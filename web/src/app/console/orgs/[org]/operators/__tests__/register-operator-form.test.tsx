@@ -1,10 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToString } from "react-dom/server";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { RegisterOperatorForm } from "@/app/console/orgs/[org]/operators/_components/register-operator-form";
+import { enter } from "@/testing/enter";
 import { API_URL, fieldOneRegistered } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -50,32 +51,32 @@ describe("register operator form", () => {
   it("posts the identifier alone when no name is given, and shows the credential and the enrollment token once", async () => {
     const posted = recordRegistrations();
     const user = userEvent.setup();
-    render(<RegisterOperatorForm org="acme" />);
+    const form = within(render(<RegisterOperatorForm org="acme" />).container);
 
-    await user.type(screen.getByLabelText("Identifier"), "field-one");
-    await user.click(screen.getByRole("button", { name: "Register operator" }));
+    await enter(user, form.getByLabelText("Identifier"), "field-one");
+    await user.click(form.getByRole("button", { name: "Register operator" }));
 
     expect(
-      await screen.findByRole("heading", {
+      await form.findByRole("heading", {
         name: `Registered ${fieldOneRegistered.operator.name}`,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Enrollment token")).toHaveValue(
+    expect(form.getByLabelText("Enrollment token")).toHaveValue(
       fieldOneRegistered.enrollment.token,
     );
-    expect(screen.getByLabelText("Credential")).toHaveValue(
+    expect(form.getByLabelText("Credential")).toHaveValue(
       fieldOneRegistered.credential.credential,
     );
     // Presence: the claim under test is that the credential cannot be
     // shown again, and the sentence goes on to name the recovery.
     expect(
-      screen.getByText(/This is the only time this credential is shown/),
+      form.getByText(/This is the only time this credential is shown/),
     ).toBeInTheDocument();
     // Presence rather than identity: the sentence is longer than the
     // claim under test, which is that the page says the token is gone
     // after this.
     expect(
-      screen.getByText(/This is the only time this token is shown/),
+      form.getByText(/This is the only time this token is shown/),
     ).toBeInTheDocument();
     // No name is sent, so the API calls the operator by its
     // identifier (ADR-0074).
@@ -85,15 +86,15 @@ describe("register operator form", () => {
   it("posts the name and description typed, and links to the operator's page", async () => {
     const posted = recordRegistrations();
     const user = userEvent.setup();
-    render(<RegisterOperatorForm org="acme" />);
+    const form = within(render(<RegisterOperatorForm org="acme" />).container);
 
-    await user.type(screen.getByLabelText("Identifier"), "field-one");
-    await user.type(screen.getByLabelText("Name"), "  Field cluster one ");
-    await user.type(screen.getByLabelText("Description"), "Batch agents.");
-    await user.click(screen.getByRole("button", { name: "Register operator" }));
+    await enter(user, form.getByLabelText("Identifier"), "field-one");
+    await enter(user, form.getByLabelText("Name"), "  Field cluster one ");
+    await enter(user, form.getByLabelText("Description"), "Batch agents.");
+    await user.click(form.getByRole("button", { name: "Register operator" }));
 
     expect(
-      await screen.findByRole("link", { name: "Open operator" }),
+      await form.findByRole("link", { name: "Open operator" }),
     ).toHaveAttribute("href", "/console/orgs/acme/operators/field-one");
     expect(posted).toEqual([
       {
@@ -107,24 +108,24 @@ describe("register operator form", () => {
   it("refuses a name past 100 characters without a round trip", async () => {
     const posted = recordRegistrations();
     const user = userEvent.setup();
-    render(<RegisterOperatorForm org="acme" />);
+    const form = within(render(<RegisterOperatorForm org="acme" />).container);
 
-    await user.type(screen.getByLabelText("Identifier"), "field-one");
-    await user.type(screen.getByLabelText("Name"), "a".repeat(101));
+    await enter(user, form.getByLabelText("Identifier"), "field-one");
+    await enter(user, form.getByLabelText("Name"), "a".repeat(101));
 
     expect(
-      screen.getByText(
+      form.getByText(
         "An operator's name holds at most 100 characters; this one holds 101.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Register operator" }),
+      form.getByRole("button", { name: "Register operator" }),
     ).toBeDisabled();
 
     // The control: one character fewer is taken.
-    await user.type(screen.getByLabelText("Name"), "{Backspace}");
+    await user.type(form.getByLabelText("Name"), "{Backspace}");
     expect(
-      screen.getByRole("button", { name: "Register operator" }),
+      form.getByRole("button", { name: "Register operator" }),
     ).toBeEnabled();
     expect(posted).toEqual([]);
   });
@@ -132,40 +133,40 @@ describe("register operator form", () => {
   it("keeps only what has to be read before typing over the input", async () => {
     recordRegistrations();
     const user = userEvent.setup();
-    render(<RegisterOperatorForm org="acme" />);
+    const form = within(render(<RegisterOperatorForm org="acme" />).container);
 
     // Presence: each is one clause of a longer sentence. What a person
     // needs before typing stays; what the operator does with the token
     // is beside the token, and what deleting a record does is on the
     // operator's page.
     expect(
-      screen.getByText(/Registering records that this organization has/),
+      form.getByText(/Registering records that this organization has/),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText(/Deleting a record stops that operator/),
+      form.queryByText(/Deleting a record stops that operator/),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/on garam's machine listener/),
+      form.queryByText(/on garam's machine listener/),
     ).not.toBeInTheDocument();
-    expect(screen.queryByText(/certificate authority/)).not.toBeInTheDocument();
+    expect(form.queryByText(/certificate authority/)).not.toBeInTheDocument();
 
-    await user.type(screen.getByLabelText("Identifier"), "field-one");
-    await user.click(screen.getByRole("button", { name: "Register operator" }));
+    await enter(user, form.getByLabelText("Identifier"), "field-one");
+    await user.click(form.getByRole("button", { name: "Register operator" }));
 
     // The control: how the operator enrols is beside the token that it
     // enrols with, so its absence above is a move rather than a
     // deletion. The recovery named beside it is a new token, which the
     // API mints (ADR-0067), and not a deletion.
     expect(
-      await screen.findByText(
+      await form.findByText(
         /on garam's machine listener for the short-lived tokens/,
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/on garam's machine listener\. It works once/),
+      form.getByText(/on garam's machine listener\. It works once/),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/ask an administrator to mint a new enrollment token/),
+      form.getByText(/ask an administrator to mint a new enrollment token/),
     ).toBeInTheDocument();
   });
 
@@ -183,26 +184,26 @@ describe("register operator form", () => {
   it("refuses an identifier outside the character rule without a round trip", async () => {
     const posted = recordRegistrations();
     const user = userEvent.setup();
-    render(<RegisterOperatorForm org="acme" />);
+    const form = within(render(<RegisterOperatorForm org="acme" />).container);
 
-    await user.type(screen.getByLabelText("Identifier"), "Field-One");
+    await enter(user, form.getByLabelText("Identifier"), "Field-One");
 
     expect(
-      screen.getByText(
+      form.getByText(
         "An operator identifier holds only lowercase letters, digits and hyphens.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Register operator" }),
+      form.getByRole("button", { name: "Register operator" }),
     ).toBeDisabled();
     expect(posted).toEqual([]);
 
     // The control: the same field holding a lowercase identifier is
     // accepted, so what refuses is the character rule and not the form.
-    await user.clear(screen.getByLabelText("Identifier"));
-    await user.type(screen.getByLabelText("Identifier"), "field-one");
+    await user.clear(form.getByLabelText("Identifier"));
+    await enter(user, form.getByLabelText("Identifier"), "field-one");
     expect(
-      screen.getByRole("button", { name: "Register operator" }),
+      form.getByRole("button", { name: "Register operator" }),
     ).toBeEnabled();
   });
 
@@ -216,15 +217,15 @@ describe("register operator form", () => {
       ),
     );
     const user = userEvent.setup();
-    render(<RegisterOperatorForm org="acme" />);
+    const form = within(render(<RegisterOperatorForm org="acme" />).container);
 
-    await user.type(screen.getByLabelText("Identifier"), "field-one");
-    await user.click(screen.getByRole("button", { name: "Register operator" }));
+    await enter(user, form.getByLabelText("Identifier"), "field-one");
+    await user.click(form.getByRole("button", { name: "Register operator" }));
 
     expect(
-      await screen.findByText("operator is already registered"),
+      await form.findByText("operator is already registered"),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Identifier")).toHaveValue("field-one");
+    expect(form.getByLabelText("Identifier")).toHaveValue("field-one");
   });
 
   it("keeps what was typed when the API never answers", async () => {
@@ -232,12 +233,12 @@ describe("register operator form", () => {
       http.post(`${API_URL}/orgs/acme/operators`, () => HttpResponse.error()),
     );
     const user = userEvent.setup();
-    render(<RegisterOperatorForm org="acme" />);
+    const form = within(render(<RegisterOperatorForm org="acme" />).container);
 
-    await user.type(screen.getByLabelText("Identifier"), "field-one");
-    await user.click(screen.getByRole("button", { name: "Register operator" }));
+    await enter(user, form.getByLabelText("Identifier"), "field-one");
+    await user.click(form.getByRole("button", { name: "Register operator" }));
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(screen.getByLabelText("Identifier")).toHaveValue("field-one");
+    expect(await form.findByRole("alert")).toBeInTheDocument();
+    expect(form.getByLabelText("Identifier")).toHaveValue("field-one");
   });
 });

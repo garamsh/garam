@@ -1,10 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToString } from "react-dom/server";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { OperatorDetailsForm } from "@/app/console/orgs/[org]/operators/[operator]/_components/operator-details-form";
+import { enter } from "@/testing/enter";
 import { API_URL, fieldOne } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -73,14 +74,14 @@ describe("operator details form", () => {
   it("sends the name and description to the operator's own path", async () => {
     const patched = recordPatches();
     const user = userEvent.setup();
-    renderForm();
+    const form = within(renderForm().container);
 
-    await user.clear(screen.getByLabelText("Name"));
-    await user.type(screen.getByLabelText("Name"), " Renamed ");
-    await user.clear(screen.getByLabelText("Description"));
-    await user.click(screen.getByRole("button", { name: "Save details" }));
+    await user.clear(form.getByLabelText("Name"));
+    await enter(user, form.getByLabelText("Name"), " Renamed ");
+    await user.clear(form.getByLabelText("Description"));
+    await user.click(form.getByRole("button", { name: "Save details" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    expect(await form.findByRole("status")).toHaveTextContent(
       "Saved as Renamed.",
     );
     // An emptied description is sent, and clears the one there was.
@@ -90,18 +91,18 @@ describe("operator details form", () => {
   it("refuses an empty name without a round trip", async () => {
     const patched = recordPatches();
     const user = userEvent.setup();
-    renderForm();
+    const form = within(renderForm().container);
 
-    await user.clear(screen.getByLabelText("Name"));
+    await user.clear(form.getByLabelText("Name"));
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
+    expect(form.getByRole("alert")).toHaveTextContent(
       "Give the operator a name.",
     );
-    expect(screen.getByRole("button", { name: "Save details" })).toBeDisabled();
+    expect(form.getByRole("button", { name: "Save details" })).toBeDisabled();
 
     // The control: a name typed back is taken.
-    await user.type(screen.getByLabelText("Name"), "Field");
-    expect(screen.getByRole("button", { name: "Save details" })).toBeEnabled();
+    await enter(user, form.getByLabelText("Name"), "Field");
+    expect(form.getByRole("button", { name: "Save details" })).toBeEnabled();
     expect(patched).toEqual([]);
   });
 
@@ -115,15 +116,15 @@ describe("operator details form", () => {
       ),
     );
     const user = userEvent.setup();
-    renderForm();
+    const form = within(renderForm().container);
 
-    await user.clear(screen.getByLabelText("Name"));
-    await user.type(screen.getByLabelText("Name"), "Renamed");
-    await user.click(screen.getByRole("button", { name: "Save details" }));
+    await user.clear(form.getByLabelText("Name"));
+    await enter(user, form.getByLabelText("Name"), "Renamed");
+    await user.click(form.getByRole("button", { name: "Save details" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    expect(await form.findByRole("alert")).toHaveTextContent(
       "permission denied",
     );
-    expect(screen.getByLabelText("Name")).toHaveValue("Renamed");
+    expect(form.getByLabelText("Name")).toHaveValue("Renamed");
   });
 });

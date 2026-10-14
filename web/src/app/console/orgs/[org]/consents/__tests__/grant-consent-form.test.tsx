@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { render, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { GrantConsentForm } from "@/app/console/orgs/[org]/consents/_components/grant-consent-form";
+import { enter } from "@/testing/enter";
 import { API_URL, globexConsent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -38,12 +39,13 @@ describe("grant consent form", () => {
     const granted = recordGrants(true);
     const user = userEvent.setup();
     const { container } = render(<GrantConsentForm org="acme" />);
+    const form = within(container);
 
-    await user.type(screen.getByLabelText("Other organization"), "globex");
-    await user.click(screen.getByRole("button", { name: "Grant consent" }));
+    await enter(user, form.getByLabelText("Other organization"), "globex");
+    await user.click(form.getByRole("button", { name: "Grant consent" }));
 
     expect(
-      await screen.findByText(
+      await form.findByText(
         "Granted. Messages now cross between this organization and globex.",
       ),
     ).toBeInTheDocument();
@@ -56,13 +58,13 @@ describe("grant consent form", () => {
   it("reports the half waiting when the other organization has not granted", async () => {
     recordGrants(false);
     const user = userEvent.setup();
-    render(<GrantConsentForm org="acme" />);
+    const form = within(render(<GrantConsentForm org="acme" />).container);
 
-    await user.type(screen.getByLabelText("Other organization"), "globex");
-    await user.click(screen.getByRole("button", { name: "Grant consent" }));
+    await enter(user, form.getByLabelText("Other organization"), "globex");
+    await user.click(form.getByRole("button", { name: "Grant consent" }));
 
     expect(
-      await screen.findByText(
+      await form.findByText(
         "Granted this organization's half for globex. Messages stay refused until it grants its own.",
       ),
     ).toBeInTheDocument();
@@ -83,13 +85,13 @@ describe("grant consent form", () => {
       ),
     );
     const user = userEvent.setup();
-    render(<GrantConsentForm org="acme" />);
+    const form = within(render(<GrantConsentForm org="acme" />).container);
 
-    await user.type(screen.getByLabelText("Other organization"), "acme");
-    await user.click(screen.getByRole("button", { name: "Grant consent" }));
+    await enter(user, form.getByLabelText("Other organization"), "acme");
+    await user.click(form.getByRole("button", { name: "Grant consent" }));
 
     expect(
-      await screen.findByText(
+      await form.findByText(
         "an organization consents with another, not with itself",
       ),
     ).toBeInTheDocument();

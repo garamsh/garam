@@ -660,6 +660,53 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/operators/{operator}/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the keys an operator was issued, with where each stands.
+         * @description Every key the operator was issued, withdrawn ones included, oldest first (ADR-0102). Each answers its public record alone: the fingerprint an assertion names it by, its algorithm, its state at garam's database time and when it last obtained a token. No private key exists here to answer; garam answered it once, to the caller of `issueOperatorKey`, and keeps nowhere.
+         */
+        get: operations["listOperatorKeys"];
+        put?: never;
+        /**
+         * Issue a registered operator a private key, shown once.
+         * @description Generates a 3072-bit RSA key for the operator and answers its private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its public fingerprint, the operator's `clientId` and the `tokenUrl` its assertions name as their audience (ADR-0102). garam keeps the public key alone: the private key is never stored, logged or answered again, and a lost answer is recovered by issuing anew with `rotation` `immediate`. The answer is not cached. An Operator has two registered identities — its manager and its control service — and each is issued its own key here.
+         *     It is the one route that issues a key; registering issues none. The first key of an operator holding no live one is authorized by `operator:register`, as registering it was. Any other — beside or in place of a live key — is `operator:reissue`, and a caller holding only the first finds an operator with a live key refused with 403.
+         *     `rotation` says how the key stands beside the ones the operator holds. `planned` adds it beside the key in use, which goes on verifying for 24 hours and is then withdrawn by itself; a third live key is refused with 409 until one is withdrawn. `immediate` withdraws every live key, and every token exchanged under one, before the new key verifies anything: the answer to a compromised key or a lost answer. An operator's agents keep their own tokens across either, and recovering them is separate.
+         *     One process issues at most 3 keys per operator and 30 in all per minute, and answers 429 with `Retry-After` past either. Where no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no key is issued and the route answers 503: an assertion could name no audience garam accepts.
+         */
+        post: operations["issueOperatorKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/operators/{operator}/keys/{kid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+         * @description Withdraws the key (ADR-0102). **It stops verifying assertions, and every token exchanged under it stops authenticating, at the moment this returns**: the next request presenting one is refused, on a connection already open too, and an exchange racing the withdrawal either finishes first and has its token withdrawn here, or finds the key withdrawn and obtains nothing. The key's record stays, listed as `revoked`. Withdrawing a key already withdrawn answers 204 again.
+         */
+        delete: operations["revokeOperatorKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/operators/{operator}/enrollment": {
         parameters: {
             query?: never;
@@ -1334,6 +1381,64 @@ export interface components {
             /** Format: date-time */
             issuedAt: string;
         };
+        /** @description How an issued key stands beside the keys the operator holds (ADR-0102). */
+        OperatorKeyIssuance: {
+            /**
+             * @description `planned` adds the key beside the one in use, which is withdrawn by itself 24 hours later; `immediate` withdraws every live key and its tokens first. For an operator holding no live key the two are the same.
+             * @enum {string}
+             */
+            rotation: "planned" | "immediate";
+        };
+        /** @description A key garam generated for an operator, answered once. Place `privateKeyPem` and `tokenUrl` in the operator's cluster for the identity `clientId` names; garam cannot answer the private key a second time. */
+        IssuedOperatorKey: {
+            key: components["schemas"]["OperatorKey"];
+            /** @description The private key, PKCS#8 `PRIVATE KEY` PEM, answered once. Show it once and say it cannot be shown again. It is placed in the operator's cluster as a file only the operator's process reads, and never in an environment variable, a command line, an image or source control. */
+            privateKeyPem: string;
+            /**
+             * @description The operator's canonical GRN, which its assertions name as `iss`, `sub` and `client_id`.
+             * @example grn:acme:default:operator:controller
+             */
+            clientId: string;
+            /**
+             * Format: uri
+             * @description The token endpoint's absolute URL, which an assertion's `aud` equals byte for byte. It is garam's configured value and need not be the address the operator dials.
+             * @example https://machine.garam.example/oauth/token
+             */
+            tokenUrl: string;
+        };
+        OperatorKeyList: {
+            keys: components["schemas"]["OperatorKey"][];
+        };
+        /** @description The public record of one key an operator was issued (ADR-0102). It carries no private material. */
+        OperatorKey: {
+            /** @description The key's fingerprint: the base64url SHA-256 RFC 7638 thumbprint of its public key, which an assertion's protected `kid` names. Confirm it against the installed key before withdrawing a predecessor. */
+            kid: string;
+            /** @enum {string} */
+            algorithm: "RS256";
+            state: components["schemas"]["OperatorKeyState"];
+            /** Format: date-time */
+            issuedAt: string;
+            /**
+             * Format: date-time
+             * @description When a planned rotation withdraws the key, where one set it.
+             */
+            retiresAt?: string;
+            /**
+             * Format: date-time
+             * @description When the key was withdrawn, where it was.
+             */
+            revokedAt?: string;
+            /**
+             * Format: date-time
+             * @description When an assertion the key signed last obtained a token, where one has.
+             */
+            lastExchangedAt?: string;
+        };
+        /**
+         * @description Where a key stands at garam's database time. `active` verifies assertions; `retiring` verifies them until `retiresAt`, which a planned successor set; `revoked` verifies nothing, because it was withdrawn or its `retiresAt` has passed, and the tokens exchanged under it authenticate nothing.
+         * @enum {string}
+         */
+        OperatorKeyState: "active" | "retiring" | "revoked";
         /** @description The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else. */
         OperatorEnrollment: {
             /**
@@ -1533,6 +1638,8 @@ export interface components {
         agent: string;
         /** @description Agent template identifier (the last GRN segment). */
         template: string;
+        /** @description A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint. */
+        kid: string;
         /** @description Operator identifier (the last GRN segment). */
         operator: string;
         /** @description Subject GRN a policy is attached to. */
@@ -2872,6 +2979,99 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listOperatorKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The operator's keys. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorKeyList"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    issueOperatorKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorKeyIssuance"];
+            };
+        };
+        responses: {
+            /** @description Key issued, its private half shown once. */
+            201: {
+                headers: {
+                    /** @description `no-store`: the answer carries a private key no cache keeps. */
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuedOperatorKey"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    revokeOperatorKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+                /** @description A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint. */
+                kid: components["parameters"]["kid"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Key withdrawn, with its tokens. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];

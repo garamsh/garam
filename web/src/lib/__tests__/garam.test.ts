@@ -105,6 +105,31 @@ describe("garamFetch", () => {
     });
   });
 
+  it("carries the reason and pointer the backend refused with", async () => {
+    server.use(
+      http.get(`${API_URL}/me`, () =>
+        HttpResponse.json(
+          {
+            kind: "invalid_argument",
+            message: "policy document: Effect must be Allow or Deny",
+            reason: "policy_document_effect_invalid",
+            path: "/Statement/0/Effect",
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+
+    await expect(garamFetch("/me", User)).rejects.toMatchObject({
+      status: 400,
+      kind: "invalid_argument",
+      reason: {
+        code: "policy_document_effect_invalid",
+        path: "/Statement/0/Effect",
+      },
+    });
+  });
+
   it("keeps the status of an answer that carries no error body", async () => {
     server.use(
       http.get(`${API_URL}/me`, () =>
@@ -182,6 +207,68 @@ describe("refusal", () => {
       /an Effect of Allow or Deny, an Action and a Resource/,
     );
     expect(message).not.toContain("policy document:");
+  });
+
+  it("reads a documented reason before the status and kind, naming the place it points at", () => {
+    const refused = (reason: string, path?: string) =>
+      refusal(
+        new GaramApiError(400, "policy document: rule", "invalid_argument", {
+          code: reason,
+          path,
+        }),
+        "addPolicyVersion",
+      ).message;
+
+    expect(
+      refused("policy_document_effect_invalid", "/Statement/1/Effect"),
+    ).toBe("Statement 2's Effect must be Allow or Deny.");
+    expect(
+      refused("policy_document_resource_missing", "/Statement/0/Resource"),
+    ).toBe("Statement 1 needs at least one Resource.");
+    expect(
+      refused("policy_document_unknown_key", "/Statement/0/Bogus~1x"),
+    ).toMatch(/^Statement 1's Bogus\/x isn't part of the policy format\./);
+    expect(refused("policy_document_wrong_type", "/Statement/0/Action/1")).toBe(
+      "Statement 1's Action, item 2 has the wrong type of value.",
+    );
+    expect(refused("policy_document_version_missing", "/Version")).toBe(
+      "The document needs a Version.",
+    );
+    // The control: the same status and kind with no reason read the
+    // sentence that names every rule, so the ones above are the
+    // reason's.
+    expect(
+      refusal(
+        new GaramApiError(400, "policy document: rule", "invalid_argument"),
+        "addPolicyVersion",
+      ).message,
+    ).toMatch(/needs a Version and at least one statement/);
+  });
+
+  it("tells a used invitation from an expired one by reason", () => {
+    const spent = (code: string) =>
+      refusal(
+        new GaramApiError(409, "invitation", "failed_precondition", { code }),
+        "acceptInvitation",
+      ).message;
+
+    expect(spent("invitation_accepted")).toBe(
+      "This invitation has already been used. Ask an admin of the organization for a new one.",
+    );
+    expect(spent("invitation_expired")).toBe(
+      "This invitation has expired. Ask an admin of the organization to send you a new one.",
+    );
+  });
+
+  it("reads a reason it does not know, or one named like an object's own key, by status and kind", () => {
+    for (const code of ["a_code_added_later", "constructor", "toString"]) {
+      expect(
+        refusal(
+          new GaramApiError(409, "invitation", "failed_precondition", { code }),
+          "acceptInvitation",
+        ).message,
+      ).toMatch(/^This invitation can no longer be used/);
+    }
   });
 
   it("quotes the server's text only inside a generic sentence for a refusal nothing maps", () => {

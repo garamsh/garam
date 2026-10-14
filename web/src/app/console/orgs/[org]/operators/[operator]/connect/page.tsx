@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
 
-import {
-  API_UNREACHABLE_TITLE,
-  ApiUnreachableReason,
-} from "@/components/api-unreachable";
 import { Banner } from "@/components/banner";
 import { getOperator, listOperatorKeys } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
@@ -56,45 +52,42 @@ export default async function ConnectOperatorPage({
       description="Issue its key, place it, and see it sign in."
     />
   );
-  if (record.status === "unreachable" || keys.status === "unreachable") {
-    return (
-      <>
-        {header}
-        <Banner tone="warn" title={API_UNREACHABLE_TITLE}>
-          <ApiUnreachableReason subject="this operator's setup" />
-        </Banner>
-      </>
-    );
-  }
-  if (record.status === "forbidden" || keys.status === "forbidden") {
-    return (
-      <>
-        {header}
-        <Banner tone="info" title="You cannot set up this operator">
-          garam refused to show this operator or its keys to you.
-        </Banner>
-      </>
-    );
-  }
 
-  const o = record.data;
-  const live = liveKeys(keys.data);
+  // A read that fails is shown inside the wizard rather than in its
+  // place: the issuing action's re-render runs this page again, and
+  // swapping the wizard out would unmount the one copy of a private key
+  // garam answered once.
+  const problem =
+    record.status !== "ok"
+      ? record.status
+      : keys.status !== "ok"
+        ? keys.status
+        : null;
+  const keyList = keys.status === "ok" ? keys.data : [];
+  const name = record.status === "ok" ? record.data.name : operator;
+  const live = liveKeys(keyList);
   const latest = live.at(-1);
   const replacing = rotate !== undefined;
   const initialStep: Exclude<ConnectStep, "register"> =
-    replacing || latest === undefined
+    problem !== null || replacing || latest === undefined
       ? "issue"
       : latest.lastExchangedAt !== undefined
         ? "verify"
         : "place";
-  // The first key of an operator never keyed is registering's to issue;
-  // any other is re-issuing's (ADR-0102).
-  const issuing = keys.data.length === 0 ? "register" : "reissue";
+  // garam issues a key to an operator holding no live one under either
+  // action, and any other under re-issuing alone
+  // (`internal/api/operator_key.go`).
+  const denied = (action: "register" | "reissue") =>
+    permissions.get(action) === "denied";
+  const canIssue =
+    live.length === 0
+      ? !(denied("register") && denied("reissue"))
+      : !denied("reissue");
 
-  if (initialStep === "issue" && permissions.get(issuing) === "denied") {
+  if (problem === null && initialStep === "issue" && !canIssue) {
     return (
       <>
-        <ItemCrumb label={o.name} />
+        <ItemCrumb label={name} />
         {header}
         <Banner tone="info" title="You cannot issue keys for this operator">
           garam does not let you issue this operator a key. Access to it is
@@ -107,15 +100,17 @@ export default async function ConnectOperatorPage({
   const operatorHref = `${orgHref(org, "operators")}/${operator}`;
   return (
     <>
-      <ItemCrumb label={o.name} />
+      <ItemCrumb label={name} />
       <ConnectWizard
         org={org}
         operator={operator}
-        name={o.name}
-        clientId={o.grn}
-        keys={keys.data}
+        name={name}
+        clientId={record.status === "ok" ? record.data.grn : undefined}
+        keys={keyList}
+        problem={problem}
         initialStep={initialStep}
         rotate={replacing}
+        canReplace={!denied("reissue")}
         operatorHref={operatorHref}
         operatorsHref={orgHref(org, "operators")}
       />

@@ -1,7 +1,8 @@
 import { axeViolations, expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
 
-// The Operators area at 390px: each route fits the screen and passes axe.
+// The Operators area at 390px: each route fits the screen and passes
+// axe.
 test.describe("operators on a phone", () => {
   for (const [route, path] of [
     ["the list", ""],

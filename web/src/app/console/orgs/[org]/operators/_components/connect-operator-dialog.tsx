@@ -222,6 +222,14 @@ function Registered({
 }) {
   const [legacyOpen, setLegacyOpen] = useState(false);
   const [shown, setShown] = useState<"credential" | "token" | null>(null);
+  // Each is answered once, so once kept it is not offered again.
+  const [kept, setKept] = useState<ReadonlySet<"credential" | "token">>(
+    new Set(),
+  );
+  const keep = (secret: "credential" | "token") => {
+    setKept((held) => new Set(held).add(secret));
+    setShown(null);
+  };
 
   return (
     <div className="flex flex-col gap-5">
@@ -263,17 +271,23 @@ function Registered({
                 type="button"
                 variant="outline"
                 size="sm"
+                disabled={kept.has("credential")}
                 onClick={() => setShown("credential")}
               >
-                Show credential
+                {kept.has("credential")
+                  ? "Credential shown"
+                  : "Show credential"}
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                disabled={kept.has("token")}
                 onClick={() => setShown("token")}
               >
-                Show enrollment token
+                {kept.has("token")
+                  ? "Enrollment token shown"
+                  : "Show enrollment token"}
               </Button>
             </div>
           </div>
@@ -285,7 +299,7 @@ function Registered({
         description="The operator exchanges it for short-lived tokens on garam's machine listener. It is shown once."
         secret={credential}
         noun="credential"
-        onDone={() => setShown(null)}
+        onDone={() => keep("credential")}
       />
       <SecretReveal
         open={shown === "token"}
@@ -293,7 +307,7 @@ function Registered({
         description="The operator presents it once to obtain its certificate. It is shown once."
         secret={token}
         noun="enrollment token"
-        onDone={() => setShown(null)}
+        onDone={() => keep("token")}
       />
       <DialogFooter>
         <Button asChild>

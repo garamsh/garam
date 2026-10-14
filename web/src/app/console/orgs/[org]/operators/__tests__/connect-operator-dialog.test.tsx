@@ -87,9 +87,22 @@ describe("connect operator dialog", () => {
     await user.click(toggle);
     await user.click(screen.getByRole("button", { name: "Show credential" }));
 
+    const reveal = screen.getByRole("alertdialog", {
+      name: "Save the legacy credential",
+    });
+    expect(reveal).toHaveTextContent(fieldOneRegistered.credential.credential);
+
+    await user.click(within(reveal).getByRole("checkbox"));
+    await user.click(within(reveal).getByRole("button", { name: "Done" }));
+
+    // Shown once: kept, it is not offered again, while the token that
+    // was not shown still is.
     expect(
-      screen.getByRole("alertdialog", { name: "Save the legacy credential" }),
-    ).toHaveTextContent(fieldOneRegistered.credential.credential);
+      screen.getByRole("button", { name: "Credential shown" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Show enrollment token" }),
+    ).toBeEnabled();
   });
 
   it("refuses an identifier outside the character rule beside its field, without a round trip", async () => {

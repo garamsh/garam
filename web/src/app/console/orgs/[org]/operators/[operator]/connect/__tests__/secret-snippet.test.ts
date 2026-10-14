@@ -15,10 +15,10 @@ describe("the Secret a key is placed in", () => {
         "kubectl create secret generic garam-credential \\",
         "  --namespace garam-agent-operator-system \\",
         "  --from-file=private-key.pem=./field-one.pem \\",
-        "  --from-literal=client-id=grn:acme:default:operator:field-one \\",
-        "  --from-literal=token-url=https://machine.garam.example/oauth/token \\",
+        "  --from-literal=client-id='grn:acme:default:operator:field-one' \\",
+        "  --from-literal=token-url='https://machine.garam.example/oauth/token' \\",
         "  --from-file=server-root.pem=./garam-server-root.pem \\",
-        "  --dry-run=client -o yaml | kubectl apply -f -",
+        "  --dry-run=client -o yaml | kubectl apply --server-side --force-conflicts -f -",
       ].join("\n"),
     );
   });
@@ -39,6 +39,19 @@ describe("the Secret a key is placed in", () => {
       expect(snippet).toContain("--from-file=private-key.pem=./field-one.pem");
       expect(snippet).not.toMatch(/--from-literal=private-key/);
       expect(snippet).not.toContain("PRIVATE KEY");
+    }
+  });
+
+  it("applies server-side, so no annotation keeps a copy of the private key", () => {
+    for (const identity of ["manager", "control"] as const) {
+      const snippet = secretSnippet(identity, placement);
+      // A client-side apply writes the whole object, key included, into
+      // `last-applied-configuration`; server-side apply writes none.
+      expect(snippet).toContain(
+        "kubectl apply --server-side --force-conflicts -f -",
+      );
+      expect(snippet).not.toMatch(/kubectl apply -f -/);
+      expect(snippet).not.toMatch(/kubectl apply(?! --server-side)/);
     }
   });
 });

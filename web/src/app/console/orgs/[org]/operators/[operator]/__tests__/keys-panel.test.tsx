@@ -143,6 +143,16 @@ describe("operator keys", () => {
     );
   });
 
+  it("offers replacing rather than rotating once two keys are live", () => {
+    renderPanel([fieldOneKey, retiring]);
+
+    expect(screen.getByRole("link", { name: "Replace keys" })).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/operators/field-one/connect?rotate",
+    );
+    expect(screen.queryByRole("link", { name: "Rotate key" })).toBeNull();
+  });
+
   it("offers neither where the server denies them", () => {
     renderPanel([fieldOneKey], { canIssue: false, canRevoke: false });
 

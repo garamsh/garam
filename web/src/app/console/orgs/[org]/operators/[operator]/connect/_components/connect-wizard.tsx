@@ -5,6 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 
+import {
+  API_UNREACHABLE_TITLE,
+  ApiUnreachableReason,
+} from "@/components/api-unreachable";
 import { Banner } from "@/components/banner";
 import { CopyField } from "@/components/copy-field";
 import { SecretReveal } from "@/components/secret-reveal";
@@ -32,8 +36,8 @@ import { useCopy } from "@/hooks/use-copy";
 import { useHydrated } from "@/hooks/use-hydrated";
 
 import { WizardPage } from "../../../../../../_components/templates/wizard-page";
-import { liveKeys } from "../../../_components/operator-status";
-import { SECRET, secretSnippet, type Identity } from "./secret-snippet";
+import { MAX_LIVE_KEYS, liveKeys } from "../../../_components/operator-status";
+import { secretSnippet, type Identity } from "./secret-snippet";
 
 /** The wizard's steps, in order. */
 export type ConnectStep = "register" | "issue" | "place" | "verify";
@@ -115,8 +119,10 @@ function CodeBlock({ label, code }: { label: string; code: string }) {
  * it, issue its key, place the key in the Operator's Secret, and see its
  * first sign-in. The step it opens on comes from what garam holds, so a
  * person who leaves resumes where they were; the private key alone lives
- * in this component's state, from the answer that issued it until it is
- * placed, and nowhere else.
+ * in this component's state, from the answer that issued it until the
+ * wizard unmounts, and nowhere else. A read that fails is shown here
+ * rather than in the wizard's place for the same reason: the render
+ * that follows issuing could otherwise unmount that one copy.
  */
 export function ConnectWizard({
   org,
@@ -124,20 +130,29 @@ export function ConnectWizard({
   name,
   clientId,
   keys,
+  problem,
   initialStep,
   rotate,
+  canReplace,
   operatorHref,
   operatorsHref,
 }: {
   org: string;
   operator: string;
   name: string;
-  /** The operator's client_id, which its assertions name and its Secret holds. */
-  clientId: string;
+  /**
+   * The operator's client_id, which its assertions name and its Secret
+   * holds; absent where the operator was not read.
+   */
+  clientId: string | undefined;
   keys: OperatorKey[];
+  /** Why the operator or its keys were not read, if they were not. */
+  problem: "unreachable" | "forbidden" | null;
   initialStep: Exclude<ConnectStep, "register">;
   /** A live key is being replaced rather than a first one issued. */
   rotate: boolean;
+  /** garam lets the caller issue a replacement (`operator:reissue`). */
+  canReplace: boolean;
   operatorHref: string;
   operatorsHref: string;
 }) {
@@ -149,22 +164,36 @@ export function ConnectWizard({
   const [step, setStep] =
     useState<Exclude<ConnectStep, "register">>(initialStep);
   const [kept, setKept] = useState<string | null>(null);
-  const [rotation, setRotation] = useState<"planned" | "immediate">("planned");
+  const [chosenRotation, setRotation] = useState<"planned" | "immediate">(
+    "planned",
+  );
 
   const issued = state.status === "issued" ? state : null;
   const live = liveKeys(keys);
+  // At the limit only replacing is a transition garam accepts, so it is
+  // the one offered.
+  const atLimit = live.length >= MAX_LIVE_KEYS;
+  const rotation = atLimit ? "immediate" : chosenRotation;
   const latest = live.at(-1);
   const target = issued?.kid ?? latest?.kid;
-  const exchanged = keys.find((key) => key.kid === target)?.lastExchangedAt;
-  const verified = step === "verify" && exchanged !== undefined;
+  const targetKey = keys.find((key) => key.kid === target);
+  const verifiedAt = step === "verify" ? targetKey?.lastExchangedAt : undefined;
+  const verified = verifiedAt !== undefined;
+  // A key revoked before its first sign-in never signs in, so the step
+  // stops asking rather than waiting on it.
+  const withdrawn = targetKey?.state === "revoked";
 
-  useRefreshWhileVisible(step === "verify" && !verified);
+  useRefreshWhileVisible(step === "verify" && !verified && !withdrawn);
 
   const index = ORDER.indexOf(step);
   const completed = ORDER.filter(
     (id, at) => at < index || (id === "verify" && verified),
   );
   const keyFile = `./${operator}.pem`;
+  const placeClientId = issued?.clientId ?? clientId;
+  // A failed read leaves nothing to act on, unless a key was issued in
+  // this sitting: it is still placed from what issuing answered.
+  const showSteps = problem === null || issued !== null;
 
   return (
     <WizardPage
@@ -174,7 +203,18 @@ export function ConnectWizard({
       current={verified ? "verify" : step}
       completed={completed}
     >
-      {step === "issue" && (
+      {problem === "unreachable" && (
+        <Banner tone="warn" title={API_UNREACHABLE_TITLE}>
+          <ApiUnreachableReason subject="this operator's setup" />
+        </Banner>
+      )}
+      {problem === "forbidden" && (
+        <Banner tone="info" title="You cannot set up this operator">
+          garam refused to show this operator or its keys to you.
+        </Banner>
+      )}
+
+      {showSteps && step === "issue" && (
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <h2 className="text-base">Issue a key</h2>
@@ -199,12 +239,14 @@ export function ConnectWizard({
                 <legend className="mb-1 font-medium">
                   This operator already holds a key
                 </legend>
-                <label className="flex items-start gap-2.5 rounded-lg border px-3 py-2.5 has-checked:border-primary">
+                <label className="flex items-start gap-2.5 rounded-lg border px-3 py-2.5 has-checked:border-primary has-disabled:opacity-60">
                   <input
                     type="radio"
                     name="rotation"
                     value="planned"
                     checked={rotation === "planned"}
+                    disabled={atLimit}
+                    aria-describedby={atLimit ? "rotation-limit" : undefined}
                     onChange={() => setRotation("planned")}
                     className="mt-0.5 size-4 accent-primary"
                   />
@@ -214,6 +256,13 @@ export function ConnectWizard({
                       Add the new key beside the current one, which keeps
                       working for 24 hours and then retires by itself.
                     </span>
+                    {atLimit && (
+                      <span id="rotation-limit" className="text-foreground">
+                        Two keys are already live, which is as many as an
+                        operator holds. Withdraw one on the Keys tab first, or
+                        replace them now.
+                      </span>
+                    )}
                   </span>
                 </label>
                 <label className="flex items-start gap-2.5 rounded-lg border px-3 py-2.5 has-checked:border-primary">
@@ -298,18 +347,18 @@ export function ConnectWizard({
         </div>
       )}
 
-      {step === "place" && (
+      {showSteps && step === "place" && placeClientId !== undefined && (
         <PlaceStep
           keyFile={keyFile}
-          clientId={issued?.clientId ?? clientId}
+          clientId={placeClientId}
           tokenUrl={issued?.tokenUrl}
           resumed={issued === null}
-          replaceHref={`?rotate`}
+          replaceHref={canReplace ? "?rotate" : undefined}
           onPlaced={() => setStep("verify")}
         />
       )}
 
-      {step === "verify" && (
+      {showSteps && step === "verify" && (
         <div className="flex flex-col gap-5">
           <div className="flex flex-col gap-1.5">
             <h2 className="text-base">Verify</h2>
@@ -318,9 +367,14 @@ export function ConnectWizard({
               exchange. This page checks every few seconds while it is open.
             </p>
           </div>
-          {verified ? (
+          {verifiedAt !== undefined ? (
             <Banner tone="ok" title={`${name} is connected`}>
-              It signed in with its key <Time value={exchanged!} />.
+              It signed in with its key <Time value={verifiedAt} />.
+            </Banner>
+          ) : withdrawn ? (
+            <Banner tone="warn" title="This key was revoked">
+              It was revoked before it signed in, so it never will. Issue {name}{" "}
+              a new key to connect it.
             </Banner>
           ) : (
             <div role="status" className="flex items-center gap-2">
@@ -342,7 +396,12 @@ export function ConnectWizard({
                 <ArrowRight />
               </Link>
             </Button>
-            {!verified && (
+            {withdrawn && canReplace && (
+              <Button asChild variant="ghost">
+                <Link href="?rotate">Issue a new key</Link>
+              </Button>
+            )}
+            {!verified && !withdrawn && (
               <Button variant="ghost" onClick={() => setStep("place")}>
                 Back to placing the key
               </Button>
@@ -387,7 +446,8 @@ function PlaceStep({
   tokenUrl: string | undefined;
   /** The key was issued earlier, so its private half is not at hand. */
   resumed: boolean;
-  replaceHref: string;
+  /** Where a replacement is issued; absent where garam denies it. */
+  replaceHref: string | undefined;
   onPlaced: () => void;
 }) {
   const shownTokenUrl = tokenUrl ?? "<token URL shown when the key was issued>";
@@ -428,13 +488,23 @@ function PlaceStep({
           tone="info"
           title="The private key was shown when it was issued"
         >
-          It cannot be shown again. If it was not saved, issue a replacement.{" "}
-          <Link
-            href={replaceHref}
-            className="font-medium underline underline-offset-4"
-          >
-            Issue a replacement
-          </Link>
+          {replaceHref !== undefined ? (
+            <>
+              It cannot be shown again. If it was not saved, issue a
+              replacement.{" "}
+              <Link
+                href={replaceHref}
+                className="font-medium underline underline-offset-4"
+              >
+                Issue a replacement
+              </Link>
+            </>
+          ) : (
+            <>
+              It cannot be shown again. If it was not saved, ask someone who can
+              re-issue this operator&apos;s keys for a replacement.
+            </>
+          )}
         </Banner>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
@@ -475,11 +545,10 @@ function PlaceStep({
                 tokenUrl: shownTokenUrl,
               })}
             />
-            {!SECRET[identity].fixed && (
-              <p className="text-muted-foreground">
-                Replace the values in angle brackets with your own.
-              </p>
-            )}
+            <p className="text-muted-foreground">
+              Replace any value in angle brackets with your own, and each file
+              path with where you saved that file.
+            </p>
           </TabsContent>
         ))}
       </Tabs>

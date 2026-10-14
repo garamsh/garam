@@ -28,7 +28,11 @@ import { useCopy } from "@/hooks/use-copy";
 import { useHydrated } from "@/hooks/use-hydrated";
 
 import { EmptyState } from "../../../../../_components/empty-state";
-import { KEY_STATUS, liveKeys } from "../../_components/operator-status";
+import {
+  KEY_STATUS,
+  MAX_LIVE_KEYS,
+  liveKeys,
+} from "../../_components/operator-status";
 
 const initialState: RevokeOperatorKeyState = { status: "idle" };
 
@@ -207,7 +211,11 @@ export function KeysPanel({
           <Button asChild variant={live.length === 0 ? "default" : "outline"}>
             <Link href={live.length === 0 ? setupHref : `${setupHref}?rotate`}>
               {live.length === 0 ? <KeyRound /> : <RefreshCw />}
-              {live.length === 0 ? "Issue a key" : "Rotate key"}
+              {live.length === 0
+                ? "Issue a key"
+                : live.length >= MAX_LIVE_KEYS
+                  ? "Replace keys"
+                  : "Rotate key"}
             </Link>
           </Button>
         )}

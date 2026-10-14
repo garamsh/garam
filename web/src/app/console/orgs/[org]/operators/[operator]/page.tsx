@@ -173,11 +173,12 @@ export default async function OperatorPage({ params, searchParams }: Params) {
       : undefined;
   const keyList = keys.status === "ok" ? keys.data : null;
   const connection = keyList ? keyConnection(keyList) : null;
-  // The first key of an operator never keyed is registering's to issue;
-  // any other is re-issuing's (ADR-0102).
+  // garam issues a key to an operator holding no live one under either
+  // action, and any other under re-issuing alone
+  // (`internal/api/operator_key.go`).
   const canIssue =
-    keyList !== null && keyList.length === 0
-      ? allowed("register")
+    keyList !== null && liveKeys(keyList).length === 0
+      ? allowed("register") || allowed("reissue")
       : allowed("reissue");
 
   const overview = (
@@ -308,6 +309,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
       <DelegationForm
         org={org}
         operator={operator}
+        canChange={allowed("delegate")}
         delegation={delegation.status === "ok" ? delegation.data : null}
         controllers={
           operators.status === "ok"

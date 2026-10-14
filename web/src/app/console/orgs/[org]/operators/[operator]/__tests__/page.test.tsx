@@ -204,6 +204,98 @@ describe("operator page", () => {
     expect(screen.getByRole("table", { name: "Keys" })).toBeInTheDocument();
   });
 
+  it("leaves out replacing and withdrawing where the server denies delegating", async () => {
+    server.use(
+      http.get(`${OPERATOR}/delegation`, () =>
+        HttpResponse.json({
+          grantId: "g-1",
+          operatorGrn: fieldOne.grn,
+          controllers: [fieldOne.grn],
+          operations: ["agent:create"],
+          expiresAt: "2026-10-21T00:00:00Z",
+          grantedBy: "grn:root:default:user:alice",
+          grantedAt: "2026-10-14T00:00:00Z",
+        }),
+      ),
+      answerPermissionChecks((action) =>
+        action === "operator:delegate" ? "deny" : "allow",
+      ),
+    );
+
+    await renderOperator("delegation");
+
+    expect(
+      screen.queryByRole("button", { name: "Replace delegation" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Withdraw delegation" }),
+    ).not.toBeInTheDocument();
+    // Control: the grant itself is still read out.
+    expect(fact("Operations")).toHaveTextContent(
+      "Create agents from published templates",
+    );
+  });
+
+  it("offers replacing and withdrawing where the server allows delegating", async () => {
+    server.use(
+      http.get(`${OPERATOR}/delegation`, () =>
+        HttpResponse.json({
+          grantId: "g-1",
+          operatorGrn: fieldOne.grn,
+          controllers: [fieldOne.grn],
+          operations: ["agent:create"],
+          expiresAt: "2026-10-21T00:00:00Z",
+          grantedBy: "grn:root:default:user:alice",
+          grantedAt: "2026-10-14T00:00:00Z",
+        }),
+      ),
+    );
+
+    await renderOperator("delegation");
+
+    expect(
+      screen.getByRole("button", { name: "Replace delegation" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Withdraw delegation" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers a first key to a caller garam allows re-issuing alone", async () => {
+    server.use(
+      http.get(`${OPERATOR}/keys`, () => HttpResponse.json({ keys: [] })),
+      answerPermissionChecks((action) =>
+        action === "operator:register" ? "deny" : "allow",
+      ),
+    );
+
+    await renderOperator("keys");
+
+    expect(
+      screen.getByRole("link", { name: "Issue a key" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no first key where the server denies registering and re-issuing", async () => {
+    server.use(
+      http.get(`${OPERATOR}/keys`, () => HttpResponse.json({ keys: [] })),
+      answerPermissionChecks((action) =>
+        action === "operator:register" || action === "operator:reissue"
+          ? "deny"
+          : "allow",
+      ),
+    );
+
+    await renderOperator("keys");
+
+    expect(
+      screen.queryByRole("link", { name: "Issue a key" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Finish setup" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("offers every action when the server cannot decide", async () => {
     server.use(answerPermissionChecks(() => "unknown"));
 

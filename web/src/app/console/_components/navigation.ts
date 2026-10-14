@@ -89,9 +89,10 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     label: "Operators",
     icon: Server,
     // An operator's identifier is typed, and `new` is one: registering
-    // stays on the list page rather than taking that segment (ADR-0074).
-    // `connect` is the operator's setup and `keys` is reserved beside
-    // it; both sit below an identifier, so neither takes one (ADR-0074).
+    // stays on the list page rather than taking that segment
+    // (ADR-0074). `connect` is the operator's setup and `keys` is
+    // reserved beside it; both sit below an identifier, so neither
+    // takes one (ADR-0074).
     items: {
       fallback: "Operator",
       pages: [{ segment: "connect", label: "Connect" }],

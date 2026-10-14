@@ -24,8 +24,8 @@ import {
  * The private key is carried in this state because this answer is the
  * only place it exists: garam keeps the public key alone and answers
  * the private one once (ADR-0102). It goes nowhere else — no URL, no
- * revalidated render — and the client holds it only while the person
- * places it.
+ * revalidated render — and the client holds it in the wizard's state
+ * until the wizard unmounts.
  */
 export type IssueOperatorKeyState =
   | { status: "idle" }

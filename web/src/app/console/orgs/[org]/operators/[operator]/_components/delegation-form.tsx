@@ -52,19 +52,23 @@ export type Controller = { grn: string; name: string; identifier: string };
  * controllers, until when (ADR-0078). A grant is never edited: saving
  * ends the one shown and writes another, refused where another write
  * moved it first, and withdrawing ends the one shown and only that.
- * Controllers are named, never shown by GRN (ADR-0011).
+ * Controllers are named, never shown by GRN (ADR-0011). `canChange` is
+ * false only where the server denied delegating, and the grant is then
+ * shown alone, with nothing offered that garam would refuse.
  */
 export function DelegationForm({
   org,
   operator,
   delegation,
   controllers,
+  canChange = true,
 }: {
   org: string;
   operator: string;
   delegation: Delegation | null;
   /** The organization's other operators, which a grant may name. */
   controllers: readonly Controller[];
+  canChange?: boolean;
 }) {
   const [granted, grantAction, granting] = useActionState(
     grantDelegation,
@@ -75,8 +79,8 @@ export function DelegationForm({
     initialState,
   );
   const hydrated = useHydrated();
-  // Held in state so a refused grant keeps what was chosen: React resets
-  // uncontrolled fields to their defaults after the action.
+  // Held in state so a refused grant keeps what was chosen: React
+  // resets uncontrolled fields to their defaults after the action.
   const [chosenControllers, setChosenControllers] = useState<string[]>(
     delegation?.controllers ?? [],
   );
@@ -131,150 +135,158 @@ export function DelegationForm({
           ]}
         />
       )}
-      <form action={grantAction} className="flex flex-col gap-5">
-        <input type="hidden" name="org" value={org} />
-        <input type="hidden" name="operator" value={operator} />
-        <input
-          type="hidden"
-          name="expectedGrantId"
-          value={delegation?.grantId ?? ""}
-        />
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 font-medium">Controllers</legend>
-          {controllers.length === 0 ? (
-            <p className="text-muted-foreground">
-              Register another operator to name it as a controller.
-            </p>
-          ) : (
-            controllers.map((c) => (
-              <label key={c.grn} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="controllers"
-                  value={c.grn}
-                  checked={chosenControllers.includes(c.grn)}
-                  onChange={(event) =>
-                    setChosenControllers((list) =>
-                      toggle(list, c.grn, event.target.checked),
-                    )
-                  }
-                  disabled={!hydrated}
-                  className="size-4 accent-primary"
-                />
-                {c.name}
-                <span className="font-mono text-xs text-muted-foreground">
-                  {c.identifier}
-                </span>
-              </label>
-            ))
-          )}
-        </fieldset>
-        <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 font-medium">Operations</legend>
-          {OPERATIONS.map((o) => (
-            <label key={o.value} className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                name="operations"
-                value={o.value}
-                checked={chosenOperations.includes(o.value)}
-                onChange={(event) =>
-                  setChosenOperations((list) =>
-                    toggle(list, o.value, event.target.checked),
-                  )
-                }
-                disabled={!hydrated}
-                className="size-4 accent-primary"
-              />
-              {o.label}
-            </label>
-          ))}
-        </fieldset>
-        <FormField
-          label="Days until it expires"
-          hint="From 1 to 30."
-          error={granted.status === "error" ? granted.message : undefined}
-          className="max-w-48"
-        >
-          {(control) => (
-            <Input
-              {...control}
-              name="days"
-              type="number"
-              min={1}
-              max={30}
-              value={days}
-              onChange={(event) => setDays(event.target.value)}
-              disabled={!hydrated}
+      {canChange && (
+        <>
+          <form action={grantAction} className="flex flex-col gap-5">
+            <input type="hidden" name="org" value={org} />
+            <input type="hidden" name="operator" value={operator} />
+            <input
+              type="hidden"
+              name="expectedGrantId"
+              value={delegation?.grantId ?? ""}
             />
-          )}
-        </FormField>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="submit"
-            disabled={!hydrated || granting || controllers.length === 0}
-          >
-            {delegation === null ? "Grant delegation" : "Replace delegation"}
-          </Button>
-          {granted.status === "granted" && (
-            <span
-              role="status"
-              className="flex items-center gap-1 text-muted-foreground"
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-1 font-medium">Controllers</legend>
+              {controllers.length === 0 ? (
+                <p className="text-muted-foreground">
+                  Register another operator to name it as a controller.
+                </p>
+              ) : (
+                controllers.map((c) => (
+                  <label key={c.grn} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      name="controllers"
+                      value={c.grn}
+                      checked={chosenControllers.includes(c.grn)}
+                      onChange={(event) =>
+                        setChosenControllers((list) =>
+                          toggle(list, c.grn, event.target.checked),
+                        )
+                      }
+                      disabled={!hydrated}
+                      className="size-4 accent-primary"
+                    />
+                    {c.name}
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {c.identifier}
+                    </span>
+                  </label>
+                ))
+              )}
+            </fieldset>
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-1 font-medium">Operations</legend>
+              {OPERATIONS.map((o) => (
+                <label key={o.value} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    name="operations"
+                    value={o.value}
+                    checked={chosenOperations.includes(o.value)}
+                    onChange={(event) =>
+                      setChosenOperations((list) =>
+                        toggle(list, o.value, event.target.checked),
+                      )
+                    }
+                    disabled={!hydrated}
+                    className="size-4 accent-primary"
+                  />
+                  {o.label}
+                </label>
+              ))}
+            </fieldset>
+            <FormField
+              label="Days until it expires"
+              hint="From 1 to 30."
+              error={granted.status === "error" ? granted.message : undefined}
+              className="max-w-48"
             >
-              <Check aria-hidden className="size-4 text-ok" />
-              Delegation granted
-            </span>
-          )}
-        </div>
-      </form>
-      {delegation !== null && (
-        <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="outline" disabled={!hydrated || withdrawing}>
-                Withdraw delegation
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <form action={withdrawAction} className="contents">
-                <input type="hidden" name="org" value={org} />
-                <input type="hidden" name="operator" value={operator} />
-                <input
-                  type="hidden"
-                  name="grantId"
-                  value={delegation.grantId}
+              {(control) => (
+                <Input
+                  {...control}
+                  name="days"
+                  type="number"
+                  min={1}
+                  max={30}
+                  value={days}
+                  onChange={(event) => setDays(event.target.value)}
+                  disabled={!hydrated}
                 />
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Withdraw this delegation?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    The grant ends when you confirm, and the console hands this
-                    operator no further operations under it.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction type="submit" variant="destructive">
+              )}
+            </FormField>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="submit"
+                disabled={!hydrated || granting || controllers.length === 0}
+              >
+                {delegation === null
+                  ? "Grant delegation"
+                  : "Replace delegation"}
+              </Button>
+              {granted.status === "granted" && (
+                <span
+                  role="status"
+                  className="flex items-center gap-1 text-muted-foreground"
+                >
+                  <Check aria-hidden className="size-4 text-ok" />
+                  Delegation granted
+                </span>
+              )}
+            </div>
+          </form>
+          {delegation !== null && (
+            <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" disabled={!hydrated || withdrawing}>
                     Withdraw delegation
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </form>
-            </AlertDialogContent>
-          </AlertDialog>
-          {withdrawn.status === "error" && (
-            <p role="alert" className="text-destructive">
-              {withdrawn.message}
-            </p>
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <form action={withdrawAction} className="contents">
+                    <input type="hidden" name="org" value={org} />
+                    <input type="hidden" name="operator" value={operator} />
+                    <input
+                      type="hidden"
+                      name="grantId"
+                      value={delegation.grantId}
+                    />
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Withdraw this delegation?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        The grant ends when you confirm, and the console hands
+                        this operator no further operations under it.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction type="submit" variant="destructive">
+                        Withdraw delegation
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </form>
+                </AlertDialogContent>
+              </AlertDialog>
+              {withdrawn.status === "error" && (
+                <p role="alert" className="text-destructive">
+                  {withdrawn.message}
+                </p>
+              )}
+              {withdrawn.status === "withdrawn" && (
+                <span
+                  role="status"
+                  className="flex items-center gap-1 text-muted-foreground"
+                >
+                  <Check aria-hidden className="size-4 text-ok" />
+                  Delegation withdrawn
+                </span>
+              )}
+            </div>
           )}
-          {withdrawn.status === "withdrawn" && (
-            <span
-              role="status"
-              className="flex items-center gap-1 text-muted-foreground"
-            >
-              <Check aria-hidden className="size-4 text-ok" />
-              Delegation withdrawn
-            </span>
-          )}
-        </div>
+        </>
       )}
     </div>
   );

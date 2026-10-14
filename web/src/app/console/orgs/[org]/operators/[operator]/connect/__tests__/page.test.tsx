@@ -77,11 +77,28 @@ describe("connect operator page", () => {
     expect(screen.getByRole("radio", { name: /Rotate/ })).toBeChecked();
   });
 
-  it("says the caller cannot issue keys where the server denies it", async () => {
+  it("offers a first key to a caller garam allows re-issuing alone", async () => {
     keysAre();
     server.use(
       answerPermissionChecks((action) =>
         action === "operator:register" ? "deny" : "allow",
+      ),
+    );
+
+    await renderPage();
+
+    expect(
+      screen.getByRole("button", { name: "Issue key" }),
+    ).toBeInTheDocument();
+  });
+
+  it("says the caller cannot issue keys where the server denies both actions", async () => {
+    keysAre();
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "operator:register" || action === "operator:reissue"
+          ? "deny"
+          : "allow",
       ),
     );
 
@@ -117,5 +134,11 @@ describe("connect operator page", () => {
     await renderPage();
 
     expect(screen.getByText("Cannot reach the API")).toBeInTheDocument();
+    // The wizard stays mounted around the notice, so the render that
+    // follows issuing never unmounts a key it is showing.
+    expect(
+      screen.getByRole("list", { name: "Connect Field cluster one steps" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Issue key" })).toBeNull();
   });
 });

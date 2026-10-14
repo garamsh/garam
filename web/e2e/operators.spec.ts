@@ -73,17 +73,18 @@ test.describe("operators", () => {
       /kubectl create secret generic garam-credential/,
     );
     await expect(snippet).toContainText(
-      "token-url=https://machine.garam.localhost/oauth/token",
+      "token-url='https://machine.garam.localhost/oauth/token'",
     );
+    await expect(snippet).toContainText("kubectl apply --server-side");
     await expect(snippet).toContainText("private-key.pem=./field-two.pem");
     await expect(snippet).not.toContainText("PRIVATE KEY");
     expect(await axeViolations(page)).toEqual([]);
 
     await page.getByRole("button", { name: /placed the key/ }).click();
     await expect(page.getByText("Waiting for its first sign-in")).toBeVisible();
-    // The local stack runs no machine listener, so nothing exchanges the
-    // key; the test writes what an exchange leaves, and the step finds
-    // it on its own next check.
+    // The local stack runs no machine listener, so nothing exchanges
+    // the key; the test writes what an exchange leaves, and the step
+    // finds it on its own next check.
     await seedKeyExchange(signedIn, "field-two");
     await expect(page.getByText("Field two is connected")).toBeVisible({
       timeout: 15_000,

@@ -18,6 +18,12 @@ export const KEY_STATUS: Record<OperatorKey["state"], Status> = {
   revoked: { tone: "neutral", label: "Revoked" },
 };
 
+/**
+ * How many keys an operator holds live at once: a planned rotation adds
+ * one beside the key in use, and garam refuses a third (ADR-0102).
+ */
+export const MAX_LIVE_KEYS = 2;
+
 /** The keys that still verify assertions. */
 export function liveKeys(keys: readonly OperatorKey[]): OperatorKey[] {
   return keys.filter((key) => key.state !== "revoked");

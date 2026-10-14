@@ -364,12 +364,13 @@ origin; the console's own server never calls one.
 
 ## Design system
 
-**The foundation is built; no page is migrated yet.** The tokens,
-fonts, theme, shell, primitives and page templates exist
+**The foundation is built, and Operators is the first area migrated.**
+The tokens, fonts, theme, shell, primitives and page templates exist
 (`web/src/styles/globals.css`, `web/src/components/`,
-`web/src/app/console/_components/`). Each area's migration lands under
-epic #1366, in its plan's order, and until a page migrates, §What it
-serves describes it as it is.
+`web/src/app/console/_components/`), and the Operators list, detail
+and connect pages are built on them (#1388). Each other area's
+migration lands under epic #1366, in its plan's order, and until a page
+migrates, §What it serves describes it as it is.
 [ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
 holds the full decision and the reason for each part. This section is
 what a page owes once it is built on the system.
@@ -433,10 +434,12 @@ The boundary is as much of the responsibility as the contents.
     permission from a role it read
     ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
     §Role-aware UI).
-  - **Built for one control.** The API is `checkPermissions`, asked
-    through `web/src/lib/permission-check.ts` (§How it reaches garam).
-    The Operators section's register form is the one control that asks
-    so far; every other form the API will refuse still renders and is
+  - **Asked by the Operators area alone so far.** The API is
+    `checkPermissions`, asked through `web/src/lib/permission-check.ts`
+    (§How it reaches garam). The Operators pages ask for every action
+    they offer — registering, issuing and revoking keys, updating,
+    delegating and deleting — and hide a control only on a deny; every
+    form outside that area that the API will refuse still renders and is
     refused.
 - **Mints no identity and holds no credential.** No GRN, no session, no
   certificate, no invitation token originates here. The session is a
@@ -554,8 +557,8 @@ These decide the application itself:
   — one design system, of principles, tokens, shell, page templates,
   primitives and patterns, and a console that asks the server what a
   caller may do rather than rendering what it will refuse; the
-  foundation and the permission check are built, and no page is
-  migrated
+  foundation and the permission check are built, and Operators is the
+  one area migrated
 
 The rest bear on it without being about it:
 

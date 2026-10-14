@@ -55,6 +55,13 @@ function wizard(
   initialStep: Exclude<ConnectStep, "register">,
   keys: OperatorKey[] = [],
   rotate = false,
+  {
+    problem = null,
+    canReplace = true,
+  }: {
+    problem?: "unreachable" | "forbidden" | null;
+    canReplace?: boolean;
+  } = {},
 ) {
   return (
     <TooltipProvider>
@@ -62,15 +69,27 @@ function wizard(
         org="acme"
         operator="field-one"
         name="Field one"
-        clientId={CLIENT_ID}
+        clientId={problem === null ? CLIENT_ID : undefined}
         keys={keys}
+        problem={problem}
         initialStep={initialStep}
         rotate={rotate}
+        canReplace={canReplace}
         operatorHref="/console/orgs/acme/operators/field-one"
         operatorsHref="/console/orgs/acme/operators"
       />
     </TooltipProvider>
   );
+}
+
+/** Issues a first key through the wizard and closes its reveal as kept. */
+async function issueAndKeep(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Issue key" }));
+  const reveal = await screen.findByRole("alertdialog", {
+    name: "Save the private key",
+  });
+  await user.click(within(reveal).getByRole("checkbox"));
+  await user.click(within(reveal).getByRole("button", { name: "Done" }));
 }
 
 /** The step the stepper marks as the one in hand. */
@@ -104,8 +123,8 @@ describe("connect wizard", () => {
     const snippet = screen.getByText(
       /kubectl create secret generic garam-credential/,
     );
-    expect(snippet).toHaveTextContent(`client-id=${CLIENT_ID}`);
-    expect(snippet).toHaveTextContent(`token-url=${TOKEN_URL}`);
+    expect(snippet).toHaveTextContent(`client-id='${CLIENT_ID}'`);
+    expect(snippet).toHaveTextContent(`token-url='${TOKEN_URL}'`);
     expect(snippet).toHaveTextContent("private-key.pem=./field-one.pem");
     expect(snippet).not.toHaveTextContent("BEGIN PRIVATE KEY");
     expect(
@@ -178,7 +197,20 @@ describe("connect wizard", () => {
     ).toHaveAttribute("href", "?rotate");
     expect(
       screen.getByText(/kubectl create secret generic garam-credential/),
-    ).toHaveTextContent("token-url=<token URL shown when the key was issued>");
+    ).toHaveTextContent(
+      "token-url='<token URL shown when the key was issued>'",
+    );
+  });
+
+  it("offers no replacement link to a caller garam denies re-issuing", () => {
+    render(wizard("place", [neverUsed], false, { canReplace: false }));
+
+    expect(
+      screen.queryByRole("link", { name: "Issue a replacement" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/ask someone who\s+can re-issue/),
+    ).toBeInTheDocument();
   });
 
   it("names the control service's Secret by placeholder", async () => {
@@ -204,12 +236,71 @@ describe("connect wizard", () => {
     await act(() => vi.advanceTimersByTimeAsync(5_000));
     expect(router.refresh).toHaveBeenCalledTimes(1);
 
-    vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
-    act(() => {
-      document.dispatchEvent(new Event("visibilitychange"));
-    });
+    const hidden = vi
+      .spyOn(document, "visibilityState", "get")
+      .mockReturnValue("hidden");
+    try {
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await act(() => vi.advanceTimersByTimeAsync(20_000));
+      expect(router.refresh).toHaveBeenCalledTimes(1);
+    } finally {
+      hidden.mockRestore();
+    }
+  });
+
+  it("offers only replacing once two keys are live, and says why", () => {
+    const second: OperatorKey = { ...fieldOneKey, kid: "second-kid" };
+    render(wizard("issue", [fieldOneKey, second], true));
+
+    const rotate = screen.getByRole("radio", { name: /Rotate/ });
+    expect(rotate).toBeDisabled();
+    expect(rotate).not.toBeChecked();
+    expect(rotate).toHaveAccessibleDescription(/Two keys are already live/);
+    expect(screen.getByRole("radio", { name: /Replace now/ })).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "Replace key now" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers rotating while one key is live", () => {
+    render(wizard("issue", [fieldOneKey], true));
+
+    expect(screen.getByRole("radio", { name: /Rotate/ })).toBeEnabled();
+  });
+
+  it("keeps the private key revealable when the render after issuing fails a read", async () => {
+    recordIssuances();
+    const user = userEvent.setup();
+    const { rerender } = render(wizard("issue"));
+    await user.click(screen.getByRole("button", { name: "Issue key" }));
+    await screen.findByRole("alertdialog", { name: "Save the private key" });
+
+    rerender(wizard("issue", [], false, { problem: "unreachable" }));
+
+    expect(screen.getByText("Cannot reach the API")).toBeInTheDocument();
+    expect(
+      screen.getByRole("alertdialog", { name: "Save the private key" }),
+    ).toHaveTextContent("BEGIN PRIVATE KEY");
+  });
+
+  it("stops waiting, and says so, when the key is revoked before it signs in", async () => {
+    recordIssuances();
+    const user = userEvent.setup();
+    const { rerender } = render(wizard("issue"));
+    await issueAndKeep(user);
+    await user.click(screen.getByRole("button", { name: /placed the key/ }));
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+
+    rerender(wizard("issue", [{ ...neverUsed, state: "revoked" }]));
     await act(() => vi.advanceTimersByTimeAsync(20_000));
-    expect(router.refresh).toHaveBeenCalledTimes(1);
+
+    expect(screen.getByText("This key was revoked")).toBeInTheDocument();
+    expect(router.refresh).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("Waiting for its first sign-in"),
+    ).not.toBeInTheDocument();
   });
 
   it("says the operator is connected once its key has signed in, and offers the control service next", () => {

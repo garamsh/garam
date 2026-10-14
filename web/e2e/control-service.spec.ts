@@ -207,7 +207,8 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(
       page.getByText("Delegation granted", { exact: true }),
     ).toBeVisible();
-    // The grant is read back by what each operation lets the operator do.
+    // The grant is read back by what each operation lets the operator
+    // do.
     const operations = page
       .locator("dt", { hasText: "Operations" })
       .locator("+ dd");
@@ -221,7 +222,8 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(
       page.getByText("Saved as Hosted renamed", { exact: true }),
     ).toBeVisible();
-    // Renaming does not reach the endpoint, which only delegating moves.
+    // Renaming does not reach the endpoint, which only delegating
+    // moves.
     await page.goto(`${hosted}?tab=control`);
     await expect(page.getByText(ENDPOINT, { exact: true })).toBeVisible();
   });
@@ -649,7 +651,17 @@ test.describe("control service, as contract tests against the agreed Operator wi
       },
     ]);
 
-    await page.goto(agentPage);
+    // The deny was written to the database, and the API's policy cache,
+    // which the owner's visit above filled, drops that org's entry only
+    // when the change notification arrives after the commit
+    // (`internal/authz/cache.go`). A read landing first is decided
+    // without the deny, so the page is read again until it is in force.
+    await expect(async () => {
+      await page.goto(agentPage);
+      await expect(page.getByText(refused, { exact: true })).toBeVisible({
+        timeout: 1_000,
+      });
+    }).toPass({ timeout: 15_000 });
     await expect(
       // A control service's agent has no definition, so no name.
       page.getByRole("heading", {
@@ -661,7 +673,6 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(
       page.getByText(signedIn.agentProvisioningState, { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText(refused, { exact: true })).toBeVisible();
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
     await expect(

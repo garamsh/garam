@@ -70,7 +70,6 @@ export {
   type OrgConsent,
   type Organization,
   type Project,
-  type RefusableRead,
   type RegisteredOperator,
 } from "./api/orgs";
 export {

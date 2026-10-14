@@ -1,9 +1,9 @@
-import { SectionSkeleton } from "../../_components/section-skeleton";
+import { ListPageSkeleton } from "../../_components/page-skeletons";
 
 /**
- * Stands in for every section below the organization: each one renders
- * a heading over a list, so they share one skeleton.
+ * Stands in for every section below the organization: each one opens
+ * on a heading over a list. An entry's page sets its own.
  */
 export default function Loading() {
-  return <SectionSkeleton />;
+  return <ListPageSkeleton />;
 }

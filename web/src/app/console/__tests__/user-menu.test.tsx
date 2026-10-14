@@ -1,16 +1,23 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UserMenu } from "@/app/console/_components/user-menu";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { THEME_STORAGE_KEY } from "@/lib/theme";
+import { stubLocalStorage } from "@/testing/storage";
 
 // The Server Action revokes the session and redirects; the menu's own
 // contract is that submitting the control reaches it.
 const loggedOut = vi.hoisted(() => vi.fn());
 
 vi.mock("@/features/auth/actions", () => ({ logOut: loggedOut }));
+
+beforeEach(() => {
+  stubLocalStorage();
+  document.documentElement.className = "";
+});
 
 function renderMenu(nickname: string) {
   return render(
@@ -40,5 +47,19 @@ describe("user menu", () => {
     await user.click(await screen.findByRole("menuitem", { name: "Sign out" }));
 
     expect(loggedOut).toHaveBeenCalled();
+  });
+
+  it("offers the theme and applies the one chosen", async () => {
+    const user = userEvent.setup();
+    renderMenu("Alice");
+
+    await user.click(screen.getByRole("button", { name: /Alice/ }));
+    expect(
+      await screen.findByRole("menuitemradio", { name: "System" }),
+    ).toHaveAttribute("aria-checked", "true");
+    await user.click(screen.getByRole("menuitemradio", { name: "Dark" }));
+
+    expect(document.documentElement).toHaveClass("dark");
+    expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
   });
 });

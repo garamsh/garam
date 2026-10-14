@@ -53,7 +53,7 @@ export function InviteMemberForm({ org }: { org: string }) {
             name="role"
             value={role}
             onChange={(event) => setRole(event.target.value)}
-            className="h-9 w-40 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            className="w-40"
           >
             <option value="member">Member</option>
             <option value="admin">Admin</option>

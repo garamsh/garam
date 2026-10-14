@@ -69,7 +69,7 @@ test.describe("signed in", () => {
     page,
     signedIn,
   }) => {
-    const nav = page.getByRole("list", { name: "Organization sections" });
+    const nav = page.getByRole("navigation", { name: "Organization sections" });
     const breadcrumb = page.getByRole("navigation", { name: "breadcrumb" });
     await page.goto(`/console/orgs/${signedIn.orgSlug}`);
 
@@ -115,7 +115,7 @@ test.describe("signed in", () => {
   });
 
   test("collapses the sidebar to icons", async ({ page, signedIn }) => {
-    const nav = page.getByRole("list", { name: "Organization sections" });
+    const nav = page.getByRole("navigation", { name: "Organization sections" });
     await page.goto(`/console/orgs/${signedIn.orgSlug}`);
     await expect(
       nav.getByRole("link", { name: "Teams", exact: true }),

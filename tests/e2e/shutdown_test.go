@@ -311,17 +311,6 @@ func buildGaram(t *testing.T) string {
 	return bin
 }
 
-// freeAddr reserves a loopback address for the process to bind. The
-// port is free again between Close here and Listen there, which is the
-// best a test can do without handing the process an open socket.
-func freeAddr(t *testing.T) string {
-	t.Helper()
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer func() { _ = lis.Close() }()
-	return lis.Addr().String()
-}
-
 // waitForProbe polls until the process answers liveness, so the SIGTERM
 // after it provably lands on a process that was serving.
 func waitForProbe(t *testing.T, url string, logs *bytes.Buffer) {

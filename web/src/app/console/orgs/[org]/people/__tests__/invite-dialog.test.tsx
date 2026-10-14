@@ -29,17 +29,17 @@ function issued(token: string, role = "member") {
   );
 }
 
-async function openDialog(user: UserEvent) {
-  render(<InviteDialog org="acme" />);
-  await user.click(screen.getByRole("button", { name: "Invite people" }));
-  return screen.getByRole("dialog", { name: "Invite a person" });
+/** Garam refusing the invitation to a caller without the right. */
+function refused() {
+  return HttpResponse.json(
+    { kind: "permission_denied", message: "permission denied" },
+    { status: 403 },
+  );
 }
 
-/** The link the dialog offers, read from its copy field. */
-function linkShown() {
-  return within(
-    screen.getByRole("group", { name: "Invitation link" }),
-  ).getByText(/console\/invitations/).textContent;
+async function open(user: UserEvent) {
+  await user.click(screen.getByRole("button", { name: "Invite people" }));
+  return screen.getByRole("dialog", { name: "Invite a person" });
 }
 
 async function chooseRole(user: UserEvent, role: string) {
@@ -47,71 +47,82 @@ async function chooseRole(user: UserEvent, role: string) {
   await user.click(await screen.findByRole("option", { name: role }));
 }
 
+function roleField() {
+  return screen.getByRole("combobox", { name: "Role" });
+}
+
 describe("invite dialog", () => {
-  it("offers the link to copy once garam issues it", async () => {
-    server.use(http.post(INVITATIONS, () => issued("secret-token")));
+  it("reveals the link once garam issues it, naming the role it admits as", async () => {
+    server.use(http.post(INVITATIONS, () => issued("secret-token", "admin")));
     const user = userEvent.setup();
-    await openDialog(user);
-
-    expect(
-      screen.queryByRole("group", { name: "Invitation link" }),
-    ).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Create invitation" }));
-
-    await screen.findByRole("group", { name: "Invitation link" });
-    expect(linkShown()).toBe(
-      "http://localhost:3000/console/invitations/secret-token",
-    );
-    expect(
-      screen.getByRole("button", { name: "Copy invitation link" }),
-    ).toBeInTheDocument();
-  });
-
-  it("stops reading Copied once a second invitation replaces the link", async () => {
-    let count = 0;
-    server.use(
-      http.post(INVITATIONS, () => {
-        count += 1;
-        return issued(`token-${count}`);
-      }),
-    );
-    const user = userEvent.setup();
-    await openDialog(user);
-
-    await user.click(screen.getByRole("button", { name: "Create invitation" }));
-    await screen.findByRole("group", { name: "Invitation link" });
-    await user.click(
-      screen.getByRole("button", { name: "Copy invitation link" }),
-    );
-    expect(await screen.findByText("Copied")).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Create invitation" }));
-    // The field already holds token 1, so its text is the only thing
-    // that marks token 2 as having arrived.
-    await waitFor(() =>
-      expect(linkShown()).toBe(
-        "http://localhost:3000/console/invitations/token-2",
-      ),
-    );
-    expect(screen.queryByText("Copied")).not.toBeInTheDocument();
-  });
-
-  it("sends the role chosen", async () => {
-    const roles: unknown[] = [];
-    server.use(
-      http.post(INVITATIONS, async ({ request }) => {
-        roles.push(((await request.json()) as { role: string }).role);
-        return issued("secret-token", "admin");
-      }),
-    );
-    const user = userEvent.setup();
-    await openDialog(user);
+    render(<InviteDialog org="acme" />);
+    await open(user);
 
     await chooseRole(user, "Admin");
     await user.click(screen.getByRole("button", { name: "Create invitation" }));
 
-    await screen.findByRole("group", { name: "Invitation link" });
-    expect(roles).toEqual(["admin"]);
+    const reveal = await screen.findByRole("alertdialog", {
+      name: "Invitation link",
+    });
+    expect(
+      within(reveal).getByText(
+        "http://localhost:3000/console/invitations/secret-token",
+      ),
+    ).toBeInTheDocument();
+    // Presence: the description goes on to say the link is shown once.
+    expect(reveal).toHaveAccessibleDescription(
+      /^It admits one person as Admin and works once\./,
+    );
+    // Shown once: nothing dismisses it before it is kept.
+    expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
+  });
+
+  it("forgets the link with the dialog: reopening offers a new invitation", async () => {
+    server.use(http.post(INVITATIONS, () => issued("secret-token")));
+    const user = userEvent.setup();
+    render(<InviteDialog org="acme" />);
+    await open(user);
+    await chooseRole(user, "Member");
+    await user.click(screen.getByRole("button", { name: "Create invitation" }));
+    // The control: the link is on screen before the dialog closes.
+    expect(
+      await screen.findByText(
+        "http://localhost:3000/console/invitations/secret-token",
+      ),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    await open(user);
+
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(roleField()).toHaveTextContent("Choose a role");
+    // Choosing the same role again brings back no old link.
+    await chooseRole(user, "Member");
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.queryByText(/secret-token/)).not.toBeInTheDocument();
+  });
+
+  it("drops a refusal once the dialog closes", async () => {
+    server.use(http.post(INVITATIONS, () => refused()));
+    const user = userEvent.setup();
+    render(<InviteDialog org="acme" />);
+    await open(user);
+    await chooseRole(user, "Admin");
+    await user.click(screen.getByRole("button", { name: "Create invitation" }));
+    // The control: the refusal is the role's error while it is open.
+    await waitFor(() =>
+      expect(roleField()).toHaveAttribute("aria-invalid", "true"),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await open(user);
+
+    expect(roleField()).not.toHaveAttribute("aria-invalid");
+    expect(roleField()).toHaveTextContent("Choose a role");
   });
 
   it("attaches a refusal to the role and sends the same role again", async () => {
@@ -120,48 +131,67 @@ describe("invite dialog", () => {
     server.use(
       http.post(INVITATIONS, async ({ request }) => {
         roles.push(((await request.json()) as { role: string }).role);
-        return refusing
-          ? HttpResponse.json(
-              { kind: "permission_denied", message: "permission denied" },
-              { status: 403 },
-            )
-          : issued("secret-token", "admin");
+        return refusing ? refused() : issued("secret-token", "admin");
       }),
     );
     const user = userEvent.setup();
-    await openDialog(user);
+    render(<InviteDialog org="acme" />);
+    await open(user);
 
-    // Not the starting role, so a reset to it shows.
     await chooseRole(user, "Admin");
     await user.click(screen.getByRole("button", { name: "Create invitation" }));
 
-    const role = screen.getByRole("combobox", { name: "Role" });
-    await waitFor(() => expect(role).toHaveAttribute("aria-invalid", "true"));
-    expect(role).toHaveAccessibleDescription(REFUSAL_COPY.permissionDenied);
-    expect(role).toHaveTextContent("Admin");
-    expect(
-      screen.queryByRole("group", { name: "Invitation link" }),
-    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(roleField()).toHaveAttribute("aria-invalid", "true"),
+    );
+    expect(roleField()).toHaveAccessibleDescription(
+      REFUSAL_COPY.permissionDenied,
+    );
+    expect(roleField()).toHaveTextContent("Admin");
 
     // The control: submitted again untouched, garam issues it as the
-    // same role and the error clears.
+    // same role.
     refusing = false;
     await user.click(screen.getByRole("button", { name: "Create invitation" }));
-    await screen.findByRole("group", { name: "Invitation link" });
-    expect(role).not.toHaveAttribute("aria-invalid");
+    await screen.findByRole("alertdialog", { name: "Invitation link" });
     expect(roles).toEqual(["admin", "admin"]);
+  });
+
+  it("says a role is needed when sent without one", async () => {
+    const roles: unknown[] = [];
+    server.use(
+      http.post(INVITATIONS, async ({ request }) => {
+        roles.push(((await request.json()) as { role: string }).role);
+        return issued("secret-token");
+      }),
+    );
+    const user = userEvent.setup();
+    render(<InviteDialog org="acme" />);
+    await open(user);
+
+    await user.click(screen.getByRole("button", { name: "Create invitation" }));
+
+    await waitFor(() =>
+      expect(roleField()).toHaveAccessibleDescription(
+        "Choose a role for the invitation.",
+      ),
+    );
+    expect(roles).toEqual([]);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 
   it("keeps the form and says so when the API never answers", async () => {
     server.use(http.post(INVITATIONS, () => HttpResponse.error()));
     const user = userEvent.setup();
-    await openDialog(user);
+    render(<InviteDialog org="acme" />);
+    await open(user);
 
+    await chooseRole(user, "Member");
     await user.click(screen.getByRole("button", { name: "Create invitation" }));
 
-    const role = screen.getByRole("combobox", { name: "Role" });
-    await waitFor(() => expect(role).toHaveAttribute("aria-invalid", "true"));
-    expect(role).toHaveAccessibleDescription(REFUSAL_COPY.unreachable);
+    await waitFor(() =>
+      expect(roleField()).toHaveAccessibleDescription(REFUSAL_COPY.unreachable),
+    );
     expect(
       screen.getByRole("button", { name: "Create invitation" }),
     ).toBeInTheDocument();

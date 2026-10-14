@@ -3,8 +3,8 @@
 import { UserPlus } from "lucide-react";
 import { useActionState, useState } from "react";
 
-import { CopyField } from "@/components/copy-field";
 import { FormField } from "@/components/form-field";
+import { SecretReveal } from "@/components/secret-reveal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -26,81 +26,116 @@ import {
   type CreateInvitationState,
 } from "@/features/orgs/actions";
 
+import { ROLE_LABEL } from "../../../../_components/org-role";
+
 const initialState: CreateInvitationState = { status: "idle" };
+
+/** The roles an invitation can carry; owners are not invited. */
+type InvitedRole = "member" | "admin";
 
 /**
  * Invites a person: the role they join as, then the link that admits
- * them, to copy and send. garam sends no email, so the link is the
- * invitation. It works once, and closing the dialog leaves it behind.
- *
- * The select stands outside the `<form>` and the role is submitted
- * from a hidden input: the select returns to its first value on a
- * reset of the form holding it, and React resets a form after its
- * action, so the role chosen is the one shown and sent after a refusal.
+ * them. garam sends no email, so the link is the invitation, and it is
+ * a credential shown once (ADR-0103 §Patterns): it is revealed in
+ * `SecretReveal` and never kept past the dialog that issued it.
  */
 export function InviteDialog({ org }: { org: string }) {
-  const [state, formAction, pending] = useActionState(
-    createInvitation,
-    initialState,
-  );
-  const [role, setRole] = useState("member");
-  const link =
-    state.status === "created"
-      ? `${window.location.origin}/console/invitations/${state.token}`
-      : null;
+  const [open, setOpen] = useState(false);
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button>
           <UserPlus />
           Invite people
         </Button>
       </DialogTrigger>
-      {/* One track no wider than the dialog: the link's full length
-          would otherwise set it and push the content off a phone. */}
       <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Invite a person</DialogTitle>
           <DialogDescription>
-            Choose the role they join as, then send them the link.
+            Choose the role they join as. The link that admits them is shown
+            once.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <FormField
-            label="Role"
-            error={state.status === "error" ? state.message : undefined}
-          >
-            {(control) => (
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger {...control} className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-          </FormField>
-          <form action={formAction}>
-            <input type="hidden" name="org" value={org} />
-            <input type="hidden" name="role" value={role} />
-            <Button type="submit" disabled={pending}>
-              {pending ? "Creating…" : "Create invitation"}
-            </Button>
-          </form>
-        </div>
-        {link && (
-          <div className="flex flex-col gap-2 border-t pt-4">
-            <CopyField label="Invitation link" value={link} />
-            <p className="text-muted-foreground">
-              Send this link to the person you invited. It works once and then
-              expires.
-            </p>
-          </div>
-        )}
+        <InviteForm org={org} onDone={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * The dialog's form, mounted only while the dialog is open, so an
+ * issued link and a refusal both go when it closes. The link is shown
+ * in `SecretReveal`, which holds the form shut until it is kept and
+ * then closes the dialog: the role cannot change under a shown link.
+ *
+ * The role starts unchosen and is sent from a hidden input in the form.
+ * React resets the form after its action, and the select answers a
+ * reset with its empty default, which is no choice and is ignored: a
+ * refused role stays chosen.
+ */
+function InviteForm({ org, onDone }: { org: string; onDone: () => void }) {
+  const [state, formAction, pending] = useActionState(
+    createInvitation,
+    initialState,
+  );
+  const [role, setRole] = useState<InvitedRole | "">("");
+  const issued =
+    state.status === "created" && role !== ""
+      ? { token: state.token, role }
+      : null;
+
+  return (
+    <>
+      <form action={formAction} className="flex flex-col gap-4">
+        <input type="hidden" name="org" value={org} />
+        <input type="hidden" name="role" value={role} />
+        <FormField
+          label="Role"
+          error={state.status === "error" ? state.message : undefined}
+        >
+          {(control) => (
+            <Select
+              value={role}
+              onValueChange={(value) => {
+                // The form's reset answers with the empty default; no
+                // option is empty, so that is not a choice.
+                if (value !== "member" && value !== "admin") return;
+                setRole(value);
+              }}
+            >
+              <SelectTrigger {...control} className="w-40">
+                <SelectValue placeholder="Choose a role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="member">{ROLE_LABEL.member}</SelectItem>
+                <SelectItem value="admin">{ROLE_LABEL.admin}</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </FormField>
+        <div>
+          <Button type="submit" disabled={pending}>
+            {pending ? "Creating…" : "Create invitation"}
+          </Button>
+        </div>
+      </form>
+      <SecretReveal
+        open={issued !== null}
+        title="Invitation link"
+        description={
+          issued &&
+          `It admits one person as ${ROLE_LABEL[issued.role]} and works once. Send it to them now: it is not shown again.`
+        }
+        secret={
+          issued
+            ? `${window.location.origin}/console/invitations/${issued.token}`
+            : ""
+        }
+        noun="invitation link"
+        onDone={onDone}
+      />
+    </>
   );
 }

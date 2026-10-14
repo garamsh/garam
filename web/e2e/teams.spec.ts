@@ -40,7 +40,7 @@ test.describe("teams", () => {
     page,
     signedIn,
   }) => {
-    const nav = page.getByRole("list", {
+    const nav = page.getByRole("navigation", {
       name: "Organization sections",
       exact: true,
     });

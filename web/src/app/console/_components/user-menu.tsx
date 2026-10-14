@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsUpDown, LogOut } from "lucide-react";
+import { ChevronsUpDown, LogOut, Monitor, Moon, Sun } from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -8,6 +8,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -18,10 +20,19 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { logOut } from "@/features/auth/actions";
+import { useTheme } from "@/hooks/use-theme";
+import { parseThemePreference } from "@/lib/theme";
 
-/** The signed-in identity and the way out of it. */
+const THEMES = [
+  { value: "system", label: "System", icon: Monitor },
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+] as const;
+
+/** The signed-in identity, the console's theme, and the way out. */
 export function UserMenu({ nickname }: { nickname: string }) {
   const { isMobile } = useSidebar();
+  const { theme, setTheme } = useTheme();
 
   return (
     <SidebarMenu>
@@ -33,17 +44,14 @@ export function UserMenu({ nickname }: { nickname: string }) {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <span className="sr-only">Open account menu</span>
-              <Avatar className="rounded-lg">
+              <Avatar className="size-8 rounded-lg">
                 <AvatarFallback className="rounded-lg text-xs">
                   {nickname.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{nickname}</span>
-                <span className="truncate text-xs text-sidebar-foreground/70">
-                  Signed in
-                </span>
-              </div>
+              <span className="flex-1 truncate text-left font-medium text-sidebar-accent-foreground">
+                {nickname}
+              </span>
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
@@ -56,6 +64,21 @@ export function UserMenu({ nickname }: { nickname: string }) {
             <DropdownMenuLabel className="text-xs text-muted-foreground">
               {nickname}
             </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              Theme
+            </DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={theme}
+              onValueChange={(value) => setTheme(parseThemePreference(value))}
+            >
+              {THEMES.map(({ value, label, icon: Icon }) => (
+                <DropdownMenuRadioItem key={value} value={value}>
+                  <Icon />
+                  {label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
             <form action={logOut}>
               <DropdownMenuItem asChild>

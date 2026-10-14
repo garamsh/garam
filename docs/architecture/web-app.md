@@ -118,8 +118,12 @@ The console's structure is `Organizations → organization → section`,
 carried by a collapsible sidebar shell over every `/console/*` route
 ([ADR-0011](./adr/0011-console-shell.md)). Its org-scoped sections are
 declared in one place, `web/src/app/console/_components/navigation.ts`,
-which is what the sidebar, the breadcrumb and the active marking all
-read; adding one is an entry there and a route folder. A section whose
+which is what the sidebar, the breadcrumb, the command palette and the
+active marking all read. Below the overview the sidebar groups the
+sections as Workloads, Access, Infrastructure and Organization, and
+the same file's `CONSOLE_NAV_GROUPS` is where each one is placed, with
+a link only for a route that exists; adding one is an entry there, a
+place in a group and a route folder. A section whose
 entries each have a page of their own declares it there too, and Teams,
 Agents, Operators and Permissions do: `/console/orgs/{org}/teams/{team}`
 is a team's page and `…/teams/new` creates one, `…/agents/{agent}` is
@@ -157,6 +161,28 @@ once the shell prefetches on intent (#1209). The cost is a link
 followed with no intent shown first, which waits for its render after
 the click: one server render and one round trip. Links in a page's own
 content, such as the overview's section cards, keep the default.
+
+The rest of the shell, and where each part is decided:
+
+- **The organization switcher** names the caller's role in the
+  organization on screen. That organization's layout reads it from its
+  members list behind `<Suspense>`
+  (`web/src/app/console/_components/org-role-read.tsx`), so no page
+  waits on it, and a refused or unanswered read shows no role.
+- **The top bar** carries the breadcrumb and a command palette, opened
+  by ⌘K, Ctrl+K or `/`, that reaches the organization's sections, the
+  caller's organizations and the theme
+  (`web/src/app/console/_components/command-palette.tsx`). On a phone
+  the breadcrumb keeps the organization's name beside the page's.
+- **The theme** is system, light or dark, chosen in the user menu or
+  the palette and kept in the browser alone. `web/src/lib/theme.ts`
+  applies it before the first paint, so a dark page is never served
+  light first.
+- **A failure below the shell** renders
+  `web/src/app/console/error.tsx`, which says what happened in words
+  and offers the error's digest as a reference, never the thrown
+  message. `notFound()` and any console address no route serves render
+  `web/src/app/console/not-found.tsx` inside the shell.
 
 What a section can do differs, and the difference is the state of the
 API behind it rather than of the console:

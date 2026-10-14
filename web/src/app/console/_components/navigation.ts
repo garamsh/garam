@@ -3,6 +3,7 @@ import {
   FolderGit2,
   Handshake,
   LayoutDashboard,
+  LayoutTemplate,
   Server,
   ShieldCheck,
   UserRound,
@@ -39,6 +40,8 @@ export type ConsoleSection = {
 export type ConsoleView = {
   segment: string;
   label: string;
+  /** Present on a view the sidebar lists as an entry of its own. */
+  icon?: LucideIcon;
   items?: { create?: string; fallback: string };
 };
 
@@ -67,6 +70,7 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
       {
         segment: "templates",
         label: "Templates",
+        icon: LayoutTemplate,
         items: { fallback: "Template" },
       },
     ],
@@ -89,6 +93,101 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     views: [{ segment: "attachments", label: "Attachments" }],
   },
 ];
+
+/**
+ * One sidebar entry: a section, or a view of one the sidebar lists in
+ * its own right. Its label and icon are the section's or the view's.
+ */
+export type NavEntry = { section: string; view?: string };
+
+/** A labelled group of sidebar entries. */
+export type NavGroup = { label: string; entries: readonly NavEntry[] };
+
+/**
+ * The sidebar's grouping of the sections, below the overview. Every
+ * section but the overview appears in exactly one group. A link is
+ * listed only for a route that exists: a group gains an entry with the
+ * route that serves it.
+ */
+export const CONSOLE_NAV_GROUPS: readonly NavGroup[] = [
+  {
+    label: "Workloads",
+    entries: [{ section: "agents" }, { section: "agents", view: "templates" }],
+  },
+  {
+    label: "Access",
+    entries: [
+      { section: "teams" },
+      { section: "people" },
+      { section: "permissions" },
+    ],
+  },
+  { label: "Infrastructure", entries: [{ section: "operators" }] },
+  {
+    label: "Organization",
+    entries: [{ section: "projects" }, { section: "consents" }],
+  },
+];
+
+/** A sidebar entry with what it shows and where it leads. */
+export type ResolvedNavEntry = {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  segment: string;
+  section: ConsoleSection;
+  view?: ConsoleView;
+};
+
+/** Looks up a sidebar entry's section and view; undefined when unknown. */
+export function resolveNavEntry(entry: NavEntry): ResolvedNavEntry | undefined {
+  const section = CONSOLE_SECTIONS.find(
+    (item) => item.segment === entry.section,
+  );
+  if (!section) return undefined;
+  if (entry.view === undefined) {
+    return {
+      key: section.segment,
+      label: section.label,
+      icon: section.icon,
+      segment: section.segment,
+      section,
+    };
+  }
+  const view = section.views?.find((item) => item.segment === entry.view);
+  if (!view?.icon) return undefined;
+  return {
+    key: `${section.segment}/${view.segment}`,
+    label: view.label,
+    icon: view.icon,
+    segment: `${section.segment}/${view.segment}`,
+    section,
+    view,
+  };
+}
+
+/**
+ * Whether a sidebar entry is where the visitor is: `page` on the entry's
+ * own page, `location` below it, and undefined elsewhere. A view the
+ * sidebar lists is its own entry, so its pages are not its section's.
+ */
+export function navEntryCurrent(
+  entry: ResolvedNavEntry,
+  location: ConsoleLocation,
+): "page" | "location" | undefined {
+  if (location.kind !== "org" || location.section !== entry.section) {
+    return undefined;
+  }
+  const listedView = entry.section.views?.find(
+    (view) => view.icon !== undefined && view.segment === location.item,
+  );
+  if (entry.view) {
+    if (listedView !== entry.view) return undefined;
+    return location.viewItem === undefined ? "page" : "location";
+  }
+  if (listedView) return undefined;
+  return location.item === undefined ? "page" : "location";
+}
 
 /**
  * Where a console pathname sits in the console's structure. `item` is

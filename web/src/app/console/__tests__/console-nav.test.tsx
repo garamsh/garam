@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ConsoleNav } from "@/app/console/_components/console-nav";
@@ -54,6 +54,64 @@ describe("console navigation", () => {
     renderNav("/console/orgs/acme/teams/eng");
 
     expect(screen.getByRole("link", { name: "Teams" })).toHaveAttribute(
+      "aria-current",
+      "location",
+    );
+  });
+
+  it("groups the sections as Workloads, Access, Infrastructure and Organization", () => {
+    renderNav("/console/orgs/acme");
+
+    const groups = {
+      Workloads: ["Agents", "Templates"],
+      Access: ["Teams", "People", "Permissions"],
+      Infrastructure: ["Operators"],
+      Organization: ["Projects", "Consents"],
+    };
+    for (const [group, sections] of Object.entries(groups)) {
+      const list = screen.getByRole("list", { name: group });
+      expect(
+        within(list)
+          .getAllByRole("link")
+          .map((link) => link.textContent),
+      ).toEqual(sections);
+    }
+  });
+
+  it("links Templates to the view inside Agents and marks it there", () => {
+    renderNav("/console/orgs/acme/agents/templates");
+
+    expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/agents/templates",
+    );
+    expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    // Control: the section the view lives in is a different entry, and
+    // is current on its own pages.
+    expect(screen.getByRole("link", { name: "Agents" })).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
+  it("marks Agents, not Templates, on one agent's page", () => {
+    renderNav("/console/orgs/acme/agents/a1");
+
+    expect(screen.getByRole("link", { name: "Agents" })).toHaveAttribute(
+      "aria-current",
+      "location",
+    );
+    expect(screen.getByRole("link", { name: "Templates" })).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
+  it("marks Templates as the location on one template's page", () => {
+    renderNav("/console/orgs/acme/agents/templates/t1");
+
+    expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
       "aria-current",
       "location",
     );

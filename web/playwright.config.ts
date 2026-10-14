@@ -18,7 +18,27 @@ export default defineConfig({
     baseURL: BASE_URL,
     trace: "on-first-retry",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Desktop runs every spec but the mobile ones, and the phone-width
+  // project runs only those: the shell's sidebar is a sheet there, and
+  // the desktop specs drive it as a column.
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+      testIgnore: /\.mobile\.spec\.ts$/,
+    },
+    {
+      name: "mobile",
+      use: {
+        browserName: "chromium",
+        viewport: { width: 390, height: 844 },
+        deviceScaleFactor: 3,
+        isMobile: true,
+        hasTouch: true,
+      },
+      testMatch: /\.mobile\.spec\.ts$/,
+    },
+  ],
   webServer: {
     // The app is served as the image ships it (deploy/local/
     // Dockerfile.web): the standalone server `output: "standalone"`

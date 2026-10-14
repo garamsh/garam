@@ -38,7 +38,7 @@ export async function ConsoleSidebar() {
           <OrgSwitcher orgs={orgs.orgs} />
         </SidebarHeader>
       )}
-      <SidebarContent>
+      <SidebarContent className="group-data-[collapsible=icon]:items-center">
         <ConsoleNav />
       </SidebarContent>
       {session.status === "signed-in" && (

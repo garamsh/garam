@@ -2,6 +2,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  OrgRoleProvider,
+  ReportOrgRole,
+  type OrgRole,
+} from "@/app/console/_components/org-role";
 import { OrgSwitcher } from "@/app/console/_components/org-switcher";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -15,12 +20,19 @@ const orgs = [
   { slug: "globex", name: "Globex" },
 ];
 
-function renderSwitcher(pathname: string, list = orgs) {
+function renderSwitcher(
+  pathname: string,
+  list = orgs,
+  reported?: { org: string; role: OrgRole },
+) {
   route.pathname = pathname;
   return render(
     <TooltipProvider>
       <SidebarProvider>
-        <OrgSwitcher orgs={list} />
+        <OrgRoleProvider>
+          {reported && <ReportOrgRole {...reported} />}
+          <OrgSwitcher orgs={list} />
+        </OrgRoleProvider>
       </SidebarProvider>
     </TooltipProvider>,
   );
@@ -33,6 +45,26 @@ describe("organization switcher", () => {
     // Presence: the trigger's name is the sr-only "Switch organization",
     // then the org's name and its slug.
     expect(screen.getByRole("button", { name: /Globex/ })).toBeInTheDocument();
+  });
+
+  it("names the caller's role in the organization once it is read", () => {
+    renderSwitcher("/console/orgs/globex", orgs, {
+      org: "globex",
+      role: "admin",
+    });
+
+    // Presence, as above: the role follows the org's name.
+    expect(
+      screen.getByRole("button", { name: /Globex\s*Admin/ }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows no identifier where the role has not been read", () => {
+    renderSwitcher("/console/orgs/globex");
+
+    const trigger = screen.getByRole("button", { name: /Globex/ });
+    expect(trigger).toHaveTextContent("Organization");
+    expect(trigger).not.toHaveTextContent("globex");
   });
 
   it("says so when no organization is selected", () => {

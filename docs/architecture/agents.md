@@ -325,8 +325,9 @@ in #1157.
   is archival, and the browser read says so, and migration 000033's
   rollback refuses while a cutover is held. `garam cutover-inventory`
   prints every source record of an organization with a digest of each
-  value and no value. The Operator's import and release are unbuilt
-  (garamsh/garam-agent-operator#217).
+  value and no value. The Operator's import and release are built
+  (`garamsh/garam-agent-operator` `ad444ed`,
+  `docs/architecture/control.md`, its ADR 0050).
 - **A managed agent is created by request, not by claim.** The control
   service presents a member's `agent:create` reference and the request
   identifier it binds; garam rechecks the reference from current state

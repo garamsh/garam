@@ -218,6 +218,12 @@ paths:
         revocation, and that refusal is what keeps a renewable
         certificate from being a permanent one.
 
+        An operator that authenticates with a token renews nothing
+        here: it exchanges its credential with `exchangeToken`, or an
+        assertion signed by a key issued to it with
+        `exchangeClientAssertion`, for the next token (ADR-0100,
+        ADR-0102).
+
         Each call signs a new certificate and generates the private key
         it returns once, so it is a POST rather than a GET.
       responses:
@@ -249,8 +255,10 @@ paths:
         operations that list `machineToken`. With an `audience` naming
         another operator of the same organization — a hosted control
         service — the token is minted to be shown to that service, and
-        garam accepts it on no operation here: it is the audience's to
-        present for introspection, which no route offers yet.
+        garam accepts it as a credential on no operation here: the
+        audience forwards it to `introspectController` under
+        `operation-authority.v2`, as `token` in place of
+        `certificatePem`, to prove the operator it names.
 
         A credential the operator's organization re-issued or withdrew
         with the operator exchanges nothing, and every token it was
@@ -414,6 +422,12 @@ paths:
         be used, and what crossed the wire was a public key and a
         signature over it. A caller that loses the key it generated
         registers again rather than recovering.
+
+        An operator that authenticates with a token needs no
+        certificate from here: it exchanges the credential its
+        organization issued it with `exchangeToken`, or an assertion
+        signed by a key issued to it with `exchangeClientAssertion`
+        (ADR-0100, ADR-0102).
       security: []
       requestBody:
         required: true
@@ -510,6 +524,10 @@ paths:
         has no connection left to renew over. Each call signs a new
         certificate and generates the private key it returns once, so
         it is a POST rather than a GET.
+
+        An agent that authenticates with a token has no certificate to
+        renew: its own token is 401 here, and its assignee mints the
+        next with `mintAgentToken` (ADR-0100).
 
         The assignment is the whole of the precondition as well. There
         is no renewal window and no lineage here: a caller the
@@ -2095,6 +2113,12 @@ paths:
         still be assigned where its creation put it, at `epoch`.
 
 
+        It takes a certificate and no token: a token is 401. A
+        controller that created the agent under `managed-enrollment.v2`
+        asks nothing here, and mints the agent's tokens with
+        `mintAgentToken` instead (ADR-0100).
+
+
         The certificate is signed over `certificateRequestPem`'s key,
         which never leaves the controller. garam reads the key alone:
         the request's subject, SAN and extension requests are ignored,
@@ -2278,6 +2302,12 @@ paths:
         registration was revoked or replaced is refused at the
         connection, and an expired certificate cannot connect: both
         recover only by an administrator's new approval.
+
+
+        A supervisor `enrollStandaloneAgent` registered under
+        `standalone-enrollment.v2` holds no certificate to renew: it
+        exchanges its credential for tokens with `exchangeToken`
+        (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/standaloneContractVersion'
       requestBody:

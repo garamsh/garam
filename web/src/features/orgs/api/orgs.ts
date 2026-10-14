@@ -68,6 +68,13 @@ export type OperatorCredential = components["schemas"]["OperatorCredential"];
  * (ADR-0035).
  */
 export type OrgConsent = components["schemas"]["OrgConsent"];
+/**
+ * What deleting an organization would destroy, counted by garam at the
+ * moment of the read and unfiltered by what the caller may list. The
+ * certificate authority stands apart because it alone cannot be made
+ * again (ADR-0065).
+ */
+export type OrgDeletionPreview = components["schemas"]["OrgDeletionPreview"];
 
 /**
  * What a read returned, or the fact that the API never answered. An
@@ -226,6 +233,26 @@ export const OrgConsentParser = parserFor<OrgConsent>()(
   }),
 );
 
+const CountParser = z.number().int().nonnegative();
+
+const OrgDeletionPreviewParser = parserFor<OrgDeletionPreview>()(
+  z.object({
+    certificateAuthority: z.boolean(),
+    counts: z.object({
+      groups: CountParser,
+      projects: CountParser,
+      members: CountParser,
+      invitations: CountParser,
+      policies: CountParser,
+      agents: CountParser,
+      agentDefinitions: CountParser,
+      agentTemplates: CountParser,
+      operators: CountParser,
+      consents: CountParser,
+    }),
+  }),
+);
+
 /** Organizations the signed-in user belongs to. */
 export function listOrgs(): Promise<Organization[]> {
   return garamFetchAuthenticated("/orgs", z.array(OrganizationParser));
@@ -235,6 +262,22 @@ export function listOrgs(): Promise<Organization[]> {
 export function getOrg(org: string): Promise<OrgRead<Organization>> {
   return orgRead(
     garamFetchAuthenticated(`/orgs/${orgPath(org)}`, OrganizationParser),
+  );
+}
+
+/**
+ * What deleting the organization would destroy. It is authorized on
+ * the delete itself (ADR-0065), so a caller who may not delete is
+ * refused it, and that refusal is returned rather than not-found.
+ */
+export function getOrgDeletionPreview(
+  org: string,
+): Promise<RefusableRead<OrgDeletionPreview>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/deletion-preview`,
+      OrgDeletionPreviewParser,
+    ),
   );
 }
 

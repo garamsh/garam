@@ -13,6 +13,7 @@ import type {
   Operator,
   OperatorKey,
   OrgConsent,
+  OrgDeletionPreview,
   Organization,
   Policy,
   PolicyAttachment,
@@ -252,6 +253,23 @@ export const acmeInvitation: InvitationPreview = {
  * answers without a session — and the signed-out fixtures below
  * reproduce it.
  */
+/** What deleting Acme would take: one of most kinds, and its CA. */
+export const acmeDeletionPreview: OrgDeletionPreview = {
+  certificateAuthority: true,
+  counts: {
+    groups: 1,
+    projects: 1,
+    members: 1,
+    invitations: 0,
+    policies: 2,
+    agents: 1,
+    agentDefinitions: 1,
+    agentTemplates: 1,
+    operators: 1,
+    consents: 1,
+  },
+};
+
 const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/me", guarded: true, body: alice },
   { path: "/auth/providers", guarded: false, body: ["google"] },
@@ -262,6 +280,11 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   },
   { path: "/orgs", guarded: true, body: [acme] },
   { path: "/orgs/acme", guarded: true, body: acme },
+  {
+    path: "/orgs/acme/deletion-preview",
+    guarded: true,
+    body: acmeDeletionPreview,
+  },
   { path: "/orgs/acme/groups", guarded: true, body: [engineering] },
   { path: "/orgs/acme/groups/eng", guarded: true, body: engineering },
   {

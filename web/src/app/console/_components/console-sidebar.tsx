@@ -15,6 +15,13 @@ import { OrgSwitcher } from "./org-switcher";
 import { UserMenu } from "./user-menu";
 
 /**
+ * Centres the 32px controls in the 56px rail the collapsed sidebar
+ * leaves: the primitive's 8px inset is sized for its own 48px rail.
+ */
+const RAIL_INSET =
+  "group-data-[collapsible=icon]:**:data-[slot=sidebar-group]:px-3 group-data-[collapsible=icon]:**:data-[slot=sidebar-header]:px-3 group-data-[collapsible=icon]:**:data-[slot=sidebar-footer]:px-3";
+
+/**
  * The sidebar and everything it needs a request for. The session check
  * stays load-bearing here: `proxy.ts` only checks that a cookie exists,
  * so an expired or revoked session lands on the login page rather than
@@ -32,13 +39,13 @@ export async function ConsoleSidebar() {
   }
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className={RAIL_INSET}>
       {orgs.status === "ok" && (
         <SidebarHeader>
           <OrgSwitcher orgs={orgs.orgs} />
         </SidebarHeader>
       )}
-      <SidebarContent className="group-data-[collapsible=icon]:items-center">
+      <SidebarContent>
         <ConsoleNav />
       </SidebarContent>
       {session.status === "signed-in" && (
@@ -54,7 +61,7 @@ export async function ConsoleSidebar() {
 /** The sidebar's frame while its two reads are in flight. */
 export function ConsoleSidebarFallback() {
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className={RAIL_INSET}>
       <SidebarHeader>
         <Skeleton className="h-12 w-full" />
       </SidebarHeader>

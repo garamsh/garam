@@ -31,9 +31,10 @@ func (s *PostgresStore) CredentialHolder(ctx context.Context, credentialHash str
 
 // RecordToken stores the token under the credential issuance holder
 // names, and keeps that issuance's newest LiveTokensPerCredential, in
-// one transaction holding the issuance's row. Holding the row is what
-// keeps two exchanges at once inside the bound, and finding it gone is
-// the refusal of a credential re-issued or withdrawn after it was read.
+// one transaction holding the registrations and then the issuance's
+// row. Holding the row is what keeps two exchanges at once inside the
+// bound, and finding it gone is the refusal of a credential re-issued
+// or withdrawn after it was read.
 func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder, t *Token) error {
 	audience := pgtype.Text{}
 	if t.Audience != nil {
@@ -46,6 +47,9 @@ func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
+	if err := holdRegistrations(ctx, q, holder.Operator.String(), t.Audience, ErrCredentialInvalid); err != nil {
+		return err
+	}
 	if _, err := q.LockOperatorCredential(ctx, holder.ID); err != nil {
 		return pgxerr.Classify(err, "hold operator credential", ErrCredentialInvalid, nil)
 	}
@@ -57,10 +61,7 @@ func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder
 		IssuedAt:     stamp(t.IssuedAt),
 		ExpiresAt:    stamp(t.ExpiresAt),
 	}); err != nil {
-		// The credential's row is held, so the one key a missing row
-		// can refuse here is the audience's: an operator the
-		// organization never registered, or deleted meanwhile.
-		return pgxerr.Classify(err, "record operator token", ErrAudienceInvalid, nil)
+		return pgxerr.Classify(err, "record operator token", nil, nil)
 	}
 	if err := q.TrimOperatorTokens(ctx, db.TrimOperatorTokensParams{
 		CredentialID: holder.ID, Keep: LiveTokensPerCredential,
@@ -69,6 +70,26 @@ func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return errorx.Wrap(err, "commit")
+	}
+	return nil
+}
+
+// holdRegistrations holds the client's registration, and the
+// audience's when one is named, before an exchange touches any other
+// row: an issuance or a deletion takes the registration first too, so
+// neither waits on a row the exchange holds while it holds one the
+// exchange needs (#1399). The token's foreign keys take the same KEY
+// SHARE lock later. A missing client answers refused, a missing
+// audience ErrAudienceInvalid.
+func holdRegistrations(ctx context.Context, q *db.Queries, client string, audience *grn.GRN, refused error) error {
+	if _, err := q.HoldOperatorRegistration(ctx, client); err != nil {
+		return pgxerr.Classify(err, "hold operator", refused, nil)
+	}
+	if audience == nil {
+		return nil
+	}
+	if _, err := q.HoldOperatorRegistration(ctx, audience.String()); err != nil {
+		return pgxerr.Classify(err, "hold audience", ErrAudienceInvalid, nil)
 	}
 	return nil
 }

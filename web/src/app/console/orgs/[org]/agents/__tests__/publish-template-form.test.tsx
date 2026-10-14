@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToString } from "react-dom/server";
 import { HttpResponse, http } from "msw";
@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { PublishTemplateForm } from "@/app/console/orgs/[org]/agents/_components/publish-template-form";
 import type { HostedOperator } from "@/features/orgs";
+import { enter } from "@/testing/enter";
 import { server } from "@/testing/setup";
 
 // The authority is minted by a Server Action; what the form does with
@@ -77,7 +78,7 @@ describe("publish template form", () => {
       ),
     );
     const user = userEvent.setup();
-    renderForm();
+    const form = within(renderForm().container);
 
     const typed: [string, string][] = [
       ["Template", "minimax"],
@@ -92,17 +93,17 @@ describe("publish template form", () => {
       ["Tools, one tool=pin per line", "search=v1"],
     ];
     for (const [label, value] of typed) {
-      await user.type(screen.getByLabelText(label), value);
+      await enter(user, form.getByLabelText(label), value);
     }
-    await user.click(screen.getByRole("button", { name: "Publish version" }));
+    await user.click(form.getByRole("button", { name: "Publish version" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    expect(await form.findByRole("alert")).toHaveTextContent(
       "the model needs an embeddings endpoint with a base URL and a name",
     );
     // The refusal is the control service's, so the form reached it.
     expect(posted).toHaveLength(1);
     for (const [label, value] of typed) {
-      expect(screen.getByLabelText(label)).toHaveValue(value);
+      expect(form.getByLabelText(label)).toHaveValue(value);
     }
   });
 });

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 )
 
@@ -18,12 +19,18 @@ import (
 // controller through the store, and answers it.
 func (f fence) mintedIn(t *testing.T) *agent.AccessToken {
 	t.Helper()
+	return f.mintedFor(t, nil)
+}
+
+// mintedFor is mintedIn for audience: garam's where it is nil.
+func (f fence) mintedFor(t *testing.T, audience *grn.GRN) *agent.AccessToken {
+	t.Helper()
 	var b [32]byte
 	_, err := rand.Read(b[:])
 	require.NoError(t, err)
 	now := time.Now()
 	token := &agent.AccessToken{Value: agent.AccessTokenPrefix + hex.EncodeToString(b[:]), Agent: f.agent,
-		IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour)}
+		Audience: audience, IssuedAt: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour)}
 	require.NoError(t, f.agents.MintAccessToken(context.Background(), f.controller, token))
 	return token
 }

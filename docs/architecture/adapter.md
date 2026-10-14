@@ -4,6 +4,7 @@ What the adapter garam ships must do, and what it rests on to do it.
 
 ## Contents
 - What it is
+- API access after common enrollment
 - The delivery loop
 - Completion
 - Failure and attempts
@@ -49,8 +50,9 @@ and this process keeps running.
 
 **Unbuilt: its token mode.**
 [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
-moves the adapter from the agent's certificate to two short-lived
-tokens, one for garam and one for the control service, each read from
+provides the retained token transport: from the agent's certificate
+to two short-lived tokens, one for garam and one for the control
+service, each read from
 its file per request, with the placement token moved to a
 `Garam-Placement` header under `agent-execution.v2`. An unfenced adapter
 — a `Garam`-source agent of the Operator, which garam-agent-operator ADR
@@ -59,6 +61,47 @@ which its operator mints and refreshes on `mintAgentToken` as for any
 agent it holds ([agents.md](./agents.md) §Tokens in place of
 certificates). It is step G2 of
 `docs/plans/2026-10-09-machine-identity-migration.md`.
+
+## API access after common enrollment
+
+**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+changes G2's target to consume the common enrollment binding; the
+certificate adapter below remains what the current code runs.
+
+- Managed and direct connectors hold agent API access scoped to the
+  current assignee, epoch and lineage; an Operator's long-lived PEM
+  stays with the manager/control service, never this adapter, runtime
+  or workspace. The direct connector can attach to an already-running
+  runtime without provisioning it.
+- Token files remain owner-only, replaced atomically and read per
+  request. Refresh changes access alone, not placement intent or the
+  activation request identifier. Garam/control audiences remain
+  separate; `Garam-Execution`, `Garam-Operation` and `Garam-Placement`
+  retain the v2 meanings ADR-0100 gave them.
+- Activation still waits for lifecycle authority and exclusive writer
+  proof. Expired/stale agent API access pauses protected calls and
+  preserves the outbox while the assignee refreshes the atomic token
+  file; the adapter rereads it with bounded backoff. Resume only after
+  current credential and execution binding are proved again, with a
+  fresh controller/assignment proof at the authority. A rejected
+  registration or generation/lineage/placement fence remains paused;
+  token refresh neither clears that refusal nor activates a writer.
+  Runtime status reports and enrollment never activate by themselves.
+- Signed message content/signature travel unchanged to Sherlock, whose
+  trusted issuer configuration and authenticated origin are separate
+  from the agent's Garam API token. Sherlock proposal
+  [#1067](https://github.com/garamsh/sherlock/issues/1067) retains
+  per-caller authorization above the platform; a local ACL needs a
+  separate owner decision and is not a token-mode prerequisite.
+
+`internal/cli/delivery.go` and §Activation and runtime status remain
+authoritative for the current certificate client; #1352 must implement
+the token-facing contract after ADR-0102. Independent direct writer
+proof remains blocked on the owner decision named in
+[agents.md](./agents.md) §Common managed and direct enrollment; an
+attachment lease is only a recommendation, not an accepted mechanism.
+The acceptance sequence is
+in the existing machine-identity migration plan.
 
 ## The delivery loop
 
@@ -296,8 +339,8 @@ contract binds:
 | An outbox entry is `<id>.json`, written whole under a dot-prefixed temporary name, carrying `created_at` once | `tools/message_send/message_send.go`, `internal/message/message.go` | The forwarder could read a partial entry or invent an age |
 
 Read in Sherlock at
-[`v0.5.0`](https://github.com/garamsh/sherlock/tree/7b4a2bb6905164c16ffd20719aba0d0920a10b2f)
-(`7b4a2bb6905164c16ffd20719aba0d0920a10b2f`), the release garam's
+[`v0.6.0`](https://github.com/garamsh/sherlock/tree/d75f552beb604c76453345d57279c168e81d3bee)
+(`d75f552beb604c76453345d57279c168e81d3bee`), the release garam's
 real-runtime suites pin, in `docs/architecture/gateway.md` §Signed
 messages, which governs Sherlock's ingress. Against
 [`v0.4.0`](https://github.com/garamsh/sherlock/tree/6054666584e6a0f22c19d563e26240d6eefc1258),
@@ -452,13 +495,16 @@ supervisor when standalone.
   under a request identifier derived from those inputs alone, so a
   restart replays the same intent and receives a newer token. It
   verifies the binding answered and keeps the highest token version.
-- **Undecided answers retry; definite ones pause.** An unavailable
-  authority or garam is retried with bounded backoff and stops nothing
-  local. A refusal, a wrong binding, or garam refusing the token or the
-  credential stops protected work and keeps the outbox, with no
-  time-based retry, until the runtime's generation, epoch or revision,
-  the placement token or the agent's leaf changes. Credential recovery
-  is the manager's, never the adapter's.
+- **Certificate mode: undecided answers retry; definite ones pause.**
+  An unavailable authority or garam is retried with bounded backoff and
+  stops nothing local. A refusal, a wrong binding, or garam refusing the
+  token or the credential stops protected work and keeps the outbox,
+  with no time-based retry, until the runtime's generation, epoch or
+  revision, the placement token or the agent's leaf changes. Credential
+  recovery is the manager's, never the adapter's. The unbuilt token mode
+  follows §API access after common enrollment for expired/stale API
+  access; it does not require a new leaf or placement merely to refresh
+  it.
 - **It reports the runtime's status outward** after activation and on
   each change: the activation, GRN, epoch, generation, revision, state
   and start time as the runtime reported them, and when it read them. A

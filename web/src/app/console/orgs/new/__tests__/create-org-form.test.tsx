@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { render, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { CreateOrgForm } from "@/app/console/orgs/new/_components/create-org-form";
+import { enter } from "@/testing/enter";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -17,11 +18,14 @@ vi.mock("next/navigation", () => ({
 // action's own answer is what the form renders.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
+/** Submits the form and answers with queries scoped to its render. */
 async function submitName(name: string) {
   const user = userEvent.setup();
-  render(<CreateOrgForm />);
-  await user.type(screen.getByLabelText("Name"), name);
-  await user.click(screen.getByRole("button", { name: "Create organization" }));
+  const { container } = render(<CreateOrgForm />);
+  const form = within(container);
+  await enter(user, form.getByLabelText("Name"), name);
+  await user.click(form.getByRole("button", { name: "Create organization" }));
+  return form;
 }
 
 describe("create organization form", () => {
@@ -35,19 +39,19 @@ describe("create organization form", () => {
       ),
     );
 
-    await submitName("Acme");
+    const form = await submitName("Acme");
 
-    expect(await screen.findByText("that name is taken")).toBeInTheDocument();
+    expect(await form.findByText("that name is taken")).toBeInTheDocument();
   });
 
   it("keeps the form when the API never answers", async () => {
     server.use(http.post(`${API_URL}/orgs`, () => HttpResponse.error()));
 
-    await submitName("Acme");
+    const form = await submitName("Acme");
 
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(await form.findByRole("alert")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Create organization" }),
+      form.getByRole("button", { name: "Create organization" }),
     ).toBeInTheDocument();
   });
 });

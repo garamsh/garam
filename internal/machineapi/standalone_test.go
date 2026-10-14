@@ -19,7 +19,8 @@ const confined = "a supervisor reaches its lifecycle routes alone"
 // every operation api/machine.yaml declares, read off the generated
 // registration, as a supervisor's certificate and as an agent's. The
 // supervisor is refused everywhere but its identity, its renewal and
-// the three execution routes it holds authority on; the agent, the
+// the three execution routes it holds authority on — its certificate
+// reaches no token mint; the agent, the
 // control, is refused by the boundary nowhere, so what refused the
 // supervisor was the kind of identity and not the route.
 func TestConfineSupervisors_ASupervisorReachesItsLifecycleRoutesAlone(t *testing.T) {

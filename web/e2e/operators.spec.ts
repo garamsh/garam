@@ -41,14 +41,22 @@ test.describe("operators", () => {
     await identifier.fill("field-two");
     await dialog.getByRole("textbox", { name: "Name" }).fill("Field two");
     await dialog.getByRole("button", { name: "Register", exact: true }).click();
-    await expect(dialog.getByText("The operator is registered")).toBeVisible();
+    // The dialog is named for what it says now: the registration.
+    const registered = page.getByRole("dialog", {
+      name: "Registered Field two",
+    });
+    await expect(
+      registered.getByText("The operator is registered"),
+    ).toBeVisible();
     // The legacy secrets wait behind a closed disclosure.
     await expect(
-      dialog.getByRole("button", {
+      registered.getByRole("button", {
         name: "Legacy credential and enrollment token",
       }),
     ).toHaveAttribute("aria-expanded", "false");
-    await dialog.getByRole("link", { name: /Continue: issue a key/ }).click();
+    await registered
+      .getByRole("link", { name: /Continue: issue a key/ })
+      .click();
 
     await expect(page).toHaveURL(`${operators}/field-two/connect`);
     await expectHydrated(page);

@@ -112,7 +112,7 @@
   --brand-foreground: oklch(0.99 0.003 264);
   --ok: oklch(0.6 0.15 150);
   --warn: oklch(0.64 0.15 60);
-  --danger: oklch(0.58 0.21 27);
+  --danger: oklch(0.5 0.19 27);
   --info: oklch(0.6 0.13 240);
   --chart-1: oklch(0.87 0.004 260);
   --chart-2: oklch(0.556 0.01 260);
@@ -153,7 +153,7 @@
   --brand-foreground: oklch(0.17 0.02 264);
   --ok: oklch(0.72 0.15 150);
   --warn: oklch(0.8 0.14 80);
-  --danger: oklch(0.7 0.19 25);
+  --danger: oklch(0.74 0.16 25);
   --info: oklch(0.72 0.12 240);
   --chart-1: oklch(0.87 0.004 260);
   --chart-2: oklch(0.556 0.01 260);

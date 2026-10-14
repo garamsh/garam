@@ -297,8 +297,8 @@ export default async function OperatorPage({ params, searchParams }: Params) {
 
   const delegationTab =
     delegation.status === "unreachable" ? (
-      <Banner tone="warn" title={API_UNREACHABLE_TITLE}>
-        <ApiUnreachableReason subject="this operator's delegation" />
+      <Banner tone="warn" title="The delegation could not be read">
+        garam did not answer for this operator&apos;s delegation.
       </Banner>
     ) : delegation.status === "forbidden" ? (
       <Banner tone="info" title="The delegation is not shown to you">

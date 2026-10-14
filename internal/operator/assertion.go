@@ -44,15 +44,16 @@ const (
 	maxJTILength = 128
 )
 
-// The bounds on the assertion exchanges one process answers (ADR-0102),
-// per ExchangeWindow, each over at most TrackedClients keys at once:
+// The bounds on the exchanges one process answers (ADR-0102), assertion
+// and shared-secret alike, per ExchangeWindow, each over at most
+// TrackedClients keys at once:
 //
 //   - ExchangesPerSource per client address, counted before anything
 //     is read, so a flood from one address is refused without holding
 //     back any other address;
-//   - ExchangesPerClient per client_id, counted once the assertion
-//     verified, so only the key's holder spends it and a stranger
-//     knowing the GRN cannot lock the operator out.
+//   - ExchangesPerClient per operator, counted once the assertion
+//     verified or the credential resolved, so only the holder spends
+//     it and a stranger knowing the GRN cannot lock the operator out.
 //
 // An operator exchanges about once in forty minutes, so ten covers its
 // retries with backoff, and sixty per address covers many operators

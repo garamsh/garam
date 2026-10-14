@@ -100,7 +100,7 @@ func TestService_ExchangeAnswersAnHourLongTokenForTheCredentialsOperator(t *test
 	credential := issued(t, store, subject)
 	svc, at := exchanging(t, store)
 
-	token, err := svc.Exchange(context.Background(), credential, nil)
+	token, err := svc.Exchange(context.Background(), testSource, credential, nil)
 	require.NoError(t, err)
 
 	assert.True(t, strings.HasPrefix(token.Value, operator.TokenPrefix))
@@ -117,9 +117,9 @@ func TestService_ExchangeRefusesACredentialNoOperatorHolds(t *testing.T) {
 	held := issued(t, store, operatorGRN("acme", "one"))
 	svc, _ := exchanging(t, store)
 
-	_, err := svc.Exchange(context.Background(), held, nil)
+	_, err := svc.Exchange(context.Background(), testSource, held, nil)
 	require.NoError(t, err)
-	_, err = svc.Exchange(context.Background(), operator.CredentialPrefix+strings.Repeat("0", 64), nil)
+	_, err = svc.Exchange(context.Background(), testSource, operator.CredentialPrefix+strings.Repeat("0", 64), nil)
 	require.ErrorIs(t, err, operator.ErrCredentialInvalid)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated))
 }
@@ -131,7 +131,7 @@ func TestService_ExchangeMintsForAnotherOperatorOfTheSameOrganizationAlone(t *te
 	svc, _ := exchanging(t, store)
 
 	hosted := operatorGRN("acme", "control")
-	token, err := svc.Exchange(context.Background(), credential, &hosted)
+	token, err := svc.Exchange(context.Background(), testSource, credential, &hosted)
 	require.NoError(t, err)
 	assert.Equal(t, &hosted, token.Audience)
 
@@ -141,7 +141,7 @@ func TestService_ExchangeMintsForAnotherOperatorOfTheSameOrganizationAlone(t *te
 		"not an operator": agentGRN("acme", "a1"),
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := svc.Exchange(context.Background(), credential, &audience)
+			_, err := svc.Exchange(context.Background(), testSource, credential, &audience)
 			require.ErrorIs(t, err, operator.ErrAudienceInvalid)
 		})
 	}
@@ -183,12 +183,12 @@ func TestService_ExchangeRefusesAMalformedCredentialWithoutAReadForIt(t *testing
 		operator.CredentialPrefix + strings.Repeat("0", 63),
 		operator.CredentialPrefix + strings.Repeat("Z", 64),
 	} {
-		_, err := svc.Exchange(context.Background(), credential, nil)
+		_, err := svc.Exchange(context.Background(), testSource, credential, nil)
 		require.ErrorIs(t, err, operator.ErrCredentialInvalid)
 	}
 	assert.Equal(t, 0, store.asked)
 
-	_, err := svc.Exchange(context.Background(), operator.CredentialPrefix+strings.Repeat("0", 64), nil)
+	_, err := svc.Exchange(context.Background(), testSource, operator.CredentialPrefix+strings.Repeat("0", 64), nil)
 	require.ErrorIs(t, err, operator.ErrCredentialInvalid)
 	assert.Equal(t, 1, store.asked)
 }
@@ -401,4 +401,88 @@ func TestService_ExchangeAssertionBoundsUnverifiedTrafficPerAddress(t *testing.T
 	require.NoError(t, err, "a valid client from another address is served")
 	assert.Equal(t, client, token.Operator)
 	assert.Len(t, store.admitted, 1)
+}
+
+// TestService_ExchangeIsBoundedPerOperator holds the shared-secret
+// exchange to ExchangeAssertion's per-operator bound (#1418): every
+// exchange holds the operator's registration, so an unbounded flood
+// under a leaked credential could keep the re-issue that answers the
+// leak waiting. The eleventh exchange inside the window is refused as
+// exhausted, with a retry-after, and records nothing. Credentials no
+// operator holds spend none of the budget first, and another operator
+// in the same window is the control.
+func TestService_ExchangeIsBoundedPerOperator(t *testing.T) {
+	store := newExchanges()
+	credential := issued(t, store, operatorGRN("acme", "one"))
+	other := issued(t, store, operatorGRN("acme", "two"))
+	svc, _ := exchanging(t, store)
+	for range 2 * operator.ExchangesPerClient {
+		_, err := svc.Exchange(context.Background(), testSource, operator.CredentialPrefix+strings.Repeat("0", 64), nil)
+		require.ErrorIs(t, err, operator.ErrCredentialInvalid, "an unknown credential is refused, not counted")
+	}
+	for range operator.ExchangesPerClient {
+		_, err := svc.Exchange(context.Background(), testSource, credential, nil)
+		require.NoError(t, err)
+	}
+
+	_, err := svc.Exchange(context.Background(), testSource, credential, nil)
+	var exceeded *operator.Exceeded
+	require.ErrorAs(t, err, &exceeded)
+	assert.True(t, errorx.IsKind(err, errorx.KindResourceExhausted))
+	assert.Positive(t, exceeded.RetryAfterSeconds())
+	assert.Len(t, store.recorded, operator.ExchangesPerClient, "the refused exchange recorded nothing")
+
+	_, err = svc.Exchange(context.Background(), testSource, other, nil)
+	assert.NoError(t, err, "another operator is not bounded by this one's count")
+}
+
+// TestService_ExchangeBoundsTrafficPerAddress holds the shared-secret
+// exchange to the per-address bound, counted before anything is read:
+// past ExchangesPerSource the flooding address is refused without the
+// store being asked, and a valid credential from another address in the
+// same window is served.
+func TestService_ExchangeBoundsTrafficPerAddress(t *testing.T) {
+	store := &countingExchanges{exchanges: newExchanges()}
+	credential := issued(t, store.exchanges, operatorGRN("acme", "one"))
+	svc := operator.NewService(newRecords(), newTokens(), store, &signer{}, operator.Config{})
+	const flooder, operatorHost = "198.51.100.7", "203.0.113.20"
+	unknown := operator.CredentialPrefix + strings.Repeat("0", 64)
+	for range operator.ExchangesPerSource {
+		_, err := svc.Exchange(context.Background(), flooder, unknown, nil)
+		require.ErrorIs(t, err, operator.ErrCredentialInvalid)
+	}
+	require.Equal(t, operator.ExchangesPerSource, store.asked)
+
+	_, err := svc.Exchange(context.Background(), flooder, unknown, nil)
+	var exceeded *operator.Exceeded
+	require.ErrorAs(t, err, &exceeded, "the flooding address is refused past its bound")
+	assert.Equal(t, operator.ExchangesPerSource, store.asked, "refused before the store was asked")
+
+	_, err = svc.Exchange(context.Background(), operatorHost, credential, nil)
+	assert.NoError(t, err, "a valid credential from another address is served")
+}
+
+// TestService_BothExchangesShareTheOperatorsBudget holds that the bound
+// is the operator's and not each form's: both hold the same
+// registration. Half the budget spent by assertion and half by the
+// credential leaves the next credential exchange refused, where two
+// budgets would have served it.
+func TestService_BothExchangesShareTheOperatorsBudget(t *testing.T) {
+	svc, store := assertionExchanging(t, endpoint)
+	credential := issued(t, store.exchanges, client)
+	now := time.Now()
+	half := operator.ExchangesPerClient / 2
+	for i := range half {
+		_, err := svc.ExchangeAssertion(context.Background(), testSource, client,
+			assertionAt(t, now, "jti-shared-0000000000000"+strconv.Itoa(100+i)), nil)
+		require.NoError(t, err)
+	}
+	for range operator.ExchangesPerClient - half {
+		_, err := svc.Exchange(context.Background(), testSource, credential, nil)
+		require.NoError(t, err)
+	}
+
+	_, err := svc.Exchange(context.Background(), testSource, credential, nil)
+	var exceeded *operator.Exceeded
+	assert.ErrorAs(t, err, &exceeded, "the operator's budget is spent across both forms")
 }

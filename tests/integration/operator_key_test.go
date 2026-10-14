@@ -720,7 +720,7 @@ func TestOperatorKey_AnImmediateRotationAndACredentialExchangeSweepingItsKeyToke
 	}
 	exchanged := make(chan exchange, 1)
 	go func() {
-		token, err := svc.Exchange(ctx, credential, nil)
+		token, err := svc.Exchange(ctx, testSource, credential, nil)
 		exchanged <- exchange{token, err}
 	}()
 	awaitLockWaiters(t, p, 2)

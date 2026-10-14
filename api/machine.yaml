@@ -273,6 +273,15 @@ paths:
         retried enrollment re-issuing the credential, each refuse the
         credential and every token it was exchanged for from the next
         request (ADR-0100).
+
+
+        For an operator's credential, one process answers at most 60
+        exchanges per client address, counted before anything is read,
+        and 10 per operator once the credential resolved, each per
+        minute, and 429 with `Retry-After` past either. Both bounds are
+        shared with `exchangeClientAssertion`: either form of exchange
+        holds the operator's registration while it records the token,
+        and a re-issue or a key withdrawal waits for those holds.
       security:
         - machineCredential: []
       parameters:
@@ -297,6 +306,17 @@ paths:
           $ref: '#/components/responses/TokenContractError'
         '401':
           $ref: '#/components/responses/TokenContractError'
+        '429':
+          description: Too many exchanges from this process; try again after `Retry-After`.
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            Garam-Contract-Version:
+              $ref: '#/components/headers/TokenContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
   /oauth/token:
     post:
       operationId: exchangeClientAssertion
@@ -347,7 +367,8 @@ paths:
         anything is read, and 10 verified ones per `client_id`, each per
         minute, and 429 with `Retry-After` past either: a flood from one
         address holds back no other, and an assertion that fails to
-        verify spends no operator's budget. An unconfigured token
+        verify spends no operator's budget. Both bounds are shared with
+        `exchangeToken`'s for an operator's credential. An unconfigured token
         endpoint, or a database that cannot be read, answers 503 and
         issues nothing; a defect answers 500 `server_error`.
       security: []

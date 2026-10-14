@@ -62,7 +62,10 @@ type Service interface {
 	// refuses a credential no registered operator holds with
 	// ErrCredentialInvalid, and an audience that is not another
 	// operator the organization registered with ErrAudienceInvalid.
-	Exchange(ctx context.Context, credential string, audience *grn.GRN) (*Token, error)
+	// source is the client address the request arrived from; it and
+	// the operator share ExchangeAssertion's bounds, answering
+	// *Exceeded past either.
+	Exchange(ctx context.Context, source, credential string, audience *grn.GRN) (*Token, error)
 	// ExchangeAssertion answers a token for the operator client whose
 	// live key signed assertion, under machine-token.v2's profile
 	// (ADR-0102), accepted by garam where audience is nil and by that
@@ -92,9 +95,12 @@ type service struct {
 	issuer      Issuer
 	now         func() time.Time
 	endpoint    string
-	// perSource bounds the assertion exchanges each client address
-	// sends, checked before anything is read; perClient bounds each
-	// client's verified ones (ADR-0102).
+	// perSource bounds the exchanges each client address sends,
+	// checked before anything is read; perClient bounds each operator's
+	// authenticated ones (ADR-0102). Both forms of exchange share them:
+	// each holds the operator's registration, and the bound on those
+	// holds is what lets a write waiting on the registration through
+	// (#1418).
 	perClient *Limiter
 	perSource *Limiter
 }
@@ -116,13 +122,21 @@ func NewService(store CertificateStore, enrollments EnrollmentStore, tokens Toke
 	}
 }
 
-func (s *service) Exchange(ctx context.Context, credential string, audience *grn.GRN) (*Token, error) {
+func (s *service) Exchange(ctx context.Context, source, credential string, audience *grn.GRN) (*Token, error) {
+	if err := s.perSource.Check(source); err != nil {
+		return nil, err
+	}
 	// A value no issuance could have produced reads nothing.
 	if !WellFormed(credential, CredentialPrefix) {
 		return nil, ErrCredentialInvalid
 	}
 	holder, err := s.tokens.CredentialHolder(ctx, HashToken(credential))
 	if err != nil {
+		return nil, err
+	}
+	// Counted once the credential resolved, so only its holder spends
+	// the operator's budget.
+	if err := s.perClient.Check(holder.Operator.String()); err != nil {
 		return nil, err
 	}
 	if err := validAudience(holder.Operator, audience); err != nil {

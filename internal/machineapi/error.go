@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"strings"
 
 	machinegen "github.com/garamsh/garam/api/machine"
@@ -128,8 +129,12 @@ type causeRecorder interface {
 
 // writeError renders an errorx error as the spec's Error body. errorx
 // carries no transport; the kind-to-status mapping is the shared one in
-// internal/wire.
+// internal/wire. A limiter's refusal carries Retry-After too.
 func writeError(w http.ResponseWriter, err error) {
+	var exceeded *operator.Exceeded
+	if errors.As(err, &exceeded) {
+		w.Header().Set("Retry-After", strconv.Itoa(exceeded.RetryAfterSeconds()))
+	}
 	writeErrorStatus(w, wire.StatusOf(errorx.KindOf(err)), err)
 }
 

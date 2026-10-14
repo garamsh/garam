@@ -128,6 +128,7 @@ describe("registerWithPassword", () => {
     expect(state).toEqual({
       status: "error",
       message: REFUSAL_COPY.invitationNotFound,
+      field: "invitationToken",
     });
     expect(JSON.stringify(state)).not.toContain(PASSWORD);
   });
@@ -144,6 +145,7 @@ describe("registerWithPassword", () => {
     ).resolves.toEqual({
       status: "error",
       message: `A password holds at least ${PASSWORD_MIN_LENGTH} characters.`,
+      field: "password",
     });
     expect(posted).toEqual([]);
 
@@ -177,6 +179,7 @@ describe("registerWithPassword", () => {
     ).resolves.toEqual({
       status: "error",
       message: "A username holds only lowercase letters, digits and hyphens.",
+      field: "username",
     });
     expect(posted).toEqual([]);
 
@@ -211,6 +214,7 @@ describe("registerWithPassword", () => {
     ).resolves.toEqual({
       status: "error",
       message: `A username holds at most ${USERNAME_MAX_LENGTH} characters; this one holds ${tooLong.length}.`,
+      field: "username",
     });
     expect(posted).toEqual([]);
   });
@@ -230,6 +234,7 @@ describe("registerWithPassword", () => {
     ).resolves.toEqual({
       status: "error",
       message: "Paste the invitation token you were sent.",
+      field: "invitationToken",
     });
     expect(posted).toEqual([]);
   });
@@ -256,6 +261,7 @@ describe("registerWithPassword", () => {
     ).resolves.toEqual({
       status: "error",
       message: "That username is taken. Choose another one.",
+      field: "username",
     });
   });
 

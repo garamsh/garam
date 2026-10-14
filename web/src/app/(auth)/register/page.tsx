@@ -59,12 +59,12 @@ export default async function RegisterPage({ searchParams }: Props) {
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader className="gap-2">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+        <h1 className="text-xl tracking-tight">
           {invitation?.usable
             ? `Create an account to join ${invitation.orgName}`
             : "Create your garam account"}
         </h1>
-        <p className="text-sm text-pretty text-muted-foreground">
+        <p className="text-pretty text-muted-foreground">
           {invitation?.usable
             ? "Your invitation is already filled in. Choose a username and a password, and you'll join as soon as the account exists."
             : "Registration takes an invitation: organizations grow by invitation, not by signup."}{" "}
@@ -80,7 +80,7 @@ export default async function RegisterPage({ searchParams }: Props) {
           />
         )}
       </CardContent>
-      <CardFooter className="flex-col gap-2 text-xs text-muted-foreground">
+      <CardFooter className="flex-col gap-2 text-muted-foreground">
         <p>
           Already registered?{" "}
           <Link

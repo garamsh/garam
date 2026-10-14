@@ -71,7 +71,7 @@ describe("console navigation", () => {
       Workloads: ["Agents", "Templates"],
       Access: ["Teams", "People", "Permissions"],
       Infrastructure: ["Operators"],
-      Organization: ["Projects", "Consents"],
+      Organization: ["Projects", "Consents", "Settings"],
     };
     for (const [group, sections] of Object.entries(groups)) {
       const list = screen.getByRole("list", { name: group });

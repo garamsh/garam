@@ -13,6 +13,7 @@ import type {
   Operator,
   OperatorKey,
   OrgConsent,
+  OrgDeletionPreview,
   Organization,
   Policy,
   PolicyAttachment,
@@ -245,6 +246,23 @@ export const acmeInvitation: InvitationPreview = {
   expiresAt: "2026-01-09T03:04:05Z",
 };
 
+/** What deleting Acme would take: one of most kinds, and its CA. */
+export const acmeDeletionPreview: OrgDeletionPreview = {
+  certificateAuthority: true,
+  counts: {
+    groups: 1,
+    projects: 1,
+    members: 1,
+    invitations: 0,
+    policies: 2,
+    agents: 1,
+    agentDefinitions: 1,
+    agentTemplates: 1,
+    operators: 1,
+    consents: 1,
+  },
+};
+
 /**
  * Every route the fixtures model: what it answers signed in, and
  * whether the backend guards it. The split is the one
@@ -262,6 +280,11 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   },
   { path: "/orgs", guarded: true, body: [acme] },
   { path: "/orgs/acme", guarded: true, body: acme },
+  {
+    path: "/orgs/acme/deletion-preview",
+    guarded: true,
+    body: acmeDeletionPreview,
+  },
   { path: "/orgs/acme/groups", guarded: true, body: [engineering] },
   { path: "/orgs/acme/groups/eng", guarded: true, body: engineering },
   {

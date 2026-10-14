@@ -1,4 +1,5 @@
 import { HttpResponse, http, type JsonBodyType } from "msw";
+import { z } from "zod";
 
 import type { User } from "@/features/auth";
 import type {
@@ -281,10 +282,44 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   },
 ];
 
+const PermissionCheckRequest = z.object({
+  checks: z.array(
+    z.object({
+      action: z.string(),
+      resource: z.object({ type: z.string(), id: z.string() }).optional(),
+    }),
+  ),
+});
+
+/**
+ * Answers Acme's permission checks with `decide(action)` for each pair,
+ * in the order asked, as the server does.
+ */
+export function answerPermissionChecks(
+  decide: (action: string) => "allow" | "deny" | "unknown",
+) {
+  return http.post(
+    `${API_URL}/orgs/acme/permission-checks`,
+    async ({ request }) => {
+      const { checks } = PermissionCheckRequest.parse(await request.json());
+      return HttpResponse.json({
+        results: checks.map((check) => ({
+          ...check,
+          decision: decide(check.action),
+        })),
+      });
+    },
+  );
+}
+
 /** The signed-in happy path: Alice owns Acme, which holds one of each. */
-export const handlers = routes.map(({ path, body }) =>
-  http.get(`${API_URL}${path}`, () => HttpResponse.json(body)),
-);
+export const handlers = [
+  ...routes.map(({ path, body }) =>
+    http.get(`${API_URL}${path}`, () => HttpResponse.json(body)),
+  ),
+  // An owner may take every action.
+  answerPermissionChecks(() => "allow"),
+];
 
 /** What the backend answers on a route it guards, without a session. */
 function noSession() {
@@ -301,9 +336,12 @@ function noSession() {
  * nothing decided.
  */
 export function signedOut() {
-  return routes
-    .filter((route) => route.guarded)
-    .map(({ path }) => http.get(`${API_URL}${path}`, noSession));
+  return [
+    ...routes
+      .filter((route) => route.guarded)
+      .map(({ path }) => http.get(`${API_URL}${path}`, noSession)),
+    http.post(`${API_URL}/orgs/acme/permission-checks`, noSession),
+  ];
 }
 
 /**

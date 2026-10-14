@@ -204,6 +204,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/permission-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask whether the signed-in caller may take each of a list of actions. Requires membership.
+         * @description Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
+         *
+         *     Some actions are decided by more than that `Check`, and those are answered `unknown`, so a caller renders the control and lets the operation decide. `agent:create`, `agent:configure`, `agent:recover`, `agent:cutover`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` also need a delegation grant to the operator (ADR-0078). `operator:delegate` and `agent:enroll` are decided on the organization's current policy, read past the engine's cache.
+         *
+         *     A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
+         *
+         *     A caller who is not a member of the organization is refused with 403, as every operation inside it refuses one. A pair the engine cannot decide fails the whole request, so no answer is partial.
+         */
+        post: operations["checkPermissions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/members": {
         parameters: {
             query?: never;
@@ -1130,6 +1156,34 @@ export interface components {
             certificateAuthority: boolean;
             counts: components["schemas"]["OrgDeletionCounts"];
         };
+        PermissionCheckRequest: {
+            checks: components["schemas"]["PermissionCheck"][];
+        };
+        PermissionCheck: {
+            /** @example operator:register */
+            action: string;
+            resource?: components["schemas"]["PermissionResource"];
+        };
+        /** @description A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. */
+        PermissionResource: {
+            /** @enum {string} */
+            type: "group" | "project" | "agent" | "agent-template" | "policy";
+            /** @example eng */
+            id: string;
+        };
+        PermissionCheckAnswer: {
+            results: components["schemas"]["PermissionCheckResult"][];
+        };
+        PermissionCheckResult: {
+            action: string;
+            resource?: components["schemas"]["PermissionResource"];
+            decision: components["schemas"]["PermissionDecision"];
+        };
+        /**
+         * @description `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide, because its enforcement reads more than the engine's `Check`: render the control and let the operation answer.
+         * @enum {string}
+         */
+        PermissionDecision: "allow" | "deny" | "unknown";
         /**
          * @description How many of each kind the deletion removes. Every one of these can be created again; what cannot is on `OrgDeletionPreview` itself.
          *
@@ -1980,6 +2034,36 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    checkPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermissionCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description One answer per pair, in the order asked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionCheckAnswer"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
         };
     };
     listOrgMembers: {

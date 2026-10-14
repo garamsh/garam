@@ -384,6 +384,67 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/permission-checks:
+    post:
+      operationId: checkPermissions
+      tags: [org]
+      summary: Ask whether the signed-in caller may take each of a list of actions. Requires membership.
+      description: >-
+        Answers each pair with the decision enforcement would reach for
+        the same caller, action and resource: the same role statements,
+        groups and attached policies, asked of the policy engine's
+        `Check` one pair at a time. The answer is `allow` or `deny` and
+        never why, so no statement or policy is named. It reads a
+        decision and grants nothing: every write is checked again when
+        it arrives, and a decision can change between this answer and
+        that write.
+
+
+        Some actions are decided by more than that `Check`, and those
+        are answered `unknown`, so a caller renders the control and
+        lets the operation decide. `agent:create`, `agent:configure`,
+        `agent:recover`, `agent:cutover`, `agent-template:publish`,
+        `execution-profile:read` and `agent:execution-read` also need a
+        delegation grant to the operator (ADR-0078). `operator:delegate`
+        and `agent:enroll` are decided on the organization's current
+        policy, read past the engine's cache.
+
+
+        A pair without `resource` asks about the organization itself.
+        Each action is checked on the organization or on resources of
+        the kinds its operations address, and a pair naming any other
+        kind is refused with 400, naming the pair: no operation asks
+        it, so the answer would describe nothing. An action garam does
+        not define is answered `deny` rather than refused, because a
+        wildcard in a role or a policy would otherwise allow a name no
+        operation checks.
+
+
+        A caller who is not a member of the organization is refused
+        with 403, as every operation inside it refuses one. A pair the
+        engine cannot decide fails the whole request, so no answer is
+        partial.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionCheckRequest'
+      responses:
+        '200':
+          description: One answer per pair, in the order asked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionCheckAnswer'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/members:
     get:
       operationId: listOrgMembers
@@ -2588,6 +2649,66 @@ components:
             authority is created on the first one it needs.
         counts:
           $ref: '#/components/schemas/OrgDeletionCounts'
+    PermissionCheckRequest:
+      type: object
+      required: [checks]
+      properties:
+        checks:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/PermissionCheck'
+    PermissionCheck:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          example: operator:register
+        resource:
+          $ref: '#/components/schemas/PermissionResource'
+    PermissionResource:
+      type: object
+      description: >-
+        A resource of the organization, named by its kind and the last
+        segment of its identifier, as the paths under `/orgs/{org}`
+        name it.
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [group, project, agent, agent-template, policy]
+        id:
+          type: string
+          example: eng
+    PermissionCheckAnswer:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionCheckResult'
+    PermissionCheckResult:
+      type: object
+      required: [action, decision]
+      properties:
+        action:
+          type: string
+        resource:
+          $ref: '#/components/schemas/PermissionResource'
+        decision:
+          $ref: '#/components/schemas/PermissionDecision'
+    PermissionDecision:
+      type: string
+      description: >-
+        `allow` and `deny` are what enforcement would decide now.
+        `unknown` is an action this operation cannot decide, because its
+        enforcement reads more than the engine's `Check`: render the
+        control and let the operation answer.
+      enum: [allow, deny, unknown]
+      x-enum-varnames: [DecisionAllow, DecisionDeny, DecisionUnknown]
     OrgDeletionCounts:
       type: object
       description: >-

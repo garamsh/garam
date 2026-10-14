@@ -36,7 +36,8 @@ func TestParseRole_Unknown(t *testing.T) {
 // what `api/openapi.yaml` and `web/src/types/api.ts` spell out, so
 // renaming one breaks a contract already published; every other
 // assertion in this file compares a constant to itself and reports
-// nothing when it moves.
+// nothing when it moves. Each is also one IsAction answers for, so a
+// constant left out of the vocabulary fails here.
 func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 	cases := []struct {
 		constant string
@@ -98,7 +99,18 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.want, func(t *testing.T) {
 			assert.Equal(t, c.want, c.constant)
+			assert.True(t, org.IsAction(c.constant))
 		})
+	}
+}
+
+// TestIsAction_RefusesWhatOnlyAWildcardMatches holds that a name a
+// role's wildcard covers is not thereby an action. The defined action
+// with the same prefix is the control.
+func TestIsAction_RefusesWhatOnlyAWildcardMatches(t *testing.T) {
+	assert.True(t, org.IsAction(org.ActionOrgDelete))
+	for _, name := range []string{"org:*", "org:frobnicate", ""} {
+		assert.False(t, org.IsAction(name), name)
 	}
 }
 

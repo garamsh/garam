@@ -3,7 +3,12 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import OperatorsPage from "@/app/console/orgs/[org]/operators/page";
-import { API_URL, fieldOne, signedOut } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  answerPermissionChecks,
+  fieldOne,
+  signedOut,
+} from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
 import { server } from "@/testing/setup";
 
@@ -111,6 +116,67 @@ describe("operators section", () => {
     expect(
       within(table).queryByRole("button", { name: /Delete/ }),
     ).not.toBeInTheDocument();
+  });
+
+  it("leaves the register form out for a caller the server denies registering", async () => {
+    // The control: an owner, whom the server allows, is offered it.
+    const owner = await renderServerComponent(OperatorsPage(params("acme")));
+    expect(
+      screen.getByRole("button", { name: "Register operator" }),
+    ).toBeInTheDocument();
+    owner.unmount();
+
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "operator:register" ? "deny" : "allow",
+      ),
+    );
+    await renderServerComponent(OperatorsPage(params("acme")));
+
+    expect(
+      screen.getByRole("link", { name: "Field cluster one" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Identifier")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Register operator" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers the register form when the check could not be asked", async () => {
+    server.use(
+      http.post(`${API_URL}/orgs/acme/permission-checks`, () =>
+        HttpResponse.error(),
+      ),
+    );
+
+    await renderServerComponent(OperatorsPage(params("acme")));
+
+    // The list still reads, and the server is left to refuse the form.
+    expect(
+      screen.getByRole("link", { name: "Field cluster one" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Register operator" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders its list and the register form when the check answers outside its contract", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    server.use(
+      http.post(`${API_URL}/orgs/acme/permission-checks`, () =>
+        HttpResponse.json({ results: [] }),
+      ),
+    );
+
+    await renderServerComponent(OperatorsPage(params("acme")));
+
+    expect(
+      screen.getByRole("link", { name: "Field cluster one" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Register operator" }),
+    ).toBeInTheDocument();
+    logged.mockRestore();
   });
 
   it("shows an empty state rather than a bare list", async () => {

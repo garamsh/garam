@@ -1,5 +1,5 @@
 import { expect, test } from "./fixtures";
-import { seedDefinition } from "./seed";
+import { seedDefinition, seedMember } from "./seed";
 
 test.describe("operators", () => {
   test("registers a named operator, renames it and lists the definition naming it", async ({
@@ -207,5 +207,43 @@ test.describe("operators", () => {
     await expect(
       page.getByRole("link", { name: signedIn.operatorName, exact: true }),
     ).toBeVisible();
+  });
+
+  test("leaves the register form out for a member, whom the server denies registering", async ({
+    page,
+    context,
+    signedIn,
+    baseURL,
+  }) => {
+    const operators = `/console/orgs/${signedIn.orgSlug}/operators`;
+
+    // The control: the owner is offered the form on the same page.
+    await page.goto(operators);
+    await expect(
+      page.getByRole("button", { name: "Register operator", exact: true }),
+    ).toBeVisible();
+
+    const member = await seedMember(signedIn);
+    await context.clearCookies();
+    await context.addCookies([
+      {
+        name: "garam_session",
+        value: member.sessionToken,
+        url: baseURL!,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+
+    await page.goto(operators);
+    // The list reads for a member, so the page rendered and the form is
+    // absent rather than unreached.
+    await expect(
+      page.getByRole("link", { name: signedIn.operatorName, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Register operator", exact: true }),
+    ).toBeHidden();
+    await expect(page.getByLabel("Identifier", { exact: true })).toBeHidden();
   });
 });

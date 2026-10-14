@@ -103,6 +103,56 @@ describe("password register form", () => {
     );
   });
 
+  it("puts a spent invitation on the token field", async () => {
+    server.use(
+      http.post(`${API_URL}/auth/password/register`, () =>
+        HttpResponse.json(
+          { kind: "failed_precondition", message: "invitation: used" },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const spent = await register(TOKEN, "alice", PASSWORD);
+
+    const token = spent.form.getByLabelText("Invitation token");
+    expect(token).toHaveAttribute("aria-invalid", "true");
+    expect(token).toHaveAccessibleDescription(
+      new RegExp(REFUSAL_COPY.invitationSpent.replace(/[.?]/g, "\\$&")),
+    );
+    // The control: the username is not marked for the invitation.
+    expect(spent.form.getByLabelText("Username")).not.toHaveAttribute(
+      "aria-invalid",
+    );
+  });
+
+  it("says an invitation refusal above the button when the token field is hidden", async () => {
+    server.use(
+      http.post(`${API_URL}/auth/password/register`, () =>
+        HttpResponse.json(
+          { kind: "not_found", message: "invitation not found" },
+          { status: 404 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    const form = within(
+      render(<PasswordRegisterForm invitationToken={TOKEN} />).container,
+    );
+    expect(form.queryByLabelText("Invitation token")).toBeNull();
+    await enter(user, form.getByLabelText("Username"), "alice");
+    await enter(user, form.getByLabelText("Password"), PASSWORD);
+    await user.click(form.getByRole("button", { name: "Create account" }));
+
+    expect(await form.findByRole("alert")).toHaveTextContent(
+      REFUSAL_COPY.invitationNotFound,
+    );
+    // The control: the shown fields are not blamed for the invitation.
+    for (const label of ["Username", "Password"]) {
+      expect(form.getByLabelText(label)).not.toHaveAttribute("aria-invalid");
+    }
+  });
+
   it("keeps the pasted invitation when the API refuses", async () => {
     server.use(
       http.post(`${API_URL}/auth/password/register`, () =>

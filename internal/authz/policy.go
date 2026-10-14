@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
@@ -138,25 +139,29 @@ func ParsePolicyDocument(raw []byte) (PolicyDocument, error) {
 	dec.DisallowUnknownFields()
 	var doc PolicyDocument
 	if err := dec.Decode(&doc); err != nil {
-		return PolicyDocument{}, errorx.Wrap(err, "policy document", errorx.KindInvalidArgument)
+		return PolicyDocument{}, locateDecodeRefusal(raw, err)
 	}
 	// Decode stops at the end of the first value and would leave
 	// anything after it unread; io.EOF is what says there was nothing.
 	if err := dec.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
-		return PolicyDocument{}, errorx.New(errorx.KindInvalidArgument, "policy document: unexpected data after the document")
+		return PolicyDocument{}, documentRefusal(ReasonPolicyDocumentTrailingData, "", "unexpected data after the document")
 	}
 	if doc.Version == "" {
-		return PolicyDocument{}, errorx.New(errorx.KindInvalidArgument, "policy document: Version is required")
+		return PolicyDocument{}, documentRefusal(ReasonPolicyDocumentVersionMissing, "/Version", "Version is required")
 	}
 	if len(doc.Statement) == 0 {
-		return PolicyDocument{}, errorx.New(errorx.KindInvalidArgument, "policy document: Statement must not be empty")
+		return PolicyDocument{}, documentRefusal(ReasonPolicyDocumentStatementEmpty, "/Statement", "Statement must not be empty")
 	}
-	for _, s := range doc.Statement {
+	for i, s := range doc.Statement {
+		at := "/Statement/" + strconv.Itoa(i)
 		if s.Effect != wire.EffectAllow && s.Effect != wire.EffectDeny {
-			return PolicyDocument{}, errorx.New(errorx.KindInvalidArgument, "policy document: statement "+s.Sid+": Effect must be Allow or Deny")
+			return PolicyDocument{}, documentRefusal(ReasonPolicyDocumentEffectInvalid, at+"/Effect", "statement "+s.Sid+": Effect must be Allow or Deny")
 		}
-		if len(s.Action) == 0 || len(s.Resource) == 0 {
-			return PolicyDocument{}, errorx.New(errorx.KindInvalidArgument, "policy document: statement "+s.Sid+": Action and Resource are required")
+		if len(s.Action) == 0 {
+			return PolicyDocument{}, documentRefusal(ReasonPolicyDocumentActionMissing, at+"/Action", "statement "+s.Sid+": Action is required")
+		}
+		if len(s.Resource) == 0 {
+			return PolicyDocument{}, documentRefusal(ReasonPolicyDocumentResourceMissing, at+"/Resource", "statement "+s.Sid+": Resource is required")
 		}
 	}
 	return doc, nil

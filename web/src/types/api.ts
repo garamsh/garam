@@ -17,7 +17,11 @@ export interface paths {
          */
         get: operations["login"];
         put?: never;
-        post?: never;
+        /**
+         * Start the OAuth flow, landing on a console path afterwards.
+         * @description The `GET` flow, with where to land once it completes. `next` is taken only where it is a console path (`/console` or below it, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on `/console`. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it.
+         */
+        post: operations["loginWithReturnPath"];
         delete?: never;
         options?: never;
         head?: never;
@@ -33,7 +37,7 @@ export interface paths {
         };
         /**
          * Complete the OAuth authorization code flow.
-         * @description Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects to `/` on success.
+         * @description Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`.
          */
         get: operations["oauthCallback"];
         put?: never;
@@ -1259,6 +1263,10 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
         };
+        LoginReturnPath: {
+            /** @description The console path to land on once signed in. */
+            next?: string;
+        };
         InvitationPreview: {
             /** @description Organization identifier (the last GRN segment), the one the API's own paths take. */
             org: string;
@@ -1681,6 +1689,10 @@ export interface components {
             /** @description errorx kind, e.g. `not_found`, `permission_denied`. */
             kind: string;
             message: string;
+            /** @description A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Policy documents, each with `path`: `policy_document_malformed`, `policy_document_trailing_data`, `policy_document_wrong_type`, `policy_document_unknown_key`, `policy_document_version_missing`, `policy_document_statement_empty`, `policy_document_effect_invalid`, `policy_document_action_missing`, `policy_document_resource_missing`. */
+            reason?: string;
+            /** @description A JSON Pointer (RFC 6901) into the document the request sent, to the place `reason` is about, e.g. `/Statement/1/Effect`. A key the document's format names is spelled as the format spells it, whatever case the request used: a document accepts `statement` for `Statement`, and the pointer reads `/Statement`. A key the format does not name is spelled as it was sent. Absent where the reason is about the document as a whole or about no document. */
+            path?: string;
         };
     };
     responses: {
@@ -1764,6 +1776,35 @@ export interface operations {
                 };
                 content?: never;
             };
+            404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
+        };
+    };
+    loginWithReturnPath: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Authentication provider name (`google`). */
+                provider: components["parameters"]["provider"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["LoginReturnPath"];
+            };
+        };
+        responses: {
+            /** @description Redirect to the provider's consent screen. */
+            302: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
             404: components["responses"]["Error"];
             429: components["responses"]["Error"];
         };

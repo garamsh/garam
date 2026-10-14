@@ -236,7 +236,7 @@ func effectToProto(e wire.Effect) authzv1.Effect {
 // chain.
 func grpcError(err error) error {
 	return disclosed{
-		status: status.New(wire.CodeOf(errorx.KindOf(err)), wire.MessageOf(err)),
+		status: wire.GRPCStatusOf(err),
 		cause:  err,
 	}
 }

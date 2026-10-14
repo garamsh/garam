@@ -35,8 +35,9 @@ type Invitation struct {
 }
 
 type OauthState struct {
-	StateHash string
-	ExpiresAt pgtype.Timestamptz
+	StateHash  string
+	ExpiresAt  pgtype.Timestamptz
+	ReturnPath pgtype.Text
 }
 
 type Org struct {

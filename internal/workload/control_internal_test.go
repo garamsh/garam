@@ -60,13 +60,14 @@ func TestCaller_RefusesAControlTokenThatIsNotOneBeforeComparing(t *testing.T) {
 // TestControlServer_CloseLeavesNoListenerBehindForTheNextGeneration is
 // #1420's cause made certain: a generation that fails before its
 // control's serving goroutine ever ran. On one processor that goroutine
-// has not run when close is called. Closing the server alone left the
-// listener open, and the goroutine, once it ran, closed it and removed
-// the socket path, by then the next control's socket, so a supervisor
-// run after a failed one lost its control or failed to make it. close
-// removes the socket before it returns, and the next control's socket
-// survives the scheduler running everything left behind; reaching it is
-// the control. Nothing of the first is left running once close returns.
+// has not run when close is called, which the test checks. Closing the
+// server alone leaves the listener open, and the goroutine, once it
+// runs, closes it and removes the socket path, by then the next
+// control's socket, so a supervisor run after a failed one loses its
+// control or fails to make it. close waits for that goroutine, so the
+// socket is removed and the goroutine has returned when close does, and
+// the next control's socket survives the scheduler running everything
+// left behind; reaching it is the control.
 func TestControlServer_CloseLeavesNoListenerBehindForTheNextGeneration(t *testing.T) {
 	defer runtime.GOMAXPROCS(runtime.GOMAXPROCS(1))
 	// A unix socket's path must fit its address, which a test's own
@@ -82,6 +83,11 @@ func TestControlServer_CloseLeavesNoListenerBehindForTheNextGeneration(t *testin
 
 	first, err := s.serveControl(genDir, serving, &intent{})
 	require.NoError(t, err)
+	// The precondition: the serving goroutine has not tracked the
+	// listener yet, so closing the server alone leaves the socket.
+	require.NoError(t, first.srv.Close())
+	_, err = os.Stat(path)
+	require.NoError(t, err, "precondition: the serving goroutine had not run when close was called")
 	first.close()
 	_, err = os.Stat(path)
 	require.ErrorIs(t, err, os.ErrNotExist, "close removed the socket before returning")

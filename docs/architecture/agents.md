@@ -150,20 +150,72 @@ release of its peer in both upgrade orders, and unsupported semantics
 are refused by name. None of it is built, so garam still publishes no
 release of that contract and no compatibility window (ADR-0049).
 
+## Common managed and direct enrollment
+
+**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+sets one target admission contract, `agent-enrollment.v1`, in place of
+separate target managed/standalone identity models. §Separated
+execution and §Standalone hosts describe the existing implementations
+and compatibility cohorts, not common enrollment already shipped.
+
+- Provisioning and enrollment are separate. A managed runtime is
+  provisioned by the Operator; a direct runtime may already be running
+  independently. Connecting it requires neither an Operator record
+  nor a Kubernetes workload nor the Docker three-container runner.
+- Both use the same approval, identity admission, token delivery and
+  activation stages defined in ADR-0102 §Common agent enrollment. The
+  differences are the approval's authority and placement: the hosted
+  service's delegation/controller proof/member reference, or an
+  administrator-approved one-agent connector using the supervisor
+  registration/authorization shape. A direct connector has no
+  organization-wide operator powers and never enrolls peers.
+- New admission mints one stable GRN, starts fenced with an assignment
+  epoch and lineage and activates no writer. Replacement preserves
+  that GRN and compares the expected assignment before raising the
+  epoch and replacing the lineage. Retry returns the same public
+  binding; changed intent conflicts, superseded placement refuses.
+- The assignee delivers/refreshes short-lived agent API access; the
+  lifecycle authority establishes writer ownership and activates the
+  reported generation. A directly connected runtime's authority must
+  establish that ownership too; unverifiable ownership stops protected
+  Garam work without asserting a second writer is safe. Existing
+  execution locks, cutover gates and recovery permissions remain.
+- The runtime owns memory, replay state, identity/generation reports
+  and trusted message issuers. Its connector owns narrow Garam API
+  access and delivery; no Operator PEM or Garam message-signing key
+  enters the runtime or workspace. Admission grants no Sherlock
+  command/channel permission ([messaging.md](./messaging.md)).
+
+**Open: independent writer proof blocks direct attachment.** Current
+`internal/workload` proves a recorded Docker generation's exit by
+container ID/nonce; runtime status alone cannot prove exclusive
+ownership of an arbitrary process. ADR-0102 §Direct attachment proof
+remains an implementation gate records the proposed local attachment
+lease and process-owning-supervisor options. The PM chose neither;
+the owner must select and validate a proof contract before this new
+connector activates. Identity admission does not close that gate, and
+it does not block Operator asymmetric exchange.
+
+The new wire and direct connector are implementation obligations,
+not additions to the current `api/machine.yaml` §enrollment and
+§standalone. Legacy v1/v2 approval bindings and supervisor credential
+retry behavior remain unchanged until explicitly migrated.
+
 ## Tokens in place of certificates
 
-**Built for an agent's operator and for the control service's
-contracts; a supervisor-held agent is not yet.**
+**Built for an agent's operator, a standalone host's supervisor and
+the control service's contracts.**
 [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 replaces an agent's certificate with a short-lived token, and the
 order is the plan's,
 `docs/plans/2026-10-09-machine-identity-migration.md`: this is steps
-G1b and G1c; a supervisor minting its agent's tokens, and its own
-credential, are G1d. Until then a certificate still authenticates as
-it did.
+G1b to G1d, and a supervisor's own credential is §Standalone hosts'.
+A certificate still authenticates as it did until G3.
 
 - **The assignee mints, at the current epoch.** `mintAgentToken`
-  answers an operator for an agent assigned to it now and no other,
+  answers an operator, or a standalone host's supervisor presenting its
+  own token and naming no audience, for an agent assigned to it now and
+  no other,
   which is ADR-0015's rule. The token names that assignee and epoch
   and the lineage the agent's execution holds, read under the
   execution row; it is admitted where the certificate route would be —
@@ -390,6 +442,25 @@ unverified (#1180, #1169).
   spendings queued on one approval create one agent and answer the
   second with the first's result. Withdrawing and spending one
   approval serialize on its row.
+- **Under `standalone-enrollment.v2` the host is answered a credential,
+  not certificates** (ADR-0100). An approval binding the host's keys is
+  spent under v1 alone and one binding none under v2 alone, so neither
+  contract spends the other's approval, and one fingerprint without
+  the other is refused. A v2 spending signs nothing: it places the
+  agent as v1 does, registers the supervisor holding no certificate,
+  and answers a credential garam keeps only the hash of
+  (`migrations/000042`). An identical retry, while the registration
+  still holds the agent, re-issues it under the approval's row lock,
+  and the credential answered before goes with every token it was
+  exchanged for; garam keeps no audit trail of that or of any other
+  void. The supervisor exchanges the credential for hour-long tokens
+  on `exchangeToken`, mints its agent's tokens for garam alone, and on
+  the execution routes forwards the agent token it minted for garam;
+  that form is a supervisor's alone, since it is the assignee and the
+  lifecycle authority at once, and an operator forwards a token shown
+  to it. A revocation or a replacement ends the
+  registration, and every read of the credential or a token joins a
+  registration that has not ended.
 - **The supervisor activates its own agent and nothing else.** On the
   execution routes it is authorized by its current registration, its
   being the agent's assignee and current policy, read per request; it
@@ -397,9 +468,10 @@ unverified (#1180, #1169).
   the execution lock beside the assignment, so an activation queued
   behind a revocation or a replacement is refused rather than
   installing a token. Its first activation rests on the approval,
-  where a managed creation's needs its reference. Its certificate
-  reaches its own identity, its renewal and those three execution
-  routes and nothing else: `ConfineSupervisors` in
+  where a managed creation's needs its reference. It reaches its own
+  identity, its renewal and those three execution routes, and with its
+  own token its agent's token mint as well, and nothing else:
+  `ConfineSupervisors` in
   `internal/machineapi/standalone.go` refuses every other route at the
   router, so a supervisor posts, claims and reads no message and acts
   on no operator route. Every collaboration route admits through the
@@ -417,8 +489,9 @@ unverified (#1180, #1169).
   over a new key in the last third of its validity; the certificate a
   renewal replaced may replay that renewal's public answer for the
   identical request, and two identical renewals racing install one
-  successor. `api/machine.yaml` §standalone is authoritative for the
-  wire and `standalone-enrollment.v1`.
+  successor; a supervisor enrolled under v2 holds no certificate and
+  renews none. `api/machine.yaml` §standalone is authoritative for the
+  wire and both `standalone-enrollment` values.
 - **The host's files.** The supervisor's directory holds the prepared
   secret and key, its current certificate and key in one file a
   renewal replaces in one rename, and a pending renewal kept from
@@ -465,8 +538,8 @@ supervisor that stops leaves the workload running.
   65532, and checks it again before the adapter is created; a link or
   anything else there refuses, and the path is never repaired. The
   store files the runtime creates beside it are 0600 and 65532's, the
-  modes Sherlock v0.5.0 keeps its state in (sherlock#1025), so an
-  account other than the runtime's on that volume can neither list
+  modes Sherlock keeps its state in from v0.5.0 on (sherlock#1025), so
+  an account other than the runtime's on that volume can neither list
   what the agent is about to send nor read its memory. The adapter
   runs as 65532 and reads the outbox all the same.
 - **`--require-store` follows the record.** Every start passes it once
@@ -558,7 +631,7 @@ supervisor that stops leaves the workload running.
   reach garam's private root. So a host on a runtime older than
   `v0.4.0` names no issuer, and one that does has every message
   refused and handed out again. `tests/standalone/signing_test.go`
-  holds the configured case against Sherlock `v0.5.0`: a runtime that
+  holds the configured case against the pinned Sherlock: a runtime that
   refuses anything unsigned takes the message. A generation started
   before the rendering keeps the configuration and the adapter it was
   given until it is replaced.

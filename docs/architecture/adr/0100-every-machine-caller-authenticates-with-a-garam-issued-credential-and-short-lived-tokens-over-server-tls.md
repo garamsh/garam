@@ -1,6 +1,6 @@
 # ADR 0100: Every machine caller authenticates with a Garam-issued credential and short-lived tokens over server TLS
 
-> Status: accepted
+> Status: superseded in part by ADR-0102
 > Date: 2026-10-09
 
 Drafted for #1251, which reserved this number. The direction is the

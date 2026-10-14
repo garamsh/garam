@@ -32,6 +32,8 @@ type pgProxy struct {
 	mu       sync.Mutex
 	open     []net.Conn
 	cutOff   bool
+	// refused is signalled when a connection is turned away while cut.
+	refused chan struct{}
 }
 
 // newPGProxy starts a proxy in front of target and returns it cut when
@@ -40,7 +42,7 @@ func newPGProxy(t *testing.T, target string) *pgProxy {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	p := &pgProxy{listener: ln}
+	p := &pgProxy{listener: ln, refused: make(chan struct{}, 1)}
 	t.Cleanup(func() {
 		_ = ln.Close()
 		p.cut()
@@ -72,6 +74,10 @@ func (p *pgProxy) forward(target string) {
 			p.mu.Unlock()
 			_ = client.Close()
 			_ = server.Close()
+			select {
+			case p.refused <- struct{}{}:
+			default:
+			}
 			continue
 		}
 		p.open = append(p.open, client, server)
@@ -98,6 +104,18 @@ func (p *pgProxy) mend() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cutOff = false
+}
+
+// requireRefused waits until the proxy has turned a connection away
+// since it was cut: whoever holds a connection through it has seen it
+// end and is trying again.
+func (p *pgProxy) requireRefused(t *testing.T) {
+	t.Helper()
+	select {
+	case <-p.refused:
+	case <-time.After(10 * time.Second):
+		t.Fatal("nothing tried to connect through the cut proxy")
+	}
 }
 
 // databaseAddr is the host and port GARAM_TEST_DATABASE_URL names.
@@ -196,16 +214,20 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 		return err == nil && len(got) == 1 && got[0].Sid == "before"
 	}, 10*time.Second, 20*time.Millisecond, "the listener should invalidate the org it is sent")
 
-	// What the cache holds when the connection is cut, which the
-	// notification above put there and only a reload can replace.
-	warm, err := cache.Statements(ctx, orgGRN, nil)
-	require.NoError(t, err)
-	require.Equal(t, "before", warm[0].Sid)
-
 	proxy.cut()
 	// Postgres drops the session with the socket, so the writes below
 	// are made with nothing listening on the channel at all.
 	requireListenerSessions(t, p, policyListenerAppName, authz.PolicyChannel, 0)
+	// A refused retry puts the listener past queued setup notifications.
+	// Warm only then, so no old invalidation can drop the control's entry.
+	proxy.requireRefused(t)
+
+	// What the cache holds while the listener is away, which only a
+	// reload can replace.
+	warm, err := cache.Statements(ctx, orgGRN, nil)
+	require.NoError(t, err)
+	require.Len(t, warm, 1)
+	require.Equal(t, "before", warm[0].Sid)
 
 	_, err = s.SetPolicyStatus(ctx, before, wire.PolicyStatusArchived)
 	require.NoError(t, err)
@@ -217,8 +239,8 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 	require.NoError(t, err)
 
 	// The control: with the connection down the cache still answers
-	// what it read before the break, which is what makes the assertion
-	// below a resynchronisation rather than a late notification.
+	// what it read above, which is what makes the assertion below a
+	// resynchronisation rather than a late notification.
 	stale, err := cache.Statements(ctx, orgGRN, nil)
 	require.NoError(t, err)
 	require.Equal(t, warm, stale)
@@ -229,5 +251,5 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 		got, err := cache.Statements(ctx, orgGRN, nil)
 		return err == nil && len(got) == 1 && got[0].Sid == "after"
 	}, 20*time.Second, 50*time.Millisecond,
-		"the reconnected listener should drop what the cache read before the break, so what it missed is read again")
+		"the reconnected listener should drop what the cache read while it was away, so what it missed is read again")
 }

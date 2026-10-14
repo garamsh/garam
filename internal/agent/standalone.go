@@ -24,6 +24,12 @@ const ServiceTypeSupervisor = "supervisor"
 // header.
 const StandaloneContractVersion = "standalone-enrollment.v1"
 
+// CredentialStandaloneContractVersion is the same enrollment answering
+// a supervisor credential where v1 signed two certificate requests
+// (ADR-0100). An approval binding the host's keys is spent under v1
+// alone and one binding none under v2 alone; renewal takes no v2 value.
+const CredentialStandaloneContractVersion = "standalone-enrollment.v2"
+
 // MaxEnrollmentLifetime bounds how long an approval may stay spendable.
 const MaxEnrollmentLifetime = 24 * time.Hour
 
@@ -33,6 +39,21 @@ var (
 	// contract version, or another.
 	ErrUnsupportedStandaloneContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: this route serves "+StandaloneContractVersion)
+	// ErrUnsupportedEnrollmentStandaloneContract refuses an enrollment
+	// carrying neither value its route serves.
+	ErrUnsupportedEnrollmentStandaloneContract = errorx.New(errorx.KindInvalidArgument,
+		"unsupported Garam-Contract-Version: this route serves "+StandaloneContractVersion+" or "+
+			CredentialStandaloneContractVersion)
+	// ErrApprovedForCertificates refuses spending, under
+	// standalone-enrollment.v2, an approval that binds the host's keys:
+	// it is spent under v1 alone.
+	ErrApprovedForCertificates = errorx.New(errorx.KindInvalidArgument,
+		"this approval binds the host's keys and is spent under "+StandaloneContractVersion)
+	// ErrApprovedForCredential refuses spending, under
+	// standalone-enrollment.v1, an approval that binds no key: it is
+	// spent under v2 alone.
+	ErrApprovedForCredential = errorx.New(errorx.KindInvalidArgument,
+		"this approval binds no key and is spent under "+CredentialStandaloneContractVersion)
 	// ErrBootstrapRefused is the one refusal of a bootstrap secret no
 	// approval holds, or one an approval holds that expired or was
 	// withdrawn: a caller learns nothing about approvals it cannot
@@ -131,38 +152,45 @@ type Replacement struct {
 	Epoch    int
 }
 
+// HostKeys are the two keys a host generated for certificates under
+// standalone-enrollment.v1: an approval binding them is spent under v1
+// alone, and one binding none under v2 alone (ADR-0100).
+type HostKeys struct {
+	Supervisor KeyFingerprint
+	Agent      KeyFingerprint
+}
+
 // ApprovalInput is an administrator's approval as received. Every
 // value but the actor, the organization and the expiry is one the host
-// generated before asking; Replaces is nil for a new agent.
+// generated before asking; Keys is nil for a host enrolling under
+// standalone-enrollment.v2, and Replaces is nil for a new agent.
 type ApprovalInput struct {
-	Actor         grn.GRN
-	Org           grn.GRN
-	RequestID     RequestID
-	HostName      Name
-	ExpiresAt     time.Time
-	SecretSHA256  [32]byte
-	SupervisorKey KeyFingerprint
-	AgentKey      KeyFingerprint
-	Replaces      *Replacement
+	Actor        grn.GRN
+	Org          grn.GRN
+	RequestID    RequestID
+	HostName     Name
+	ExpiresAt    time.Time
+	SecretSHA256 [32]byte
+	Keys         *HostKeys
+	Replaces     *Replacement
 }
 
 // Enrollment is an approval as stored: the binding it approved, and
 // what spending it answered once it was spent.
 type Enrollment struct {
-	ID            EnrollmentID
-	Org           grn.GRN
-	Agent         grn.GRN
-	Supervisor    grn.GRN
-	HostName      Name
-	RequestID     RequestID
-	SecretSHA256  [32]byte
-	SupervisorKey KeyFingerprint
-	AgentKey      KeyFingerprint
-	Replaces      *Replacement
-	ApprovedBy    grn.GRN
-	ExpiresAt     time.Time
-	CreatedAt     time.Time
-	Withdrawn     bool
+	ID           EnrollmentID
+	Org          grn.GRN
+	Agent        grn.GRN
+	Supervisor   grn.GRN
+	HostName     Name
+	RequestID    RequestID
+	SecretSHA256 [32]byte
+	Keys         *HostKeys
+	Replaces     *Replacement
+	ApprovedBy   grn.GRN
+	ExpiresAt    time.Time
+	CreatedAt    time.Time
+	Withdrawn    bool
 	// Spent is nil until the host enrolls.
 	Spent *SpentEnrollment
 }
@@ -176,49 +204,69 @@ type SpentEnrollment struct {
 
 // EnrollmentResult is what an enrollment answers, the first time and
 // on an identical retry. It carries no private key: the host generated
-// both before the approval.
+// both before the approval. Certificates is nil for an enrollment
+// under standalone-enrollment.v2, which answers Credential instead.
 type EnrollmentResult struct {
-	Agent                    grn.GRN
-	Supervisor               grn.GRN
-	Epoch                    int
-	Lineage                  Lineage
+	Agent        grn.GRN
+	Supervisor   grn.GRN
+	Epoch        int
+	Lineage      Lineage
+	Certificates *EnrollmentCertificates
+	// Credential is the supervisor's credential, answered by the call
+	// that issued it alone: garam keeps its hash.
+	Credential    string
+	ServerRootPEM string
+}
+
+// EnrollmentCertificates are what a standalone-enrollment.v1 spending
+// signed, and the chain both were signed under.
+type EnrollmentCertificates struct {
 	SupervisorCertificatePEM string
 	AgentCertificatePEM      string
 	IssuerPEM                string
-	ServerRootPEM            string
 }
 
 // EnrollmentInput is a host spending its approval, as received. Body
-// is the exact bytes the request digest covers.
+// is the exact bytes the request digest covers. Requests is nil under
+// standalone-enrollment.v2, which signs nothing.
 type EnrollmentInput struct {
-	Secret                          string
-	RequestID                       RequestID
-	Body                            []byte
-	SupervisorCertificateRequestPEM []byte
-	AgentCertificateRequestPEM      []byte
+	Secret    string
+	RequestID RequestID
+	Body      []byte
+	Requests  *CertificateRequests
+}
+
+// CertificateRequests are the two requests a standalone-enrollment.v1
+// spending signs, over the keys its approval binds.
+type CertificateRequests struct {
+	SupervisorPEM []byte
+	AgentPEM      []byte
 }
 
 // EnrollmentRequest is a spending the service admitted, as the store
-// applies it. Supervisor and AgentCertificate are nil when the
-// approval was already spent and is only to be answered again.
+// applies it. Supervisor and Agent are what a v1 spending signed and
+// Credential what a v2 spending issued; all three are nil when a v1
+// approval was already spent and is only to be answered again, and a
+// v2 retry carries a fresh Credential, which re-issues it.
 type EnrollmentRequest struct {
 	Enrollment    EnrollmentID
 	RequestSHA256 [32]byte
 	Lineage       Lineage
 	Supervisor    *SignedCertificate
 	Agent         *SignedCertificate
+	Credential    *SupervisorCredential
 }
 
 // Supervisor is a current supervisor registration: the agent it holds
-// and which certificate garam last issued it, until when. Its
-// lifecycle authority over the agent holds until that expiry.
+// and, for one enrolled under standalone-enrollment.v1, which
+// certificate garam last issued it. Certificate is nil for one
+// enrolled under v2, which holds a credential instead.
 type Supervisor struct {
-	GRN        grn.GRN
-	Agent      grn.GRN
-	Enrollment EnrollmentID
-	HostName   Name
-	Serial     string
-	NotAfter   time.Time
+	GRN         grn.GRN
+	Agent       grn.GRN
+	Enrollment  EnrollmentID
+	HostName    Name
+	Certificate *Credential
 }
 
 // SupervisorRenewal is a renewal the service admitted, as the store

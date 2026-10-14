@@ -1,9 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { CreateProjectForm } from "@/app/console/orgs/[org]/projects/_components/create-project-form";
+import { enter } from "@/testing/enter";
 import { API_URL, frontend } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -54,11 +55,12 @@ describe.each(RESOURCES)(
       const posted = recordCreates();
       const user = userEvent.setup();
       const { container } = render(<CreateProjectForm org="acme" />);
+      const form = within(container);
 
-      await user.type(screen.getByLabelText(label), typed);
-      await user.click(screen.getByRole("button", { name: submit }));
+      await enter(user, form.getByLabelText(label), typed);
+      await user.click(form.getByRole("button", { name: submit }));
 
-      expect(await screen.findByText(identifier)).toBeInTheDocument();
+      expect(await form.findByText(identifier)).toBeInTheDocument();
       expect(posted).toEqual([{ name: typed }]);
       // The console addresses a resource by the identifier segment and
       // prints no GRN (ADR-0011), the confirmation included.
@@ -78,15 +80,15 @@ describe.each(RESOURCES)(
         ),
       );
       const user = userEvent.setup();
-      render(<CreateProjectForm org="acme" />);
+      const form = within(render(<CreateProjectForm org="acme" />).container);
 
-      await user.type(screen.getByLabelText(label), typed);
-      await user.click(screen.getByRole("button", { name: submit }));
+      await enter(user, form.getByLabelText(label), typed);
+      await user.click(form.getByRole("button", { name: submit }));
 
-      expect(await screen.findByRole("alert")).toHaveTextContent(
+      expect(await form.findByRole("alert")).toHaveTextContent(
         `this organization already holds a ${kind} named ${typed}`,
       );
-      expect(screen.queryByText(identifier)).not.toBeInTheDocument();
+      expect(form.queryByText(identifier)).not.toBeInTheDocument();
     });
   },
 );

@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, within } from "@testing-library/react";
 import { Component, type ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { CreatePolicyForm } from "@/app/console/orgs/[org]/permissions/new/_components/create-policy-form";
+import { enter } from "@/testing/enter";
 import { API_URL, denyDeletes } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -58,21 +59,22 @@ describe("create policy form", () => {
       }),
     );
     const user = userEvent.setup();
-    render(
-      <Navigation>
-        <CreatePolicyForm org="acme" />
-      </Navigation>,
+    const form = within(
+      render(
+        <Navigation>
+          <CreatePolicyForm org="acme" />
+        </Navigation>,
+      ).container,
     );
-    const name = screen.getByLabelText("Policy name");
-    const document = screen.getByLabelText("Document");
+    const name = form.getByLabelText("Policy name");
+    const document = form.getByLabelText("Document");
 
-    await user.type(name, "Deny deletes");
+    await enter(user, name, "Deny deletes");
     await user.clear(document);
-    // user-event reads a doubled brace or bracket as the literal one.
-    await user.type(document, '{{"Statement":[[]}');
-    await user.click(screen.getByRole("button", { name: "Create draft" }));
+    await enter(user, document, '{"Statement":[]}');
+    await user.click(form.getByRole("button", { name: "Create draft" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    expect(await form.findByRole("alert")).toHaveTextContent(
       "policy document: Effect must be Allow or Deny",
     );
     expect(name).toHaveValue("Deny deletes");
@@ -82,10 +84,10 @@ describe("create policy form", () => {
     // The control: the document garam takes, sent from the same form,
     // opens the policy, so the refusal above was the document's.
     await user.clear(document);
-    await user.type(document, '{{"Version":"2026-07-25"}');
-    await user.click(screen.getByRole("button", { name: "Create draft" }));
+    await enter(user, document, '{"Version":"2026-07-25"}');
+    await user.click(form.getByRole("button", { name: "Create draft" }));
     expect(
-      await screen.findByText(
+      await form.findByText(
         "NEXT_REDIRECT:/console/orgs/acme/permissions/d1e2f3a4b5c6d7e8",
       ),
     ).toBeInTheDocument();
@@ -93,15 +95,15 @@ describe("create policy form", () => {
 
   it("holds back text that is not JSON and names why", async () => {
     const user = userEvent.setup();
-    render(<CreatePolicyForm org="acme" />);
-    const submit = screen.getByRole("button", { name: "Create draft" });
+    const form = within(render(<CreatePolicyForm org="acme" />).container);
+    const submit = form.getByRole("button", { name: "Create draft" });
     // The control: the starting document parses, so the form can be
     // sent.
     expect(submit).toBeEnabled();
 
-    await user.type(screen.getByLabelText("Document"), "oops");
+    await enter(user, form.getByLabelText("Document"), "oops");
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
+    expect(form.getByRole("alert")).toHaveTextContent(
       "The document is not valid JSON.",
     );
     expect(submit).toBeDisabled();

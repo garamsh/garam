@@ -5,6 +5,7 @@ What garam serves to a caller outside it: which listeners exist, what admits a c
 ## Contents
 - What it is
 - The surfaces
+- Planned authentication and enrollment profiles
 - What admits a caller
 - What decides the rest
 - What a specification is authoritative for
@@ -53,6 +54,40 @@ polls, never by garam opening a connection to it
 ([ADR-0012](./adr/0012-agent-operator-model.md),
 [ADR-0013](./adr/0013-agent-messaging.md)), which is why every rule
 below is about what garam admits rather than about what it reaches.
+
+## Planned authentication and enrollment profiles
+
+**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+adds a standard client-assertion exchange and a common agent admission
+contract. The specifications still describe the current v1/v2 cohorts;
+no new endpoint or OAuth `Bearer` alias is served at `3beb156`.
+
+- `machine-token.v2` adds `POST /oauth/token` with the RFC 7523
+  client assertion parameters, the client credentials grant and OAuth
+  token/error responses. Its exact profile, including identity,
+  endpoint audience, RS256, lifetime and replay, is ADR-0102
+  §Assertion exchange profile and §Replay, rotation and revocation.
+  Existing `machine-token.v1` exchange/mint remains unchanged.
+- A planned `Bearer` alias resolves the same opaque access tokens as
+  `Garam-Token`, with the same route confinement, per-request reads,
+  v2 contract selection and rejection of combined credentials. It
+  changes no execution or operation header and enables no certificate
+  renewal route. Published schemas and tests must establish it first.
+- Browser-facing key issuance/replacement retains registration and
+  `operator:reissue` authorization, answering private PEM once and
+  thereafter public metadata alone; no secret readback is introduced.
+- `agent-enrollment.v1` adds one admission contract, whose managed and
+  direct cases differ by authorized placement. It allocates no workload
+  and activates nothing. The current managed/standalone v1/v2 paths
+  keep their approval bindings, retry behavior and refusal semantics.
+- The Garam implementation issues must update each affected listener's
+  specification, generated output and route/version tests. This docs
+  PR changes none of those artifacts, so the decision is a target and
+  the current specifications remain authoritative for what runs.
+
+[agents.md](./agents.md) §Common managed and direct enrollment owns
+admission; [operators.md](./operators.md) §Issued PEM identity owns
+registration/key custody. Message issuer publication stays ADR-0101's.
 
 ## What admits a caller
 
@@ -116,9 +151,10 @@ changes is served to a token under its v2 value and to a certificate
 under v1, and a request whose value disagrees with its credential is
 refused naming the value the credential takes; beside a token an
 operation authority or reference travels in a `Garam-Operation`
-header, since the token takes `Authorization`. A supervisor presents a
-certificate until the plan's step G1d
-(`docs/plans/2026-10-09-machine-identity-migration.md`).
+header, since the token takes `Authorization`. A standalone host's
+supervisor exchanges the credential its v2 enrollment answered for a
+token on the same `exchangeToken`, prefixed `garam_st_`, and
+`ConfineSupervisors` bounds its token as it bounds its certificate.
 
 **The listener requests a client certificate and does not require
 one** — `tls.RequestClientCert` in `internal/machine/listener.go` — so
@@ -277,10 +313,14 @@ answer that cannot be decided from current state is the listener's
 decided on `agent:enroll` from current state and carry no contract
 version, as an operator's registration does not; on the machine
 listener `enrollStandaloneAgent` and `renewSupervisorCertificate`
-require and answer `Garam-Contract-Version: standalone-enrollment.v1`.
-A supervisor's certificate is admitted to those, to `getIdentity` and
-to the three execution routes it holds authority on, and refused on
-every other route at the router before a handler runs. The
+require and answer `Garam-Contract-Version: standalone-enrollment.v1`,
+and `enrollStandaloneAgent` answers `standalone-enrollment.v2` as well,
+the value the request names: an approval binding the host's keys is
+spent under v1 alone and one binding none under v2 alone (ADR-0100). A
+supervisor is admitted to those, to `getIdentity` and to the three
+execution routes it holds authority on, and by its own token to its
+agent's token mint as well, and refused on every other route at the
+router before a handler runs. The
 specifications are authoritative for their forms, and
 [agents.md](./agents.md) §Standalone hosts for what they decide.
 

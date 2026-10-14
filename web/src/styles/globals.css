@@ -81,7 +81,6 @@
   --radius-2xl: 0.75rem;
   --radius-3xl: 1rem;
   --radius-4xl: 1.5rem;
-  --ease-out-quick: cubic-bezier(0.2, 0, 0, 1);
 }
 
 :root {
@@ -192,6 +191,11 @@
   h3,
   h4 {
     @apply font-semibold;
+  }
+  /* Lucide draws at 2; against 14px text the console's icons take
+     1.5. A `stroke-*` utility on one icon still overrides it. */
+  .lucide {
+    stroke-width: 1.5;
   }
   /* Identifiers, keys and timestamps line up in columns. */
   code,

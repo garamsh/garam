@@ -76,10 +76,8 @@ export function StageTrack({
                 state === "upcoming" && "border-border",
               )}
             >
-              {state === "done" && (
-                <Check className="size-3" strokeWidth={2.5} />
-              )}
-              {state === "failed" && <X className="size-3" strokeWidth={2.5} />}
+              {state === "done" && <Check className="size-3 stroke-[2.5]" />}
+              {state === "failed" && <X className="size-3 stroke-[2.5]" />}
               {state === "current" && (
                 <span className="size-1.5 rounded-full bg-primary" />
               )}

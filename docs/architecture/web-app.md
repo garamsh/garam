@@ -357,10 +357,12 @@ origin; the console's own server never calls one.
 
 ## Design system
 
-**Unbuilt.** No console page is built on this system yet. The
-foundation and each area's migration land under epic #1366, in its
-plan's order, and until a page migrates, §What it serves describes it
-as it is.
+**The foundation is built; no page is migrated yet.** The tokens,
+fonts, theme, shell, primitives and page templates exist
+(`web/src/styles/globals.css`, `web/src/components/`,
+`web/src/app/console/_components/`). Each area's migration lands under
+epic #1366, in its plan's order, and until a page migrates, §What it
+serves describes it as it is.
 [ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
 holds the full decision and the reason for each part. This section is
 what a page owes once it is built on the system.
@@ -545,7 +547,8 @@ These decide the application itself:
   — one design system, of principles, tokens, shell, page templates,
   primitives and patterns, and a console that asks the server what a
   caller may do rather than rendering what it will refuse; the
-  permission check is built and the rest is unbuilt
+  foundation and the permission check are built, and no page is
+  migrated
 
 The rest bear on it without being about it:
 

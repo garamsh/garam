@@ -55,11 +55,7 @@ export function Stepper({
                 !done && !isCurrent && "text-muted-foreground",
               )}
             >
-              {done ? (
-                <Check className="size-3.5" strokeWidth={2.5} />
-              ) : (
-                index + 1
-              )}
+              {done ? <Check className="size-3.5 stroke-[2.5]" /> : index + 1}
             </span>
             <div className="flex min-w-0 flex-col gap-0.5 pt-0.5">
               <span

@@ -1,6 +1,8 @@
 import type { Locator, Page } from "@playwright/test";
 
+import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
+import { seedMember } from "./seed";
 
 /** The seeded group's page: its GRN's identifier is `engineering`. */
 function teamUrl(orgSlug: string, team = "engineering"): string {
@@ -27,12 +29,26 @@ function memberRow(page: Page, text: string): Locator {
   return page.getByRole("row", { name: text });
 }
 
-/** Adds the option labelled `label` through the team page's form. */
-async function addMember(page: Page, label: string): Promise<void> {
-  await page
-    .getByLabel("Person or agent", { exact: true })
-    .selectOption({ label });
+/**
+ * Adds the option named `name` through the team page's form. An
+ * option's name is the member's name and then its identifier.
+ */
+async function addMember(page: Page, name: string): Promise<void> {
+  const option = page.getByRole("option", { name, exact: true });
+  await clickUntil(
+    page.getByRole("combobox", { name: "Person or agent", exact: true }),
+    option,
+  );
+  await option.click();
   await page.getByRole("button", { name: "Add to team", exact: true }).click();
+}
+
+/** Opens the Settings tab of the team page on screen. */
+async function openSettings(page: Page): Promise<void> {
+  await clickUntil(
+    page.getByRole("tab", { name: "Settings", exact: true }),
+    page.getByLabel("Team name", { exact: true }),
+  );
 }
 
 test.describe("teams", () => {
@@ -89,8 +105,8 @@ test.describe("teams", () => {
     page,
     signedIn,
   }) => {
-    const person = `${signedIn.nickname} · Person`;
-    const agent = `Unnamed agent (${signedIn.agentIdentifier}) · Agent`;
+    const person = `${signedIn.nickname} ${signedIn.userSlug}`;
+    const agent = `Unnamed agent ${signedIn.agentIdentifier}`;
 
     // A second team, created through the console, holding the agent.
     await page.goto(`/console/orgs/${signedIn.orgSlug}/teams`);
@@ -122,12 +138,13 @@ test.describe("teams", () => {
     await expect(memberRow(page, signedIn.agentIdentifier)).toContainText(
       "Agent",
     );
-    // Neither can be chosen again.
+    // Neither can be chosen again: the seed holds one of each.
     await expect(
-      page
-        .getByLabel("Person or agent", { exact: true })
-        .getByRole("option", { name: person, exact: true }),
-    ).toHaveCount(0);
+      page.getByText(
+        "Every person and agent of this organization is already in this team.",
+        { exact: true },
+      ),
+    ).toBeVisible();
 
     await page.reload();
     await expect(memberRow(page, signedIn.nickname)).toContainText("Person");
@@ -143,14 +160,15 @@ test.describe("teams", () => {
       },
     );
     const confirm = page.getByRole("button", {
-      name: "Confirm removal",
+      name: "Remove from team",
       exact: true,
     });
     await clickUntil(remove, confirm);
-    // Substring on purpose: the question opens a sentence that goes on
-    // to say what the removal leaves alone.
     await expect(
-      page.getByText(`Remove an unnamed agent from ${signedIn.groupName}?`),
+      page.getByRole("alertdialog", {
+        name: `Remove an unnamed agent from ${signedIn.groupName}?`,
+        exact: true,
+      }),
     ).toBeVisible();
     await confirm.click();
     await expect(memberRow(page, signedIn.agentIdentifier)).toHaveCount(0);
@@ -172,13 +190,8 @@ test.describe("teams", () => {
     baseURL,
     signedIn,
   }) => {
-    const person = `${signedIn.nickname} · Person`;
+    const person = `${signedIn.nickname} ${signedIn.userSlug}`;
     await page.goto(teamUrl(signedIn.orgSlug));
-    await expect(
-      page
-        .getByLabel("Person or agent", { exact: true })
-        .getByRole("option", { name: person, exact: true }),
-    ).toHaveCount(1);
 
     // Another tab adds the same person first, so this page's choice is
     // stale when it is submitted and garam refuses it.
@@ -199,6 +212,10 @@ test.describe("teams", () => {
         exact: true,
       }),
     ).toBeVisible();
+    // The refusal is the choice's error.
+    await expect(
+      page.getByRole("combobox", { name: "Person or agent", exact: true }),
+    ).toHaveAttribute("aria-invalid", "true");
     // Recovered: the refusal leaves one membership, which the page
     // shows without a reload.
     await expect(memberRow(page, signedIn.nickname)).toHaveCount(1);
@@ -225,7 +242,7 @@ test.describe("teams", () => {
     // member and the team, and the row already fixes which member.
     const remove = row.getByRole("button", { name: /^Remove / });
     const confirm = page.getByRole("button", {
-      name: "Confirm removal",
+      name: "Remove from team",
       exact: true,
     });
     await clickUntil(remove, confirm);
@@ -241,21 +258,28 @@ test.describe("teams", () => {
     signedIn,
   }) => {
     await page.goto(teamUrl(signedIn.orgSlug));
+    await openSettings(page);
     await page.getByLabel("Team name", { exact: true }).fill("Platform");
     await page.getByRole("button", { name: "Save name", exact: true }).click();
     await expect(
       page.getByRole("heading", { level: 1, name: "Platform", exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByText("Renamed to Platform.", { exact: true }),
+    ).toBeVisible();
 
-    const confirm = page.getByRole("button", {
-      name: "Delete Platform",
+    const dialog = page.getByRole("alertdialog", {
+      name: "Delete Platform?",
       exact: true,
     });
-    await clickUntil(
-      page.getByRole("button", { name: "Delete team", exact: true }),
-      confirm,
-    );
-    await confirm.click();
+    await page
+      .getByRole("region", { name: "Danger zone", exact: true })
+      .getByRole("button", { name: "Delete team", exact: true })
+      .click();
+    await expect(dialog).toBeVisible();
+    await dialog
+      .getByRole("button", { name: "Delete team", exact: true })
+      .click();
 
     await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/teams`);
     await expect(
@@ -276,8 +300,109 @@ test.describe("teams", () => {
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
     await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/people`);
+    // Presence: the heading carries the list's count after the title.
     await expect(
-      page.getByRole("heading", { level: 1, name: "People", exact: true }),
+      page.getByRole("heading", { level: 1, name: /^People/ }),
     ).toBeVisible();
   });
+
+  test("offers a member none of the writes the server denies them", async ({
+    page,
+    context,
+    signedIn,
+    baseURL,
+  }) => {
+    const teams = `/console/orgs/${signedIn.orgSlug}/teams`;
+
+    // The control: the owner is offered each write on the same pages.
+    await page.goto(teams);
+    await expect(
+      page.getByRole("link", { name: "Create team", exact: true }),
+    ).toBeVisible();
+    await page.goto(teamUrl(signedIn.orgSlug));
+    await expect(
+      page.getByRole("combobox", { name: "Person or agent", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("tab", { name: "Settings", exact: true }),
+    ).toBeVisible();
+
+    const member = await seedMember(signedIn);
+    await context.clearCookies();
+    await context.addCookies([
+      {
+        name: "garam_session",
+        value: member.sessionToken,
+        url: baseURL!,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+
+    // The list reads for a member, so the page rendered and the action
+    // is absent rather than unreached.
+    await page.goto(teams);
+    await expect(
+      page.getByRole("link", { name: signedIn.groupName, exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Create team", exact: true }),
+    ).toBeHidden();
+
+    await page.goto(teamUrl(signedIn.orgSlug));
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: signedIn.groupName,
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("tab", { name: "Overview", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("combobox", { name: "Person or agent", exact: true }),
+    ).toBeHidden();
+    await expect(
+      page.getByRole("tab", { name: "Settings", exact: true }),
+    ).toBeHidden();
+
+    await page.goto(`${teams}/new`);
+    await expect(
+      page.getByText("You cannot create teams here", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Team name", { exact: true })).toBeHidden();
+  });
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`the Teams routes pass axe in the ${theme} theme`, async ({
+      page,
+      signedIn,
+    }) => {
+      await useTheme(page, theme);
+
+      await page.goto(`/console/orgs/${signedIn.orgSlug}/teams`);
+      await expectHydrated(page);
+      expect(await axeViolations(page)).toEqual([]);
+
+      await page.goto(`/console/orgs/${signedIn.orgSlug}/teams/new`);
+      await expectHydrated(page);
+      expect(await axeViolations(page)).toEqual([]);
+
+      await page.goto(teamUrl(signedIn.orgSlug));
+      await expectHydrated(page);
+      expect(await axeViolations(page)).toEqual([]);
+
+      await openSettings(page);
+      expect(await axeViolations(page)).toEqual([]);
+
+      const dialog = page.getByRole("alertdialog");
+      await page
+        .getByRole("region", { name: "Danger zone", exact: true })
+        .getByRole("button", { name: "Delete team", exact: true })
+        .click();
+      await expect(dialog).toBeVisible();
+      expect(await axeViolations(page, ['[role="alertdialog"]'])).toEqual([]);
+    });
+  }
 });

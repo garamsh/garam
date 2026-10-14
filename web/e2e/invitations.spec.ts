@@ -86,7 +86,7 @@ test.describe("organization mutations", () => {
     // cells, and the assertion asks which role one of them shows.
     await expect(
       page.getByRole("row", { name: invitee.userSlug }),
-    ).toContainText("member");
+    ).toContainText("Member");
 
     await inviteeContext.close();
   });
@@ -309,10 +309,18 @@ test.describe("organization mutations", () => {
  */
 async function createInvitationLink(page: Page, orgSlug: string) {
   await page.goto(`/console/orgs/${orgSlug}/people`);
-  await page.getByLabel("Role").selectOption("member");
-  await page.getByRole("button", { name: "Create invitation" }).click();
+  const dialog = page.getByRole("dialog", { name: "Invite a person" });
+  // A click taken before React hydrates the trigger is dropped, so it
+  // is repeated until the dialog is there.
+  await expect(async () => {
+    await page.getByRole("button", { name: "Invite people" }).click();
+    await expect(dialog).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+  await dialog.getByRole("button", { name: "Create invitation" }).click();
 
-  const linkField = page.getByLabel("Invitation link");
-  await expect(linkField).toBeVisible();
-  return linkField.inputValue();
+  const link = dialog
+    .getByRole("group", { name: "Invitation link" })
+    .locator("code");
+  await expect(link).toBeVisible();
+  return (await link.textContent()) ?? "";
 }

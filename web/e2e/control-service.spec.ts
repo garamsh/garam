@@ -609,7 +609,8 @@ test.describe("control service, as contract tests against the agreed Operator wi
     ).toBeVisible();
     await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
     await expect(
-      page.getByRole("heading", { level: 1, name: "People", exact: true }),
+      // Presence: the heading carries the list's count after the title.
+      page.getByRole("heading", { level: 1, name: /^People/ }),
     ).toBeVisible();
     await expect(page.getByText(signedIn.nickname).first()).toBeVisible();
   });

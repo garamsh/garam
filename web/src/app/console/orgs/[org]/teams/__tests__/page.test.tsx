@@ -30,7 +30,7 @@ describe("teams section", () => {
       TeamsPage(params("acme")),
     );
 
-    // Presence: the heading goes on to carry the count beside the title.
+    // Presence: the heading goes on to carry the count.
     const heading = screen.getByRole("heading", { level: 1, name: /^Teams/ });
     expect(within(heading).getByText("1")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Engineering" })).toHaveAttribute(

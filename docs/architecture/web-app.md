@@ -402,7 +402,10 @@ what a page owes once it is built on the system.
   breadcrumb stay as ADR-0075 has them. Standalone hosts and Settings
   are sections no route serves yet.
 - **Templates.** Every console page is a List, a Detail, a Settings
-  page or a Wizard, as ADR-0103 §Page templates lays each out.
+  page or a Wizard, as ADR-0103 §Page templates lays each out. A
+  Detail page keeps every tab mounted and hides the inactive ones, so
+  what a person typed in a tab, a refusal and an inline outcome
+  included, is still there on return.
 - **Primitives and patterns.** A page composes the primitives
   ADR-0103 lists rather than copying markup. It follows the patterns
   for a secret shown once, a destructive action, lifecycle stages, the

@@ -14,7 +14,9 @@ type CopyState = "idle" | "copied" | "failed";
  * read as a name, a title or a sentence.
  *
  * `label` names what the identifier is for — "Alice", "the Backend
- * project" — so a screen reader hears which one it copies.
+ * project" — so a screen reader hears which one it copies. The button
+ * is at least 24px each way, WCAG 2.2's minimum target, so a caller
+ * sets no gap to make it one.
  */
 export function CopyId({
   value,
@@ -52,7 +54,7 @@ export function CopyId({
         onClick={copy}
         title="Copy identifier"
         aria-label={`Copy the identifier of ${label}: ${value}`}
-        className="inline-flex max-w-full items-center gap-1 rounded-sm font-mono text-xs font-normal text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        className="inline-flex min-h-6 min-w-6 max-w-full items-center gap-1 rounded-sm font-mono text-xs font-normal text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         <span className="truncate">{value}</span>
         <Icon aria-hidden className="size-3 shrink-0" strokeWidth={1.5} />

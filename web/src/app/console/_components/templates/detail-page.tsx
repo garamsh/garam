@@ -14,7 +14,7 @@ export type DetailTab = {
  * A page for one object: its header — name, copyable id in mono, status
  * and actions — then its tabs, with the danger zone closing the last
  * tab. The id is never the title: the name is, and the id is what a
- * visitor copies.
+ * visitor copies. An inactive tab is hidden rather than unmounted.
  */
 export function DetailPage({
   name,
@@ -78,11 +78,15 @@ export function DetailPage({
             ))}
           </TabsList>
         </div>
+        {/* `forceMount` keeps what a person typed in a panel, a refusal
+            and an inline outcome included, across a switch; it also
+            leaves an inactive panel unhidden, so its state hides it. */}
         {tabs.map((tab) => (
           <TabsContent
             key={tab.value}
             value={tab.value}
-            className="flex flex-col gap-6"
+            forceMount
+            className="flex flex-col gap-6 data-[state=inactive]:hidden"
           >
             {tab.content}
             {tab.value === last && dangerZone && dangerZone.length > 0 && (

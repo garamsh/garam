@@ -1,5 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
 import { DetailPage } from "@/app/console/_components/templates/detail-page";
@@ -94,12 +95,15 @@ describe("DetailPage", () => {
       />,
     );
 
-    expect(screen.getByRole("tabpanel")).toHaveTextContent("Facts");
-    expect(screen.queryByText("Danger zone")).not.toBeInTheDocument();
+    const overview = screen.getByRole("tabpanel", { name: "Overview" });
+    expect(overview).toHaveTextContent("Facts");
+    expect(
+      within(overview).queryByRole("region", { name: "Danger zone" }),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("tab", { name: "Settings" }));
 
-    const panel = screen.getByRole("tabpanel");
+    const panel = screen.getByRole("tabpanel", { name: "Settings" });
     const zone = within(panel).getByRole("region", { name: "Danger zone" });
     expect(zone).toHaveTextContent(
       "Work already running in its cluster does not stop.",
@@ -107,6 +111,92 @@ describe("DetailPage", () => {
     expect(
       within(zone).getByRole("button", { name: "Delete operator" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("DetailPage tabs", () => {
+  /** A form holding typed input and the outcome of its last submit. */
+  function RenameForm() {
+    const [outcome, setOutcome] = useState("");
+    return (
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const name = new FormData(event.currentTarget).get("name");
+          setOutcome(name === "taken" ? "That name is taken." : "Saved.");
+        }}
+      >
+        <input name="name" aria-label="Name" />
+        <button type="submit">Save</button>
+        {outcome && <p role="status">{outcome}</p>}
+      </form>
+    );
+  }
+
+  function renderPage() {
+    render(
+      <DetailPage
+        name="Field one"
+        idLabel="Operator ID"
+        id="field-one"
+        tabs={[
+          { value: "overview", label: "Overview", content: <p>Facts</p> },
+          { value: "settings", label: "Settings", content: <RenameForm /> },
+        ]}
+      />,
+    );
+  }
+
+  async function switchAwayAndBack(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("tab", { name: "Overview" }));
+    // The switch happened: Settings is no longer the tab in view.
+    expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("tabpanel", { name: "Settings" })).toHaveAttribute(
+      "data-state",
+      "inactive",
+    );
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+  }
+
+  it("keeps typed input and a refusal across a tab switch", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+    await user.type(screen.getByRole("textbox", { name: "Name" }), "taken");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("status")).toHaveTextContent("That name is taken.");
+
+    await switchAwayAndBack(user);
+
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("taken");
+    expect(screen.getByRole("status")).toHaveTextContent("That name is taken.");
+  });
+
+  it("keeps an inline success across a tab switch", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+    await user.type(screen.getByRole("textbox", { name: "Name" }), "Field");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await switchAwayAndBack(user);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Saved.");
+  });
+
+  it("keeps each panel a tabpanel named by its tab", () => {
+    renderPage();
+
+    for (const name of ["Overview", "Settings"]) {
+      const tab = screen.getByRole("tab", { name });
+      expect(screen.getByRole("tabpanel", { name })).toHaveAttribute(
+        "aria-labelledby",
+        tab.id,
+      );
+    }
   });
 });
 

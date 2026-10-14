@@ -60,20 +60,20 @@ var (
 // listener stopping on its own.
 type controlServer struct {
 	srv    *http.Server
-	ln     net.Listener
 	failed chan error
-	// served is closed once the goroutine serving ln has returned.
+	// served is closed once the goroutine serving the listener has
+	// returned.
 	served chan struct{}
 }
 
-// close stops the control and returns once nothing of it runs. It
-// closes the listener itself, which removes the socket: a server
-// closed before its serving goroutine started tracks no listener, and
-// that goroutine closes it on starting, removing whatever socket holds
-// the path by then, the next generation's included (#1420).
+// close stops the control and returns once its serving goroutine has
+// returned. Handlers already running are not waited for. A server
+// closed before that goroutine started tracks no listener; the
+// goroutine closes the listener when it starts, which removes the
+// socket path, so waiting for it is what keeps that removal from
+// landing on the next generation's socket (#1420).
 func (c *controlServer) close() {
 	_ = c.srv.Close()
-	_ = c.ln.Close()
 	<-c.served
 }
 
@@ -124,7 +124,7 @@ func (s *Supervisor) serveControl(genDir string, serving *tls.Certificate, in *i
 		TLSConfig:         config,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
-	ctl := &controlServer{srv: srv, ln: ln, failed: make(chan error, 1), served: make(chan struct{})}
+	ctl := &controlServer{srv: srv, failed: make(chan error, 1), served: make(chan struct{})}
 	go func() {
 		defer close(ctl.served)
 		if err := srv.ServeTLS(ln, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {

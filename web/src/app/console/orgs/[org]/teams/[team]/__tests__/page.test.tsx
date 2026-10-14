@@ -567,4 +567,24 @@ describe("team page", () => {
     // The control: the rename, answered apart, stays.
     expect(screen.getByLabelText("Team name")).toBeInTheDocument();
   });
+  it("keeps an unsaved rename and the add choice across a tab switch", async () => {
+    const user = userEvent.setup();
+    await renderTeam();
+
+    await user.click(screen.getByRole("combobox", { name: "Person or agent" }));
+    // Presence: an option's name goes on to carry the identifier.
+    await user.click(await screen.findByRole("option", { name: /^Scout / }));
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+    const name = screen.getByLabelText("Team name");
+    await user.clear(name);
+    await user.type(name, "Platform");
+
+    await user.click(screen.getByRole("tab", { name: "Overview" }));
+    // Presence: the trigger shows the option's name and identifier.
+    expect(
+      screen.getByRole("combobox", { name: "Person or agent" }),
+    ).toHaveTextContent(/^Scout/);
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(screen.getByLabelText("Team name")).toHaveValue("Platform");
+  });
 });

@@ -200,6 +200,7 @@ API behind it rather than of the console:
 | Operators | **On the design system.** Lists the operators the organization registered by name, with the identifier under each, its control service's host and where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)); connects one by registering it in a dialog over the list, offered unless the server denies the caller registering, which keeps the credential and enrollment token it answers behind a closed disclosure for an operator not yet on keys ([ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)), then on the operator's setup page issues its key, shows the private key once, gives the Secret each identity reads it from, and waits for its first sign-in, resuming from the keys garam holds ([ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)). An operator's page has Overview, Keys, Control service, Delegation and Settings: what garam knows of it, with its image and last contact unbuilt until the Operator reports them; its keys, rotated from its setup page and revoked after a confirmation; its control endpoint; its delegation; and its name, description and legacy credential, re-issued after a confirmation saying the previous one and its tokens stop authenticating. A danger zone deletes it once its identifier is typed, saying that work already running in its cluster does not stop ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)). The delete is not offered while a definition names it, which the dialog names, and a refused definitions list is marked not checked |
 | Consents | **On the design system.** Shows each cross-organization consent relation the organization is a side of as a card naming where the pair stands and both halves, the other organization by its identifier in a copy field alone ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)); grants this organization's half from the card of a pair the other side holds, after a confirmation saying messages cross from then on; opens a new pair from a dialog the header opens, which is also its empty state's next step; and withdraws a half after a confirmation saying what stops. A list the caller is refused is said, never shown as empty |
 | Permissions | **On the design system.** The organization's policies and their attachments ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)), through the existing policy operations only. An agent is chosen by its definition's name with its identifier, including one awaiting an operator ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)). The Policies view lists policies and opens a page per policy, where one is created as a draft; its document is edited as statements or as JSON, one text, and published as the next version — appended and made the default in one step, confirmed after a diff against the default — or saved without publishing; any stored version is made the default, it is activated and archived, and it is attached to and detached from teams, people and agents chosen by name. Each of these writes is offered unless the server denies it to the caller ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)). A write that makes a policy evaluate states the version and whom it reaches first, and one reaching everyone, or reaching a scope garam will not list, needs an explicit confirmation. The Attachments view shows each policy's attachments and, for one chosen subject, the policies attached to it, to its teams and to no one, without calling that its access. A list the caller is refused is shown as unchecked, never as empty; a Condition is shown as not evaluated. Neither view deletes a policy or explains a decision, since no operation does |
+| Settings | **On the design system.** The organization's name, renamed in place, beside its identifier to copy; and a danger zone that deletes the organization once garam has counted what the deletion takes, read again when the dialog opens, and the person has typed the organization's name ([ADR-0065](./adr/0065-garam-states-what-deleting-an-organization-destroys-before-the-act.md)). The count names each kind the organization holds and says when its certificate authority goes with it; where garam did not answer the count, the dialog says so and has no confirm field, so the delete cannot be confirmed. Each write is offered unless the server denies it to the caller, and a caller denied the rename reads the name instead |
 
 Every section's empty state names the absence and no next step. Where
 a section creates in place, that next step is the form standing under
@@ -356,6 +357,16 @@ origin; the console's own server never calls one.
   Which models need one is the control service's to decide and refuse
   (garam-agent-operator ADR 0052 and ADR 0053 at `8e1116933408`); the
   console shows the refusal.
+- **It words what it refuses.** A refusal reads the sentence
+  `web/src/lib/control-refusal-copy.ts` writes for the `kind` the
+  control service named, or for the HTTP status where it named none,
+  read for the operation that asked where that means something
+  particular to it. A kind that file does not list, and a status it
+  does not map, read one fixed sentence saying what to try. The control
+  service's `message` is never shown. The kinds listed are the ones the
+  Operator documents for the routes the console calls, at the commits
+  that file cites. Nothing detects a kind the Operator adds later; the
+  fixed sentence is what a person reads for it.
 - **It answers in the section that asked.** A refused mint, a refused
   call, an unreachable service and an answer outside the agreed wire
   each disable that section's controls and say so. Teams, People,
@@ -399,8 +410,8 @@ what a page owes once it is built on the system.
     keeps the organization's name on mobile.
 
   Templates is a sidebar entry under Workloads, while its address and
-  breadcrumb stay as ADR-0075 has them. Standalone hosts and Settings
-  are sections no route serves yet.
+  breadcrumb stay as ADR-0075 has them. Standalone hosts is a section
+  no route serves yet.
 - **Templates.** Every console page is a List, a Detail, a Settings
   page or a Wizard, as ADR-0103 §Page templates lays each out. A
   Detail page keeps every tab mounted and hides the inactive ones, so
@@ -428,10 +439,14 @@ The boundary is as much of the responsibility as the contents.
   engine ([ADR-0002](./adr/0002-iam-style-policy-model.md),
   [authz.md](./authz.md)).
   - **The console asks the server whether the caller may take an
-    action.** It asks through a permission-check API backed by authz
-    `Check`, and hides or disables what the answer denies. The server
-    still enforces every write, so a refusal that is reached still
-    renders.
+    action.** It asks through a permission-check API that answers
+    from the check enforcement runs: authz `Check`, or `CheckCurrent`
+    for an action a mint or a delegation write decides. It answers
+    unknown where a mint's check allows and the grant is left to
+    decide, and where it asks neither
+    ([api-surface.md](./api-surface.md) §What decides the rest). It
+    hides or disables what the answer denies. The server still
+    enforces every write, so a refusal that is reached still renders.
   - **An unanswered check shows the control.** The console infers no
     permission from a role it read
     ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
@@ -557,8 +572,8 @@ These decide the application itself:
   — one design system, of principles, tokens, shell, page templates,
   primitives and patterns, and a console that asks the server what a
   caller may do rather than rendering what it will refuse; the
-  foundation and the permission check are built, and Operators is the
-  one area migrated
+  foundation and the permission check are built, and the areas on the
+  design system are marked under §What it serves
 
 The rest bear on it without being about it:
 

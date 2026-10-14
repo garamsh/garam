@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import type { DelegatedOperation, HostedOperator } from "@/features/orgs";
 import {
   ProfilesParser,
@@ -26,7 +27,6 @@ import {
 import {
   ControlNotice,
   NO_FIX,
-  UNAVAILABLE,
   controlBlocker,
   controlReach,
 } from "./control-notice";
@@ -117,9 +117,7 @@ export function OperatorTemplates({
     return (
       <ControlNotice
         org={org}
-        reason={
-          templates.status === "unavailable" ? UNAVAILABLE : templates.message
-        }
+        reason={controlFailureCopy(templates, "agent-template:read")}
         fix={NO_FIX}
       />
     );
@@ -220,9 +218,7 @@ export function OperatorTemplates({
         ) : (
           <ControlNotice
             org={org}
-            reason={
-              profiles.status === "unavailable" ? UNAVAILABLE : profiles.message
-            }
+            reason={controlFailureCopy(profiles, "execution-profile:read")}
             fix={NO_FIX}
           />
         )}
@@ -268,7 +264,7 @@ export function OperatorTemplates({
             </>
           ) : (
             <p role="alert" className="text-danger">
-              {detail.status === "unavailable" ? UNAVAILABLE : detail.message}
+              {controlFailureCopy(detail, "agent-template:read")}
             </p>
           )}
         </DialogContent>

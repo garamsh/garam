@@ -30,6 +30,7 @@ export { createOrg, type CreateOrgState } from "./api/create-org";
 export { createPolicy, type CreatePolicyState } from "./api/create-policy";
 export { createProject, type CreateProjectState } from "./api/create-project";
 export { deleteGroup, type DeleteGroupState } from "./api/delete-group";
+export { deleteOrg, type DeleteOrgState } from "./api/delete-org";
 export { grantDelegation, type DelegationState } from "./api/grant-delegation";
 export { withdrawDelegation } from "./api/withdraw-delegation";
 export { detachPolicy, type DetachPolicyState } from "./api/detach-policy";
@@ -76,6 +77,7 @@ export {
   updateOperator,
   type UpdateOperatorState,
 } from "./api/update-operator";
+export { updateOrg, type UpdateOrgState } from "./api/update-org";
 export {
   withdrawOrgConsent,
   type WithdrawOrgConsentState,

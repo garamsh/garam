@@ -48,6 +48,69 @@ func (_m *MockAuthorityService) EXPECT() *MockAuthorityService_Expecter {
 	return &MockAuthorityService_Expecter{mock: &_m.Mock}
 }
 
+// AuthorizeDelegation provides a mock function for the type MockAuthorityService
+func (_mock *MockAuthorityService) AuthorizeDelegation(ctx context.Context, actor grn.GRN, org grn.GRN) error {
+	ret := _mock.Called(ctx, actor, org)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AuthorizeDelegation")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) error); ok {
+		r0 = returnFunc(ctx, actor, org)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockAuthorityService_AuthorizeDelegation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AuthorizeDelegation'
+type MockAuthorityService_AuthorizeDelegation_Call struct {
+	*mock.Call
+}
+
+// AuthorizeDelegation is a helper method to define mock.On call
+//   - ctx context.Context
+//   - actor grn.GRN
+//   - org grn.GRN
+func (_e *MockAuthorityService_Expecter) AuthorizeDelegation(ctx any, actor any, org any) *MockAuthorityService_AuthorizeDelegation_Call {
+	return &MockAuthorityService_AuthorizeDelegation_Call{Call: _e.mock.On("AuthorizeDelegation", ctx, actor, org)}
+}
+
+func (_c *MockAuthorityService_AuthorizeDelegation_Call) Run(run func(ctx context.Context, actor grn.GRN, org grn.GRN)) *MockAuthorityService_AuthorizeDelegation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 grn.GRN
+		if args[2] != nil {
+			arg2 = args[2].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAuthorityService_AuthorizeDelegation_Call) Return(err error) *MockAuthorityService_AuthorizeDelegation_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockAuthorityService_AuthorizeDelegation_Call) RunAndReturn(run func(ctx context.Context, actor grn.GRN, org grn.GRN) error) *MockAuthorityService_AuthorizeDelegation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // AuthorizeOperation provides a mock function for the type MockAuthorityService
 func (_mock *MockAuthorityService) AuthorizeOperation(ctx context.Context, actor grn.GRN, org grn.GRN, object grn.GRN, op operator.Operation) error {
 	ret := _mock.Called(ctx, actor, org, object, op)

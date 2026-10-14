@@ -2,6 +2,7 @@
 export { logOut } from "./api/log-out";
 export {
   registerWithPassword,
+  type RegisterField,
   type RegisterWithPasswordState,
 } from "./api/register-with-password";
 export {

@@ -1,3 +1,4 @@
+import { Banner } from "@/components/banner";
 import {
   InvitationSummary,
   getInvitationPreview,
@@ -42,14 +43,8 @@ export function InvitationContext({
 }) {
   if (context.usable) return <InvitationSummary invitation={context} />;
   return (
-    <div
-      role="status"
-      className="flex flex-col gap-1 rounded-lg border border-border bg-muted/40 p-3"
-    >
-      <p className="text-sm font-medium">{context.title}</p>
-      <p className="text-sm text-pretty text-muted-foreground">
-        {context.body}
-      </p>
-    </div>
+    <Banner tone="warn" title={context.title}>
+      {context.body}
+    </Banner>
   );
 }

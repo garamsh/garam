@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LayoutTemplate,
   Server,
+  Settings,
   ShieldCheck,
   UserRound,
   UsersRound,
@@ -106,6 +107,7 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     items: { create: "New policy", fallback: "Policy" },
     views: [{ segment: "attachments", label: "Attachments" }],
   },
+  { segment: "settings", label: "Settings", icon: Settings },
 ];
 
 /**
@@ -139,7 +141,11 @@ export const CONSOLE_NAV_GROUPS: readonly NavGroup[] = [
   { label: "Infrastructure", entries: [{ section: "operators" }] },
   {
     label: "Organization",
-    entries: [{ section: "projects" }, { section: "consents" }],
+    entries: [
+      { section: "projects" },
+      { section: "consents" },
+      { section: "settings" },
+    ],
   },
 ];
 

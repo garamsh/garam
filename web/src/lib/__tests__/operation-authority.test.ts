@@ -135,7 +135,10 @@ describe("callControl", () => {
       minting({ status: "refused", message: "not delegated" }),
     );
 
-    expect(refused).toEqual({ status: "refused", message: "not delegated" });
+    expect(refused).toEqual({
+      status: "refused",
+      refusal: { source: "mint", sentence: "not delegated" },
+    });
     expect(fetch).not.toHaveBeenCalled();
     // The control: the same call under a minted authority is sent.
     await callControl(readCall(), minting());
@@ -156,7 +159,7 @@ describe("callControl", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("reads a failed connection and a 503 as unavailable, and a refusal as its message", async () => {
+  it("reads a failed connection and a 503 as unavailable", async () => {
     answering(new TypeError("Failed to fetch"));
     expect(await callControl(readCall(), minting())).toEqual({
       status: "unavailable",
@@ -165,12 +168,38 @@ describe("callControl", () => {
     expect(await callControl(readCall(), minting())).toEqual({
       status: "unavailable",
     });
+  });
+
+  it("carries a refusal's status and kind, and not its message", async () => {
+    answering(
+      Response.json(
+        { kind: "embedding_required", message: "the model needs one" },
+        { status: 400 },
+      ),
+    );
+    expect(await callControl(readCall(), minting())).toEqual({
+      status: "refused",
+      refusal: { source: "control", status: 400, kind: "embedding_required" },
+    });
     answering(
       Response.json({ message: "request target differs" }, { status: 403 }),
     );
     expect(await callControl(readCall(), minting())).toEqual({
       status: "refused",
-      message: "request target differs",
+      refusal: { source: "control", status: 403, kind: null },
+    });
+  });
+
+  it("reads an empty kind, and a body that is not one, as no kind", async () => {
+    answering(Response.json({ kind: "", message: "no" }, { status: 409 }));
+    expect(await callControl(readCall(), minting())).toEqual({
+      status: "refused",
+      refusal: { source: "control", status: 409, kind: null },
+    });
+    answering(new Response("<html>bad gateway</html>", { status: 502 }));
+    expect(await callControl(readCall(), minting())).toEqual({
+      status: "refused",
+      refusal: { source: "control", status: 502, kind: null },
     });
   });
 
@@ -178,7 +207,7 @@ describe("callControl", () => {
     answering(Response.json({ title: "web agent" }));
     expect(await callControl(readCall(), minting())).toEqual({
       status: "refused",
-      message: "The control service answered outside the agreed contract.",
+      refusal: { source: "unreadable" },
     });
   });
 });

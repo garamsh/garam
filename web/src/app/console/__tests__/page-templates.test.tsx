@@ -149,14 +149,15 @@ describe("DetailPage tabs", () => {
 
   async function switchAwayAndBack(user: ReturnType<typeof userEvent.setup>) {
     await user.click(screen.getByRole("tab", { name: "Overview" }));
-    // The switch happened: Settings is no longer the tab in view.
+    // The switch happened: Settings is no longer the tab in view. Read
+    // off the tabs, which stand whether or not a panel stays mounted.
     expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
       "aria-selected",
       "true",
     );
-    expect(screen.getByRole("tabpanel", { name: "Settings" })).toHaveAttribute(
-      "data-state",
-      "inactive",
+    expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute(
+      "aria-selected",
+      "false",
     );
     await user.click(screen.getByRole("tab", { name: "Settings" }));
   }

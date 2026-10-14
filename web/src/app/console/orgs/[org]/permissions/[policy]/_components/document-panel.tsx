@@ -123,6 +123,16 @@ export function DocumentPanel({
     savedInitial,
   );
 
+  // A save's notice says which version is still the default, so a
+  // default that moves after it retires that notice; a later save
+  // answers a new one.
+  const [shownDefault, setShownDefault] = useState(defaultVersion);
+  const [retired, setRetired] = useState<AddPolicyVersionState | null>(null);
+  if (shownDefault !== defaultVersion) {
+    setShownDefault(defaultVersion);
+    setRetired(saved);
+  }
+
   const parsed = parsePolicyDocument(document);
   // The text as garam would store it: a minified paste of the default
   // is no change, and the diff compares the two as stored.
@@ -254,6 +264,7 @@ export function DocumentPanel({
               className="text-sm text-muted-foreground empty:hidden"
             >
               {saved.status === "saved" &&
+                saved !== retired &&
                 `Saved as v${saved.version}. v${defaultVersion} is still the default.`}
             </span>
             {saved.status === "error" && saved.field === undefined && (

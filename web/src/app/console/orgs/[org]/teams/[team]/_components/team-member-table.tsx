@@ -8,22 +8,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { KIND_LABEL, UNNAMED_AGENT, type Lookup } from "@/features/orgs";
+import { KIND_LABEL } from "@/features/orgs";
 
 import { RemoveTeamMemberForm } from "./remove-team-member-form";
-import { isNamedAgent, memberLabel, type TeamMember } from "./team-member";
-
-/**
- * What stands where a member without a name would have one: a person
- * found with no name on record, one the organization does not hold,
- * one whose list was refused, and an identity of neither type.
- */
-const PLACEHOLDER: Record<Lookup | "unknown", string> = {
-  found: "No name on record",
-  missing: "Unknown person",
-  refused: "Name not available",
-  unknown: "Unknown identity",
-};
+import { memberLabel, memberName, type TeamMember } from "./team-member";
 
 /**
  * A team's members by name and type, each removable from this team.
@@ -60,30 +48,14 @@ export function TeamMemberTable({
         {members.map((member) => (
           <TableRow key={member.grn}>
             <TableCell className="align-top font-medium whitespace-normal">
-              {member.kind === "agent" ? (
-                // An agent no definition names is called unnamed rather
-                // than by its identifier, which is offered below to copy.
-                <span>
-                  {isNamedAgent(member) ? member.label : UNNAMED_AGENT}
+              {member.label ?? (
+                <span className="font-normal text-muted-foreground">
+                  {memberName(member)}
                 </span>
-              ) : (
-                (member.label ?? (
-                  <span className="font-normal text-muted-foreground">
-                    {
-                      PLACEHOLDER[
-                        member.kind === "unknown" ? "unknown" : member.lookup
-                      ]
-                    }
-                  </span>
-                ))
               )}
               <CopyId
                 value={member.identifier}
-                label={
-                  member.kind === "agent" && !isNamedAgent(member)
-                    ? UNNAMED_AGENT
-                    : (member.label ?? "this member")
-                }
+                label={memberName(member)}
                 className="flex"
               />
               {member.lookup === "missing" && (

@@ -14,6 +14,15 @@
 /** The parameter `/login` and `/register` read the return path from. */
 export const RETURN_PARAM = "next";
 
+/**
+ * The request header `proxy.ts` stamps a console request with: the path
+ * and query it asked for, so a page or an action that finds the
+ * session gone can send the visitor to sign in carrying it. The proxy
+ * overwrites whatever a client sent under this name, and every reader
+ * passes it through `safeReturnPath` all the same.
+ */
+export const RETURN_PATH_HEADER = "x-garam-return-path";
+
 const INVITATION_PATH = /^\/console\/invitations\/([^/?#]+)$/;
 
 /** `value` as a console path to return to, or null where it is not one. */

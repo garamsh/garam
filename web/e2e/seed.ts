@@ -215,6 +215,27 @@ export async function seedSignedInUser(): Promise<SeededUser> {
   return user;
 }
 
+/**
+ * Writes a session for `userGrn` that expired an hour ago and answers
+ * its cookie value: what a browser still holds after the backend has
+ * stopped honouring it, which the proxy lets through on sight.
+ */
+export async function seedExpiredSession(userGrn: string): Promise<string> {
+  const token = randomBytes(32).toString("base64url");
+  const client = new Client({ connectionString: DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(
+      `INSERT INTO sessions (token_hash, user_grn, created_at, expires_at)
+       VALUES ($1, $2, now() - interval '2 hours', now() - interval '1 hour')`,
+      [hashToken(token), userGrn],
+    );
+  } finally {
+    await client.end();
+  }
+  return token;
+}
+
 /** The hosted operator `seedHostedOperator` wrote, and its grant. */
 export type HostedSeed = {
   identifier: string;

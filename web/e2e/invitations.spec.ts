@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
-import { seedSignedInOrg, seedSignedInUser } from "./seed";
+import { seedExpiredSession, seedSignedInOrg, seedSignedInUser } from "./seed";
 
 test.describe("organization mutations", () => {
   test("creates an organization and lands on its page", async ({
@@ -209,6 +209,91 @@ test.describe("organization mutations", () => {
 
     // Signing in returns to the invitation rather than the front page.
     await expect(visitor).toHaveURL(new URL(second).pathname);
+    await visitor
+      .getByRole("button", { name: `Join ${other.orgName}`, exact: true })
+      .click();
+    await expect(visitor).toHaveURL(`/console/orgs/${other.orgSlug}`);
+
+    await context.close();
+  });
+
+  test("keeps the invitation through sign-in when the browser's session has expired", async ({
+    page,
+    browser,
+    baseURL,
+    signedIn,
+  }) => {
+    // An account that already exists, through an invitation of the
+    // seeded organization.
+    const username = `x-${signedIn.orgSlug}`;
+    const password = `pw-${signedIn.orgSlug}-expired`;
+    const first = await createInvitationLink(page, signedIn.orgSlug);
+    const registering = await browser.newContext({ baseURL });
+    const registerPage = await registering.newPage();
+    await registerPage.goto(first);
+    await registerPage.getByRole("link", { name: "Create one" }).click();
+    await expect(
+      registerPage.getByRole("heading", {
+        name: `Create an account to join ${signedIn.orgName}`,
+        exact: true,
+      }),
+    ).toBeVisible();
+    await registerPage.getByLabel("Username").fill(username);
+    await registerPage.getByLabel("Password").fill(password);
+    await registerPage.getByRole("button", { name: "Create account" }).click();
+    await expect(registerPage).toHaveURL(`/console/orgs/${signedIn.orgSlug}`);
+    await registering.close();
+
+    const other = await seedSignedInOrg();
+    const ownerContext = await browser.newContext({ baseURL });
+    await ownerContext.addCookies([
+      {
+        name: "garam_session",
+        value: other.sessionToken,
+        url: baseURL ?? "http://localhost:3000",
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    const second = await createInvitationLink(
+      await ownerContext.newPage(),
+      other.orgSlug,
+    );
+    await ownerContext.close();
+
+    // The browser still holds a cookie, so the proxy lets the request
+    // through; the backend no longer honours the session behind it.
+    const stale = await seedExpiredSession(
+      `grn:root:default:user:local-${username}`,
+    );
+    const context = await browser.newContext({ baseURL });
+    await context.addCookies([
+      {
+        name: "garam_session",
+        value: stale,
+        url: baseURL ?? "http://localhost:3000",
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    const visitor = await context.newPage();
+    const invitationPath = new URL(second).pathname;
+    await visitor.goto(second);
+
+    await expect(visitor).toHaveURL(
+      `/login?next=${encodeURIComponent(invitationPath)}`,
+    );
+    await expect(
+      visitor.getByRole("heading", {
+        name: `Sign in to join ${other.orgName}`,
+        exact: true,
+      }),
+    ).toBeVisible();
+    await visitor.getByLabel("Username").fill(username);
+    await visitor.getByLabel("Password").fill(password);
+    await visitor.getByRole("button", { name: "Sign in", exact: true }).click();
+
+    await expect(visitor).toHaveURL(invitationPath);
     await visitor
       .getByRole("button", { name: `Join ${other.orgName}`, exact: true })
       .click();

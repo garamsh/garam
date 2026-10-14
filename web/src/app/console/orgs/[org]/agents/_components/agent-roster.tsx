@@ -12,6 +12,9 @@ import {
 import { CutoverBadge } from "../../../../_components/cutover-marker";
 
 import { OperatorName } from "./agent-facts";
+
+/** What a reported agent is called where its definition was not read. */
+const NAME_NOT_AVAILABLE = "Name not available";
 import { ReportedState } from "./reported-state";
 
 /** One row of the roster: an agent and what the page knows of it. */
@@ -45,43 +48,47 @@ export function AgentRoster({
 }) {
   return (
     <ul className="flex flex-col gap-3">
-      {entries.map(({ directory, agent, operator, cutover }) => (
-        <li key={directory.grn}>
-          <Card className="gap-3 p-4">
-            <div className="flex flex-col gap-0.5">
-              <CardTitle className="text-base">
-                <Link
-                  href={`/console/orgs/${org}/agents/${directory.identifier}`}
-                  className="wrap-anywhere underline-offset-4 hover:underline focus-visible:underline"
-                >
-                  {directory.name ?? UNNAMED_AGENT}
-                </Link>
-              </CardTitle>
-              <CopyId
-                value={directory.identifier}
-                label={directory.name ?? UNNAMED_AGENT}
-              />
-              {directory.name === null && (
-                <p className="text-xs text-muted-foreground">
-                  {definitionsRead
-                    ? "Reported by an operator without a definition here."
-                    : "Reported by an operator. Its definition is not checked."}
-                </p>
+      {entries.map(({ directory, agent, operator, cutover }) => {
+        // A reported agent's name is its definition's, so where the
+        // definitions were not read its name is unknown, not absent.
+        const name =
+          directory.name ??
+          (definitionsRead ? UNNAMED_AGENT : NAME_NOT_AVAILABLE);
+        return (
+          <li key={directory.grn}>
+            <Card className="gap-3 p-4">
+              <div className="flex flex-col gap-0.5">
+                <CardTitle className="text-base">
+                  <Link
+                    href={`/console/orgs/${org}/agents/${directory.identifier}`}
+                    className="wrap-anywhere underline-offset-4 hover:underline focus-visible:underline"
+                  >
+                    {name}
+                  </Link>
+                </CardTitle>
+                <CopyId value={directory.identifier} label={name} />
+                {directory.name === null && (
+                  <p className="text-xs text-muted-foreground">
+                    {definitionsRead
+                      ? "Reported by an operator without a definition here."
+                      : "Reported by an operator. Its definition is not checked."}
+                  </p>
+                )}
+              </div>
+              <CutoverBadge cutover={cutover} />
+              {operator && (
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                  <dt className="text-muted-foreground">Operator</dt>
+                  <dd>
+                    <OperatorName org={org} {...operator} />
+                  </dd>
+                </dl>
               )}
-            </div>
-            <CutoverBadge cutover={cutover} />
-            {operator && (
-              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-                <dt className="text-muted-foreground">Operator</dt>
-                <dd>
-                  <OperatorName org={org} {...operator} />
-                </dd>
-              </dl>
-            )}
-            <ReportedState reported={directory.reported} agent={agent} />
-          </Card>
-        </li>
-      ))}
+              <ReportedState reported={directory.reported} agent={agent} />
+            </Card>
+          </li>
+        );
+      })}
     </ul>
   );
 }

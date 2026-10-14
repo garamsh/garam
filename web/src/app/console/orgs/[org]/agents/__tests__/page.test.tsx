@@ -255,6 +255,11 @@ describe("agents section", () => {
         "Reported by an operator without a definition here.",
       ),
     ).not.toBeInTheDocument();
+    // Nor is it called unnamed: its name is one the page did not read.
+    expect(
+      within(reported).getByRole("link", { name: "Name not available" }),
+    ).toBeInTheDocument();
+    expect(within(reported).queryByText("Unnamed agent")).toBeNull();
     expect(screen.queryByText("Scout")).not.toBeInTheDocument();
   });
 

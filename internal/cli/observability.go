@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
@@ -173,6 +174,7 @@ func (o *observability) logMachineRequests(next http.Handler) http.Handler {
 // is worse than one that is merely diagnosable.
 func (o *observability) logServed(w http.ResponseWriter, r *http.Request, next http.Handler, field string, principal func() string) {
 	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+	scrubSpanPath(r)
 
 	next.ServeHTTP(recorder, r)
 
@@ -186,6 +188,19 @@ func (o *observability) logServed(w http.ResponseWriter, r *http.Request, next h
 	}
 	o.logger.LogAttrs(r.Context(), levelOf(recorder.status >= http.StatusInternalServerError),
 		"http request", attrs...)
+}
+
+// scrubSpanPath replaces the url.path otelhttp took from the concrete
+// path with the route's own, for the span the request runs in. A path
+// can be a bearer secret — an invitation's is its token (ADR-0006) — and
+// the span is exported wherever a deployment points it, so it names the
+// route the way the request line does.
+func scrubSpanPath(r *http.Request) {
+	_, route, found := strings.Cut(r.Pattern, " ")
+	if !found {
+		route = r.Pattern
+	}
+	trace.SpanFromContext(r.Context()).SetAttributes(semconv.URLPath(route))
 }
 
 // recoverPanics answers a panicking handler on behalf of the server

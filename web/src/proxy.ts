@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { withReturnPath } from "@/lib/return-path";
+import { RETURN_PATH_HEADER, withReturnPath } from "@/lib/return-path";
 import { SESSION_COOKIE } from "@/lib/session";
 
 /**
@@ -15,10 +15,14 @@ import { SESSION_COOKIE } from "@/lib/session";
  * visitor was going rather than on the console's front page.
  */
 export function proxy(request: NextRequest) {
-  if (request.cookies.has(SESSION_COOKIE)) {
-    return NextResponse.next();
-  }
   const { pathname, search } = request.nextUrl;
+  if (request.cookies.has(SESSION_COOKIE)) {
+    // A cookie the backend no longer honours is found out further in,
+    // where the URL is not at hand; the path travels with the request.
+    const headers = new Headers(request.headers);
+    headers.set(RETURN_PATH_HEADER, pathname + search);
+    return NextResponse.next({ request: { headers } });
+  }
   return NextResponse.redirect(
     new URL(withReturnPath("/login", pathname + search), request.url),
   );

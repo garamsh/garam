@@ -28,6 +28,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -1030,4 +1032,39 @@ func TestLogRequests_KeepsAnInvitationTokenOffTheLine(t *testing.T) {
 			assert.NotContains(t, out.String(), tc.token)
 		})
 	}
+}
+
+// TestAPIHandler_KeepsAnInvitationTokenOffTheSpan reads the spans
+// apiHandler records for the invitation read: otelhttp takes url.path
+// from the concrete path, which is the token, and a configured exporter
+// would ship it. The span is found by its route before the search, so
+// an empty recording cannot pass for a clean one.
+func TestAPIHandler_KeepsAnInvitationTokenOffTheSpan(t *testing.T) {
+	recorded := tracetest.NewSpanRecorder()
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorded)))
+	t.Cleanup(func() { otel.SetTracerProvider(previous) })
+
+	var out lines
+	orgs := invitationOrgs{token: "live-tok-secret"}
+	srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	server := httptest.NewServer(recordingObservability(&out).apiHandler(srv))
+	t.Cleanup(server.Close)
+
+	resp, err := server.Client().Get(server.URL + "/invitations/live-tok-secret")
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	spans := recorded.Ended()
+	require.Len(t, spans, 1)
+	attrs := map[string]string{}
+	for _, kv := range spans[0].Attributes() {
+		attrs[string(kv.Key)] = kv.Value.Emit()
+	}
+	assert.Equal(t, "/invitations/{token}", attrs["url.path"])
+	for key, value := range attrs {
+		assert.NotContains(t, value, "live-tok-secret", "attribute %s", key)
+	}
+	assert.NotContains(t, spans[0].Name(), "live-tok-secret")
 }

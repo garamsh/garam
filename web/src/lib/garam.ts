@@ -1,7 +1,6 @@
 import "server-only";
 
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { env } from "@/env";
@@ -11,6 +10,7 @@ import {
   type RefusalOperation,
 } from "@/lib/refusal-copy";
 import { SESSION_COOKIE } from "@/lib/session";
+import { redirectToSignIn } from "@/lib/sign-in-redirect";
 
 /**
  * A non-2xx response from the backend, carrying its HTTP status and the
@@ -193,7 +193,7 @@ export async function garamFetchAuthenticated<T>(
   try {
     return await garamFetch(path, parser, init);
   } catch (error) {
-    if (isUnauthenticated(error)) redirect("/login");
+    if (isUnauthenticated(error)) await redirectToSignIn();
     throw error;
   }
 }

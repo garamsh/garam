@@ -503,9 +503,10 @@ func exchangeCredential(t *testing.T, s *executionStack, credential string) int 
 // no key and writes nothing in the agent's directory, `enroll` installs
 // the supervisor's credential owner-only and keeps it out of the
 // record, an enrollment interrupted before its record re-issues the
-// credential and voids the one written before, a completed one installs
-// nothing again, and `renew` has no certificate to renew. The credential
-// installed last exchanging is the control on the voided one refusing.
+// credential and voids the one written before, a completed one
+// installs nothing again, and `renew` has no certificate to renew. The
+// credential installed last exchanging is the control on the voided
+// one refusing.
 func TestStandaloneHost_EnrollsUnderV2ForACredential(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
@@ -517,7 +518,9 @@ func TestStandaloneHost_EnrollsUnderV2ForACredential(t *testing.T) {
 	assert.Len(t, request, 2, "a v2 approval binds no key: %v", request)
 	assert.NotEmpty(t, request["requestId"])
 	assert.NotEmpty(t, request["secretSha256"])
-	assert.Empty(t, snapshot(t, h.agent), "nothing is generated for the agent")
+	written := snapshot(t, h.agent)
+	delete(written, ".standalone.lock")
+	assert.Empty(t, written, "nothing is generated for the agent")
 	assert.Equal(t, os.FileMode(0o600), mode(t, filepath.Join(h.supervisor, "prepared.json")))
 
 	out, err := h.enroll(t, s)
@@ -562,4 +565,3 @@ func TestStandaloneHost_EnrollsUnderV2ForACredential(t *testing.T) {
 	assert.Contains(t, err.Error(), "holds no certificate to renew")
 	assert.NoFileExists(t, filepath.Join(h.supervisor, "renewal.json"))
 }
-

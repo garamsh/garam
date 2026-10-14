@@ -411,7 +411,7 @@ func TestRun_FencedTokenModeKeepsItsTwoTokensApart(t *testing.T) {
 // the pause holds and nothing more is asked.
 func TestRun_ARewrittenTokenReasksAPausedActivation(t *testing.T) {
 	for name, after := range map[string]struct {
-		answer error
+		answer  error
 		resumes bool
 	}{
 		"a recovery's token is activated": {answer: nil, resumes: true},

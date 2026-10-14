@@ -13,10 +13,11 @@ const (
 	controlTokenFile = "control-token"
 )
 
-// defaultTokenCheckInterval is how often a running adapter's agent token
-// is compared with the one the supervisor holds. It is a small part of
-// the quarter of a token's life a refresh leaves for it to reach the
-// adapter: five minutes at the shortest lifetime garam allows.
+// defaultTokenCheckInterval is how often a running adapter's agent
+// token is compared with the one the supervisor holds. It is a small
+// part of the quarter of a token's life a refresh leaves for it to
+// reach the adapter: five minutes at the shortest lifetime garam
+// allows.
 const defaultTokenCheckInterval = 30 * time.Second
 
 // agentToken answers the agent token an adapter starts with, in the

@@ -277,6 +277,8 @@ that the source no longer reads.
 | `GARAM_ADAPTER_GATEWAY_URL` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_TLS_CERT_FILE` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_TLS_KEY_FILE` | Same: the adapter's own deployment. |
+| `GARAM_ADAPTER_TOKEN_FILE` | Same: the adapter's own deployment, whose assignee keeps the token current (ADR-0100). |
+| `GARAM_ADAPTER_CONTROL_TOKEN_FILE` | Same: the adapter's own deployment, beside its control settings (ADR-0100). |
 | `GARAM_ADAPTER_SERVER_ROOT_FILE` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_CONTROL_URL` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_CONTROL_ROOT_FILE` | Same: the adapter's own deployment. |

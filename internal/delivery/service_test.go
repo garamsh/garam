@@ -92,7 +92,7 @@ type garamQueue struct {
 	presented []string
 	// executions is every Garam-Execution header a claim carried.
 	executions []string
-	fenced    int
+	fenced     int
 	// outbox is the outbox route's state.
 	outbox outboxRoute
 }

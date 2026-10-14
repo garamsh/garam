@@ -4,6 +4,7 @@ What the adapter garam ships must do, and what it rests on to do it.
 
 ## Contents
 - What it is
+- Token mode
 - API access after common enrollment
 - The delivery loop
 - Completion
@@ -38,35 +39,112 @@ on anchors) and because it must outlive the agent process during
 shutdown — a native sidecar rather than an ordinary container, for the
 reason in [ADR-0018](./adr/0018-delivery-acknowledgement.md).
 
-It reaches garam as the agent, with the certificate garam issued for
-that agent, and verifies garam's listener against the garam server root
-— one root every organization shares, separate from the authority that
-signed the agent, and delivered in the same answer as the certificate
+It reaches garam as the agent in one of two credential modes, and
+verifies garam's listener against the garam server root in both —
+one root every organization shares, separate from anything that
+authenticates the agent
 ([ADR-0014](./adr/0014-agent-authentication.md),
 [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)).
-It presents its certificate per handshake rather than holding what it
-read at startup, so a renewed one is presented on the next connection
-and this process keeps running.
 
-**Unbuilt: its token mode.**
-[ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
-provides the retained token transport: from the agent's certificate
-to two short-lived tokens, one for garam and one for the control
-service, each read from
-its file per request, with the placement token moved to a
-`Garam-Placement` header under `agent-execution.v2`. An unfenced adapter
-— a `Garam`-source agent of the Operator, which garam-agent-operator ADR
-0068 leaves with no control settings — takes the garam token alone,
-which its operator mints and refreshes on `mintAgentToken` as for any
-agent it holds ([agents.md](./agents.md) §Tokens in place of
-certificates). It is step G2 of
-`docs/plans/2026-10-09-machine-identity-migration.md`.
+- **The certificate mode** presents the certificate garam issued for
+  the agent, per handshake rather than as read at startup, so a renewed
+  one is presented on the next connection and this process keeps
+  running. It lasts until G3 of
+  `docs/plans/2026-10-09-machine-identity-migration.md`.
+- **The token mode** presents a short-lived agent token instead, read
+  from a file before every call (§Token mode,
+  [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)).
+  It is step G2 of the plan.
+
+## Token mode
+
+**Built (#1352).** The agent's assignee mints its tokens and keeps the
+files current; the adapter reads them and never mints, so a stolen
+token cannot renew itself (ADR-0100 §Rejected alternatives). This
+section is the contract a deployment writes against: the Operator for a
+managed agent, the supervisor for a standalone host
+([agents.md](./agents.md) §Standalone hosts). The tests named last hold
+it.
+
+| Setting | Holds | Where it is set |
+|---|---|---|
+| `GARAM_ADAPTER_TOKEN_FILE` | The agent token garam accepts: minted with no audience | Every token-mode adapter; it selects the mode |
+| `GARAM_ADAPTER_CONTROL_TOKEN_FILE` | The agent token the lifecycle authority accepts: minted with the control service as its audience | A fenced token-mode adapter, beside the three control settings |
+| `GARAM_ADAPTER_SERVER_ROOT_FILE` | The garam server root `mintAgentToken` answers as `serverRootPem` | Every adapter |
+| `GARAM_ADAPTER_CONTROL_ROOT_FILE` | The root the control service's serving certificate chains to | A fenced adapter, as in the certificate mode |
+
+- **One credential mode, chosen at startup.** `GARAM_ADAPTER_TOKEN_FILE`
+  and `GARAM_ADAPTER_TLS_CERT_FILE`/`GARAM_ADAPTER_TLS_KEY_FILE` are two
+  modes, and naming both refuses to start; neither falls back to the
+  other. `GARAM_ADAPTER_CONTROL_TOKEN_FILE` is required beside the
+  control settings in the token mode and refused anywhere else
+  (`internal/cli/delivery.go`).
+- **An unfenced adapter runs on its garam token alone.** A
+  `Garam`-source agent of the Operator, which garam-agent-operator ADR
+  0068 leaves with no control settings, is named
+  `GARAM_ADAPTER_TOKEN_FILE` and nothing of control's; its operator
+  mints and refreshes the token as for any agent it holds
+  ([agents.md](./agents.md) §Tokens in place of certificates).
+- **The file format is the token alone**: `garam_at_` and 64 lowercase
+  hex characters, which `api/machine.yaml` spells for `AgentToken`.
+  Whitespace around it — a trailing newline — is ignored, and at most
+  1 KiB is read. The writer keeps each file readable by the adapter's
+  account alone; the adapter does not check the mode.
+- **Each file is read before every call to its peer and never held.**
+  The garam token before each call to garam, the control token before
+  each call to control. A replacement is presented on the next call,
+  with no restart and no signal.
+- **A writer replaces a file by renaming within its directory**, so a
+  reader sees the old token or the new one. A Kubernetes Secret volume
+  swaps its files that way; the standalone supervisor's copy into the
+  container does not (agents.md §The host's runner), and the next rule
+  is what absorbs it.
+- **A file that is missing, part-written or anything but one token is
+  undecided.** The call is not made, nothing is refused or paused, and
+  the next call reads the file again.
+- **The two audiences never cross.** The garam token goes to garam
+  alone, in `Authorization: Garam-Token <token>`, with the activation's
+  token beside it in `Garam-Execution` and an outbox reply under
+  `durable-delivery.v2`. The control token goes to the authority alone,
+  under `agent-execution.v2`, in `Authorization: Garam-Token <token>`,
+  with the placement token in `Garam-Placement` on activation. garam
+  refuses a control-audience token with 401, and the authority cannot
+  activate on garam's token: garam answers its forward 422, because a
+  token minted for garam proves nothing forwarded.
+- **agent-execution.v2 is the request identifier's first field**, so a
+  generation's first token-mode activation is new intent and every
+  later one replays it (ADR-0100 §Contract values). Refreshing either
+  token changes neither the identifier nor the placement token.
+- **A 401 in the token mode is undecided.** An expired token, one not
+  yet replaced and one a reassignment or a recovery refused all answer
+  it, and garam answers it to an unfenced adapter of an agent already
+  cut over too. The call is made again after a backoff that doubles up
+  to the configured ceiling, reading the file again each time, so a
+  replacement whose bytes match the last is still tried. Protected work
+  waits and the outbox is kept. A file's change is never needed to
+  resume.
+- **A definite refusal re-arms on a rewritten token**, as it does on a
+  renewed leaf in the certificate mode (§Activation and runtime status).
+  Re-arming asks the authority again, and the answer decides: the
+  rewrite activates nothing and clears no fence. While a definite
+  refusal stands, that costs one request per refresh. After
+  `agent:recover`, garam has ended the activation, so the same
+  generation and placement are refused again as ended, and the agent
+  resumes on the next generation or placement its assignee starts.
+
+`internal/delivery/token_mode_test.go` holds the adapter's reading,
+retrying and re-arming against stand-ins.
+`tests/integration/adapter_token_test.go` holds the unfenced and fenced
+modes, the two audiences and a recovery against the real listener, and
+`internal/cli/delivery_test.go` holds the settings.
 
 ## API access after common enrollment
 
 **Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
-changes G2's target to consume the common enrollment binding; the
-certificate adapter below remains what the current code runs.
+sets the target an adapter of a commonly enrolled agent meets. The
+token mode above is built on the existing v2 contracts, which ADR-0102
+leaves unchanged; consuming `agent-enrollment.v1` and the direct
+connector are not, and wait on #1355.
 
 - Managed and direct connectors hold agent API access scoped to the
   current assignee, epoch and lineage; an Operator's long-lived PEM
@@ -94,9 +172,9 @@ certificate adapter below remains what the current code runs.
   per-caller authorization above the platform; a local ACL needs a
   separate owner decision and is not a token-mode prerequisite.
 
-`internal/cli/delivery.go` and §Activation and runtime status remain
-authoritative for the current certificate client; #1352 must implement
-the token-facing contract after ADR-0102. Independent direct writer
+`internal/cli/delivery.go`, §Token mode and §Activation and runtime
+status are authoritative for what the adapter runs now. Independent
+direct writer
 proof remains blocked on the owner decision named in
 [agents.md](./agents.md) §Common managed and direct enrollment; an
 attachment lease is only a recommendation, not an accepted mechanism.
@@ -465,7 +543,8 @@ standalone supervisor serves them on a socket of its generation
 ([agents.md](./agents.md) §Standalone hosts, ADR-0085), and its joint
 acceptance with garam and Sherlock is unverified (#1180). This is
 [ADR-0084](./adr/0084-the-adapter-activates-its-generation-and-reports-runtime-status-under-a-contract-garam-owns.md)'s
-contract, `agent-execution.v1`, which garam owns and the lifecycle
+contract, `agent-execution.v1`, and in the token mode
+`agent-execution.v2` (§Token mode), which garam owns and the lifecycle
 authority serves: the Operator control service when managed, the local
 supervisor when standalone.
 
@@ -478,14 +557,16 @@ supervisor when standalone.
   The legacy mode lasts until #1171 retires its source.
 - **Control authenticates the agent's leaf**, read per handshake, over
   mTLS; the leaf names the GRN in the path, and garam's token never
-  goes to control.
+  goes to control. In the token mode it authenticates the control token
+  over server TLS instead (§Token mode).
 - **A standalone adapter dials its supervisor's socket.**
   `GARAM_ADAPTER_CONTROL_SOCKET` makes every control connection reach
   that unix socket while TLS still verifies the control URL's host;
   it is valid only beside the fenced mode's settings, and nothing else
   in the client changes (ADR-0085).
 - **Every protected call carries the activation's token**, as
-  `Authorization: Garam-Execution <token>`
+  `Authorization: Garam-Execution <token>`, or in a `Garam-Execution`
+  header of its own in the token mode
   ([machine-identity.md](./machine-identity.md) §Generation and
   lineage), and the adapter makes none before it holds one.
 - **It activates the generation the runtime reports, while it reports
@@ -501,10 +582,9 @@ supervisor when standalone.
   token or the credential stops protected work and keeps the outbox,
   with no time-based retry, until the runtime's generation, epoch or
   revision, the placement token or the agent's leaf changes. Credential
-  recovery is the manager's, never the adapter's. The unbuilt token mode
-  follows §API access after common enrollment for expired/stale API
-  access; it does not require a new leaf or placement merely to refresh
-  it.
+  recovery is the manager's, never the adapter's. In the token mode a
+  rewritten token file stands where the leaf does here, and a 401 is
+  undecided (§Token mode).
 - **It reports the runtime's status outward** after activation and on
   each change: the activation, GRN, epoch, generation, revision, state
   and start time as the runtime reported them, and when it read them. A

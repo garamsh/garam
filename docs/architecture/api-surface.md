@@ -470,6 +470,19 @@ and not in the same place on every surface.
   who may not perform the delete is told nothing about it. No role
   gained an action for this, because the owner already holds `org:*`
   ([authz.md](./authz.md) §Statement collection).
+- **A member may ask what it may do, and the answer decides nothing.**
+  `checkPermissions` takes up to 50 pairs of an action and a resource
+  of the caller's organization, the resource named by its kind and the
+  identifier segment its own path takes, and answers allow or deny for
+  each. Each pair is the question enforcement asks for the same
+  request: the same statements and groups, put to the engine's `Check`.
+  It never calls `Explain`, so no answer says why. An action garam
+  does not define is answered deny, because a role's wildcard such as
+  `org:*` would otherwise allow a name no operation checks. Every write
+  is still decided when it arrives, so an answer is a hint the console
+  renders by and not a grant
+  ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
+  §Role-aware UI).
 
 One of ADR-0036's decisions is a commitment rather than a rule deciding
 anything today: **no surface serves a secret's value**, garam's

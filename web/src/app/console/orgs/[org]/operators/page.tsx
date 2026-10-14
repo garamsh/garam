@@ -3,6 +3,7 @@ import { Server } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
 import { listOperators } from "@/features/orgs";
+import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
@@ -21,14 +22,18 @@ type Params = { params: Promise<{ org: string }> };
  * is here rather than on a create route because an identifier may be
  * `new`, and that route would take the operator's page.
  *
- * Registering is granted by `operator:register`, which owners and
- * admins hold and members do not, while every role reads the list. The
- * form is offered to all of them and the API refuses a caller that
- * holds only the read — the same shape the agents section takes.
+ * Every role reads the list, and registering is `operator:register`,
+ * which owners and admins hold and members do not. The page asks the
+ * server whether the caller may register and leaves the form out when
+ * the answer is no. A check that could not be asked renders the form,
+ * and the API refuses whoever holds only the read.
  */
 export default async function OperatorsPage({ params }: Params) {
   const { org } = await params;
-  const operators = await listOperators(org);
+  const [operators, permissions] = await Promise.all([
+    listOperators(org),
+    checkPermissions(org, { register: { action: "operator:register" } }),
+  ]);
 
   return (
     <>
@@ -47,8 +52,12 @@ export default async function OperatorsPage({ params }: Params) {
       ) : (
         <OperatorList org={org} operators={operators.data} />
       )}
-      <Separator />
-      <RegisterOperatorForm org={org} />
+      {permissions.get("register") !== "denied" && (
+        <>
+          <Separator />
+          <RegisterOperatorForm org={org} />
+        </>
+      )}
     </>
   );
 }

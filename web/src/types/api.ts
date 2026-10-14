@@ -204,6 +204,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/permission-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask whether the signed-in caller may take each of a list of actions. Requires membership.
+         * @description Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is allow or deny and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
+         *
+         *     A pair without `resource` asks about the organization itself, which is the resource every action not addressed to a group, project, agent, template or policy is checked on. An action garam does not define is answered `false` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
+         *
+         *     A caller who is not a member of the organization is refused with 403, as every operation inside it refuses one.
+         */
+        post: operations["checkPermissions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/members": {
         parameters: {
             query?: never;
@@ -1130,6 +1154,29 @@ export interface components {
             certificateAuthority: boolean;
             counts: components["schemas"]["OrgDeletionCounts"];
         };
+        PermissionCheckRequest: {
+            checks: components["schemas"]["PermissionCheck"][];
+        };
+        PermissionCheck: {
+            /** @example operator:register */
+            action: string;
+            resource?: components["schemas"]["PermissionResource"];
+        };
+        /** @description A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. */
+        PermissionResource: {
+            /** @enum {string} */
+            type: "group" | "project" | "agent" | "agent-template" | "policy";
+            /** @example eng */
+            id: string;
+        };
+        PermissionCheckAnswer: {
+            results: components["schemas"]["PermissionCheckResult"][];
+        };
+        PermissionCheckResult: {
+            action: string;
+            resource?: components["schemas"]["PermissionResource"];
+            allowed: boolean;
+        };
         /**
          * @description How many of each kind the deletion removes. Every one of these can be created again; what cannot is on `OrgDeletionPreview` itself.
          *
@@ -1980,6 +2027,36 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    checkPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PermissionCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description One answer per pair, in the order asked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionCheckAnswer"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
         };
     };
     listOrgMembers: {

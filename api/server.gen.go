@@ -247,6 +247,33 @@ func (e OperatorKeyState) Valid() bool {
 	}
 }
 
+// Defines values for PermissionResourceType.
+const (
+	PermissionResourceTypeAgent         PermissionResourceType = "agent"
+	PermissionResourceTypeAgentTemplate PermissionResourceType = "agent-template"
+	PermissionResourceTypeGroup         PermissionResourceType = "group"
+	PermissionResourceTypePolicy        PermissionResourceType = "policy"
+	PermissionResourceTypeProject       PermissionResourceType = "project"
+)
+
+// Valid indicates whether the value is a known member of the PermissionResourceType enum.
+func (e PermissionResourceType) Valid() bool {
+	switch e {
+	case PermissionResourceTypeAgent:
+		return true
+	case PermissionResourceTypeAgentTemplate:
+		return true
+	case PermissionResourceTypeGroup:
+		return true
+	case PermissionResourceTypePolicy:
+		return true
+	case PermissionResourceTypeProject:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PolicyStatus.
 const (
 	Active   PolicyStatus = "active"
@@ -786,6 +813,42 @@ type PasswordRegistration struct {
 	Username string `json:"username"`
 }
 
+// PermissionCheck defines model for PermissionCheck.
+type PermissionCheck struct {
+	Action string `json:"action"`
+
+	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it.
+	Resource *PermissionResource `json:"resource,omitempty"`
+}
+
+// PermissionCheckAnswer defines model for PermissionCheckAnswer.
+type PermissionCheckAnswer struct {
+	Results []PermissionCheckResult `json:"results"`
+}
+
+// PermissionCheckRequest defines model for PermissionCheckRequest.
+type PermissionCheckRequest struct {
+	Checks []PermissionCheck `json:"checks"`
+}
+
+// PermissionCheckResult defines model for PermissionCheckResult.
+type PermissionCheckResult struct {
+	Action  string `json:"action"`
+	Allowed bool   `json:"allowed"`
+
+	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it.
+	Resource *PermissionResource `json:"resource,omitempty"`
+}
+
+// PermissionResource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it.
+type PermissionResource struct {
+	Id   string                 `json:"id"`
+	Type PermissionResourceType `json:"type"`
+}
+
+// PermissionResourceType defines model for PermissionResource.Type.
+type PermissionResourceType string
+
 // Policy defines model for Policy.
 type Policy struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -1071,6 +1134,9 @@ type WriteOperatorDelegationJSONRequestBody = DelegationWrite
 // IssueOperatorKeyJSONRequestBody defines body for IssueOperatorKey for application/json ContentType.
 type IssueOperatorKeyJSONRequestBody = OperatorKeyIssuance
 
+// CheckPermissionsJSONRequestBody defines body for CheckPermissions for application/json ContentType.
+type CheckPermissionsJSONRequestBody = PermissionCheckRequest
+
 // CreatePolicyJSONRequestBody defines body for CreatePolicy for application/json ContentType.
 type CreatePolicyJSONRequestBody = PolicyCreate
 
@@ -1256,6 +1322,9 @@ type ServerInterface interface {
 	// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
 	// (DELETE /orgs/{org}/operators/{operator}/keys/{kid})
 	RevokeOperatorKey(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, keyID KeyID)
+	// CheckPermissions Ask whether the signed-in caller may take each of a list of actions. Requires membership.
+	// (POST /orgs/{org}/permission-checks)
+	CheckPermissions(w http.ResponseWriter, r *http.Request, org Org)
 	// ListPolicies List an organization's policies. Requires the `admin` role.
 	// (GET /orgs/{org}/policies)
 	ListPolicies(w http.ResponseWriter, r *http.Request, org Org)
@@ -3198,6 +3267,32 @@ func (siw *ServerInterfaceWrapper) RevokeOperatorKey(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// CheckPermissions operation middleware
+func (siw *ServerInterfaceWrapper) CheckPermissions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CheckPermissions(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPolicies operation middleware
 func (siw *ServerInterfaceWrapper) ListPolicies(w http.ResponseWriter, r *http.Request) {
 
@@ -3972,6 +4067,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}", wrapper.GetOrg)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}", wrapper.UpdateOrg)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/deletion-preview", wrapper.GetOrgDeletionPreview)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/permission-checks", wrapper.CheckPermissions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/members", wrapper.ListOrgMembers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/groups", wrapper.CreateGroup)

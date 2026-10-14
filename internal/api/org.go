@@ -282,35 +282,14 @@ func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action
 // org identifier into a resource pattern, where a wildcard would widen
 // the statement past the org it was scoped to.
 func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.User, action string) error {
-	if err := orgGRN.Validate(); err != nil {
-		return err
-	}
 	if err := target.Validate(); err != nil {
 		return err
 	}
-	m, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN)
-	if errorx.IsKind(err, errorx.KindNotFound) {
-		return errorx.New(errorx.KindPermissionDenied, "not a member of this org")
-	}
+	c, err := s.callerIn(r, orgGRN, u)
 	if err != nil {
 		return err
 	}
-	statements, err := s.scopedStatements(r, orgGRN, m, target, u)
-	if err != nil {
-		return err
-	}
-	groups, err := s.orgs.ListGroupsByMember(r.Context(), orgGRN, u.GRN)
-	if err != nil {
-		return err
-	}
-	allowed, err := s.evaluator.Evaluate(r.Context(), EvalInput{
-		Subject:       u.GRN,
-		Object:        target,
-		Action:        action,
-		SubjectGroups: groups,
-		Statements:    statements,
-		SubjectOrg:    orgGRN,
-	})
+	allowed, err := s.allows(r, c, target, action)
 	if err != nil {
 		return err
 	}
@@ -318,6 +297,53 @@ func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.Us
 		return errorx.New(errorx.KindPermissionDenied, "insufficient role")
 	}
 	return nil
+}
+
+// caller is what every check of one user inside one org shares: the
+// membership every check requires, and the groups the engine finds
+// attached policies through (ADR-0008).
+type caller struct {
+	org    grn.GRN
+	user   *user.User
+	member *org.Membership
+	groups []grn.GRN
+}
+
+// callerIn resolves u inside orgGRN. A non-member is refused, since
+// membership is the precondition of every check.
+func (s *Server) callerIn(r *http.Request, orgGRN grn.GRN, u *user.User) (*caller, error) {
+	if err := orgGRN.Validate(); err != nil {
+		return nil, err
+	}
+	m, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN)
+	if errorx.IsKind(err, errorx.KindNotFound) {
+		return nil, errorx.New(errorx.KindPermissionDenied, "not a member of this org")
+	}
+	if err != nil {
+		return nil, err
+	}
+	groups, err := s.orgs.ListGroupsByMember(r.Context(), orgGRN, u.GRN)
+	if err != nil {
+		return nil, err
+	}
+	return &caller{org: orgGRN, user: u, member: m, groups: groups}, nil
+}
+
+// allows asks the engine whether c may take action on target, a
+// validated resource of c's org.
+func (s *Server) allows(r *http.Request, c *caller, target grn.GRN, action string) (bool, error) {
+	statements, err := s.scopedStatements(r, c.org, c.member, target, c.user)
+	if err != nil {
+		return false, err
+	}
+	return s.evaluator.Evaluate(r.Context(), EvalInput{
+		Subject:       c.user.GRN,
+		Object:        target,
+		Action:        action,
+		SubjectGroups: c.groups,
+		Statements:    statements,
+		SubjectOrg:    c.org,
+	})
 }
 
 // orgGRN builds the GRN for an org identifier from an API path.

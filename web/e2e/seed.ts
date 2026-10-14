@@ -364,6 +364,38 @@ export async function recordedAuthority(
 }
 
 /**
+ * Adds a member of the seeded organization holding the member role and
+ * nothing else, and answers that member's session token.
+ */
+export async function seedMember(seed: Seed): Promise<SeededUser> {
+  const suffix = randomBytes(6).toString("hex");
+  const member: SeededUser = {
+    sessionToken: randomBytes(32).toString("base64url"),
+    userGrn: `grn:root:default:user:e2e-${suffix}`,
+    userSlug: `e2e-${suffix}`,
+    nickname: `e2e-member-${suffix}`,
+  };
+  const client = new Client({ connectionString: DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query("BEGIN");
+    await insertUserAndSession(client, member);
+    await client.query(
+      `INSERT INTO org_members (org_grn, user_grn, role, created_at)
+       VALUES ($1, $2, 'member', now())`,
+      [`grn:root:default:org:${seed.orgSlug}`, member.userGrn],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    await client.end();
+  }
+  return member;
+}
+
+/**
  * Adds a member of the seeded organization whom an active policy denies
  * `operator:read`, and answers that member's session token. Policies
  * are seeded rather than written through the console because the

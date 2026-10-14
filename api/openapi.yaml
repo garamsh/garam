@@ -384,6 +384,53 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/permission-checks:
+    post:
+      operationId: checkPermissions
+      tags: [org]
+      summary: Ask whether the signed-in caller may take each of a list of actions. Requires membership.
+      description: >-
+        Answers each pair with the decision enforcement would reach for
+        the same caller, action and resource: the same role statements,
+        groups and attached policies, asked of the policy engine's
+        `Check` one pair at a time. The answer is allow or deny and
+        never why, so no statement or policy is named. It reads a
+        decision and grants nothing: every write is checked again when
+        it arrives, and a decision can change between this answer and
+        that write.
+
+
+        A pair without `resource` asks about the organization itself,
+        which is the resource every action not addressed to a group,
+        project, agent, template or policy is checked on. An action
+        garam does not define is answered `false` rather than refused,
+        because a wildcard in a role or a policy would otherwise allow
+        a name no operation checks.
+
+
+        A caller who is not a member of the organization is refused
+        with 403, as every operation inside it refuses one.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionCheckRequest'
+      responses:
+        '200':
+          description: One answer per pair, in the order asked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionCheckAnswer'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/members:
     get:
       operationId: listOrgMembers
@@ -2588,6 +2635,57 @@ components:
             authority is created on the first one it needs.
         counts:
           $ref: '#/components/schemas/OrgDeletionCounts'
+    PermissionCheckRequest:
+      type: object
+      required: [checks]
+      properties:
+        checks:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/PermissionCheck'
+    PermissionCheck:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          example: operator:register
+        resource:
+          $ref: '#/components/schemas/PermissionResource'
+    PermissionResource:
+      type: object
+      description: >-
+        A resource of the organization, named by its kind and the last
+        segment of its identifier, as the paths under `/orgs/{org}`
+        name it.
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          enum: [group, project, agent, agent-template, policy]
+        id:
+          type: string
+          example: eng
+    PermissionCheckAnswer:
+      type: object
+      required: [results]
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionCheckResult'
+    PermissionCheckResult:
+      type: object
+      required: [action, allowed]
+      properties:
+        action:
+          type: string
+        resource:
+          $ref: '#/components/schemas/PermissionResource'
+        allowed:
+          type: boolean
     OrgDeletionCounts:
       type: object
       description: >-

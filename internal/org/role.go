@@ -162,6 +162,32 @@ const (
 	ActionAgentExecutionRead = "agent:execution-read"
 )
 
+// actions is every action above: the ones a browser-facing operation
+// is checked against, and so the only ones worth asking about.
+var actions = []string{
+	ActionOrgRead, ActionOrgUpdate, ActionOrgDelete, ActionOrgMemberList, ActionOrgInvite,
+	ActionGroupCreate, ActionGroupRead, ActionGroupUpdate, ActionGroupDelete,
+	ActionGroupMemberList, ActionGroupMemberAdd, ActionGroupMemberRemove,
+	ActionProjectCreate, ActionProjectRead, ActionProjectUpdate, ActionProjectDelete,
+	ActionProjectMemberList, ActionProjectMemberAdd, ActionProjectMemberRemove,
+	ActionPolicyCreate, ActionPolicyRead, ActionPolicyUpdate, ActionPolicyAttach, ActionPolicyDetach,
+	ActionConsentRead, ActionConsentGrant, ActionConsentWithdraw,
+	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
+	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,
+	ActionAgentRead, ActionAgentWatch, ActionAgentRename, ActionAgentCreate,
+	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentCutover,
+	ActionAgentTemplateRead, ActionAgentTemplatePublish,
+	ActionExecutionProfileRead, ActionAgentExecutionRead,
+}
+
+// IsAction reports whether a is an action garam defines. A role's
+// wildcard such as `org:*` matches any name with its prefix, so a
+// caller asking about a name nothing defines would otherwise be
+// allowed something no operation checks.
+func IsAction(a string) bool {
+	return slices.Contains(actions, a)
+}
+
 // machineActions is every agent, operator and execution action a role
 // grants, one row each and in the order Actions answers them. An owner
 // and an admin hold every row. A member holds the rows marked for it:

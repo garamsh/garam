@@ -720,4 +720,5 @@ ADRs:
   for secrets, destruction, lifecycle, policies, onboarding and
   feedback, on shadcn/ui over Radix; it asks the server through a
   permission-check API what a caller may do and hides or disables what
-  is denied, while the server still enforces every write. Unbuilt
+  is denied, while the server still enforces every write. The
+  permission check is built; the rest is unbuilt

@@ -104,11 +104,19 @@ test.describe("named agents", () => {
     // membership is its GRN, minted with the definition.
     const team = `/console/orgs/${signedIn.orgSlug}/teams/engineering`;
     await page.goto(team);
-    const choice = page.getByLabel("Person or agent", { exact: true });
-    await expect(choice).toBeEnabled();
-    await choice.selectOption({
-      label: `Ranger (${identifier}) · awaiting operator · Agent`,
+    const option = page.getByRole("option", {
+      name: `Ranger ${identifier} · awaiting operator`,
+      exact: true,
     });
+    // A click taken before React hydrates the choice is dropped, so it
+    // is repeated until the options are there.
+    await expect(async () => {
+      await page
+        .getByRole("combobox", { name: "Person or agent", exact: true })
+        .click();
+      await expect(option).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+    await option.click();
     await page
       .getByRole("button", { name: "Add to team", exact: true })
       .click();

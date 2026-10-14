@@ -1,10 +1,18 @@
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import AttachmentsPage from "@/app/console/orgs/[org]/permissions/attachments/page";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, alice, reportedAgent } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  alice,
+  answerPermissionChecks,
+  denyDeletes,
+  reportedAgent,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -24,6 +32,7 @@ function renderAttachments(subject?: string) {
       params: Promise.resolve({ org: "acme" }),
       searchParams: Promise.resolve(subject === undefined ? {} : { subject }),
     }),
+    { wrapper: TooltipProvider },
   );
 }
 
@@ -135,7 +144,9 @@ describe("attachments page", () => {
         "No policy is attached to Alice.",
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Some policies were not checked"),
+    ).not.toBeInTheDocument();
     read.unmount();
 
     server.use(http.get(BASELINE, refuse));
@@ -156,9 +167,11 @@ describe("attachments page", () => {
         "No policy you can read is attached to Alice.",
       ),
     ).toBeInTheDocument();
-    // Presence: the note names the policy inside a sentence.
-    expect(screen.getByRole("note")).toHaveTextContent(
-      "Not checked: the attachments of Baseline read are not listed to you",
+    // Presence: the notice names the policy inside a sentence.
+    expect(
+      screen.getByText("Some policies were not checked").closest("[role]"),
+    ).toHaveTextContent(
+      "The attachments of Baseline read are not listed to you",
     );
   });
 
@@ -194,12 +207,101 @@ describe("attachments page", () => {
         "No team, person or agent of this organization matches this address.",
       ),
     ).toBeInTheDocument();
-    const choice = screen.getByLabelText("Team, person or agent");
-    const values = within(choice)
-      .getAllByRole("option")
-      .map((option) => option.getAttribute("value"));
-    expect(values).toContain("person:alice");
-    expect(values.some((value) => value?.startsWith("grn:"))).toBe(false);
+    // The address the picker sends: the subject's kind and identifier.
+    const user = userEvent.setup();
+    await user.click(
+      screen.getByRole("combobox", { name: "Team, person or agent" }),
+    );
+    await user.click(
+      await screen.findByRole("option", { name: /^Alice · Person/ }),
+    );
+    const picker = screen
+      .getByRole("button", { name: "Show policies" })
+      .closest("form");
+    expect(picker).not.toBeNull();
+    expect(new FormData(picker ?? undefined).get("subject")).toBe(
+      "person:alice",
+    );
     expect(container.textContent).not.toContain("grn:");
+  });
+
+  it("withdraws a subject's attach and detach only where the server denies them", async () => {
+    // The control: allowed, Engineering's direct policy is detachable
+    // and another policy is offered to attach.
+    const allowed = await renderAttachments("team:eng");
+    const direct = () => section("Attached directly");
+    expect(
+      within(direct()).getByRole("button", {
+        name: "Detach Deny project deletion from Engineering",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(direct()).getByRole("combobox", { name: "Attach a policy" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(answerPermissionChecks(() => "deny"));
+    await renderAttachments("team:eng");
+
+    expect(
+      within(direct()).queryByRole("button", { name: /^Detach/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(direct()).queryByRole("combobox", { name: "Attach a policy" }),
+    ).not.toBeInTheDocument();
+    // The attachment itself is still listed.
+    expect(
+      within(direct()).getByRole("link", { name: "Deny project deletion" }),
+    ).toBeInTheDocument();
+  });
+
+  it("asks at most the API's limit and leaves the policies past it to the server", async () => {
+    const policies = Array.from({ length: 30 }, (_, index) => ({
+      ...denyDeletes,
+      grn: `grn:acme:default:policy:p${index + 1}`,
+      name: `Policy ${index + 1}`,
+      status: "draft",
+    }));
+    const asked: number[] = [];
+    server.use(
+      http.get(POLICIES, () => HttpResponse.json(policies)),
+      http.get(`${POLICIES}/:policy/attachments`, () => HttpResponse.json([])),
+      http.post(
+        `${API_URL}/orgs/acme/permission-checks`,
+        async ({ request }) => {
+          const body = await request.json();
+          const checks =
+            typeof body === "object" &&
+            body !== null &&
+            "checks" in body &&
+            Array.isArray(body.checks)
+              ? body.checks
+              : [];
+          asked.push(checks.length);
+          return HttpResponse.json({
+            results: checks.map(() => ({ action: "x", decision: "deny" })),
+          });
+        },
+      ),
+    );
+    const user = userEvent.setup();
+
+    await renderAttachments("team:eng");
+
+    // Two checks for each of the first 25 policies, the API's 50.
+    expect(asked).toEqual([50]);
+    await user.click(
+      within(section("Attached directly")).getByRole("combobox", {
+        name: "Attach a policy",
+      }),
+    );
+    // Asked and denied, the first is withdrawn; unasked, the last is
+    // offered and the server decides.
+    expect(
+      screen.queryByRole("option", { name: "Policy 1 · Draft" }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "Policy 30 · Draft" }),
+    ).toBeInTheDocument();
   });
 });

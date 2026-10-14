@@ -1,10 +1,17 @@
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import PolicyPage from "@/app/console/orgs/[org]/permissions/[policy]/page";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, baselineRead, denyDeletes } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  answerPermissionChecks,
+  baselineRead,
+  denyDeletes,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -16,39 +23,79 @@ vi.mock("next/navigation", () => ({
   },
   usePathname: () => "/console/orgs/acme/permissions/d1e2f3a4b5c6d7e8",
 }));
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 const POLICIES = `${API_URL}/orgs/acme/policies`;
 const DENY = `${POLICIES}/d1e2f3a4b5c6d7e8`;
 
+// The console layout mounts the provider a `<Time>` needs.
 function renderPolicy(policy = "d1e2f3a4b5c6d7e8") {
   return renderServerComponent(
     PolicyPage({ params: Promise.resolve({ org: "acme", policy }) }),
+    { wrapper: TooltipProvider },
   );
 }
 
+async function openTab(name: RegExp) {
+  await userEvent.setup().click(screen.getByRole("tab", { name }));
+}
+
 describe("policy page", () => {
-  it("shows the state, whom it is attached to by name, and each version", async () => {
+  it("heads the page with the name, status and identifier, and opens on the document", async () => {
     const { container } = await renderPolicy();
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Deny project deletion" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Active")).toBeInTheDocument();
+    expect(
+      screen.getByRole("group", { name: "Policy identifier" }),
+    ).toHaveTextContent("d1e2f3a4b5c6d7e8");
+    expect(
+      screen.getByText(
+        "Active: version 1 takes part in every check it reaches.",
+      ),
+    ).toBeInTheDocument();
     expect(
       screen.getByText("Applies to Engineering (Team)."),
     ).toBeInTheDocument();
-    // Presence: a row's accessible name is all of its cells.
-    const row = screen.getByRole("row", { name: /Engineering/ });
-    expect(within(row).getByText("Team")).toBeInTheDocument();
-    const current = screen.getByRole("listitem", { name: "Version 1" });
-    expect(within(current).getByText("Default")).toBeInTheDocument();
-    const newer = screen.getByRole("listitem", { name: "Version 2" });
+    // The editor opens on the default version, v1, and nothing to
+    // publish.
     expect(
-      within(newer).getByRole("button", { name: "Make default" }),
-    ).toBeInTheDocument();
+      screen.getByRole("textbox", { name: "Statement 1 action 1" }),
+    ).toHaveValue("project:delete");
+    expect(screen.getByRole("button", { name: "Publish v3" })).toBeDisabled();
+    // Archiving is in the danger zone, at the end of the last tab.
     expect(container.textContent).not.toContain("grn:acme:default:group");
   });
 
-  it("says a draft grants nothing, and whom it would reach once active", async () => {
+  it("lists the versions with the default marked, and whom it is attached to", async () => {
+    await renderPolicy();
+
+    // Presence: a tab's name carries its count.
+    await openTab(/^Versions/);
+    const current = screen.getByRole("row", { name: /^v1/ });
+    expect(within(current).getByText("Default · in use")).toBeInTheDocument();
+    const newer = screen.getByRole("row", { name: /^v2/ });
+    expect(
+      within(newer).getByRole("button", { name: "Make v2 default" }),
+    ).toBeInTheDocument();
+
+    await openTab(/^Attachments/);
+    // Presence: a row's accessible name is all of its cells.
+    const row = screen.getByRole("row", { name: /Engineering/ });
+    expect(within(row).getByText("Team")).toBeInTheDocument();
+    expect(
+      within(row).getByRole("button", {
+        name: "Detach Deny project deletion from Engineering",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Archive policy" }),
+    ).toBeInTheDocument();
+  });
+
+  it("says a draft grants nothing, whom it would reach once active, and offers activation", async () => {
     server.use(
       http.get(POLICIES, () =>
         HttpResponse.json([{ ...denyDeletes, status: "draft" }]),
@@ -67,7 +114,7 @@ describe("policy page", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Activate…" }),
+      screen.getByRole("button", { name: "Activate" }),
     ).toBeInTheDocument();
   });
 
@@ -89,7 +136,8 @@ describe("policy page", () => {
     // The control: listed as empty, the policy says it has none.
     server.use(http.get(`${DENY}/attachments`, () => HttpResponse.json([])));
     const listed = await renderPolicy();
-    expect(screen.getByText(/^No attachments\./)).toBeInTheDocument();
+    await openTab(/^Attachments/);
+    expect(screen.getByText("No attachments")).toBeInTheDocument();
     listed.unmount();
 
     server.use(
@@ -99,16 +147,71 @@ describe("policy page", () => {
     );
 
     await renderPolicy();
-
-    expect(
-      screen.getByText(
-        "garam refused to list this policy's attachments to you.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/^No attachments\./)).not.toBeInTheDocument();
     // Presence: the reach is a sentence that goes on to say why.
     expect(
       screen.getByText(/may apply to everyone in this organization\.$/),
+    ).toBeInTheDocument();
+    await openTab(/^Attachments/);
+
+    expect(screen.getByText("Attachments not shown")).toBeInTheDocument();
+    expect(screen.queryByText("No attachments")).not.toBeInTheDocument();
+  });
+
+  it("withdraws only the writes the server denies, and keeps the document readable", async () => {
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "policy:attach" ? "allow" : "deny",
+      ),
+    );
+
+    await renderPolicy();
+
+    // Denied a change, the document is shown and not offered for edit.
+    expect(
+      screen.queryByRole("button", { name: /^Publish/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Your access lets you read this policy, not change it."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("textbox", { name: "Statement 1 action 1" }),
+    ).toHaveAttribute("readonly");
+
+    await openTab(/^Versions/);
+    expect(
+      screen.queryByRole("button", { name: "Make v2 default" }),
+    ).not.toBeInTheDocument();
+
+    await openTab(/^Attachments/);
+    expect(
+      screen.queryByRole("button", { name: /^Detach/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Archive policy" }),
+    ).not.toBeInTheDocument();
+    // The control: attaching, allowed, is still offered.
+    expect(
+      screen.getByRole("combobox", { name: "Team, person or agent" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers every write when the check could not be asked", async () => {
+    server.use(
+      http.post(`${API_URL}/orgs/acme/permission-checks`, () =>
+        HttpResponse.error(),
+      ),
+    );
+
+    await renderPolicy();
+
+    expect(
+      screen.getByRole("button", { name: "Publish v3" }),
+    ).toBeInTheDocument();
+    await openTab(/^Attachments/);
+    expect(
+      screen.getByRole("button", {
+        name: "Detach Deny project deletion from Engineering",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -128,5 +231,55 @@ describe("policy page", () => {
     );
 
     await expect(renderPolicy("nope")).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("withdraws Activate where the server denies changing the policy", async () => {
+    server.use(
+      http.get(POLICIES, () =>
+        HttpResponse.json([{ ...denyDeletes, status: "draft" }]),
+      ),
+    );
+    // The control: allowed, a draft offers Activate.
+    const allowed = await renderPolicy();
+    expect(
+      screen.getByRole("button", { name: "Activate" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "policy:update" ? "deny" : "allow",
+      ),
+    );
+    await renderPolicy();
+
+    expect(
+      screen.queryByRole("button", { name: "Activate" }),
+    ).not.toBeInTheDocument();
+    // The page still reads: the draft's state is said.
+    expect(
+      screen.getByText("Draft: grants no access until it is activated."),
+    ).toBeInTheDocument();
+  });
+
+  it("says an activation landed beside the header once its button is gone", async () => {
+    server.use(
+      http.get(POLICIES, () =>
+        HttpResponse.json([{ ...denyDeletes, status: "draft" }]),
+      ),
+      http.post(`${DENY}/activate`, () => HttpResponse.json(denyDeletes)),
+    );
+    const user = userEvent.setup();
+    await renderPolicy();
+
+    await user.click(screen.getByRole("button", { name: "Activate" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Activate policy" }),
+    );
+
+    expect(
+      await screen.findByText("Activated: v1 takes part in checks."),
+    ).toBeInTheDocument();
   });
 });

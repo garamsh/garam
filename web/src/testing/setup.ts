@@ -44,6 +44,13 @@ Element.prototype.setPointerCapture = () => {};
 Element.prototype.releasePointerCapture = () => {};
 Element.prototype.scrollIntoView = () => {};
 
+// jsdom lays nothing out, so a Range has no rectangles; CodeMirror
+// measures the cursor with them after every edit.
+// An element's own list is jsdom's empty one.
+Range.prototype.getClientRects = () =>
+  document.createElement("span").getClientRects();
+Range.prototype.getBoundingClientRect = () => new DOMRect();
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   server.resetHandlers();

@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { garamFetchAuthenticated, refusal } from "@/lib/garam";
+import { garamFetchAuthenticated } from "@/lib/garam";
 import { parsePolicyDocument } from "@/lib/policy-document";
 import type { PolicyDocument } from "@/lib/policy-document";
 
+import { documentRefusal, type DocumentRefusal } from "./document-refusal";
 import { PolicyVersionParser, type PolicyVersion } from "./policies";
 
 /**
@@ -14,9 +15,7 @@ import { PolicyVersionParser, type PolicyVersion } from "./policies";
  * the version garam stored.
  */
 export type AddPolicyVersionState =
-  | { status: "idle" }
-  | { status: "error"; message: string }
-  | { status: "saved"; version: number };
+  { status: "idle" } | DocumentRefusal | { status: "saved"; version: number };
 
 const Schema = z.object({
   org: z.string().min(1),
@@ -42,7 +41,7 @@ export async function addPolicyVersion(
     return { status: "error", message: "The form did not arrive complete." };
   }
   const document = parsePolicyDocument(parsed.data.document);
-  if (document.status === "error") return document;
+  if (document.status === "error") return { ...document, field: "document" };
 
   const { org, policy } = parsed.data;
   let saved: PolicyVersion;
@@ -59,7 +58,7 @@ export async function addPolicyVersion(
       },
     );
   } catch (error) {
-    return refusal(error, "addPolicyVersion");
+    return documentRefusal(error, "addPolicyVersion");
   }
 
   revalidatePath(`/console/orgs/${org}/permissions`, "layout");

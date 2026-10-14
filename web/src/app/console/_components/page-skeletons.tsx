@@ -64,3 +64,26 @@ export function DetailPageSkeleton() {
     </div>
   );
 }
+
+/**
+ * The shape a settings page takes while it is prepared: the header,
+ * then one section's card, as `SettingsPage` draws them.
+ */
+export function SettingsPageSkeleton() {
+  return (
+    <div role="status" aria-label="Loading" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-4 w-72 max-w-full" />
+      </div>
+      <div className="grid gap-8 md:grid-cols-[11rem_1fr]">
+        <Skeleton className="hidden h-5 w-24 md:block" />
+        <div className="flex flex-col gap-4 rounded-xl border p-4">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-8 w-full max-w-sm" />
+          <Skeleton className="h-48 w-full" />
+        </div>
+      </div>
+    </div>
+  );
+}

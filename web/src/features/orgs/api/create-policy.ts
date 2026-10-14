@@ -4,12 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { garamFetchAuthenticated, refusal } from "@/lib/garam";
+import { garamFetchAuthenticated } from "@/lib/garam";
 import { parsePolicyDocument } from "@/lib/policy-document";
 import type { PolicyDocument } from "@/lib/policy-document";
 import type { components } from "@/types/api";
 
 import { slugFromGrn } from "../grn";
+import { documentRefusal, type DocumentRefusal } from "./document-refusal";
 import { PolicyParser, type Policy } from "./policies";
 
 /**
@@ -17,7 +18,9 @@ import { PolicyParser, type Policy } from "./policies";
  * no created state — a created policy is the page it is sent to.
  */
 export type CreatePolicyState =
-  { status: "idle" } | { status: "error"; message: string };
+  | { status: "idle" }
+  | DocumentRefusal
+  | { status: "error"; message: string; field: "name" };
 
 const Schema = z.object({
   org: z.string().min(1),
@@ -41,10 +44,14 @@ export async function createPolicy(
     document: formData.get("document"),
   });
   if (!parsed.success) {
-    return { status: "error", message: "Give the policy a name." };
+    return {
+      status: "error",
+      message: "Give the policy a name.",
+      field: "name",
+    };
   }
   const document = parsePolicyDocument(parsed.data.document);
-  if (document.status === "error") return document;
+  if (document.status === "error") return { ...document, field: "document" };
 
   const { org, name } = parsed.data;
   let created: Policy;
@@ -67,7 +74,7 @@ export async function createPolicy(
     // A refused document, a refusal or an outage is a state the form
     // renders, not a throw: the boundary would replace the form and
     // the document typed into it.
-    return refusal(error, "createPolicy");
+    return documentRefusal(error, "createPolicy");
   }
 
   revalidatePath(`/console/orgs/${org}/permissions`, "layout");

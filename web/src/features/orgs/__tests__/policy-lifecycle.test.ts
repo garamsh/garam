@@ -6,6 +6,7 @@ import { activatePolicy } from "@/features/orgs/api/activate-policy";
 import { addPolicyVersion } from "@/features/orgs/api/add-policy-version";
 import { archivePolicy } from "@/features/orgs/api/archive-policy";
 import { createPolicy } from "@/features/orgs/api/create-policy";
+import { publishPolicyVersion } from "@/features/orgs/api/publish-policy-version";
 import { rollbackPolicy } from "@/features/orgs/api/rollback-policy";
 import {
   API_URL,
@@ -104,6 +105,8 @@ describe("createPolicy", () => {
     ).resolves.toEqual({
       status: "error",
       message: REFUSAL_COPY.policyDocumentRefused,
+      // The refusal is the document's, so the form attaches it there.
+      field: "document",
     });
 
     // The control: the document the engine takes creates the policy, so
@@ -130,6 +133,7 @@ describe("createPolicy", () => {
     ).resolves.toEqual({
       status: "error",
       message: "The document must be a JSON object.",
+      field: "document",
     });
     expect(posted).toEqual([]);
 
@@ -329,5 +333,124 @@ describe("archivePolicy", () => {
     await expect(
       archivePolicy({ status: "idle" }, form({ policy: "d1e2f3a4b5c6d7e8" })),
     ).resolves.toEqual({ status: "idle" });
+  });
+});
+
+describe("publishPolicyVersion", () => {
+  it("saves the document as the next version, then makes it the default", async () => {
+    const versions: z.infer<typeof PolicyVersionCreate>[] = [];
+    const rollbacks: z.infer<typeof PolicyRollback>[] = [];
+    server.use(
+      http.post(`${DENY}/versions`, async ({ request }) => {
+        versions.push(PolicyVersionCreate.parse(await request.json()));
+        return HttpResponse.json(
+          { ...denyDeletesVersions[1], version: 3 },
+          { status: 201 },
+        );
+      }),
+      http.post(`${DENY}/rollback`, async ({ request }) => {
+        rollbacks.push(PolicyRollback.parse(await request.json()));
+        return HttpResponse.json({ ...denyDeletes, defaultVersion: 3 });
+      }),
+    );
+
+    await expect(
+      publishPolicyVersion(
+        { status: "idle" },
+        form({ policy: "d1e2f3a4b5c6d7e8", document: DOCUMENT }),
+      ),
+    ).resolves.toEqual({ status: "published", version: 3 });
+    expect(versions).toEqual([
+      { document: { Version: "2026-07-25", Statement: [] } },
+    ]);
+    // The default moves to the version garam numbered, not a guess.
+    expect(rollbacks).toEqual([{ version: 3 }]);
+  });
+
+  it("says the version was saved when making it the default is refused", async () => {
+    server.use(
+      http.post(`${DENY}/versions`, () =>
+        HttpResponse.json(
+          { ...denyDeletesVersions[1], version: 3 },
+          { status: 201 },
+        ),
+      ),
+      http.post(`${DENY}/rollback`, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "permission denied" },
+          { status: 403 },
+        ),
+      ),
+    );
+
+    await expect(
+      publishPolicyVersion(
+        { status: "idle" },
+        form({ policy: "d1e2f3a4b5c6d7e8", document: DOCUMENT }),
+      ),
+    ).resolves.toEqual({
+      status: "saved-not-default",
+      version: 3,
+      message: REFUSAL_COPY.permissionDenied,
+    });
+  });
+
+  it("attaches the engine's refusal to the document and moves no default", async () => {
+    const rollbacks: unknown[] = [];
+    server.use(
+      http.post(`${DENY}/versions`, refusedDocument),
+      http.post(`${DENY}/rollback`, async ({ request }) => {
+        rollbacks.push(await request.json());
+        return HttpResponse.json(denyDeletes);
+      }),
+    );
+
+    await expect(
+      publishPolicyVersion(
+        { status: "idle" },
+        form({ policy: "d1e2f3a4b5c6d7e8", document: '{"Bad":1}' }),
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message: REFUSAL_COPY.policyDocumentRefused,
+      field: "document",
+    });
+    expect(rollbacks).toEqual([]);
+  });
+
+  it("waits for the confirmation where the active policy reaches everyone", async () => {
+    const versions: unknown[] = [];
+    server.use(
+      http.post(`${BASELINE}/versions`, async ({ request }) => {
+        versions.push(await request.json());
+        return HttpResponse.json(
+          { ...denyDeletesVersions[1], version: 2 },
+          { status: 201 },
+        );
+      }),
+      http.post(`${BASELINE}/rollback`, () =>
+        HttpResponse.json({ ...baselineRead, defaultVersion: 2 }),
+      ),
+    );
+
+    await expect(
+      publishPolicyVersion(
+        { status: "idle" },
+        form({ policy: "0a1b2c3d4e5f6071", document: DOCUMENT }),
+      ),
+    ).resolves.toEqual({ status: "confirm-org-wide" });
+    expect(versions).toEqual([]);
+
+    // The control: confirmed, the same publish goes through.
+    await expect(
+      publishPolicyVersion(
+        { status: "idle" },
+        form({
+          policy: "0a1b2c3d4e5f6071",
+          document: DOCUMENT,
+          orgWide: "confirmed",
+        }),
+      ),
+    ).resolves.toEqual({ status: "published", version: 2 });
   });
 });

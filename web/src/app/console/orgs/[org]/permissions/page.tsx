@@ -1,17 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { getOrg, listPolicies } from "@/features/orgs";
+import { getOrg, listPolicies, slugFromGrn } from "@/features/orgs";
+import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
-import { EmptyState } from "../../../_components/empty-state";
 import { NEW_ITEM, orgHref } from "../../../_components/navigation";
-import { PageHeader } from "../../../_components/page-header";
+import { ListPage } from "../../../_components/templates/list-page";
 import { PermissionsViews } from "./_components/permissions-views";
 import { PoliciesRefused } from "./_components/policies-refused";
-import { PolicyList } from "./_components/policy-list";
+import { PolicyTable } from "./_components/policy-table";
 
 /** Head metadata for the permissions route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Permissions — garam" };
@@ -22,42 +22,49 @@ type Params = { params: Promise<{ org: string }> };
  * The Policies view of Permissions: the organization's policies, each
  * opening a page of its own (ADR-0073). The organization is read for
  * itself, so one the caller cannot read answers 404 (ADR-0011), and a
- * refused policy list inside one it reads says so.
+ * refused policy list inside one it reads says so. Creating is offered
+ * unless the server denies it (ADR-0103).
  */
 export default async function PermissionsPage({ params }: Params) {
   const { org } = await params;
-  const [organization, policies] = await Promise.all([
+  const base = orgHref(org, "permissions");
+  const [organization, policies, permissions] = await Promise.all([
     getOrg(org),
     listPolicies(org),
+    checkPermissions(org, { create: { action: "policy:create" } }),
   ]);
+  const listed = policies.status === "ok" ? policies.data : null;
 
   return (
-    <>
-      <PageHeader
-        title="Permissions"
-        description="Policies decide what teams, people and agents may do."
-      >
-        <Button asChild>
-          <Link href={`${orgHref(org, "permissions")}/${NEW_ITEM}`}>
-            Create policy
-          </Link>
-        </Button>
-      </PageHeader>
-      <PermissionsViews org={org} current="policies" />
+    <ListPage
+      title="Permissions"
+      description="Policies decide what teams, people and agents may do."
+      count={listed?.length}
+      primaryAction={
+        permissions.get("create") !== "denied" && (
+          <Button asChild>
+            <Link href={`${base}/${NEW_ITEM}`}>
+              <Plus aria-hidden />
+              Create policy
+            </Link>
+          </Button>
+        )
+      }
+      filters={<PermissionsViews org={org} current="policies" />}
+    >
       {organization.status === "unreachable" ||
       policies.status === "unreachable" ? (
         <ApiUnreachable subject="this organization's policies" />
-      ) : policies.status === "forbidden" ? (
+      ) : listed === null ? (
         <PoliciesRefused />
-      ) : policies.data.length === 0 ? (
-        <EmptyState
-          icon={ShieldCheck}
-          title="No policies"
-          description="This organization has no policies."
-        />
       ) : (
-        <PolicyList org={org} policies={policies.data} />
+        <PolicyTable
+          rows={listed.map((policy) => {
+            const identifier = slugFromGrn(policy.grn);
+            return { policy, identifier, href: `${base}/${identifier}` };
+          })}
+        />
       )}
-    </>
+    </ListPage>
   );
 }

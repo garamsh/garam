@@ -193,6 +193,60 @@ func (e OperatorEnrollmentState) Valid() bool {
 	}
 }
 
+// Defines values for OperatorKeyAlgorithm.
+const (
+	RS256 OperatorKeyAlgorithm = "RS256"
+)
+
+// Valid indicates whether the value is a known member of the OperatorKeyAlgorithm enum.
+func (e OperatorKeyAlgorithm) Valid() bool {
+	switch e {
+	case RS256:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperatorKeyIssuanceRotation.
+const (
+	Immediate OperatorKeyIssuanceRotation = "immediate"
+	Planned   OperatorKeyIssuanceRotation = "planned"
+)
+
+// Valid indicates whether the value is a known member of the OperatorKeyIssuanceRotation enum.
+func (e OperatorKeyIssuanceRotation) Valid() bool {
+	switch e {
+	case Immediate:
+		return true
+	case Planned:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperatorKeyState.
+const (
+	OperatorKeyActive   OperatorKeyState = "active"
+	OperatorKeyRetiring OperatorKeyState = "retiring"
+	OperatorKeyRevoked  OperatorKeyState = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the OperatorKeyState enum.
+func (e OperatorKeyState) Valid() bool {
+	switch e {
+	case OperatorKeyActive:
+		return true
+	case OperatorKeyRetiring:
+		return true
+	case OperatorKeyRevoked:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PolicyStatus.
 const (
 	Active   PolicyStatus = "active"
@@ -466,6 +520,21 @@ type InvitationCreate struct {
 // InvitationCreateRole Owners are not transferable by invitation.
 type InvitationCreateRole string
 
+// IssuedOperatorKey A key garam generated for an operator, answered once. Place `privateKeyPem` and `tokenUrl` in the operator's cluster for the identity `clientId` names; garam cannot answer the private key a second time.
+type IssuedOperatorKey struct {
+	// ClientId The operator's canonical GRN, which its assertions name as `iss`, `sub` and `client_id`.
+	ClientId string `json:"clientId"`
+
+	// Key The public record of one key an operator was issued (ADR-0102). It carries no private material.
+	Key OperatorKey `json:"key"`
+
+	// PrivateKeyPem The private key, PKCS#8 `PRIVATE KEY` PEM, answered once. Show it once and say it cannot be shown again. It is placed in the operator's cluster as a file only the operator's process reads, and never in an environment variable, a command line, an image or source control.
+	PrivateKeyPem string `json:"privateKeyPem"`
+
+	// TokenUrl The token endpoint's absolute URL, which an assertion's `aud` equals byte for byte. It is garam's configured value and need not be the address the operator dials.
+	TokenUrl string `json:"tokenUrl"`
+}
+
 // Member defines model for Member.
 type Member struct {
 	// Nickname Display name from the member's user row. Omitted when that row is gone, which the client renders as it chooses; the GRN is never a substitute.
@@ -556,6 +625,47 @@ type OperatorEnrollment struct {
 
 // OperatorEnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
 type OperatorEnrollmentState string
+
+// OperatorKey The public record of one key an operator was issued (ADR-0102). It carries no private material.
+type OperatorKey struct {
+	Algorithm OperatorKeyAlgorithm `json:"algorithm"`
+	IssuedAt  time.Time            `json:"issuedAt"`
+
+	// Kid The key's fingerprint: the base64url SHA-256 RFC 7638 thumbprint of its public key, which an assertion's protected `kid` names. Confirm it against the installed key before withdrawing a predecessor.
+	Kid string `json:"kid"`
+
+	// LastExchangedAt When an assertion the key signed last obtained a token, where one has.
+	LastExchangedAt *time.Time `json:"lastExchangedAt,omitempty"`
+
+	// RetiresAt When a planned rotation withdraws the key, where one set it.
+	RetiresAt *time.Time `json:"retiresAt,omitempty"`
+
+	// RevokedAt When the key was withdrawn, where it was.
+	RevokedAt *time.Time `json:"revokedAt,omitempty"`
+
+	// State Where a key stands at garam's database time. `active` verifies assertions; `retiring` verifies them until `retiresAt`, which a planned successor set; `revoked` verifies nothing, because it was withdrawn or its `retiresAt` has passed, and the tokens exchanged under it authenticate nothing.
+	State OperatorKeyState `json:"state"`
+}
+
+// OperatorKeyAlgorithm defines model for OperatorKey.Algorithm.
+type OperatorKeyAlgorithm string
+
+// OperatorKeyIssuance How an issued key stands beside the keys the operator holds (ADR-0102).
+type OperatorKeyIssuance struct {
+	// Rotation `planned` adds the key beside the one in use, which is withdrawn by itself 24 hours later; `immediate` withdraws every live key and its tokens first. For an operator holding no live key the two are the same.
+	Rotation OperatorKeyIssuanceRotation `json:"rotation"`
+}
+
+// OperatorKeyIssuanceRotation `planned` adds the key beside the one in use, which is withdrawn by itself 24 hours later; `immediate` withdraws every live key and its tokens first. For an operator holding no live key the two are the same.
+type OperatorKeyIssuanceRotation string
+
+// OperatorKeyList defines model for OperatorKeyList.
+type OperatorKeyList struct {
+	Keys []OperatorKey `json:"keys"`
+}
+
+// OperatorKeyState Where a key stands at garam's database time. `active` verifies assertions; `retiring` verifies them until `retiresAt`, which a planned successor set; `revoked` verifies nothing, because it was withdrawn or its `retiresAt` has passed, and the tokens exchanged under it authenticate nothing.
+type OperatorKeyState string
 
 // OperatorName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
 type OperatorName = string
@@ -801,6 +911,9 @@ type ContractVersion = string
 // GroupSlug defines model for group.
 type GroupSlug = string
 
+// KeyID defines model for kid.
+type KeyID = string
+
 // Limit defines model for limit.
 type Limit = int
 
@@ -954,6 +1067,9 @@ type EndOperatorDelegationJSONRequestBody = DelegationEnd
 
 // WriteOperatorDelegationJSONRequestBody defines body for WriteOperatorDelegation for application/json ContentType.
 type WriteOperatorDelegationJSONRequestBody = DelegationWrite
+
+// IssueOperatorKeyJSONRequestBody defines body for IssueOperatorKey for application/json ContentType.
+type IssueOperatorKeyJSONRequestBody = OperatorKeyIssuance
 
 // CreatePolicyJSONRequestBody defines body for CreatePolicy for application/json ContentType.
 type CreatePolicyJSONRequestBody = PolicyCreate
@@ -1131,6 +1247,15 @@ type ServerInterface interface {
 	// MintOperatorEnrollment Mint a fresh enrollment token for a registered operator. Requires the `admin` role.
 	// (POST /orgs/{org}/operators/{operator}/enrollment)
 	MintOperatorEnrollment(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
+	// ListOperatorKeys List the keys an operator was issued, with where each stands.
+	// (GET /orgs/{org}/operators/{operator}/keys)
+	ListOperatorKeys(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
+	// IssueOperatorKey Issue a registered operator a private key, shown once.
+	// (POST /orgs/{org}/operators/{operator}/keys)
+	IssueOperatorKey(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
+	// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+	// (DELETE /orgs/{org}/operators/{operator}/keys/{kid})
+	RevokeOperatorKey(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, keyID KeyID)
 	// ListPolicies List an organization's policies. Requires the `admin` role.
 	// (GET /orgs/{org}/policies)
 	ListPolicies(w http.ResponseWriter, r *http.Request, org Org)
@@ -2959,6 +3084,120 @@ func (siw *ServerInterfaceWrapper) MintOperatorEnrollment(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// ListOperatorKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListOperatorKeys(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOperatorKeys(w, r, org, operatorSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IssueOperatorKey operation middleware
+func (siw *ServerInterfaceWrapper) IssueOperatorKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IssueOperatorKey(w, r, org, operatorSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeOperatorKey operation middleware
+func (siw *ServerInterfaceWrapper) RevokeOperatorKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "kid" -------------
+	var keyID KeyID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "kid", r.PathValue("kid"), &keyID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kid", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeOperatorKey(w, r, org, operatorSlug, keyID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPolicies operation middleware
 func (siw *ServerInterfaceWrapper) ListPolicies(w http.ResponseWriter, r *http.Request) {
 
@@ -3767,6 +4006,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.GetOperator)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.UpdateOperator)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/credential", wrapper.ReissueOperatorCredential)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/keys", wrapper.ListOperatorKeys)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/keys", wrapper.IssueOperatorKey)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/keys/{kid}", wrapper.RevokeOperatorKey)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/enrollment", wrapper.MintOperatorEnrollment)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.EndOperatorDelegation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.GetOperatorDelegation)

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -139,4 +140,100 @@ func countMachineRequests(counter *prometheus.CounterVec) func(http.Handler) htt
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// tokenExchangesMetric counts the token exchanges the machine listener
+// answered, by how the exchange authenticated and how it ended: what
+// tells the shared-secret cohort from the private_key_jwt one, which
+// garam_machine_requests_total cannot, since both present a token
+// afterwards (ADR-0102,
+// docs/plans/2026-10-09-machine-identity-migration.md). Neither label
+// carries anything the caller sent beyond which prefix its credential
+// has.
+const tokenExchangesMetric = "garam_machine_token_exchanges_total"
+
+// The exchange methods tokenExchangesMetric distinguishes.
+const (
+	exchangeOperatorSharedSecret   = "operator_shared_secret"
+	exchangeSupervisorSharedSecret = "supervisor_shared_secret"
+	exchangeOperatorPrivateKeyJWT  = "operator_private_key_jwt"
+	exchangeUnrecognised           = "unrecognised"
+)
+
+// newTokenExchangeCounter builds the counter and registers it on
+// registerer, where one is given.
+func newTokenExchangeCounter(registerer prometheus.Registerer) (*prometheus.CounterVec, error) {
+	counter := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: tokenExchangesMetric,
+		Help: "Token exchanges the machine listener answered, by exchange method and outcome.",
+	}, []string{"method", "outcome"})
+	if registerer == nil {
+		return counter, nil
+	}
+	if err := registerer.Register(counter); err != nil {
+		return nil, errorx.Wrap(err, "register token exchange counter", errorx.KindInternal)
+	}
+	return counter, nil
+}
+
+// countTokenExchanges counts each request to an exchange route by its
+// method and outcome once it is answered. It runs as the generated
+// router's middleware, outside the request log's, so the route pattern
+// is matched and the status written is the one the client read.
+func countTokenExchanges(counter *prometheus.CounterVec) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			method, ok := exchangeMethod(r)
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+			recorder := &exchangeStatus{ResponseWriter: w, status: http.StatusOK}
+			next.ServeHTTP(recorder, r)
+			counter.WithLabelValues(method, exchangeOutcome(recorder.status)).Inc()
+		})
+	}
+}
+
+// exchangeMethod names how a request to an exchange route
+// authenticates, reading the credential's prefix and nothing more.
+func exchangeMethod(r *http.Request) (string, bool) {
+	switch r.Pattern {
+	case http.MethodPost + " /oauth/token":
+		return exchangeOperatorPrivateKeyJWT, true
+	case http.MethodPost + " /tokens":
+		credential := r.Header.Get("Authorization")
+		switch {
+		case strings.HasPrefix(credential, operator.CredentialScheme+" "+operator.CredentialPrefix):
+			return exchangeOperatorSharedSecret, true
+		case strings.HasPrefix(credential, operator.CredentialScheme+" "+agent.SupervisorCredentialPrefix):
+			return exchangeSupervisorSharedSecret, true
+		}
+		return exchangeUnrecognised, true
+	}
+	return "", false
+}
+
+// exchangeOutcome reduces a status to what an inventory reads.
+func exchangeOutcome(status int) string {
+	switch {
+	case status < http.StatusBadRequest:
+		return "issued"
+	case status == http.StatusTooManyRequests:
+		return "limited"
+	case status < http.StatusInternalServerError:
+		return "refused"
+	}
+	return "failed"
+}
+
+// exchangeStatus records the status an exchange was answered with.
+type exchangeStatus struct {
+	http.ResponseWriter
+	status int
+}
+
+func (e *exchangeStatus) WriteHeader(code int) {
+	e.status = code
+	e.ResponseWriter.WriteHeader(code)
 }

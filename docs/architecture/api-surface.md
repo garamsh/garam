@@ -5,7 +5,7 @@ What garam serves to a caller outside it: which listeners exist, what admits a c
 ## Contents
 - What it is
 - The surfaces
-- Planned authentication and enrollment profiles
+- Authentication and enrollment profiles
 - What admits a caller
 - What decides the rest
 - What a specification is authoritative for
@@ -55,35 +55,34 @@ polls, never by garam opening a connection to it
 [ADR-0013](./adr/0013-agent-messaging.md)), which is why every rule
 below is about what garam admits rather than about what it reaches.
 
-## Planned authentication and enrollment profiles
+## Authentication and enrollment profiles
 
-**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+**Built in part.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
 adds a standard client-assertion exchange and a common agent admission
-contract. The specifications still describe the current v1/v2 cohorts;
-no new endpoint or OAuth `Bearer` alias is served at `3beb156`.
+contract. The exchange, the OAuth `Bearer` alias and key issuance are
+served; `agent-enrollment.v1` is not, and the managed and standalone
+v1/v2 paths are what admit an agent.
 
-- `machine-token.v2` adds `POST /oauth/token` with the RFC 7523
-  client assertion parameters, the client credentials grant and OAuth
-  token/error responses. Its exact profile, including identity,
-  endpoint audience, RS256, lifetime and replay, is ADR-0102
-  §Assertion exchange profile and §Replay, rotation and revocation.
-  Existing `machine-token.v1` exchange/mint remains unchanged.
-- A planned `Bearer` alias resolves the same opaque access tokens as
-  `Garam-Token`, with the same route confinement, per-request reads,
-  v2 contract selection and rejection of combined credentials. It
-  changes no execution or operation header and enables no certificate
-  renewal route. Published schemas and tests must establish it first.
-- Browser-facing key issuance/replacement retains registration and
-  `operator:reissue` authorization, answering private PEM once and
-  thereafter public metadata alone; no secret readback is introduced.
-- `agent-enrollment.v1` adds one admission contract, whose managed and
-  direct cases differ by authorized placement. It allocates no workload
-  and activates nothing. The current managed/standalone v1/v2 paths
-  keep their approval bindings, retry behavior and refusal semantics.
-- The Garam implementation issues must update each affected listener's
-  specification, generated output and route/version tests. This docs
-  PR changes none of those artifacts, so the decision is a target and
-  the current specifications remain authoritative for what runs.
+- `machine-token.v2` is `exchangeClientAssertion`, `POST /oauth/token`
+  on the machine listener: RFC 7523's client assertion parameters, the
+  client credentials grant and RFC 6749's token and error responses.
+  `api/machine.yaml` §exchangeClientAssertion is authoritative for its
+  wire. `machine-token.v1`'s exchange and mint are unchanged.
+- The `Bearer` alias resolves the same opaque access tokens as
+  `Garam-Token`, with the same route confinement, per-request reads, v2
+  contract selection and refusal of combined credentials
+  ([machine-identity.md](./machine-identity.md) §Asymmetric Operator
+  exchange). It changes no execution or operation header and reaches
+  no certificate renewal route.
+- `issueOperatorKey`, `listOperatorKeys` and `revokeOperatorKey` on
+  the browser-facing listener answer a private PEM once and public
+  metadata thereafter; no secret is read back
+  ([operators.md](./operators.md) §Issued PEM identity).
+- **`agent-enrollment.v1` is unbuilt.** It adds one admission contract,
+  whose managed and direct cases differ by authorized placement; it
+  allocates no workload and activates nothing. The current
+  managed/standalone v1/v2 paths keep their approval bindings, retry
+  behavior and refusal semantics.
 
 [agents.md](./agents.md) §Common managed and direct enrollment owns
 admission; [operators.md](./operators.md) §Issued PEM identity owns
@@ -131,9 +130,10 @@ terms an agent does
 
 **Or a token, which is ADR-0100's direction and is built for an operator
 and an agent its operator holds.** An operator exchanges the credential
-its organization issued it for a one-hour token at `exchangeToken`, and
-presents the token as `Authorization: Garam-Token <token>` with no
-certificate
+its organization issued it for a one-hour token at `exchangeToken`, or
+a client assertion its key signed for the same token at
+`exchangeClientAssertion`, and presents the token as `Authorization:
+Garam-Token <token>`, or `Bearer <token>`, with no certificate
 ([ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)).
 The token is read on every request, beside the registration it rests on,
 so a deleted operator or a re-issued credential is refused from the next
@@ -165,7 +165,7 @@ enrolling exists to issue
 ([ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
 A connection whose certificate does not authenticate is not refused
 there either; it carries no identity instead, and every operation but
-four refuses a request that carries none. The identity a handler holds
+five refuses a request that carries none. The identity a handler holds
 is the one the handshake's own verification returned, so nothing
 derives it a second time and a certificate naming any GRN under a
 chain nothing signed reaches no handler that asks for one. Which
@@ -178,6 +178,10 @@ because what it answers is public: the keys a verifier anywhere checks
 garam's signature on a message with
 ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)),
 read at the issuer followed by `/message-signing-keys`.
+`exchangeClientAssertion` carries it as well, and is authenticated by
+the client assertion in its body, refusing a certificate or an
+`Authorization` header beside it
+([ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)).
 `exchangeToken` carries `machineCredential`, and is authenticated by
 the operator's credential.
 
@@ -193,10 +197,10 @@ true of every route.** `internal/machineapi/identity_test.go`, in
 `TestServer_EnrollmentsAndTheKeySetAreTheOnlyRoutesAnUncertifiedCallerReaches`,
 is authoritative for that: every operation `api/machine.yaml` declares
 except `POST /enrollment`, `POST /agent-enrollments`,
-`GET /message-signing-keys` and `POST /tokens` answers `401` naming the
-missing identity to a caller carrying none, sent from the same client
-that enrols, so what admitted those four was the route rather than a
-listener that had stopped checking.
+`GET /message-signing-keys`, `POST /tokens` and `POST /oauth/token`
+answers `401` naming the missing identity to a caller carrying none,
+sent from the same client that enrols, so what admitted those five was
+the route rather than a listener that had stopped checking.
 The routes it sends to are derived and not listed — read off the
 registration `make gen` writes from that specification, and held
 against the operation count of the generated interface — so an

@@ -26,7 +26,8 @@ import (
 // it holds, and a request that carries none reaches no handler that
 // asks for one.
 //
-// A request may present a token instead, under [TokenScheme]: then
+// A request may present a token instead, under [TokenScheme] or
+// [BearerScheme]: then
 // tokens is asked for that request, and what it answers is the
 // request's identity (ADR-0100). A request presenting a token over a
 // connection whose certificate authenticated is refused rather than
@@ -158,11 +159,14 @@ func identify(tokens Tokens, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cell, ok := authenticatedOf(r.Context())
 		certified := ok && cell.identity != nil
-		token, presented := tokenOf(r)
+		token, presented := PresentedToken(r)
 		switch {
 		case presented && certified:
 			refuse(w, r, next, errorx.New(errorx.KindUnauthenticated,
 				"machine: a request presents a token or a certificate, not both"))
+		case presented && len(r.Header.Values("Authorization")) > 1:
+			refuse(w, r, next, errorx.New(errorx.KindUnauthenticated,
+				"machine: a request presenting a token carries one Authorization header"))
 		case presented:
 			bearer, err := tokens.Resolve(r.Context(), token)
 			if err != nil {
@@ -188,12 +192,37 @@ func identify(tokens Tokens, next http.Handler) http.Handler {
 	})
 }
 
-// tokenOf returns the token a request presents under [TokenScheme].
-// Another scheme is not a token: the execution and operation headers
-// share Authorization on routes a certificate authenticates.
-func tokenOf(r *http.Request) (string, bool) {
-	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), TokenScheme+" ")
-	return token, ok
+// PresentedToken returns the token a request presents in any of its
+// Authorization headers, under [TokenScheme] or its alias
+// [BearerScheme] (ADR-0102), and whether it presents one. Another
+// scheme is not a token: the execution and operation headers share
+// Authorization on routes a certificate authenticates.
+//
+// It is the one reading of that header the listener and the routes
+// share, so the scheme that decides a request's identity also decides
+// its contract value and where its other values travel.
+func PresentedToken(r *http.Request) (string, bool) {
+	for _, value := range r.Header.Values("Authorization") {
+		if token, ok := tokenIn(value); ok {
+			return token, true
+		}
+	}
+	return "", false
+}
+
+// tokenIn reads one Authorization value. The bearer scheme matches
+// case-insensitively, as RFC 9110 has every scheme match, and a value
+// naming it presents a token however malformed the rest is, so a bad
+// one is refused rather than read as no token at all.
+func tokenIn(value string) (string, bool) {
+	if token, ok := strings.CutPrefix(value, TokenScheme+" "); ok {
+		return token, true
+	}
+	scheme, token, _ := strings.Cut(value, " ")
+	if strings.EqualFold(scheme, BearerScheme) {
+		return token, true
+	}
+	return "", false
 }
 
 // refuse hands next the request with no identity and the reason it

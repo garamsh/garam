@@ -147,6 +147,49 @@ func (q *Queries) DeleteOperatorCredential(ctx context.Context, operatorGrn stri
 	return err
 }
 
+const deleteOperatorKeyTokens = `-- name: DeleteOperatorKeyTokens :exec
+DELETE FROM operator_tokens WHERE key_id = ANY($1::bigint[])
+`
+
+func (q *Queries) DeleteOperatorKeyTokens(ctx context.Context, keyIds []int64) error {
+	_, err := q.db.Exec(ctx, deleteOperatorKeyTokens, keyIds)
+	return err
+}
+
+const getLiveOperatorKey = `-- name: GetLiveOperatorKey :one
+SELECT k.id, k.operator_grn, k.kid, k.algorithm, k.public_jwk, k.issued_by, k.issued_at,
+       k.retires_at, k.revoked_at, k.last_exchanged_at
+FROM operator_keys k
+JOIN operators o ON o.grn = k.operator_grn
+WHERE k.operator_grn = $1 AND k.kid = $2
+  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
+`
+
+type GetLiveOperatorKeyParams struct {
+	OperatorGrn string
+	Kid         string
+}
+
+// The live key a client's assertion names, looked up within that
+// client's registration alone (ADR-0102).
+func (q *Queries) GetLiveOperatorKey(ctx context.Context, arg GetLiveOperatorKeyParams) (OperatorKey, error) {
+	row := q.db.QueryRow(ctx, getLiveOperatorKey, arg.OperatorGrn, arg.Kid)
+	var i OperatorKey
+	err := row.Scan(
+		&i.ID,
+		&i.OperatorGrn,
+		&i.Kid,
+		&i.Algorithm,
+		&i.PublicJwk,
+		&i.IssuedBy,
+		&i.IssuedAt,
+		&i.RetiresAt,
+		&i.RevokedAt,
+		&i.LastExchangedAt,
+	)
+	return i, err
+}
+
 const getOperator = `-- name: GetOperator :one
 SELECT o.grn, o.org_grn, o.registered_by, o.created_at, o.name, o.description, o.control_endpoint,
        c.issued_at AS certificate_issued_at,
@@ -211,6 +254,32 @@ func (q *Queries) GetOperatorCredentialHolder(ctx context.Context, credentialHas
 	return i, err
 }
 
+const holdLiveOperatorKey = `-- name: HoldLiveOperatorKey :one
+SELECT now()::timestamptz AS decided_at
+FROM operator_keys k
+JOIN operators o ON o.grn = k.operator_grn
+WHERE k.id = $1 AND k.operator_grn = $2
+  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
+FOR NO KEY UPDATE OF k
+`
+
+type HoldLiveOperatorKeyParams struct {
+	ID          int64
+	OperatorGrn string
+}
+
+// An exchange holds the verifying key's row, rereading that it is
+// still live, under the lock a withdrawal's update takes too: a
+// withdrawal either commits first and this answers no row, or waits
+// and deletes the token this exchange records. It answers the
+// database's time, which the assertion's dates are measured against.
+func (q *Queries) HoldLiveOperatorKey(ctx context.Context, arg HoldLiveOperatorKeyParams) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, holdLiveOperatorKey, arg.ID, arg.OperatorGrn)
+	var decided_at pgtype.Timestamptz
+	err := row.Scan(&decided_at)
+	return decided_at, err
+}
+
 const insertOperatorCredential = `-- name: InsertOperatorCredential :exec
 INSERT INTO operator_credentials (operator_grn, credential_hash, issued_by, issued_at)
 VALUES ($1, $2, $3, $4)
@@ -231,6 +300,129 @@ func (q *Queries) InsertOperatorCredential(ctx context.Context, arg InsertOperat
 		arg.IssuedAt,
 	)
 	return err
+}
+
+const insertOperatorKey = `-- name: InsertOperatorKey :one
+INSERT INTO operator_keys (operator_grn, kid, algorithm, public_jwk, issued_by, issued_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6)
+RETURNING id
+`
+
+type InsertOperatorKeyParams struct {
+	OperatorGrn string
+	Kid         string
+	Algorithm   string
+	PublicJwk   string
+	IssuedBy    string
+	IssuedAt    pgtype.Timestamptz
+}
+
+func (q *Queries) InsertOperatorKey(ctx context.Context, arg InsertOperatorKeyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, insertOperatorKey,
+		arg.OperatorGrn,
+		arg.Kid,
+		arg.Algorithm,
+		arg.PublicJwk,
+		arg.IssuedBy,
+		arg.IssuedAt,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const listLiveOperatorKeys = `-- name: ListLiveOperatorKeys :many
+SELECT id, retires_at FROM operator_keys
+WHERE operator_grn = $1 AND revoked_at IS NULL AND (retires_at IS NULL OR retires_at > now())
+ORDER BY issued_at, id
+`
+
+type ListLiveOperatorKeysRow struct {
+	ID        int64
+	RetiresAt pgtype.Timestamptz
+}
+
+// The keys an operator holds live at the database's time: neither
+// withdrawn nor past a planned rotation's deadline.
+func (q *Queries) ListLiveOperatorKeys(ctx context.Context, operatorGrn string) ([]ListLiveOperatorKeysRow, error) {
+	rows, err := q.db.Query(ctx, listLiveOperatorKeys, operatorGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLiveOperatorKeysRow
+	for rows.Next() {
+		var i ListLiveOperatorKeysRow
+		if err := rows.Scan(&i.ID, &i.RetiresAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOperatorKeys = `-- name: ListOperatorKeys :many
+SELECT id, operator_grn, kid, algorithm, public_jwk, issued_by, issued_at, retires_at, revoked_at, last_exchanged_at,
+       (CASE
+            WHEN revoked_at IS NOT NULL OR retires_at <= now() THEN 'revoked'
+            WHEN retires_at IS NOT NULL THEN 'retiring'
+            ELSE 'active'
+        END)::text AS state
+FROM operator_keys
+WHERE operator_grn = $1
+ORDER BY issued_at, id
+`
+
+type ListOperatorKeysRow struct {
+	ID              int64
+	OperatorGrn     string
+	Kid             string
+	Algorithm       string
+	PublicJwk       string
+	IssuedBy        string
+	IssuedAt        pgtype.Timestamptz
+	RetiresAt       pgtype.Timestamptz
+	RevokedAt       pgtype.Timestamptz
+	LastExchangedAt pgtype.Timestamptz
+	State           string
+}
+
+// Every key the operator was issued, with the state the database's
+// time puts it in.
+func (q *Queries) ListOperatorKeys(ctx context.Context, operatorGrn string) ([]ListOperatorKeysRow, error) {
+	rows, err := q.db.Query(ctx, listOperatorKeys, operatorGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOperatorKeysRow
+	for rows.Next() {
+		var i ListOperatorKeysRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OperatorGrn,
+			&i.Kid,
+			&i.Algorithm,
+			&i.PublicJwk,
+			&i.IssuedBy,
+			&i.IssuedAt,
+			&i.RetiresAt,
+			&i.RevokedAt,
+			&i.LastExchangedAt,
+			&i.State,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listOperatorsByOrg = `-- name: ListOperatorsByOrg :many
@@ -295,6 +487,33 @@ func (q *Queries) LockOperatorCredential(ctx context.Context, id int64) (int64, 
 	return id_2, err
 }
 
+const lockOperatorRegistration = `-- name: LockOperatorRegistration :one
+SELECT grn FROM operators WHERE grn = $1 FOR UPDATE
+`
+
+// Holds the operator's registration while its keys change, so two
+// issuances at once cannot both find room under the bound (ADR-0102).
+func (q *Queries) LockOperatorRegistration(ctx context.Context, grn string) (string, error) {
+	row := q.db.QueryRow(ctx, lockOperatorRegistration, grn)
+	var grn_2 string
+	err := row.Scan(&grn_2)
+	return grn_2, err
+}
+
+const markOperatorKeyExchanged = `-- name: MarkOperatorKeyExchanged :exec
+UPDATE operator_keys SET last_exchanged_at = $1 WHERE id = $2
+`
+
+type MarkOperatorKeyExchangedParams struct {
+	At pgtype.Timestamptz
+	ID int64
+}
+
+func (q *Queries) MarkOperatorKeyExchanged(ctx context.Context, arg MarkOperatorKeyExchangedParams) error {
+	_, err := q.db.Exec(ctx, markOperatorKeyExchanged, arg.At, arg.ID)
+	return err
+}
+
 const mintOperatorEnrollment = `-- name: MintOperatorEnrollment :exec
 WITH pruned AS (
     DELETE FROM operator_enrollment_tokens
@@ -350,13 +569,60 @@ func (q *Queries) MintOperatorEnrollment(ctx context.Context, arg MintOperatorEn
 	return err
 }
 
+const operatorKeyExists = `-- name: OperatorKeyExists :one
+SELECT EXISTS (SELECT 1 FROM operator_keys WHERE operator_grn = $1 AND kid = $2)
+`
+
+type OperatorKeyExistsParams struct {
+	OperatorGrn string
+	Kid         string
+}
+
+func (q *Queries) OperatorKeyExists(ctx context.Context, arg OperatorKeyExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, operatorKeyExists, arg.OperatorGrn, arg.Kid)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const recordOperatorKeyToken = `-- name: RecordOperatorKeyToken :exec
+WITH swept AS (
+    DELETE FROM operator_tokens
+    WHERE operator_grn = $3 AND expires_at <= now()
+)
+INSERT INTO operator_tokens (token_hash, key_id, operator_grn, audience_grn, issued_at, expires_at)
+VALUES ($1, $2::bigint, $3,
+        $4, $5, $6)
+`
+
+type RecordOperatorKeyTokenParams struct {
+	TokenHash   string
+	KeyID       int64
+	OperatorGrn string
+	AudienceGrn pgtype.Text
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
+func (q *Queries) RecordOperatorKeyToken(ctx context.Context, arg RecordOperatorKeyTokenParams) error {
+	_, err := q.db.Exec(ctx, recordOperatorKeyToken,
+		arg.TokenHash,
+		arg.KeyID,
+		arg.OperatorGrn,
+		arg.AudienceGrn,
+		arg.IssuedAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
 const recordOperatorToken = `-- name: RecordOperatorToken :exec
 WITH swept AS (
     DELETE FROM operator_tokens
     WHERE operator_grn = $3 AND expires_at <= now()
 )
 INSERT INTO operator_tokens (token_hash, credential_id, operator_grn, audience_grn, issued_at, expires_at)
-VALUES ($1, $2, $3,
+VALUES ($1, $2::bigint, $3,
         $4, $5, $6)
 `
 
@@ -389,7 +655,10 @@ const resolveOperatorToken = `-- name: ResolveOperatorToken :one
 SELECT t.operator_grn, t.audience_grn, t.expires_at
 FROM operator_tokens t
 JOIN operators o ON o.grn = t.operator_grn
+LEFT JOIN operator_keys k ON k.id = t.key_id
 WHERE t.token_hash = $1 AND t.expires_at > now()
+  AND (t.key_id IS NULL
+       OR (k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())))
 `
 
 type ResolveOperatorTokenRow struct {
@@ -398,14 +667,82 @@ type ResolveOperatorTokenRow struct {
 	ExpiresAt   pgtype.Timestamptz
 }
 
-// The read every request presenting a token takes (ADR-0100): the
-// token's row joined to the registration it rests on, so a deleted
-// operator or a re-issued credential refuses it from the next request.
+// The read every request presenting a token takes (ADR-0100,
+// ADR-0102): the token's row joined to the registration it rests on
+// and, for one exchanged under a key, to that key while it is live, so
+// a deleted operator, a re-issued credential, a withdrawn key and a
+// planned rotation's passed deadline each refuse it from the next
+// request.
 func (q *Queries) ResolveOperatorToken(ctx context.Context, tokenHash string) (ResolveOperatorTokenRow, error) {
 	row := q.db.QueryRow(ctx, resolveOperatorToken, tokenHash)
 	var i ResolveOperatorTokenRow
 	err := row.Scan(&i.OperatorGrn, &i.AudienceGrn, &i.ExpiresAt)
 	return i, err
+}
+
+const retireOperatorKey = `-- name: RetireOperatorKey :exec
+UPDATE operator_keys SET retires_at = now() + $1::bigint * interval '1 second'
+WHERE id = $2 AND retires_at IS NULL
+`
+
+type RetireOperatorKeyParams struct {
+	WindowSeconds int64
+	ID            int64
+}
+
+// A planned rotation starts the predecessor's rollover window, and
+// leaves an earlier deadline where one is already set.
+func (q *Queries) RetireOperatorKey(ctx context.Context, arg RetireOperatorKeyParams) error {
+	_, err := q.db.Exec(ctx, retireOperatorKey, arg.WindowSeconds, arg.ID)
+	return err
+}
+
+const revokeLiveOperatorKeys = `-- name: RevokeLiveOperatorKeys :many
+UPDATE operator_keys SET revoked_at = now()
+WHERE operator_grn = $1 AND revoked_at IS NULL AND (retires_at IS NULL OR retires_at > now())
+RETURNING id
+`
+
+// Withdraws every live key of the operator and answers which, so the
+// same write deletes their tokens.
+func (q *Queries) RevokeLiveOperatorKeys(ctx context.Context, operatorGrn string) ([]int64, error) {
+	rows, err := q.db.Query(ctx, revokeLiveOperatorKeys, operatorGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const revokeOperatorKey = `-- name: RevokeOperatorKey :one
+UPDATE operator_keys SET revoked_at = now()
+WHERE operator_grn = $1 AND kid = $2 AND revoked_at IS NULL
+RETURNING id
+`
+
+type RevokeOperatorKeyParams struct {
+	OperatorGrn string
+	Kid         string
+}
+
+// Withdraws one key the operator holds, live or past its deadline, and
+// answers its row; a key already withdrawn answers none.
+func (q *Queries) RevokeOperatorKey(ctx context.Context, arg RevokeOperatorKeyParams) (int64, error) {
+	row := q.db.QueryRow(ctx, revokeOperatorKey, arg.OperatorGrn, arg.Kid)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const setOperatorControlEndpoint = `-- name: SetOperatorControlEndpoint :execrows
@@ -429,6 +766,28 @@ func (q *Queries) SetOperatorControlEndpoint(ctx context.Context, arg SetOperato
 	return result.RowsAffected(), nil
 }
 
+const spendOperatorAssertion = `-- name: SpendOperatorAssertion :one
+INSERT INTO operator_assertions (operator_grn, jti, expires_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (operator_grn, jti) DO NOTHING
+RETURNING jti
+`
+
+type SpendOperatorAssertionParams struct {
+	OperatorGrn string
+	Jti         string
+	ExpiresAt   pgtype.Timestamptz
+}
+
+// Spends a (client, jti). A conflict answers no row: the assertion was
+// spent already, by this replica or another (ADR-0102).
+func (q *Queries) SpendOperatorAssertion(ctx context.Context, arg SpendOperatorAssertionParams) (string, error) {
+	row := q.db.QueryRow(ctx, spendOperatorAssertion, arg.OperatorGrn, arg.Jti, arg.ExpiresAt)
+	var jti string
+	err := row.Scan(&jti)
+	return jti, err
+}
+
 const spendOperatorEnrollment = `-- name: SpendOperatorEnrollment :one
 DELETE FROM operator_enrollment_tokens
 WHERE token_hash = $1 AND expires_at > now()
@@ -447,12 +806,46 @@ func (q *Queries) SpendOperatorEnrollment(ctx context.Context, tokenHash string)
 	return operator_grn, err
 }
 
-const trimOperatorTokens = `-- name: TrimOperatorTokens :exec
+const sweepOperatorAssertions = `-- name: SweepOperatorAssertions :exec
+DELETE FROM operator_assertions WHERE operator_grn = $1 AND expires_at <= now()
+`
+
+// Drops the client's spent identifiers past their keeping. It is a
+// statement of its own rather than the spend's CTE, which would share
+// the spend's snapshot and still conflict with a row it deletes.
+func (q *Queries) SweepOperatorAssertions(ctx context.Context, operatorGrn string) error {
+	_, err := q.db.Exec(ctx, sweepOperatorAssertions, operatorGrn)
+	return err
+}
+
+const trimOperatorKeyTokens = `-- name: TrimOperatorKeyTokens :exec
 DELETE FROM operator_tokens t
-WHERE t.credential_id = $1
+WHERE t.key_id = $1::bigint
   AND t.token_hash NOT IN (
       SELECT k.token_hash FROM operator_tokens k
-      WHERE k.credential_id = $1
+      WHERE k.key_id = $1::bigint
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT $2)
+`
+
+type TrimOperatorKeyTokensParams struct {
+	KeyID int64
+	Keep  int32
+}
+
+// Keeps the key's newest tokens and drops the rest, the bound a
+// credential's tokens have too.
+func (q *Queries) TrimOperatorKeyTokens(ctx context.Context, arg TrimOperatorKeyTokensParams) error {
+	_, err := q.db.Exec(ctx, trimOperatorKeyTokens, arg.KeyID, arg.Keep)
+	return err
+}
+
+const trimOperatorTokens = `-- name: TrimOperatorTokens :exec
+DELETE FROM operator_tokens t
+WHERE t.credential_id = $1::bigint
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM operator_tokens k
+      WHERE k.credential_id = $1::bigint
       ORDER BY k.issued_at DESC, k.token_hash DESC
       LIMIT $2)
 `

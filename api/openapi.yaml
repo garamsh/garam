@@ -1422,6 +1422,131 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/operators/{operator}/keys:
+    get:
+      operationId: listOperatorKeys
+      tags: [operator]
+      summary: List the keys an operator was issued, with where each stands.
+      description: >-
+        Every key the operator was issued, withdrawn ones included,
+        oldest first (ADR-0102). Each answers its public record alone:
+        the fingerprint an assertion names it by, its algorithm, its
+        state at garam's database time and when it last obtained a
+        token. No private key exists here to answer; garam answered it
+        once, to the caller of `issueOperatorKey`, and keeps nowhere.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/operator'
+      responses:
+        '200':
+          description: The operator's keys.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorKeyList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: issueOperatorKey
+      tags: [operator]
+      summary: Issue a registered operator a private key, shown once.
+      description: >-
+        Generates a 3072-bit RSA key for the operator and answers its
+        private half once, as PKCS#8 `PRIVATE KEY` PEM, beside its
+        public fingerprint, the operator's `clientId` and the
+        `tokenUrl` its assertions name as their audience (ADR-0102).
+        garam keeps the public key alone: the private key is never
+        stored, logged or answered again, and a lost answer is recovered
+        by issuing anew with `rotation` `immediate`. The answer is not
+        cached. An Operator has two registered identities — its manager
+        and its control service — and each is issued its own key here.
+
+        It is the one route that issues a key; registering issues none.
+        The first key of an operator holding no live one is authorized
+        by `operator:register`, as registering it was. Any other —
+        beside or in place of a live key — is `operator:reissue`, and a
+        caller holding only the first finds an operator with a live key
+        refused with 403.
+
+        `rotation` says how the key stands beside the ones the operator
+        holds. `planned` adds it beside the key in use, which goes on
+        verifying for 24 hours and is then withdrawn by itself; a third
+        live key is refused with 409 until one is withdrawn. `immediate`
+        withdraws every live key, and every token exchanged under one,
+        before the new key verifies anything: the answer to a
+        compromised key or a lost answer. An operator's agents keep
+        their own tokens across either, and recovering them is separate.
+
+        One process issues at most 3 keys per operator and 30 in all per
+        minute, and answers 429 with `Retry-After` past either. Where
+        no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no
+        key is issued and the route answers 503: an assertion could name
+        no audience garam accepts.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/operator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatorKeyIssuance'
+      responses:
+        '201':
+          description: Key issued, its private half shown once.
+          headers:
+            Cache-Control:
+              description: '`no-store`: the answer carries a private key no cache keeps.'
+              schema:
+                type: string
+                enum: [no-store]
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuedOperatorKey'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/operators/{operator}/keys/{kid}:
+    delete:
+      operationId: revokeOperatorKey
+      tags: [operator]
+      summary: Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+      description: >-
+        Withdraws the key (ADR-0102). **It stops verifying assertions,
+        and every token exchanged under it stops authenticating, at the
+        moment this returns**: the next request presenting one is
+        refused, on a connection already open too, and an exchange
+        racing the withdrawal either finishes first and has its token
+        withdrawn here, or finds the key withdrawn and obtains nothing.
+        The key's record stays, listed as `revoked`. Withdrawing a key
+        already withdrawn answers 204 again.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/operator'
+        - $ref: '#/components/parameters/kid'
+      responses:
+        '204':
+          description: Key withdrawn, with its tokens.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/operators/{operator}/enrollment:
     post:
       operationId: mintOperatorEnrollment
@@ -2228,6 +2353,14 @@ components:
       x-go-name: TemplateSlug
       schema:
         type: string
+    kid:
+      name: kid
+      in: path
+      required: true
+      description: A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint.
+      x-go-name: KeyID
+      schema:
+        type: string
     operator:
       name: operator
       in: path
@@ -2959,6 +3092,100 @@ components:
         issuedAt:
           type: string
           format: date-time
+    OperatorKeyIssuance:
+      type: object
+      description: How an issued key stands beside the keys the operator holds (ADR-0102).
+      required: [rotation]
+      properties:
+        rotation:
+          type: string
+          enum: [planned, immediate]
+          description: >-
+            `planned` adds the key beside the one in use, which is
+            withdrawn by itself 24 hours later; `immediate` withdraws
+            every live key and its tokens first. For an operator holding
+            no live key the two are the same.
+    IssuedOperatorKey:
+      type: object
+      description: >-
+        A key garam generated for an operator, answered once. Place
+        `privateKeyPem` and `tokenUrl` in the operator's cluster for the
+        identity `clientId` names; garam cannot answer the private key a
+        second time.
+      required: [key, privateKeyPem, clientId, tokenUrl]
+      properties:
+        key:
+          $ref: '#/components/schemas/OperatorKey'
+        privateKeyPem:
+          type: string
+          description: >-
+            The private key, PKCS#8 `PRIVATE KEY` PEM, answered once.
+            Show it once and say it cannot be shown again. It is placed
+            in the operator's cluster as a file only the operator's
+            process reads, and never in an environment variable, a
+            command line, an image or source control.
+        clientId:
+          type: string
+          description: The operator's canonical GRN, which its assertions name as `iss`, `sub` and `client_id`.
+          example: grn:acme:default:operator:controller
+        tokenUrl:
+          type: string
+          format: uri
+          description: >-
+            The token endpoint's absolute URL, which an assertion's
+            `aud` equals byte for byte. It is garam's configured value
+            and need not be the address the operator dials.
+          example: https://machine.garam.example/oauth/token
+    OperatorKeyList:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperatorKey'
+    OperatorKey:
+      type: object
+      description: The public record of one key an operator was issued (ADR-0102). It carries no private material.
+      required: [kid, algorithm, state, issuedAt]
+      properties:
+        kid:
+          type: string
+          description: >-
+            The key's fingerprint: the base64url SHA-256 RFC 7638
+            thumbprint of its public key, which an assertion's protected
+            `kid` names. Confirm it against the installed key before
+            withdrawing a predecessor.
+        algorithm:
+          type: string
+          enum: [RS256]
+        state:
+          $ref: '#/components/schemas/OperatorKeyState'
+        issuedAt:
+          type: string
+          format: date-time
+        retiresAt:
+          type: string
+          format: date-time
+          description: When a planned rotation withdraws the key, where one set it.
+        revokedAt:
+          type: string
+          format: date-time
+          description: When the key was withdrawn, where it was.
+        lastExchangedAt:
+          type: string
+          format: date-time
+          description: When an assertion the key signed last obtained a token, where one has.
+    OperatorKeyState:
+      type: string
+      enum: [active, retiring, revoked]
+      x-enum-varnames: [OperatorKeyActive, OperatorKeyRetiring, OperatorKeyRevoked]
+      description: >-
+        Where a key stands at garam's database time. `active` verifies
+        assertions; `retiring` verifies them until `retiresAt`, which a
+        planned successor set; `revoked` verifies nothing, because it
+        was withdrawn or its `retiresAt` has passed, and the tokens
+        exchanged under it authenticate nothing.
     OperatorEnrollment:
       type: object
       description: >-

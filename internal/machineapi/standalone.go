@@ -194,7 +194,8 @@ func ConfineSupervisors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		identity, ok := machine.IdentityOf(r)
 		if ok && identity.GRN().ServiceType == agent.ServiceTypeSupervisor && !supervisorRoutes[r.Pattern] &&
-			(identity.Method() != machine.MethodToken || !supervisorTokenRoutes[r.Pattern]) {
+			(identity.Method() != machine.MethodToken || !supervisorTokenRoutes[r.Pattern]) &&
+			r.Pattern != clientAssertionRoute {
 			writeError(w, errorx.New(errorx.KindPermissionDenied, "a supervisor reaches its lifecycle routes alone"))
 			return
 		}

@@ -120,7 +120,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 		oauth_states, password_credentials, password_attempts,
 		policies, policy_versions, policy_attachments, agents,
 		agent_assignments, agent_definitions, operators, certificate_authorities,
-		operator_certificates,
+		operator_certificates, operator_assertions,
 		messages, message_consents, message_signing_keys, agent_watches CASCADE`)
 	require.NoError(t, err)
 }
@@ -3135,6 +3135,12 @@ func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, *grpc
 // listener's own address.
 const testIssuer message.Issuer = "https://garam.test"
 
+// testTokenURL is the token endpoint every listener here is configured
+// with, which an operator's assertion names as its audience (ADR-0102).
+// It is not the listener's address: the audience is garam's configured
+// value, not the one a caller dials.
+const testTokenURL = "https://garam.test/oauth/token"
+
 // machineListener serves the server `garam serve machine` builds,
 // over the stores Postgres holds, and returns its URL. What the command
 // reads from its configuration is supplied here instead: the sealer and
@@ -3151,6 +3157,7 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grp
 		Delivery:    briefDelivery(),
 		Engine:      engine,
 		Logger:      slog.New(slog.NewJSONHandler(io.Discard, nil)),
+		TokenURL:    testTokenURL,
 	})
 	require.NoError(t, err)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")

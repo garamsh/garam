@@ -14,6 +14,36 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ClientAssertionRequestClientAssertionType.
+const (
+	UrnIetfParamsOauthClientAssertionTypeJwtBearer ClientAssertionRequestClientAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+)
+
+// Valid indicates whether the value is a known member of the ClientAssertionRequestClientAssertionType enum.
+func (e ClientAssertionRequestClientAssertionType) Valid() bool {
+	switch e {
+	case UrnIetfParamsOauthClientAssertionTypeJwtBearer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ClientAssertionRequestGrantType.
+const (
+	ClientCredentials ClientAssertionRequestGrantType = "client_credentials"
+)
+
+// Valid indicates whether the value is a known member of the ClientAssertionRequestGrantType enum.
+func (e ClientAssertionRequestGrantType) Valid() bool {
+	switch e {
+	case ClientCredentials:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CutoverClass.
 const (
 	BlockedUnparseable CutoverClass = "blocked:unparseable"
@@ -245,6 +275,51 @@ func (e MessageState) Valid() bool {
 	}
 }
 
+// Defines values for OAuthErrorError.
+const (
+	InvalidClient          OAuthErrorError = "invalid_client"
+	InvalidRequest         OAuthErrorError = "invalid_request"
+	InvalidScope           OAuthErrorError = "invalid_scope"
+	ServerError            OAuthErrorError = "server_error"
+	TemporarilyUnavailable OAuthErrorError = "temporarily_unavailable"
+	UnsupportedGrantType   OAuthErrorError = "unsupported_grant_type"
+)
+
+// Valid indicates whether the value is a known member of the OAuthErrorError enum.
+func (e OAuthErrorError) Valid() bool {
+	switch e {
+	case InvalidClient:
+		return true
+	case InvalidRequest:
+		return true
+	case InvalidScope:
+		return true
+	case ServerError:
+		return true
+	case TemporarilyUnavailable:
+		return true
+	case UnsupportedGrantType:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OAuthTokenTokenType.
+const (
+	Bearer OAuthTokenTokenType = "Bearer"
+)
+
+// Valid indicates whether the value is a known member of the OAuthTokenTokenType enum.
+func (e OAuthTokenTokenType) Valid() bool {
+	switch e {
+	case Bearer:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OperationBindingOperation.
 const (
 	AgentConfigure       OperationBindingOperation = "agent:configure"
@@ -432,6 +507,26 @@ type Claim struct {
 	// Watchers How many streams garam was holding for this agent when it answered, which is what says whether to forward the turn's events (ADR-0022). Zero is the ordinary answer and the field is always here: garam stores nothing for an agent nobody watches, so it is answered in the same shape as one somebody watches. Every renewal carries the count again, so a person who opened the view mid-turn is seen without a call of their own — and one who left is stopped forwarding to.
 	Watchers int `json:"watchers"`
 }
+
+// ClientAssertionRequest The client credentials request `exchangeClientAssertion` reads (ADR-0102). Each parameter appears once.
+type ClientAssertionRequest struct {
+	// Audience The GRN of another operator of the caller's organization the token is to be shown to. Absent, the token is garam's.
+	Audience *string `json:"audience,omitempty"`
+
+	// ClientAssertion One compact RS256 JWT the operator's private key signed; never the key itself.
+	ClientAssertion     string                                    `json:"client_assertion"`
+	ClientAssertionType ClientAssertionRequestClientAssertionType `json:"client_assertion_type"`
+
+	// ClientId The operator's canonical GRN, which the assertion's `iss` and `sub` equal.
+	ClientId  string                          `json:"client_id"`
+	GrantType ClientAssertionRequestGrantType `json:"grant_type"`
+}
+
+// ClientAssertionRequestClientAssertionType defines model for ClientAssertionRequest.ClientAssertionType.
+type ClientAssertionRequestClientAssertionType string
+
+// ClientAssertionRequestGrantType defines model for ClientAssertionRequest.GrantType.
+type ClientAssertionRequestGrantType string
 
 // ControllerIntrospection defines model for ControllerIntrospection.
 type ControllerIntrospection struct {
@@ -797,6 +892,29 @@ type MessageSubmission struct {
 	Recipient string `json:"recipient"`
 }
 
+// OAuthError RFC 6749's error response (ADR-0102).
+type OAuthError struct {
+	// Error `invalid_request` for a malformed or repeated parameter, a client certificate or `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+	Error            OAuthErrorError `json:"error"`
+	ErrorDescription *string         `json:"error_description,omitempty"`
+}
+
+// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a client certificate or `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+type OAuthErrorError string
+
+// OAuthToken RFC 6749's successful token response (ADR-0102).
+type OAuthToken struct {
+	// AccessToken The token, prefixed `garam_ot_` and opaque, presented as `Authorization: Bearer` or `Garam-Token`. garam stores only its hash.
+	AccessToken string `json:"access_token"`
+
+	// ExpiresIn Seconds the token is accepted for, 3600.
+	ExpiresIn int                 `json:"expires_in"`
+	TokenType OAuthTokenTokenType `json:"token_type"`
+}
+
+// OAuthTokenTokenType defines model for OAuthToken.TokenType.
+type OAuthTokenTokenType string
+
 // OperationBinding defines model for OperationBinding.
 type OperationBinding struct {
 	// ActorGrn The user the operation is performed for.
@@ -1155,6 +1273,9 @@ type EnrollOperatorJSONRequestBody = Enrollment
 // PostMessageJSONRequestBody defines body for PostMessage for application/json ContentType.
 type PostMessageJSONRequestBody = MessageSubmission
 
+// ExchangeClientAssertionFormdataRequestBody defines body for ExchangeClientAssertion for application/x-www-form-urlencoded ContentType.
+type ExchangeClientAssertionFormdataRequestBody = ClientAssertionRequest
+
 // IntrospectOperationAuthorityJSONRequestBody defines body for IntrospectOperationAuthority for application/json ContentType.
 type IntrospectOperationAuthorityJSONRequestBody = AuthorityIntrospection
 
@@ -1256,6 +1377,9 @@ type ServerInterface interface {
 	// GetMessageStatus Read how far a message the caller sent has got.
 	// (GET /messages/{message})
 	GetMessageStatus(w http.ResponseWriter, r *http.Request, messageId MessageId)
+	// ExchangeClientAssertion Exchange an operator's signed client assertion for a short-lived token.
+	// (POST /oauth/token)
+	ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 	// IntrospectOperationAuthority Read what an operation authority binds, once current state still authorizes it.
 	// (POST /operation-authorities/introspection)
 	IntrospectOperationAuthority(w http.ResponseWriter, r *http.Request, params IntrospectOperationAuthorityParams)
@@ -2232,6 +2356,20 @@ func (siw *ServerInterfaceWrapper) GetMessageStatus(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ExchangeClientAssertion operation middleware
+func (siw *ServerInterfaceWrapper) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExchangeClientAssertion(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // IntrospectOperationAuthority operation middleware
 func (siw *ServerInterfaceWrapper) IntrospectOperationAuthority(w http.ResponseWriter, r *http.Request) {
 
@@ -2697,6 +2835,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetIdentity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/identity/certificate", wrapper.RenewIdentityCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tokens", wrapper.ExchangeToken)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/oauth/token", wrapper.ExchangeClientAssertion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/enrollment", wrapper.EnrollOperator)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/certificate", wrapper.IssueAgentCertificate)

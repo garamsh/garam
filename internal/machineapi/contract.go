@@ -49,7 +49,8 @@ func served(w http.ResponseWriter, r *http.Request, version string, values contr
 	return true
 }
 
-// tokenBorne reports whether r presents a token, which decides the
+// tokenBorne reports whether r presents a token, under either scheme,
+// which decides the
 // contract value it is served under and where the values that share
 // Authorization beside a certificate travel instead (ADR-0100). It reads
 // the scheme presented and not whether the token proved anything, so a
@@ -57,7 +58,8 @@ func served(w http.ResponseWriter, r *http.Request, version string, values contr
 // reaches the refusal the listener read, rather than one naming the
 // certificate's value.
 func tokenBorne(r *http.Request) bool {
-	return strings.HasPrefix(r.Header.Get("Authorization"), machine.TokenScheme+" ")
+	_, presented := machine.PresentedToken(r)
+	return presented
 }
 
 // operationOf answers the operation authority or reference r carries:

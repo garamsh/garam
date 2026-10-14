@@ -93,6 +93,10 @@ func serveMachine(cmd *cobra.Command) error {
 	if err != nil {
 		return errorx.Wrap(err, string(envMachineIssuer))
 	}
+	tokenURL, err := operator.ParseTokenEndpoint(envOr(envMachineTokenURL, ""))
+	if err != nil {
+		return errorx.Wrap(err, string(envMachineTokenURL))
+	}
 
 	// Whom an agent may send to is decided by the policy engine, which
 	// runs as a process of its own and is reached over gRPC (ADR-0003).
@@ -121,6 +125,7 @@ func serveMachine(cmd *cobra.Command) error {
 		// for another value.
 		Delivery:           message.Config{},
 		AgentTokenLifetime: tokenLifetime,
+		TokenURL:           tokenURL,
 		Engine:             conn,
 		Logger:             obs.logger,
 		Metrics:            obs.registry,
@@ -180,6 +185,10 @@ type MachineConfig struct {
 	// AgentTokenLifetime is how long an agent token is accepted
 	// (ADR-0100); zero is the default, and agent.NewService bounds it.
 	AgentTokenLifetime time.Duration
+	// TokenURL is the token endpoint URL an operator's assertion names
+	// as its audience, which operator.ParseTokenEndpoint read
+	// (ADR-0102). Empty serves no assertion exchange.
+	TokenURL string
 	// Metrics is where the count of requests by how they authenticated
 	// is registered (ADR-0100). Nil registers it nowhere.
 	Metrics prometheus.Registerer
@@ -199,6 +208,10 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	if err != nil {
 		return nil, err
 	}
+	exchanges, err := newTokenExchangeCounter(cfg.Metrics)
+	if err != nil {
+		return nil, err
+	}
 
 	authorities := capg.New(pool)
 	issuer, err := ca.NewService(authorities, cfg.Sealer, cfg.Authority)
@@ -214,7 +227,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// credential is exchanged for.
 	operatorStore := operator.NewPostgresStore(pool)
 	operators := operator.NewService(operatorStore, operatorStore, operatorStore,
-		operatorCertificates{issuer: issuer, serverRoot: cfg.ServerRoot}, operator.Config{})
+		operatorCertificates{issuer: issuer, serverRoot: cfg.ServerRoot}, operator.Config{TokenEndpoint: cfg.TokenURL})
 	// An agent token's start is backdated by the allowance a
 	// certificate's is, and its audience is an operator the
 	// organization registered (ADR-0100).
@@ -275,7 +288,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			newSupervisorService(pool, cfg.Engine, issuer, cfg.ServerRoot, cfg.Now), keyring),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineTokens, machineapi.ConfineSupervisors, machineapi.RecoverPanics,
-				obs.logMachineRequests, countMachineRequests(requests)},
+				obs.logMachineRequests, countMachineRequests(requests), countTokenExchanges(exchanges)},
 			// A parameter the router cannot bind is refused before any
 			// handler runs, so this is the only place the surface's own
 			// error body reaches that refusal.

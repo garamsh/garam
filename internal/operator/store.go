@@ -38,6 +38,23 @@ type Store interface {
 	// answers ErrOperatorNotFound where the organization holds no record
 	// under that GRN.
 	ReissueCredential(ctx context.Context, c *IssuedCredential) error
+	// IssueKey records k's public key for its operator as rotation
+	// says it stands beside the keys already held, and answers its
+	// public record (ADR-0102). KeyRotationImmediate withdraws every
+	// live key and deletes its tokens in the same write; planned
+	// starts the predecessor's RolloverWindow and refuses a third live
+	// key with ErrKeyLimit; first refuses an operator holding a live
+	// key with ErrOperatorHoldsKey. It answers ErrOperatorNotFound
+	// where the organization holds no record under that GRN.
+	IssueKey(ctx context.Context, k *IssuedKey, rotation KeyRotation) (Key, error)
+	// ListKeys answers every key the operator was issued, withdrawn
+	// ones included, oldest first, or ErrOperatorNotFound.
+	ListKeys(ctx context.Context, g grn.GRN) ([]Key, error)
+	// RevokeKey withdraws the operator's key kid and deletes its
+	// tokens in one write, so the next request presenting one is
+	// refused (ADR-0102). A key already withdrawn answers nil; one the
+	// operator was never issued answers ErrKeyNotFound.
+	RevokeKey(ctx context.Context, g grn.GRN, kid string) error
 	// Remint replaces the operator's enrollment token with the one
 	// minted here, so what was live before it stops being spendable
 	// and one identity is never reachable by two (ADR-0067).

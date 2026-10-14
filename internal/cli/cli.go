@@ -63,6 +63,11 @@
 //	                       authorities are sealed under, readable by its
 //	                       owner alone (required for serve machine and
 //	                       issue-certificate)
+//	GARAM_MACHINE_TOKEN_URL  absolute https URL of the machine listener's
+//	                       /oauth/token, which an operator's assertion
+//	                       names as its audience (ADR-0102; optional for
+//	                       serve api and serve machine — unset, no key is
+//	                       issued and the exchange answers 503)
 //	GARAM_CERTIFICATE_LIFETIME  how long a certificate garam signs stays
 //	                       valid (default "24h"; internal/ca bounds it)
 //	GARAM_AGENT_TOKEN_LIFETIME  how long an agent token garam mints is
@@ -195,6 +200,7 @@ const (
 	envMachineTLSKeyFile     envName = "GARAM_MACHINE_TLS_KEY_FILE"
 	envMachineServerRootFile envName = "GARAM_MACHINE_SERVER_ROOT_FILE"
 	envMachineIssuer         envName = "GARAM_MACHINE_ISSUER"
+	envMachineTokenURL       envName = "GARAM_MACHINE_TOKEN_URL"
 	envAdapterAgent          envName = "GARAM_ADAPTER_AGENT"
 	envAdapterMachineURL     envName = "GARAM_ADAPTER_MACHINE_URL"
 	envAdapterGatewayURL     envName = "GARAM_ADAPTER_GATEWAY_URL"

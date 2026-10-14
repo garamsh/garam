@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -179,4 +180,51 @@ func TestNewMachineRequestCounter_RegistersOnce(t *testing.T) {
 	assert.Error(t, err)
 	_, err = newMachineRequestCounter(nil)
 	assert.NoError(t, err, "no registerer registers nowhere")
+}
+
+// TestCountTokenExchanges_TellsTheCohortsApartByExchangeMethod holds
+// the cohort evidence ADR-0102 asks for: an exchange is counted by how
+// it authenticated — a shared-secret operator, a shared-secret
+// supervisor, a private_key_jwt operator — and by how it ended, a
+// route that exchanges nothing is not counted, and no label carries
+// what the caller sent beyond its credential's prefix.
+func TestCountTokenExchanges_TellsTheCohortsApartByExchangeMethod(t *testing.T) {
+	registry := prometheus.NewRegistry()
+	counter, err := newTokenExchangeCounter(registry)
+	require.NoError(t, err)
+	status := map[string]int{}
+	answer := func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(status[r.Header.Get("X-Case")]) }
+	mux := http.NewServeMux()
+	for _, pattern := range []string{"POST /tokens", "POST /oauth/token", "GET /identity"} {
+		mux.Handle(pattern, countTokenExchanges(counter)(http.HandlerFunc(answer)))
+	}
+	operatorSecret := operator.CredentialScheme + " " + operator.CredentialPrefix + strings.Repeat("a", 64)
+	supervisorSecret := operator.CredentialScheme + " " + agent.SupervisorCredentialPrefix + strings.Repeat("b", 64)
+	send := func(method, path, authorization string, answered int) {
+		req := httptest.NewRequest(method, path, nil)
+		req.Header.Set("Authorization", authorization)
+		c := method + path + authorization
+		status[c] = answered
+		req.Header.Set("X-Case", c)
+		mux.ServeHTTP(httptest.NewRecorder(), req)
+	}
+
+	send(http.MethodPost, "/tokens", operatorSecret, http.StatusCreated)
+	send(http.MethodPost, "/tokens", supervisorSecret, http.StatusUnauthorized)
+	send(http.MethodPost, "/oauth/token", "", http.StatusOK)
+	send(http.MethodPost, "/oauth/token", "", http.StatusOK)
+	send(http.MethodPost, "/oauth/token", "x", http.StatusTooManyRequests)
+	send(http.MethodPost, "/oauth/token", "y", http.StatusServiceUnavailable)
+	send(http.MethodGet, "/identity", "Garam-Token "+liveToken, http.StatusOK)
+
+	rec := httptest.NewRecorder()
+	promhttp.HandlerFor(registry, promhttp.HandlerOpts{}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+	scraped := rec.Body.String()
+	assert.Contains(t, scraped, tokenExchangesMetric+`{method="operator_shared_secret",outcome="issued"} 1`)
+	assert.Contains(t, scraped, tokenExchangesMetric+`{method="supervisor_shared_secret",outcome="refused"} 1`)
+	assert.Contains(t, scraped, tokenExchangesMetric+`{method="operator_private_key_jwt",outcome="issued"} 2`)
+	assert.Contains(t, scraped, tokenExchangesMetric+`{method="operator_private_key_jwt",outcome="limited"} 1`)
+	assert.Contains(t, scraped, tokenExchangesMetric+`{method="operator_private_key_jwt",outcome="failed"} 1`)
+	assert.NotContains(t, scraped, strings.Repeat("a", 64), "no credential value reaches a label")
+	assert.NotContains(t, scraped, liveToken)
 }

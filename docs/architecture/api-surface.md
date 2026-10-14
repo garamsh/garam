@@ -98,9 +98,10 @@ either through a redirect provider — Google is the only one left
 — or against a password garam verifies itself, which is an endpoint
 rather than a provider
 ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
-Starting a login, its callback, the provider list, reading an
-invitation, registering an account from one, and signing in with a
-password carry no credential, as do the probes and metrics this
+Starting a login, by `GET` or by the `POST` that names where it lands,
+its callback, the provider list, reading an invitation, registering
+an account from one, and signing in with a password carry no
+credential, as do the probes and metrics this
 process serves from the same router. Which operations those are is
 read from `api/openapi.yaml` rather than remembered: an operation
 carrying `security: []` opts out of the cookie requirement the file
@@ -574,6 +575,28 @@ refuses it as an invalid argument with 400, because each of its
 handlers decodes on its own. The bound is on the request rather than
 a field, which is what leaves it standing where §What nothing checks
 says a declared constraint does not.
+
+**A refusal names its rule where the kind cannot.** The browser
+listener's `Error` carries an optional `reason`, a stable code, where
+one status and kind cover refusals a client must tell apart (#1380):
+an invitation used against one that lapsed, and each rule a policy
+document breaks, with `path`, a JSON Pointer into the document. The
+codes are listed in `api/openapi.yaml` `Error.reason`; a client
+branches on them and never on `message`, and one that does not know a
+code reads the kind as before. A reason the engine gives crosses the
+gRPC hop as an `ErrorInfo` status detail (`internal/wire/error.go`),
+so the API answers the engine's code unchanged.
+
+**A provider sign-in can land on a console path.** `POST
+/auth/login/{provider}` starts the same flow as `GET` and takes `next`
+in its form body. A path off the console is dropped by the rule the
+console applies to the password sign-in (`internal/api/return_path.go`,
+`web/src/lib/return-path.ts`). What is kept is held on the login's
+`oauth_states` row, so it is spent with the state by the callback that
+completes and expires with it. The callback redirects to it, checked
+again, or to `/console`, and no answer repeats it. A cross-site form
+can start such a login, and the most it decides is where inside the
+console that login lands.
 
 The other three surfaces are fixed differently. The engine's wire
 contract is `proto/garam/authz/v1`, generated and checked the same way.

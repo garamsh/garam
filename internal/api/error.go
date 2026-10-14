@@ -132,6 +132,14 @@ func writeError(w http.ResponseWriter, err error) {
 	// every status rather than above 500 alone: below it the kind's
 	// own sentence replaced a chain naming the constraint and the
 	// SQLSTATE a conflict was refused on.
+	// A reason is a code this project wrote for the client to branch
+	// on, so it is disclosed below 500 whatever the chain's text was.
+	if reason, ok := errorx.ReasonOf(err); ok && status < http.StatusInternalServerError {
+		body.Reason = &reason.Code
+		if reason.Path != "" {
+			body.Path = &reason.Path
+		}
+	}
 	if recorder, ok := w.(causeRecorder); ok && !disclosed {
 		recorder.RecordCause(err)
 	}

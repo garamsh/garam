@@ -232,7 +232,8 @@ func TestLogin_ShedsLoadPastTheLiveStateBound(t *testing.T) {
 	for spent = range f.states.expiryOf {
 		break
 	}
-	require.NoError(t, f.states.Consume(testCtx(t), spent))
+	_, err := f.states.Consume(testCtx(t), spent)
+	require.NoError(t, err)
 	rec = f.do(t, "GET", "/auth/login/google", "")
 	assert.Equal(t, http.StatusFound, rec.Code)
 }
@@ -330,7 +331,7 @@ func TestOauthCallback_StateAndVerifierGuards(t *testing.T) {
 			f := callbackFixture(t)
 			// The login that started this flow issued the state the
 			// query carries; only the cookies differ between cases.
-			require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute))
+			require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute, ""))
 
 			rec := f.do(t, "GET", "/auth/callback/google?code=ok&state="+returnedState, "", tt.cookies...)
 
@@ -374,7 +375,7 @@ func (f *fixture) callback(t *testing.T, state string) *httptest.ResponseRecorde
 func TestOauthCallback_StateIsSingleUse(t *testing.T) {
 	const returnedState = "state-abc"
 	f := callbackFixture(t)
-	require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute))
+	require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute, ""))
 
 	rec := f.callback(t, returnedState)
 	require.Equal(t, http.StatusFound, rec.Code)
@@ -423,7 +424,7 @@ func TestOauthCallback_StateMustBeLive(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f := callbackFixture(t)
 			if tt.issue {
-				require.NoError(t, f.states.Issue(testCtx(t), returnedState, tt.ttl))
+				require.NoError(t, f.states.Issue(testCtx(t), returnedState, tt.ttl, ""))
 			}
 
 			rec := f.callback(t, returnedState)
@@ -448,7 +449,7 @@ func TestOauthCallback_StateMustBeLive(t *testing.T) {
 func TestOauthCallback_RefusedExchangeLeavesStateLive(t *testing.T) {
 	const returnedState = "state-abc"
 	f := callbackFixture(t)
-	require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute))
+	require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute, ""))
 	f.provider.identity, f.provider.err = nil, errorx.New(errorx.KindUnauthenticated, "token exchange")
 
 	rec := f.callback(t, returnedState)
@@ -468,7 +469,7 @@ func TestOauthCallback_RefusedExchangeLeavesStateLive(t *testing.T) {
 func TestOauthCallback_ExpiresSingleUseCookies(t *testing.T) {
 	const returnedState = "state-abc"
 	f := callbackFixture(t)
-	require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute))
+	require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute, ""))
 
 	rec := f.do(t, "GET", "/auth/callback/google?code=ok&state="+returnedState, "",
 		oauthStateCookie(returnedState), oauthVerifierCookie("verifier-xyz"))

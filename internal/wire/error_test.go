@@ -7,8 +7,11 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/wire"
@@ -169,4 +172,31 @@ func TestErrorOf(t *testing.T) {
 	}
 	got := wire.ErrorOf(errors.New("not a status"))
 	assert.True(t, errorx.IsKind(got, errorx.KindUnknown), "got %v", got)
+}
+
+// TestGRPCStatusOf_CarriesTheReasonAcrossTheHop marshals the status the
+// engine sends to bytes and back, as the hop does, and reads the reason
+// and its pointer out the other side. An error with no reason is the
+// control: it crosses as before, with none.
+func TestGRPCStatusOf_CarriesTheReasonAcrossTheHop(t *testing.T) {
+	cross := func(sent error) error {
+		wireBytes, err := proto.Marshal(wire.GRPCStatusOf(sent).Proto())
+		require.NoError(t, err)
+		var received spb.Status
+		require.NoError(t, proto.Unmarshal(wireBytes, &received))
+		return wire.ErrorOf(status.FromProto(&received).Err())
+	}
+
+	reason := errorx.Reason{Code: "policy_document_effect_invalid", Path: "/Statement/1/Effect"}
+	got := cross(errorx.NewWithReason(errorx.KindInvalidArgument, reason, "policy document: Effect must be Allow or Deny"))
+	assert.True(t, errorx.IsKind(got, errorx.KindInvalidArgument))
+	assert.Equal(t, "policy document: Effect must be Allow or Deny", got.Error())
+	gotReason, ok := errorx.ReasonOf(got)
+	require.True(t, ok)
+	assert.Equal(t, reason, gotReason)
+
+	plain := cross(errorx.New(errorx.KindInvalidArgument, "no reason here"))
+	_, ok = errorx.ReasonOf(plain)
+	assert.False(t, ok)
+	assert.True(t, errorx.IsKind(plain, errorx.KindInvalidArgument))
 }

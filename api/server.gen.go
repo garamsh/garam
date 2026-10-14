@@ -545,6 +545,12 @@ type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
+
+	// Path A JSON Pointer (RFC 6901) into the document the request sent, to the place `reason` is about, e.g. `/Statement/1/Effect`. Absent where the reason is about the document as a whole or about no document.
+	Path *string `json:"path,omitempty"`
+
+	// Reason A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Policy documents, each with `path`: `policy_document_malformed`, `policy_document_trailing_data`, `policy_document_wrong_type`, `policy_document_unknown_key`, `policy_document_version_missing`, `policy_document_statement_empty`, `policy_document_effect_invalid`, `policy_document_action_missing`, `policy_document_resource_missing`.
+	Reason *string `json:"reason,omitempty"`
 }
 
 // Group defines model for Group.
@@ -624,6 +630,12 @@ type IssuedOperatorKey struct {
 
 	// TokenUrl The token endpoint's absolute URL, which an assertion's `aud` equals byte for byte. It is garam's configured value and need not be the address the operator dials.
 	TokenUrl string `json:"tokenUrl"`
+}
+
+// LoginReturnPath defines model for LoginReturnPath.
+type LoginReturnPath struct {
+	// Next The console path to land on once signed in.
+	Next *string `json:"next,omitempty"`
 }
 
 // Member defines model for Member.
@@ -1152,6 +1164,9 @@ type ListProjectsParams struct {
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// LoginWithReturnPathFormdataRequestBody defines body for LoginWithReturnPath for application/x-www-form-urlencoded ContentType.
+type LoginWithReturnPathFormdataRequestBody = LoginReturnPath
+
 // LoginPasswordJSONRequestBody defines body for LoginPassword for application/json ContentType.
 type LoginPasswordJSONRequestBody = PasswordLogin
 
@@ -1235,6 +1250,9 @@ type ServerInterface interface {
 	// Login Start the OAuth authorization code flow.
 	// (GET /auth/login/{provider})
 	Login(w http.ResponseWriter, r *http.Request, provider Provider)
+	// LoginWithReturnPath Start the OAuth flow, landing on a console path afterwards.
+	// (POST /auth/login/{provider})
+	LoginWithReturnPath(w http.ResponseWriter, r *http.Request, provider Provider)
 	// Logout Revoke the current session and clear the cookie.
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
@@ -1534,6 +1552,32 @@ func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Login(w, r, provider)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LoginWithReturnPath operation middleware
+func (siw *ServerInterfaceWrapper) LoginWithReturnPath(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "provider" -------------
+	var provider Provider
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LoginWithReturnPath(w, r, provider)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4153,6 +4197,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/login/{provider}", wrapper.Login)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/login/{provider}", wrapper.LoginWithReturnPath)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/callback/{provider}", wrapper.OauthCallback)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.Logout)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/providers", wrapper.ListProviders)

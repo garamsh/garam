@@ -11,16 +11,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const consumeOAuthState = `-- name: ConsumeOAuthState :execrows
+const consumeOAuthState = `-- name: ConsumeOAuthState :one
 DELETE FROM oauth_states WHERE state_hash = $1 AND expires_at > now()
+RETURNING return_path
 `
 
-func (q *Queries) ConsumeOAuthState(ctx context.Context, stateHash string) (int64, error) {
-	result, err := q.db.Exec(ctx, consumeOAuthState, stateHash)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+func (q *Queries) ConsumeOAuthState(ctx context.Context, stateHash string) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, consumeOAuthState, stateHash)
+	var return_path pgtype.Text
+	err := row.Scan(&return_path)
+	return return_path, err
 }
 
 const createPasswordCredential = `-- name: CreatePasswordCredential :exec
@@ -110,15 +110,16 @@ const issueOAuthState = `-- name: IssueOAuthState :execrows
 WITH pruned AS (
     DELETE FROM oauth_states WHERE expires_at <= now()
 )
-INSERT INTO oauth_states (state_hash, expires_at)
-SELECT $1, $2
-WHERE (SELECT count(*) FROM oauth_states live WHERE live.expires_at > now()) < $3::bigint
+INSERT INTO oauth_states (state_hash, expires_at, return_path)
+SELECT $1, $2, $3
+WHERE (SELECT count(*) FROM oauth_states live WHERE live.expires_at > now()) < $4::bigint
 `
 
 type IssueOAuthStateParams struct {
-	StateHash string
-	ExpiresAt pgtype.Timestamptz
-	MaxLive   int64
+	StateHash  string
+	ExpiresAt  pgtype.Timestamptz
+	ReturnPath pgtype.Text
+	MaxLive    int64
 }
 
 // Issuing writes nothing once max_live states are live, which is what
@@ -130,7 +131,12 @@ type IssueOAuthStateParams struct {
 // statement's own snapshot, so it sees rows this same statement prunes
 // — the bound it enforces is conservative, never loose.
 func (q *Queries) IssueOAuthState(ctx context.Context, arg IssueOAuthStateParams) (int64, error) {
-	result, err := q.db.Exec(ctx, issueOAuthState, arg.StateHash, arg.ExpiresAt, arg.MaxLive)
+	result, err := q.db.Exec(ctx, issueOAuthState,
+		arg.StateHash,
+		arg.ExpiresAt,
+		arg.ReturnPath,
+		arg.MaxLive,
+	)
 	if err != nil {
 		return 0, err
 	}

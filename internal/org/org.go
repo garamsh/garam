@@ -12,6 +12,14 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
+// The reasons an invitation refusal carries (api/openapi.yaml
+// `Error.reason`): both are failed_precondition, and only the reason
+// tells a used invitation from one that lapsed.
+const (
+	ReasonInvitationAccepted = "invitation_accepted"
+	ReasonInvitationExpired  = "invitation_expired"
+)
+
 // Domain sentinel errors.
 var (
 	ErrOrgNotFound           = errorx.New(errorx.KindNotFound, "org not found")
@@ -21,8 +29,8 @@ var (
 	ErrGroupMemberNotFound   = errorx.New(errorx.KindNotFound, "group member not found")
 	ErrProjectMemberNotFound = errorx.New(errorx.KindNotFound, "project member not found")
 	ErrInvitationNotFound    = errorx.New(errorx.KindNotFound, "invitation not found")
-	ErrInvitationAccepted    = errorx.New(errorx.KindFailedPrecondition, "invitation already accepted")
-	ErrInvitationExpired     = errorx.New(errorx.KindFailedPrecondition, "invitation expired")
+	ErrInvitationAccepted    = errorx.NewWithReason(errorx.KindFailedPrecondition, errorx.Reason{Code: ReasonInvitationAccepted}, "invitation already accepted")
+	ErrInvitationExpired     = errorx.NewWithReason(errorx.KindFailedPrecondition, errorx.Reason{Code: ReasonInvitationExpired}, "invitation expired")
 	ErrMemberAlreadyExists   = errorx.New(errorx.KindAlreadyExists, "org member already exists")
 	ErrMemberOfAnotherOrg    = errorx.New(errorx.KindFailedPrecondition, "member is owned by another org")
 )

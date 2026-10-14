@@ -136,8 +136,11 @@ refusals, and §machineBearer for the alias.
   transaction holds the key's row under the lock a withdrawal's update
   takes and measures the assertion's dates at the database's time, so
   a withdrawal either commits first and the exchange records nothing,
-  or waits and deletes the token the exchange recorded. A refused
-  assertion spends no jti.
+  or waits and deletes the token the exchange recorded. It holds the
+  registration's row first, as an issuance does before it withdraws
+  or retires a key, so whichever of an exchange and a rotation comes
+  second waits for the first to commit, and neither holds a row the
+  other is waiting on (#1399). A refused assertion spends no jti.
 - **Token reads join the live key.** A token exchanged under a key is
   resolved with that key unwithdrawn and inside any rollover, so a
   withdrawal, an immediate replacement or a passed rollover refuses the

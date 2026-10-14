@@ -42,6 +42,13 @@ test.describe("permissions on a phone", () => {
       await page.goto(path);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expectHydrated(page);
+      // The shell hydrates before this page's form, whose submit stays
+      // disabled until its own part does; the scan reads it enabled.
+      if (path.endsWith("/new")) {
+        await expect(
+          page.getByRole("button", { name: "Create draft" }),
+        ).toBeEnabled();
+      }
 
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - window.innerWidth,

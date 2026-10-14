@@ -246,13 +246,6 @@ export const acmeInvitation: InvitationPreview = {
   expiresAt: "2026-01-09T03:04:05Z",
 };
 
-/**
- * Every route the fixtures model: what it answers signed in, and
- * whether the backend guards it. The split is the one
- * `api/openapi.yaml` records — an operation carrying `security: []`
- * answers without a session — and the signed-out fixtures below
- * reproduce it.
- */
 /** What deleting Acme would take: one of most kinds, and its CA. */
 export const acmeDeletionPreview: OrgDeletionPreview = {
   certificateAuthority: true,
@@ -270,6 +263,13 @@ export const acmeDeletionPreview: OrgDeletionPreview = {
   },
 };
 
+/**
+ * Every route the fixtures model: what it answers signed in, and
+ * whether the backend guards it. The split is the one
+ * `api/openapi.yaml` records — an operation carrying `security: []`
+ * answers without a session — and the signed-out fixtures below
+ * reproduce it.
+ */
 const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/me", guarded: true, body: alice },
   { path: "/auth/providers", guarded: false, body: ["google"] },

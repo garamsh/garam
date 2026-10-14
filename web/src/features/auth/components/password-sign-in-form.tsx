@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { RETURN_PARAM } from "@/lib/return-path";
 
 import { signInWithPassword, type SignInWithPasswordState } from "../actions";
@@ -36,6 +37,10 @@ export function PasswordSignInForm({
   // again to read the answer. The password is not held — the reset
   // leaves the field empty for the next attempt.
   const [username, setUsername] = useState("");
+  // The fields are controlled, so text typed before React hydrates is
+  // replaced by the empty state it hydrates with; until then they take
+  // none.
+  const hydrated = useHydrated();
 
   return (
     <form action={formAction} className="flex w-full flex-col gap-4">
@@ -48,6 +53,7 @@ export function PasswordSignInForm({
           id="username"
           name="username"
           required
+          disabled={!hydrated}
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
@@ -62,6 +68,7 @@ export function PasswordSignInForm({
           name="password"
           type="password"
           required
+          disabled={!hydrated}
           autoComplete="current-password"
         />
       </div>
@@ -70,7 +77,7 @@ export function PasswordSignInForm({
           {state.message}
         </p>
       )}
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={!hydrated || pending}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>
     </form>

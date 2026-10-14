@@ -25,6 +25,7 @@ const OPERATIONS: readonly { value: DelegatedOperation; label: string }[] = [
   { value: "agent-template:publish", label: "Publish template versions" },
   { value: "execution-profile:read", label: "Read execution profiles" },
   { value: "agent:execution-read", label: "Read an agent's execution" },
+  { value: "operator:read", label: "Read operator status" },
 ];
 
 /**

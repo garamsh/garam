@@ -90,6 +90,7 @@ const (
 	DelegatedOperationAgentTemplatePublish DelegatedOperation = "agent-template:publish"
 	DelegatedOperationAgentTemplateRead    DelegatedOperation = "agent-template:read"
 	DelegatedOperationExecutionProfileRead DelegatedOperation = "execution-profile:read"
+	DelegatedOperationOperatorRead         DelegatedOperation = "operator:read"
 )
 
 // Valid indicates whether the value is a known member of the DelegatedOperation enum.
@@ -112,6 +113,8 @@ func (e DelegatedOperation) Valid() bool {
 	case DelegatedOperationAgentTemplateRead:
 		return true
 	case DelegatedOperationExecutionProfileRead:
+		return true
+	case DelegatedOperationOperatorRead:
 		return true
 	default:
 		return false
@@ -146,6 +149,7 @@ const (
 	OperationAuthorityRequestOperationAgentTemplatePublish OperationAuthorityRequestOperation = "agent-template:publish"
 	OperationAuthorityRequestOperationAgentTemplateRead    OperationAuthorityRequestOperation = "agent-template:read"
 	OperationAuthorityRequestOperationExecutionProfileRead OperationAuthorityRequestOperation = "execution-profile:read"
+	OperationAuthorityRequestOperationOperatorRead         OperationAuthorityRequestOperation = "operator:read"
 )
 
 // Valid indicates whether the value is a known member of the OperationAuthorityRequestOperation enum.
@@ -166,6 +170,8 @@ func (e OperationAuthorityRequestOperation) Valid() bool {
 	case OperationAuthorityRequestOperationAgentTemplateRead:
 		return true
 	case OperationAuthorityRequestOperationExecutionProfileRead:
+		return true
+	case OperationAuthorityRequestOperationOperatorRead:
 		return true
 	default:
 		return false
@@ -479,7 +485,7 @@ type ControlEndpointWrite struct {
 	Url string `json:"url"`
 }
 
-// DelegatedOperation `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it. `agent-template:read`, `agent-template:publish` and `execution-profile:read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
+// DelegatedOperation `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it. `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
 type DelegatedOperation string
 
 // Delegation defines model for Delegation.
@@ -618,10 +624,10 @@ type OperationAuthorityRequest struct {
 	Operation  OperationAuthorityRequestOperation `json:"operation"`
 	RequestId  RequestId                          `json:"requestId"`
 
-	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `agent:cutover`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. For `agent:cutover` it is the machine listener's cutover route of the agent, such as `/agents/{agent}/cutover/switch`, and garam compares it with the target that route receives. garam binds it as given and decodes nothing.
+	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read`, `agent:cutover` and `operator:read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. For `agent:cutover` it is the machine listener's cutover route of the agent, such as `/agents/{agent}/cutover/switch`, and garam compares it with the target that route receives. garam binds it as given and decodes nothing.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover`; this organization's GRN for `agent-template:read`, `agent-template:publish` and `execution-profile:read`.
+	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
 	Target string `json:"target"`
 }
 

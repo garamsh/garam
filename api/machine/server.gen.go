@@ -330,6 +330,7 @@ const (
 	AgentTemplatePublish OperationBindingOperation = "agent-template:publish"
 	AgentTemplateRead    OperationBindingOperation = "agent-template:read"
 	ExecutionProfileRead OperationBindingOperation = "execution-profile:read"
+	OperatorRead         OperationBindingOperation = "operator:read"
 )
 
 // Valid indicates whether the value is a known member of the OperationBindingOperation enum.
@@ -350,6 +351,8 @@ func (e OperationBindingOperation) Valid() bool {
 	case AgentTemplateRead:
 		return true
 	case ExecutionProfileRead:
+		return true
+	case OperatorRead:
 		return true
 	default:
 		return false
@@ -935,10 +938,10 @@ type OperationBinding struct {
 	OrgGrn       string                    `json:"orgGrn"`
 	RequestId    string                    `json:"requestId"`
 
-	// RequestTarget Present for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `agent:cutover`, absent for every other operation. For `agent:cutover` it is garam's own cutover route the reference is carried to, and garam compares it (ADR-0086). Otherwise it is the exact origin-form request target the console sent: the escaped path and the raw query, with no scheme or authority, including any path prefix of the registered control endpoint. Compare it, before decoding, routing or reading any data, with the target the request arrived with, byte for byte; the empty body's digest does not tell one read from another.
+	// RequestTarget Present for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read`, `agent:cutover` and `operator:read`, absent for every other operation. For `agent:cutover` it is garam's own cutover route the reference is carried to, and garam compares it (ADR-0086). Otherwise it is the exact origin-form request target the console sent: the escaped path and the raw query, with no scheme or authority, including any path prefix of the registered control endpoint. Compare it, before decoding, routing or reading any data, with the target the request arrived with, byte for byte; the empty body's digest does not tell one read from another.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// TargetGrn The controller for `agent:create`; the agent for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover`; the organization for `agent-template:read`, `agent-template:publish` and `execution-profile:read`.
+	// TargetGrn The controller for `agent:create`; the agent for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover`; the organization for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
 	TargetGrn string `json:"targetGrn"`
 }
 

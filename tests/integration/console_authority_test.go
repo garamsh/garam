@@ -124,6 +124,53 @@ func TestConsoleAuthority_ReadsAndPublicationBindTheirRequestTarget(t *testing.T
 	assert.Equal(t, execution, *b.RequestTarget)
 }
 
+// TestConsoleAuthority_OperatorReadBindsTheOrganization holds #1374 at
+// garam's boundary. A member holding operator:read mints it for this
+// organization and the exact request target, and introspection answers
+// that binding. Each refusal sits beside an accepted call it differs
+// from in one thing:
+//   - another target, or no request target;
+//   - a member a Deny takes operator:read from, beside the owner;
+//   - a grant that no longer lists the operation.
+func TestConsoleAuthority_OperatorReadBindsTheOrganization(t *testing.T) {
+	p := pool(t)
+	policies, engine := policyEngine(t, p)
+	s := newAuthorityStack(t, engine, p)
+	d := s.grant(t, "g-1", nil, "operator:read")
+	orgTarget := s.acme.String()
+	const operators = "/v1/orgs/acme/operators"
+
+	status, got := s.mintTarget(t, s.member, "operator:read", orgTarget, "operators-1", operators)
+	require.Equal(t, http.StatusCreated, status, "a member holds operator:read: %s", got)
+	status, got = s.introspect(t, s.hostedTLS, authorityOf(t, got).Authority)
+	require.Equal(t, http.StatusOK, status, got)
+	b := bindingOf(t, got)
+	assert.Equal(t, machinegen.OperatorRead, b.Operation)
+	assert.Equal(t, orgTarget, b.TargetGrn)
+	require.NotNil(t, b.RequestTarget)
+	assert.Equal(t, operators, *b.RequestTarget)
+	assert.Nil(t, b.Assignment, "an organization read binds no placement")
+
+	status, got = s.mintTarget(t, s.member, "operator:read", s.controller.String(), "operators-2", operators)
+	assert.Equal(t, http.StatusBadRequest, status, "a controller is not this organization: %s", got)
+	status, got = s.mintTarget(t, s.member, "operator:read", s.provisionAgent(t), "operators-3", operators)
+	assert.Equal(t, http.StatusBadRequest, status, "an agent is not this organization: %s", got)
+	status, got = s.mintTarget(t, s.member, "operator:read", orgTarget, "operators-4", "")
+	assert.Equal(t, http.StatusBadRequest, status, "the read binds its request target: %s", got)
+
+	denied := activePolicy(t, policies, s.acme, "deny-operator-read",
+		statementDoc("deny-operator-read", wire.EffectDeny, org.ActionOperatorRead, s.acme.String()))
+	attachPolicy(t, policies, denied, s.memberGRN)
+	status, got = s.mintTarget(t, s.member, "operator:read", orgTarget, "operators-5", operators)
+	assert.Equal(t, http.StatusForbidden, status, "a caller without operator:read: %s", got)
+	status, got = s.mintTarget(t, s.owner, "operator:read", orgTarget, "operators-5", operators)
+	assert.Equal(t, http.StatusCreated, status, "the owner, whom the Deny does not reach: %s", got)
+
+	s.grant(t, "g-2", &d.GrantId, "agent-template:read")
+	status, got = s.mintTarget(t, s.owner, "operator:read", orgTarget, "operators-6", operators)
+	assert.Equal(t, http.StatusForbidden, status, "a grant that does not list operator:read: %s", got)
+}
+
 // TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind holds the
 // refusals beside the ones above, each next to the accepted call it
 // differs from in one field: configure and recover take no request

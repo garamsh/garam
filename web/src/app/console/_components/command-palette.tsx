@@ -90,7 +90,8 @@ export function CommandPalette({
       <Button
         type="button"
         variant="outline"
-        // A click before hydration would be lost, so the control waits.
+        // A click before hydration would be lost, so the control waits,
+        // drawn at full strength so the first paint does not flicker.
         disabled={!hydrated}
         onPointerEnter={() => void loadDialog()}
         onFocus={() => void loadDialog()}
@@ -99,7 +100,7 @@ export function CommandPalette({
           setOpen(true);
         }}
         aria-keyshortcuts="Meta+K Control+K /"
-        className="gap-2 px-2 text-muted-foreground sm:w-56 sm:justify-start"
+        className="gap-2 px-2 text-muted-foreground disabled:opacity-100 sm:w-56 sm:justify-start"
       >
         <Search />
         <span className="sr-only sm:not-sr-only">Search or jump to…</span>

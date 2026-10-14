@@ -1,4 +1,4 @@
-import { axeViolations } from "./axe";
+import { axeViolations, expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
 
 // The console at 390px: the sidebar is a sheet behind the trigger, and
@@ -55,6 +55,7 @@ test.describe("console shell on a phone", () => {
     await page.goto(`/console/orgs/${signedIn.orgSlug}`);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
+    await expectHydrated(page);
     expect(await axeViolations(page, ["header"])).toEqual([]);
   });
 });

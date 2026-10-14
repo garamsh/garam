@@ -1,4 +1,4 @@
-import { axeViolations, useTheme } from "./axe";
+import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
 
 // The console shell in both themes, and one existing page in full.
@@ -18,6 +18,7 @@ test.describe("accessibility", () => {
         theme === "dark" ? /\bdark\b/ : /^(?!.*\bdark\b)/,
       );
 
+      await expectHydrated(page);
       expect(
         await axeViolations(page, ['[data-slot="sidebar"]', "header"]),
       ).toEqual([]);
@@ -40,6 +41,7 @@ test.describe("accessibility", () => {
       page.getByRole("heading", { level: 1, name: "People" }),
     ).toBeVisible();
 
+    await expectHydrated(page);
     expect(await axeViolations(page)).toEqual([]);
   });
 });

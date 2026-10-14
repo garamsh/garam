@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/errorx"
 )
@@ -185,4 +186,21 @@ func KindOf(c codes.Code) errorx.Kind {
 	default:
 		return errorx.KindUnknown
 	}
+}
+
+// ErrorOf renders an error a gRPC call returned as an errorx error,
+// its status code carrying the kind by name (ADR-0003). It is the
+// inverse of what the engine sends: a status built from [CodeOf] and
+// [MessageOf].
+//
+// The message is taken as this project's own, which is what the engine
+// undertakes to send: it decides what a caller may be told while it
+// still holds the chain's types, because a status crossing the hop
+// carries text and nothing that says who wrote it. A status the engine
+// did not answer at all — one gRPC itself raised for a call that never
+// reached a handler — carries gRPC's text under that undertaking, and
+// every code it raises but two is replaced on the way out as a 5xx.
+func ErrorOf(err error) error {
+	st, _ := status.FromError(err)
+	return errorx.New(KindOf(st.Code()), st.Message())
 }

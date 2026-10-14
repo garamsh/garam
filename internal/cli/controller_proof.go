@@ -6,7 +6,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
@@ -61,8 +60,7 @@ func (a audienceAuthorization) Authorize(ctx context.Context, audience, orgGRN, 
 		SubjectOrg:    orgGRN.String(),
 	})
 	if err != nil {
-		st, _ := status.FromError(err)
-		return errorx.New(wire.KindOf(st.Code()), st.Message())
+		return wire.ErrorOf(err)
 	}
 	if !resp.GetAllowed() {
 		return errorx.New(errorx.KindPermissionDenied, "current policy denies "+action)

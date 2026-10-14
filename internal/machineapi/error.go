@@ -20,6 +20,11 @@ import (
 // connection it retries forever. It answers and does not log: the stack
 // travels in the cause, and reaches the request line through the
 // recorder a handled 5xx already reports on.
+//
+// Each surface keeps its own rather than sharing one: the answer is
+// that surface's Error, written by its writeError, the one place it
+// translates an error (stack-go.md §4), and the two never import each
+// other (ADR-0017).
 func RecoverPanics(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

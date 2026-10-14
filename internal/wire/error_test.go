@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/wire"
@@ -151,4 +152,21 @@ func TestCodeOf(t *testing.T) {
 	}
 
 	assert.Equal(t, codes.Unknown, wire.CodeOf(errorx.Kind(99)))
+}
+
+// TestErrorOf reads a gRPC error back as an errorx error: the status
+// code becomes the kind by name and the message is kept as written, so
+// the engine's own sentence reaches the caller. A status built from
+// CodeOf and MessageOf, as the engine builds one, is the round trip. An
+// error that carries no status reads as Unknown rather than as a kind
+// it never named.
+func TestErrorOf(t *testing.T) {
+	for _, kind := range []errorx.Kind{errorx.KindInvalidArgument, errorx.KindPermissionDenied, errorx.KindUnavailable, errorx.KindInternal} {
+		sent := errorx.New(kind, "the engine's own sentence")
+		got := wire.ErrorOf(status.Error(wire.CodeOf(errorx.KindOf(sent)), wire.MessageOf(sent)))
+		assert.True(t, errorx.IsKind(got, kind), "%v: got %v", kind, got)
+		assert.Equal(t, "the engine's own sentence", got.Error())
+	}
+	got := wire.ErrorOf(errors.New("not a status"))
+	assert.True(t, errorx.IsKind(got, errorx.KindUnknown), "got %v", got)
 }

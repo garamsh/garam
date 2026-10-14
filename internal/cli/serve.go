@@ -9,13 +9,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials/insecure"
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/agent"
@@ -56,13 +54,9 @@ func serveAPI(cmd *cobra.Command) error {
 		return err
 	}
 
-	databaseURL := envOr(envDatabaseURL, "")
-	if databaseURL == "" {
-		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(ctx, databaseURL)
+	pool, err := openPool(ctx)
 	if err != nil {
-		return errorx.Wrap(err, "postgres", errorx.KindUnavailable)
+		return err
 	}
 	defer pool.Close()
 
@@ -75,17 +69,9 @@ func serveAPI(cmd *cobra.Command) error {
 		return err
 	}
 
-	// Insecure transport: both processes run inside one trust
-	// boundary; TLS between them is future work.
-	conn, err := grpc.NewClient(
-		envOr(envAuthzAddr, "localhost:9090"),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		// Carries this request's trace id to the engine, so one id
-		// covers both halves of the hop.
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
-	)
+	conn, err := dialAuthz()
 	if err != nil {
-		return errorx.Wrap(err, "authz client", errorx.KindInvalidArgument)
+		return err
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -265,13 +251,9 @@ func serveAuthz(cmd *cobra.Command) error {
 		return err
 	}
 
-	databaseURL := envOr(envDatabaseURL, "")
-	if databaseURL == "" {
-		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(ctx, databaseURL)
+	pool, err := openPool(ctx)
 	if err != nil {
-		return errorx.Wrap(err, "postgres", errorx.KindUnavailable)
+		return err
 	}
 	defer pool.Close()
 

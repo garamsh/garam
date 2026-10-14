@@ -417,8 +417,10 @@ collaborate on a shared plan.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/wire/` — the conversions onto the wire formats the request
   surfaces share: the statement `Effect` and a policy's status with
-  their authz-proto mappings, errorx kinds rendered as HTTP statuses and
-  as gRPC codes and read back from them; shared primitive.
+  their authz-proto mappings, a statement rendered onto the authz
+  contract, errorx kinds rendered as HTTP statuses and as gRPC codes
+  and read back from them, and a gRPC error read back as an errorx
+  error; shared primitive.
 - `internal/keyfile/` — the owner-only rule every key material file is
   read under (ADR-0015); shared primitive.
 - `internal/listfilter/` — the offset/limit filter a domain's list call

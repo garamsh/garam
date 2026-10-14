@@ -1,10 +1,8 @@
 package cli
 
 import (
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 
-	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/message"
 )
 
@@ -29,13 +27,9 @@ func newRetireMessageSigningKeyCommand() *cobra.Command {
 
 func retireMessageSigningKey(cmd *cobra.Command, id message.KeyID) error {
 	ctx := cmd.Context()
-	databaseURL := envOr(envDatabaseURL, "")
-	if databaseURL == "" {
-		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(ctx, databaseURL)
+	pool, err := openPool(ctx)
 	if err != nil {
-		return errorx.Wrap(err, "postgres", errorx.KindUnavailable)
+		return err
 	}
 	defer pool.Close()
 	if err := message.NewPostgresStore(pool).WithdrawSigningKey(ctx, id); err != nil {

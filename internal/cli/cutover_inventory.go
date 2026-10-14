@@ -3,7 +3,6 @@ package cli
 import (
 	"encoding/json"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
@@ -39,13 +38,9 @@ func cutoverInventory(cmd *cobra.Command, slug string) error {
 	if err := orgGRN.Validate(); err != nil {
 		return errorx.Wrap(err, "org", errorx.KindInvalidArgument)
 	}
-	databaseURL := envOr(envDatabaseURL, "")
-	if databaseURL == "" {
-		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(ctx, databaseURL)
+	pool, err := openPool(ctx)
 	if err != nil {
-		return errorx.Wrap(err, "postgres", errorx.KindUnavailable)
+		return err
 	}
 	defer pool.Close()
 

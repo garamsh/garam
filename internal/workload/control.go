@@ -49,8 +49,11 @@ const (
 const maxBody = 64 << 10
 
 var (
-	requestIDPattern  = regexp.MustCompile(`^[A-Za-z0-9._~-]{1,128}$`)
-	generationPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
+	// controlTokenPattern is a control token as the supervisor draws
+	// one, spelled as an agent token (controlTokenPrefix).
+	controlTokenPattern = regexp.MustCompile(`^garam_at_[0-9a-f]{64}$`)
+	requestIDPattern    = regexp.MustCompile(`^[A-Za-z0-9._~-]{1,128}$`)
+	generationPattern   = regexp.MustCompile(`^[0-9a-f]{32}$`)
 )
 
 // controlServer is a generation's control and what reports its
@@ -162,7 +165,11 @@ func (s *Supervisor) caller(w http.ResponseWriter, r *http.Request, in *intent) 
 	}
 	if s.cfg.Tokens != nil {
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), tokenScheme+" ")
-		if !ok || subtle.ConstantTimeCompare([]byte(token), []byte(in.ControlToken)) != 1 {
+		// The presented token is held to its spelling before anything
+		// is compared, so no record the intent holds — empty included —
+		// can match an empty or malformed one.
+		if !ok || !controlTokenPattern.MatchString(token) ||
+			subtle.ConstantTimeCompare([]byte(token), []byte(in.ControlToken)) != 1 {
 			refuse(w, http.StatusUnauthorized, "unauthenticated", "the generation's control token is required")
 			return nil, false
 		}

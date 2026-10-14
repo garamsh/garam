@@ -11,11 +11,23 @@ import {
   API_URL,
   answerPermissionChecks,
   fieldAgent,
+  fieldOne,
   reportedAgent,
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
+
+// The rename's Server Action stays real; the control service's
+// authority is counted, which is what a re-read would mint again.
+const minted = vi.hoisted(() => ({ count: 0 }));
+vi.mock("@/features/orgs/actions", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/orgs/actions")>()),
+  mintOperationAuthority: async () => {
+    minted.count += 1;
+    return { status: "ok", authority: "test-authority" };
+  },
+}));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
@@ -133,10 +145,80 @@ describe("agent page", () => {
     await enter(user, screen.getByLabelText("Name"), " Ranger ");
     await user.click(screen.getByRole("button", { name: "Save name" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Renamed to Ranger.",
-    );
+    // Inactive panels stay mounted, so the answer is read in the panel
+    // that asked.
+    expect(
+      await within(
+        screen.getByRole("tabpanel", { name: "Settings" }),
+      ).findByRole("status"),
+    ).toHaveTextContent("Renamed to Ranger.");
     expect(body).toEqual({ name: "Ranger" });
+  });
+
+  it("keeps an unsaved rename through a switch to another tab and back", async () => {
+    const user = userEvent.setup();
+    await renderAgent();
+    await openTab("Settings");
+    const name = screen.getByLabelText("Name");
+    // The control: the field starts at the saved name, so what it holds
+    // after the switch is what was typed.
+    expect(name).toHaveValue("Scout");
+    await user.clear(name);
+    await enter(user, name, "Ranger");
+
+    await openTab("Overview");
+    await openTab("Settings");
+
+    expect(screen.getByLabelText("Name")).toHaveValue("Ranger");
+  });
+
+  it("reads the execution once, and a switch back to Execution does not read it again", async () => {
+    const endpoint = "https://control.example.test/garam";
+    const hosted = "grn:acme:default:operator:hosted";
+    let reads = 0;
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json([
+          fieldOne,
+          {
+            ...fieldOne,
+            grn: hosted,
+            name: "Hosted",
+            controlEndpoint: endpoint,
+          },
+        ]),
+      ),
+      http.get(`${API_URL}/orgs/acme/operators/hosted/delegation`, () =>
+        HttpResponse.json({
+          grantId: "grant-1",
+          operatorGrn: hosted,
+          controllers: [fieldOne.grn],
+          operations: ["agent:execution-read"],
+          expiresAt: "2099-01-01T00:00:00Z",
+          grantedBy: "grn:root:default:user:alice",
+          grantedAt: "2026-10-01T00:00:00Z",
+        }),
+      ),
+      http.get(`${endpoint}/v1/orgs/acme/agents/:agent/execution`, () => {
+        reads += 1;
+        return HttpResponse.json({
+          desired: { revision: "1", pending: true },
+          rendered: null,
+          effective: null,
+        });
+      }),
+    );
+    minted.count = 0;
+    await renderAgent();
+    await openTab("Execution");
+    expect(await screen.findByText("Revision 1 (pending)")).toBeInTheDocument();
+
+    await openTab("Overview");
+    await openTab("Execution");
+
+    expect(screen.getByText("Revision 1 (pending)")).toBeInTheDocument();
+    expect(reads).toBe(1);
+    expect(minted.count).toBe(1);
   });
 
   it("leaves the rename out where the server denies it, and keeps it where the server cannot say", async () => {

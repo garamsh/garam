@@ -5,6 +5,7 @@ import {
   ItemCrumb,
   ItemCrumbProvider,
 } from "@/app/console/_components/item-crumb";
+import { MarkMissing } from "@/app/console/_components/missing-page";
 import { RouteBreadcrumb } from "@/app/console/_components/route-breadcrumb";
 
 const route = vi.hoisted(() => ({ pathname: "/console/orgs" }));
@@ -100,5 +101,57 @@ describe("route breadcrumb", () => {
     expect(
       screen.getByRole("navigation", { name: "breadcrumb" }),
     ).not.toHaveTextContent("grn:");
+  });
+
+  it("says Not found for an organization the caller does not hold", () => {
+    renderBreadcrumb("/console/orgs/initech");
+
+    const trail = screen.getByRole("navigation", { name: "breadcrumb" });
+    expect(screen.getByText("Not found")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(trail).not.toHaveTextContent("Overview");
+    expect(trail).not.toHaveTextContent("initech");
+  });
+
+  it("names an organization by slug while the list is unanswered", () => {
+    // Control for the case above: an unanswered list cannot tell an
+    // unknown organization from a known one.
+    route.pathname = "/console/orgs/initech";
+    render(<RouteBreadcrumb orgs={null} />);
+
+    expect(screen.getByRole("link", { name: "initech" })).toBeInTheDocument();
+    expect(screen.getByText("Overview")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("says Not found, under its section, for an entry that is not there", () => {
+    route.pathname = "/console/orgs/acme/teams/gone";
+    render(
+      <>
+        <MarkMissing />
+        <RouteBreadcrumb orgs={orgs} />
+      </>,
+    );
+
+    expect(screen.getByRole("link", { name: "Teams" })).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/teams",
+    );
+    expect(screen.getByText("Not found")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    expect(screen.queryByText("Team")).not.toBeInTheDocument();
+  });
+
+  it("calls an entry by its fallback until a page says it is missing", () => {
+    // Control: the same route without the not-found page's marker.
+    renderBreadcrumb("/console/orgs/acme/teams/gone");
+
+    expect(screen.getByText("Team")).toHaveAttribute("aria-current", "page");
   });
 });

@@ -23,7 +23,16 @@ export async function ConsoleSidebarProvider({
   const stored = (await cookies()).get(SIDEBAR_COOKIE)?.value;
 
   return (
-    <SidebarProvider defaultOpen={stored !== "false"}>
+    <SidebarProvider
+      defaultOpen={stored !== "false"}
+      // 240px open and 56px collapsed, over the primitive's defaults.
+      style={
+        {
+          "--sidebar-width": "15rem",
+          "--sidebar-width-icon": "3.5rem",
+        } as React.CSSProperties
+      }
+    >
       {children}
     </SidebarProvider>
   );

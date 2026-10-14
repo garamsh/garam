@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  CONSOLE_NAV_GROUPS,
+  CONSOLE_SECTIONS,
   consoleCrumbs,
   parseConsolePath,
+  resolveNavEntry,
 } from "@/app/console/_components/navigation";
 
 const orgs = [{ slug: "acme", name: "Acme" }];
@@ -270,5 +273,40 @@ describe("consoleCrumbs", () => {
     const crumbs = consoleCrumbs(parseConsolePath("/console/orgs"), orgs);
 
     expect(crumbs).toEqual([{ label: "Organizations" }]);
+  });
+});
+
+describe("CONSOLE_NAV_GROUPS", () => {
+  it("lists every section but the overview exactly once", () => {
+    const listed = CONSOLE_NAV_GROUPS.flatMap((group) =>
+      group.entries
+        .filter((entry) => entry.view === undefined)
+        .map((entry) => entry.section),
+    );
+
+    expect([...listed].sort()).toEqual(
+      CONSOLE_SECTIONS.map((section) => section.segment)
+        .filter((segment) => segment !== "")
+        .sort(),
+    );
+  });
+
+  it("resolves every entry to a section or a listed view", () => {
+    for (const group of CONSOLE_NAV_GROUPS) {
+      for (const entry of group.entries) {
+        expect(resolveNavEntry(entry)).toBeDefined();
+      }
+    }
+  });
+
+  it("resolves no view the sidebar does not list", () => {
+    // Attachments is a view of Permissions with no sidebar entry; the
+    // control is Templates, which has one.
+    expect(
+      resolveNavEntry({ section: "permissions", view: "attachments" }),
+    ).toBeUndefined();
+    expect(
+      resolveNavEntry({ section: "agents", view: "templates" })?.segment,
+    ).toBe("agents/templates");
   });
 });

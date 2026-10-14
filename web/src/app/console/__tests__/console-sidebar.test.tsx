@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -76,7 +77,8 @@ describe("console sidebar", () => {
     );
   });
 
-  it("keeps the shell, without the controls its reads feed, when the API is unreachable", async () => {
+  it("keeps every control, degraded, when the API is unreachable", async () => {
+    const user = userEvent.setup();
     server.use(
       http.get(`${API_URL}/me`, () => HttpResponse.error()),
       http.get(`${API_URL}/orgs`, () => HttpResponse.error()),
@@ -85,15 +87,24 @@ describe("console sidebar", () => {
     await renderSidebar();
 
     expect(screen.getByRole("link", { name: "People" })).toBeInTheDocument();
-    // Presence: the sr-only label opens a name the org's own name and
-    // slug complete, so it stays a fragment when the trigger renders.
+    // Presence: the sr-only label opens the trigger's name, and the slug
+    // and the reason follow it.
+    const switcher = screen.getByRole("button", {
+      name: /Switch organization/,
+    });
+    expect(switcher).toHaveTextContent("acme");
+    expect(switcher).toHaveTextContent("Can’t load organizations");
+    // Presence, as above: "Account" and the reason follow.
+    const account = screen.getByRole("button", { name: /Open account menu/ });
+    expect(account).toHaveTextContent("Can’t load your account");
+
+    // What the account menu offers needs no answer from the API.
+    await user.click(account);
     expect(
-      screen.queryByRole("button", { name: /Switch organization/ }),
-    ).not.toBeInTheDocument();
-    // Presence, as above: the initials, the nickname and "Signed in"
-    // complete this one.
+      await screen.findByRole("menuitemradio", { name: "Dark" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /Open account menu/ }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("menuitem", { name: "Sign out" }),
+    ).toBeInTheDocument();
   });
 });

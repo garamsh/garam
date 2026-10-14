@@ -2,6 +2,8 @@
 
 import { useLayoutEffect, useRef } from "react";
 
+import { cn } from "@/lib/utils";
+
 /**
  * A controlled `<select>` whose choice survives a refused submission.
  * Every console form holding a select renders it through this.
@@ -17,9 +19,13 @@ import { useLayoutEffect, useRef } from "react";
  * This marks the chosen option, and only it, as the default after every
  * commit, so the reset lands on the choice. The form keeps its action
  * and its progressive enhancement; only the select's default moves.
+ *
+ * It is drawn as the console's other controls are, 32px high; a caller
+ * passes layout only.
  */
 export function KeptSelect({
   value,
+  className,
   ...props
 }: Omit<React.ComponentProps<"select">, "value" | "defaultValue" | "ref"> & {
   value: string;
@@ -32,5 +38,15 @@ export function KeptSelect({
       option.defaultSelected = option.value === value;
     }
   });
-  return <select ref={select} value={value} {...props} />;
+  return (
+    <select
+      ref={select}
+      value={value}
+      className={cn(
+        "h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive dark:bg-input/30",
+        className,
+      )}
+      {...props}
+    />
+  );
 }

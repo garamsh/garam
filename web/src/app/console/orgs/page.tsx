@@ -53,7 +53,9 @@ export default async function OrgsPage() {
               <Link href={`/console/orgs/${org.slug}`} className="block">
                 <Card className="gap-1 p-5 transition-colors hover:border-ring">
                   <CardTitle>{org.name}</CardTitle>
-                  <CardDescription>{org.slug}</CardDescription>
+                  <CardDescription className="font-mono text-xs">
+                    {org.slug}
+                  </CardDescription>
                 </Card>
               </Link>
             </li>

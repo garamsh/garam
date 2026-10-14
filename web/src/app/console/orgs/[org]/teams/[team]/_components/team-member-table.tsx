@@ -1,20 +1,110 @@
-import { CopyId } from "@/components/copy-id";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { KIND_LABEL } from "@/features/orgs";
+"use client";
 
-import { RemoveTeamMemberForm } from "./remove-team-member-form";
-import { memberLabel, memberName, type TeamMember } from "./team-member";
+import { UsersRound } from "lucide-react";
+
+import { CopyId } from "@/components/copy-id";
+import { DataTable, type ColumnDef } from "@/components/data-table";
+import { StatusDot } from "@/components/status-dot";
+import type { Lookup } from "@/features/orgs";
+
+import { EmptyState } from "../../../../../_components/empty-state";
+import { RemoveTeamMemberDialog } from "./remove-team-member-dialog";
+
+/** One membership as its row shows it, every phrase already chosen. */
+export type TeamMemberRow = {
+  grn: string;
+  identifier: string;
+  /** Person, Agent or Unknown. */
+  type: string;
+  /** The member's name, or what stands in its place. */
+  name: string;
+  /** False where `name` stands in for one the page does not have. */
+  named: boolean;
+  /** How a sentence names the member. */
+  sentence: string;
+  lookup: Lookup;
+  /** The list the member's name would come from, as a plural noun. */
+  listed: "people" | "agents";
+};
+
+function columns(
+  org: string,
+  team: string,
+  teamName: string,
+  removable: boolean,
+): ColumnDef<TeamMemberRow, unknown>[] {
+  const shown: ColumnDef<TeamMemberRow, unknown>[] = [
+    {
+      id: "member",
+      header: "Member",
+      accessorFn: (member) => `${member.name} ${member.identifier}`,
+      sortingFn: (a, b) => a.original.name.localeCompare(b.original.name),
+      cell: ({ row: { original: member } }) => (
+        <div className="flex min-w-0 flex-col gap-0.5 whitespace-normal">
+          <span
+            className={member.named ? "font-medium" : "text-muted-foreground"}
+          >
+            {member.name}
+          </span>
+          <CopyId
+            value={member.identifier}
+            label={member.name}
+            className="flex"
+          />
+        </div>
+      ),
+    },
+    {
+      id: "type",
+      header: "Type",
+      accessorFn: (member) => member.type,
+      cell: ({ row: { original: member } }) => member.type,
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorFn: (member) => member.lookup,
+      enableSorting: false,
+      cell: ({ row: { original: member } }) =>
+        member.lookup === "missing" ? (
+          <StatusDot tone="danger" label="Not found in this organization" />
+        ) : member.lookup === "refused" ? (
+          <span className="flex flex-col gap-0.5 whitespace-normal">
+            <StatusDot tone="neutral" label="Not checked" />
+            <span className="text-xs text-muted-foreground">
+              This organization&apos;s {member.listed} are not listed to you
+            </span>
+          </span>
+        ) : (
+          <StatusDot tone="ok" label="In this organization" />
+        ),
+    },
+  ];
+  if (removable) {
+    shown.push({
+      id: "actions",
+      header: () => <span className="sr-only">Actions</span>,
+      enableSorting: false,
+      enableGlobalFilter: false,
+      cell: ({ row: { original: member } }) => (
+        <div className="flex justify-end">
+          <RemoveTeamMemberDialog
+            org={org}
+            team={team}
+            teamName={teamName}
+            member={member.grn}
+            label={member.sentence}
+          />
+        </div>
+      ),
+    });
+  }
+  return shown;
+}
 
 /**
- * A team's members by name and type, each removable from this team.
+ * A team's members by name, type and whether the organization still
+ * holds them, each removable from this team where the server allows it.
  *
  * A member without a name says so rather than lifting its identifier
  * into the name's place, and one the organization no longer holds is
@@ -26,70 +116,29 @@ export function TeamMemberTable({
   org,
   team,
   teamName,
+  removable,
   members,
 }: {
   org: string;
   team: string;
   teamName: string;
-  members: TeamMember[];
+  removable: boolean;
+  members: readonly TeamMemberRow[];
 }) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Member</TableHead>
-          <TableHead>Type</TableHead>
-          <TableHead>
-            <span className="sr-only">Actions</span>
-          </TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {members.map((member) => (
-          <TableRow key={member.grn}>
-            <TableCell className="align-top font-medium whitespace-normal">
-              {member.label ?? (
-                <span className="font-normal text-muted-foreground">
-                  {memberName(member)}
-                </span>
-              )}
-              <CopyId
-                value={member.identifier}
-                label={memberName(member)}
-                className="flex"
-              />
-              {member.lookup === "missing" && (
-                <span className="block text-xs font-normal text-destructive">
-                  Not found in this organization
-                </span>
-              )}
-              {member.lookup === "refused" && (
-                <span className="block text-xs font-normal text-muted-foreground">
-                  Not checked: this organization&apos;s{" "}
-                  {member.kind === "agent" ? "agents are" : "people are"} not
-                  listed to you
-                </span>
-              )}
-            </TableCell>
-            <TableCell className="align-top">
-              <Badge
-                variant={member.kind === "unknown" ? "outline" : "secondary"}
-              >
-                {KIND_LABEL[member.kind]}
-              </Badge>
-            </TableCell>
-            <TableCell className="align-top whitespace-normal">
-              <RemoveTeamMemberForm
-                org={org}
-                team={team}
-                teamName={teamName}
-                member={member.grn}
-                label={memberLabel(member)}
-              />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <DataTable
+      label={`Members of ${teamName}`}
+      columns={columns(org, team, teamName, removable)}
+      data={[...members]}
+      getRowId={(member) => member.grn}
+      search={{ placeholder: "Search members" }}
+      empty={
+        <EmptyState
+          icon={UsersRound}
+          title="No members"
+          description="This team has no members."
+        />
+      }
+    />
   );
 }

@@ -1,6 +1,5 @@
 import {
   UNNAMED_AGENT,
-  agentChoiceLabel,
   directoryAgents,
   kindFromGrn,
   lookUpAgent,
@@ -36,11 +35,18 @@ export type TeamMember = {
   nameRead: boolean;
 };
 
-/** A person or an agent the team does not hold yet. */
+/**
+ * A person or an agent the team does not hold yet: its name, or what
+ * stands in for one, and the identifier that tells two of one name
+ * apart, which the choice shows in mono beside the name.
+ */
 export type Candidate = {
   grn: string;
   kind: "person" | "agent";
-  label: string;
+  name: string;
+  identifier: string;
+  /** Where an agent stands, when no operator has reported it yet. */
+  note?: string;
 };
 
 /** Looks `grn` up in `catalog` by the key `keyOf` reads. */
@@ -113,11 +119,11 @@ export function resolveTeamMembers(
 
 /**
  * The people and agents of the organization the team does not hold,
- * people first. A person without a name on record is offered under
- * their identifier, said to be one. An agent is offered by name with
- * its identifier, including one still awaiting an operator: its GRN is
- * minted with its definition, and a team holds GRNs (ADR-0075). A
- * refused list offers no one.
+ * people first, each with its identifier. A person without a name on
+ * record is offered as having none. An agent is offered by name,
+ * including one still awaiting an operator: its GRN is minted with its
+ * definition, and a team holds GRNs (ADR-0075). A refused list offers
+ * no one.
  */
 export function teamCandidates(
   members: readonly GroupMember[],
@@ -131,16 +137,17 @@ export function teamCandidates(
       .map((person): Candidate => ({
         grn: person.userGrn,
         kind: "person",
-        label:
-          person.nickname ??
-          `No name on record (${slugFromGrn(person.userGrn)})`,
+        name: person.nickname ?? "No name on record",
+        identifier: slugFromGrn(person.userGrn),
       })),
     ...directoryAgents(agents)
       .filter((agent) => !held.has(agent.grn))
       .map((agent): Candidate => ({
         grn: agent.grn,
         kind: "agent",
-        label: agentChoiceLabel(agent),
+        name: agent.name ?? UNNAMED_AGENT,
+        identifier: agent.identifier,
+        ...(agent.reported === "awaiting" ? { note: "awaiting operator" } : {}),
       })),
   ];
 }

@@ -9,6 +9,7 @@ import { renderServerComponent } from "@/testing/render";
 import {
   API_URL,
   alice,
+  answerPermissionChecks,
   aliceMembership,
   fieldAgent,
   reportedAgent,
@@ -43,6 +44,13 @@ function membersAre(...grns: string[]) {
 
 function renderTeam() {
   return renderServerComponent(TeamPage(params("acme", "eng")));
+}
+
+/** Opens the choice of whom to add and answers what it offers. */
+async function offered(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("combobox", { name: "Person or agent" }));
+  const options = await screen.findAllByRole("option");
+  return options.map((option) => option.textContent);
 }
 
 describe("team page", () => {
@@ -90,19 +98,15 @@ describe("team page", () => {
       ),
     );
 
+    const user = userEvent.setup();
     await renderTeam();
 
-    const choice = screen.getByLabelText("Person or agent");
-    const offered = within(choice)
-      .getAllByRole("option")
-      .map((option) => option.textContent);
     // A defined agent is offered by name before any operator claims
     // it, with its identifier and its state beside the name (ADR-0075).
-    expect(offered).toEqual([
-      "Choose who to add",
-      "Bob · Person",
-      "Scout (9f2ac1b40d8e7a35) · awaiting operator · Agent",
-      `Unnamed agent (${slugFromGrn(reportedAgent.grn)}) · Agent`,
+    expect(await offered(user)).toEqual([
+      "Bob bob",
+      "Scout 9f2ac1b40d8e7a35 · awaiting operator",
+      `Unnamed agent ${slugFromGrn(reportedAgent.grn)}`,
     ]);
   });
 
@@ -138,15 +142,18 @@ describe("team page", () => {
         name: "Remove Scout from Engineering",
       }),
     );
-    expect(
-      screen.getByText(
-        "Remove Scout from Engineering? Only this team membership goes; nothing else changes in the organization or in other teams.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.queryByText(/0a1b2c3d4e5f6071\)/)).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Confirm removal" }));
+    const dialog = screen.getByRole("alertdialog", {
+      name: "Remove Scout from Engineering?",
+    });
+    expect(within(dialog).queryByText(/0a1b2c3d4e5f6071/)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Remove from team" }));
 
     await vi.waitFor(() => expect(removed).toEqual([second]));
+    // The removal answered closes the dialog, which is what hands the
+    // page back.
+    await vi.waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
+    );
     expect(
       within(screen.getByRole("row", { name: /9f2ac1b40d8e7a35/ })).getByRole(
         "button",
@@ -171,6 +178,7 @@ describe("team page", () => {
   it("says agents may be missing, not that none can be chosen, when one agent list is refused", async () => {
     // The control: with both agent lists read, nothing is said missing.
     server.use(membersAre(alice.grn));
+    const user = userEvent.setup();
     const allowed = await renderTeam();
     expect(screen.queryByText(/may be missing here/)).not.toBeInTheDocument();
     allowed.unmount();
@@ -190,11 +198,8 @@ describe("team page", () => {
     ).toBeInTheDocument();
     // The reported list still offers its agent, so "none can be chosen"
     // would be false.
-    const offered = within(screen.getByLabelText("Person or agent"))
-      .getAllByRole("option")
-      .map((option) => option.textContent);
-    expect(offered).toContain(
-      `Unnamed agent (${slugFromGrn(reportedAgent.grn)}) · Agent`,
+    expect(await offered(user)).toContain(
+      `Unnamed agent ${slugFromGrn(reportedAgent.grn)}`,
     );
     expect(
       screen.queryByText(/none of them can be chosen/),
@@ -272,16 +277,15 @@ describe("team page", () => {
   // are looked up in. The team is not missing, and a member the list
   // was not read for is not missing either.
   it.each([
-    ["agents", "Agent", "agents are"],
-    ["members", "Person", "people are"],
+    ["agents", "Agent", "agents"],
+    ["members", "Person", "people"],
   ])(
     "keeps the team readable when the %s list is refused",
-    async (segment, type, marker) => {
+    async (segment, type, listed) => {
       // The control: with the list answered, no member is unchecked, so
       // the mark below is the refusal and not every render.
-      // Presence: the mark is a sentence that goes on to name the list.
       const allowed = await renderTeam();
-      expect(screen.queryByText(/^Not checked:/)).not.toBeInTheDocument();
+      expect(screen.queryByText("Not checked")).not.toBeInTheDocument();
       allowed.unmount();
 
       server.use(
@@ -300,9 +304,11 @@ describe("team page", () => {
         .find((row) => within(row).queryByText(type) !== null);
       expect(refused).toBeDefined();
       if (refused === undefined) return;
-      // Presence: the mark continues with the list it could not read.
+      expect(within(refused).getByText("Not checked")).toBeInTheDocument();
       expect(
-        within(refused).getByText(new RegExp(`^Not checked: .*${marker}`)),
+        within(refused).getByText(
+          `This organization's ${listed} are not listed to you`,
+        ),
       ).toBeInTheDocument();
       expect(
         within(refused).queryByText("Not found in this organization"),
@@ -339,9 +345,10 @@ describe("team page", () => {
 
     await renderTeam();
 
-    expect(
-      screen.getByRole("heading", { name: "You cannot view this team" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      // Presence: the notice goes on to say where access comes from.
+      /^You cannot view this team/,
+    );
     expect(screen.queryByText("Engineering")).not.toBeInTheDocument();
   });
 
@@ -402,5 +409,127 @@ describe("team page", () => {
     server.use(...signedOut());
 
     await expect(renderTeam()).rejects.toThrow("NEXT_REDIRECT:/login");
+  });
+  it("keeps the rename in Settings and the delete in its danger zone", async () => {
+    const user = userEvent.setup();
+    await renderTeam();
+
+    expect(screen.queryByLabelText("Team name")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+
+    expect(screen.getByLabelText("Team name")).toHaveValue("Engineering");
+    const danger = screen.getByRole("region", { name: "Danger zone" });
+    expect(
+      within(danger).getByRole("button", { name: "Delete team" }),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves out each write the server denies and keeps the rest", async () => {
+    // The control: every write allowed, every control is there.
+    const user = userEvent.setup();
+    const allowed = await renderTeam();
+    expect(
+      screen.getByRole("combobox", { name: "Person or agent" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: /^Remove / }).length,
+    ).toBeGreaterThan(0);
+    allowed.unmount();
+
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "group:member-add" || action === "group:member-remove"
+          ? "deny"
+          : "allow",
+      ),
+    );
+    await renderTeam();
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Engineering" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Remove / }),
+    ).not.toBeInTheDocument();
+    // The members are still listed; only the control went.
+    // Presence: a row's accessible name is all of its cells.
+    expect(screen.getByRole("row", { name: /Alice/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(screen.getByLabelText("Team name")).toBeInTheDocument();
+  });
+
+  it("drops the Settings tab when the server denies renaming and deleting", async () => {
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "group:update" || action === "group:delete"
+          ? "deny"
+          : "allow",
+      ),
+    );
+
+    await renderTeam();
+
+    expect(screen.getByRole("tab", { name: "Overview" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "Settings" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("region", { name: "Danger zone" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows every control when the server cannot say", async () => {
+    server.use(answerPermissionChecks(() => "unknown"));
+    const user = userEvent.setup();
+
+    await renderTeam();
+
+    expect(
+      screen.getByRole("combobox", { name: "Person or agent" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: /^Remove / }).length,
+    ).toBeGreaterThan(0);
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+    expect(screen.getByLabelText("Team name")).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Danger zone" }),
+    ).toBeInTheDocument();
+  });
+
+  it("asks the server once, about this team, for every write it offers", async () => {
+    const asked: unknown[] = [];
+    server.use(
+      http.post(
+        `${API_URL}/orgs/acme/permission-checks`,
+        async ({ request }) => {
+          const body = (await request.json()) as {
+            checks: { action: string }[];
+          };
+          asked.push(body);
+          return HttpResponse.json({
+            results: body.checks.map((check) => ({
+              ...check,
+              decision: "allow",
+            })),
+          });
+        },
+      ),
+    );
+
+    await renderTeam();
+
+    const group = { type: "group", id: "eng" };
+    expect(asked).toEqual([
+      {
+        checks: [
+          { action: "group:member-add", resource: group },
+          { action: "group:member-remove", resource: group },
+          { action: "group:update", resource: group },
+          { action: "group:delete", resource: group },
+        ],
+      },
+    ]);
   });
 });

@@ -2,9 +2,17 @@
 
 import { useActionState, useState } from "react";
 
-import { KeptSelect } from "@/components/kept-select";
+import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   addGroupMember,
   type AddGroupMemberState,
@@ -16,8 +24,14 @@ const initialState: AddGroupMemberState = { status: "idle" };
 
 /**
  * Adds a person or an agent of this organization to the team, chosen by
- * name with its type beside it. Only people and agents the team does
- * not already hold are offered, so a member cannot be chosen twice.
+ * name under its type. Only people and agents the team does not already
+ * hold are offered, so a member cannot be chosen twice.
+ *
+ * The select stands outside the `<form>` and its choice is submitted
+ * from a hidden input. React resets a form after its action, and the
+ * select returns to its first value on a reset of the form holding it,
+ * while a hidden input's value is its default; so a refused choice is
+ * still the one shown and sent when the form is submitted again.
  */
 export function AddTeamMemberForm({
   org,
@@ -47,79 +61,95 @@ export function AddTeamMemberForm({
   const choice = candidates.some((candidate) => candidate.grn === chosen)
     ? chosen
     : "";
-  const people = candidates.filter((candidate) => candidate.kind === "person");
-  const agents = candidates.filter((candidate) => candidate.kind === "agent");
+  const groups = [
+    {
+      label: "People",
+      entries: candidates.filter((candidate) => candidate.kind === "person"),
+    },
+    {
+      label: "Agents",
+      entries: candidates.filter((candidate) => candidate.kind === "agent"),
+    },
+  ].filter((group) => group.entries.length > 0);
+
+  const notes = [
+    ...(unlisted.length > 0
+      ? [
+          `This organization's ${unlisted.join(" and ")} are not listed to you, so none of them can be chosen here.`,
+        ]
+      : []),
+    ...(partlyListed.length > 0
+      ? [
+          `This organization's ${partlyListed.join(" and ")} are not listed to you, so some agents may be missing here.`,
+        ]
+      : []),
+  ];
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="font-heading text-lg font-semibold">Add a member</h2>
-      {unlisted.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          This organization&apos;s {unlisted.join(" and ")} are not listed to
-          you, so none of them can be chosen here.
-        </p>
-      )}
-      {partlyListed.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          This organization&apos;s {partlyListed.join(" and ")} are not listed
-          to you, so some agents may be missing here.
-        </p>
-      )}
+    <section
+      aria-labelledby="add-member-title"
+      className="flex flex-col gap-3 rounded-xl border bg-card p-4"
+    >
+      <h2 id="add-member-title" className="text-base">
+        Add a member
+      </h2>
       {candidates.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {unlisted.length > 0 || partlyListed.length > 0
-            ? "No one you can list is outside this team."
-            : "Every person and agent of this organization is already in this team."}
-        </p>
+        <div className="flex flex-col gap-1 text-muted-foreground">
+          {notes.map((note) => (
+            <p key={note}>{note}</p>
+          ))}
+          <p>
+            {notes.length > 0
+              ? "No one you can list is outside this team."
+              : "Every person and agent of this organization is already in this team."}
+          </p>
+        </div>
       ) : (
-        <form
-          action={formAction}
-          className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end"
-        >
-          <input type="hidden" name="org" value={org} />
-          <input type="hidden" name="group" value={team} />
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <Label htmlFor="member">Person or agent</Label>
-            <KeptSelect
-              id="member"
-              name="member"
-              required
-              value={choice}
-              onChange={(event) => setChosen(event.target.value)}
-              className="w-full min-w-0"
-            >
-              <option value="" disabled>
-                Choose who to add
-              </option>
-              {people.length > 0 && (
-                <optgroup label="People">
-                  {people.map((candidate) => (
-                    <option key={candidate.grn} value={candidate.grn}>
-                      {candidate.label} · Person
-                    </option>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <FormField
+            label="Person or agent"
+            hint={notes.length > 0 ? notes.join(" ") : undefined}
+            error={state.status === "error" ? state.message : undefined}
+            className="min-w-0 sm:max-w-sm"
+          >
+            {(control) => (
+              <Select value={choice} onValueChange={setChosen}>
+                <SelectTrigger {...control} className="w-full">
+                  <SelectValue placeholder="Choose who to add" />
+                </SelectTrigger>
+                <SelectContent>
+                  {groups.map((group) => (
+                    <SelectGroup key={group.label}>
+                      <SelectLabel>{group.label}</SelectLabel>
+                      {group.entries.map((candidate) => (
+                        <SelectItem key={candidate.grn} value={candidate.grn}>
+                          <span>{candidate.name}</span>{" "}
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {candidate.identifier}
+                          </span>
+                          {candidate.note && (
+                            <span className="text-muted-foreground">
+                              {" "}
+                              · {candidate.note}
+                            </span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   ))}
-                </optgroup>
-              )}
-              {agents.length > 0 && (
-                <optgroup label="Agents">
-                  {agents.map((candidate) => (
-                    <option key={candidate.grn} value={candidate.grn}>
-                      {candidate.label} · Agent
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </KeptSelect>
-          </div>
-          <Button type="submit" disabled={pending}>
-            {pending ? "Adding…" : "Add to team"}
-          </Button>
-        </form>
-      )}
-      {state.status === "error" && (
-        <p role="alert" className="text-sm text-destructive">
-          {state.message}
-        </p>
+                </SelectContent>
+              </Select>
+            )}
+          </FormField>
+          <form action={formAction} className="sm:mt-6">
+            <input type="hidden" name="org" value={org} />
+            <input type="hidden" name="group" value={team} />
+            <input type="hidden" name="member" value={choice} />
+            <Button type="submit" disabled={pending || choice === ""}>
+              {pending ? "Adding…" : "Add to team"}
+            </Button>
+          </form>
+        </div>
       )}
     </section>
   );

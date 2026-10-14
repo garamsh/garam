@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { DeleteTeamForm } from "@/app/console/orgs/[org]/teams/[team]/_components/delete-team-form";
+import { DeleteTeamDialog } from "@/app/console/orgs/[org]/teams/[team]/_components/delete-team-dialog";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
@@ -19,7 +19,7 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 const GROUP = `${API_URL}/orgs/acme/groups/eng`;
 
 /**
- * Shows what the form's action threw. A delete that succeeds ends in
+ * Shows what the dialog's action threw. A delete that succeeds ends in
  * `redirect()`, which throws to navigate; this is where it lands.
  */
 class Navigation extends Component<
@@ -35,18 +35,20 @@ class Navigation extends Component<
   }
 }
 
-function renderForm() {
+function renderDialog() {
   return render(
-    <DeleteTeamForm
-      org="acme"
-      team="eng"
-      teamName="Engineering"
-      memberCount={2}
-    />,
+    <Navigation>
+      <DeleteTeamDialog
+        org="acme"
+        team="eng"
+        teamName="Engineering"
+        memberships="2 memberships"
+      />
+    </Navigation>,
   );
 }
 
-describe("delete team form", () => {
+describe("delete team dialog", () => {
   it("names the team and what goes with it before deleting anything", async () => {
     const deleted: string[] = [];
     server.use(
@@ -56,23 +58,24 @@ describe("delete team form", () => {
       }),
     );
     const user = userEvent.setup();
-    renderForm();
+    renderDialog();
 
     await user.click(screen.getByRole("button", { name: "Delete team" }));
 
-    // Presence: the sentence goes on to say what stays.
     expect(
-      screen.getByText(
-        /^Delete Engineering\? This removes the team and its 2 memberships;/,
-      ),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Delete Engineering" }),
-    ).toBeInTheDocument();
+      screen.getByRole("alertdialog", { name: "Delete Engineering?" }),
+    ).toHaveAccessibleDescription(
+      "This removes the team and its 2 memberships. The people and agents in it stay in this organization. garam cannot bring the team back.",
+    );
+    // The act is named on the button that does it, not "Confirm".
+    expect(screen.getByRole("button", { name: "Delete team" })).toHaveAttribute(
+      "type",
+      "submit",
+    );
     expect(deleted).toEqual([]);
   });
 
-  it("keeps the team and shows why when garam refuses the delete", async () => {
+  it("keeps the team and says why in the dialog when garam refuses", async () => {
     let refusing = true;
     server.use(
       http.delete(GROUP, () =>
@@ -85,32 +88,20 @@ describe("delete team form", () => {
       ),
     );
     const user = userEvent.setup();
-    render(
-      <Navigation>
-        <DeleteTeamForm
-          org="acme"
-          team="eng"
-          teamName="Engineering"
-          memberCount={2}
-        />
-      </Navigation>,
-    );
+    renderDialog();
 
     await user.click(screen.getByRole("button", { name: "Delete team" }));
-    await user.click(
-      screen.getByRole("button", { name: "Delete Engineering" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Delete team" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       REFUSAL_COPY.permissionDenied,
     );
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
 
-    // The control: the same confirmation garam accepts returns to the
-    // list, so staying above is garam's refusal and not the form.
+    // The control: the same dialog garam accepts returns to the list,
+    // so staying above is garam's refusal and not the dialog.
     refusing = false;
-    await user.click(
-      screen.getByRole("button", { name: "Delete Engineering" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Delete team" }));
     expect(
       await screen.findByText("NEXT_REDIRECT:/console/orgs/acme/teams"),
     ).toBeInTheDocument();

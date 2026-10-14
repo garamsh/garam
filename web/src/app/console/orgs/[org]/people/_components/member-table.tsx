@@ -1,61 +1,96 @@
+"use client";
+
+import { UserRound } from "lucide-react";
+
 import { CopyId } from "@/components/copy-id";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { slugFromGrn, type Member } from "@/features/orgs";
+import { DataTable, type ColumnDef } from "@/components/data-table";
+import { Time } from "@/components/time";
+import type { Member } from "@/features/orgs";
+
+import { EmptyState } from "../../../../_components/empty-state";
+
+/** One member as its row shows it. */
+export type MemberRow = {
+  /** The segment the API addresses the member by (ADR-0011). */
+  identifier: string;
+  /** Null where the member's user row is gone. */
+  nickname: string | null;
+  role: Member["role"];
+  since: string;
+};
+
+const ROLE_LABEL: Record<Member["role"], string> = {
+  owner: "Owner",
+  admin: "Admin",
+  member: "Member",
+};
+
+const NO_NAME = "No name on record";
+
+const COLUMNS: ColumnDef<MemberRow, unknown>[] = [
+  {
+    id: "name",
+    header: "Name",
+    accessorFn: (member) =>
+      `${member.nickname ?? NO_NAME} ${member.identifier}`,
+    sortingFn: (a, b) =>
+      (a.original.nickname ?? "").localeCompare(b.original.nickname ?? ""),
+    cell: ({ row: { original: member } }) => (
+      <div className="flex min-w-0 flex-col gap-0.5">
+        {member.nickname === null ? (
+          <span className="text-muted-foreground">{NO_NAME}</span>
+        ) : (
+          <span className="font-medium">{member.nickname}</span>
+        )}
+        <CopyId
+          value={member.identifier}
+          label={member.nickname ?? "this member"}
+          className="flex"
+        />
+      </div>
+    ),
+  },
+  {
+    id: "role",
+    header: "Role",
+    accessorFn: (member) => ROLE_LABEL[member.role],
+    cell: ({ row: { original: member } }) => ROLE_LABEL[member.role],
+  },
+  {
+    id: "since",
+    header: "Member since",
+    accessorFn: (member) => member.since,
+    enableGlobalFilter: false,
+    cell: ({ row: { original: member } }) => <Time value={member.since} />,
+  },
+];
 
 /**
- * The organization's members by name, role and joining date. A member
- * is shown by the name the user row carries, and the identifier segment
- * the API addresses them by (ADR-0011) — `local-` and all, for an
- * account garam minted — is offered beneath it to copy rather than as
- * text to read.
+ * The organization's members by name, role and joining time. A member
+ * is shown by the name the user row carries, and the identifier the API
+ * addresses them by is offered beneath it to copy rather than as text
+ * to read.
  *
  * `nickname` is absent only where that row is gone
  * (`api/openapi.yaml` §Member), and the cell then says so rather than
  * lifting the identifier into the name's place: an identity subject
  * put where a name goes reads as a name and names nobody.
  */
-export function MemberTable({ members }: { members: Member[] }) {
+export function MemberTable({ members }: { members: readonly MemberRow[] }) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>User</TableHead>
-          <TableHead>Role</TableHead>
-          <TableHead>Member since</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {members.map((member) => (
-          <TableRow key={member.userGrn}>
-            <TableCell className="font-medium">
-              {member.nickname ?? (
-                <span className="font-normal text-muted-foreground">
-                  No name on record
-                </span>
-              )}
-              <CopyId
-                value={slugFromGrn(member.userGrn)}
-                label={member.nickname ?? "this member"}
-                className="flex"
-              />
-            </TableCell>
-            <TableCell>
-              <Badge variant="secondary">{member.role}</Badge>
-            </TableCell>
-            <TableCell>
-              <time dateTime={member.since}>{member.since.slice(0, 10)}</time>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <DataTable
+      label="People"
+      columns={COLUMNS}
+      data={[...members]}
+      getRowId={(member) => member.identifier}
+      search={{ placeholder: "Search people" }}
+      empty={
+        <EmptyState
+          icon={UserRound}
+          title="No people"
+          description="No one belongs to this organization."
+        />
+      }
+    />
   );
 }

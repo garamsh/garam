@@ -37,9 +37,21 @@ function serveConsents(...consents: unknown[]) {
 const refused = (status: number) =>
   HttpResponse.json({ kind: "permission_denied", message: "no" }, { status });
 
+/** Every word on screen but what a `code` element shows. */
+function textOutsideCode(root: HTMLElement): string {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let text = "";
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    if (!node.parentElement?.closest("code")) text += node.textContent;
+  }
+  return text;
+}
+
 /** The card for the pair with `other`. */
 function card(other: string) {
-  return within(screen.getByRole("group", { name: `Consent with ${other}` }));
+  return within(
+    screen.getByRole("group", { name: `Other organization ${other}` }),
+  );
 }
 
 describe("consents section", () => {
@@ -70,7 +82,7 @@ describe("consents section", () => {
     ).toBeInTheDocument();
     expect(
       globex.getByText(
-        "globex has granted its half. Messages stay refused until this organization grants its own.",
+        "The other organization has granted its half. Messages stay refused until this organization grants its own.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -89,10 +101,12 @@ describe("consents section", () => {
     await renderServerComponent(ConsentsPage(params("acme")));
 
     const globex = card("globex");
-    expect(globex.getByText("Waiting for globex")).toBeInTheDocument();
+    expect(
+      globex.getByText("Waiting for the other organization"),
+    ).toBeInTheDocument();
     expect(
       globex.getByText(
-        "This organization has granted its half. Messages stay refused until globex grants its own.",
+        "This organization has granted its half. Messages stay refused until the other organization grants its own.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -149,6 +163,93 @@ describe("consents section", () => {
     expect(
       card("globex").getByRole("button", { name: "Grant consent" }),
     ).toBeInTheDocument();
+  });
+
+  it("reads the other organization's identifier nowhere but its copy field", async () => {
+    // garam gives an organization created through the API a random hex
+    // identifier, which no sentence, label or title can read as a name.
+    const hex = "3fa9c2d1e0b4a7f6";
+    serveConsents(
+      {
+        orgGrn: `grn:root:default:org:${hex}`,
+        grantedHere: false,
+        grantedThere: true,
+        stands: false,
+      },
+      {
+        orgGrn: "grn:root:default:org:initech",
+        grantedHere: true,
+        grantedThere: true,
+        stands: true,
+      },
+    );
+
+    const { container } = await renderServerComponent(
+      ConsentsPage(params("acme")),
+    );
+
+    // The control: the identifier is on the page, in its copy field.
+    const card = within(
+      screen.getByRole("group", { name: `Other organization ${hex}` }),
+    );
+    expect(card.getByText(hex, { selector: "code" })).toBeInTheDocument();
+    expect(textOutsideCode(container)).not.toContain(hex);
+    expect(textOutsideCode(container)).not.toContain("initech");
+  });
+
+  it("leaves out the withdrawal the server denies, and keeps the grant it allows", async () => {
+    serveConsents(
+      { ...globexConsent, grantedHere: false, stands: false },
+      {
+        orgGrn: "grn:root:default:org:initech",
+        grantedHere: true,
+        grantedThere: true,
+        stands: true,
+      },
+    );
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "consent:withdraw" ? "deny" : "allow",
+      ),
+    );
+
+    await renderServerComponent(ConsentsPage(params("acme")));
+
+    expect(
+      card("initech").queryByRole("button", { name: "Withdraw consent" }),
+    ).not.toBeInTheDocument();
+    // The control: the same answer allowed the grant, which is offered.
+    expect(
+      card("globex").getByRole("button", { name: "Grant consent" }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders the withdrawal when its check answers unknown, beside a denied grant left out", async () => {
+    serveConsents(
+      { ...globexConsent, grantedHere: false, stands: false },
+      {
+        orgGrn: "grn:root:default:org:initech",
+        grantedHere: true,
+        grantedThere: true,
+        stands: true,
+      },
+    );
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "consent:withdraw" ? "unknown" : "deny",
+      ),
+    );
+
+    await renderServerComponent(ConsentsPage(params("acme")));
+
+    expect(
+      card("initech").getByRole("button", { name: "Withdraw consent" }),
+    ).toBeInTheDocument();
+    // The control: the deny beside it is honoured, so the unknown is
+    // what kept the withdrawal.
+    expect(
+      card("globex").queryByRole("button", { name: "Grant consent" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows an empty state when the organization holds no relation", async () => {

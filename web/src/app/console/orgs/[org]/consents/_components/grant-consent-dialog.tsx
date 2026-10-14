@@ -54,8 +54,8 @@ export function GrantConsentDialog({ org }: { org: string }) {
       {state.status === "granted" && !open && (
         <p role="status" className="text-muted-foreground">
           {state.stands
-            ? `Granted. Messages now cross with ${state.other}.`
-            : `Granted. Messages stay refused until ${state.other} grants its own half.`}
+            ? "Granted. Messages now cross with the other organization."
+            : "Granted. Messages stay refused until the other organization grants its own half."}
         </p>
       )}
       <Dialog open={open} onOpenChange={setOpen}>

@@ -3,8 +3,9 @@ import { DescriptionList } from "@/components/description-list";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Card } from "@/components/ui/card";
 
-import { GrantFromCard } from "./grant-from-card";
-import { WithdrawConsentDialog } from "./withdraw-consent-dialog";
+import { grantOrgConsent, withdrawOrgConsent } from "@/features/orgs/actions";
+
+import { ConsentConfirmDialog } from "./consent-confirm-dialog";
 
 /**
  * Where a pair stands, as one of the three states garam can serve.
@@ -20,32 +21,27 @@ function pairOf(grantedHere: boolean, stands: boolean): Pair {
   return grantedHere ? "awaiting-there" : "awaiting-here";
 }
 
-const PAIR: Record<
-  Pair,
-  { tone: StatusTone; label: (other: string) => string }
-> = {
-  crossing: { tone: "ok", label: () => "Messages cross" },
-  "awaiting-here": {
-    tone: "info",
-    label: () => "Waiting for this organization",
-  },
+// The other organization is named by its identifier alone, which is
+// often random hex, so no sentence or label carries it; the card's
+// `CopyField` is the one place it is read (ADR-0103 §Principles).
+const PAIR: Record<Pair, { tone: StatusTone; label: string }> = {
+  crossing: { tone: "ok", label: "Messages cross" },
+  "awaiting-here": { tone: "info", label: "Waiting for this organization" },
   "awaiting-there": {
     tone: "neutral",
-    label: (other) => `Waiting for ${other}`,
+    label: "Waiting for the other organization",
   },
 };
 
 /** What the pair's state means for messages, in one sentence. */
-function summary(pair: Pair, other: string): string {
-  switch (pair) {
-    case "crossing":
-      return `Both halves stand, so messages cross between this organization and ${other} in either direction.`;
-    case "awaiting-there":
-      return `This organization has granted its half. Messages stay refused until ${other} grants its own.`;
-    case "awaiting-here":
-      return `${other} has granted its half. Messages stay refused until this organization grants its own.`;
-  }
-}
+const SUMMARY: Record<Pair, string> = {
+  crossing:
+    "Both halves stand, so messages cross between the two organizations in either direction.",
+  "awaiting-there":
+    "This organization has granted its half. Messages stay refused until the other organization grants its own.",
+  "awaiting-here":
+    "The other organization has granted its half. Messages stay refused until this organization grants its own.",
+};
 
 function Half({ granted }: { granted: boolean }) {
   return granted ? (
@@ -86,12 +82,12 @@ export function ConsentCard({
   return (
     <Card
       role="group"
-      aria-label={`Consent with ${other}`}
+      aria-label={`Other organization ${other}`}
       className="w-full gap-4 p-4"
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <CopyField label="Other organization" value={other} />
-        <StatusDot tone={status.tone} label={status.label(other)} />
+        <StatusDot tone={status.tone} label={status.label} />
       </div>
       <DescriptionList
         items={[
@@ -105,12 +101,33 @@ export function ConsentCard({
           },
         ]}
       />
-      <p className="text-muted-foreground">{summary(pair, other)}</p>
+      <p className="text-muted-foreground">{SUMMARY[pair]}</p>
       {pair === "awaiting-here" && mayGrant && (
-        <GrantFromCard org={org} other={other} />
+        <ConsentConfirmDialog
+          org={org}
+          other={other}
+          action={grantOrgConsent}
+          act="Grant consent"
+          doing="Granting…"
+          title="Grant this organization's consent?"
+          consequence="The other organization already holds its half, so messages cross between the two organizations in either direction from then on."
+        />
       )}
       {grantedHere && mayWithdraw && (
-        <WithdrawConsentDialog org={org} other={other} stands={stands} />
+        <ConsentConfirmDialog
+          org={org}
+          other={other}
+          action={withdrawOrgConsent}
+          act="Withdraw consent"
+          doing="Withdrawing…"
+          title="Withdraw this organization's consent?"
+          consequence={
+            stands
+              ? "Messages between the two organizations stop at once. The other organization keeps its own half, so granting again here would let them cross."
+              : "Nothing crosses today, because the other organization has not granted its half, and withdrawing removes the relation."
+          }
+          destructive
+        />
       )}
     </Card>
   );

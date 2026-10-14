@@ -8,7 +8,9 @@ test.describe("consents", () => {
     signedIn,
   }) => {
     const partner = signedIn.partnerOrgSlug;
-    const card = page.getByRole("group", { name: `Consent with ${partner}` });
+    const card = page.getByRole("group", {
+      name: `Other organization ${partner}`,
+    });
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/consents`);
 
@@ -22,23 +24,28 @@ test.describe("consents", () => {
     ).toBeHidden();
 
     // Granted from the card itself: the other organization is not
-    // typed again.
+    // typed again, and the dialog names the act.
     await expectHydrated(page);
     await card.getByRole("button", { name: "Grant consent" }).click();
+    const grant = page.getByRole("alertdialog", {
+      name: "Grant this organization's consent?",
+    });
+    await grant.getByRole("button", { name: "Grant consent" }).click();
+    await expect(grant).toBeHidden();
 
     await expect(
       card.getByText("Messages cross", { exact: true }),
     ).toBeVisible();
     await expect(
       card.getByText(
-        `Both halves stand, so messages cross between this organization and ${partner} in either direction.`,
+        "Both halves stand, so messages cross between the two organizations in either direction.",
         { exact: true },
       ),
     ).toBeVisible();
 
     await card.getByRole("button", { name: "Withdraw consent" }).click();
     const dialog = page.getByRole("alertdialog", {
-      name: `Withdraw consent for ${partner}?`,
+      name: "Withdraw this organization's consent?",
     });
     await expect(dialog).toBeVisible();
     // Opening the dialog withdrew nothing.
@@ -72,6 +79,10 @@ test.describe("consents", () => {
     await dialog.getByRole("button", { name: "Grant consent" }).click();
 
     await expect(field).toHaveAttribute("aria-invalid", "true");
+    // The grant's own sentence, not garam's English.
+    await expect(field).toHaveAccessibleDescription(
+      "The identifier the other organization is addressed by. That is this organization's own identifier. A consent is granted to another organization.",
+    );
     await expect(field).toHaveValue(signedIn.orgSlug);
     await expect(dialog).toBeVisible();
   });

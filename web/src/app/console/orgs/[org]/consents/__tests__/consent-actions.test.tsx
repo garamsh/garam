@@ -3,9 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
+import { ConsentConfirmDialog } from "@/app/console/orgs/[org]/consents/_components/consent-confirm-dialog";
 import { GrantConsentDialog } from "@/app/console/orgs/[org]/consents/_components/grant-consent-dialog";
-import { GrantFromCard } from "@/app/console/orgs/[org]/consents/_components/grant-from-card";
-import { WithdrawConsentDialog } from "@/app/console/orgs/[org]/consents/_components/withdraw-consent-dialog";
+import { grantOrgConsent, withdrawOrgConsent } from "@/features/orgs/actions";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
 import { enter } from "@/testing/enter";
 import { API_URL, globexConsent } from "@/testing/mocks/handlers";
@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 const CONSENT = `${API_URL}/orgs/acme/consents/:other`;
+const HEX = "3fa9c2d1e0b4a7f6";
 
 /** Records each path the actions wrote, and answers as garam does. */
 function record(method: "put" | "delete", answer: () => Response) {
@@ -35,35 +36,170 @@ function record(method: "put" | "delete", answer: () => Response) {
   return written;
 }
 
-const denied = () =>
-  HttpResponse.json(
-    { kind: "permission_denied", message: "the admin role is required" },
-    { status: 403 },
-  );
+const refused = (status: number, kind: string, message: string) => () =>
+  HttpResponse.json({ kind, message }, { status });
 
-describe("grant from a waiting card", () => {
-  it("grants the card's pair without asking for the other organization", async () => {
-    const granted = record("put", () => HttpResponse.json(globexConsent));
+const denied = refused(403, "permission_denied", "the admin role is required");
+
+/** The two confirmations a card offers, as the card renders them. */
+const ACTS = [
+  {
+    act: "Grant consent",
+    method: "put",
+    title: "Grant this organization's consent?",
+    render: () => (
+      <ConsentConfirmDialog
+        org="acme"
+        other={HEX}
+        action={grantOrgConsent}
+        act="Grant consent"
+        doing="Granting…"
+        title="Grant this organization's consent?"
+        consequence="The other organization already holds its half, so messages cross between the two organizations in either direction from then on."
+      />
+    ),
+    landed: () => HttpResponse.json(globexConsent),
+  },
+  {
+    act: "Withdraw consent",
+    method: "delete",
+    title: "Withdraw this organization's consent?",
+    render: () => (
+      <ConsentConfirmDialog
+        org="acme"
+        other={HEX}
+        action={withdrawOrgConsent}
+        act="Withdraw consent"
+        doing="Withdrawing…"
+        title="Withdraw this organization's consent?"
+        consequence="Messages between the two organizations stop at once."
+        destructive
+      />
+    ),
+    landed: () => new HttpResponse(null, { status: 204 }),
+  },
+] as const;
+
+describe.each(ACTS)("$act confirmation", (subject) => {
+  async function ask(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole("button", { name: subject.act }));
+    return within(screen.getByRole("alertdialog", { name: subject.title }));
+  }
+
+  it("writes on the dialog's named button and not on the click that opens it", async () => {
+    // The refusal and its control are read together: opening sends
+    // nothing, and the same recorder shows the confirmed one sending.
+    const written = record(subject.method, subject.landed);
     const user = userEvent.setup();
-    render(<GrantFromCard org="acme" other="globex" />);
+    render(subject.render());
 
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Grant consent" }));
+    const dialog = await ask(user);
+    expect(written).toEqual([]);
+
+    await user.click(dialog.getByRole("button", { name: subject.act }));
 
     await vi.waitFor(() =>
-      expect(granted).toEqual(["/orgs/acme/consents/globex"]),
+      expect(written).toEqual([`/orgs/acme/consents/${HEX}`]),
+    );
+    await vi.waitFor(() =>
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
     );
   });
 
-  it("says a refusal beside the button", async () => {
-    record("put", denied);
+  it("sends nothing when cancelled", async () => {
+    const written = record(subject.method, subject.landed);
     const user = userEvent.setup();
-    render(<GrantFromCard org="acme" other="globex" />);
+    render(subject.render());
 
-    await user.click(screen.getByRole("button", { name: "Grant consent" }));
+    const dialog = await ask(user);
+    await user.click(dialog.getByRole("button", { name: "Cancel" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(written).toEqual([]);
+  });
+
+  it("names the pair by its identifier in mono only, never in its words", async () => {
+    const user = userEvent.setup();
+    render(subject.render());
+
+    // Found by role alone, so a title carrying the identifier fails
+    // the assertion below rather than the lookup.
+    await user.click(screen.getByRole("button", { name: subject.act }));
+    const alert = screen.getByRole("alertdialog");
+
+    expect(
+      within(alert).getByText(HEX, { selector: "code" }),
+    ).toBeInTheDocument();
+    expect(alert).not.toHaveAccessibleName(new RegExp(HEX));
+    expect(alert).not.toHaveAccessibleDescription(new RegExp(HEX));
+  });
+
+  it("keeps the dialog open with the refusal in it", async () => {
+    record(subject.method, denied);
+    const user = userEvent.setup();
+    render(subject.render());
+
+    const dialog = await ask(user);
+    await user.click(dialog.getByRole("button", { name: subject.act }));
+
+    expect(await dialog.findByRole("alert")).toHaveTextContent(
       REFUSAL_COPY.permissionDenied,
+    );
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+});
+
+describe("refusals a grant reads in its own words", () => {
+  it.each([
+    [
+      "this organization itself",
+      refused(
+        400,
+        "invalid_argument",
+        "an organization consents with another, not with itself",
+      ),
+      REFUSAL_COPY.consentWithItself,
+    ],
+    [
+      "an organization garam does not hold",
+      refused(404, "not_found", "org not found"),
+      REFUSAL_COPY.consentPartnerNotFound,
+    ],
+  ])("says so for %s, with no server text", async (_case, answer, said) => {
+    record("put", answer);
+    const user = userEvent.setup();
+    render(<GrantConsentDialog org="acme" />);
+
+    await user.click(screen.getByRole("button", { name: "New consent" }));
+    const dialog = within(
+      screen.getByRole("dialog", { name: "Grant consent" }),
+    );
+    await enter(user, dialog.getByLabelText("Other organization"), "acme");
+    await user.click(dialog.getByRole("button", { name: "Grant consent" }));
+
+    const field = dialog.getByLabelText("Other organization");
+    await vi.waitFor(() =>
+      expect(field).toHaveAccessibleDescription(
+        `The identifier the other organization is addressed by. ${said}`,
+      ),
+    );
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(field).toHaveValue("acme");
+  });
+
+  it("leaves the same not-found to a withdrawal's generic sentence", async () => {
+    // The control: the sentence is the grant's own, not a remap of
+    // every 404 — the withdrawal reads the generic one.
+    record("delete", refused(404, "not_found", "org not found"));
+    const user = userEvent.setup();
+    render(ACTS[1].render());
+
+    await user.click(screen.getByRole("button", { name: "Withdraw consent" }));
+    const dialog = within(screen.getByRole("alertdialog"));
+    await user.click(dialog.getByRole("button", { name: "Withdraw consent" }));
+
+    expect(await dialog.findByRole("alert")).toHaveTextContent(
+      REFUSAL_COPY.notFound,
     );
   });
 });
@@ -74,15 +210,16 @@ describe("grant consent dialog", () => {
     const dialog = within(
       screen.getByRole("dialog", { name: "Grant consent" }),
     );
-    await enter(user, dialog.getByLabelText("Other organization"), "globex");
+    await enter(user, dialog.getByLabelText("Other organization"), HEX);
     await user.click(dialog.getByRole("button", { name: "Grant consent" }));
     return dialog;
   }
 
-  it("grants the half for the organization typed, closes, and says where the pair stands", async () => {
+  it("grants the half for the organization typed, closes, and says where the pair stands without its identifier", async () => {
     const granted = record("put", () =>
       HttpResponse.json({
-        ...globexConsent,
+        orgGrn: `grn:root:default:org:${HEX}`,
+        grantedHere: true,
         grantedThere: false,
         stands: false,
       }),
@@ -93,10 +230,11 @@ describe("grant consent dialog", () => {
     await grant(user);
 
     expect(await screen.findByRole("status")).toHaveTextContent(
-      "Granted. Messages stay refused until globex grants its own half.",
+      "Granted. Messages stay refused until the other organization grants its own half.",
     );
+    expect(screen.getByRole("status")).not.toHaveTextContent(HEX);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(granted).toEqual(["/orgs/acme/consents/globex"]);
+    expect(granted).toEqual([`/orgs/acme/consents/${HEX}`]);
   });
 
   it("attaches a refusal to the field and keeps the identifier typed", async () => {
@@ -111,86 +249,7 @@ describe("grant consent dialog", () => {
       await dialog.findByText(REFUSAL_COPY.permissionDenied),
     ).toBeInTheDocument();
     expect(field).toHaveAttribute("aria-invalid", "true");
-    expect(field).toHaveValue("globex");
+    expect(field).toHaveValue(HEX);
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-  });
-});
-
-describe("withdraw consent dialog", () => {
-  async function ask(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(screen.getByRole("button", { name: "Withdraw consent" }));
-    return within(
-      screen.getByRole("alertdialog", { name: "Withdraw consent for globex?" }),
-    );
-  }
-
-  it("withdraws on the dialog's named button and not on the click that opens it", async () => {
-    // The refusal and its control are read together: opening sends
-    // nothing, and the same recorder shows the confirmed one sending.
-    const withdrawn = record(
-      "delete",
-      () => new HttpResponse(null, { status: 204 }),
-    );
-    const user = userEvent.setup();
-    render(<WithdrawConsentDialog org="acme" other="globex" stands />);
-
-    const dialog = await ask(user);
-    expect(withdrawn).toEqual([]);
-
-    await user.click(dialog.getByRole("button", { name: "Withdraw consent" }));
-
-    await vi.waitFor(() =>
-      expect(withdrawn).toEqual(["/orgs/acme/consents/globex"]),
-    );
-    await vi.waitFor(() =>
-      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
-    );
-  });
-
-  it("sends nothing when cancelled", async () => {
-    const withdrawn = record(
-      "delete",
-      () => new HttpResponse(null, { status: 204 }),
-    );
-    const user = userEvent.setup();
-    render(<WithdrawConsentDialog org="acme" other="globex" stands />);
-
-    const dialog = await ask(user);
-    await user.click(dialog.getByRole("button", { name: "Cancel" }));
-
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    expect(withdrawn).toEqual([]);
-  });
-
-  it.each([
-    [
-      true,
-      "Messages between this organization and globex stop at once. globex keeps its own half, so granting again here would let them cross.",
-    ],
-    [
-      false,
-      "Nothing crosses today, because globex has not granted its half, and withdrawing removes the relation.",
-    ],
-  ])("says what stops when the pair stands is %s", async (stands, said) => {
-    const user = userEvent.setup();
-    render(<WithdrawConsentDialog org="acme" other="globex" stands={stands} />);
-
-    const dialog = await ask(user);
-
-    expect(dialog.getByText(said)).toBeInTheDocument();
-  });
-
-  it("keeps the dialog open with the refusal in it", async () => {
-    record("delete", denied);
-    const user = userEvent.setup();
-    render(<WithdrawConsentDialog org="acme" other="globex" stands />);
-
-    const dialog = await ask(user);
-    await user.click(dialog.getByRole("button", { name: "Withdraw consent" }));
-
-    expect(await dialog.findByRole("alert")).toHaveTextContent(
-      REFUSAL_COPY.permissionDenied,
-    );
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 });

@@ -126,16 +126,26 @@ func TestIssueOperatorKey_TheRegistrationsAuthorityIssuesTheFirstKeyAlone(t *tes
 }
 
 // TestIssueOperatorKey_IssuesNothingWithoutATokenURL is the PM's
-// decision on GARAM_MACHINE_TOKEN_URL: unset, the route answers 503 and
-// no key is generated or stored. The configured fixture issuing above
-// is the control.
+// decision on GARAM_MACHINE_TOKEN_URL (#1394): unset, the route answers
+// 409 failed_precondition with the key_issuance_unconfigured reason,
+// and no key is generated or stored. The same fixture with the URL set
+// is the control: it issues.
 func TestIssueOperatorKey_IssuesNothingWithoutATokenURL(t *testing.T) {
 	k := newKeyFixture(t, api.Config{SessionTTL: time.Hour})
 
 	rec := k.issue(t, "controller", "planned", k.admin)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code, rec.Body.String())
+	require.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
+	body := decodeBody[apigen.Error](t, rec)
+	assert.Equal(t, "failed_precondition", body.Kind)
+	require.NotNil(t, body.Reason, "the refusal names its reason")
+	assert.Equal(t, operator.ReasonKeyIssuanceUnconfigured, *body.Reason)
+	assert.Nil(t, body.Path, "the reason is about no document")
 	assert.NotContains(t, rec.Body.String(), "PRIVATE KEY")
 	assert.Empty(t, k.operators.issuances, "nothing reached the store")
+
+	configured := newKeyFixture(t, api.Config{SessionTTL: time.Hour, TokenURL: fixtureTokenURL})
+	rec = configured.issue(t, "controller", "planned", configured.admin)
+	assert.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 }
 
 // TestIssueOperatorKey_IsBoundedPerOperator holds the per-process

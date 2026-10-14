@@ -53,7 +53,7 @@ func (s *Server) IssueOperatorKey(w http.ResponseWriter, r *http.Request, orgSlu
 		rotation = operator.KeyRotationFirst
 	}
 	if s.cfg.TokenURL == "" {
-		writeError(w, operator.ErrAssertionProfileUnavailable)
+		writeError(w, operator.ErrKeyIssuanceUnconfigured)
 		return
 	}
 	if err := s.keysPerProcess.Check(""); err != nil {

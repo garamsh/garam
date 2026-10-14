@@ -18,7 +18,7 @@ import (
 )
 
 // reasonPackages are the packages whose refusals carry a reason.
-var reasonPackages = []string{"../org", "../authz"}
+var reasonPackages = []string{"../org", "../authz", "../operator"}
 
 // reasonConstants reads every `Reason*` string constant the reason
 // packages declare, from their source, so a code added there is in this

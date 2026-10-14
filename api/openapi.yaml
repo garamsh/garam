@@ -1595,8 +1595,10 @@ paths:
         identity and 30 in all per minute, and answers 429 with
         `Retry-After` past either. Where
         no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no
-        key is issued and the route answers 503: an assertion could name
-        no audience garam accepts.
+        key is issued and the route answers 409 `failed_precondition`
+        with the reason `key_issuance_unconfigured`: an assertion could
+        name no audience garam accepts, and the state holds until the
+        deployment sets the URL.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/operator'
@@ -3742,6 +3744,9 @@ components:
             be reworded at any release; a client that does not know a
             code reads the kind as before, and new codes may be added.
             Invitations: `invitation_accepted`, `invitation_expired`.
+            Operator keys: `key_issuance_unconfigured`, on the 409 that
+            refuses issuing one where this garam has no token endpoint
+            configured.
             Policy documents, each with `path`:
             `policy_document_malformed`, `policy_document_trailing_data`,
             `policy_document_wrong_type`, `policy_document_unknown_key`,

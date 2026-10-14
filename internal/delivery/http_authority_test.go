@@ -23,7 +23,7 @@ func controlAnswering(t *testing.T, answer http.HandlerFunc) *delivery.HTTPAutho
 	t.Helper()
 	server := httptest.NewTLSServer(answer)
 	t.Cleanup(server.Close)
-	authority, err := delivery.NewHTTPAuthority(server.Client(), server.URL, agentGRN())
+	authority, err := delivery.NewHTTPAuthority(server.Client(), server.URL, agentGRN(), certificateMode())
 	require.NoError(t, err)
 	return authority
 }
@@ -121,7 +121,7 @@ func TestHTTPAuthority_SortsControlsAnswersIntoUndecidedAndDefinite(t *testing.T
 	}
 
 	server := httptest.NewTLSServer(http.NotFoundHandler())
-	unreachable, err := delivery.NewHTTPAuthority(server.Client(), server.URL, agentGRN())
+	unreachable, err := delivery.NewHTTPAuthority(server.Client(), server.URL, agentGRN(), certificateMode())
 	require.NoError(t, err)
 	server.Close()
 	_, err = unreachable.Activate(context.Background(), "request-1", binding(), "placement-1")
@@ -165,7 +165,7 @@ func TestHTTPAuthority_ReportCarriesTheRuntimesStatusUnderItsActivation(t *testi
 // TestNewHTTPAuthority_RefusesWhatItCannotCall keeps a misconfiguration
 // at the start. An https address is the control.
 func TestNewHTTPAuthority_RefusesWhatItCannotCall(t *testing.T) {
-	_, err := delivery.NewHTTPAuthority(http.DefaultClient, "https://control.example", agentGRN())
+	_, err := delivery.NewHTTPAuthority(http.DefaultClient, "https://control.example", agentGRN(), certificateMode())
 	require.NoError(t, err, "the control: an https address and an agent")
 	for name, args := range map[string]struct {
 		client *http.Client
@@ -178,7 +178,7 @@ func TestNewHTTPAuthority_RefusesWhatItCannotCall(t *testing.T) {
 		"no agent":             {http.DefaultClient, "https://control.example", grn.GRN{}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := delivery.NewHTTPAuthority(args.client, args.base, args.agent)
+			_, err := delivery.NewHTTPAuthority(args.client, args.base, args.agent, certificateMode())
 			require.Error(t, err)
 		})
 	}

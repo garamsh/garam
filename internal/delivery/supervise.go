@@ -12,12 +12,15 @@ import (
 
 // inputs is what an activation is sought on and what re-arms one a
 // definite refusal paused: the binding the runtime reports, the
-// placement token's fingerprint and the agent certificate's serial
-// (ADR-0084). Only the first two decide the request identifier.
+// placement token's fingerprint and the fingerprint of what the
+// adapter's calls present — the agent certificate's serial, or its
+// token files' hashes (ADR-0084, ADR-0100). Only the first two decide
+// the request identifier, and a re-armed activation is asked again,
+// never assumed.
 type inputs struct {
-	binding   Binding
-	placement string
-	leaf      string
+	binding    Binding
+	placement  string
+	credential string
 }
 
 // supervision is the supervisor's memory of what it last acted on.
@@ -45,7 +48,8 @@ type supervision struct {
 // supervise keeps the execution matched to the runtime beside it: for
 // a fenced agent it activates the generation the runtime reports and
 // reports that runtime's status, and for a legacy one it reopens the
-// gate when the certificate a refusal was met under is renewed.
+// gate when the credential a refusal was met under is renewed or
+// rewritten.
 func (s *service) supervise(ctx context.Context) {
 	var sup supervision
 	for ctx.Err() == nil {
@@ -59,20 +63,20 @@ func (s *service) supervise(ctx context.Context) {
 	}
 }
 
-// superviseLegacy reopens a refused legacy execution once the agent's
-// certificate has changed, and never on a timer.
+// superviseLegacy reopens a refused legacy execution once what the
+// adapter presents has changed, and never on a timer.
 func (s *service) superviseLegacy(ctx context.Context, sup *supervision) {
-	leaf, err := s.ends.Credentials.LeafSerial()
+	credential, err := s.ends.Credentials.Fingerprint()
 	if err != nil {
-		slog.WarnContext(ctx, "agent certificate not read", slog.String("error", err.Error()))
+		slog.WarnContext(ctx, "agent credential not read", slog.String("error", err.Error()))
 		return
 	}
 	gate, _ := s.ends.Execution.state()
-	if gate == gateRefused && leaf != sup.at.leaf {
-		slog.InfoContext(ctx, "protected work resumed on a renewed certificate")
+	if gate == gateRefused && credential != sup.at.credential {
+		slog.InfoContext(ctx, "protected work resumed on a changed credential")
 		s.ends.Execution.open()
 	}
-	sup.at.leaf = leaf
+	sup.at.credential = credential
 }
 
 // superviseFenced reads the runtime and the credentials once and acts
@@ -96,13 +100,13 @@ func (s *service) superviseFenced(ctx context.Context, sup *supervision) {
 		slog.WarnContext(ctx, "placement token not read", slog.String("error", err.Error()))
 		return
 	}
-	leaf, err := s.ends.Credentials.LeafSerial()
+	credential, err := s.ends.Credentials.Fingerprint()
 	if err != nil {
-		slog.WarnContext(ctx, "agent certificate not read", slog.String("error", err.Error()))
+		slog.WarnContext(ctx, "agent credential not read", slog.String("error", err.Error()))
 		return
 	}
 	fingerprint := sha256.Sum256([]byte(token))
-	now := inputs{binding: BindingOf(status), placement: hex.EncodeToString(fingerprint[:]), leaf: leaf}
+	now := inputs{binding: BindingOf(status), placement: hex.EncodeToString(fingerprint[:]), credential: credential}
 
 	gate, held := s.ends.Execution.state()
 	switch {
@@ -130,7 +134,7 @@ func (s *service) superviseFenced(ctx context.Context, sup *supervision) {
 // undecided answer is retried with backoff under the same request; a
 // definite one pauses on the inputs it was asked under.
 func (s *service) activate(ctx context.Context, sup *supervision, now inputs, token string, status *RuntimeStatus) {
-	requestID := RequestID(now.binding, token)
+	requestID := RequestID(s.ends.Authority.Contract(), now.binding, token)
 	callCtx, cancel := context.WithTimeout(ctx, s.cfg.CallTimeout)
 	activation, err := s.ends.Authority.Activate(callCtx, requestID, now.binding, token)
 	cancel()

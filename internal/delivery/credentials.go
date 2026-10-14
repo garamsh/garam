@@ -3,11 +3,29 @@ package delivery
 // Credentials is what the deployment mounted for the agent, read afresh
 // on each look so a replaced file is seen without a restart. A changed
 // answer from either is what re-arms an activation a definite refusal
-// paused (ADR-0084).
+// paused (ADR-0084): it asks again, and the answer decides.
 type Credentials interface {
 	// PlacementToken answers the placement token as mounted now.
 	PlacementToken() (string, error)
-	// LeafSerial answers the serial of the agent certificate the next
-	// handshake presents, which renewal changes.
-	LeafSerial() (string, error)
+	// Fingerprint answers a digest of what the agent's calls present
+	// now — the certificate's serial, or each token file's hash — which
+	// a renewal or a rewritten token file changes.
+	Fingerprint() (string, error)
+}
+
+// Credential is what authenticates this adapter's calls to one peer:
+// the agent certificate its connections present, or a token file
+// read before every call (ADR-0100). The two are the adapter's
+// certificate and token modes, and a call takes its contract from the
+// mode.
+type Credential interface {
+	// Authorization answers what a call's Authorization header
+	// carries, read now: empty for a certificate, which the connection
+	// carries instead. A token that cannot be read whole is
+	// KindUnavailable, so the call is not made and is retried.
+	Authorization() (string, error)
+	// Fingerprint answers a digest of what the next call presents.
+	Fingerprint() (string, error)
+	// IsToken reports the token mode.
+	IsToken() bool
 }

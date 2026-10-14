@@ -28,7 +28,7 @@ func garamAnswering(t *testing.T, answer http.HandlerFunc) (*delivery.HTTPQueue,
 	server := httptest.NewServer(answer)
 	t.Cleanup(server.Close)
 	execution := delivery.NewLegacyExecution()
-	queue, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution)
+	queue, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution, certificateMode())
 	require.NoError(t, err)
 	return queue, execution
 }
@@ -274,7 +274,7 @@ func TestNewHTTPQueue_RefusesWhatItCannotCall(t *testing.T) {
 	t.Cleanup(server.Close)
 	execution := delivery.NewLegacyExecution()
 
-	_, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution)
+	_, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution, certificateMode())
 	require.NoError(t, err, "an address and an agent that work")
 
 	tests := map[string]struct {
@@ -291,7 +291,7 @@ func TestNewHTTPQueue_RefusesWhatItCannotCall(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := delivery.NewHTTPQueue(tt.client, tt.base, tt.agent, tt.execution)
+			_, err := delivery.NewHTTPQueue(tt.client, tt.base, tt.agent, tt.execution, certificateMode())
 			require.Error(t, err)
 		})
 	}

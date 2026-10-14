@@ -206,6 +206,8 @@ const (
 	envAdapterGatewayURL     envName = "GARAM_ADAPTER_GATEWAY_URL"
 	envAdapterTLSCertFile    envName = "GARAM_ADAPTER_TLS_CERT_FILE"
 	envAdapterTLSKeyFile     envName = "GARAM_ADAPTER_TLS_KEY_FILE"
+	envAdapterTokenFile      envName = "GARAM_ADAPTER_TOKEN_FILE"
+	envAdapterControlToken   envName = "GARAM_ADAPTER_CONTROL_TOKEN_FILE"
 	envAdapterServerRootFile envName = "GARAM_ADAPTER_SERVER_ROOT_FILE"
 	envAdapterControlURL     envName = "GARAM_ADAPTER_CONTROL_URL"
 	envAdapterControlRoot    envName = "GARAM_ADAPTER_CONTROL_ROOT_FILE"

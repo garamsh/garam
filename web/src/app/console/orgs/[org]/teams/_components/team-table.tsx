@@ -26,9 +26,7 @@ function columns(org: string): ColumnDef<TeamRow, unknown>[] {
       accessorFn: (team) => `${team.name} ${team.identifier}`,
       sortingFn: (a, b) => a.original.name.localeCompare(b.original.name),
       cell: ({ row: { original: team } }) => (
-        // The gap keeps the copy control's 24px target clear of the
-        // link above it (WCAG 2.2 SC 2.5.8).
-        <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex min-w-0 flex-col">
           <Link
             href={`${orgHref(org, "teams")}/${team.identifier}`}
             className="font-medium underline-offset-4 hover:underline focus-visible:underline"

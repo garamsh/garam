@@ -617,3 +617,56 @@ func TestOperatorKey_AnImmediateRotationRacingExchangesLeavesNoTokenOfTheOldKey(
 	_, err = store.ResolveToken(ctx, keptToken.Hash())
 	assert.NoError(t, err, "the control: another operator's token resolves throughout")
 }
+
+// TestOperatorKey_AnImmediateRotationWaitsForAnExchangeAlreadyHoldingTheKey
+// is #1399's interleaving made certain rather than raced for: an
+// exchange holds the old key when an immediate rotation begins. An
+// uncommitted spend of the same jti, another replica's, parks the
+// exchange there. The rotation waits for the exchange and deletes the
+// token it recorded; holding the two rows in opposite orders, each
+// waited on the other and Postgres aborted one with 40P01.
+func TestOperatorKey_AnImmediateRotationWaitsForAnExchangeAlreadyHoldingTheKey(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	store := operator.NewPostgresStore(p)
+	svc := keyService(store)
+	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
+	old, oldKey := issueKey(t, store, subject, operator.KeyRotationFirst)
+	successor, err := operator.NewIssuedKey(subject, scopedGRN("acme", "user", "ada"))
+	require.NoError(t, err)
+	jti := freshJTI(t)
+	signed := assertion(t, old, subject, testTokenURL, jti, time.Now())
+
+	replica, err := p.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = replica.Rollback(ctx) }()
+	_, err = replica.Exec(ctx, `INSERT INTO operator_assertions (operator_grn, jti, expires_at)
+		VALUES ($1, $2, now() + interval '2 minutes')`, subject.String(), jti)
+	require.NoError(t, err)
+
+	type exchange struct {
+		token *operator.Token
+		err   error
+	}
+	exchanged := make(chan exchange, 1)
+	go func() {
+		token, err := svc.ExchangeAssertion(ctx, testSource, subject, signed, nil)
+		exchanged <- exchange{token, err}
+	}()
+	awaitLockWaiters(t, p, 1)
+	rotated := make(chan error, 1)
+	go func() {
+		_, err := store.IssueKey(ctx, successor, operator.KeyRotationImmediate)
+		rotated <- err
+	}()
+	awaitLockWaiters(t, p, 2)
+	require.NoError(t, replica.Rollback(ctx))
+
+	done := <-exchanged
+	require.NoError(t, done.err, "the exchange holding the key completes")
+	require.NoError(t, <-rotated, "the rotation waits for it rather than deadlocking")
+	_, err = store.ResolveToken(ctx, done.token.Hash())
+	assert.ErrorIs(t, err, operator.ErrTokenInvalid, "the rotation deleted the token the exchange recorded")
+	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE key_id = $1`, oldKey.ID))
+}

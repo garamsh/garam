@@ -174,10 +174,12 @@ func (s *PostgresStore) VerificationKey(ctx context.Context, client grn.GRN, kid
 }
 
 // RecordAssertionToken admits the assertion and records the token in
-// one transaction that holds the key's row from the reread to the
-// commit. The (client, jti) primary key is what refuses a replay on
-// any replica: a concurrent spend of the same pair waits on the first
-// and conflicts once it commits.
+// one transaction that holds the registration and then the key's row
+// from the reread to the commit, the order IssueKey takes them in, so
+// an exchange racing a rotation waits rather than deadlocks. The
+// (client, jti) primary key is what refuses a replay on any replica: a
+// concurrent spend of the same pair waits on the first and conflicts
+// once it commits.
 func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAssertion, t *Token) error {
 	audience := pgtype.Text{}
 	if t.Audience != nil {
@@ -191,6 +193,9 @@ func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAsse
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
+	if _, err := q.HoldOperatorRegistration(ctx, client); err != nil {
+		return pgxerr.Classify(err, "hold operator", ErrClientInvalid, nil)
+	}
 	decided, err := q.HoldLiveOperatorKey(ctx, db.HoldLiveOperatorKeyParams{ID: a.KeyID, OperatorGrn: client})
 	if err != nil {
 		return pgxerr.Classify(err, "hold operator key", ErrClientInvalid, nil)

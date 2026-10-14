@@ -272,6 +272,14 @@ JOIN operators o ON o.grn = k.operator_grn
 WHERE k.operator_grn = sqlc.arg('operator_grn') AND k.kid = sqlc.arg('kid')
   AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now());
 
+-- An exchange holds the registration before the key, the order an
+-- issuance takes them in, so neither waits on the other while holding
+-- what the other needs (#1399). KEY SHARE is the lock the token's
+-- foreign key takes anyway: it waits for an issuance or a deletion of
+-- the operator, and for nothing else.
+-- name: HoldOperatorRegistration :one
+SELECT grn FROM operators WHERE grn = $1 FOR KEY SHARE;
+
 -- An exchange holds the verifying key's row, rereading that it is
 -- still live, under the lock a withdrawal's update takes too: a
 -- withdrawal either commits first and this answers no row, or waits
@@ -279,11 +287,10 @@ WHERE k.operator_grn = sqlc.arg('operator_grn') AND k.kid = sqlc.arg('kid')
 -- database's time, which the assertion's dates are measured against.
 -- name: HoldLiveOperatorKey :one
 SELECT now()::timestamptz AS decided_at
-FROM operator_keys k
-JOIN operators o ON o.grn = k.operator_grn
-WHERE k.id = sqlc.arg('id') AND k.operator_grn = sqlc.arg('operator_grn')
-  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
-FOR NO KEY UPDATE OF k;
+FROM operator_keys
+WHERE id = sqlc.arg('id') AND operator_grn = sqlc.arg('operator_grn')
+  AND revoked_at IS NULL AND (retires_at IS NULL OR retires_at > now())
+FOR NO KEY UPDATE;
 
 -- Drops the client's spent identifiers past their keeping. It is a
 -- statement of its own rather than the spend's CTE, which would share

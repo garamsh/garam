@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import {
   GaramApiError,
+  GaramContractError,
   GaramUnreachableError,
   garamFetchAuthenticated,
   parserFor,
@@ -18,10 +19,11 @@ import type { components } from "@/types/api";
 export type PermissionCheck = components["schemas"]["PermissionCheck"];
 
 /**
- * What the server said about one action. `unknown` is a check that
- * could not be asked; a page renders the action then and lets the
- * server refuse it, as it would with no check at all. The server
- * enforces every write either way.
+ * What the server said about one action. `unknown` is an action the
+ * server cannot decide here, or a check that could not be asked or
+ * relied on; a page renders the action then and lets the server refuse
+ * it, as it would with no check at all. The server enforces every
+ * write either way.
  */
 export type Permission = "allowed" | "denied" | "unknown";
 
@@ -34,6 +36,12 @@ export type PermissionMap<K extends string> = {
 export const MAX_PERMISSION_CHECKS = 50;
 
 type PermissionCheckAnswer = components["schemas"]["PermissionCheckAnswer"];
+
+/** What a page reads for each decision the server answers. */
+const PERMISSION: Record<
+  components["schemas"]["PermissionDecision"],
+  Permission
+> = { allow: "allowed", deny: "denied", unknown: "unknown" };
 
 const PermissionResourceParser = z.object({
   type: z.enum(["group", "project", "agent", "agent-template", "policy"]),
@@ -71,7 +79,7 @@ export async function checkPermissions<K extends string>(
               z.object({
                 action: z.string(),
                 resource: PermissionResourceParser.optional(),
-                allowed: z.boolean(),
+                decision: z.enum(["allow", "deny", "unknown"]),
               }),
             ),
           })
@@ -88,10 +96,14 @@ export async function checkPermissions<K extends string>(
       },
     );
     results.forEach((result, index) => {
-      answered.set(asked[index][0], result.allowed ? "allowed" : "denied");
+      answered.set(asked[index][0], PERMISSION[result.decision]);
     });
   } catch (error) {
-    if (
+    // A malformed answer cannot be relied on, so it decides nothing on
+    // the page; it is still garam breaking its contract, and is logged.
+    if (error instanceof GaramContractError) {
+      console.error(error);
+    } else if (
       !(error instanceof GaramUnreachableError) &&
       !(error instanceof GaramApiError)
     ) {

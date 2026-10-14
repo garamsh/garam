@@ -1,7 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"slices"
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/errorx"
@@ -13,10 +15,101 @@ import (
 // offers costs the engine a page's worth of checks and no more.
 const maxPermissionChecks = 50
 
+// onOrg is the kind of a pair that names no resource: the org itself.
+const onOrg apigen.PermissionResourceType = ""
+
+const (
+	kindGroup    = apigen.PermissionResourceTypeGroup
+	kindProject  = apigen.PermissionResourceTypeProject
+	kindAgent    = apigen.PermissionResourceTypeAgent
+	kindTemplate = apigen.PermissionResourceTypeAgentTemplate
+	kindPolicy   = apigen.PermissionResourceTypePolicy
+)
+
+// decidedBy is what enforcement reads to decide an action.
+type decidedBy int
+
+const (
+	// decidedByCheck is the engine's Check alone, which this operation
+	// asks too.
+	decidedByCheck decidedBy = iota
+	// decidedByGrant is Check and a delegation grant to the operator
+	// (ADR-0078), which this operation does not read.
+	decidedByGrant
+	// decidedByCurrent is the org's current policy read past the
+	// engine's cache (CheckCurrent), which this operation does not read.
+	decidedByCurrent
+)
+
+// actionRule is how enforcement checks one action: the kinds of
+// resource its operations address, and what decides it.
+type actionRule struct {
+	on        []apigen.PermissionResourceType
+	decidedBy decidedBy
+}
+
+// actionRules holds one rule per action org.Actions defines, read off
+// the operations that enforce it. An action with no rule pairs with
+// nothing, so every pair naming it is refused.
+var actionRules = map[string]actionRule{
+	org.ActionOrgRead:       {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionOrgUpdate:     {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionOrgDelete:     {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionOrgMemberList: {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionOrgInvite:     {on: []apigen.PermissionResourceType{onOrg}},
+
+	org.ActionGroupCreate:       {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionGroupRead:         {on: []apigen.PermissionResourceType{onOrg, kindGroup}},
+	org.ActionGroupUpdate:       {on: []apigen.PermissionResourceType{kindGroup}},
+	org.ActionGroupDelete:       {on: []apigen.PermissionResourceType{kindGroup}},
+	org.ActionGroupMemberList:   {on: []apigen.PermissionResourceType{kindGroup}},
+	org.ActionGroupMemberAdd:    {on: []apigen.PermissionResourceType{kindGroup}},
+	org.ActionGroupMemberRemove: {on: []apigen.PermissionResourceType{kindGroup}},
+
+	org.ActionProjectCreate:       {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionProjectRead:         {on: []apigen.PermissionResourceType{onOrg, kindProject}},
+	org.ActionProjectUpdate:       {on: []apigen.PermissionResourceType{kindProject}},
+	org.ActionProjectDelete:       {on: []apigen.PermissionResourceType{kindProject}},
+	org.ActionProjectMemberList:   {on: []apigen.PermissionResourceType{kindProject}},
+	org.ActionProjectMemberAdd:    {on: []apigen.PermissionResourceType{kindProject}},
+	org.ActionProjectMemberRemove: {on: []apigen.PermissionResourceType{kindProject}},
+
+	org.ActionPolicyCreate: {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionPolicyRead:   {on: []apigen.PermissionResourceType{onOrg, kindPolicy}},
+	org.ActionPolicyUpdate: {on: []apigen.PermissionResourceType{kindPolicy}},
+	org.ActionPolicyAttach: {on: []apigen.PermissionResourceType{kindPolicy}},
+	org.ActionPolicyDetach: {on: []apigen.PermissionResourceType{kindPolicy}},
+
+	org.ActionConsentRead:     {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionConsentGrant:    {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionConsentWithdraw: {on: []apigen.PermissionResourceType{onOrg}},
+
+	org.ActionOperatorRead:     {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionOperatorRegister: {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionOperatorUpdate:   {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionOperatorDelete:   {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionOperatorReissue:  {on: []apigen.PermissionResourceType{onOrg}},
+	org.ActionOperatorDelegate: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByCurrent},
+
+	org.ActionAgentRead:            {on: []apigen.PermissionResourceType{onOrg, kindAgent}},
+	org.ActionAgentWatch:           {on: []apigen.PermissionResourceType{kindAgent}},
+	org.ActionAgentRename:          {on: []apigen.PermissionResourceType{kindAgent}},
+	org.ActionAgentEnroll:          {on: []apigen.PermissionResourceType{onOrg, kindAgent}, decidedBy: decidedByCurrent},
+	org.ActionAgentCreate:          {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},
+	org.ActionAgentConfigure:       {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
+	org.ActionAgentRecover:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
+	org.ActionAgentCutover:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
+	org.ActionAgentExecutionRead:   {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
+	org.ActionAgentTemplateRead:    {on: []apigen.PermissionResourceType{onOrg, kindTemplate}},
+	org.ActionAgentTemplatePublish: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},
+	org.ActionExecutionProfileRead: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},
+}
+
 // CheckPermissions answers, for each pair asked, whether enforcement
 // would allow the signed-in caller the action on the resource: the
 // same statements, groups and engine `Check` authorizeOn uses. It
-// answers allow or deny and never why. Requires membership.
+// answers allow or deny and never why, and unknown for an action
+// enforcement decides on more than that Check. Requires membership.
 func (s *Server) CheckPermissions(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -34,7 +127,7 @@ func (s *Server) CheckPermissions(w http.ResponseWriter, r *http.Request, orgSlu
 	}
 	targets := make([]grn.GRN, len(body.Checks))
 	for i, check := range body.Checks {
-		if targets[i], err = permissionTarget(orgSlug, check.Resource); err != nil {
+		if targets[i], err = permissionTarget(orgSlug, check); err != nil {
 			writeError(w, err)
 			return
 		}
@@ -46,39 +139,77 @@ func (s *Server) CheckPermissions(w http.ResponseWriter, r *http.Request, orgSlu
 	}
 	results := make([]apigen.PermissionCheckResult, len(body.Checks))
 	for i, check := range body.Checks {
-		allowed := false
-		if org.IsAction(check.Action) {
-			if allowed, err = s.allows(r, c, targets[i], check.Action); err != nil {
-				writeError(w, err)
-				return
-			}
+		decision, err := s.decide(r, c, targets[i], check.Action)
+		// One pair the engine cannot decide fails the request: a
+		// partial answer would read its missing pairs as decided.
+		if err != nil {
+			writeError(w, err)
+			return
 		}
-		results[i] = apigen.PermissionCheckResult{Action: check.Action, Resource: check.Resource, Allowed: allowed}
+		results[i] = apigen.PermissionCheckResult{Action: check.Action, Resource: check.Resource, Decision: decision}
 	}
 	writeJSON(w, http.StatusOK, apigen.PermissionCheckAnswer{Results: results})
 }
 
+// decide answers one pair whose target permissionTarget accepted.
+func (s *Server) decide(r *http.Request, c *caller, target grn.GRN, action string) (apigen.PermissionDecision, error) {
+	if !org.IsAction(action) {
+		return apigen.DecisionDeny, nil
+	}
+	switch actionRules[action].decidedBy {
+	case decidedByGrant, decidedByCurrent:
+		return apigen.DecisionUnknown, nil
+	case decidedByCheck:
+	}
+	allowed, err := s.allows(r, c, target, action)
+	if err != nil {
+		return "", err
+	}
+	if allowed {
+		return apigen.DecisionAllow, nil
+	}
+	return apigen.DecisionDeny, nil
+}
+
 // permissionTarget is the GRN enforcement checks a pair's resource as,
 // built the way the operation addressing that resource builds it. No
-// resource is the org itself.
-func permissionTarget(orgSlug string, resource *apigen.PermissionResource) (grn.GRN, error) {
-	if resource == nil {
+// resource is the org itself. A defined action paired with a kind none
+// of its operations address is refused: no operation asks that pair.
+func permissionTarget(orgSlug string, check apigen.PermissionCheck) (grn.GRN, error) {
+	kind := onOrg
+	if check.Resource != nil {
+		kind = check.Resource.Type
+	}
+	if org.IsAction(check.Action) && !slices.Contains(actionRules[check.Action].on, kind) {
+		return grn.GRN{}, errorx.New(errorx.KindInvalidArgument,
+			fmt.Sprintf("%s is not checked on %s", check.Action, kindName(kind)))
+	}
+	if check.Resource == nil {
 		return orgGRN(orgSlug), nil
 	}
 	var g grn.GRN
-	switch resource.Type {
-	case apigen.PermissionResourceTypeGroup:
-		g = groupGRN(orgSlug, resource.Id)
-	case apigen.PermissionResourceTypeProject:
-		g = projectGRN(orgSlug, resource.Id)
-	case apigen.PermissionResourceTypeAgent:
-		g = agentGRN(orgSlug, resource.Id)
-	case apigen.PermissionResourceTypeAgentTemplate:
-		g = templateGRN(orgSlug, resource.Id)
-	case apigen.PermissionResourceTypePolicy:
-		g = policyGRN(orgSlug, resource.Id)
+	id := check.Resource.Id
+	switch kind {
+	case kindGroup:
+		g = groupGRN(orgSlug, id)
+	case kindProject:
+		g = projectGRN(orgSlug, id)
+	case kindAgent:
+		g = agentGRN(orgSlug, id)
+	case kindTemplate:
+		g = templateGRN(orgSlug, id)
+	case kindPolicy:
+		g = policyGRN(orgSlug, id)
 	default:
 		return grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "unknown resource type")
 	}
 	return g, g.Validate()
+}
+
+// kindName is how a refusal names the kind a pair addressed.
+func kindName(kind apigen.PermissionResourceType) string {
+	if kind == onOrg {
+		return "the organization"
+	}
+	return "a resource of type " + string(kind)
 }

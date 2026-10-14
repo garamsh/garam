@@ -13,6 +13,7 @@ import (
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/api"
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
@@ -42,8 +43,8 @@ func TestCheckPermissions_AnswersEachPairInOrder(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.Equal(t, []apigen.PermissionCheckResult{
-		{Action: org.ActionOperatorRegister, Allowed: false},
-		{Action: org.ActionOperatorRead, Allowed: true},
+		{Action: org.ActionOperatorRegister, Decision: apigen.DecisionDeny},
+		{Action: org.ActionOperatorRead, Decision: apigen.DecisionAllow},
 	}, decodeBody[apigen.PermissionCheckAnswer](t, rec).Results)
 }
 
@@ -67,8 +68,8 @@ func TestCheckPermissions_DeniesAnActionGaramDoesNotDefine(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
 	require.Len(t, results, 2)
-	assert.False(t, results[0].Allowed, "an undefined action is denied")
-	assert.True(t, results[1].Allowed, "a defined action the engine allows is allowed")
+	assert.Equal(t, apigen.DecisionDeny, results[0].Decision, "an undefined action is denied")
+	assert.Equal(t, apigen.DecisionAllow, results[1].Decision, "a defined action the engine allows is allowed")
 }
 
 // TestCheckPermissions_AsksAboutTheNamedResource holds that a resource
@@ -95,9 +96,9 @@ func TestCheckPermissions_AsksAboutTheNamedResource(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
 	require.Len(t, results, 2)
-	assert.True(t, results[0].Allowed)
+	assert.Equal(t, apigen.DecisionAllow, results[0].Decision)
 	assert.Equal(t, "eng", results[0].Resource.Id, "an answer carries the resource it answers")
-	assert.False(t, results[1].Allowed)
+	assert.Equal(t, apigen.DecisionDeny, results[1].Decision)
 }
 
 // TestCheckPermissions_BoundsTheRequest accepts fifty pairs and
@@ -165,4 +166,154 @@ func TestCheckPermissions_RefusesANonMember(t *testing.T) {
 	rec := f.do(t, "POST", path, body, outsider)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 	assert.False(t, strings.Contains(rec.Body.String(), "results"))
+}
+
+// TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision holds
+// that an action enforcement decides on more than the engine's Check
+// is answered unknown even where Check allows it: one case for a
+// delegation grant and one for current policy. The engine here allows
+// everything, and the plainly checked action is the control.
+func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).Return(true, nil).Maybe()
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionAgentCreate},
+		apigen.PermissionCheck{Action: org.ActionOperatorDelegate},
+		apigen.PermissionCheck{Action: org.ActionOperatorRegister},
+	), owner)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
+	require.Len(t, results, 3)
+	assert.Equal(t, apigen.DecisionUnknown, results[0].Decision, "a delegation grant decides agent:create")
+	assert.Equal(t, apigen.DecisionUnknown, results[1].Decision, "current policy decides operator:delegate")
+	assert.Equal(t, apigen.DecisionAllow, results[2].Decision, "Check alone decides operator:register")
+}
+
+// TestCheckPermissions_RefusesAPairNoOperationChecks refuses an action
+// paired with a kind none of its operations address, naming the pair.
+// The same actions on the kinds they are checked on are the control.
+func TestCheckPermissions_RefusesAPairNoOperationChecks(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit()
+	path := "/orgs/" + slug + "/permission-checks"
+	eng := &apigen.PermissionResource{Type: apigen.PermissionResourceTypeGroup, Id: "eng"}
+
+	rec := f.do(t, "POST", path, checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionOperatorRegister},
+		apigen.PermissionCheck{Action: org.ActionGroupUpdate, Resource: eng},
+	), owner)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	rec = f.do(t, "POST", path, checksBody(t, apigen.PermissionCheck{Action: org.ActionOperatorRegister, Resource: eng}), owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "operator:register is not checked on a resource of type group")
+
+	rec = f.do(t, "POST", path, checksBody(t, apigen.PermissionCheck{Action: org.ActionGroupUpdate}), owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "group:update is not checked on the organization")
+}
+
+// TestCheckPermissions_EveryActionPairsWithSomething asks every action
+// garam defines on the organization and on each resource kind, and
+// holds that at least one of those pairs is answered. An action left
+// out of the pairing rules is refused on all of them.
+func TestCheckPermissions_EveryActionPairsWithSomething(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit()
+	path := "/orgs/" + slug + "/permission-checks"
+	resources := []*apigen.PermissionResource{nil}
+	for _, kind := range []apigen.PermissionResourceType{
+		apigen.PermissionResourceTypeGroup, apigen.PermissionResourceTypeProject,
+		apigen.PermissionResourceTypeAgent, apigen.PermissionResourceTypeAgentTemplate,
+		apigen.PermissionResourceTypePolicy,
+	} {
+		resources = append(resources, &apigen.PermissionResource{Type: kind, Id: "x"})
+	}
+	actions := org.Actions()
+	require.NotEmpty(t, actions)
+
+	for _, action := range actions {
+		answered := 0
+		for _, resource := range resources {
+			rec := f.do(t, "POST", path, checksBody(t, apigen.PermissionCheck{Action: action, Resource: resource}), owner)
+			if rec.Code == http.StatusOK {
+				answered++
+			}
+		}
+		assert.Positive(t, answered, "%s pairs with nothing", action)
+	}
+}
+
+// TestCheckPermissions_FailsWholeWhenTheEngineCannotDecide holds that
+// an engine error on one pair fails the request rather than answering
+// the pairs around it. The same request with an engine that answers is
+// the control.
+func TestCheckPermissions_FailsWholeWhenTheEngineCannotDecide(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	failing := true
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
+			if failing && in.Action == org.ActionOrgUpdate {
+				return false, errorx.New(errorx.KindUnavailable, "engine unreachable")
+			}
+			return true, nil
+		})
+	body := checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionOrgRead},
+		apigen.PermissionCheck{Action: org.ActionOrgUpdate},
+		apigen.PermissionCheck{Action: org.ActionOrgDelete},
+	)
+	path := "/orgs/" + slug + "/permission-checks"
+
+	rec := f.do(t, "POST", path, body, owner)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "results", "no pair is answered")
+
+	failing = false
+	rec = f.do(t, "POST", path, body, owner)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Len(t, decodeBody[apigen.PermissionCheckAnswer](t, rec).Results, 3)
+}
+
+// TestCheckPermissions_AMissingResourceAnswersAsADeniedOne holds that
+// a group or project that does not exist is answered as one that
+// exists and is denied, so the answer tells no one what exists. The
+// existing resource beside it is the control for each kind.
+func TestCheckPermissions_AMissingResourceAnswersAsADeniedOne(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	orgG := orgGRNForTest(slug)
+	require.NoError(t, f.orgs.CreateGroup(testCtx(t),
+		org.NewGroup(grn.New(slug, grn.DefaultProject, org.ServiceTypeGroup, "eng"), "Engineering", orgG)))
+	require.NoError(t, f.orgs.CreateProject(testCtx(t),
+		org.NewProject(grn.New(slug, grn.DefaultProject, org.ServiceTypeProject, "web"), "Web", orgG)))
+	f.permit()
+	pair := func(action string, kind apigen.PermissionResourceType, id string) apigen.PermissionCheck {
+		return apigen.PermissionCheck{Action: action, Resource: &apigen.PermissionResource{Type: kind, Id: id}}
+	}
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
+		pair(org.ActionGroupUpdate, apigen.PermissionResourceTypeGroup, "eng"),
+		pair(org.ActionGroupUpdate, apigen.PermissionResourceTypeGroup, "ghost"),
+		pair(org.ActionProjectUpdate, apigen.PermissionResourceTypeProject, "web"),
+		pair(org.ActionProjectUpdate, apigen.PermissionResourceTypeProject, "ghost"),
+	), owner)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
+	require.Len(t, results, 4)
+	for _, r := range results {
+		assert.Equal(t, apigen.DecisionDeny, r.Decision, "%s on %s", r.Action, r.Resource.Id)
+	}
 }

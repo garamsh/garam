@@ -127,7 +127,9 @@ describe("operators section", () => {
     owner.unmount();
 
     server.use(
-      answerPermissionChecks((action) => action !== "operator:register"),
+      answerPermissionChecks((action) =>
+        action === "operator:register" ? "deny" : "allow",
+      ),
     );
     await renderServerComponent(OperatorsPage(params("acme")));
 
@@ -156,6 +158,25 @@ describe("operators section", () => {
     expect(
       screen.getByRole("button", { name: "Register operator" }),
     ).toBeInTheDocument();
+  });
+
+  it("renders its list and the register form when the check answers outside its contract", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    server.use(
+      http.post(`${API_URL}/orgs/acme/permission-checks`, () =>
+        HttpResponse.json({ results: [] }),
+      ),
+    );
+
+    await renderServerComponent(OperatorsPage(params("acme")));
+
+    expect(
+      screen.getByRole("link", { name: "Field cluster one" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Register operator" }),
+    ).toBeInTheDocument();
+    logged.mockRestore();
   });
 
   it("shows an empty state rather than a bare list", async () => {

@@ -180,6 +180,11 @@ var actions = []string{
 	ActionExecutionProfileRead, ActionAgentExecutionRead,
 }
 
+// Actions returns every action garam defines.
+func Actions() []string {
+	return slices.Clone(actions)
+}
+
 // IsAction reports whether a is an action garam defines. A role's
 // wildcard such as `org:*` matches any name with its prefix, so a
 // caller asking about a name nothing defines would otherwise be

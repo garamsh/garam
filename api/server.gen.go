@@ -247,6 +247,27 @@ func (e OperatorKeyState) Valid() bool {
 	}
 }
 
+// Defines values for PermissionDecision.
+const (
+	DecisionAllow   PermissionDecision = "allow"
+	DecisionDeny    PermissionDecision = "deny"
+	DecisionUnknown PermissionDecision = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the PermissionDecision enum.
+func (e PermissionDecision) Valid() bool {
+	switch e {
+	case DecisionAllow:
+		return true
+	case DecisionDeny:
+		return true
+	case DecisionUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PermissionResourceType.
 const (
 	PermissionResourceTypeAgent         PermissionResourceType = "agent"
@@ -833,12 +854,17 @@ type PermissionCheckRequest struct {
 
 // PermissionCheckResult defines model for PermissionCheckResult.
 type PermissionCheckResult struct {
-	Action  string `json:"action"`
-	Allowed bool   `json:"allowed"`
+	Action string `json:"action"`
+
+	// Decision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide, because its enforcement reads more than the engine's `Check`: render the control and let the operation answer.
+	Decision PermissionDecision `json:"decision"`
 
 	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it.
 	Resource *PermissionResource `json:"resource,omitempty"`
 }
+
+// PermissionDecision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide, because its enforcement reads more than the engine's `Check`: render the control and let the operation answer.
+type PermissionDecision string
 
 // PermissionResource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it.
 type PermissionResource struct {

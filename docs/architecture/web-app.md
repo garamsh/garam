@@ -251,10 +251,12 @@ so adding a variable here is a change the chart has to answer for.
 
 **A page asks what it offers.** `web/src/lib/permission-check.ts` puts
 the actions a page offers to `checkPermissions` in one request through
-the seam above, and answers each one allowed, denied, or unknown where
-the check could not be asked ([api-surface.md](./api-surface.md) §What
-decides the rest). What a page does with each answer is §What it does
-not decide.
+the seam above, and answers each one allowed, denied or unknown
+([api-surface.md](./api-surface.md) §What decides the rest). Unknown is
+an action the server answers it cannot decide, or a check that could
+not be asked or answered outside its contract; the last is logged on
+the server. What a page does with each answer is §What it does not
+decide.
 
 Sign-in state is read from the backend's `/me` and never inferred from
 the cookie (ADR-0009).

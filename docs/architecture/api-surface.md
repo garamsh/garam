@@ -473,16 +473,30 @@ and not in the same place on every surface.
 - **A member may ask what it may do, and the answer decides nothing.**
   `checkPermissions` takes up to 50 pairs of an action and a resource
   of the caller's organization, the resource named by its kind and the
-  identifier segment its own path takes, and answers allow or deny for
-  each. Each pair is the question enforcement asks for the same
-  request: the same statements and groups, put to the engine's `Check`.
-  It never calls `Explain`, so no answer says why. An action garam
-  does not define is answered deny, because a role's wildcard such as
-  `org:*` would otherwise allow a name no operation checks. Every write
-  is still decided when it arrives, so an answer is a hint the console
-  renders by and not a grant
+  identifier segment its own path takes. Every write is still decided
+  when it arrives, so an answer is a hint the console renders by and
+  not a grant
   ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
-  §Role-aware UI).
+  §Role-aware UI). Each pair is answered one of three ways:
+  - **allow or deny**, where enforcement is the engine's `Check` alone:
+    the same statements and groups, put to the same `Check`. It never
+    calls `Explain`, so no answer says why. A missing group or project
+    answers as a denied one, so the answer tells no one what exists.
+  - **unknown**, where enforcement reads more than that `Check`: a
+    delegation grant for `agent:create`, `agent:configure`,
+    `agent:recover`, `agent:cutover`, `agent-template:publish`,
+    `execution-profile:read` and `agent:execution-read`
+    ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)),
+    and current policy past the engine's cache for `operator:delegate`
+    and `agent:enroll`. A cached deny there could hide a control the
+    operation would allow.
+  - **deny** for an action garam does not define, because a role's
+    wildcard such as `org:*` would otherwise allow a name no operation
+    checks.
+
+  A defined action paired with a resource kind none of its operations
+  address is refused with 400 naming the pair, and one pair the engine
+  cannot decide fails the whole request rather than answering the rest.
 
 One of ADR-0036's decisions is a commitment rather than a rule deciding
 anything today: **no surface serves a secret's value**, garam's

@@ -292,10 +292,12 @@ const PermissionCheckRequest = z.object({
 });
 
 /**
- * Answers Acme's permission checks with `allows(action)` for each pair,
+ * Answers Acme's permission checks with `decide(action)` for each pair,
  * in the order asked, as the server does.
  */
-export function answerPermissionChecks(allows: (action: string) => boolean) {
+export function answerPermissionChecks(
+  decide: (action: string) => "allow" | "deny" | "unknown",
+) {
   return http.post(
     `${API_URL}/orgs/acme/permission-checks`,
     async ({ request }) => {
@@ -303,7 +305,7 @@ export function answerPermissionChecks(allows: (action: string) => boolean) {
       return HttpResponse.json({
         results: checks.map((check) => ({
           ...check,
-          allowed: allows(check.action),
+          decision: decide(check.action),
         })),
       });
     },
@@ -316,7 +318,7 @@ export const handlers = [
     http.get(`${API_URL}${path}`, () => HttpResponse.json(body)),
   ),
   // An owner may take every action.
-  answerPermissionChecks(() => true),
+  answerPermissionChecks(() => "allow"),
 ];
 
 /** What the backend answers on a route it guards, without a session. */

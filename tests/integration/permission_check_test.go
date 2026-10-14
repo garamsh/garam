@@ -83,7 +83,7 @@ func (s *checkStack) send(t *testing.T, method, path string, cookie *http.Cookie
 
 // check asks about actions on acme itself as cookie and answers one
 // decision per action, in order.
-func (s *checkStack) check(t *testing.T, cookie *http.Cookie, actions ...string) []bool {
+func (s *checkStack) check(t *testing.T, cookie *http.Cookie, actions ...string) []apigen.PermissionDecision {
 	t.Helper()
 	checks := make([]apigen.PermissionCheck, len(actions))
 	for i, a := range actions {
@@ -95,11 +95,11 @@ func (s *checkStack) check(t *testing.T, cookie *http.Cookie, actions ...string)
 	require.Equal(t, http.StatusOK, status, body)
 	var answer apigen.PermissionCheckAnswer
 	require.NoError(t, json.Unmarshal([]byte(body), &answer))
-	allowed := make([]bool, len(answer.Results))
+	decisions := make([]apigen.PermissionDecision, len(answer.Results))
 	for i, r := range answer.Results {
-		allowed[i] = r.Allowed
+		decisions[i] = r.Decision
 	}
-	return allowed
+	return decisions
 }
 
 // TestCheckPermissions_AnswersAsEnforcementDecides asks the engine for
@@ -113,8 +113,8 @@ func TestCheckPermissions_AnswersAsEnforcementDecides(t *testing.T) {
 
 	owner := s.check(t, s.owner, org.ActionOperatorRegister, org.ActionConsentRead)
 	member := s.check(t, s.member, org.ActionOperatorRegister, org.ActionConsentRead)
-	assert.Equal(t, []bool{true, true}, owner, "an owner registers operators and reads consents")
-	assert.Equal(t, []bool{false, false}, member, "a member does neither")
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow, apigen.DecisionAllow}, owner, "an owner registers operators and reads consents")
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionDeny}, member, "a member does neither")
 
 	ownerStatus, _ := s.send(t, http.MethodGet, "/orgs/acme/consents", s.owner, "")
 	memberStatus, _ := s.send(t, http.MethodGet, "/orgs/acme/consents", s.member, "")
@@ -128,13 +128,13 @@ func TestCheckPermissions_AnswersAsEnforcementDecides(t *testing.T) {
 // the attachment is the control.
 func TestCheckPermissions_ReadsAttachedPolicies(t *testing.T) {
 	s := newCheckStack(t)
-	require.Equal(t, []bool{true}, s.check(t, s.owner, org.ActionOperatorRegister))
+	require.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow}, s.check(t, s.owner, org.ActionOperatorRegister))
 
 	denied := activePolicy(t, s.policies, s.acme, "deny-register",
 		statementDoc("deny-register", wire.EffectDeny, org.ActionOperatorRegister, s.acme.String()))
 	attachPolicy(t, s.policies, denied, s.ownerGRN)
 
-	assert.Equal(t, []bool{false}, s.check(t, s.owner, org.ActionOperatorRegister),
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny}, s.check(t, s.owner, org.ActionOperatorRegister),
 		"a Deny attached to the owner wins over the owner's role")
 }
 
@@ -145,7 +145,7 @@ func TestCheckPermissions_ReadsAttachedPolicies(t *testing.T) {
 func TestCheckPermissions_DeniesAnUndefinedAction(t *testing.T) {
 	s := newCheckStack(t)
 
-	assert.Equal(t, []bool{false, true}, s.check(t, s.owner, "org:frobnicate", org.ActionOrgDelete))
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionAllow}, s.check(t, s.owner, "org:frobnicate", org.ActionOrgDelete))
 }
 
 // TestCheckPermissions_AsksAtMostFifty answers fifty pairs and refuses
@@ -164,4 +164,18 @@ func TestCheckPermissions_AsksAtMostFifty(t *testing.T) {
 	require.Equal(t, http.StatusOK, status, body)
 	status, _ = s.send(t, http.MethodPost, "/orgs/acme/permission-checks", s.member, pairs(51))
 	assert.Equal(t, http.StatusBadRequest, status)
+}
+
+// TestCheckPermissions_LeavesGrantAndCurrentActionsUnknown asks the
+// owner, whose role allows each of them, about an action a delegation
+// grant decides and two that current policy decides: each is unknown,
+// because the engine's Check is not what enforcement asks for them.
+// operator:register, which Check alone decides, is the control.
+func TestCheckPermissions_LeavesGrantAndCurrentActionsUnknown(t *testing.T) {
+	s := newCheckStack(t)
+
+	assert.Equal(t, []apigen.PermissionDecision{
+		apigen.DecisionUnknown, apigen.DecisionUnknown, apigen.DecisionUnknown, apigen.DecisionAllow,
+	}, s.check(t, s.owner,
+		org.ActionAgentCreate, org.ActionOperatorDelegate, org.ActionAgentEnroll, org.ActionOperatorRegister))
 }

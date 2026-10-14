@@ -1,12 +1,13 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
+import { Component, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PasswordSignInForm } from "@/features/auth/components/password-sign-in-form";
 import { PASSWORD_REFUSED } from "@/lib/password-credentials";
 import { enter } from "@/testing/enter";
-import { API_URL } from "@/testing/mocks/handlers";
+import { API_URL, alice } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
@@ -46,6 +47,20 @@ async function signIn(username: string, password: string) {
   return { refusal: refusal.textContent, rendered: container.textContent };
 }
 
+/** Shows where the action's `redirect()` was sending the reader. */
+class Navigation extends Component<
+  { children: ReactNode },
+  { to: string | null }
+> {
+  state = { to: null };
+  static getDerivedStateFromError(error: Error) {
+    return { to: error.message };
+  }
+  render() {
+    return this.state.to ?? this.props.children;
+  }
+}
+
 describe("password sign-in form", () => {
   it("renders one refusal for a wrong password and for a username no account holds", async () => {
     // garam refuses the two identically (ADR-0041). These two answers
@@ -76,19 +91,56 @@ describe("password sign-in form", () => {
     expect(bounded.refusal).toBe(REFUSAL_COPY.tooManyRequests);
   });
 
-  it("puts a refused credential under the password and names neither field wrong", async () => {
+  it("says a refused credential above the button and marks neither field", async () => {
     refuses(401, "unauthenticated", "no");
     const user = userEvent.setup();
     const form = within(render(<PasswordSignInForm />).container);
     await enter(user, form.getByLabelText("Username"), "alice");
     await enter(user, form.getByLabelText("Password"), PASSWORD);
     await user.click(form.getByRole("button", { name: "Sign in" }));
-    await form.findByRole("alert");
 
-    expect(form.getByLabelText("Password")).toHaveAccessibleDescription(
-      PASSWORD_REFUSED,
+    const refusal = await form.findByRole("alert");
+    expect(refusal).toHaveTextContent(PASSWORD_REFUSED);
+    // ADR-0041: the answer names neither field, so neither is invalid
+    // and neither is described by the sentence.
+    for (const label of ["Username", "Password"]) {
+      const field = form.getByLabelText(label);
+      expect(field).not.toHaveAttribute("aria-invalid");
+      expect(field).not.toHaveAccessibleDescription(PASSWORD_REFUSED);
+    }
+    expect(
+      refusal.compareDocumentPosition(
+        form.getByRole("button", { name: "Sign in" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it("lands on the return path it was handed once signed in", async () => {
+    server.use(
+      http.post(`${API_URL}/auth/password/login`, () =>
+        HttpResponse.json(alice, {
+          headers: {
+            "set-cookie":
+              "garam_session=s; Path=/; Max-Age=3600; HttpOnly; SameSite=Lax",
+          },
+        }),
+      ),
     );
-    expect(form.getByLabelText("Username")).not.toHaveAttribute("aria-invalid");
+    const user = userEvent.setup();
+    render(
+      <Navigation>
+        <PasswordSignInForm returnPath="/console/invitations/secret-token" />
+      </Navigation>,
+    );
+    await enter(user, screen.getByLabelText("Username"), "alice");
+    await enter(user, screen.getByLabelText("Password"), PASSWORD);
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    expect(
+      await screen.findByText(
+        "NEXT_REDIRECT:/console/invitations/secret-token",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("asks nothing about the username before sending it", async () => {

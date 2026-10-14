@@ -10,13 +10,9 @@ import type { components } from "@/types/api";
 
 import { keepSessionCookie } from "./session-cookie";
 
-/**
- * What the sign-in form has to show: nothing yet, or a refusal. A
- * refused credential is about the password field, which is where a
- * person corrects it; it names neither field as the wrong one.
- */
+/** What the sign-in form has to show: nothing yet, or a refusal. */
 export type SignInWithPasswordState =
-  { status: "idle" } | { status: "error"; message: string; field?: "password" };
+  { status: "idle" } | { status: "error"; message: string };
 
 // Neither field is bounded here. What a username may look like is
 // registration's rule, and holding it at sign-in would answer a
@@ -60,7 +56,7 @@ export async function signInWithPassword(
     // the form renders, not a throw: the boundary would replace the
     // form and lose what was typed into it.
     if (error instanceof GaramApiError && error.status === 401) {
-      return { status: "error", message: PASSWORD_REFUSED, field: "password" };
+      return { status: "error", message: PASSWORD_REFUSED };
     }
     return refusal(error);
   }

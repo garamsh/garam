@@ -168,7 +168,6 @@ describe("signInWithPassword", () => {
     expect(state).toEqual({
       status: "error",
       message: "That username and password do not match an account.",
-      field: "password",
     });
     expect(JSON.stringify(state)).not.toContain(PASSWORD);
   });
@@ -192,7 +191,6 @@ describe("signInWithPassword", () => {
     expect(unknownUsername).toEqual({
       status: "error",
       message: PASSWORD_REFUSED,
-      field: "password",
     });
     expect(unknownUsername).toEqual(wrongPassword);
 

@@ -221,20 +221,24 @@ func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAsse
 		return pgxerr.Classify(err, "spend operator assertion", ErrClientInvalid, nil)
 	}
 	t.IssuedAt, t.ExpiresAt = now, now.Add(TokenTTL)
-	if err := q.RecordOperatorKeyToken(ctx, db.RecordOperatorKeyTokenParams{
-		TokenHash:   t.Hash(),
-		KeyID:       a.KeyID,
-		OperatorGrn: client,
-		AudienceGrn: audience,
-		IssuedAt:    stamp(t.IssuedAt),
-		ExpiresAt:   stamp(t.ExpiresAt),
-	}); err != nil {
-		return pgxerr.Classify(err, "record operator token", nil, nil)
-	}
-	if err := q.TrimOperatorKeyTokens(ctx, db.TrimOperatorKeyTokensParams{
-		KeyID: a.KeyID, Keep: LiveTokensPerCredential,
-	}); err != nil {
-		return pgxerr.Classify(err, "trim operator tokens", nil, nil)
+	err = recordTokens(ctx, q, client,
+		func() error {
+			return q.RecordOperatorKeyToken(ctx, db.RecordOperatorKeyTokenParams{
+				TokenHash:   t.Hash(),
+				KeyID:       a.KeyID,
+				OperatorGrn: client,
+				AudienceGrn: audience,
+				IssuedAt:    stamp(t.IssuedAt),
+				ExpiresAt:   stamp(t.ExpiresAt),
+			})
+		},
+		func() error {
+			return q.TrimOperatorKeyTokens(ctx, db.TrimOperatorKeyTokensParams{
+				KeyID: a.KeyID, Keep: LiveTokensPerCredential,
+			})
+		})
+	if err != nil {
+		return err
 	}
 	if err := q.MarkOperatorKeyExchanged(ctx, db.MarkOperatorKeyExchangedParams{At: decided, ID: a.KeyID}); err != nil {
 		return pgxerr.Classify(err, "mark operator key exchanged", nil, nil)

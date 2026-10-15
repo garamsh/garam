@@ -68,7 +68,9 @@ ON CONFLICT (operator_grn) DO UPDATE
 
 -- Minting sweeps the tokens that have expired, as creating an
 -- invitation sweeps its own table: a row is written in one place, so
--- sweeping there keeps the table proportional to what is live.
+-- sweeping there keeps the table proportional to what is live. The
+-- sweep skips a row another transaction holds, which a later sweep
+-- takes, so the one row a mint waits on is its own operator's (#1424).
 --
 -- The upsert is what makes a re-mint leave one live token (ADR-0067),
 -- and the unique key it arbitrates on (000024) is what makes two
@@ -90,7 +92,10 @@ ON CONFLICT (operator_grn) DO UPDATE
 -- name: MintOperatorEnrollment :exec
 WITH pruned AS (
     DELETE FROM operator_enrollment_tokens
-    WHERE expires_at <= now() AND operator_grn <> sqlc.arg('operator_grn')
+    WHERE token_hash IN (
+        SELECT e.token_hash FROM operator_enrollment_tokens e
+        WHERE e.expires_at <= now() AND e.operator_grn <> sqlc.arg('operator_grn')
+        FOR UPDATE SKIP LOCKED)
 )
 INSERT INTO operator_enrollment_tokens (token_hash, operator_grn, minted_by, minted_at, expires_at)
 VALUES (sqlc.arg('token_hash'), sqlc.arg('operator_grn'), sqlc.arg('minted_by'),
@@ -128,6 +133,18 @@ DELETE FROM operators WHERE grn = $1;
 -- name: DeleteOperatorCertificate :exec
 DELETE FROM operator_certificates WHERE operator_grn = $1;
 
+-- Every token the operator holds or is the audience of, which the
+-- deletion's cascades would otherwise take in their own orders. Like
+-- every statement that may wait on more than one token, it takes them
+-- in token_hash order (#1424).
+-- name: DeleteOperatorTokens :exec
+WITH doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM operator_tokens t
+    WHERE t.operator_grn = sqlc.arg('operator_grn') OR t.audience_grn = sqlc.arg('operator_grn')
+    ORDER BY t.token_hash
+    FOR UPDATE OF t)
+DELETE FROM operator_tokens WHERE token_hash IN (SELECT token_hash FROM doomed);
+
 -- name: CountOperatorsByOrg :one
 -- The operators the organization has registered, which deleting the
 -- organization removes with it, along with any enrollment token that
@@ -136,10 +153,20 @@ DELETE FROM operator_certificates WHERE operator_grn = $1;
 -- (ADR-0045 errata).
 SELECT count(*) FROM operators WHERE org_grn = $1;
 
--- Re-issuing is these two in one transaction: the delete takes the
--- previous credential and, by 000038's foreign key, every token minted
--- under it, and the insert writes the successor. An operator the
+-- Re-issuing is these three in one transaction: the first deletes
+-- every token minted under the previous credential, in token_hash
+-- order, which 000038's cascade would take in its own; the second the
+-- credential, and the insert writes the successor. An operator the
 -- organization holds no record of fails the insert's foreign key.
+-- name: DeleteOperatorCredentialTokens :exec
+WITH doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM operator_tokens t
+    JOIN operator_credentials c ON c.id = t.credential_id
+    WHERE c.operator_grn = sqlc.arg('operator_grn')
+    ORDER BY t.token_hash
+    FOR UPDATE OF t)
+DELETE FROM operator_tokens WHERE token_hash IN (SELECT token_hash FROM doomed);
+
 -- name: DeleteOperatorCredential :exec
 DELETE FROM operator_credentials WHERE operator_grn = $1;
 
@@ -155,15 +182,7 @@ FROM operator_credentials c
 JOIN operators o ON o.grn = c.operator_grn
 WHERE c.credential_hash = $1;
 
--- An exchange sweeps the operator's expired tokens in the statement
--- that records the new one, so the table stays proportional to what is
--- live without a job of its own. The two never touch one row: the
--- sweep deletes what has expired and the insert writes what has not.
 -- name: RecordOperatorToken :exec
-WITH swept AS (
-    DELETE FROM operator_tokens
-    WHERE operator_grn = sqlc.arg('operator_grn') AND expires_at <= now()
-)
 INSERT INTO operator_tokens (token_hash, credential_id, operator_grn, audience_grn, issued_at, expires_at)
 VALUES (sqlc.arg('token_hash'), sqlc.arg('credential_id')::bigint, sqlc.arg('operator_grn'),
         sqlc.narg('audience_grn'), sqlc.arg('issued_at'), sqlc.arg('expires_at'));
@@ -189,16 +208,32 @@ WHERE t.token_hash = $1 AND t.expires_at > now()
 -- name: LockOperatorCredential :one
 SELECT id FROM operator_credentials WHERE id = $1 FOR UPDATE;
 
--- Keeps the issuance's newest tokens and drops the rest, which bounds
--- what a leaked credential can write (ADR-0100).
+-- Keeps the issuance's newest live tokens and drops the rest, which
+-- bounds what a leaked credential can write (ADR-0100). It takes them
+-- in token_hash order, and is the one statement of an exchange that
+-- waits on a token (#1424).
 -- name: TrimOperatorTokens :exec
-DELETE FROM operator_tokens t
-WHERE t.credential_id = sqlc.arg('credential_id')::bigint
-  AND t.token_hash NOT IN (
-      SELECT k.token_hash FROM operator_tokens k
-      WHERE k.credential_id = sqlc.arg('credential_id')::bigint
-      ORDER BY k.issued_at DESC, k.token_hash DESC
-      LIMIT sqlc.arg('keep'));
+WITH doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM operator_tokens t
+    WHERE t.credential_id = sqlc.arg('credential_id')::bigint
+      AND t.token_hash NOT IN (
+          SELECT k.token_hash FROM operator_tokens k
+          WHERE k.credential_id = sqlc.arg('credential_id')::bigint AND k.expires_at > now()
+          ORDER BY k.issued_at DESC, k.token_hash DESC
+          LIMIT sqlc.arg('keep'))
+    ORDER BY t.token_hash
+    FOR UPDATE OF t)
+DELETE FROM operator_tokens WHERE token_hash IN (SELECT token_hash FROM doomed);
+
+-- An exchange sweeps the operator's expired tokens last, so the table
+-- stays proportional to what is live without a job of its own. It
+-- skips a token another transaction holds, which that transaction is
+-- deleting or a later sweep takes, so it never waits (#1424).
+-- name: SweepOperatorTokens :exec
+DELETE FROM operator_tokens WHERE token_hash IN (
+    SELECT t.token_hash FROM operator_tokens t
+    WHERE t.operator_grn = sqlc.arg('operator_grn') AND t.expires_at <= now()
+    FOR UPDATE OF t SKIP LOCKED);
 
 -- Holds the operator's registration while its keys change, so two
 -- issuances at once cannot both find room under the bound (ADR-0102).
@@ -241,7 +276,12 @@ RETURNING id;
 SELECT EXISTS (SELECT 1 FROM operator_keys WHERE operator_grn = sqlc.arg('operator_grn') AND kid = sqlc.arg('kid'));
 
 -- name: DeleteOperatorKeyTokens :exec
-DELETE FROM operator_tokens WHERE key_id = ANY(sqlc.arg('key_ids')::bigint[]);
+WITH doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM operator_tokens t
+    WHERE t.key_id = ANY(sqlc.arg('key_ids')::bigint[])
+    ORDER BY t.token_hash
+    FOR UPDATE OF t)
+DELETE FROM operator_tokens WHERE token_hash IN (SELECT token_hash FROM doomed);
 
 -- name: InsertOperatorKey :one
 INSERT INTO operator_keys (operator_grn, kid, algorithm, public_jwk, issued_by, issued_at)
@@ -308,24 +348,24 @@ ON CONFLICT (operator_grn, jti) DO NOTHING
 RETURNING jti;
 
 -- name: RecordOperatorKeyToken :exec
-WITH swept AS (
-    DELETE FROM operator_tokens
-    WHERE operator_grn = sqlc.arg('operator_grn') AND expires_at <= now()
-)
 INSERT INTO operator_tokens (token_hash, key_id, operator_grn, audience_grn, issued_at, expires_at)
 VALUES (sqlc.arg('token_hash'), sqlc.arg('key_id')::bigint, sqlc.arg('operator_grn'),
         sqlc.narg('audience_grn'), sqlc.arg('issued_at'), sqlc.arg('expires_at'));
 
--- Keeps the key's newest tokens and drops the rest, the bound a
--- credential's tokens have too.
+-- Keeps the key's newest live tokens and drops the rest, the bound and
+-- the order a credential's trim has too.
 -- name: TrimOperatorKeyTokens :exec
-DELETE FROM operator_tokens t
-WHERE t.key_id = sqlc.arg('key_id')::bigint
-  AND t.token_hash NOT IN (
-      SELECT k.token_hash FROM operator_tokens k
-      WHERE k.key_id = sqlc.arg('key_id')::bigint
-      ORDER BY k.issued_at DESC, k.token_hash DESC
-      LIMIT sqlc.arg('keep'));
+WITH doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM operator_tokens t
+    WHERE t.key_id = sqlc.arg('key_id')::bigint
+      AND t.token_hash NOT IN (
+          SELECT k.token_hash FROM operator_tokens k
+          WHERE k.key_id = sqlc.arg('key_id')::bigint AND k.expires_at > now()
+          ORDER BY k.issued_at DESC, k.token_hash DESC
+          LIMIT sqlc.arg('keep'))
+    ORDER BY t.token_hash
+    FOR UPDATE OF t)
+DELETE FROM operator_tokens WHERE token_hash IN (SELECT token_hash FROM doomed);
 
 -- name: MarkOperatorKeyExchanged :exec
 UPDATE operator_keys SET last_exchanged_at = sqlc.arg('at') WHERE id = sqlc.arg('id');

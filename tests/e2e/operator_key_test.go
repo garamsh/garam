@@ -116,7 +116,8 @@ func TestOperatorKey_TheBuiltBinariesIssueAKeyAndExchangeItsAssertion(t *testing
 	keys := "/orgs/" + slug + "/operators/controller/keys"
 
 	status, body := consumerClient{t: t, base: "http://" + unconfiguredAddr}.do(http.MethodPost, keys, owner, `{"rotation":"planned"}`)
-	assert.Equal(t, http.StatusServiceUnavailable, status, "no token URL issues no key: %s", body)
+	assert.Equal(t, http.StatusConflict, status, "no token URL issues no key: %s", body)
+	assert.Contains(t, body, `"reason":"key_issuance_unconfigured"`, "the refusal names why (#1394)")
 	assert.NotContains(t, body, "PRIVATE KEY")
 
 	status, body = c.do(http.MethodPost, keys, owner, `{"rotation":"planned"}`)

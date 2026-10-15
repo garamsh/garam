@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/operator/postgres/db"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Compile-time check that Store satisfies operator.GrantStore.
@@ -53,7 +54,7 @@ func (s *Store) WriteGrant(ctx context.Context, w operator.GrantWrite, id operat
 	}
 	if hasCurrent {
 		if _, err := q.EndDelegation(ctx, db.EndDelegationParams{
-			EndedAt: stamp(w.Now), ID: current.ID, OrgGrn: w.Org.String(), OperatorGrn: w.Operator.String(),
+			EndedAt: pgxtype.Timestamptz(w.Now), ID: current.ID, OrgGrn: w.Org.String(), OperatorGrn: w.Operator.String(),
 		}); err != nil {
 			return nil, false, storageError(err, "end delegation", nil, nil)
 		}
@@ -66,8 +67,8 @@ func (s *Store) WriteGrant(ctx context.Context, w operator.GrantWrite, id operat
 	if err := q.CreateDelegation(ctx, db.CreateDelegationParams{
 		ID: string(id), OrgGrn: w.Org.String(), OperatorGrn: w.Operator.String(),
 		RequestID: string(w.RequestID), Replaces: optionalText((*string)(w.Expected)),
-		Operations: operations, ExpiresAt: stamp(w.Terms.ExpiresAt),
-		GrantedBy: w.Actor.String(), GrantedAt: stamp(w.Now),
+		Operations: operations, ExpiresAt: pgxtype.Timestamptz(w.Terms.ExpiresAt),
+		GrantedBy: w.Actor.String(), GrantedAt: pgxtype.Timestamptz(w.Now),
 	}); err != nil {
 		return nil, false, storageError(err, "create delegation", operator.ErrOperatorNotFound, operator.ErrGrantStale)
 	}
@@ -105,7 +106,7 @@ func replay(ctx context.Context, q *db.Queries, row db.OperatorDelegation, w ope
 // EndGrant ends the named grant, and answers nil for one already ended.
 func (s *Store) EndGrant(ctx context.Context, org, hosted grn.GRN, id operator.GrantID, now time.Time) error {
 	n, err := s.q.EndDelegation(ctx, db.EndDelegationParams{
-		EndedAt: stamp(now), ID: string(id), OrgGrn: org.String(), OperatorGrn: hosted.String(),
+		EndedAt: pgxtype.Timestamptz(now), ID: string(id), OrgGrn: org.String(), OperatorGrn: hosted.String(),
 	})
 	if err != nil {
 		return storageError(err, "end delegation", nil, nil)

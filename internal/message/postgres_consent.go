@@ -2,14 +2,12 @@ package message
 
 import (
 	"context"
-	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Compile-time check that PostgresStore satisfies ConsentStore.
@@ -92,15 +90,5 @@ func rowToConsent(row db.MessageConsent) (*Consent, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "consent org b", errorx.KindInternal)
 	}
-	return NewConsent(orgA, orgB, consentStamp(row.AConsentedAt), consentStamp(row.BConsentedAt)), nil
-}
-
-// consentStamp reads a half's stamp, where a withdrawn half is no time
-// at all rather than the zero time.
-func consentStamp(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	stamp := t.Time
-	return &stamp
+	return NewConsent(orgA, orgB, pgxtype.Time(row.AConsentedAt), pgxtype.Time(row.BConsentedAt)), nil
 }

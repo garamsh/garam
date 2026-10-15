@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Assign binds the agent to an assignee at the next epoch. Every call
@@ -28,7 +29,7 @@ func (s *PostgresStore) Assign(ctx context.Context, agentGRN, assigneeGRN grn.GR
 	if _, err := q.LockAgentExecution(ctx, agentGRN.String()); err != nil {
 		return nil, pgxerr.Classify(err, "assign", ErrAgentNotFound, nil)
 	}
-	now := stamp(time.Now().UTC())
+	now := pgxtype.Timestamptz(time.Now().UTC())
 	row, err := q.AssignAgent(ctx, db.AssignAgentParams{
 		AgentGrn:    agentGRN.String(),
 		AssigneeGrn: assigneeGRN.String(),

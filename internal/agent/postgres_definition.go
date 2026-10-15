@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // GetDefinition returns the definition naming the agent, or
@@ -146,7 +147,7 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 	if err != nil {
 		return nil, err
 	}
-	now := stamp(time.Now().UTC())
+	now := pgxtype.Timestamptz(time.Now().UTC())
 	if err := q.CreateAgent(ctx, db.CreateAgentParams{
 		Grn:               a.grn.String(),
 		OrgGrn:            a.orgGRN.String(),

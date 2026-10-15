@@ -5,6 +5,7 @@ import (
 
 	"github.com/garamsh/garam/internal/operator/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Compile-time check that PostgresStore satisfies CertificateStore.
@@ -16,7 +17,7 @@ func (s *PostgresStore) Adopt(ctx context.Context, current Current) error {
 	err := s.q.AdoptOperatorCertificate(ctx, db.AdoptOperatorCertificateParams{
 		OperatorGrn: current.Operator.String(),
 		Serial:      string(current.Serial),
-		IssuedAt:    stamp(current.IssuedAt),
+		IssuedAt:    pgxtype.Timestamptz(current.IssuedAt),
 	})
 	return pgxerr.Classify(err, "adopt", nil, nil)
 }
@@ -30,7 +31,7 @@ func (s *PostgresStore) Advance(ctx context.Context, current Current, predecesso
 	moved, err := s.q.AdvanceOperatorCertificate(ctx, db.AdvanceOperatorCertificateParams{
 		OperatorGrn: current.Operator.String(),
 		Serial:      string(current.Serial),
-		IssuedAt:    stamp(current.IssuedAt),
+		IssuedAt:    pgxtype.Timestamptz(current.IssuedAt),
 		Predecessor: string(predecessor),
 	})
 	if err != nil {

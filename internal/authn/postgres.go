@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // PostgresSessionStore implements SessionStore against PostgreSQL.
@@ -34,8 +35,8 @@ func (s *PostgresSessionStore) Create(ctx context.Context, token string, sess *S
 	err := s.q.CreateSession(ctx, db.CreateSessionParams{
 		TokenHash: HashToken(token),
 		UserGrn:   sess.userGRN.String(),
-		CreatedAt: stamp(sess.createdAt),
-		ExpiresAt: stamp(sess.expiresAt),
+		CreatedAt: pgxtype.Timestamptz(sess.createdAt),
+		ExpiresAt: pgxtype.Timestamptz(sess.expiresAt),
 	})
 	return pgxerr.Classify(err, "create session", nil, nil)
 }
@@ -84,7 +85,7 @@ func NewPostgresOAuthStateStore(pool *pgxpool.Pool) *PostgresOAuthStateStore {
 func (s *PostgresOAuthStateStore) Issue(ctx context.Context, state string, ttl time.Duration, returnPath string) error {
 	issued, err := s.q.IssueOAuthState(ctx, db.IssueOAuthStateParams{
 		StateHash:  HashToken(state),
-		ExpiresAt:  stamp(time.Now().UTC().Add(ttl)),
+		ExpiresAt:  pgxtype.Timestamptz(time.Now().UTC().Add(ttl)),
 		ReturnPath: pgtype.Text{String: returnPath, Valid: returnPath != ""},
 		MaxLive:    MaxLiveOAuthStates,
 	})
@@ -109,11 +110,6 @@ func (s *PostgresOAuthStateStore) Consume(ctx context.Context, state string) (st
 	return returnPath.String, nil
 }
 
-// stamp converts a time.Time to a valid pgtype.Timestamptz.
-func stamp(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
-}
-
 // PostgresPasswordCredentialStore implements PasswordCredentialStore
 // against PostgreSQL. Only the Argon2id verifier is persisted; the
 // password never reaches the database (ADR-0041).
@@ -133,7 +129,7 @@ func NewPostgresPasswordCredentialStore(pool *pgxpool.Pool) *PostgresPasswordCre
 
 // Create records the first verifier for a user.
 func (s *PostgresPasswordCredentialStore) Create(ctx context.Context, userGRN grn.GRN, v Verifier) error {
-	now := stamp(time.Now().UTC())
+	now := pgxtype.Timestamptz(time.Now().UTC())
 	err := s.q.CreatePasswordCredential(ctx, db.CreatePasswordCredentialParams{
 		UserGrn:   userGRN.String(),
 		Verifier:  string(v),
@@ -158,7 +154,7 @@ func (s *PostgresPasswordCredentialStore) Replace(ctx context.Context, userGRN g
 	err := s.q.ReplacePasswordVerifier(ctx, db.ReplacePasswordVerifierParams{
 		UserGrn:   userGRN.String(),
 		Verifier:  string(v),
-		UpdatedAt: stamp(time.Now().UTC()),
+		UpdatedAt: pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	return pgxerr.Classify(err, "replace password verifier", nil, nil)
 }
@@ -186,7 +182,7 @@ func NewPostgresPasswordAttemptStore(pool *pgxpool.Pool) *PostgresPasswordAttemp
 func (s *PostgresPasswordAttemptStore) Record(ctx context.Context, attempt string, ttl time.Duration) error {
 	recorded, err := s.q.RecordPasswordAttempt(ctx, db.RecordPasswordAttemptParams{
 		AttemptID: attempt,
-		ExpiresAt: stamp(time.Now().UTC().Add(ttl)),
+		ExpiresAt: pgxtype.Timestamptz(time.Now().UTC().Add(ttl)),
 		MaxLive:   MaxLivePasswordAttempts,
 	})
 	if err != nil {

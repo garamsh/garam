@@ -12,11 +12,12 @@ import (
 	"github.com/garamsh/garam/internal/agent/postgres/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 func (s *Store) CreateManaged(ctx context.Context, a *agent.Agent, c agent.ManagedCreation) (*agent.ManagedCreation, bool, error) {
 	err := s.inTx(ctx, "create managed agent", func(q *db.Queries) error {
-		at := stamp(a.CreatedAt())
+		at := pgxtype.Timestamptz(a.CreatedAt())
 		if err := q.CreateManagedAgent(ctx, db.CreateManagedAgentParams{
 			Grn:               a.GRN().String(),
 			OrgGrn:            a.Organization().String(),
@@ -133,7 +134,7 @@ func (s *Store) InstallInitialCertificate(ctx context.Context, req agent.Initial
 		signed := req.Signed
 		if err := q.InsertCredential(ctx, db.InsertCredentialParams{
 			AgentGrn: req.Agent.String(), Serial: signed.Credential.Serial, Lineage: lineage,
-			NotAfter: stamp(signed.Credential.NotAfter),
+			NotAfter: pgxtype.Timestamptz(signed.Credential.NotAfter),
 		}); err != nil {
 			return storageError(err, "record credential", nil, nil)
 		}
@@ -147,8 +148,8 @@ func (s *Store) InstallInitialCertificate(ctx context.Context, req agent.Initial
 			CertificatePem: signed.CertificatePEM,
 			IssuerPem:      signed.IssuerPEM,
 			ServerRootPem:  signed.ServerRootPEM,
-			NotAfter:       stamp(signed.Credential.NotAfter),
-			CreatedAt:      stamp(now),
+			NotAfter:       pgxtype.Timestamptz(signed.Credential.NotAfter),
+			CreatedAt:      pgxtype.Timestamptz(now),
 		}
 		if err := q.InsertInitialCertificate(ctx, db.InsertInitialCertificateParams(row)); err != nil {
 			return storageError(err, "record initial certificate", nil, agent.ErrInitialCertificateConflict)

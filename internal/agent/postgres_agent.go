@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Create persists a new Agent and its execution row, in one
@@ -30,14 +31,14 @@ func (s *PostgresStore) Create(ctx context.Context, a *Agent) error {
 		OrgGrn:            a.orgGRN.String(),
 		ProvisioningState: string(a.provisioning),
 		RuntimeState:      string(a.runtime),
-		CreatedAt:         stamp(a.createdAt),
-		UpdatedAt:         stamp(a.updatedAt),
+		CreatedAt:         pgxtype.Timestamptz(a.createdAt),
+		UpdatedAt:         pgxtype.Timestamptz(a.updatedAt),
 	}); err != nil {
 		return pgxerr.Classify(err, "create", nil, ErrAgentAlreadyExists)
 	}
 	if err := q.CreateAgentExecution(ctx, db.CreateAgentExecutionParams{
 		AgentGrn:  a.grn.String(),
-		UpdatedAt: stamp(a.createdAt),
+		UpdatedAt: pgxtype.Timestamptz(a.createdAt),
 	}); err != nil {
 		return pgxerr.Classify(err, "create", nil, nil)
 	}
@@ -88,7 +89,7 @@ func (s *PostgresStore) ReportProvisioningState(ctx context.Context, agentGRN gr
 		Grn:               agentGRN.String(),
 		ProvisioningState: string(state),
 		Epoch:             e,
-		UpdatedAt:         stamp(time.Now().UTC()),
+		UpdatedAt:         pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, s.fenced(ctx, s.q, err, "report provisioning state", agentGRN)
@@ -113,8 +114,8 @@ func (s *PostgresStore) ReportRuntimeState(ctx context.Context, agentGRN grn.GRN
 		AgentGrn:  fence.Agent.String(),
 		TokenHash: fence.TokenBytes(),
 		Serial:    fence.Credential.Serial,
-		NotBefore: stamp(fence.Credential.NotBefore),
-		NotAfter:  stamp(fence.Credential.NotAfter),
+		NotBefore: pgxtype.Timestamptz(fence.Credential.NotBefore),
+		NotAfter:  pgxtype.Timestamptz(fence.Credential.NotAfter),
 	})
 	if err != nil {
 		return nil, errorx.Wrap(err, "report runtime state: admit", errorx.KindUnavailable)
@@ -126,7 +127,7 @@ func (s *PostgresStore) ReportRuntimeState(ctx context.Context, agentGRN grn.GRN
 		Grn:          agentGRN.String(),
 		RuntimeState: string(state),
 		Epoch:        e,
-		UpdatedAt:    stamp(time.Now().UTC()),
+		UpdatedAt:    pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		// The answer is read in the same transaction: no second

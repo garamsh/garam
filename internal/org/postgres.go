@@ -1,8 +1,6 @@
 package org
 
 import (
-	"time"
-
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -54,11 +52,6 @@ func classifyRows(n int64, err error, op string, notFound error) error {
 		return notFound
 	}
 	return nil
-}
-
-// stamp converts a time.Time to a valid pgtype.Timestamptz.
-func stamp(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
 // strs normalizes a nil slice to empty: pgx encodes a nil slice as

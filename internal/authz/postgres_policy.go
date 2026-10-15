@@ -9,6 +9,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -33,8 +34,8 @@ func (s *PostgresStore) CreatePolicy(ctx context.Context, p *Policy, doc PolicyD
 		Name:           p.name,
 		Status:         string(p.status),
 		DefaultVersion: int32(p.defaultVersion),
-		CreatedAt:      stamp(p.createdAt),
-		UpdatedAt:      stamp(p.updatedAt),
+		CreatedAt:      pgxtype.Timestamptz(p.createdAt),
+		UpdatedAt:      pgxtype.Timestamptz(p.updatedAt),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "create policy", nil, ErrPolicyAlreadyExists)
@@ -43,7 +44,7 @@ func (s *PostgresStore) CreatePolicy(ctx context.Context, p *Policy, doc PolicyD
 		PolicyGrn: p.grn.String(),
 		Document:  raw,
 		CreatedBy: createdBy.String(),
-		CreatedAt: stamp(p.createdAt),
+		CreatedAt: pgxtype.Timestamptz(p.createdAt),
 	}); err != nil {
 		return nil, pgxerr.Classify(err, "create policy version", nil, nil)
 	}
@@ -90,7 +91,7 @@ func (s *PostgresStore) AddPolicyVersion(ctx context.Context, g grn.GRN, doc Pol
 		PolicyGrn: g.String(),
 		Document:  raw,
 		CreatedBy: createdBy.String(),
-		CreatedAt: stamp(time.Now().UTC()),
+		CreatedAt: pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "add policy version", ErrPolicyNotFound, nil)
@@ -120,7 +121,7 @@ func (s *PostgresStore) SetPolicyStatus(ctx context.Context, g grn.GRN, status w
 	row, err := s.q.SetPolicyStatus(ctx, db.SetPolicyStatusParams{
 		Grn:       g.String(),
 		Status:    string(status),
-		UpdatedAt: stamp(time.Now().UTC()),
+		UpdatedAt: pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "set policy status", ErrPolicyNotFound, nil)
@@ -140,7 +141,7 @@ func (s *PostgresStore) SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, 
 	row, err := s.q.SetPolicyDefaultVersion(ctx, db.SetPolicyDefaultVersionParams{
 		Grn:            g.String(),
 		DefaultVersion: int32(version),
-		UpdatedAt:      stamp(time.Now().UTC()),
+		UpdatedAt:      pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "set policy default version", ErrPolicyNotFound, nil)

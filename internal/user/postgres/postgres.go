@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 	"github.com/garamsh/garam/internal/user"
 	"github.com/garamsh/garam/internal/user/postgres/db"
 )
@@ -36,8 +37,8 @@ func (s *Store) Create(ctx context.Context, u *user.User) error {
 		Nickname:  u.Nickname,
 		Roles:     strs(u.Roles),
 		Policies:  strs(u.Policies),
-		CreatedAt: stamp(u.CreatedAt),
-		UpdatedAt: stamp(u.UpdatedAt),
+		CreatedAt: pgxtype.Timestamptz(u.CreatedAt),
+		UpdatedAt: pgxtype.Timestamptz(u.UpdatedAt),
 	})
 	return pgxerr.Classify(err, "create", nil, nil)
 }
@@ -83,7 +84,7 @@ func (s *Store) Update(ctx context.Context, g grn.GRN, p user.Patch) (*user.User
 		Nickname:  text(p.Nickname),
 		Roles:     p.Roles,
 		Policies:  p.Policies,
-		UpdatedAt: stamp(time.Now().UTC()),
+		UpdatedAt: pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "update", user.ErrUserNotFound, nil)
@@ -134,11 +135,6 @@ func strs(s []string) []string {
 		return []string{}
 	}
 	return s
-}
-
-// stamp converts a time.Time to a valid pgtype.Timestamptz.
-func stamp(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
 // text converts a *string patch field to a nullable text.

@@ -429,6 +429,9 @@ collaborate on a shared plan.
   errorx kinds every postgres-backed store answers through. The five
   copies the volume audit found have been collapsed into this one.
   Shared primitive.
+- `internal/pgxtype/` — the timestamptz conversion, both directions,
+  every postgres-backed store binds and scans through. Shared
+  primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
   | `serve machine` | `migrate` | `probe` | `issue-certificate` |
   `adapter`).

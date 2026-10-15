@@ -4,6 +4,7 @@ import {
   seedArchivedTemplate,
   seedCutoverDefinition,
   seedDefinition,
+  type Seed,
 } from "./seed";
 
 test.describe("archived agent templates", () => {
@@ -257,46 +258,92 @@ test.describe("cutover", () => {
 });
 
 test.describe("agents and templates accessibility", () => {
-  for (const theme of ["light", "dark"] as const) {
-    test(`every route in the area passes axe in the ${theme} theme`, async ({
-      page,
-      signedIn,
-    }) => {
-      await useTheme(page, theme);
-      const defined = await seedCutoverDefinition(signedIn, "Moving", "frozen");
-      const kept = await seedArchivedTemplate(signedIn, "Researcher", {
-        workspace: "papers",
-      });
-      const agents = `/console/orgs/${signedIn.orgSlug}/agents`;
+  /** What the area's routes read, seeded into the test's organization. */
+  async function seedArea(signedIn: Seed) {
+    const defined = await seedCutoverDefinition(signedIn, "Moving", "frozen");
+    const kept = await seedArchivedTemplate(signedIn, "Researcher", {
+      workspace: "papers",
+    });
+    return {
+      agents: `/console/orgs/${signedIn.orgSlug}/agents`,
+      defined,
+      kept: kept.identifier,
+    };
+  }
 
-      // Each route, with the heading that says it rendered, and the
-      // tabs a detail page hides until they are opened.
-      const routes: [string, string, string[]][] = [
-        [agents, "Agents", []],
-        [`${agents}/${defined}`, "Moving", ["Execution", "Settings"]],
-        [`${agents}/new`, "New agent", []],
-        [`${agents}/templates`, "Templates", []],
-        [`${agents}/templates/${kept.identifier}`, "Researcher", ["Values"]],
-      ];
-      for (const [href, heading, tabs] of routes) {
+  // Each route, with the heading that says it rendered, and each tab a
+  // detail page hides until it is opened: one test reads one of them.
+  const routes: {
+    name: string;
+    href: (area: Awaited<ReturnType<typeof seedArea>>) => string;
+    heading: string;
+    tab?: string;
+  }[] = [
+    { name: "the agent list", href: (a) => a.agents, heading: "Agents" },
+    {
+      name: "an agent",
+      href: (a) => `${a.agents}/${a.defined}`,
+      heading: "Moving",
+    },
+    {
+      name: "an agent's Execution tab",
+      href: (a) => `${a.agents}/${a.defined}`,
+      heading: "Moving",
+      tab: "Execution",
+    },
+    {
+      name: "an agent's Settings tab",
+      href: (a) => `${a.agents}/${a.defined}`,
+      heading: "Moving",
+      tab: "Settings",
+    },
+    {
+      name: "the new agent wizard",
+      href: (a) => `${a.agents}/new`,
+      heading: "New agent",
+    },
+    {
+      name: "the template list",
+      href: (a) => `${a.agents}/templates`,
+      heading: "Templates",
+    },
+    {
+      name: "an archived template",
+      href: (a) => `${a.agents}/templates/${a.kept}`,
+      heading: "Researcher",
+    },
+    {
+      name: "an archived template's Values tab",
+      href: (a) => `${a.agents}/templates/${a.kept}`,
+      heading: "Researcher",
+      tab: "Values",
+    },
+  ];
+
+  for (const theme of ["light", "dark"] as const) {
+    for (const route of routes) {
+      test(`${route.name} passes axe in the ${theme} theme`, async ({
+        page,
+        signedIn,
+      }) => {
+        await useTheme(page, theme);
+        const href = route.href(await seedArea(signedIn));
         await page.goto(href);
         // A list's heading carries its count after the title.
         await expect(
           page.getByRole("heading", {
             level: 1,
-            name: new RegExp(`^${heading}( ?\\d+)?$`),
+            name: new RegExp(`^${route.heading}( ?\\d+)?$`),
           }),
         ).toBeVisible();
         await expectHydrated(page);
-        expect(await axeViolations(page), href).toEqual([]);
-        for (const tab of tabs) {
-          await page.getByRole("tab", { name: tab, exact: true }).click();
-          await expect(
-            page.getByRole("tab", { name: tab, exact: true }),
-          ).toHaveAttribute("aria-selected", "true");
-          expect(await axeViolations(page), `${href} ${tab}`).toEqual([]);
+        if (route.tab !== undefined) {
+          const tab = page.getByRole("tab", { name: route.tab, exact: true });
+          await tab.click();
+          await expect(tab).toHaveAttribute("aria-selected", "true");
         }
-      }
-    });
+        expect(await axeViolations(page)).toEqual([]);
+      });
+    }
   }
 });

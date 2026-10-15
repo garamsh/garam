@@ -364,35 +364,57 @@ test.describe("teams", () => {
     await expect(page.getByLabel("Team name", { exact: true })).toBeHidden();
   });
 
+  // One test reads one of these: a route, the team page's Settings
+  // tab, or the delete dialog it opens. `reach` waits for what the scan
+  // reads, and `include` limits the scan to the dialog.
+  const views: {
+    name: string;
+    path: (orgSlug: string) => string;
+    reach: (page: Page) => Promise<void>;
+    include?: string[];
+  }[] = [
+    {
+      name: "the team list",
+      path: (org) => `/console/orgs/${org}/teams`,
+      reach: expectHydrated,
+    },
+    {
+      name: "a new team",
+      path: (org) => `/console/orgs/${org}/teams/new`,
+      reach: expectHydrated,
+    },
+    { name: "a team", path: (org) => teamUrl(org), reach: expectHydrated },
+    {
+      name: "a team's Settings tab",
+      path: (org) => teamUrl(org),
+      reach: openSettings,
+    },
+    {
+      name: "a team's delete dialog",
+      path: (org) => teamUrl(org),
+      reach: async (page) => {
+        await openSettings(page);
+        await page
+          .getByRole("region", { name: "Danger zone", exact: true })
+          .getByRole("button", { name: "Delete team", exact: true })
+          .click();
+        await expect(page.getByRole("alertdialog")).toBeVisible();
+      },
+      include: ['[role="alertdialog"]'],
+    },
+  ];
+
   for (const theme of ["light", "dark"] as const) {
-    test(`the Teams routes pass axe in the ${theme} theme`, async ({
-      page,
-      signedIn,
-    }) => {
-      await useTheme(page, theme);
-
-      await page.goto(`/console/orgs/${signedIn.orgSlug}/teams`);
-      await expectHydrated(page);
-      expect(await axeViolations(page)).toEqual([]);
-
-      await page.goto(`/console/orgs/${signedIn.orgSlug}/teams/new`);
-      await expectHydrated(page);
-      expect(await axeViolations(page)).toEqual([]);
-
-      await page.goto(teamUrl(signedIn.orgSlug));
-      await expectHydrated(page);
-      expect(await axeViolations(page)).toEqual([]);
-
-      await openSettings(page);
-      expect(await axeViolations(page)).toEqual([]);
-
-      const dialog = page.getByRole("alertdialog");
-      await page
-        .getByRole("region", { name: "Danger zone", exact: true })
-        .getByRole("button", { name: "Delete team", exact: true })
-        .click();
-      await expect(dialog).toBeVisible();
-      expect(await axeViolations(page, ['[role="alertdialog"]'])).toEqual([]);
-    });
+    for (const view of views) {
+      test(`${view.name} passes axe in the ${theme} theme`, async ({
+        page,
+        signedIn,
+      }) => {
+        await useTheme(page, theme);
+        await page.goto(view.path(signedIn.orgSlug));
+        await view.reach(page);
+        expect(await axeViolations(page, view.include)).toEqual([]);
+      });
+    }
   }
 });

@@ -5,6 +5,13 @@ import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
 import { seedMember, type Seed } from "./seed";
 
+/** Opens a tab of the page and waits until it is the one shown. */
+async function openTab(page: Page, name: string | RegExp): Promise<void> {
+  const tab = page.getByRole("tab", { name, exact: typeof name === "string" });
+  await tab.click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+}
+
 /**
  * Clicks a control that only works once React has hydrated it. A click
  * taken before then is dropped, not queued, so it is repeated until
@@ -560,90 +567,148 @@ test.describe("permissions accessibility", () => {
     expect(await axeViolations(page, ["table"])).toEqual([]);
   });
 
-  for (const theme of ["light", "dark"] as const) {
-    test(`every Permissions route passes axe in the ${theme} theme`, async ({
-      page,
+  /**
+   * What the area's routes read: a policy attached to the team and
+   * active, with a stored v2 beside the default v1, so a diff has both
+   * kinds of line to scan.
+   */
+  async function seedArea(request: APIRequestContext, signedIn: Seed) {
+    const policy = await createPolicy(
+      request,
       signedIn,
-    }) => {
-      await useTheme(page, theme);
-      const policy = await createPolicy(
-        page.request,
-        signedIn,
-        "Deny project deletion",
-        denyDocument(signedIn.orgSlug, ["project:delete"]),
-      );
-      await attachToTeamAndActivate(page.request, signedIn, policy);
-      // A stored v2 beside the default v1, so a diff has both kinds of
-      // line to scan.
-      const saved = await page.request.post(
-        `/api/orgs/${signedIn.orgSlug}/policies/${policy}/versions`,
-        {
-          data: {
-            document: JSON.parse(
-              denyDocument(signedIn.orgSlug, ["project:update"]),
-            ),
-          },
+      "Deny project deletion",
+      denyDocument(signedIn.orgSlug, ["project:delete"]),
+    );
+    await attachToTeamAndActivate(request, signedIn, policy);
+    const saved = await request.post(
+      `/api/orgs/${signedIn.orgSlug}/policies/${policy}/versions`,
+      {
+        data: {
+          document: JSON.parse(
+            denyDocument(signedIn.orgSlug, ["project:update"]),
+          ),
         },
-      );
-      expect(saved.status()).toBe(201);
-      const base = `/console/orgs/${signedIn.orgSlug}/permissions`;
+      },
+    );
+    expect(saved.status()).toBe(201);
+    return {
+      base: `/console/orgs/${signedIn.orgSlug}/permissions`,
+      policy,
+      person: signedIn.userSlug,
+    };
+  }
 
-      for (const [path, title] of [
-        [base, /^Permissions/],
-        [`${base}/new`, /^New policy$/],
-        [`${base}/attachments`, /^Permissions/],
-        [
-          `${base}/attachments?subject=person:${signedIn.userSlug}`,
-          /^Permissions/,
-        ],
-        [`${base}/${policy}`, /^Deny project deletion$/],
-      ] as const) {
+  // One test reads one of these: a route, a tab of the policy page,
+  // or a state a step on it reaches. `reach` waits for what the scan
+  // reads, and `include` limits the scan to a dialog.
+  const views: {
+    name: string;
+    path: (area: Awaited<ReturnType<typeof seedArea>>) => string;
+    title: RegExp;
+    reach?: (page: Page) => Promise<void>;
+    include?: string[];
+  }[] = [
+    { name: "the policy list", path: (a) => a.base, title: /^Permissions/ },
+    {
+      name: "a new policy",
+      path: (a) => `${a.base}/new`,
+      title: /^New policy$/,
+      // The shell hydrates before this page's form, whose submit stays
+      // disabled until its own part does; the scan reads it enabled.
+      reach: async (page) => {
+        await expect(
+          page.getByRole("button", { name: "Create draft" }),
+        ).toBeEnabled();
+      },
+    },
+    {
+      name: "the attachments view",
+      path: (a) => `${a.base}/attachments`,
+      title: /^Permissions/,
+    },
+    {
+      name: "a subject's attachments",
+      path: (a) => `${a.base}/attachments?subject=person:${a.person}`,
+      title: /^Permissions/,
+    },
+    {
+      name: "a policy",
+      path: (a) => `${a.base}/${a.policy}`,
+      title: /^Deny project deletion$/,
+    },
+    {
+      name: "a policy's Versions tab",
+      path: (a) => `${a.base}/${a.policy}`,
+      title: /^Deny project deletion$/,
+      reach: (page) => openTab(page, /^Versions/),
+    },
+    {
+      name: "a policy's Attachments tab",
+      path: (a) => `${a.base}/${a.policy}`,
+      title: /^Deny project deletion$/,
+      reach: (page) => openTab(page, /^Attachments/),
+    },
+    {
+      name: "a policy's document as JSON",
+      path: (a) => `${a.base}/${a.policy}`,
+      title: /^Deny project deletion$/,
+      reach: async (page) => {
+        await openTab(page, "Document");
+        await page.getByRole("tab", { name: "JSON", exact: true }).click();
+        await expect(
+          page.getByRole("textbox", { name: "Document JSON" }),
+        ).toBeVisible();
+      },
+    },
+    {
+      name: "a stored version's dialog",
+      path: (a) => `${a.base}/${a.policy}`,
+      title: /^Deny project deletion$/,
+      reach: async (page) => {
+        await openTab(page, /^Versions/);
+        await page
+          .getByRole("row", { name: /^v1/ })
+          .getByRole("button", { name: /^View/ })
+          .click();
+        await expect(page.getByRole("dialog")).toBeVisible();
+      },
+      include: ['[role="dialog"]'],
+    },
+    {
+      name: "a diff against the default",
+      path: (a) => `${a.base}/${a.policy}`,
+      title: /^Deny project deletion$/,
+      // v2 against the default: removed and added lines on their tints.
+      reach: async (page) => {
+        await openTab(page, /^Versions/);
+        await page
+          .getByRole("row", { name: /^v2/ })
+          .getByRole("button", { name: /^Compare/ })
+          .click();
+        const diff = page.getByRole("dialog").getByRole("figure");
+        await expect(diff).toContainText('Added: "project:update"');
+        await expect(diff).toContainText('Removed: "project:delete"');
+      },
+      include: ['[role="dialog"]'],
+    },
+  ];
+
+  for (const theme of ["light", "dark"] as const) {
+    for (const view of views) {
+      test(`${view.name} passes axe in the ${theme} theme`, async ({
+        page,
+        signedIn,
+      }) => {
+        await useTheme(page, theme);
+        const path = view.path(await seedArea(page.request, signedIn));
         await page.goto(path);
         await expect(
-          page.getByRole("heading", { level: 1, name: title }),
+          page.getByRole("heading", { level: 1, name: view.title }),
         ).toBeVisible();
         await expectHydrated(page);
-        // The shell hydrates before this page's form, whose submit stays
-        // disabled until its own part does; the scan reads it enabled.
-        if (path.endsWith("/new")) {
-          await expect(
-            page.getByRole("button", { name: "Create draft" }),
-          ).toBeEnabled();
-        }
-        expect(await axeViolations(page), path).toEqual([]);
-      }
-
-      // Each of the policy page's tabs, and the dialog publishing it.
-      for (const tab of [/^Versions/, /^Attachments/]) {
-        await page.getByRole("tab", { name: tab }).click();
-        expect(await axeViolations(page), String(tab)).toEqual([]);
-      }
-      await page.getByRole("tab", { name: "Document" }).click();
-      await page.getByRole("tab", { name: "JSON", exact: true }).click();
-      await expect(
-        page.getByRole("textbox", { name: "Document JSON" }),
-      ).toBeVisible();
-      expect(await axeViolations(page), "JSON view").toEqual([]);
-      await page.getByRole("tab", { name: /^Versions/ }).click();
-      await page
-        .getByRole("row", { name: /^v1/ })
-        .getByRole("button", { name: /^View/ })
-        .click();
-      await expect(page.getByRole("dialog")).toBeVisible();
-      expect(await axeViolations(page, ['[role="dialog"]'])).toEqual([]);
-      await page.keyboard.press("Escape");
-
-      // v2 against the default: removed and added lines on their tints.
-      await page
-        .getByRole("row", { name: /^v2/ })
-        .getByRole("button", { name: /^Compare/ })
-        .click();
-      const diff = page.getByRole("dialog").getByRole("figure");
-      await expect(diff).toContainText('Added: "project:update"');
-      await expect(diff).toContainText('Removed: "project:delete"');
-      expect(await axeViolations(page, ['[role="dialog"]']), "diff").toEqual(
-        [],
-      );
-    });
+        await view.reach?.(page);
+        expect(await axeViolations(page, view.include)).toEqual([]);
+      });
+    }
   }
 });

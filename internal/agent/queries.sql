@@ -138,6 +138,13 @@ WHERE d.operator_grn = $1 AND (e.mode IS NULL OR e.mode = 'legacy')
   )
 ORDER BY d.agent_grn;
 
+-- A claim holds its organization's row before the definition's, with
+-- the KEY SHARE lock the agent insert's foreign key takes anyway: an
+-- organization's deletion holds that row before its cascade reaches
+-- the definition, so the two take them in one order (#1441).
+-- name: HoldAgentOrg :one
+SELECT grn FROM orgs WHERE grn = $1 FOR KEY SHARE;
+
 -- LockAgentDefinition is the lock a claim serializes on: two claims of
 -- one definition take the row lock in turn, and the second reads the
 -- assignment the first wrote.

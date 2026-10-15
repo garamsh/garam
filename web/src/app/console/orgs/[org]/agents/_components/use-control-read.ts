@@ -3,12 +3,11 @@
 import { useEffect, useState } from "react";
 import type { z } from "zod";
 
+import { mintOperationAuthority } from "@/features/orgs/actions";
 import {
   callControl,
   type ControlOperation,
   type ControlResult,
-  type MintInput,
-  type MintResult,
 } from "@/lib/operation-authority";
 
 /** A control read in flight, or what it answered. */
@@ -23,10 +22,9 @@ export type ControlReadTarget = {
 };
 
 /**
- * Reads one control route under a fresh authority, which `mint` asks
- * garam for, whenever the route or `generation` changes, and answers
- * null where `where` is null. Each attempt mints its own request
- * identifier, so a re-read is a new
+ * Reads one control route under a fresh authority whenever the route or
+ * `generation` changes, and answers null where `where` is null. Each
+ * attempt mints its own request identifier, so a re-read is a new
  * operation rather than a replay. While a new generation of the same
  * route is read, the last answer stands, so what is on screen is not
  * unmounted by a refresh it asked for.
@@ -36,7 +34,6 @@ export function useControlRead<T>(
   operation: ControlOperation,
   where: ControlReadTarget | null,
   parser: z.ZodType<T>,
-  mint: (input: MintInput) => Promise<MintResult>,
   generation = 0,
 ): ControlRead<T> | null {
   const endpoint = where?.endpoint ?? null;
@@ -66,25 +63,14 @@ export function useControlRead<T>(
         target,
         parser,
       },
-      mint,
+      mintOperationAuthority,
     ).then((read) => {
       if (live) setAnswer({ key, route, read });
     });
     return () => {
       live = false;
     };
-  }, [
-    key,
-    route,
-    endpoint,
-    path,
-    org,
-    audience,
-    operation,
-    target,
-    parser,
-    mint,
-  ]);
+  }, [key, route, endpoint, path, org, audience, operation, target, parser]);
 
   if (key === null) return null;
   return answer?.route === route ? answer.read : { status: "loading" };

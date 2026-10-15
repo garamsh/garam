@@ -9,12 +9,11 @@ import { CopyId } from "@/components/copy-id";
 import { DescriptionList } from "@/components/description-list";
 import { Time } from "@/components/time";
 import type { HostedOperator } from "@/features/orgs";
-import { mintOperationAuthority } from "@/features/orgs/actions";
-import { useControlRead } from "@/hooks/use-control-read";
 import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import { ExecutionParser, segment } from "@/lib/operation-authority";
 
 import { orgHref } from "../../../../_components/navigation";
+import { useControlRead } from "./use-control-read";
 
 /**
  * An agent's execution as its hosted operator's control service holds
@@ -46,7 +45,6 @@ export function ExecutionPanel({
         }
       : null,
     ExecutionParser,
-    mintOperationAuthority,
   );
 
   if (blocker !== null)

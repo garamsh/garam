@@ -19,8 +19,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { mintOperationAuthority } from "@/features/orgs/actions";
-import { useControlRead } from "@/hooks/use-control-read";
 import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import type { DelegatedOperation, HostedOperator } from "@/features/orgs";
 import {
@@ -38,6 +36,7 @@ import {
   startingDraft,
   type PublishDraft,
 } from "./publish-template-form";
+import { useControlRead } from "./use-control-read";
 
 /** One published template, as the control service lists it. */
 type Published = VersionRef & { profile: VersionRef };
@@ -85,7 +84,6 @@ export function OperatorTemplates({
     "agent-template:read",
     reach("agent-template:read", `${base}/templates`),
     TemplatesParser,
-    mintOperationAuthority,
     generation,
   );
   const detail = useControlRead(
@@ -98,14 +96,12 @@ export function OperatorTemplates({
           `${base}/templates/${segment(selected.name)}/versions/${segment(selected.version)}`,
         ),
     TemplateVersionParser,
-    mintOperationAuthority,
   );
   const profiles = useControlRead(
     org,
     "execution-profile:read",
     reach("execution-profile:read", `${base}/profiles`),
     ProfilesParser,
-    mintOperationAuthority,
   );
 
   if (read.status === "blocked") {

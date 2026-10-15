@@ -15,7 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { DelegatedOperator } from "@/features/orgs";
-import { useControlRead } from "@/hooks/use-control-read";
 import { slugFromGrn } from "@/lib/grn";
 import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import { mintOperationAuthority } from "@/features/orgs/actions";
@@ -27,6 +26,7 @@ import {
 } from "@/lib/operation-authority";
 
 import { orgHref } from "../../../../_components/navigation";
+import { useControlRead } from "./use-control-read";
 
 /** The agent a control service created, as its answer named it. */
 export type CreatedAgent = { agent: string; revision: string };
@@ -75,7 +75,6 @@ export function CreateFromTemplate({
       target: orgGrn,
     },
     TemplatesParser,
-    mintOperationAuthority,
   );
 
   const delegated = hosted.delegation.controllers;

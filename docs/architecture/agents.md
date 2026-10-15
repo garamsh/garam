@@ -317,7 +317,12 @@ in #1157.
   deletion is too, so a definition still goes with its organization.
   Every definition held stays readable, claimable by the operator it
   names and cut over below, so the legacy agents a cutover has to
-  move are those garam held when 000035 ran.
+  move are those garam held when 000035 ran. A claim holds the
+  organization's row `FOR KEY SHARE`, the lock its agent insert's
+  foreign key takes, before the definition's `FOR UPDATE`: the order
+  the organization's deletion takes the two in, so a claim racing it
+  waits holding nothing and finds the definition gone (#1441;
+  `internal/agent` `PostgresStore.Claim`).
 - **garam's templates are retired read-only and not imported**
   (ADR-0088). Migration 000034's trigger refuses every insert, update
   and delete on `agent_templates`, from whichever release sends it:

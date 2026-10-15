@@ -190,13 +190,13 @@ test.describe("operators", () => {
     await confirm
       .getByRole("button", { name: "Revoke key", exact: true })
       .click();
+    // The dialog closes on submit, before garam has answered; the row
+    // reads Revoked only once the action's response has arrived. A
+    // reload before then cuts that response off (#1454).
+    const revoked = keys.getByRole("row").filter({ hasText: "Revoked" });
+    await expect(revoked).toHaveCount(1);
     await page.reload();
-    await expect(
-      page
-        .getByRole("table", { name: "Keys" })
-        .getByRole("row")
-        .filter({ hasText: "Revoked" }),
-    ).toHaveCount(1);
+    await expect(revoked).toHaveCount(1);
   });
 
   test("renames, re-issues the legacy credential, and deletes only what no definition names", async ({

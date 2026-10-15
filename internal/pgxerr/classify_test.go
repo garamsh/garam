@@ -1,7 +1,10 @@
 package pgxerr_test
 
 import (
+	"context"
 	"errors"
+	"io"
+	"net"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -171,6 +174,52 @@ func TestClassify_NotFoundFallsThroughWhenNotPgError(t *testing.T) {
 	require.Error(t, got)
 	assert.True(t, errorx.IsKind(got, errorx.KindUnknown))
 	assert.Equal(t, "create org: connection refused", got.Error())
+}
+
+// refusedDial answers what the driver returns when nothing accepts at
+// the address it dials, under ctx: a listener opened and closed again
+// leaves a port that refuses.
+func refusedDial(t *testing.T, ctx context.Context) error {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := ln.Addr().String()
+	require.NoError(t, ln.Close())
+	_, err = pgconn.Connect(ctx, "postgres://garam@"+addr+"/garam?sslmode=disable&connect_timeout=5")
+	var connectErr *pgconn.ConnectError
+	require.ErrorAs(t, err, &connectErr, "the driver answers a refused dial with a ConnectError")
+	return err
+}
+
+// TestClassify_ALostConnectionIsUnavailable holds #1165's mapping to
+// the two forms the driver gives an unreachable database, as a cut
+// connection produced them against real Postgres: a ConnectError, and
+// io.ErrUnexpectedEOF on a connection that was open. The controls are
+// what must not read as an outage: the caller's own cancellation, in
+// either form, and an error the driver did not raise.
+func TestClassify_ALostConnectionIsUnavailable(t *testing.T) {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	cancelledDial := refusedDial(t, cancelled)
+	require.ErrorIs(t, cancelledDial, context.Canceled, "the cancelled dial carries the caller's cancellation")
+	for name, c := range map[string]struct {
+		err  error
+		want errorx.Kind
+	}{
+		"a dial nothing accepts":            {refusedDial(t, context.Background()), errorx.KindUnavailable},
+		"an open connection ending":         {io.ErrUnexpectedEOF, errorx.KindUnavailable},
+		"the caller cancelling a dial":      {cancelledDial, errorx.KindUnknown},
+		"the caller cancelling an exchange": {context.Canceled, errorx.KindUnknown},
+		"the caller's deadline passing":     {context.DeadlineExceeded, errorx.KindUnknown},
+		"an error the driver did not raise": {errors.New("connection refused"), errorx.KindUnknown},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := pgxerr.Classify(c.err, "list policies", nil, nil)
+			require.Error(t, got)
+			assert.Equal(t, c.want, errorx.KindOf(got))
+			assert.ErrorIs(t, got, c.err, "the driver's error stays on the chain for the log")
+		})
+	}
 }
 
 // TestClassify_PreservesKindInChain confirms the wrap preserves the

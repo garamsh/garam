@@ -23,6 +23,10 @@ export async function axeViolations(
   page: Page,
   include: readonly string[] = [],
 ): Promise<{ id: string; nodes: string[] }[]> {
+  // A client-side navigation commits the page before Next.js adds its
+  // <title>, and a scan started in between reports the page untitled
+  // (#1440). Every page here has a title, so the scan waits for it.
+  await expect.poll(() => page.title()).not.toBe("");
   let builder = new AxeBuilder({ page }).withTags(WCAG);
   for (const selector of include) builder = builder.include(selector);
   const still = await page.addStyleTag({ content: STILL });

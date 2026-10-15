@@ -359,7 +359,8 @@ the `Error` interface, and `New` / `Wrap` / `IsKind` / `KindOf`. It has
 no dependency of its own.
 
 `internal/pgxerr` maps a postgres driver error to an `errorx` error by
-reading the sql state the driver carries, and labels it with the
+reading the sql state the driver carries, or, where it carries none,
+whether the driver lost its connection (#1165), and labels it with the
 operation the caller names rather than with a store's name. It is a
 package of its own rather than part of `errorx` because `errorx` is
 transport-agnostic by design, so the same errors flow over any surface,

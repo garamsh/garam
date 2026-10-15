@@ -150,10 +150,12 @@ refusals, and §machineBearer for the alias.
   - An issuance, a withdrawal, a credential re-issue and a deletion
     hold it `FOR UPDATE`.
   - Deleting an organization holds every one of its operators' `FOR
-    UPDATE` before its cascade deletes them, by `migrations/000046`'s
-    trigger on `orgs`. An audience is an operator of the client's
-    organization, so the registrations an exchange holds are among
-    them.
+    UPDATE` before its cascade deletes them, by the trigger on `orgs`
+    `migrations/000047` defines, after its agents' execution rows
+    ([agents.md](./agents.md) §Tokens in place of certificates states
+    why). An audience
+    is an operator of the client's organization, so the registrations
+    an exchange holds are among them.
 
   The `FOR KEY SHARE` holders hold it together. Every other pair
   acting for one operator waits on the registration for the first to

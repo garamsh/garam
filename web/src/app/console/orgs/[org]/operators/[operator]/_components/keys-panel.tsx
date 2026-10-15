@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, KeyRound, RefreshCw } from "lucide-react";
+import { KeyRound, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useActionState } from "react";
 
@@ -24,10 +24,10 @@ import {
   type RevokeOperatorKeyState,
 } from "@/features/orgs/actions";
 import type { OperatorKey } from "@/features/orgs";
-import { useCopy } from "@/hooks/use-copy";
 import { useHydrated } from "@/hooks/use-hydrated";
 
 import { EmptyState } from "../../../../../_components/empty-state";
+import { CopyableCode } from "../../_components/copyable-code";
 import {
   KEY_STATUS,
   MAX_LIVE_KEYS,
@@ -42,22 +42,12 @@ const initialState: RevokeOperatorKeyState = { status: "idle" };
  * against the key installed in the cluster.
  */
 function Fingerprint({ kid }: { kid: string }) {
-  const { outcome, copy } = useCopy(kid);
   return (
-    <span className="flex items-center gap-1">
-      <code className="font-mono text-xs" title={kid}>
-        {kid.slice(0, 12)}…
-      </code>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        aria-label="Copy fingerprint"
-        onClick={copy}
-      >
-        {outcome === "copied" ? <Check className="text-ok" /> : <Copy />}
-      </Button>
-    </span>
+    <CopyableCode
+      value={kid}
+      shown={`${kid.slice(0, 12)}…`}
+      label="fingerprint"
+    />
   );
 }
 

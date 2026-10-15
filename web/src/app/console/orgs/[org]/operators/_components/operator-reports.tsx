@@ -1,113 +1,209 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 import {
   ControlNotice,
   NO_FIX,
-  controlReach,
   type ControlBlock,
 } from "@/components/control-notice";
 import { Time } from "@/components/time";
-import type { HostedOperator } from "@/features/orgs";
+import type { DelegatedOperator } from "@/features/orgs";
 import { mintOperationAuthority } from "@/features/orgs/actions";
-import { useControlRead } from "@/hooks/use-control-read";
 import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import {
   OperatorReportsParser,
+  callControl,
   segment,
+  type ControlResult,
   type OperatorReport,
 } from "@/lib/operation-authority";
 
+import { CopyableCode } from "./copyable-code";
+
+/** A hosted operator whose grant carries `operator:read`. */
+export type ReportService = { operator: DelegatedOperator; orgGrn: string };
+
 /**
- * Where the reports are read from: the organization, and the hosted
- * operator whose control service holds them with the GRN of the
- * organization the read targets, or null where none is hosted; or why
- * no hosted operator could be read.
+ * Where the reports are read from: every service whose grant carries
+ * the read, the GRNs of the organization's control-service identities,
+ * and why none can be asked where that is worth saying; or why the
+ * hosted operators could not be read at all.
  */
 export type ReportsSource =
   | {
       status: "ready";
       org: string;
-      hosted: { operator: HostedOperator; orgGrn: string } | null;
+      services: ReportService[];
+      identities: string[];
+      blocked: ControlBlock | null;
     }
   | { status: "unavailable"; reason: string };
 
+type Reports = { operators: OperatorReport[] };
+
+/** What one service answered, beside the grant it answered under. */
+type ServiceAnswer = {
+  service: ReportService;
+  read: ControlResult<Reports>;
+};
+
 /**
- * What the reports read answered: still reading, not checked and why,
- * or each reporting operator's entry by GRN.
+ * What the reports read answered: still reading, or each service's
+ * answer, the identities, and why any of it went unchecked.
  */
 export type ReportsRead =
   | { status: "loading" }
-  | { status: "unchecked"; block: ControlBlock }
-  | { status: "ok"; byGrn: ReadonlyMap<string, OperatorReport> };
+  | {
+      status: "read";
+      answers: ServiceAnswer[];
+      identities: ReadonlySet<string>;
+      notices: ControlBlock[];
+    };
+
+/** The services a source asks, empty where it asks none. */
+function servicesOf(source: ReportsSource | null): ReportService[] {
+  return source?.status === "ready" ? source.services : [];
+}
+
+/** What a person reads where a service did not answer the read. */
+function unansweredReason(service: ReportService): string {
+  return `${service.operator.name}'s control service did not answer, so what it reports of the operators it serves was not checked.`;
+}
+
+/** Why one service's read went unchecked, or null where it answered. */
+function noticeOf({ service, read }: ServiceAnswer): ControlBlock | null {
+  if (read.status === "ok") return null;
+  return {
+    reason:
+      read.status === "unavailable"
+        ? unansweredReason(service)
+        : controlFailureCopy(read, "operator:read"),
+    fix: NO_FIX,
+  };
+}
 
 /**
- * Reads what the hosted operator's control service holds of the
- * organization's operators, under `operator:read` (#1047). A null
+ * Reads what each service holds of the organization's operators, under
+ * `operator:read` (#1047), each call under its own authority. A null
  * source, which a page passes where the server denies the caller the
  * read, asks nothing and answers null.
  */
 export function useOperatorReports(
   source: ReportsSource | null,
 ): ReportsRead | null {
-  const ready = source?.status === "ready" ? source : null;
-  const reach = controlReach(ready?.hosted?.operator ?? null, "operator:read");
-  const read = useControlRead(
-    ready?.org ?? "",
-    "operator:read",
-    ready?.hosted && reach.status === "ready"
-      ? {
-          endpoint: reach.hosted.endpoint,
-          audience: reach.hosted.grn,
-          path: `/v1/orgs/${segment(ready.org)}/operators`,
-          target: ready.hosted.orgGrn,
-        }
-      : null,
-    OperatorReportsParser,
-    mintOperationAuthority,
-  );
+  const [answered, setAnswered] = useState<{
+    source: ReportsSource;
+    answers: ServiceAnswer[];
+  } | null>(null);
+
+  useEffect(() => {
+    const services = servicesOf(source);
+    if (source?.status !== "ready" || services.length === 0) return;
+    const { org } = source;
+    let live = true;
+    void Promise.all(
+      services.map(async (service) => ({
+        service,
+        read: await callControl(
+          {
+            endpoint: service.operator.endpoint,
+            path: `/v1/orgs/${segment(org)}/operators`,
+            method: "GET",
+            requestId: crypto.randomUUID(),
+            org,
+            audience: service.operator.grn,
+            operation: "operator:read",
+            target: service.orgGrn,
+            parser: OperatorReportsParser,
+          },
+          mintOperationAuthority,
+        ),
+      })),
+    ).then((answers) => {
+      if (live) setAnswered({ source, answers });
+    });
+    return () => {
+      live = false;
+    };
+  }, [source]);
 
   if (source === null) return null;
   if (source.status === "unavailable") {
     return {
-      status: "unchecked",
-      block: { reason: source.reason, fix: NO_FIX },
+      status: "read",
+      answers: [],
+      identities: new Set(),
+      notices: [{ reason: source.reason, fix: NO_FIX }],
     };
   }
-  if (reach.status === "blocked") {
-    return { status: "unchecked", block: reach.block };
-  }
-  if (read === null || read.status === "loading") return { status: "loading" };
-  if (read.status !== "ok") {
+  const identities = new Set(source.identities);
+  if (source.services.length === 0) {
     return {
-      status: "unchecked",
-      block: { reason: controlFailureCopy(read, "operator:read"), fix: NO_FIX },
+      status: "read",
+      answers: [],
+      identities,
+      notices: source.blocked === null ? [] : [source.blocked],
     };
   }
+  if (answered?.source !== source) return { status: "loading" };
   return {
-    status: "ok",
-    byGrn: new Map(read.data.operators.map((report) => [report.grn, report])),
+    status: "read",
+    answers: answered.answers,
+    identities,
+    notices: answered.answers.flatMap((a) => noticeOf(a) ?? []),
   };
 }
 
 /**
- * What one operator's report says: being read, not checked, never
- * reported, or the report. An operator the answer leaves out never
- * reached the control service, so it has reported nothing.
+ * What one operator's report says: being read; not checked, where no
+ * service that answered serves it; a control service, which is no
+ * controller to report on; or what the services that serve it hold,
+ * null where it reported nothing.
  */
 export type OperatorReportState =
   | { status: "loading" }
   | { status: "unchecked" }
+  | { status: "control-service" }
   | { status: "reported"; report: OperatorReport | null };
 
-/** The state of `grn`'s report within what the read answered. */
-export function reportOf(read: ReportsRead, grn: string): OperatorReportState {
-  if (read.status !== "ok") return { status: read.status };
-  return { status: "reported", report: read.byGrn.get(grn) ?? null };
+/** When a report was last heard from, for choosing between two. */
+function heardAt(report: OperatorReport): number {
+  const at = report.lastContactAt ?? report.reportedAt;
+  return at === undefined ? 0 : Date.parse(at) || 0;
 }
 
-/** Why the reports were not checked, where they were not. */
+/**
+ * The state of `grn`'s report within what the read answered. A
+ * service answers only for the controllers that reached it, so one
+ * absent from every answer has reported nothing only where an
+ * answering service's grant names it; where two answer for it, the
+ * one heard from later stands.
+ */
+export function reportOf(read: ReportsRead, grn: string): OperatorReportState {
+  if (read.status === "loading") return read;
+  const answered = read.answers.flatMap(({ service, read: r }) =>
+    r.status === "ok" ? [{ service, operators: r.data.operators }] : [],
+  );
+  const reports = answered.flatMap(({ operators }) =>
+    operators.filter((report) => report.grn === grn),
+  );
+  if (reports.length > 0) {
+    const latest = reports.reduce((a, b) => (heardAt(b) > heardAt(a) ? b : a));
+    return { status: "reported", report: latest };
+  }
+  if (
+    answered.some(({ service }) =>
+      service.operator.delegation.controllers.includes(grn),
+    )
+  ) {
+    return { status: "reported", report: null };
+  }
+  if (read.identities.has(grn)) return { status: "control-service" };
+  return { status: "unchecked" };
+}
+
+/** Why the reports, or some of them, were not checked. */
 export function ReportsNotice({
   read,
   operatorsHref,
@@ -115,8 +211,18 @@ export function ReportsNotice({
   read: ReportsRead;
   operatorsHref: string;
 }) {
-  if (read.status !== "unchecked") return null;
-  return <ControlNotice operatorsHref={operatorsHref} {...read.block} />;
+  if (read.status !== "read" || read.notices.length === 0) return null;
+  return (
+    <>
+      {read.notices.map((notice) => (
+        <ControlNotice
+          key={notice.reason}
+          operatorsHref={operatorsHref}
+          {...notice}
+        />
+      ))}
+    </>
+  );
 }
 
 function Muted({ children }: { children: React.ReactNode }) {
@@ -125,19 +231,29 @@ function Muted({ children }: { children: React.ReactNode }) {
 
 /**
  * The words for a report that is not there to show, or null where it
- * is: reading, not checked, or not reported.
+ * is: reading, not checked, a control service, or not reported.
  */
 function absent(state: OperatorReportState, reported: boolean) {
   if (state.status === "loading") return <Muted>Checking…</Muted>;
   if (state.status === "unchecked") return <Muted>Not checked</Muted>;
+  if (state.status === "control-service") {
+    return <Muted>A control service, not a controller</Muted>;
+  }
   if (!reported) return <Muted>Not reported</Muted>;
   return null;
+}
+
+/** A digest as a table shows it: its algorithm and first 12 digits. */
+function shortDigest(digest: string): string {
+  const [algorithm, hex] = digest.split(":", 2);
+  return hex === undefined ? digest : `${algorithm}:${hex.slice(0, 12)}…`;
 }
 
 /**
  * The images an operator reported: each by name and reference, with
  * its digest where it gave one and `withDigest` asks for it, and when
- * it reported them. Never filled in where nothing was reported.
+ * it reported them. Each reference and digest copies whole. Never
+ * filled in where nothing was reported.
  */
 export function ReportedImages({
   state,
@@ -155,14 +271,22 @@ export function ReportedImages({
       <ul className="flex flex-col gap-1">
         {images.map((image) => (
           <li key={image.name} className="flex min-w-0 flex-col">
-            <span className="font-mono text-xs wrap-anywhere">
-              <span className="text-muted-foreground">{image.name}</span>{" "}
-              <span>{image.ref}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="font-mono text-xs text-muted-foreground">
+                {image.name}
+              </span>
+              <CopyableCode
+                value={image.ref}
+                shown={image.ref}
+                label={`the ${image.name} image's reference`}
+              />
             </span>
             {withDigest && image.digest !== undefined && (
-              <span className="font-mono text-xs wrap-anywhere text-muted-foreground">
-                {image.digest}
-              </span>
+              <CopyableCode
+                value={image.digest}
+                shown={shortDigest(image.digest)}
+                label={`the ${image.name} image's digest`}
+              />
             )}
           </li>
         ))}
@@ -177,7 +301,7 @@ export function ReportedImages({
 }
 
 /**
- * When an operator last made contact with the control service, or that
+ * When an operator last made contact with a control service, or that
  * no contact is recorded.
  */
 export function LastContact({ state }: { state: OperatorReportState }) {

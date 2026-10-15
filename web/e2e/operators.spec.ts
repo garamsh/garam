@@ -326,19 +326,26 @@ test.describe("operators", () => {
     await expect(
       seeded.getByText("ghcr.io/garamsh/gagent:v1.2.0", { exact: true }),
     ).toBeVisible();
-    // The hosted operator is absent from the answer: it never reported.
+    // The control service's own identity is no controller to report.
     const hosted = table.getByRole("row").filter({ hasText: "Hosted control" });
     await expect(
-      hosted.getByText("Not reported", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      hosted.getByText("No contact recorded", { exact: true }),
-    ).toBeVisible();
+      hosted.getByText("A control service, not a controller", { exact: true }),
+    ).toHaveCount(2);
     expect(await axeViolations(page)).toEqual([]);
 
     await page.goto(`${operators}/${signedIn.operatorIdentifier}`);
     await expectHydrated(page);
-    await expect(page.getByText(digest, { exact: true })).toBeVisible();
+    // The digest is shortened on screen and copied whole.
+    await expect(
+      page.getByText(`sha256:${"ab".repeat(6)}…`, { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(digest, { exact: true })).toBeHidden();
+    await expect(
+      page.getByRole("button", {
+        name: "Copy the manager image's digest",
+        exact: true,
+      }),
+    ).toBeVisible();
     await expect(
       page.getByText("ghcr.io/garamsh/operator:v0.4.0", { exact: true }),
     ).toBeVisible();
@@ -364,24 +371,34 @@ test.describe("operators", () => {
     }
   });
 
-  test("says the reports were not checked, and why, where the control service cannot be reached", async ({
+  test("says the reports were not checked, and why, on the list and the operator's page, where the control service cannot be reached", async ({
     page,
     signedIn,
     baseURL,
   }) => {
     await seedHostedOperator(signedIn, ENDPOINT, ["operator:read"]);
     await stubReports(page, new URL(baseURL!).origin, "unreachable");
-
-    await page.goto(
-      `/console/orgs/${signedIn.orgSlug}/operators/${signedIn.operatorIdentifier}`,
+    const unanswered = page.getByText(
+      "Hosted control's control service did not answer, so what it reports of the operators it serves was not checked.",
+      { exact: true },
     );
+    const operators = `/console/orgs/${signedIn.orgSlug}/operators`;
+
+    await page.goto(operators);
     await expectHydrated(page);
-    await expect(
-      page.getByText(
-        "The control service is unavailable, so its controls are disabled. Teams, people and agents are unaffected.",
-        { exact: true },
-      ),
-    ).toBeVisible();
+    await expect(unanswered).toBeVisible();
+    const seeded = page
+      .getByRole("table", { name: "Operators" })
+      .getByRole("row")
+      .filter({ hasText: signedIn.operatorName });
+    await expect(seeded.getByText("Not checked", { exact: true })).toHaveCount(
+      2,
+    );
+    expect(await axeViolations(page)).toEqual([]);
+
+    await page.goto(`${operators}/${signedIn.operatorIdentifier}`);
+    await expectHydrated(page);
+    await expect(unanswered).toBeVisible();
     await expect(page.getByText("Not checked", { exact: true })).toHaveCount(2);
     await expect(page.getByText("Not reported", { exact: true })).toBeHidden();
     expect(await axeViolations(page)).toEqual([]);

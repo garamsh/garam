@@ -92,29 +92,28 @@ func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder
 // answers refused, a missing audience ErrAudienceInvalid.
 func holdRegistrations(ctx context.Context, q *db.Queries, client string, audience *grn.GRN, refused error) error {
 	type hold struct {
-		grn     string
-		refused error
+		grn, what string
+		refused   error
 	}
-	holds := []hold{{client, refused}}
+	holds := []hold{{client, "hold operator", refused}}
 	if audience != nil {
-		holds = append(holds, hold{audience.String(), ErrAudienceInvalid})
+		holds = append(holds, hold{audience.String(), "hold audience", ErrAudienceInvalid})
 	}
 	slices.SortFunc(holds, func(a, b hold) int { return strings.Compare(a.grn, b.grn) })
 	for _, h := range holds {
 		if _, err := q.HoldOperatorRegistration(ctx, h.grn); err != nil {
-			return pgxerr.Classify(err, "hold operator", h.refused, nil)
+			return pgxerr.Classify(err, h.what, h.refused, nil)
 		}
 	}
 	return nil
 }
 
-// recordTokens writes an exchange's token rows in the one order that
-// keeps it out of every wait on them (#1424): record, which waits on
-// nothing; trim, which takes what it deletes in token_hash order, the
-// order every statement waiting on several tokens takes them in, while
-// the exchange holds no token but the one it just wrote; then sweep
-// the operator's expired tokens, which skips any another transaction
-// holds and so never waits while holding the trimmed ones.
+// recordTokens writes an exchange's token rows so that it never waits
+// on a token while holding one another transaction could want (#1424):
+// record, which waits on nothing; trim, which takes what it deletes in
+// token_hash order while the exchange holds only the token it wrote;
+// then sweep the operator's expired tokens, skipping any another
+// transaction holds, so it never waits.
 func recordTokens(ctx context.Context, q *db.Queries, operatorGRN string, record, trim func() error) error {
 	if err := record(); err != nil {
 		return pgxerr.Classify(err, "record operator token", nil, nil)

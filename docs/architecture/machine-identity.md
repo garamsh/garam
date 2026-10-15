@@ -165,23 +165,24 @@ refusals, and §machineBearer for the alias.
   keeps that wait finite is the exchanges' per-process bound below,
   which counts both forms, so a leaked credential cannot hold off the
   re-issue that answers it.
-- **Every statement that may wait on more than one token takes them in
-  `token_hash` order, and no transaction waits on a token while holding
-  another it took before** (#1424).
+- **A transaction waits on tokens in one statement at most, which
+  takes them in `token_hash` order and holds none before it but a token
+  the transaction just wrote** (#1424).
   - A withdrawal's and an immediate rotation's deletion of a key's
     tokens, a re-issue's of the credential's, and a deletion's of every
-    token the operator holds or is the audience of are each one such
-    statement and the transaction's first on tokens. The re-issue and
-    the deletion run theirs before the credential or the registration
-    goes, so the cascades of `migrations/000038` and `000041` find
-    none; `000046` indexes `audience_grn` for the deletion's.
+    token the operator holds or is the audience of are each that
+    statement. The re-issue and the deletion run theirs before the
+    credential or the registration goes, so the cascades of
+    `migrations/000038` and `000041` find none; `000046` indexes
+    `audience_grn` for the deletion's.
   - An exchange records its token, trims its issuance to the newest
     five live ones, and then sweeps the operator's expired tokens. The
-    trim is its one such statement; the sweep skips a token another
+    trim is that statement; the sweep skips a token another
     transaction holds, which that transaction is deleting or a later
     sweep takes, so it never waits.
   - An organization's deletion takes its operators' tokens in its
-    cascade's order, under every registration a writer of them holds.
+    cascade's order and waits on none: every other writer of them
+    holds a registration the deletion already holds.
 - **Minting an enrollment token sweeps other operators' expired ones
   without their registrations, and skips any another transaction
   holds**, so the one row a mint waits on is its own operator's

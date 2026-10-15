@@ -247,13 +247,13 @@ func (s *PostgresStore) SetControlEndpoint(ctx context.Context, g grn.GRN, endpo
 // token needs no statement: it references the registration and goes
 // with it (000023).
 //
-// The transaction holds the registration first, as every other writer
-// of the operator's rows does, and then deletes every token the
-// operator holds or is the audience of in token_hash order, the order
-// every statement waiting on several tokens takes them in. The
-// cascades would take them in their own orders, and the audience's
-// reaches tokens of other operators whose registrations it does not
-// hold (#1424).
+// The transaction holds the registration first, as every writer of
+// the operator's credential, keys and tokens does, and then deletes
+// every token the operator holds or is the audience of in token_hash
+// order, the order every statement waiting on several tokens takes
+// them in. The cascades would take them in their own orders, and the
+// audience's reaches tokens of other operators whose registrations it
+// does not hold (#1424).
 //
 // The foreign-key reading is made here because only here is the
 // statement known: [pgxerr.Classify] maps 23503 to not found, which is

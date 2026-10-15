@@ -315,7 +315,8 @@ WHERE k.operator_grn = sqlc.arg('operator_grn') AND k.kid = sqlc.arg('kid')
 -- An exchange holds its registration, and its audience's, before the
 -- key or credential and the tokens, the order an issuance or a deletion
 -- takes them in, so neither waits on the other while holding what the
--- other needs (#1399). KEY SHARE is the lock the token's foreign keys
+-- other needs (#1399). It holds the two in GRN byte order, as an
+-- organization's deletion holds all of them (#1424). KEY SHARE is the lock the token's foreign keys
 -- take anyway: it waits for an issuance or a deletion of the operator,
 -- and for nothing else.
 -- name: HoldOperatorRegistration :one

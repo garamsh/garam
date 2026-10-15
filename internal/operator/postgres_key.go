@@ -122,10 +122,7 @@ func (s *PostgresStore) ListKeys(ctx context.Context, g grn.GRN) ([]Key, error) 
 // transaction, under the registration's row lock, which every exchange
 // of the operator holds first too. The two serialize on it: an
 // exchange either commits first and its token is deleted here, or
-// rereads the key withdrawn and records nothing. The hold also keeps
-// this walk over the key's tokens apart from an exchange's sweep of the
-// operator's expired ones, which visit shared tokens in opposite orders
-// (#1418).
+// rereads the key withdrawn and records nothing (#1418).
 func (s *PostgresStore) RevokeKey(ctx context.Context, g grn.GRN, kid string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

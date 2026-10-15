@@ -105,6 +105,13 @@ func (s *fakeUserStore) remove(g grn.GRN) {
 	delete(s.byID, g.String())
 }
 
+// Delete removes a user, as a registration that could not finish
+// does with the one it created.
+func (s *fakeUserStore) Delete(_ context.Context, g grn.GRN) error {
+	s.remove(g)
+	return nil
+}
+
 // grantRoles replaces the stored user with one carrying the given
 // direct roles; login creates users without any.
 func (s *fakeUserStore) grantRoles(g grn.GRN, roles ...string) {
@@ -205,6 +212,7 @@ type fakeOrgStore struct {
 	members        map[string]*org.Membership
 	invitations    map[string]*org.Invitation
 	accepted       map[string]bool
+	claims         int
 }
 
 func newFakeOrgStore() *fakeOrgStore {
@@ -530,18 +538,76 @@ func (s *fakeOrgStore) GetInvitation(_ context.Context, token string) (*org.Invi
 	return inv, nil
 }
 
-func (s *fakeOrgStore) AcceptInvitation(_ context.Context, token string, _ grn.GRN) (*org.Invitation, error) {
+func (s *fakeOrgStore) AcceptInvitation(_ context.Context, token string, userGRN grn.GRN) (*org.Membership, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	inv, ok := s.invitations[token]
-	if !ok {
-		return nil, org.ErrInvitationNotFound
+	inv, err := s.claimLocked(token)
+	if err != nil {
+		return nil, err
 	}
-	if s.accepted[token] {
-		return nil, org.ErrInvitationAccepted
+	m := org.NewMembership(inv.Organization(), userGRN, inv.Role())
+	k := memberKey(m.Organization(), m.User())
+	if _, ok := s.members[k]; ok {
+		return nil, org.ErrMemberAlreadyExists
+	}
+	s.members[k] = m
+	s.accepted[token] = true
+	return m, nil
+}
+
+// ClaimInvitation spends the invitation as the store's claim does. The
+// double keeps no mark, so the Invitation is returned as created.
+func (s *fakeOrgStore) ClaimInvitation(_ context.Context, token string) (*org.Invitation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	inv, err := s.claimLocked(token)
+	if err != nil {
+		return nil, err
 	}
 	s.accepted[token] = true
+	s.claims++
 	return inv, nil
+}
+
+// claimed reports how many registration claims succeeded, released
+// ones included.
+func (s *fakeOrgStore) claimed() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.claims
+}
+
+func (s *fakeOrgStore) CompleteInvitationClaim(context.Context, *org.Invitation, grn.GRN) error {
+	return nil
+}
+
+func (s *fakeOrgStore) ReleaseInvitationClaim(_ context.Context, inv *org.Invitation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.accepted[inv.Token()] = false
+	return nil
+}
+
+// claimLocked answers the invitation a claim on token would spend, or
+// the refusal the store gives, in the store's order.
+func (s *fakeOrgStore) claimLocked(token string) (*org.Invitation, error) {
+	inv, ok := s.invitations[token]
+	switch {
+	case !ok:
+		return nil, org.ErrInvitationNotFound
+	case s.accepted[token]:
+		return nil, org.ErrInvitationAccepted
+	case inv.Expired(time.Now().UTC()):
+		return nil, org.ErrInvitationExpired
+	}
+	return inv, nil
+}
+
+// spent reports whether an accept or a claim holds the invitation.
+func (s *fakeOrgStore) spent(token string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.accepted[token]
 }
 
 // fakeAgentStore is an in-memory agent.Store double. The API reads
@@ -945,6 +1011,7 @@ type fakePasswordCredentialStore struct {
 	mu             sync.Mutex
 	byUser         map[string]authn.Verifier
 	replaceRefused bool
+	createRefused  bool
 }
 
 func newFakePasswordCredentialStore() *fakePasswordCredentialStore {
@@ -956,6 +1023,9 @@ func newFakePasswordCredentialStore() *fakePasswordCredentialStore {
 func (s *fakePasswordCredentialStore) Create(_ context.Context, userGRN grn.GRN, v authn.Verifier) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.createRefused {
+		return errorx.New(errorx.KindUnavailable, "password credential store is gone")
+	}
 	if _, held := s.byUser[userGRN.String()]; held {
 		return errorx.New(errorx.KindAlreadyExists, "password credential exists")
 	}
@@ -989,6 +1059,14 @@ func (s *fakePasswordCredentialStore) refuseReplace() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.replaceRefused = true
+}
+
+// refuseCreates stands in, while on, for a store that is gone by the
+// time a registration writes the credential.
+func (s *fakePasswordCredentialStore) refuseCreates(on bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.createRefused = on
 }
 
 // held returns the verifier stored for a user, so a test can read what

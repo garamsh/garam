@@ -17,7 +17,8 @@ import (
 // cascade-deletes its Groups, Projects, Memberships, and Invitations
 // via foreign keys.
 type PostgresStore struct {
-	q *db.Queries
+	pool *pgxpool.Pool
+	q    *db.Queries
 }
 
 // Compile-time check that PostgresStore satisfies Store.
@@ -25,7 +26,7 @@ var _ Store = (*PostgresStore)(nil)
 
 // NewPostgresStore constructs a Postgres-backed Store.
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
-	return &PostgresStore{q: db.New(pool)}
+	return &PostgresStore{pool: pool, q: db.New(pool)}
 }
 
 func parseGRNs(ss []string, op string) ([]grn.GRN, error) {

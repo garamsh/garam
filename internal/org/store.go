@@ -86,5 +86,12 @@ type Store interface {
 	// Invitation — pending until accepted, single-use.
 	CreateInvitation(ctx context.Context, inv *Invitation) error
 	GetInvitation(ctx context.Context, token string) (*Invitation, error)
-	AcceptInvitation(ctx context.Context, token string, userGRN grn.GRN) (*Invitation, error)
+	// AcceptInvitation spends the invitation and adds the user as a
+	// member with its role, both or neither.
+	AcceptInvitation(ctx context.Context, token string, userGRN grn.GRN) (*Membership, error)
+	// ClaimInvitation spends the invitation for an account not yet
+	// created; the claim is completed once it exists, or released.
+	ClaimInvitation(ctx context.Context, token string) (*Invitation, error)
+	CompleteInvitationClaim(ctx context.Context, inv *Invitation, userGRN grn.GRN) error
+	ReleaseInvitationClaim(ctx context.Context, inv *Invitation) error
 }

@@ -139,5 +139,30 @@ SELECT * FROM invitations WHERE token = $1;
 
 -- name: AcceptInvitation :one
 UPDATE invitations SET accepted_by = $2, accepted_at = $3
-WHERE token = $1 AND accepted_at IS NULL
+WHERE token = $1 AND accepted_at IS NULL AND expires_at > $3
 RETURNING *;
+
+-- A claimed invitation has accepted_at set and accepted_by NULL: a
+-- registration holds it while the account it is for does not exist
+-- yet, since accepted_by references users. Every read takes it as
+-- spent. A registration that crashed while holding it leaves it so,
+-- which fails closed: an admin issues a new invitation (#1381).
+-- name: ClaimInvitation :one
+UPDATE invitations SET accepted_at = sqlc.arg('claimed_at')
+WHERE token = sqlc.arg('token') AND accepted_at IS NULL
+  AND expires_at > sqlc.arg('claimed_at')
+RETURNING *;
+
+-- Matches only the claim taken at claimed_at, so it completes no
+-- other holder's claim.
+-- name: CompleteInvitationClaim :execrows
+UPDATE invitations SET accepted_by = sqlc.arg('accepted_by')
+WHERE token = sqlc.arg('token') AND accepted_by IS NULL
+  AND accepted_at = sqlc.arg('claimed_at');
+
+-- Matches only the claim taken at claimed_at, so it undoes no other
+-- holder's claim and never an accepted invitation.
+-- name: ReleaseInvitationClaim :execrows
+UPDATE invitations SET accepted_at = NULL
+WHERE token = sqlc.arg('token') AND accepted_by IS NULL
+  AND accepted_at = sqlc.arg('claimed_at');

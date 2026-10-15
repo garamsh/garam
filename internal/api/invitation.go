@@ -105,34 +105,17 @@ func (s *Server) GetInvitation(w http.ResponseWriter, r *http.Request, token str
 }
 
 // AcceptInvitation joins the caller into the invitation's org with the
-// invitation's role.
+// invitation's role. The store spends the invitation and adds the
+// membership together, so of two concurrent accepts one joins and the
+// other is refused (#1381).
 func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token string) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	inv, err := s.orgs.GetInvitation(r.Context(), token)
+	m, err := s.orgs.AcceptInvitation(r.Context(), token, u.GRN)
 	if err != nil {
-		writeError(w, err)
-		return
-	}
-	if inv.Accepted() {
-		writeError(w, org.ErrInvitationAccepted)
-		return
-	}
-	if inv.Expired(time.Now().UTC()) {
-		writeError(w, org.ErrInvitationExpired)
-		return
-	}
-	// Membership first: a duplicate membership rejects the accept
-	// without burning the invitation.
-	m := org.NewMembership(inv.Organization(), u.GRN, inv.Role())
-	if err := s.orgs.AddMember(r.Context(), m); err != nil {
-		writeError(w, err)
-		return
-	}
-	if _, err := s.orgs.AcceptInvitation(r.Context(), token, u.GRN); err != nil {
 		writeError(w, err)
 		return
 	}

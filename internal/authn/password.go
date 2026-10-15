@@ -71,18 +71,27 @@ const (
 	MaxPasswordLength = 128
 )
 
-// NewVerifier computes the verifier for p under the current policy,
-// with a fresh salt. It refuses a password outside the accepted
-// length; the refusal names the bound, never the password.
-func NewVerifier(p Password) (Verifier, error) {
+// CheckNewPassword refuses a password outside the length a new one
+// must have; the refusal names the bound, never the password. It
+// hashes nothing, so a caller can run it before deciding to.
+func CheckNewPassword(p Password) error {
 	// Runes for the floor and bytes for the ceiling: the floor is about
 	// how much a person chose, the ceiling about how much this process
 	// agrees to hash.
 	if utf8.RuneCountInString(string(p)) < MinPasswordLength {
-		return "", ErrPasswordTooShort
+		return ErrPasswordTooShort
 	}
 	if len(p) > MaxPasswordLength {
-		return "", ErrPasswordTooLong
+		return ErrPasswordTooLong
+	}
+	return nil
+}
+
+// NewVerifier computes the verifier for p under the current policy,
+// with a fresh salt. It refuses what CheckNewPassword refuses.
+func NewVerifier(p Password) (Verifier, error) {
+	if err := CheckNewPassword(p); err != nil {
+		return "", err
 	}
 	salt := make([]byte, saltLength)
 	if _, err := rand.Read(salt); err != nil {

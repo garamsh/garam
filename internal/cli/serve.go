@@ -135,15 +135,28 @@ func serveAPI(cmd *cobra.Command) error {
 	)
 
 	addr := envOr(envHTTPAddr, ":8080")
-	httpSrv := &http.Server{
-		Addr: addr,
-		// A request needs both to be served: rows out of the database,
-		// and the decision that admits it.
-		Handler:     obs.apiHandler(srv, health.Database(pool), authzChannel{conn: conn}),
-		ReadTimeout: requestReadTimeout,
-	}
+	// A request needs both to be served: rows out of the database, and
+	// the decision that admits it.
+	httpSrv := apiServer(addr, obs.apiHandler(srv, health.Database(pool), authzChannel{conn: conn}))
 	obs.logger.Info("serving api", slog.String("addr", addr))
 	return obs.serveHTTP(ctx, shutdownGrace, httpSrv, httpSrv.ListenAndServe)
+}
+
+// apiServer is the listener `serve api` answers on. It closes each
+// connection after one response rather than keeping it alive. The
+// console's `/api` rewrite reaches it through a pool whose idle
+// sockets never time out and which ignores a Keep-Alive hint, so a
+// request reusing a socket as the read deadline closes it was reset
+// and answered 500 (#1428). The race is removed rather than narrowed:
+// a longer IdleTimeout only moves it.
+func apiServer(addr string, handler http.Handler) *http.Server {
+	srv := &http.Server{
+		Addr:        addr,
+		Handler:     handler,
+		ReadTimeout: requestReadTimeout,
+	}
+	srv.SetKeepAlivesEnabled(false)
+	return srv
 }
 
 // apiHandler is everything `serve api` answers on its one port: the

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import type { DelegatedOperator } from "@/features/orgs";
 import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +16,6 @@ import {
   segment,
   type TemplateVersion,
 } from "@/lib/operation-authority";
-
-import type { DelegatedOperator } from "./control-notice";
 
 /** Reads `tool=pin` lines into the tool pins a configuration carries. */
 function parseTools(text: string): Record<string, string> | null {

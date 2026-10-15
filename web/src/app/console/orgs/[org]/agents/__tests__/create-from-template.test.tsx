@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { CreateFromTemplate } from "@/app/console/orgs/[org]/agents/_components/create-from-template";
-import type { DelegatedOperator } from "@/app/console/orgs/[org]/agents/_components/control-notice";
+import type { DelegatedOperator } from "@/features/orgs";
 import { server } from "@/testing/setup";
 
 // The authority is minted by a Server Action; what the form does with

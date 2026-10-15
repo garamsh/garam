@@ -2,10 +2,11 @@ import Link from "next/link";
 
 import { Banner } from "@/components/banner";
 import { Button } from "@/components/ui/button";
-import type { DelegatedOperation, HostedOperator } from "@/features/orgs";
 import { DELEGATED_OPERATION_LABEL } from "@/lib/delegated-operations";
+import type { components } from "@/types/api";
 
-import { orgHref } from "../../../../_components/navigation";
+/** One operation a hosted operator's grant can carry. */
+type DelegatedOperation = components["schemas"]["DelegatedOperation"];
 
 /**
  * Where what blocks a panel is fixed: the page of the operator whose
@@ -22,15 +23,25 @@ export const NO_FIX: ControlFix = { at: "none" };
 /** Why a control service panel cannot act, and where that is fixed. */
 export type ControlBlock = { reason: string; fix: ControlFix };
 
-/** A hosted operator whose grant was read. */
-export type DelegatedOperator = HostedOperator & {
-  delegation: NonNullable<HostedOperator["delegation"]>;
+/**
+ * What a panel reads of a hosted operator to say whether it can act:
+ * where its page is, what it is called, the operations its grant
+ * carries or null where the grant was not read, and why not.
+ */
+export type ReachableOperator = {
+  identifier: string;
+  name: string;
+  delegation: { operations: readonly DelegatedOperation[] } | null;
+  problem: string | null;
 };
 
 /** Whether a control service panel can act, and through whom. */
-export type ControlReach =
+export type ControlReach<H extends ReachableOperator> =
   | { status: "blocked"; block: ControlBlock }
-  | { status: "ready"; hosted: DelegatedOperator };
+  | {
+      status: "ready";
+      hosted: H & { delegation: NonNullable<H["delegation"]> };
+    };
 
 /**
  * Whether a panel can reach a control service for every one of
@@ -39,11 +50,11 @@ export type ControlReach =
  * else on the page stays available either way; only the panel is
  * disabled.
  */
-export function controlReach(
-  hosted: HostedOperator | null,
+export function controlReach<H extends ReachableOperator>(
+  hosted: H | null,
   ...operations: DelegatedOperation[]
-): ControlReach {
-  const blocked = (reason: string, fix: ControlFix): ControlReach => ({
+): ControlReach<H> {
+  const blocked = (reason: string, fix: ControlFix): ControlReach<H> => ({
     status: "blocked",
     block: { reason, fix },
   });
@@ -78,7 +89,7 @@ export function controlReach(
 
 /** Why a panel cannot reach `operation`, or null where it can. */
 export function controlBlocker(
-  hosted: HostedOperator | null,
+  hosted: ReachableOperator | null,
   operation: DelegatedOperation,
 ): ControlBlock | null {
   const reach = controlReach(hosted, operation);
@@ -87,14 +98,14 @@ export function controlBlocker(
 
 /**
  * What a disabled control service panel shows: the reason, and a link
- * to the page that fixes it where one does.
+ * to the page that fixes it where one does. `operatorsHref` is the
+ * organization's Operators list, which the calling page names.
  */
 export function ControlNotice({
-  org,
+  operatorsHref,
   reason,
   fix,
-}: { org: string } & ControlBlock) {
-  const operators = orgHref(org, "operators");
+}: { operatorsHref: string } & ControlBlock) {
   return (
     <Banner
       tone="warn"
@@ -105,8 +116,8 @@ export function ControlNotice({
             <Link
               href={
                 fix.at === "operators"
-                  ? operators
-                  : `${operators}/${fix.identifier}`
+                  ? operatorsHref
+                  : `${operatorsHref}/${fix.identifier}`
               }
             >
               {fix.at === "operators" ? "Open operators" : "Open the operator"}

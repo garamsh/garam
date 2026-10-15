@@ -3,17 +3,18 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { CopyField } from "@/components/copy-field";
-import { Button } from "@/components/ui/button";
-import { parseGrn } from "@/lib/grn";
-
-import { WizardPage } from "../../../../../_components/templates/wizard-page";
 import {
   ControlNotice,
   controlReach,
   type ControlReach,
-  type DelegatedOperator,
-} from "../../_components/control-notice";
+} from "@/components/control-notice";
+import type { DelegatedOperator, HostedOperator } from "@/features/orgs";
+import { CopyField } from "@/components/copy-field";
+import { Button } from "@/components/ui/button";
+import { parseGrn } from "@/lib/grn";
+
+import { orgHref } from "../../../../../_components/navigation";
+import { WizardPage } from "../../../../../_components/templates/wizard-page";
 import {
   CreateFromTemplate,
   type CreatedAgent,
@@ -61,7 +62,7 @@ export function NewAgentWizard({
   org: string;
   orgGrn: string;
   /** Whether a control service can create, as the server read it. */
-  start: ControlReach;
+  start: ControlReach<HostedOperator>;
   controllers: Readonly<Record<string, string>>;
 }) {
   const [created, setCreated] = useState<CreatedAgent | null>(null);
@@ -100,7 +101,10 @@ export function NewAgentWizard({
               hosted operator&apos;s control service, from a template it
               published.
             </p>
-            <ControlNotice org={org} {...start.block} />
+            <ControlNotice
+              operatorsHref={orgHref(org, "operators")}
+              {...start.block}
+            />
           </>
         ) : created === null ? (
           <>

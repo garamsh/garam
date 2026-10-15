@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import type { DelegatedOperator } from "@/app/console/orgs/[org]/agents/_components/control-notice";
 import { OperatorTemplates } from "@/app/console/orgs/[org]/agents/_components/operator-templates";
+import type { DelegatedOperator } from "@/features/orgs";
 import { server } from "@/testing/setup";
 
 // The authority is minted by a Server Action; what the panel does with

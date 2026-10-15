@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { LayoutTemplate } from "lucide-react";
 
 import { Banner } from "@/components/banner";
+import { ControlNotice, NO_FIX } from "@/components/control-notice";
 import {
   getOrg,
   hostedFor,
@@ -13,8 +14,8 @@ import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { EmptyState } from "../../../../_components/empty-state";
+import { orgHref } from "../../../../_components/navigation";
 import { ListPage } from "../../../../_components/templates/list-page";
-import { ControlNotice, NO_FIX } from "../_components/control-notice";
 import { OperatorTemplates } from "../_components/operator-templates";
 import { TemplateTable } from "./_components/template-table";
 
@@ -62,7 +63,11 @@ export default async function AgentTemplatesPage({ params }: Params) {
               publishDenied={permissions.get("publish") === "denied"}
             />
           ) : (
-            <ControlNotice org={org} reason={hosted.reason} fix={NO_FIX} />
+            <ControlNotice
+              operatorsHref={orgHref(org, "operators")}
+              reason={hosted.reason}
+              fix={NO_FIX}
+            />
           )}
         </Section>
       )}

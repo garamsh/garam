@@ -123,6 +123,9 @@ export type HostedOperator = {
   problem: string | null;
 };
 
+/** A hosted operator whose grant was read. */
+export type DelegatedOperator = HostedOperator & { delegation: Delegation };
+
 /**
  * What the console can reach of the organization's control services:
  * every operator with a registered endpoint and its grant, or why none

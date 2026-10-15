@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { Banner } from "@/components/banner";
+import { ControlNotice, NO_FIX } from "@/components/control-notice";
 import { DescriptionList } from "@/components/description-list";
 import { StageTrack } from "@/components/stage-track";
 import { StatusDot } from "@/components/status-dot";
@@ -34,7 +35,6 @@ import {
 } from "../../../../_components/templates/detail-page";
 import { DesiredValues, OperatorName } from "../_components/agent-facts";
 import { reportedDots, type AgentDot } from "../_components/agent-status";
-import { ControlNotice, NO_FIX } from "../_components/control-notice";
 import { ExecutionPanel } from "../_components/execution-panel";
 import { RenameAgentForm } from "./_components/rename-agent-form";
 
@@ -178,7 +178,11 @@ export default async function AgentPage({ params }: Params) {
               )}
             />
           ) : (
-            <ControlNotice org={org} reason={hosted.reason} fix={NO_FIX} />
+            <ControlNotice
+              operatorsHref={orgHref(org, "operators")}
+              reason={hosted.reason}
+              fix={NO_FIX}
+            />
           )}
         </Section>
       ),

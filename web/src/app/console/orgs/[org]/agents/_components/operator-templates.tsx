@@ -3,6 +3,12 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
+import {
+  ControlNotice,
+  NO_FIX,
+  controlBlocker,
+  controlReach,
+} from "@/components/control-notice";
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { DescriptionList } from "@/components/description-list";
 import { Button } from "@/components/ui/button";
@@ -13,6 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { mintOperationAuthority } from "@/features/orgs/actions";
+import { useControlRead } from "@/hooks/use-control-read";
 import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import type { DelegatedOperation, HostedOperator } from "@/features/orgs";
 import {
@@ -24,18 +32,12 @@ import {
   type VersionRef,
 } from "@/lib/operation-authority";
 
-import {
-  ControlNotice,
-  NO_FIX,
-  controlBlocker,
-  controlReach,
-} from "./control-notice";
+import { orgHref } from "../../../../_components/navigation";
 import {
   PublishTemplateForm,
   startingDraft,
   type PublishDraft,
 } from "./publish-template-form";
-import { useControlRead } from "./use-control-read";
 
 /** One published template, as the control service lists it. */
 type Published = VersionRef & { profile: VersionRef };
@@ -83,6 +85,7 @@ export function OperatorTemplates({
     "agent-template:read",
     reach("agent-template:read", `${base}/templates`),
     TemplatesParser,
+    mintOperationAuthority,
     generation,
   );
   const detail = useControlRead(
@@ -95,16 +98,23 @@ export function OperatorTemplates({
           `${base}/templates/${segment(selected.name)}/versions/${segment(selected.version)}`,
         ),
     TemplateVersionParser,
+    mintOperationAuthority,
   );
   const profiles = useControlRead(
     org,
     "execution-profile:read",
     reach("execution-profile:read", `${base}/profiles`),
     ProfilesParser,
+    mintOperationAuthority,
   );
 
   if (read.status === "blocked") {
-    return <ControlNotice org={org} {...read.block} />;
+    return (
+      <ControlNotice
+        operatorsHref={orgHref(org, "operators")}
+        {...read.block}
+      />
+    );
   }
   if (templates === null || templates.status === "loading") {
     return (
@@ -116,7 +126,7 @@ export function OperatorTemplates({
   if (templates.status !== "ok") {
     return (
       <ControlNotice
-        org={org}
+        operatorsHref={orgHref(org, "operators")}
         reason={controlFailureCopy(templates, "agent-template:read")}
         fix={NO_FIX}
       />
@@ -186,7 +196,10 @@ export function OperatorTemplates({
         </p>
       )}
       {publish.status === "blocked" && (
-        <ControlNotice org={org} {...publish.block} />
+        <ControlNotice
+          operatorsHref={orgHref(org, "operators")}
+          {...publish.block}
+        />
       )}
       <DataTable
         label="Published templates"
@@ -202,7 +215,10 @@ export function OperatorTemplates({
           Execution profiles
         </h3>
         {profileBlock !== null ? (
-          <ControlNotice org={org} {...profileBlock} />
+          <ControlNotice
+            operatorsHref={orgHref(org, "operators")}
+            {...profileBlock}
+          />
         ) : profiles === null ||
           profiles.status === "loading" ? null : profiles.status === "ok" ? (
           <p>
@@ -217,7 +233,7 @@ export function OperatorTemplates({
           </p>
         ) : (
           <ControlNotice
-            org={org}
+            operatorsHref={orgHref(org, "operators")}
             reason={controlFailureCopy(profiles, "execution-profile:read")}
             fix={NO_FIX}
           />

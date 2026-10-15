@@ -1,16 +1,21 @@
 import type { Metadata } from "next";
 
-import { getOrg, hostedFor, listHostedOperators } from "@/features/orgs";
+import {
+  NO_FIX,
+  controlReach,
+  type ControlReach,
+} from "@/components/control-notice";
+import {
+  getOrg,
+  hostedFor,
+  listHostedOperators,
+  type HostedOperator,
+} from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { PageHeader } from "../../../../_components/page-header";
-import {
-  NO_FIX,
-  controlReach,
-  type ControlReach,
-} from "../_components/control-notice";
 import { NewAgentWizard } from "./_components/new-agent-wizard";
 
 /** Head metadata for the create-agent route; Next.js reads it by name. */
@@ -48,7 +53,7 @@ export default async function NewAgentPage({ params }: Params) {
     );
   }
 
-  const start: ControlReach =
+  const start: ControlReach<HostedOperator> =
     permissions.get("create") === "denied"
       ? {
           status: "blocked",

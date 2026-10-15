@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import type { DelegatedOperator } from "@/app/console/orgs/[org]/agents/_components/control-notice";
 import { NewAgentWizard } from "@/app/console/orgs/[org]/agents/new/_components/new-agent-wizard";
+import type { DelegatedOperator } from "@/features/orgs";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { server } from "@/testing/setup";
 

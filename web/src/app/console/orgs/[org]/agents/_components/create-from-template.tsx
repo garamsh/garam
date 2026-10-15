@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { Banner } from "@/components/banner";
+import { ControlNotice, NO_FIX } from "@/components/control-notice";
 import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { DelegatedOperator } from "@/features/orgs";
+import { useControlRead } from "@/hooks/use-control-read";
 import { slugFromGrn } from "@/lib/grn";
 import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import { mintOperationAuthority } from "@/features/orgs/actions";
@@ -23,12 +26,7 @@ import {
   segment,
 } from "@/lib/operation-authority";
 
-import {
-  ControlNotice,
-  NO_FIX,
-  type DelegatedOperator,
-} from "./control-notice";
-import { useControlRead } from "./use-control-read";
+import { orgHref } from "../../../../_components/navigation";
 
 /** The agent a control service created, as its answer named it. */
 export type CreatedAgent = { agent: string; revision: string };
@@ -77,13 +75,14 @@ export function CreateFromTemplate({
       target: orgGrn,
     },
     TemplatesParser,
+    mintOperationAuthority,
   );
 
   const delegated = hosted.delegation.controllers;
   if (delegated.length === 0) {
     return (
       <ControlNotice
-        org={org}
+        operatorsHref={orgHref(org, "operators")}
         reason={`${hosted.name}'s delegation names no controller, so there is no operator to place an agent on.`}
         fix={{ at: "operator", identifier: hosted.identifier }}
       />
@@ -99,7 +98,7 @@ export function CreateFromTemplate({
   if (templates.status !== "ok") {
     return (
       <ControlNotice
-        org={org}
+        operatorsHref={orgHref(org, "operators")}
         reason={controlFailureCopy(templates, "agent-template:read")}
         fix={NO_FIX}
       />

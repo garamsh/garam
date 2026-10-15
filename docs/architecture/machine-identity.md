@@ -142,35 +142,50 @@ refusals, and §machineBearer for the alias.
   second waits for the first to commit, and neither holds a row the
   other is waiting on (#1399). A refused assertion spends no jti.
 - **The store's writes to one operator's own credential, keys and
-  tokens take that operator's registration row first**
+  tokens take that operator's registration row first, and a
+  transaction holding several takes them in GRN byte order**
   (`internal/operator` `PostgresStore`).
   - An exchange, by shared secret or by key, holds it `FOR KEY SHARE`
     for the client, and for the audience when the token names one.
-  - An issuance, a withdrawal and a credential re-issue hold it `FOR
-    UPDATE`; a deletion deletes it.
+  - An issuance, a withdrawal, a credential re-issue and a deletion
+    hold it `FOR UPDATE`.
+  - Deleting an organization holds every one of its operators' `FOR
+    UPDATE` before its cascade deletes them, by `migrations/000046`'s
+    trigger on `orgs`. An audience is an operator of the client's
+    organization, so the registrations an exchange holds are among
+    them.
 
   Two exchanges hold it together. Every other pair waits on the
   registration for the first to commit, before either touches a
-  credential, key or token row. A withdrawal deletes its key's tokens
-  in key order and a re-issue's cascade the credential's in credential
-  order, while an exchange's sweep walks the operator's expired tokens
-  by expiry; taking the registration first keeps those walks from
-  locking two tokens in opposite orders, and a deletion from waiting on
-  a credential a re-issue holds (#1418).
+  credential, key or token row, and none waits on one registration
+  while holding a later one (#1418, #1424).
 
   A writer taking it `FOR UPDATE` waits for every exchange in flight,
   and Postgres does not queue it ahead of later shared holders. What
   keeps that wait finite is the exchanges' per-process bound below,
   which counts both forms, so a leaked credential cannot hold off the
   re-issue that answers it.
-
-  Two orderings this does not cover are open (#1424):
-  - deleting an operator Y takes, by `migrations/000041`'s cascade,
-    another operator's tokens naming Y as audience while holding only
-    Y's registration;
-  - two exchanges of one operator are not ordered against each other,
-    so one's trim and the other's sweep can both reach tokens that
-    expired between the two transactions' start.
+- **Every statement that may wait on more than one token takes them in
+  `token_hash` order, and no transaction waits on a token while holding
+  another it took before** (#1424).
+  - A withdrawal's and an immediate rotation's deletion of a key's
+    tokens, a re-issue's of the credential's, and a deletion's of every
+    token the operator holds or is the audience of are each one such
+    statement and the transaction's first on tokens. The re-issue and
+    the deletion run theirs before the credential or the registration
+    goes, so the cascades of `migrations/000038` and `000041` find
+    none; `000046` indexes `audience_grn` for the deletion's.
+  - An exchange records its token, trims its issuance to the newest
+    five live ones, and then sweeps the operator's expired tokens. The
+    trim is its one such statement; the sweep skips a token another
+    transaction holds, which that transaction is deleting or a later
+    sweep takes, so it never waits.
+  - An organization's deletion takes its operators' tokens in its
+    cascade's order, under every registration a writer of them holds.
+- **Minting an enrollment token sweeps other operators' expired ones
+  without their registrations, and skips any another transaction
+  holds**, so the one row a mint waits on is its own operator's
+  (#1424).
 - **Token reads join the live key.** A token exchanged under a key is
   resolved with that key unwithdrawn and inside any rollover, so a
   withdrawal, an immediate replacement or a passed rollover refuses the

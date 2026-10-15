@@ -71,14 +71,22 @@ require("http")
 stub_ip=$(docker inspect -f "{{(index .NetworkSettings.Networks \"$net\").IPAddress}}" "$stub")
 [ -n "$stub_ip" ] || fail "the stub backend took no address on $net"
 
+# The host's kernel picks the port, not the daemon: a rootless daemon
+# allocates from 32768 up knowing nothing of the other daemons on the
+# host, so two of them pick the same one (#1436). The port is free
+# again between this bind's close and the daemon's own, a window an
+# unrelated process can still take it in.
+port=$(python3 -c 'import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])') || fail "could not reserve a host port"
+echo "web-image-e2e: publishing on 127.0.0.1:$port"
+
 # --add-host rather than a network alias: the baked host is a DNS name
 # with dots, which an alias does not accept.
 web=$net-web
 docker run -d --name "$web" --network "$net" \
-	--add-host "$api_host:$stub_ip" -p 127.0.0.1:0:3000 "$image" >/dev/null
-
-port=$(docker port "$web" 3000/tcp | head -1 | sed 's/.*://')
-[ -n "$port" ] || fail "the web container published no port"
+	--add-host "$api_host:$stub_ip" -p "127.0.0.1:$port:3000" "$image" >/dev/null
 
 # Wait on the condition the checks depend on — the server answering —
 # and stop early when the container is gone, which is how a standalone
@@ -102,4 +110,4 @@ body=$(curl -fsS "http://127.0.0.1:$port/api/healthz")
 	fail "GET /api/healthz reached the backend as '$body', want '/healthz' at $dest"
 passed=$((passed + 1))
 
-echo "web-image-e2e: $passed checks passed against $image (rewrite target $dest)"
+echo "web-image-e2e: $passed checks passed against $image on 127.0.0.1:$port (rewrite target $dest)"

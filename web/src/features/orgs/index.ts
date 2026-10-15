@@ -41,6 +41,7 @@ export {
   type Delegation,
   type DelegationRead,
   type HostedOperator,
+  type HostedOperatorsRead,
 } from "./api/delegation";
 export {
   getAgentDefinition,

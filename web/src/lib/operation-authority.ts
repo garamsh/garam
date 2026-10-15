@@ -14,7 +14,8 @@
  *
  * The control routes and their answers are the merged wire of
  * `garamsh/garam-agent-operator` at `dev` `8e1116933408`: create
- * (#244, `5e46800`), the reads and publication (#277, `5ef745a`).
+ * (#244, `5e46800`), the reads and publication (#277, `5ef745a`); and
+ * at `ba691a6`, the operators' reports (#364).
  */
 
 import { z } from "zod";
@@ -255,6 +256,35 @@ export const ExecutionParser = z.object({
     .nullable(),
 });
 export type Execution = z.infer<typeof ExecutionParser>;
+
+/** One image an operator reported running, by reference and digest. */
+export const ReportedImageParser = z.object({
+  name: z.string(),
+  ref: z.string(),
+  digest: z.string().optional(),
+});
+export type ReportedImage = z.infer<typeof ReportedImageParser>;
+
+/**
+ * What the control service holds of each operator of the organization
+ * that reached it: the images it last reported, when it reported them,
+ * and when it last made contact (garam-agent-operator ADR 0074). An
+ * operator that never reached it is absent. An absent time never
+ * happened; it is never now.
+ */
+export const OperatorReportsParser = z.object({
+  operators: z.array(
+    z.object({
+      grn: z.string(),
+      images: z.array(ReportedImageParser),
+      reportedAt: z.string().optional(),
+      lastContactAt: z.string().optional(),
+    }),
+  ),
+});
+export type OperatorReport = z.infer<
+  typeof OperatorReportsParser
+>["operators"][number];
 
 /** An escaped path segment. */
 export function segment(value: string | number): string {

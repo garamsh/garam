@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import {
   EMPTY_BODY_SHA256,
+  OperatorReportsParser,
   TemplateVersionParser,
   callControl,
   sha256Hex,
@@ -244,5 +245,49 @@ describe("TemplateVersionParser", () => {
     const parsed = TemplateVersionParser.parse(version(model));
 
     expect(parsed.configuration.model).not.toHaveProperty("embedding");
+  });
+});
+
+describe("OperatorReportsParser", () => {
+  const reported = {
+    grn: "grn:acme:default:operator:field-one",
+    images: [
+      {
+        name: "manager",
+        ref: "ghcr.io/garamsh/operator:v0.4.0",
+        digest: `sha256:${"ab".repeat(32)}`,
+      },
+      { name: "agent", ref: "ghcr.io/garamsh/gagent:v1.2.0" },
+    ],
+    reportedAt: "2026-10-14T08:00:00Z",
+    lastContactAt: "2026-10-15T09:30:00Z",
+  };
+
+  it("reads the agreed answer, keeping each digest where one was given", () => {
+    expect(OperatorReportsParser.parse({ operators: [reported] })).toEqual({
+      operators: [reported],
+    });
+  });
+
+  it("leaves the times out of an operator that never reported or made contact, rather than filling them", () => {
+    const parsed = OperatorReportsParser.parse({
+      operators: [{ grn: reported.grn, images: [] }],
+    });
+
+    expect(parsed.operators[0]).not.toHaveProperty("reportedAt");
+    expect(parsed.operators[0]).not.toHaveProperty("lastContactAt");
+  });
+
+  it("refuses an entry with no images list", () => {
+    // The control: the same entry with its list is read.
+    expect(
+      OperatorReportsParser.safeParse({
+        operators: [{ grn: reported.grn, images: [] }],
+      }).success,
+    ).toBe(true);
+    expect(
+      OperatorReportsParser.safeParse({ operators: [{ grn: reported.grn }] })
+        .success,
+    ).toBe(false);
   });
 });

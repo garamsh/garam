@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 
 import { Banner } from "@/components/banner";
-import { slugFromGrn, lookupOperators } from "@/features/orgs";
+import {
+  listHostedOperators,
+  lookupOperators,
+  slugFromGrn,
+} from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
 import {
@@ -12,6 +16,7 @@ import { orgHref } from "../../../_components/navigation";
 import { ListPage } from "../../../_components/templates/list-page";
 import { ConnectOperatorDialog } from "./_components/connect-operator-dialog";
 import { OperatorTable } from "./_components/operator-table";
+import { reportsSource } from "./_components/reports-source";
 
 /** Head metadata for the operators route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Operators — garam" };
@@ -31,12 +36,21 @@ type Params = {
  * not be asked still offers it and the API refuses whoever holds only
  * the read. `?connect` opens the dialog, which is where an operator's
  * own setup sends a person to connect its second identity.
+ *
+ * What each operator reports running and when it last made contact is
+ * the hosted operator's control service's to answer (#1047), read in
+ * the browser under `operator:read`, and left out only where the
+ * server denies the caller that read.
  */
 export default async function OperatorsPage({ params, searchParams }: Params) {
   const [{ org }, { connect }] = await Promise.all([params, searchParams]);
-  const [operators, permissions] = await Promise.all([
+  const [operators, hosted, permissions] = await Promise.all([
     lookupOperators(org),
-    checkPermissions(org, { register: { action: "operator:register" } }),
+    listHostedOperators(org),
+    checkPermissions(org, {
+      register: { action: "operator:register" },
+      readReports: { action: "operator:read" },
+    }),
   ]);
   const operatorsHref = orgHref(org, "operators");
 
@@ -68,7 +82,13 @@ export default async function OperatorsPage({ params, searchParams }: Params) {
       ) : (
         <OperatorTable
           operatorsHref={operatorsHref}
+          reports={
+            permissions.get("readReports") === "denied"
+              ? null
+              : reportsSource(org, hosted)
+          }
           operators={operators.data.map((operator) => ({
+            grn: operator.grn,
             identifier: slugFromGrn(operator.grn),
             name: operator.name,
             enrollmentState: operator.enrollmentState,

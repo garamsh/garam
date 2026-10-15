@@ -107,6 +107,11 @@ func (s *PostgresStore) ListDefinitionsByOperator(ctx context.Context, operatorG
 // second reads the assignment the first wrote — the conflict, never an
 // override (ADR-0033). The definition writes no agent row before this
 // (ADR-0026), so the claim is also where the agent comes to exist.
+//
+// The organization's row is held before the definition's, the order an
+// organization's deletion takes them in, so a claim racing one either
+// commits first or waits for it holding nothing and finds its
+// definition gone (#1441).
 func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -115,6 +120,10 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
+	// An organization that is gone holds no definition either.
+	if _, err := q.HoldAgentOrg(ctx, orgGRNOf(agentGRN).String()); err != nil {
+		return nil, pgxerr.Classify(err, "claim", ErrDefinitionNotFound, nil)
+	}
 	row, err := q.LockAgentDefinition(ctx, agentGRN.String())
 	if err != nil {
 		return nil, pgxerr.Classify(err, "claim", ErrDefinitionNotFound, nil)

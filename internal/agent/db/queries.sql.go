@@ -306,6 +306,21 @@ func (q *Queries) GetAgentTokenShownTo(ctx context.Context, arg GetAgentTokenSho
 	return i, err
 }
 
+const holdAgentOrg = `-- name: HoldAgentOrg :one
+SELECT grn FROM orgs WHERE grn = $1 FOR KEY SHARE
+`
+
+// A claim holds its organization's row before the definition's, with
+// the KEY SHARE lock the agent insert's foreign key takes anyway: an
+// organization's deletion holds that row before its cascade reaches
+// the definition, so the two take them in one order (#1441).
+func (q *Queries) HoldAgentOrg(ctx context.Context, grn string) (string, error) {
+	row := q.db.QueryRow(ctx, holdAgentOrg, grn)
+	var grn_2 string
+	err := row.Scan(&grn_2)
+	return grn_2, err
+}
+
 const isAgentCutOver = `-- name: IsAgentCutOver :one
 SELECT EXISTS (
     SELECT 1 FROM agent_cutovers WHERE agent_grn = $1 AND stage = 'switched'

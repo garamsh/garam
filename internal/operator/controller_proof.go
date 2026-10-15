@@ -5,10 +5,6 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// orgServiceType is the GRN service type of an organization.
-// internal/org owns it; see Operation for why it is repeated.
-const orgServiceType = "org"
-
 // ControllerProof is a positive proof, for one lifecycle decision by a
 // hosted operator, that a controller of its organization currently
 // holds the authority the decision needs (ADR-0078). It proves the

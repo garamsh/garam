@@ -17,6 +17,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Store implements agent.ExecutionStore.
@@ -124,8 +125,8 @@ func (s *Store) Introspect(ctx context.Context, agentGRN grn.GRN, c agent.Creden
 	row, err := s.q.Introspect(ctx, db.IntrospectParams{
 		AgentGrn:  agentGRN.String(),
 		Serial:    c.Serial,
-		NotBefore: stamp(c.NotBefore),
-		NotAfter:  stamp(c.NotAfter),
+		NotBefore: pgxtype.Timestamptz(c.NotBefore),
+		NotAfter:  pgxtype.Timestamptz(c.NotAfter),
 	})
 	if err != nil {
 		return nil, storageError(err, "introspect", agent.ErrAgentNotFound, nil)
@@ -164,13 +165,9 @@ func credentialParams(agentGRN grn.GRN, c agent.Credential) db.CredentialCurrent
 	return db.CredentialCurrentParams{
 		AgentGrn:  agentGRN.String(),
 		Serial:    c.Serial,
-		NotBefore: stamp(c.NotBefore),
-		NotAfter:  stamp(c.NotAfter),
+		NotBefore: pgxtype.Timestamptz(c.NotBefore),
+		NotAfter:  pgxtype.Timestamptz(c.NotAfter),
 	}
-}
-
-func stamp(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
 func pgUUID(u uuid.UUID) pgtype.UUID {

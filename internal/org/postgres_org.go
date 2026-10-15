@@ -9,6 +9,7 @@ import (
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // CreateOrg persists a new Organization.
@@ -16,8 +17,8 @@ func (s *PostgresStore) CreateOrg(ctx context.Context, o *Organization) error {
 	err := s.q.CreateOrg(ctx, db.CreateOrgParams{
 		Grn:       o.grn.String(),
 		Name:      o.name,
-		CreatedAt: stamp(o.createdAt),
-		UpdatedAt: stamp(o.updatedAt),
+		CreatedAt: pgxtype.Timestamptz(o.createdAt),
+		UpdatedAt: pgxtype.Timestamptz(o.updatedAt),
 	})
 	return pgxerr.Classify(err, "create org", nil, nil)
 }
@@ -57,7 +58,7 @@ func (s *PostgresStore) UpdateOrg(ctx context.Context, g grn.GRN, p Patch) (*Org
 	row, err := s.q.UpdateOrg(ctx, db.UpdateOrgParams{
 		Grn:       g.String(),
 		Name:      text(p.Name),
-		UpdatedAt: stamp(time.Now().UTC()),
+		UpdatedAt: pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "update org", ErrOrgNotFound, nil)

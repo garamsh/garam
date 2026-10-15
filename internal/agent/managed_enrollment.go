@@ -118,7 +118,7 @@ func (s *executionService) CreateManaged(ctx context.Context, caller grn.GRN, in
 	if err != nil {
 		return nil, false, err
 	}
-	if b.Kind != OperationKindCreate || b.Audience != caller || b.Org != orgGRNOf(caller) {
+	if b.Kind != OperationKindCreate || b.Audience != caller || b.Org != grn.Org(caller.Organization) {
 		return nil, false, ErrReferenceMismatch
 	}
 	if b.Target != in.Controller || b.RequestID != string(in.RequestID) {
@@ -215,7 +215,7 @@ func (s *executionService) IssueInitialCertificate(ctx context.Context, caller g
 // reference of another agent's creation, even on the same controller,
 // covers nothing here.
 func (s *executionService) creationOf(ctx context.Context, b *OperationBinding, caller, agentGRN grn.GRN) (*ManagedCreation, error) {
-	if b.Kind != OperationKindCreate || b.Audience != caller || b.Org != orgGRNOf(agentGRN) {
+	if b.Kind != OperationKindCreate || b.Audience != caller || b.Org != grn.Org(agentGRN.Organization) {
 		return nil, ErrReferenceMismatch
 	}
 	creation, err := s.executions.GetManagedCreation(ctx, agentGRN)

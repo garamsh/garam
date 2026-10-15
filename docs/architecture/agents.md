@@ -353,7 +353,15 @@ in #1157.
   is archival, and the browser read says so, and migration 000033's
   rollback refuses while a cutover is held. `garam cutover-inventory`
   prints every source record of an organization with a digest of each
-  value and no value. The Operator's import and release are built
+  value and no value. No source garam serves carries a `tools.pins.*`
+  key: a dot fails the value-key rule, and a stored payload holding one
+  does not parse, so its freeze is refused as not eligible. A pin set
+  written for Sherlock's `github` tool stops v0.8.0 at startup, which
+  split that tool into four the set does not name
+  (garamsh/sherlock#1086; `checkPin` in `internal/tool/registry.go` at
+  v0.8.0). That set is never garam's to forward: it is swapped in the
+  Operator-side spec. The Operator's
+  import and release are built
   (`garamsh/garam-agent-operator` `ad444ed`,
   `docs/architecture/control.md`, its ADR 0050).
 - **A managed agent is created by request, not by claim.** The control

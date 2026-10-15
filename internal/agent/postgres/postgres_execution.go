@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/agent/postgres/db"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 func (s *Store) Activate(ctx context.Context, req agent.ActivationRequest) (*agent.Activation, bool, error) {
@@ -88,7 +89,7 @@ func (s *Store) Activate(ctx context.Context, req agent.ActivationRequest) (*age
 			GrantID:              req.GrantID,
 			OperationRef:         optionalText(req.OperationRef),
 			ReplacesActivationID: optionalUUID((*uuid.UUID)(req.Replaces)),
-			CreatedAt:            stamp(now),
+			CreatedAt:            pgxtype.Timestamptz(now),
 		})
 		if err != nil {
 			return storageError(err, "insert activation", nil, agent.ErrGenerationUsed)
@@ -102,7 +103,7 @@ func (s *Store) Activate(ctx context.Context, req agent.ActivationRequest) (*age
 			AgentGrn:     req.Agent.String(),
 			ActivationID: row.ID,
 			TokenHash:    req.TokenHash[:],
-			UpdatedAt:    stamp(now),
+			UpdatedAt:    pgxtype.Timestamptz(now),
 		}); err != nil {
 			return storageError(err, "install activation", nil, nil)
 		}
@@ -131,7 +132,7 @@ func remint(ctx context.Context, q *db.Queries, req agent.ActivationRequest, pri
 		return nil, storageError(err, "remint activation", nil, nil)
 	}
 	if err := q.ReplaceToken(ctx, db.ReplaceTokenParams{
-		AgentGrn: req.Agent.String(), TokenHash: req.TokenHash[:], UpdatedAt: stamp(now),
+		AgentGrn: req.Agent.String(), TokenHash: req.TokenHash[:], UpdatedAt: pgxtype.Timestamptz(now),
 	}); err != nil {
 		return nil, storageError(err, "replace token", nil, nil)
 	}
@@ -154,7 +155,7 @@ func end(ctx context.Context, q *db.Queries, id pgtype.UUID, reason agent.EndRea
 	err := q.EndActivation(ctx, db.EndActivationParams{
 		ID:          id,
 		EndedReason: pgtype.Text{String: string(reason), Valid: true},
-		EndedAt:     stamp(now),
+		EndedAt:     pgxtype.Timestamptz(now),
 	})
 	return storageError(err, "end activation", nil, nil)
 }
@@ -180,7 +181,7 @@ func (s *Store) Deactivate(ctx context.Context, agentGRN grn.GRN, id agent.Activ
 		if err := end(ctx, q, target, agent.EndDeactivated, now); err != nil {
 			return err
 		}
-		if err := q.ClearActivation(ctx, db.ClearActivationParams{AgentGrn: agentGRN.String(), UpdatedAt: stamp(now)}); err != nil {
+		if err := q.ClearActivation(ctx, db.ClearActivationParams{AgentGrn: agentGRN.String(), UpdatedAt: pgxtype.Timestamptz(now)}); err != nil {
 			return storageError(err, "clear activation", nil, nil)
 		}
 		ended = true
@@ -232,7 +233,7 @@ func (s *Store) Recover(ctx context.Context, req agent.RecoveryRequest) (*agent.
 			CertificatePem: pgtype.Text{String: req.CertificatePEM, Valid: signed},
 			IssuerPem:      pgtype.Text{String: req.Chain.IssuerPEM, Valid: signed},
 			ServerRootPem:  pgtype.Text{String: req.Chain.ServerRootPEM, Valid: signed},
-			CreatedAt:      stamp(now),
+			CreatedAt:      pgxtype.Timestamptz(now),
 		}); err != nil {
 			return storageError(err, "insert recovery", nil, agent.ErrRecoveryConflict)
 		}
@@ -241,7 +242,7 @@ func (s *Store) Recover(ctx context.Context, req agent.RecoveryRequest) (*agent.
 				return err
 			}
 		}
-		if err := q.MoveLineage(ctx, db.MoveLineageParams{AgentGrn: req.Agent.String(), Lineage: lineage, UpdatedAt: stamp(now)}); err != nil {
+		if err := q.MoveLineage(ctx, db.MoveLineageParams{AgentGrn: req.Agent.String(), Lineage: lineage, UpdatedAt: pgxtype.Timestamptz(now)}); err != nil {
 			return storageError(err, "move lineage", nil, nil)
 		}
 		if !signed {
@@ -249,7 +250,7 @@ func (s *Store) Recover(ctx context.Context, req agent.RecoveryRequest) (*agent.
 			return nil
 		}
 		if err := q.InsertCredential(ctx, db.InsertCredentialParams{
-			AgentGrn: req.Agent.String(), Serial: req.Credential.Serial, Lineage: lineage, NotAfter: stamp(req.Credential.NotAfter),
+			AgentGrn: req.Agent.String(), Serial: req.Credential.Serial, Lineage: lineage, NotAfter: pgxtype.Timestamptz(req.Credential.NotAfter),
 		}); err != nil {
 			return storageError(err, "record credential", nil, nil)
 		}
@@ -291,8 +292,8 @@ func (s *Store) RecordRenewal(ctx context.Context, fence agent.Fencing, successo
 			AgentGrn:  agentGRN.String(),
 			TokenHash: fence.TokenBytes(),
 			Serial:    fence.Credential.Serial,
-			NotBefore: stamp(fence.Credential.NotBefore),
-			NotAfter:  stamp(fence.Credential.NotAfter),
+			NotBefore: pgxtype.Timestamptz(fence.Credential.NotBefore),
+			NotAfter:  pgxtype.Timestamptz(fence.Credential.NotAfter),
 		})
 		if err != nil {
 			return storageError(err, "admit", nil, nil)
@@ -313,7 +314,7 @@ func (s *Store) RecordRenewal(ctx context.Context, fence agent.Fencing, successo
 			return storageError(err, "prune credentials", nil, nil)
 		}
 		return storageError(q.InsertCredential(ctx, db.InsertCredentialParams{
-			AgentGrn: agentGRN.String(), Serial: successor.Serial, Lineage: exec.Lineage, NotAfter: stamp(successor.NotAfter),
+			AgentGrn: agentGRN.String(), Serial: successor.Serial, Lineage: exec.Lineage, NotAfter: pgxtype.Timestamptz(successor.NotAfter),
 		}), "record credential", nil, nil)
 	})
 }

@@ -327,7 +327,7 @@ func (s *executionService) checkReference(ctx context.Context, caller grn.GRN, i
 // covers reports whether the binding was minted for this caller, this
 // agent and the assignment it is on.
 func (b *OperationBinding) covers(caller, agentGRN grn.GRN, assignment *Assignment) bool {
-	return b.Org == orgGRNOf(agentGRN) &&
+	return b.Org == grn.Org(agentGRN.Organization) &&
 		b.Audience == caller &&
 		b.Target == agentGRN &&
 		b.Assignee == assignment.Assignee() &&
@@ -365,7 +365,7 @@ func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.
 	}
 	out := &Introspection{
 		Agent:      agentGRN,
-		Org:        orgGRNOf(agentGRN),
+		Org:        grn.Org(agentGRN.Organization),
 		Assignee:   *snapshot.Assignee,
 		Epoch:      snapshot.Epoch,
 		Mode:       snapshot.Mode,

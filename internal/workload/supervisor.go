@@ -16,9 +16,9 @@ import (
 
 // Paths inside the containers. The memory volume goes on /data, the
 // directory Sherlock's agent image makes and gives 65532
-// (build/agent.Dockerfile at v0.6.0); the runtime's other paths and the
+// (build/agent.Dockerfile at v0.8.0); the runtime's other paths and the
 // workspace's are what Sherlock's own fixture mounts
-// (deploy/runtime-fixture at v0.6.0).
+// (deploy/runtime-fixture at v0.8.0).
 const (
 	memoryTarget    = "/data"
 	outboxDir       = "outbox"
@@ -41,7 +41,7 @@ const (
 
 // workspaceCaps is what the workspace's executor needs to drop each
 // child to its own account and namespace (Sherlock's
-// deploy/local/docker-compose.yml at v0.6.0 records why each).
+// deploy/local/docker-compose.yml at v0.8.0 records why each).
 var workspaceCaps = []string{"SETUID", "SETGID", "CHOWN", "SYS_ADMIN", "KILL"}
 
 // immutableImage is a reference that cannot come to mean other

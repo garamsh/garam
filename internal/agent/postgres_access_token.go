@@ -10,6 +10,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Compile-time checks that PostgresStore satisfies AccessTokenStore and
@@ -84,8 +85,8 @@ func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *
 		Epoch:       assignment.Epoch,
 		Lineage:     execution.Lineage,
 		AudienceGrn: audience,
-		IssuedAt:    pgtype.Timestamptz{Time: t.IssuedAt, Valid: true},
-		ExpiresAt:   pgtype.Timestamptz{Time: t.ExpiresAt, Valid: true},
+		IssuedAt:    pgxtype.Timestamptz(t.IssuedAt),
+		ExpiresAt:   pgxtype.Timestamptz(t.ExpiresAt),
 	}); err != nil {
 		// The execution row is held, so the one key a missing row can
 		// refuse here is the audience's: a hosted operator deleted

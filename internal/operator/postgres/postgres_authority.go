@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/operator/postgres/db"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Compile-time check that Store satisfies operator.AuthorityStore.
@@ -36,7 +37,7 @@ func (s *Store) MintAuthority(ctx context.Context, b operator.Binding, tokenHash
 		Operation: string(b.Operation), TargetGrn: b.Target.String(),
 		AssigneeGrn: assignee, AssignmentEpoch: epoch, BodySha256: string(b.Digest),
 		RequestTarget: target,
-		TokenHash:     tokenHash, TokenExpiresAt: stamp(expiresAt), CreatedAt: stamp(now),
+		TokenHash:     tokenHash, TokenExpiresAt: pgxtype.Timestamptz(expiresAt), CreatedAt: pgxtype.Timestamptz(now),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", operator.ErrAuthorityRequestConflict

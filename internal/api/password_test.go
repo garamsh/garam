@@ -163,8 +163,10 @@ func TestLoginPassword_RefusalCarriesNothingThatWasSent(t *testing.T) {
 	assert.NotContains(t, body, "swordfish")
 
 	// The same holds for a refusal raised before any account is looked
-	// up, where the password is what was wrong.
-	rec = f.do(t, "POST", "/auth/password/register", registerBody(token, "bob", "short"))
+	// up, where the password is what was wrong. It takes a live
+	// invitation of its own: the first registration spent token.
+	second := inviteTo(t, f, "acme", "invite-tok-2")
+	rec = f.do(t, "POST", "/auth/password/register", registerBody(second, "bob", "short"))
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "short")
 	assert.Contains(t, rec.Body.String(), fmt.Sprint(authn.MinPasswordLength), "it names the bound instead")
@@ -344,6 +346,37 @@ func TestRegisterPassword_RefusesAUsernameThatIsTakenOrUnusable(t *testing.T) {
 		rec = f.do(t, "POST", "/auth/password/register", registerBody("second-tok", username, registeredPassword))
 		assert.Equal(t, http.StatusBadRequest, rec.Code, "username %q cannot name an account", username)
 	}
+
+	// None of the refusals spent the invitation: an unusable username
+	// is refused before the claim, and a taken one releases it.
+	rec = f.do(t, "POST", "/auth/password/register", registerBody("second-tok", "bob", registeredPassword))
+	assert.Equal(t, http.StatusCreated, rec.Code)
+}
+
+// TestRegisterPassword_AFailureAfterTheUserIsCreatedLeavesNothing
+// holds the cleanup a claimed registration owes (#1381): the user it
+// created is deleted and the invitation is released, so a retry with
+// the same username and token is not refused as taken or spent.
+func TestRegisterPassword_AFailureAfterTheUserIsCreatedLeavesNothing(t *testing.T) {
+	f := newFixture(t)
+	token := inviteTo(t, f, "acme", "invite-tok")
+	alice := grn.New("root", "default", user.ServiceType, "local-alice")
+
+	f.credentials.refuseCreates(true)
+	rec := f.do(t, "POST", "/auth/password/register", registerBody(token, "alice", registeredPassword))
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Nil(t, sessionCookie(rec.Result()))
+
+	_, err := f.users.Get(testCtx(t), alice)
+	assert.ErrorIs(t, err, user.ErrUserNotFound, "the user it created is gone")
+	assert.False(t, f.orgs.spent(token), "the invitation is live again")
+
+	// The control: the same request, once the credential store answers,
+	// is accepted, so the refusal above was the failure under test.
+	f.credentials.refuseCreates(false)
+	rec = f.do(t, "POST", "/auth/password/register", registerBody(token, "alice", registeredPassword))
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.True(t, f.orgs.spent(token))
 }
 
 // TestOauthCallback_RefusesAProviderSubjectInTheReservedSpace is the

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -37,8 +38,9 @@ var ErrUsernameInvalid = errorx.New(errorx.KindInvalidArgument, "username must b
 // RegisterPassword creates an account from an invitation and signs it
 // in. There is no registration without one: the token is the
 // unguessable possession proof that authorizes the account, and it is
-// also what gates the hash below — nothing is computed for a caller
-// who does not hold a live invitation (ADR-0006, ADR-0041).
+// also what gates the hash registerClaimed derives — nothing is
+// computed for a caller who does not hold a live invitation
+// (ADR-0006, ADR-0041).
 func (s *Server) RegisterPassword(w http.ResponseWriter, r *http.Request) {
 	var body apigen.PasswordRegistration
 	if err := decodeJSON(r, &body); err != nil {
@@ -50,44 +52,16 @@ func (s *Server) RegisterPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	inv, err := s.orgs.GetInvitation(r.Context(), body.InvitationToken)
+	// The claim spends the invitation before anything is created, so
+	// of two registrations on one token the second creates nothing
+	// (#1381).
+	inv, err := s.orgs.ClaimInvitation(r.Context(), body.InvitationToken)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	if inv.Accepted() {
-		writeError(w, org.ErrInvitationAccepted)
-		return
-	}
-	if inv.Expired(time.Now().UTC()) {
-		writeError(w, org.ErrInvitationExpired)
-		return
-	}
-	// Derived only once the invitation is known live, so the cost is
-	// spent for a caller holding one and for nobody else.
-	verifier, err := authn.NewVerifier(authn.Password(body.Password))
+	u, m, err := s.registerClaimed(r, inv, g, body)
 	if err != nil {
-		writeError(w, err)
-		return
-	}
-	u := user.New(g, body.Username)
-	if err := s.users.Create(r.Context(), u); err != nil {
-		writeError(w, err)
-		return
-	}
-	if err := s.credentials.Create(r.Context(), g, verifier); err != nil {
-		writeError(w, err)
-		return
-	}
-	// Membership before the invitation is burned, so a refused
-	// membership leaves the invitation to be accepted again — the
-	// ordering AcceptInvitation already uses (ADR-0006).
-	m := org.NewMembership(inv.Organization(), g, inv.Role())
-	if err := s.orgs.AddMember(r.Context(), m); err != nil {
-		writeError(w, err)
-		return
-	}
-	if _, err := s.orgs.AcceptInvitation(r.Context(), body.InvitationToken, g); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -98,6 +72,75 @@ func (s *Server) RegisterPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	nickname := u.Nickname
 	writeJSON(w, http.StatusCreated, memberToAPI(m, &nickname))
+}
+
+// registerClaimed creates the account a claimed invitation admits:
+// the user, its credential and its membership, then names the user on
+// the claim. A failure deletes the user, which takes the credential
+// and the membership with it, and then releases the claim, so a retry
+// with the same username and token finds neither taken.
+//
+// A process that dies before that cleanup leaves the invitation spent
+// with no acceptor named, which fails closed: an admin issues a new
+// one. If it dies after the user was created, an account with a
+// password and no membership remains. It reaches no organization, and
+// its username stays taken.
+func (s *Server) registerClaimed(r *http.Request, inv *org.Invitation, g grn.GRN, body apigen.PasswordRegistration) (*user.User, *org.Membership, error) {
+	ctx := r.Context()
+	// Derived only once the invitation is claimed, so the cost is spent
+	// for a caller holding a live one and for nobody else.
+	verifier, err := authn.NewVerifier(authn.Password(body.Password))
+	if err != nil {
+		s.releaseClaim(r, inv, g)
+		return nil, nil, err
+	}
+	u := user.New(g, body.Username)
+	if err := s.users.Create(ctx, u); err != nil {
+		s.releaseClaim(r, inv, g)
+		return nil, nil, err
+	}
+	m := org.NewMembership(inv.Organization(), g, inv.Role())
+	err = s.credentials.Create(ctx, g, verifier)
+	if err == nil {
+		err = s.orgs.AddMember(ctx, m)
+	}
+	if err == nil {
+		err = s.orgs.CompleteInvitationClaim(ctx, inv, g)
+	}
+	if err != nil {
+		s.abandonAccount(r, g)
+		s.releaseClaim(r, inv, g)
+		return nil, nil, err
+	}
+	return u, m, nil
+}
+
+// abandonAccount deletes a user registration created and could not
+// finish. The credential and membership go with it by cascade.
+func (s *Server) abandonAccount(r *http.Request, g grn.GRN) {
+	ctx := context.WithoutCancel(r.Context())
+	if err := s.users.Delete(ctx, g); err != nil {
+		slog.WarnContext(ctx, "abandoned registration not deleted",
+			slog.String("error", err.Error()),
+			slog.String("user_id", g.String()))
+	}
+}
+
+// releaseClaim returns the invitation a registration claimed to
+// pending. It never logs the token, which is the invitation itself.
+func (s *Server) releaseClaim(r *http.Request, inv *org.Invitation, g grn.GRN) {
+	ctx := context.WithoutCancel(r.Context())
+	err := s.orgs.ReleaseInvitationClaim(ctx, inv)
+	attrs := []any{
+		slog.String("org", inv.Organization().String()),
+		slog.String("user_id", g.String()),
+	}
+	if err != nil {
+		slog.WarnContext(ctx, "invitation claim not released",
+			append(attrs, slog.String("error", err.Error()))...)
+		return
+	}
+	slog.InfoContext(ctx, "invitation claim released", attrs...)
 }
 
 // LoginPassword signs in with a username and a password.

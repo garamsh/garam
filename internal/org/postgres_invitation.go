@@ -39,27 +39,123 @@ func (s *PostgresStore) GetInvitation(ctx context.Context, token string) (*Invit
 	return rowToInvitation(row)
 }
 
-// AcceptInvitation marks a pending Invitation accepted by the user.
-// An unknown token yields ErrInvitationNotFound; an already-accepted
-// token yields ErrInvitationAccepted.
-func (s *PostgresStore) AcceptInvitation(ctx context.Context, token string, userGRN grn.GRN) (*Invitation, error) {
-	row, err := s.q.AcceptInvitation(ctx, db.AcceptInvitationParams{
+// AcceptInvitation spends a pending, unexpired Invitation and adds the
+// user to its org with its role, in one transaction. The conditional
+// update is the claim: of two concurrent accepts one matches the row
+// and the other waits on it and then matches nothing, so it adds no
+// member. A membership the user already holds rolls the claim back,
+// leaving the invitation unspent.
+//
+// An unknown token yields ErrInvitationNotFound, an accepted one
+// ErrInvitationAccepted, and an expired one ErrInvitationExpired.
+func (s *PostgresStore) AcceptInvitation(ctx context.Context, token string, userGRN grn.GRN) (*Membership, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	now := time.Now().UTC()
+	row, err := q.AcceptInvitation(ctx, db.AcceptInvitationParams{
 		Token:      token,
 		AcceptedBy: pgtype.Text{String: userGRN.String(), Valid: true},
-		AcceptedAt: stamp(time.Now().UTC()),
+		AcceptedAt: stamp(now),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		// The update only misses when the token is unknown or the row
-		// is already accepted; look it up to tell the two apart.
-		if _, getErr := s.q.GetInvitation(ctx, token); getErr != nil {
-			return nil, pgxerr.Classify(getErr, "accept invitation", ErrInvitationNotFound, nil)
-		}
-		return nil, ErrInvitationAccepted
+		return nil, unclaimable(ctx, q, token, now)
 	}
 	if err != nil {
 		return nil, pgxerr.Classify(err, "accept invitation", nil, nil)
 	}
+	inv, err := rowToInvitation(row)
+	if err != nil {
+		return nil, err
+	}
+	m := NewMembership(inv.orgGRN, userGRN, inv.role)
+	if err := q.AddOrgMember(ctx, db.AddOrgMemberParams{
+		OrgGrn:    m.orgGRN.String(),
+		UserGrn:   m.userGRN.String(),
+		Role:      string(m.role),
+		CreatedAt: stamp(m.createdAt),
+	}); err != nil {
+		return nil, pgxerr.Classify(err, "add member", nil, ErrMemberAlreadyExists)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errorx.Wrap(err, "commit")
+	}
+	return m, nil
+}
+
+// ClaimInvitation spends a pending, unexpired Invitation for an
+// account that does not exist yet. The returned Invitation's
+// AcceptedAt is the claim's mark, which CompleteInvitationClaim and
+// ReleaseInvitationClaim match on. Errors as AcceptInvitation's.
+func (s *PostgresStore) ClaimInvitation(ctx context.Context, token string) (*Invitation, error) {
+	now := time.Now().UTC()
+	row, err := s.q.ClaimInvitation(ctx, db.ClaimInvitationParams{
+		ClaimedAt: stamp(now),
+		Token:     token,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, unclaimable(ctx, s.q, token, now)
+	}
+	if err != nil {
+		return nil, pgxerr.Classify(err, "claim invitation", nil, nil)
+	}
 	return rowToInvitation(row)
+}
+
+// CompleteInvitationClaim records userGRN as the claimed Invitation's
+// acceptor, once that user exists.
+func (s *PostgresStore) CompleteInvitationClaim(ctx context.Context, inv *Invitation, userGRN grn.GRN) error {
+	n, err := s.q.CompleteInvitationClaim(ctx, db.CompleteInvitationClaimParams{
+		AcceptedBy: pgtype.Text{String: userGRN.String(), Valid: true},
+		Token:      inv.token,
+		ClaimedAt:  stamp(inv.acceptedAt),
+	})
+	return claimRows(n, err, "complete invitation claim")
+}
+
+// ReleaseInvitationClaim returns a claimed Invitation to pending.
+func (s *PostgresStore) ReleaseInvitationClaim(ctx context.Context, inv *Invitation) error {
+	n, err := s.q.ReleaseInvitationClaim(ctx, db.ReleaseInvitationClaimParams{
+		Token:     inv.token,
+		ClaimedAt: stamp(inv.acceptedAt),
+	})
+	return claimRows(n, err, "release invitation claim")
+}
+
+// claimRows refuses a claim update that matched no row: the claim it
+// names is not held.
+func claimRows(n int64, err error, op string) error {
+	if err != nil {
+		return pgxerr.Classify(err, op, nil, nil)
+	}
+	if n == 0 {
+		return errorx.New(errorx.KindInternal, op+": the claim is not held")
+	}
+	return nil
+}
+
+// unclaimable names why the claim on token matched no row: the token
+// is unknown, already accepted, or expired, in that order.
+func unclaimable(ctx context.Context, q *db.Queries, token string, now time.Time) error {
+	row, err := q.GetInvitation(ctx, token)
+	if err != nil {
+		return pgxerr.Classify(err, "accept invitation", ErrInvitationNotFound, nil)
+	}
+	inv, err := rowToInvitation(row)
+	if err != nil {
+		return err
+	}
+	if inv.Accepted() {
+		return ErrInvitationAccepted
+	}
+	if inv.Expired(now) {
+		return ErrInvitationExpired
+	}
+	return errorx.New(errorx.KindInternal, "invitation claim matched no live row")
 }
 
 func rowToInvitation(row db.Invitation) (*Invitation, error) {

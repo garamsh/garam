@@ -549,7 +549,15 @@ func TestOrgStore_InvitationLifecycle(t *testing.T) {
 	_, err = s.GetInvitation(ctx, "nope")
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 
-	accepted, err := s.AcceptInvitation(ctx, "tok-1", invitee)
+	m, err := s.AcceptInvitation(ctx, "tok-1", invitee)
+	require.NoError(t, err)
+	assert.Equal(t, orgGRN, m.Organization())
+	assert.Equal(t, invitee, m.User())
+	assert.Equal(t, org.RoleAdmin, m.Role())
+	held, err := s.GetMember(ctx, orgGRN, invitee)
+	require.NoError(t, err)
+	assert.Equal(t, org.RoleAdmin, held.Role())
+	accepted, err := s.GetInvitation(ctx, "tok-1")
 	require.NoError(t, err)
 	assert.True(t, accepted.Accepted())
 	assert.Equal(t, invitee, accepted.AcceptedBy())
@@ -558,6 +566,124 @@ func TestOrgStore_InvitationLifecycle(t *testing.T) {
 	assert.ErrorIs(t, err, org.ErrInvitationAccepted)
 	_, err = s.AcceptInvitation(ctx, "nope", invitee)
 	assert.ErrorIs(t, err, org.ErrInvitationNotFound)
+}
+
+// TestOrgStore_AcceptInvitationSpendsNothingItCannotJoin holds that the
+// accept's claim and membership are one transaction: a user already a
+// member is refused and the invitation stays pending, and an expired
+// invitation is refused and adds no member (#1381). A second user's
+// accept of the same invitation afterwards is the control that the
+// refusal left it spendable.
+func TestOrgStore_AcceptInvitationSpendsNothingItCannotJoin(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := org.NewPostgresStore(p)
+	orgGRN := grnOf("org", "acme")
+	owner := grnOf("user", "ada")
+	member := grnOf("user", "bob")
+	newcomer := grnOf("user", "carol")
+
+	users := userpg.New(p)
+	for _, u := range []grn.GRN{owner, member, newcomer} {
+		require.NoError(t, users.Create(ctx, user.New(u, u.Identifier)))
+	}
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	require.NoError(t, s.AddMember(ctx, org.NewMembership(orgGRN, member, org.RoleMember)))
+	require.NoError(t, s.CreateInvitation(ctx,
+		org.NewInvitation("tok-live", orgGRN, org.RoleAdmin, owner, time.Now().UTC().Add(time.Hour))))
+	require.NoError(t, s.CreateInvitation(ctx,
+		org.NewInvitation("tok-lapsed", orgGRN, org.RoleAdmin, owner, time.Now().UTC().Add(-time.Minute))))
+
+	_, err := s.AcceptInvitation(ctx, "tok-live", member)
+	require.ErrorIs(t, err, org.ErrMemberAlreadyExists)
+	pending, err := s.GetInvitation(ctx, "tok-live")
+	require.NoError(t, err)
+	assert.False(t, pending.Accepted(), "the refused membership rolled the claim back")
+
+	_, err = s.AcceptInvitation(ctx, "tok-lapsed", newcomer)
+	require.ErrorIs(t, err, org.ErrInvitationExpired)
+	_, err = s.GetMember(ctx, orgGRN, newcomer)
+	require.ErrorIs(t, err, org.ErrMemberNotFound, "the expired invitation joined nobody")
+
+	_, err = s.AcceptInvitation(ctx, "tok-live", newcomer)
+	require.NoError(t, err)
+	joined, err := s.GetMember(ctx, orgGRN, newcomer)
+	require.NoError(t, err)
+	assert.Equal(t, org.RoleAdmin, joined.Role())
+}
+
+// TestOrgStore_InvitationClaimIsReleasedOrCompletedOnlyByItsHolder
+// walks the claim a registration takes before the account exists: it
+// spends the invitation with no acceptor named, a second claim is
+// refused, and the completion and the release each match only the
+// claim whose mark they carry, so a stale holder undoes nobody's
+// claim and nobody's acceptance (#1381). A claimed invitation past its
+// expiry is not pruned: it is spent, not pending.
+func TestOrgStore_InvitationClaimIsReleasedOrCompletedOnlyByItsHolder(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := org.NewPostgresStore(p)
+	orgGRN := grnOf("org", "acme")
+	owner := grnOf("user", "ada")
+	invitee := grnOf("user", "bob")
+
+	users := userpg.New(p)
+	require.NoError(t, users.Create(ctx, user.New(owner, "ada")))
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	require.NoError(t, s.CreateInvitation(ctx,
+		org.NewInvitation("tok-1", orgGRN, org.RoleMember, owner, time.Now().UTC().Add(time.Hour))))
+
+	first, err := s.ClaimInvitation(ctx, "tok-1")
+	require.NoError(t, err)
+	assert.Equal(t, orgGRN, first.Organization())
+	claimed, err := s.GetInvitation(ctx, "tok-1")
+	require.NoError(t, err)
+	assert.True(t, claimed.Accepted(), "a claimed invitation reads as spent")
+	assert.True(t, claimed.AcceptedBy().IsZero(), "with nobody named yet")
+
+	_, err = s.ClaimInvitation(ctx, "tok-1")
+	require.ErrorIs(t, err, org.ErrInvitationAccepted)
+
+	require.NoError(t, s.ReleaseInvitationClaim(ctx, first))
+	released, err := s.GetInvitation(ctx, "tok-1")
+	require.NoError(t, err)
+	assert.False(t, released.Accepted())
+
+	second, err := s.ClaimInvitation(ctx, "tok-1")
+	require.NoError(t, err)
+	require.False(t, second.AcceptedAt().Equal(first.AcceptedAt()),
+		"the two claims carry different marks")
+	assert.Error(t, s.ReleaseInvitationClaim(ctx, first), "a stale mark releases nothing")
+	assert.Error(t, s.CompleteInvitationClaim(ctx, first, invitee), "nor completes anything")
+	still, err := s.GetInvitation(ctx, "tok-1")
+	require.NoError(t, err)
+	assert.True(t, still.Accepted(), "the second claim still holds")
+
+	require.NoError(t, users.Create(ctx, user.New(invitee, "bob")))
+	require.NoError(t, s.CompleteInvitationClaim(ctx, second, invitee))
+	assert.Error(t, s.ReleaseInvitationClaim(ctx, second), "an accepted invitation is not released")
+	accepted, err := s.GetInvitation(ctx, "tok-1")
+	require.NoError(t, err)
+	assert.Equal(t, invitee, accepted.AcceptedBy())
+
+	// A claim whose registration died, past its expiry, survives the
+	// sweep the next create runs; the expired pending one beside it is
+	// the control that the sweep ran.
+	require.NoError(t, s.CreateInvitation(ctx,
+		org.NewInvitation("tok-crashed", orgGRN, org.RoleMember, owner, time.Now().UTC().Add(time.Hour))))
+	_, err = s.ClaimInvitation(ctx, "tok-crashed")
+	require.NoError(t, err)
+	require.NoError(t, s.CreateInvitation(ctx,
+		org.NewInvitation("tok-lapsed", orgGRN, org.RoleMember, owner, time.Now().UTC().Add(-time.Minute))))
+	_, err = s.ClaimInvitation(ctx, "tok-lapsed")
+	require.ErrorIs(t, err, org.ErrInvitationExpired, "an expired invitation is not claimed")
+	_, err = p.Exec(ctx, `UPDATE invitations SET expires_at = now() - interval '1 minute'
+		WHERE token = 'tok-crashed'`)
+	require.NoError(t, err)
+	require.NoError(t, s.CreateInvitation(ctx,
+		org.NewInvitation("tok-next", orgGRN, org.RoleMember, owner, time.Now().UTC().Add(time.Hour))))
+	assert.Equal(t, 1, countRows(t, p, "SELECT count(*) FROM invitations WHERE token = 'tok-crashed'"))
+	assert.Equal(t, 0, countRows(t, p, "SELECT count(*) FROM invitations WHERE token = 'tok-lapsed'"))
 }
 
 // TestOrgStore_CreateInvitationPrunesExpiredPending holds that a pending
@@ -589,9 +715,13 @@ func TestOrgStore_CreateInvitationPrunesExpiredPending(t *testing.T) {
 	lapsed := time.Now().UTC().Add(-time.Hour)
 	ahead := time.Now().UTC().Add(time.Hour)
 
+	// Accepted while it was live, then lapsed: written by hand, since
+	// the store refuses to accept an invitation already past expiry.
 	spent := org.NewInvitation("tok-accepted", orgGRN, org.RoleMember, owner, lapsed)
 	require.NoError(t, s.CreateInvitation(ctx, spent))
-	_, err := s.AcceptInvitation(ctx, "tok-accepted", invitee)
+	_, err := p.Exec(ctx, `UPDATE invitations SET accepted_by = $2,
+		accepted_at = expires_at - interval '1 minute' WHERE token = $1`,
+		"tok-accepted", invitee.String())
 	require.NoError(t, err)
 
 	standing := org.NewInvitation("tok-standing", orgGRN, org.RoleMember, owner, ahead)

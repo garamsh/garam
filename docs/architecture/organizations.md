@@ -36,6 +36,27 @@ sends to the engine to resolve group-attached policies (ADR-0008). A
 project is listed by its organization alone. Orgs grow by invitation and
 acceptance, not open signup.
 
+**An invitation is spent once, by a claim taken before anything it
+admits is created** (#1381). The claim is a conditional update on the
+invitation's row, matching only one that is neither spent nor expired,
+so of two concurrent uses one matches and the other creates nothing.
+Accepting is one transaction: the claim and the membership commit
+together, and a membership the user already holds rolls the claim
+back. Registering creates an account in stores outside this domain,
+so its claim stands alone: it sets `accepted_at` and leaves
+`accepted_by` empty, since that column references a user who does
+not exist yet. That claimed state reads as spent everywhere, the
+preview included. The user, the credential and the membership follow,
+and `accepted_by` is written last. A failure on the way deletes the
+user, which takes the credential and the membership with it, and then
+releases the claim. The release matches only the claim's own
+`accepted_at`, so it undoes no other holder's claim. A registration
+that dies while holding a claim leaves the invitation spent with
+nobody named, which fails closed: an admin issues a new one. One that
+dies after the user was created also leaves an account with a
+password and no membership. That account reaches no organization, and
+its username stays taken.
+
 **A group or project holds no member another organization owns.** An
 org-owned GRN names its organization in the organization segment
 (ADR-0001), so the store refuses an add whose member names an

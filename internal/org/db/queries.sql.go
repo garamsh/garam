@@ -13,7 +13,7 @@ import (
 
 const acceptInvitation = `-- name: AcceptInvitation :one
 UPDATE invitations SET accepted_by = $2, accepted_at = $3
-WHERE token = $1 AND accepted_at IS NULL
+WHERE token = $1 AND accepted_at IS NULL AND expires_at > $3
 RETURNING token, org_grn, role, created_by, created_at, expires_at, accepted_by, accepted_at
 `
 
@@ -87,6 +87,61 @@ type AddProjectMemberParams struct {
 func (q *Queries) AddProjectMember(ctx context.Context, arg AddProjectMemberParams) error {
 	_, err := q.db.Exec(ctx, addProjectMember, arg.ProjectGrn, arg.MemberGrn)
 	return err
+}
+
+const claimInvitation = `-- name: ClaimInvitation :one
+UPDATE invitations SET accepted_at = $1
+WHERE token = $2 AND accepted_at IS NULL
+  AND expires_at > $1
+RETURNING token, org_grn, role, created_by, created_at, expires_at, accepted_by, accepted_at
+`
+
+type ClaimInvitationParams struct {
+	ClaimedAt pgtype.Timestamptz
+	Token     string
+}
+
+// A claimed invitation has accepted_at set and accepted_by NULL: a
+// registration holds it while the account it is for does not exist
+// yet, since accepted_by references users. Every read takes it as
+// spent. A registration that crashed while holding it leaves it so,
+// which fails closed: an admin issues a new invitation (#1381).
+func (q *Queries) ClaimInvitation(ctx context.Context, arg ClaimInvitationParams) (Invitation, error) {
+	row := q.db.QueryRow(ctx, claimInvitation, arg.ClaimedAt, arg.Token)
+	var i Invitation
+	err := row.Scan(
+		&i.Token,
+		&i.OrgGrn,
+		&i.Role,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.AcceptedBy,
+		&i.AcceptedAt,
+	)
+	return i, err
+}
+
+const completeInvitationClaim = `-- name: CompleteInvitationClaim :execrows
+UPDATE invitations SET accepted_by = $1
+WHERE token = $2 AND accepted_by IS NULL
+  AND accepted_at = $3
+`
+
+type CompleteInvitationClaimParams struct {
+	AcceptedBy pgtype.Text
+	Token      string
+	ClaimedAt  pgtype.Timestamptz
+}
+
+// Matches only the claim taken at claimed_at, so it completes no
+// other holder's claim.
+func (q *Queries) CompleteInvitationClaim(ctx context.Context, arg CompleteInvitationClaimParams) (int64, error) {
+	result, err := q.db.Exec(ctx, completeInvitationClaim, arg.AcceptedBy, arg.Token, arg.ClaimedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const countOrgContents = `-- name: CountOrgContents :one
@@ -624,6 +679,27 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 		return nil, err
 	}
 	return items, nil
+}
+
+const releaseInvitationClaim = `-- name: ReleaseInvitationClaim :execrows
+UPDATE invitations SET accepted_at = NULL
+WHERE token = $1 AND accepted_by IS NULL
+  AND accepted_at = $2
+`
+
+type ReleaseInvitationClaimParams struct {
+	Token     string
+	ClaimedAt pgtype.Timestamptz
+}
+
+// Matches only the claim taken at claimed_at, so it undoes no other
+// holder's claim and never an accepted invitation.
+func (q *Queries) ReleaseInvitationClaim(ctx context.Context, arg ReleaseInvitationClaimParams) (int64, error) {
+	result, err := q.db.Exec(ctx, releaseInvitationClaim, arg.Token, arg.ClaimedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const removeGroupMember = `-- name: RemoveGroupMember :execrows

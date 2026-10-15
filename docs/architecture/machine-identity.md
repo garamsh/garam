@@ -141,12 +141,12 @@ refusals, and §machineBearer for the alias.
   or retires a key, so whichever of an exchange and a rotation comes
   second waits for the first to commit, and neither holds a row the
   other is waiting on (#1399). A refused assertion spends no jti.
-- **The store's writes to one operator's own credential, keys and
-  tokens take that operator's registration row first, and a
-  transaction holding several takes them in GRN byte order**
-  (`internal/operator` `PostgresStore`).
+- **A store write acting for an operator takes that operator's
+  registration row first, and a transaction holding several takes them
+  in GRN byte order** (`internal/operator` `PostgresStore`).
   - An exchange, by shared secret or by key, holds it `FOR KEY SHARE`
     for the client, and for the audience when the token names one.
+  - A re-mint of an enrollment token holds it `FOR KEY SHARE`.
   - An issuance, a withdrawal, a credential re-issue and a deletion
     hold it `FOR UPDATE`.
   - Deleting an organization holds every one of its operators' `FOR
@@ -155,10 +155,14 @@ refusals, and §machineBearer for the alias.
     organization, so the registrations an exchange holds are among
     them.
 
-  Two exchanges hold it together. Every other pair waits on the
-  registration for the first to commit, before either touches a
-  credential, key or token row, and none waits on one registration
-  while holding a later one (#1418, #1424).
+  The `FOR KEY SHARE` holders hold it together. Every other pair
+  acting for one operator waits on the registration for the first to
+  commit, before either touches a credential, key, token or enrollment
+  row, and none waits on one registration while holding a later one
+  (#1418, #1424). One write reaches past the operator it acts for: a
+  deletion also deletes other operators' tokens that name it as
+  audience, holding only its own registration, and against those
+  operators' writers the order is the `token_hash` order below.
 
   A writer taking it `FOR UPDATE` waits for every exchange in flight,
   and Postgres does not queue it ahead of later shared holders. What
@@ -185,8 +189,10 @@ refusals, and §machineBearer for the alias.
     holds a registration the deletion already holds.
 - **Minting an enrollment token sweeps other operators' expired ones
   without their registrations, and skips any another transaction
-  holds**, so the one row a mint waits on is its own operator's
-  (#1424).
+  holds** (#1424). A re-mint waits on its operator's registration,
+  held first, and on that operator's enrollment row, and on no other
+  operator's row; registering mints for an operator no other
+  transaction can see yet.
 - **Token reads join the live key.** A token exchanged under a key is
   resolved with that key unwithdrawn and inside any rollover, so a
   withdrawal, an immediate replacement or a passed rollover refuses the

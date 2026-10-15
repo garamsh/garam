@@ -15,6 +15,7 @@ import {
   getOperator,
   getOperatorDelegation,
   getOrg,
+  listHostedOperators,
   listOperatorKeys,
   lookupAgentDefinitions,
   lookupOperators,
@@ -28,10 +29,17 @@ import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
 import { DetailPage } from "../../../../_components/templates/detail-page";
 import {
+  OperatorReportsProvider,
+  ProvidedImages,
+  ProvidedLastContact,
+  ProvidedReportsNotice,
+} from "../_components/operator-reports";
+import {
   CERTIFICATE_STATUS,
   keyConnection,
   liveKeys,
 } from "../_components/operator-status";
+import { reportsSource } from "../_components/reports-source";
 import { ControlEndpointForm } from "./_components/control-endpoint-form";
 import { DelegationForm } from "./_components/delegation-form";
 import { DeleteOperatorForm } from "./_components/delete-operator-form";
@@ -89,10 +97,10 @@ function Unavailable({ children }: { children: React.ReactNode }) {
  * The organization is read for itself, so one the caller cannot read
  * answers 404 (ADR-0011). Inside one it can read, a refused operator
  * says so, and a refused list says it was not checked rather than
- * none. Nothing here is a report from the operator: garam never dials
- * one (ADR-0012), so its image and last contact are unbuilt until the
- * Operator reports them (garam-agent-operator#357), and a key's last
- * sign-in is the one sign of it.
+ * none. garam never dials an operator (ADR-0012), so a key's last
+ * sign-in is garam's one sign of it; the images it runs and its last
+ * contact are the hosted operator's control service's to report
+ * (#1047), read in the browser under `operator:read`.
  *
  * The page asks the server once which of its actions the caller may
  * take, and leaves out only what it is told is denied (ADR-0103).
@@ -110,6 +118,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
     delegation,
     operators,
     members,
+    hosted,
     permissions,
   ] = await Promise.all([
     getOrg(org),
@@ -119,12 +128,14 @@ export default async function OperatorPage({ params, searchParams }: Params) {
     getOperatorDelegation(org, operator),
     lookupOperators(org),
     lookupOrgMembers(org),
+    listHostedOperators(org),
     checkPermissions(org, {
       register: { action: "operator:register" },
       reissue: { action: "operator:reissue" },
       update: { action: "operator:update" },
       delegate: { action: "operator:delegate" },
       delete: { action: "operator:delete" },
+      readReports: { action: "operator:read" },
     }),
   ]);
 
@@ -212,22 +223,18 @@ export default async function OperatorPage({ params, searchParams }: Params) {
               </span>
             ),
           },
-          {
-            term: "Image",
-            description: (
-              <span className="text-muted-foreground">
-                Unbuilt — the Operator does not report it yet
-              </span>
-            ),
-          },
-          {
-            term: "Last contact",
-            description: (
-              <span className="text-muted-foreground">
-                Unbuilt — the Operator does not report it yet
-              </span>
-            ),
-          },
+          ...(allowed("readReports")
+            ? [
+                {
+                  term: "Images",
+                  description: <ProvidedImages grn={o.grn} />,
+                },
+                {
+                  term: "Last contact",
+                  description: <ProvidedLastContact grn={o.grn} />,
+                },
+              ]
+            : []),
           {
             term: "Registered",
             description: (
@@ -246,6 +253,16 @@ export default async function OperatorPage({ params, searchParams }: Params) {
       />
       <NamingDefinitions definitions={naming} agentsHref={agentsHref} />
     </div>
+  );
+  const overviewTab = allowed("readReports") ? (
+    <OperatorReportsProvider source={reportsSource(org, hosted)}>
+      <div className="flex flex-col gap-4">
+        <ProvidedReportsNotice operatorsHref={orgHref(org, "operators")} />
+        {overview}
+      </div>
+    </OperatorReportsProvider>
+  ) : (
+    overview
   );
 
   const keysTab =
@@ -376,7 +393,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
         }
         defaultTab={tab}
         tabs={[
-          { value: "overview", label: "Overview", content: overview },
+          { value: "overview", label: "Overview", content: overviewTab },
           { value: "keys", label: "Keys", content: keysTab },
           { value: "control", label: "Control service", content: controlTab },
           { value: "delegation", label: "Delegation", content: delegationTab },

@@ -9,10 +9,19 @@ import { Time } from "@/components/time";
 import type { Operator } from "@/features/orgs";
 
 import { EmptyState } from "../../../../_components/empty-state";
+import {
+  LastContact,
+  ReportedImages,
+  ReportsNotice,
+  reportOf,
+  useOperatorReports,
+  type ReportsSource,
+} from "./operator-reports";
 import { CERTIFICATE_STATUS } from "./operator-status";
 
 /** One operator as the list shows it. */
 export type OperatorRow = {
+  grn: string;
   identifier: string;
   name: string;
   enrollmentState: Operator["enrollmentState"];
@@ -32,15 +41,21 @@ function host(endpoint: string): string {
 /**
  * The organization's operators by name, each opening its own page. A
  * name is what the organization calls an operator and two may share
- * one, so the identifier stands under every name.
+ * one, so the identifier stands under every name. Where `reports` is
+ * given, each row also says what images the operator reported and
+ * when it last made contact; a page passes null where the server
+ * denies the caller that read.
  */
 export function OperatorTable({
   operatorsHref,
   operators,
+  reports,
 }: {
   operatorsHref: string;
   operators: OperatorRow[];
+  reports: ReportsSource | null;
 }) {
+  const read = useOperatorReports(reports);
   const columns: ColumnDef<OperatorRow, unknown>[] = [
     {
       id: "operator",
@@ -81,6 +96,31 @@ export function OperatorTable({
         <StatusDot {...CERTIFICATE_STATUS[row.original.enrollmentState]} />
       ),
     },
+    ...(read === null
+      ? []
+      : ([
+          {
+            id: "images",
+            header: "Images",
+            enableSorting: false,
+            enableGlobalFilter: false,
+            cell: ({ row }) => (
+              <ReportedImages
+                state={reportOf(read, row.original.grn)}
+                withDigest={false}
+              />
+            ),
+          },
+          {
+            id: "lastContact",
+            header: "Last contact",
+            enableSorting: false,
+            enableGlobalFilter: false,
+            cell: ({ row }) => (
+              <LastContact state={reportOf(read, row.original.grn)} />
+            ),
+          },
+        ] satisfies ColumnDef<OperatorRow, unknown>[])),
     {
       accessorKey: "createdAt",
       header: "Registered",
@@ -89,19 +129,24 @@ export function OperatorTable({
   ];
 
   return (
-    <DataTable
-      label="Operators"
-      columns={columns}
-      data={operators}
-      getRowId={(row) => row.identifier}
-      search={{ placeholder: "Search operators" }}
-      empty={
-        <EmptyState
-          icon={ServerIcon}
-          title="No operators registered"
-          description="This organization has registered no operators."
-        />
-      }
-    />
+    <div className="flex flex-col gap-4">
+      {read !== null && (
+        <ReportsNotice read={read} operatorsHref={operatorsHref} />
+      )}
+      <DataTable
+        label="Operators"
+        columns={columns}
+        data={operators}
+        getRowId={(row) => row.identifier}
+        search={{ placeholder: "Search operators" }}
+        empty={
+          <EmptyState
+            icon={ServerIcon}
+            title="No operators registered"
+            description="This organization has registered no operators."
+          />
+        }
+      />
+    </div>
   );
 }

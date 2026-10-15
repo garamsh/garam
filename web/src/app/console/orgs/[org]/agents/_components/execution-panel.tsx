@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  ControlNotice,
+  NO_FIX,
+  controlBlocker,
+} from "@/components/control-notice";
 import { CopyId } from "@/components/copy-id";
 import { DescriptionList } from "@/components/description-list";
 import { Time } from "@/components/time";
@@ -7,7 +12,7 @@ import type { HostedOperator } from "@/features/orgs";
 import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import { ExecutionParser, segment } from "@/lib/operation-authority";
 
-import { ControlNotice, NO_FIX, controlBlocker } from "./control-notice";
+import { orgHref } from "../../../../_components/navigation";
 import { useControlRead } from "./use-control-read";
 
 /**
@@ -42,7 +47,10 @@ export function ExecutionPanel({
     ExecutionParser,
   );
 
-  if (blocker !== null) return <ControlNotice org={org} {...blocker} />;
+  if (blocker !== null)
+    return (
+      <ControlNotice operatorsHref={orgHref(org, "operators")} {...blocker} />
+    );
   if (execution === null || execution.status === "loading") {
     return (
       <p role="status" className="text-muted-foreground">
@@ -53,7 +61,7 @@ export function ExecutionPanel({
   if (execution.status !== "ok") {
     return (
       <ControlNotice
-        org={org}
+        operatorsHref={orgHref(org, "operators")}
         reason={controlFailureCopy(execution, "agent:execution-read")}
         fix={NO_FIX}
       />

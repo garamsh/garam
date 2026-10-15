@@ -3,6 +3,12 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
+import {
+  ControlNotice,
+  NO_FIX,
+  controlBlocker,
+  controlReach,
+} from "@/components/control-notice";
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { DescriptionList } from "@/components/description-list";
 import { Button } from "@/components/ui/button";
@@ -24,12 +30,7 @@ import {
   type VersionRef,
 } from "@/lib/operation-authority";
 
-import {
-  ControlNotice,
-  NO_FIX,
-  controlBlocker,
-  controlReach,
-} from "./control-notice";
+import { orgHref } from "../../../../_components/navigation";
 import {
   PublishTemplateForm,
   startingDraft,
@@ -104,7 +105,12 @@ export function OperatorTemplates({
   );
 
   if (read.status === "blocked") {
-    return <ControlNotice org={org} {...read.block} />;
+    return (
+      <ControlNotice
+        operatorsHref={orgHref(org, "operators")}
+        {...read.block}
+      />
+    );
   }
   if (templates === null || templates.status === "loading") {
     return (
@@ -116,7 +122,7 @@ export function OperatorTemplates({
   if (templates.status !== "ok") {
     return (
       <ControlNotice
-        org={org}
+        operatorsHref={orgHref(org, "operators")}
         reason={controlFailureCopy(templates, "agent-template:read")}
         fix={NO_FIX}
       />
@@ -186,7 +192,10 @@ export function OperatorTemplates({
         </p>
       )}
       {publish.status === "blocked" && (
-        <ControlNotice org={org} {...publish.block} />
+        <ControlNotice
+          operatorsHref={orgHref(org, "operators")}
+          {...publish.block}
+        />
       )}
       <DataTable
         label="Published templates"
@@ -202,7 +211,10 @@ export function OperatorTemplates({
           Execution profiles
         </h3>
         {profileBlock !== null ? (
-          <ControlNotice org={org} {...profileBlock} />
+          <ControlNotice
+            operatorsHref={orgHref(org, "operators")}
+            {...profileBlock}
+          />
         ) : profiles === null ||
           profiles.status === "loading" ? null : profiles.status === "ok" ? (
           <p>
@@ -217,7 +229,7 @@ export function OperatorTemplates({
           </p>
         ) : (
           <ControlNotice
-            org={org}
+            operatorsHref={orgHref(org, "operators")}
             reason={controlFailureCopy(profiles, "execution-profile:read")}
             fix={NO_FIX}
           />

@@ -37,9 +37,11 @@ export {
   hostedFor,
   listHostedOperators,
   type DelegatedOperation,
+  type DelegatedOperator,
   type Delegation,
   type DelegationRead,
   type HostedOperator,
+  type HostedOperatorsRead,
 } from "./api/delegation";
 export {
   getAgentDefinition,

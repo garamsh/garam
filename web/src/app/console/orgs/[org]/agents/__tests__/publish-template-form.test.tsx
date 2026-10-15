@@ -10,7 +10,7 @@ import {
   PublishTemplateForm,
   startingDraft,
 } from "@/app/console/orgs/[org]/agents/_components/publish-template-form";
-import type { DelegatedOperator } from "@/app/console/orgs/[org]/agents/_components/control-notice";
+import type { DelegatedOperator } from "@/features/orgs";
 import { enter } from "@/testing/enter";
 import { server } from "@/testing/setup";
 

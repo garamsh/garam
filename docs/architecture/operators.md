@@ -469,17 +469,23 @@ and no operation here grants it. The role defaults are the one
 authoritative for which role holds what.
 
 **Reading what the Operator reports about the organization's
-operators is `operator:read`, and the read itself is unbuilt** until
-garam-agent-operator#357 ships it (#1374). garam's half is built: the
-operation is delegable and mintable like `agent-template:read`, targets
-the organization, names no controller, binds the exact request target
-and is held by every role, because it is the action that lists the
+operators is `operator:read`** (#1374, #1047). The operation is
+delegable and mintable like `agent-template:read`, targets the
+organization, names no controller, binds the exact request target and
+is held by every role, because it is the action that lists the
 operators garam holds. The status belongs to the control service
-(ADR-0077), and the answer the console will read is recorded in that
-service's contract as one entry per operator: its GRN, its images
-(each a name, a reference and, where known, a digest), and
-`reportedAt` and `lastContactAt`. An absent `reportedAt` or
-`lastContactAt` means never reported or never contacted, never now.
+(ADR-0077), which serves it at `GET /v1/orgs/{org}/operators`
+(garam-agent-operator #364 at `ba691a6`, its ADR 0074). The answer
+holds one entry per controller that reached that service:
+- its GRN;
+- its images, each a name, a reference and, where known, a digest;
+- `reportedAt` and `lastContactAt`.
+
+An absent `reportedAt` or `lastContactAt` means never reported or
+never contacted, never now. A service answers only for the controllers
+that reached it, so the console asks every hosted operator whose grant
+carries the read and merges the answers by GRN
+([web-app.md](./web-app.md) §What it serves, Operators).
 
 **The registered control endpoint is where the console sends an
 authority, and only the delegating act moves it.** Each operator may

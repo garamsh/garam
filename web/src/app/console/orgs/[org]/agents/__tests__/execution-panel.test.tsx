@@ -2,8 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import type { DelegatedOperator } from "@/app/console/orgs/[org]/agents/_components/control-notice";
 import { ExecutionPanel } from "@/app/console/orgs/[org]/agents/_components/execution-panel";
+import type { DelegatedOperator } from "@/features/orgs";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { server } from "@/testing/setup";
 

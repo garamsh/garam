@@ -75,14 +75,12 @@ describe("operator page", () => {
     );
   });
 
-  it("says what garam knows of it, and that image and last contact are unbuilt", async () => {
+  it("says what garam knows of it", async () => {
     await renderOperator();
 
     expect(fact("Description")).toHaveTextContent("Runs the batch agents.");
     expect(fact("Signs in with")).toHaveTextContent("Key in use");
     expect(fact("Certificate")).toHaveTextContent("Issued");
-    expect(fact("Image")).toHaveTextContent("Unbuilt");
-    expect(fact("Last contact")).toHaveTextContent("Unbuilt");
     // Registered by a member, named rather than identified.
     expect(fact("Registered")).toHaveTextContent("by Alice");
   });

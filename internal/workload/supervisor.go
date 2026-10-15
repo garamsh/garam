@@ -264,7 +264,7 @@ func (s *Supervisor) supervise(ctx context.Context, in *intent) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = ctl.srv.Close() }()
+	defer ctl.close()
 	for _, r := range roles {
 		err := s.ensure(ctx, in, r, genDir, root)
 		if errors.Is(err, errOver) {

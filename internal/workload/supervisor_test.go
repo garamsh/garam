@@ -151,6 +151,8 @@ type host struct {
 	machineURL string
 	// issuer is garam's message issuer the host names; empty is none.
 	issuer string
+	// latest is the run start began last.
+	latest *running
 }
 
 // testIssuer is garam's message-signing issuer in these tests.
@@ -194,9 +196,16 @@ type running struct {
 	err    error
 }
 
+// start runs the supervisor in the certificate mode.
 func (h *host) start(edit ...func(*workload.Desired)) *running {
 	h.t.Helper()
-	s, err := workload.NewSupervisor(h.engine, h.garam, h.config(edit...))
+	return h.run(h.config(edit...))
+}
+
+// run runs a supervisor under cfg in the background, as the latest run.
+func (h *host) run(cfg workload.Config) *running {
+	h.t.Helper()
+	s, err := workload.NewSupervisor(h.engine, h.garam, cfg)
 	require.NoError(h.t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &running{cancel: cancel, done: make(chan struct{})}
@@ -205,6 +214,7 @@ func (h *host) start(edit ...func(*workload.Desired)) *running {
 		r.err = s.Run(ctx)
 	}()
 	h.t.Cleanup(func() { r.cancel(); <-r.done })
+	h.latest = r
 	return r
 }
 
@@ -239,13 +249,22 @@ func (r *running) result(t *testing.T) error {
 }
 
 // serving waits until a generation's three containers run, and answers
-// them.
+// them. The latest run returning first fails at once with what it
+// returned, since nothing else brings a generation up.
 func (h *host) serving() (runtime, workspace, adapter *stubContainer) {
 	h.t.Helper()
-	require.NoError(h.t, h.engine.await(func() bool {
+	var stopped <-chan struct{}
+	if h.latest != nil {
+		stopped = h.latest.done
+	}
+	err := h.engine.awaitUnless(func() bool {
 		runtime, workspace, adapter = h.live(workload.RoleRuntime), h.live(workload.RoleWorkspace), h.live(workload.RoleAdapter)
 		return runtime != nil && workspace != nil && adapter != nil
-	}))
+	}, stopped)
+	if errors.Is(err, errStopped) {
+		require.NoError(h.t, h.latest.err, "the run returned before serving")
+	}
+	require.NoError(h.t, err)
 	return runtime, workspace, adapter
 }
 

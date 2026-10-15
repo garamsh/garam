@@ -156,8 +156,8 @@ export function ReportedImages({
         {images.map((image) => (
           <li key={image.name} className="flex min-w-0 flex-col">
             <span className="font-mono text-xs wrap-anywhere">
-              <span className="text-muted-foreground">{image.name} </span>
-              {image.ref}
+              <span className="text-muted-foreground">{image.name}</span>{" "}
+              <span>{image.ref}</span>
             </span>
             {withDigest && image.digest !== undefined && (
               <span className="font-mono text-xs wrap-anywhere text-muted-foreground">

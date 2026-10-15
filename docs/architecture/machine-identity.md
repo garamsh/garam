@@ -171,9 +171,13 @@ refusals, and §machineBearer for the alias.
   keeps that wait finite is the exchanges' per-process bound below,
   which counts both forms, so a leaked credential cannot hold off the
   re-issue that answers it.
-- **A transaction waits on tokens in one statement at most, which
-  takes them in `token_hash` order and holds none before it but a token
-  the transaction just wrote** (#1424).
+- **A transaction waits on operator tokens in one statement at most,
+  which takes them in `token_hash` order and holds none before it but a
+  token the transaction just wrote** (#1424). An operator's deletion
+  then waits on the agent tokens naming it too, holding its operator
+  tokens ([agents.md](./agents.md) §Tokens in place of certificates);
+  that cannot cycle, since no holder of an agent token waits on an
+  operator token.
   - A withdrawal's and an immediate rotation's deletion of a key's
     tokens, a re-issue's of the credential's, and a deletion's of every
     token the operator holds or is the audience of are each that

@@ -588,8 +588,9 @@ func TestOperatorLockOrder_TwoMintsSweepingEachOthersExpiredEnrollmentsBothCompl
 // audience's first here, while the exchange held one registration and
 // then waited on the other: each held the registration the other
 // needed next. The deletion now holds every operator's registration in
-// GRN byte order first (000046), and the exchange holds its two in that
-// order, so it waits for the deletion and finds what it named gone.
+// GRN byte order before its cascade, after its agents' execution rows
+// (000047), and the exchange holds its two in that order, so it waits
+// for the deletion and finds what it named gone.
 // With the client first in GRN order the case needs the deletion's
 // order, with the audience first the exchange's.
 func TestOperatorLockOrder_AnOrganizationDeletionAndAnExchangeNamingAnAudienceBothComplete(t *testing.T) {

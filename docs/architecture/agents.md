@@ -239,9 +239,11 @@ it did until G3.
   is an operator the organization registered, so naming more
   audiences widens nothing. A token renews no certificate: an agent
   holding one is minted another by its assignee.
-- **Every statement that may wait on more than one agent token takes
-  them in `token_hash` order** (#1434; `internal/agent`
-  `PostgresStore.MintAccessToken`, `migrations/000047`).
+- **A mint and an operator's deletion each wait on agent tokens in one
+  statement, which takes them in `token_hash` order; an organization's
+  deletion takes them in its cascade's order and waits on none** (#1434;
+  `internal/agent` `PostgresStore.MintAccessToken`,
+  `migrations/000047`).
   - A mint holds the agent's execution row `FOR SHARE`, records its
     token, whose foreign key holds the audience's registration, and
     then deletes in one such statement every token past the two bounds
@@ -253,7 +255,10 @@ it did until G3.
   - Deleting an organization holds its agents' execution rows, then
     its operators' registrations, each in byte order, before its
     cascade: the order a mint takes an execution row and then an
-    audience's registration in.
+    audience's registration in. The cascade then deletes the agents'
+    tokens through `agent_executions` in its own order, and no other
+    writer holds one: a mint holds its agent's execution row, which
+    the deletion already holds.
 - **A token shown to a hosted operator is forwarded, not presented.**
   The assignee may mint one naming the control service as its
   audience; garam accepts it on no route, and the control service

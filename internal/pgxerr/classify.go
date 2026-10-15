@@ -6,7 +6,9 @@
 package pgxerr
 
 import (
+	"context"
 	"errors"
+	"io"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -55,6 +57,7 @@ func IsForeignKeyViolation(err error) bool {
 //	                          not an outage.
 //	P0001 (raise_exception)  → KindFailedPrecondition: a trigger that
 //	                          fires is a system-state refusal.
+//	a lost connection        → KindUnavailable; see [connectionLost].
 //	anything else            → wrapped with op and the chain's kind.
 func Classify(err error, op string, notFound, conflict error) error {
 	if err == nil {
@@ -84,6 +87,25 @@ func Classify(err error, op string, notFound, conflict error) error {
 		case codeRaiseException:
 			return errorx.Wrap(err, op, errorx.KindFailedPrecondition)
 		}
+		return errorx.Wrap(err, op)
+	}
+	if connectionLost(err) {
+		return errorx.Wrap(err, op, errorx.KindUnavailable)
 	}
 	return errorx.Wrap(err, op)
+}
+
+// connectionLost reports whether err is the database becoming
+// unreachable, in the two forms the driver gives it (#1165): a
+// *pgconn.ConnectError, where no connection could be made, and
+// io.ErrUnexpectedEOF, where an established one ended mid-exchange. A
+// chain carrying the caller's context error is the caller ending the
+// call, not an outage, and Classify reaches here only for a chain with
+// no SQLSTATE: a server that answered with one was reachable.
+func connectionLost(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var connectErr *pgconn.ConnectError
+	return errors.As(err, &connectErr) || errors.Is(err, io.ErrUnexpectedEOF)
 }

@@ -374,8 +374,7 @@ func machineKeyMaterial(certFile, keyFile, caKeyFile, serverRootFile string) (ma
 type certificateAuthorities struct{ store ca.Store }
 
 func (c certificateAuthorities) Get(ctx context.Context, subject grn.GRN) ([]byte, error) {
-	authority, err := c.store.Get(ctx,
-		grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, subject.Organization))
+	authority, err := c.store.Get(ctx, grn.Org(subject.Organization))
 	if err != nil {
 		return nil, err
 	}
@@ -390,8 +389,7 @@ func (c certificateAuthorities) Get(ctx context.Context, subject grn.GRN) ([]byt
 type memberGroups struct{ store org.Store }
 
 func (m memberGroups) List(ctx context.Context, subject grn.GRN) ([]grn.GRN, error) {
-	return m.store.ListGroupsByMember(ctx,
-		grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, subject.Organization), subject)
+	return m.store.ListGroupsByMember(ctx, grn.Org(subject.Organization), subject)
 }
 
 // certificates is the certificate authority as the agent domain signs

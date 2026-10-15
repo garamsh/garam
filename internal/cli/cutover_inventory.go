@@ -34,7 +34,7 @@ func newCutoverInventoryCommand() *cobra.Command {
 
 func cutoverInventory(cmd *cobra.Command, slug string) error {
 	ctx := cmd.Context()
-	orgGRN := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	if err := orgGRN.Validate(); err != nil {
 		return errorx.Wrap(err, "org", errorx.KindInvalidArgument)
 	}

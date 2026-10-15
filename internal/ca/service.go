@@ -35,11 +35,6 @@ const (
 	MaxCertificateLifetime = 30 * 24 * time.Hour
 )
 
-// serviceTypeOrg is the GRN service type of an organization. Orgs are
-// root-owned, so an org's identifier is the organization segment of
-// every resource beneath it (ADR-0001).
-const serviceTypeOrg = "org"
-
 // Config holds the CA's security parameters.
 type Config struct {
 	// CertificateLifetime is the longest an issued certificate is valid
@@ -131,11 +126,11 @@ func (s *service) Sign(ctx context.Context, subject grn.GRN, request []byte) (*C
 }
 
 func (s *service) IssuerPEM(ctx context.Context, subject grn.GRN) ([]byte, error) {
-	authority, err := s.store.Get(ctx, orgGRNOf(subject))
+	authority, err := s.store.Get(ctx, grn.Org(subject.Organization))
 	if err != nil {
 		return nil, err
 	}
-	authority, err = ownedBy(authority, orgGRNOf(subject))
+	authority, err = ownedBy(authority, grn.Org(subject.Organization))
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +150,7 @@ func (s *service) sign(ctx context.Context, subject grn.GRN, public *ecdsa.Publi
 	if err != nil {
 		return nil, err
 	}
-	authority, err := s.authorityOf(ctx, orgGRNOf(subject))
+	authority, err := s.authorityOf(ctx, grn.Org(subject.Organization))
 	if err != nil {
 		return nil, err
 	}
@@ -297,12 +292,4 @@ func (s *service) open(ctx context.Context, a *Authority) (*x509.Certificate, *e
 		return nil, nil, errorx.New(errorx.KindInternal, "ca: authority key is not an ecdsa key")
 	}
 	return certificate, key, nil
-}
-
-// orgGRNOf returns the GRN of the organization that owns the subject,
-// whose CA is the only one that may sign for it. A subject whose
-// organization segment would parse into something else never reaches
-// here: Issue validates the subject first.
-func orgGRNOf(subject grn.GRN) grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, subject.Organization)
 }

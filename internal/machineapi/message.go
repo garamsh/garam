@@ -17,12 +17,6 @@ import (
 	"github.com/garamsh/garam/internal/wire"
 )
 
-// serviceTypeOrg is the GRN service type of an organization, kept as a
-// copy for the reason internal/agent keeps one: this surface may not
-// import internal/org, and the consent relation is keyed by the
-// organizations' GRNs.
-const serviceTypeOrg = "org"
-
 // PostMessage stores a message the caller is sending. The sender is
 // what the certificate names, and the recipient is whatever the body
 // says: garam answers once the message is stored and reports a routing
@@ -177,8 +171,7 @@ func (s *Server) consentStands(ctx context.Context, sender, recipient grn.GRN) (
 	// The relation is keyed by the organizations' GRNs, which are
 	// root-owned (ADR-0001).
 	return s.consents.Stands(ctx,
-		grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, sender.Organization),
-		grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, recipient.Organization))
+		grn.Org(sender.Organization), grn.Org(recipient.Organization))
 }
 
 // policyAdmits asks the engine whether sender may post to a recipient
@@ -197,7 +190,10 @@ func (s *Server) policyAdmits(ctx context.Context, sender, recipient grn.GRN) (b
 		Action:        message.ActionSend,
 		SubjectGroups: groups,
 		Statements:    sendingStatements(sender),
-		SubjectOrg:    subjectOrg(sender),
+		// A machine identity is not an org member, so the engine's
+		// half of membership is the org the sender's GRN names
+		// (ADR-0038).
+		SubjectOrg: grn.Org(sender.Organization),
 	})
 	if err != nil {
 		return false, err
@@ -221,14 +217,6 @@ func sendingStatements(sender grn.GRN) []Statement {
 		Action:   []string{message.ActionSend},
 		Resource: []string{"grn:" + sender.Organization + ":*"},
 	}}
-}
-
-// subjectOrg is the GRN of the organization the sender belongs to, the
-// engine's half of the membership the api server reads for human
-// callers (ADR-0038). A machine identity is not an org member, so what
-// the engine sees is the org the sender's GRN already names.
-func subjectOrg(sender grn.GRN) grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, sender.Organization)
 }
 
 // GetMessageStatus answers how far a message the caller sent has got.

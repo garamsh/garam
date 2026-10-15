@@ -121,7 +121,7 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 
 	q := s.q.WithTx(tx)
 	// An organization that is gone holds no definition either.
-	if _, err := q.HoldAgentOrg(ctx, orgGRNOf(agentGRN).String()); err != nil {
+	if _, err := q.HoldAgentOrg(ctx, grn.Org(agentGRN.Organization).String()); err != nil {
 		return nil, pgxerr.Classify(err, "claim", ErrDefinitionNotFound, nil)
 	}
 	row, err := q.LockAgentDefinition(ctx, agentGRN.String())

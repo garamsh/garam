@@ -352,7 +352,9 @@ go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{e
 | `internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
 
 `internal/grn` holds the `GRN` value type with `New`, `Parse`,
-`Validate`, `String` and `IsZero`, and depends on `errorx` only.
+`Validate`, `String` and `IsZero`, and `Org`, the GRN of an
+organization, which ADR-0001 makes root-owned (#1150). It depends on
+`errorx` only.
 
 `internal/errorx` holds the `Kind` enum aligned with gRPC status codes,
 the `Error` interface, and `New` / `Wrap` / `IsKind` / `KindOf`. It has

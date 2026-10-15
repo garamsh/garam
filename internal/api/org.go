@@ -34,7 +34,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Organizations are owned by the reserved root owner (ADR-0001).
-	g := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, id)
+	g := grn.Org(id)
 	o := org.NewOrganization(g, body.Name)
 	if err := s.orgs.CreateOrg(r.Context(), o); err != nil {
 		writeError(w, err)
@@ -348,7 +348,7 @@ func (s *Server) allows(r *http.Request, c *caller, target grn.GRN, action strin
 
 // orgGRN builds the GRN for an org identifier from an API path.
 func orgGRN(slug string) grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, slug)
+	return grn.Org(slug)
 }
 
 func orgToAPI(o *org.Organization) apigen.Organization {

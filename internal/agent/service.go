@@ -8,11 +8,6 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// serviceTypeOrg is the GRN service type of an organization. Orgs are
-// root-owned, so an identity's organization segment is the identifier
-// of the organization that owns it (ADR-0001).
-const serviceTypeOrg = "org"
-
 // Service is what an operator does to the agents it runs — it creates
 // them, obtains the certificates they authenticate with, and reports
 // what it sees of their pods — and what an agent reports about its own
@@ -156,7 +151,7 @@ func (s *service) Create(ctx context.Context, operator grn.GRN) (*Assignment, er
 	if err := operates(operator); err != nil {
 		return nil, err
 	}
-	orgGRN := orgGRNOf(operator)
+	orgGRN := grn.Org(operator.Organization)
 	g, err := NewGRN(orgGRN)
 	if err != nil {
 		return nil, err
@@ -268,10 +263,4 @@ func operates(caller grn.GRN) error {
 		return ErrNotAnOperator
 	}
 	return nil
-}
-
-// orgGRNOf returns the GRN of the organization that owns identity,
-// which is the organization an agent it creates belongs to.
-func orgGRNOf(identity grn.GRN) grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, identity.Organization)
 }

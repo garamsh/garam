@@ -150,10 +150,12 @@ refusals, and §machineBearer for the alias.
   - An issuance, a withdrawal, a credential re-issue and a deletion
     hold it `FOR UPDATE`.
   - Deleting an organization holds every one of its operators' `FOR
-    UPDATE` before its cascade deletes them, by `migrations/000046`'s
-    trigger on `orgs`. An audience is an operator of the client's
-    organization, so the registrations an exchange holds are among
-    them.
+    UPDATE` before its cascade deletes them, by the trigger on `orgs`
+    `migrations/000047` defines, after its agents' execution rows
+    ([agents.md](./agents.md) §Tokens in place of certificates states
+    why). An audience
+    is an operator of the client's organization, so the registrations
+    an exchange holds are among them.
 
   The `FOR KEY SHARE` holders hold it together. Every other pair
   acting for one operator waits on the registration for the first to
@@ -169,9 +171,13 @@ refusals, and §machineBearer for the alias.
   keeps that wait finite is the exchanges' per-process bound below,
   which counts both forms, so a leaked credential cannot hold off the
   re-issue that answers it.
-- **A transaction waits on tokens in one statement at most, which
-  takes them in `token_hash` order and holds none before it but a token
-  the transaction just wrote** (#1424).
+- **A transaction waits on operator tokens in one statement at most,
+  which takes them in `token_hash` order and holds none before it but a
+  token the transaction just wrote** (#1424). An operator's deletion
+  then waits on the agent tokens naming it too, holding its operator
+  tokens ([agents.md](./agents.md) §Tokens in place of certificates);
+  that cannot cycle, since no holder of an agent token waits on an
+  operator token.
   - A withdrawal's and an immediate rotation's deletion of a key's
     tokens, a re-issue's of the credential's, and a deletion's of every
     token the operator holds or is the audience of are each that

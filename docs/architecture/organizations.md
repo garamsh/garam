@@ -60,9 +60,10 @@ definitions and agent templates `internal/agent` owns, the operators
 authority. Through those: a group's and a project's members, a
 policy's versions and attachments, an agent's assignment, and an
 operator's unspent enrollment tokens, its credential and the tokens
-exchanged for it. Before the cascade, `migrations/000046`'s trigger on
-`orgs` holds the operators' registrations in the order
-[machine-identity.md](./machine-identity.md) states.
+exchanged for it. Before the cascade, `migrations/000047`'s trigger on
+`orgs` holds the agents' execution rows and then the operators'
+registrations, in the orders [agents.md](./agents.md) and
+[machine-identity.md](./machine-identity.md) state.
 
 Two of those reach further than one organization. A consent relation
 is a pair, so deleting one organization removes the relation the other

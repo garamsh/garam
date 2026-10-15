@@ -574,10 +574,6 @@ func (q *Queries) LockAgentExecution(ctx context.Context, agentGrn string) (stri
 }
 
 const recordAgentToken = `-- name: RecordAgentToken :exec
-WITH swept AS (
-    DELETE FROM agent_tokens
-    WHERE agent_grn = $3 AND expires_at <= now()
-)
 INSERT INTO agent_tokens (token_hash, serial, agent_grn, assignee_grn, epoch, lineage,
                           audience_grn, issued_at, expires_at)
 VALUES ($1, $2, $3, $4,
@@ -597,8 +593,6 @@ type RecordAgentTokenParams struct {
 	ExpiresAt   pgtype.Timestamptz
 }
 
-// A mint sweeps the agent's expired tokens in the statement that
-// records the new one.
 func (q *Queries) RecordAgentToken(ctx context.Context, arg RecordAgentTokenParams) error {
 	_, err := q.db.Exec(ctx, recordAgentToken,
 		arg.TokenHash,
@@ -807,48 +801,50 @@ func (q *Queries) ShareAgentLineage(ctx context.Context, agentGrn string) (Share
 }
 
 const trimAgentTokens = `-- name: TrimAgentTokens :exec
-DELETE FROM agent_tokens t
-WHERE t.agent_grn = $1
-  AND t.audience_grn IS NOT DISTINCT FROM $2
-  AND t.token_hash NOT IN (
-      SELECT k.token_hash FROM agent_tokens k
-      WHERE k.agent_grn = $1
-        AND k.audience_grn IS NOT DISTINCT FROM $2
-      ORDER BY k.issued_at DESC, k.token_hash DESC
-      LIMIT $3)
+WITH audience_kept AS (
+    SELECT k.token_hash FROM agent_tokens k
+    WHERE k.agent_grn = $1
+      AND k.audience_grn IS NOT DISTINCT FROM $2
+      AND k.expires_at > now()
+    ORDER BY k.issued_at DESC, k.token_hash DESC
+    LIMIT $3
+), kept AS (
+    SELECT k.token_hash FROM agent_tokens k
+    WHERE k.agent_grn = $1 AND k.expires_at > now()
+      AND (k.audience_grn IS DISTINCT FROM $2
+           OR k.token_hash IN (SELECT a.token_hash FROM audience_kept a))
+    ORDER BY k.issued_at DESC, k.token_hash DESC
+    LIMIT $4
+), doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM agent_tokens t
+    WHERE t.agent_grn = $1
+      AND t.token_hash NOT IN (SELECT c.token_hash FROM kept c)
+    ORDER BY t.token_hash
+    FOR UPDATE OF t
+)
+DELETE FROM agent_tokens WHERE token_hash IN (SELECT d.token_hash FROM doomed d)
 `
 
 type TrimAgentTokensParams struct {
-	AgentGrn    string
-	AudienceGrn pgtype.Text
-	Keep        int32
+	AgentGrn        string
+	AudienceGrn     pgtype.Text
+	KeepPerAudience int32
+	KeepInAll       int32
 }
 
-// Keeps an agent's newest tokens for one audience and drops the rest,
-// which bounds what an assignee's mints can write (ADR-0100).
+// Keeps an agent's newest live tokens for the audience just minted
+// for, and its newest live ones in all, which bounds what an
+// assignee's mints can write (ADR-0100), and deletes the rest, the
+// expired ones included, so it is the mint's sweep too. It takes them
+// in token_hash order, as an operator's deletion takes the tokens
+// naming it (000047), and is the one statement of a mint that waits
+// on a token (#1434).
 func (q *Queries) TrimAgentTokens(ctx context.Context, arg TrimAgentTokensParams) error {
-	_, err := q.db.Exec(ctx, trimAgentTokens, arg.AgentGrn, arg.AudienceGrn, arg.Keep)
-	return err
-}
-
-const trimAgentTokensTotal = `-- name: TrimAgentTokensTotal :exec
-DELETE FROM agent_tokens t
-WHERE t.agent_grn = $1
-  AND t.token_hash NOT IN (
-      SELECT k.token_hash FROM agent_tokens k
-      WHERE k.agent_grn = $1
-      ORDER BY k.issued_at DESC, k.token_hash DESC
-      LIMIT $2)
-`
-
-type TrimAgentTokensTotalParams struct {
-	AgentGrn string
-	Keep     int32
-}
-
-// Keeps an agent's newest tokens across every audience, so naming
-// more audiences does not widen what one agent's tokens can occupy.
-func (q *Queries) TrimAgentTokensTotal(ctx context.Context, arg TrimAgentTokensTotalParams) error {
-	_, err := q.db.Exec(ctx, trimAgentTokensTotal, arg.AgentGrn, arg.Keep)
+	_, err := q.db.Exec(ctx, trimAgentTokens,
+		arg.AgentGrn,
+		arg.AudienceGrn,
+		arg.KeepPerAudience,
+		arg.KeepInAll,
+	)
 	return err
 }

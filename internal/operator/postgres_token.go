@@ -86,7 +86,7 @@ func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder
 // row: an issuance or a deletion takes the registration first too, so
 // neither waits on a row the exchange holds while it holds one the
 // exchange needs (#1399). It takes the two in GRN byte order, the
-// order an organization's deletion takes all of them in (000046), so
+// order an organization's deletion takes all of them in (000047), so
 // neither holds one while waiting on the other's (#1424). The token's
 // foreign keys take the same KEY SHARE lock later. A missing client
 // answers refused, a missing audience ErrAudienceInvalid.

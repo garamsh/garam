@@ -177,31 +177,43 @@ SELECT agent_execution_admit(
 -- name: ShareAgentLineage :one
 SELECT mode, lineage FROM agent_executions WHERE agent_grn = $1 FOR SHARE;
 
--- A mint sweeps the agent's expired tokens in the statement that
--- records the new one.
 -- name: RecordAgentToken :exec
-WITH swept AS (
-    DELETE FROM agent_tokens
-    WHERE agent_grn = sqlc.arg('agent_grn') AND expires_at <= now()
-)
 INSERT INTO agent_tokens (token_hash, serial, agent_grn, assignee_grn, epoch, lineage,
                           audience_grn, issued_at, expires_at)
 VALUES (sqlc.arg('token_hash'), sqlc.arg('serial'), sqlc.arg('agent_grn'), sqlc.arg('assignee_grn'),
         sqlc.arg('epoch'), sqlc.narg('lineage'), sqlc.narg('audience_grn'),
         sqlc.arg('issued_at'), sqlc.arg('expires_at'));
 
--- Keeps an agent's newest tokens for one audience and drops the rest,
--- which bounds what an assignee's mints can write (ADR-0100).
+-- Keeps an agent's newest live tokens for the audience just minted
+-- for, and its newest live ones in all, which bounds what an
+-- assignee's mints can write (ADR-0100), and deletes the rest, the
+-- expired ones included, so it is the mint's sweep too. It takes them
+-- in token_hash order, as an operator's deletion takes the tokens
+-- naming it (000047), and is the one statement of a mint that waits
+-- on a token (#1434).
 -- name: TrimAgentTokens :exec
-DELETE FROM agent_tokens t
-WHERE t.agent_grn = sqlc.arg('agent_grn')
-  AND t.audience_grn IS NOT DISTINCT FROM sqlc.narg('audience_grn')
-  AND t.token_hash NOT IN (
-      SELECT k.token_hash FROM agent_tokens k
-      WHERE k.agent_grn = sqlc.arg('agent_grn')
-        AND k.audience_grn IS NOT DISTINCT FROM sqlc.narg('audience_grn')
-      ORDER BY k.issued_at DESC, k.token_hash DESC
-      LIMIT sqlc.arg('keep'));
+WITH audience_kept AS (
+    SELECT k.token_hash FROM agent_tokens k
+    WHERE k.agent_grn = sqlc.arg('agent_grn')
+      AND k.audience_grn IS NOT DISTINCT FROM sqlc.narg('audience_grn')
+      AND k.expires_at > now()
+    ORDER BY k.issued_at DESC, k.token_hash DESC
+    LIMIT sqlc.arg('keep_per_audience')
+), kept AS (
+    SELECT k.token_hash FROM agent_tokens k
+    WHERE k.agent_grn = sqlc.arg('agent_grn') AND k.expires_at > now()
+      AND (k.audience_grn IS DISTINCT FROM sqlc.narg('audience_grn')
+           OR k.token_hash IN (SELECT a.token_hash FROM audience_kept a))
+    ORDER BY k.issued_at DESC, k.token_hash DESC
+    LIMIT sqlc.arg('keep_in_all')
+), doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM agent_tokens t
+    WHERE t.agent_grn = sqlc.arg('agent_grn')
+      AND t.token_hash NOT IN (SELECT c.token_hash FROM kept c)
+    ORDER BY t.token_hash
+    FOR UPDATE OF t
+)
+DELETE FROM agent_tokens WHERE token_hash IN (SELECT d.token_hash FROM doomed d);
 
 -- The read every request presenting an agent token takes (ADR-0100):
 -- the token's row joined to the agent's assignment and execution as
@@ -215,17 +227,6 @@ JOIN agent_assignments a
 JOIN agent_executions e
   ON e.agent_grn = t.agent_grn AND t.lineage IS NOT DISTINCT FROM e.lineage
 WHERE t.token_hash = $1 AND t.expires_at > now();
-
--- Keeps an agent's newest tokens across every audience, so naming
--- more audiences does not widen what one agent's tokens can occupy.
--- name: TrimAgentTokensTotal :exec
-DELETE FROM agent_tokens t
-WHERE t.agent_grn = sqlc.arg('agent_grn')
-  AND t.token_hash NOT IN (
-      SELECT k.token_hash FROM agent_tokens k
-      WHERE k.agent_grn = sqlc.arg('agent_grn')
-      ORDER BY k.issued_at DESC, k.token_hash DESC
-      LIMIT sqlc.arg('keep'));
 
 -- A token as it was minted to be shown to one audience, with no join to
 -- the agent's current state: the execution fence judges that, so a

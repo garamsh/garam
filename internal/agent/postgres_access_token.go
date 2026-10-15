@@ -24,6 +24,11 @@ var (
 // with the epoch and lineage it read, in one transaction. A
 // reassignment or recovery committing after the read waits for the
 // mint; one committing before it is what the mint is decided on.
+//
+// It records the token before deleting any, so the audience's
+// registration, which the insert's foreign key holds, is waited on
+// holding no token another transaction could want; the trim after it
+// is the one statement that waits on tokens (#1434).
 func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *AccessToken) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -88,12 +93,8 @@ func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *
 		return pgxerr.Classify(err, "record agent token", ErrAccessTokenAudience, nil)
 	}
 	if err := q.TrimAgentTokens(ctx, db.TrimAgentTokensParams{
-		AgentGrn: t.Agent.String(), AudienceGrn: audience, Keep: LiveAccessTokensPerAudience,
-	}); err != nil {
-		return pgxerr.Classify(err, "trim agent tokens", nil, nil)
-	}
-	if err := q.TrimAgentTokensTotal(ctx, db.TrimAgentTokensTotalParams{
-		AgentGrn: t.Agent.String(), Keep: LiveAccessTokensPerAgent,
+		AgentGrn: t.Agent.String(), AudienceGrn: audience,
+		KeepPerAudience: LiveAccessTokensPerAudience, KeepInAll: LiveAccessTokensPerAgent,
 	}); err != nil {
 		return pgxerr.Classify(err, "trim agent tokens", nil, nil)
 	}

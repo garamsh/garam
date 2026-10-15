@@ -53,9 +53,9 @@ releases the claim. The release matches only the claim's own
 `accepted_at`, so it undoes no other holder's claim. A registration
 that dies while holding a claim leaves the invitation spent with
 nobody named, which fails closed: an admin issues a new one. One that
-dies after the user was created also leaves an account with a
-password and no membership. That account reaches no organization, and
-its username stays taken.
+dies after the user was created also leaves an account, possibly with
+a password, and no membership. That account reaches no organization,
+and its username stays taken.
 
 **A group or project holds no member another organization owns.** An
 org-owned GRN names its organization in the organization segment

@@ -353,6 +353,27 @@ func TestRegisterPassword_RefusesAUsernameThatIsTakenOrUnusable(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, rec.Code)
 }
 
+// TestRegisterPassword_RefusesAnUnusablePasswordBeforeClaiming holds
+// that a password of the wrong length is refused before the claim, so
+// it never holds the invitation a concurrent valid request could have
+// spent (#1381).
+func TestRegisterPassword_RefusesAnUnusablePasswordBeforeClaiming(t *testing.T) {
+	f := newFixture(t)
+	token := inviteTo(t, f, "acme", "invite-tok")
+
+	for _, password := range []string{"short", strings.Repeat("p", authn.MaxPasswordLength+1)} {
+		rec := f.do(t, "POST", "/auth/password/register", registerBody(token, "alice", password))
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	}
+	assert.Equal(t, 0, f.orgs.claimed(), "neither refusal claimed the invitation")
+
+	// The control: an acceptable password claims it, so the count above
+	// reads claims rather than standing still.
+	rec := f.do(t, "POST", "/auth/password/register", registerBody(token, "alice", registeredPassword))
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, 1, f.orgs.claimed())
+}
+
 // TestRegisterPassword_AFailureAfterTheUserIsCreatedLeavesNothing
 // holds the cleanup a claimed registration owes (#1381): the user it
 // created is deleted and the invitation is released, so a retry with

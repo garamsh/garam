@@ -686,6 +686,78 @@ func TestOrgStore_InvitationClaimIsReleasedOrCompletedOnlyByItsHolder(t *testing
 	assert.Equal(t, 0, countRows(t, p, "SELECT count(*) FROM invitations WHERE token = 'tok-lapsed'"))
 }
 
+// TestOrgStore_AClaimThatLosesARaceIsRefusedAsSpent holds that a claim
+// which matched nothing is answered as spent even when the invitation
+// is live again by the time the store reads why: the holder that beat
+// it released after its own request failed. That is a lost race, an
+// expected conflict, not an internal fault (#1381).
+//
+// The interleaving is forced with locks, each wait read off
+// pg_stat_activity before the next step: a holder's uncommitted claim
+// blocks the store's; a table lock queued behind both makes the
+// store's read wait once its claim has missed; the release commits
+// under that lock, so the read finds the row live. The read is shown
+// to be waiting before the release, so the state it meets is the one
+// the test asked for.
+func TestOrgStore_AClaimThatLosesARaceIsRefusedAsSpent(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := org.NewPostgresStore(p)
+	orgGRN := grnOf("org", "acme")
+	owner := grnOf("user", "ada")
+	require.NoError(t, userpg.New(p).Create(ctx, user.New(owner, "ada")))
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	require.NoError(t, s.CreateInvitation(ctx,
+		org.NewInvitation("tok-1", orgGRN, org.RoleMember, owner, time.Now().UTC().Add(time.Hour))))
+
+	waiting := func(like string) func() bool {
+		return func() bool {
+			return countRows(t, p, `SELECT count(*) FROM pg_stat_activity
+				WHERE datname = current_database() AND wait_event_type = 'Lock'
+				AND query LIKE $1`, like) == 1
+		}
+	}
+
+	holder, err := p.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = holder.Rollback(ctx) }()
+	_, err = holder.Exec(ctx, `UPDATE invitations SET accepted_at = now() WHERE token = 'tok-1'`)
+	require.NoError(t, err)
+
+	lost := make(chan error, 1)
+	go func() {
+		_, err := s.ClaimInvitation(ctx, "tok-1")
+		lost <- err
+	}()
+	require.Eventually(t, waiting("%name: ClaimInvitation%"), 10*time.Second, 10*time.Millisecond,
+		"the store's claim waits on the holder's")
+
+	gate, err := p.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = gate.Rollback(ctx) }()
+	locked := make(chan error, 1)
+	go func() {
+		_, err := gate.Exec(ctx, `LOCK TABLE invitations IN ACCESS EXCLUSIVE MODE`)
+		locked <- err
+	}()
+	require.Eventually(t, waiting("LOCK TABLE invitations%"), 10*time.Second, 10*time.Millisecond,
+		"the table lock queues behind both claims")
+
+	require.NoError(t, holder.Commit(ctx))
+	require.NoError(t, <-locked)
+	require.Eventually(t, waiting("%name: GetInvitation%"), 10*time.Second, 10*time.Millisecond,
+		"the store's claim missed and its read waits on the table lock")
+
+	_, err = gate.Exec(ctx, `UPDATE invitations SET accepted_at = NULL WHERE token = 'tok-1'`)
+	require.NoError(t, err)
+	require.NoError(t, gate.Commit(ctx))
+
+	assert.ErrorIs(t, <-lost, org.ErrInvitationAccepted)
+	live, err := s.GetInvitation(ctx, "tok-1")
+	require.NoError(t, err)
+	assert.False(t, live.Accepted(), "the read met a live invitation")
+}
+
 // TestOrgStore_CreateInvitationPrunesExpiredPending holds that a pending
 // invitation past its expiry is removed rather than merely refused, and
 // that an accepted one that is equally past its expiry stays: it records

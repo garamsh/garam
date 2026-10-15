@@ -63,7 +63,7 @@ func (s *PostgresStore) AcceptInvitation(ctx context.Context, token string, user
 		AcceptedAt: stamp(now),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, unclaimable(ctx, q, token, now)
+		return nil, unclaimable(ctx, q, "accept invitation", token, now)
 	}
 	if err != nil {
 		return nil, pgxerr.Classify(err, "accept invitation", nil, nil)
@@ -98,7 +98,7 @@ func (s *PostgresStore) ClaimInvitation(ctx context.Context, token string) (*Inv
 		Token:     token,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, unclaimable(ctx, s.q, token, now)
+		return nil, unclaimable(ctx, s.q, "claim invitation", token, now)
 	}
 	if err != nil {
 		return nil, pgxerr.Classify(err, "claim invitation", nil, nil)
@@ -138,24 +138,24 @@ func claimRows(n int64, err error, op string) error {
 	return nil
 }
 
-// unclaimable names why the claim on token matched no row: the token
-// is unknown, already accepted, or expired, in that order.
-func unclaimable(ctx context.Context, q *db.Queries, token string, now time.Time) error {
+// unclaimable names why the claim op took on token matched no row: the
+// token is unknown, already spent, or expired, in that order. A row
+// that is live again by the time it is read was spent when the claim
+// ran and released since, by a holder whose own request failed: the
+// claim lost that race and is refused as spent, which is what it met.
+func unclaimable(ctx context.Context, q *db.Queries, op, token string, now time.Time) error {
 	row, err := q.GetInvitation(ctx, token)
 	if err != nil {
-		return pgxerr.Classify(err, "accept invitation", ErrInvitationNotFound, nil)
+		return pgxerr.Classify(err, op, ErrInvitationNotFound, nil)
 	}
 	inv, err := rowToInvitation(row)
 	if err != nil {
 		return err
 	}
-	if inv.Accepted() {
-		return ErrInvitationAccepted
-	}
-	if inv.Expired(now) {
+	if inv.Expired(now) && !inv.Accepted() {
 		return ErrInvitationExpired
 	}
-	return errorx.New(errorx.KindInternal, "invitation claim matched no live row")
+	return ErrInvitationAccepted
 }
 
 func rowToInvitation(row db.Invitation) (*Invitation, error) {

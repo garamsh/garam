@@ -254,3 +254,49 @@ func TestRegisterPassword_TwoRacingRegistrationsCreateOneAccount(t *testing.T) {
 			"round %d: the refused registration created no user", round)
 	}
 }
+
+// TestInvitation_AnAcceptRacingARegistrationAdmitsOne races a signed-in
+// user's accept against a registration on one invitation: one of the
+// two is admitted, the other is refused as spent, and the org gains
+// exactly one member (#1381).
+func TestInvitation_AnAcceptRacingARegistrationAdmitsOne(t *testing.T) {
+	st := newInvitationStack(t)
+	p := st.pool
+	ctx := context.Background()
+	bob := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "bob")
+	require.NoError(t, st.users.Create(ctx, user.New(bob, "bob")))
+	session, err := authn.NewToken()
+	require.NoError(t, err)
+	require.NoError(t, authn.NewPostgresSessionStore(p).Create(ctx, session, authn.NewSession(bob, time.Hour)))
+
+	for round := range raceRounds {
+		orgGRN, token := st.invite(t, fmt.Sprintf("acme-%d", round))
+		accept := httptest.NewRequest(http.MethodPost, "/invitations/"+token+"/accept", nil)
+		accept.AddCookie(&http.Cookie{Name: "garam_session", Value: session})
+		account := fmt.Sprintf("grn:root:default:user:local-dave-%d", round)
+		register := httptest.NewRequest(http.MethodPost, "/auth/password/register", strings.NewReader(
+			fmt.Sprintf(`{"invitationToken":%q,"username":"dave-%d","password":%q}`, token, round, integrationPassword)))
+		register.Header.Set("Content-Type", "application/json")
+
+		a, r := race(st.handler, accept, register)
+		admitted := bob.String()
+		switch {
+		case a.Code == http.StatusOK && r.Code == http.StatusConflict:
+		case r.Code == http.StatusCreated && a.Code == http.StatusConflict:
+			admitted = account
+		default:
+			t.Fatalf("round %d: want one admitted and one 409, got accept %d, register %d (%s | %s)",
+				round, a.Code, r.Code, a.Body, r.Body)
+		}
+		assert.Equal(t, 1, countRows(t, p,
+			"SELECT count(*) FROM org_members WHERE org_grn = $1", orgGRN.String()),
+			"round %d: one member", round)
+		assert.Equal(t, 1, countRows(t, p,
+			"SELECT count(*) FROM invitations WHERE token = $1 AND accepted_by = $2", token, admitted),
+			"round %d: the invitation names who was admitted", round)
+		if admitted == bob.String() {
+			assert.Equal(t, 0, countRows(t, p, "SELECT count(*) FROM users WHERE grn = $1", account),
+				"round %d: the refused registration created no user", round)
+		}
+	}
+}

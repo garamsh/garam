@@ -52,6 +52,12 @@ func (s *Server) RegisterPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	// Refused before the claim, so a password that cannot register
+	// never holds the invitation a valid request could have spent.
+	if err := authn.CheckNewPassword(authn.Password(body.Password)); err != nil {
+		writeError(w, err)
+		return
+	}
 	// The claim spends the invitation before anything is created, so
 	// of two registrations on one token the second creates nothing
 	// (#1381).
@@ -82,9 +88,9 @@ func (s *Server) RegisterPassword(w http.ResponseWriter, r *http.Request) {
 //
 // A process that dies before that cleanup leaves the invitation spent
 // with no acceptor named, which fails closed: an admin issues a new
-// one. If it dies after the user was created, an account with a
-// password and no membership remains. It reaches no organization, and
-// its username stays taken.
+// one. If it dies after the user was created, an account, possibly
+// with a password, and no membership remains. It reaches no
+// organization, and its username stays taken.
 func (s *Server) registerClaimed(r *http.Request, inv *org.Invitation, g grn.GRN, body apigen.PasswordRegistration) (*user.User, *org.Membership, error) {
 	ctx := r.Context()
 	// Derived only once the invitation is claimed, so the cost is spent
@@ -115,7 +121,7 @@ func (s *Server) registerClaimed(r *http.Request, inv *org.Invitation, g grn.GRN
 	return u, m, nil
 }
 
-// abandonAccount deletes a user registration created and could not
+// abandonAccount deletes a user a registration created and could not
 // finish. The credential and membership go with it by cascade.
 func (s *Server) abandonAccount(r *http.Request, g grn.GRN) {
 	ctx := context.WithoutCancel(r.Context())

@@ -99,15 +99,17 @@ func (s *fakeUserStore) ListByGRNs(_ context.Context, grns []grn.GRN) ([]*user.U
 
 // remove drops a user row, leaving memberships that name it
 // unresolvable.
-func (s *fakeUserStore) Delete(_ context.Context, g grn.GRN) error {
-	s.remove(g)
-	return nil
-}
-
 func (s *fakeUserStore) remove(g grn.GRN) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.byID, g.String())
+}
+
+// Delete removes a user, as a registration that could not finish
+// does with the one it created.
+func (s *fakeUserStore) Delete(_ context.Context, g grn.GRN) error {
+	s.remove(g)
+	return nil
 }
 
 // grantRoles replaces the stored user with one carrying the given
@@ -210,6 +212,7 @@ type fakeOrgStore struct {
 	members        map[string]*org.Membership
 	invitations    map[string]*org.Invitation
 	accepted       map[string]bool
+	claims         int
 }
 
 func newFakeOrgStore() *fakeOrgStore {
@@ -562,7 +565,16 @@ func (s *fakeOrgStore) ClaimInvitation(_ context.Context, token string) (*org.In
 		return nil, err
 	}
 	s.accepted[token] = true
+	s.claims++
 	return inv, nil
+}
+
+// claimed reports how many registration claims succeeded, released
+// ones included.
+func (s *fakeOrgStore) claimed() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.claims
 }
 
 func (s *fakeOrgStore) CompleteInvitationClaim(context.Context, *org.Invitation, grn.GRN) error {

@@ -811,3 +811,59 @@ func TestOperatorLockOrder_AnAudiencesDeletionAndAnExchangeHoldingNoTokenItWaits
 		})
 	}
 }
+
+// TestOperatorLockOrder_AnOrganizationDeletionAndARemintSweepingItsEnrollmentsBothComplete
+// is #1424's enrollment sweep against an organization's deletion. A
+// re-mint of an operator with no enrollment row sweeps another
+// operator's expired one and only then, at the insert's foreign key,
+// waits on its own registration. The deletion, holding that
+// registration and parked on a later one, went on to the swept row:
+// each held what the other needed next. The re-mint now holds its
+// registration before the sweep, so it waits for the deletion holding
+// nothing and finds its operator gone.
+func TestOperatorLockOrder_AnOrganizationDeletionAndARemintSweepingItsEnrollmentsBothComplete(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	orgs := org.NewPostgresStore(p)
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	store := operator.NewPostgresStore(p)
+	// Registered in GRN order, which is the heap order the cascade takes
+	// on dev and the order the deletion holds them in with 000046.
+	reminted, _ := registerCredentialed(t, store, "alpha")
+	parkedOn, _ := registerCredentialed(t, store, "bravo")
+	swept, _ := registerCredentialed(t, store, "charlie")
+	var heapOrdered bool
+	require.NoError(t, p.QueryRow(ctx, `SELECT array_agg(grn ORDER BY ctid) = $1 FROM operators`,
+		[]string{reminted.String(), parkedOn.String(), swept.String()}).Scan(&heapOrdered))
+	require.True(t, heapOrdered, "alpha, bravo and charlie sit in the heap in that order")
+	// alpha holds no enrollment row, so its re-mint inserts one; charlie's
+	// has expired, so the re-mint's sweep takes it.
+	_, err := p.Exec(ctx, `DELETE FROM operator_enrollment_tokens WHERE operator_grn = $1`, reminted.String())
+	require.NoError(t, err)
+	_, err = p.Exec(ctx, `UPDATE operator_enrollment_tokens SET expires_at = now() - interval '1 hour' WHERE operator_grn = $1`,
+		swept.String())
+	require.NoError(t, err)
+	require.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM operator_enrollment_tokens WHERE expires_at <= now()`),
+		"charlie's is the one expired token")
+
+	// A holder of bravo's registration, as an exchange of bravo is.
+	parked, err := p.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = parked.Rollback(ctx) }()
+	_, err = parked.Exec(ctx, `SELECT grn FROM operators WHERE grn = $1 FOR KEY SHARE`, parkedOn.String())
+	require.NoError(t, err)
+	deleted := make(chan error, 1)
+	go func() { deleted <- orgs.DeleteOrg(ctx, orgRootGRN("acme")) }()
+	awaitSettled(t, p, 1, returned(deleted))
+	e, err := operator.NewEnrollment(reminted, scopedGRN("acme", "user", "ada"))
+	require.NoError(t, err)
+	minted := make(chan error, 1)
+	go func() { minted <- store.Remint(ctx, e) }()
+	awaitSettled(t, p, 2, returned(deleted), returned(minted))
+	require.NoError(t, parked.Rollback(ctx))
+
+	require.NoError(t, receive(t, deleted), "the organization's deletion completes rather than deadlocking")
+	assert.ErrorIs(t, receive(t, minted), operator.ErrOperatorNotFound,
+		"the re-mint waited for the deletion and found its operator gone")
+	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_enrollment_tokens`))
+}

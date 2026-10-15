@@ -43,7 +43,8 @@ jobs:
   # §Consequences).
   #
   # Neither toolchain is reached except through a Dockerfile, so the
-  # runner's own Docker and make are all this needs.
+  # runner's own Docker and make are all this needs, with the python3
+  # tests/image/web.sh reserves a host port through.
   images:
     runs-on: ubuntu-latest
     steps:

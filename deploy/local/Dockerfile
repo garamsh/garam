@@ -12,7 +12,7 @@
 # Public's copy of Docker's official image, the same digest, because
 # Docker Hub refuses anonymous pulls past a per-IP limit that a CI
 # runner shares with whoever held its address before (#1337).
-FROM public.ecr.aws/docker/library/golang:1.27.2-alpine3.24@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673 AS build
+FROM public.ecr.aws/docker/library/golang:1.27.2-alpine3.24@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS build
 
 WORKDIR /src
 

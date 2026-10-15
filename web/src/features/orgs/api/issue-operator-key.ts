@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import {
+  GaramApiError,
   GaramUnreachableError,
   garamFetchAuthenticated,
   refusal,
@@ -16,10 +17,11 @@ import {
 } from "./operator-keys";
 
 /**
- * What issuing a key has to show: nothing yet, a refusal, no answer, or
- * the key. No answer covers both an outage and a garam that issues no
- * keys because no token endpoint is configured: garam answers the
- * second with 503, which the seam reads as an outage (#1394).
+ * What issuing a key has to show: nothing yet, a refusal, a garam that
+ * issues no keys because no token endpoint is configured, no answer,
+ * or the key. garam refuses the unconfigured case with a reason of its
+ * own (`api/openapi.yaml` `Error.reason`), so it is told apart from an
+ * outage rather than read as one (#1394).
  *
  * The private key is carried in this state because this answer is the
  * only place it exists: garam keeps the public key alone and answers
@@ -30,6 +32,7 @@ import {
 export type IssueOperatorKeyState =
   | { status: "idle" }
   | { status: "error"; message: string }
+  | { status: "unconfigured" }
   | { status: "unavailable" }
   | {
       status: "issued";
@@ -38,6 +41,9 @@ export type IssueOperatorKeyState =
       clientId: string;
       tokenUrl: string;
     };
+
+/** The reason garam refuses a key with where it issues none. */
+const KEY_ISSUANCE_UNCONFIGURED = "key_issuance_unconfigured";
 
 const Schema = z.object({
   org: z.string().min(1),
@@ -81,6 +87,12 @@ export async function issueOperatorKey(
   } catch (error) {
     if (error instanceof GaramUnreachableError) {
       return { status: "unavailable" };
+    }
+    if (
+      error instanceof GaramApiError &&
+      error.reason?.code === KEY_ISSUANCE_UNCONFIGURED
+    ) {
+      return { status: "unconfigured" };
     }
     return refusal(error);
   }

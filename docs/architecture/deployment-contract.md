@@ -137,8 +137,9 @@ this chart), and no deployment has adopted the workflow below.
   `serve machine`, and keep it for the deployment's life: every
   assertion names it as its audience byte for byte, and changing it
   refuses every Operator until each is given the new value. Unset,
-  `serve api` issues no key and `serve machine` answers the exchange
-  503. It is not `GARAM_MACHINE_ISSUER`, the message issuer.
+  `serve api` issues no key, refusing with 409 and the reason
+  `key_issuance_unconfigured`, and `serve machine` answers the
+  exchange 503. It is not `GARAM_MACHINE_ISSUER`, the message issuer.
 
 - Place each controller/control-service private key in its own
   owner-only file via the deployment's secret mechanism, never in

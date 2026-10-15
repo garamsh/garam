@@ -99,6 +99,13 @@ function currentStep() {
     .find((item) => item.getAttribute("aria-current") === "step");
 }
 
+/** Answers every key issuance for field-one with `answer`. */
+function answerIssuance(answer: () => Response) {
+  server.use(
+    http.post(`${API_URL}/orgs/acme/operators/field-one/keys`, answer),
+  );
+}
+
 describe("connect wizard", () => {
   it("issues a first key, shows its private half once, and moves on to placing it", async () => {
     const posted = recordIssuances();
@@ -134,13 +141,16 @@ describe("connect wizard", () => {
     ).toHaveTextContent(CLIENT_ID);
   });
 
-  it("says garam couldn't issue a key, naming both causes, when it answers 503", async () => {
-    server.use(
-      http.post(`${API_URL}/orgs/acme/operators/field-one/keys`, () =>
-        HttpResponse.json(
-          { kind: "unavailable", message: "GARAM_MACHINE_TOKEN_URL is unset" },
-          { status: 503 },
-        ),
+  it("says this garam issues no keys when it refuses with key_issuance_unconfigured", async () => {
+    answerIssuance(() =>
+      HttpResponse.json(
+        {
+          kind: "failed_precondition",
+          message:
+            "no operator key is issued: GARAM_MACHINE_TOKEN_URL is unset",
+          reason: "key_issuance_unconfigured",
+        },
+        { status: 409 },
       ),
     );
     const user = userEvent.setup();
@@ -149,18 +159,64 @@ describe("connect wizard", () => {
     await user.click(screen.getByRole("button", { name: "Issue key" }));
 
     expect(
-      await screen.findByText("garam couldn't issue a key"),
+      await screen.findByText("This garam doesn't issue operator keys"),
     ).toBeInTheDocument();
-    // Presence: the sentence names the outage and the configuration
-    // both, since the seam cannot tell them apart (#1394).
-    expect(
-      screen.getByText(/isn.t\s+configured to issue keys/),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/GARAM_MACHINE_TOKEN_URL/),
-    ).not.toBeInTheDocument();
+    // The control: it is not read as an outage.
+    expect(screen.queryByText("garam couldn't issue a key")).toBeNull();
+    expect(screen.queryByText(/no operator key is issued/)).toBeNull();
     expect(currentStep()).toHaveTextContent("Issue a key");
   });
+
+  it("reads a 409 without that reason as the refusal it is, not as unconfigured", async () => {
+    answerIssuance(() =>
+      HttpResponse.json(
+        {
+          kind: "failed_precondition",
+          message: "operator holds two live keys",
+        },
+        { status: 409 },
+      ),
+    );
+    const user = userEvent.setup();
+    render(wizard("issue"));
+
+    await user.click(screen.getByRole("button", { name: "Issue key" }));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(
+      screen.queryByText("This garam doesn't issue operator keys"),
+    ).toBeNull();
+  });
+
+  it.each([
+    [
+      "a bare 503",
+      () =>
+        HttpResponse.json(
+          { kind: "unavailable", message: "internal error" },
+          { status: 503 },
+        ),
+    ],
+    ["a failed connection", () => HttpResponse.error()],
+  ])(
+    "says garam couldn't be reached on %s, not that it issues no keys",
+    async (_, answer) => {
+      answerIssuance(answer);
+      const user = userEvent.setup();
+      render(wizard("issue"));
+
+      await user.click(screen.getByRole("button", { name: "Issue key" }));
+
+      expect(
+        await screen.findByText("garam couldn't issue a key"),
+      ).toBeInTheDocument();
+      // The control: the outage is not read as a garam with no keys.
+      expect(
+        screen.queryByText("This garam doesn't issue operator keys"),
+      ).toBeNull();
+      expect(currentStep()).toHaveTextContent("Issue a key");
+    },
+  );
 
   it("rotates beside a live key by default, and replaces it only once confirmed", async () => {
     const posted = recordIssuances();

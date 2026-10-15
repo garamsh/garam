@@ -87,11 +87,25 @@ const MaxAssertionLength = 8 << 10
 // which registrations or keys exist.
 var ErrClientInvalid = errorx.New(errorx.KindUnauthenticated, "client authentication failed")
 
-// ErrAssertionProfileUnavailable refuses the exchange and key issuance
-// where no token endpoint URL is configured: no assertion can name an
-// audience garam would accept (ADR-0102).
+// ErrAssertionProfileUnavailable refuses the exchange where no token
+// endpoint URL is configured: no assertion can name an audience garam
+// would accept (ADR-0102).
 var ErrAssertionProfileUnavailable = errorx.New(errorx.KindUnavailable,
 	"the private_key_jwt profile is not configured: GARAM_MACHINE_TOKEN_URL is unset")
+
+// ReasonKeyIssuanceUnconfigured is the reason a key issuance refusal
+// carries where no token endpoint URL is configured (api/openapi.yaml
+// `Error.reason`).
+const ReasonKeyIssuanceUnconfigured = "key_issuance_unconfigured"
+
+// ErrKeyIssuanceUnconfigured refuses issuing a key where no token
+// endpoint URL is configured. It is a standing state of the deployment
+// rather than a fault, so it is a failed precondition, and its reason
+// tells it apart from the route's other 409s.
+var ErrKeyIssuanceUnconfigured = errorx.NewWithReason(
+	errorx.KindFailedPrecondition,
+	errorx.Reason{Code: ReasonKeyIssuanceUnconfigured},
+	"no operator key is issued: GARAM_MACHINE_TOKEN_URL is unset")
 
 // ParseTokenEndpoint reads the configured token endpoint URL: empty,
 // which serves no assertion exchange, or an absolute https URL with a

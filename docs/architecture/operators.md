@@ -317,7 +317,10 @@ single-mode cutover is its own repository's (Operator ADR-0068).
   `GARAM_MACHINE_ISSUER`, ADR-0101's message issuer, would couple two
   contracts, and the Operator dials garam at an address that need not
   be its public origin, so it cannot derive `aud` from the address.
-  Unset, no key is issued and the exchange answers 503
+  Unset, no key is issued: issuing one is refused with 409
+  `failed_precondition` and the reason `key_issuance_unconfigured`,
+  since the state holds until the deployment sets the URL rather than
+  being a fault (#1394), and the exchange answers 503
   ([deployment-contract.md](./deployment-contract.md) §Operator key
   and enrollment rollout).
 - **Planned rotation holds two live keys.** The predecessor reads

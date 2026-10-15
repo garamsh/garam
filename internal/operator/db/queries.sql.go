@@ -326,9 +326,10 @@ SELECT grn FROM operators WHERE grn = $1 FOR KEY SHARE
 // key or credential and the tokens, the order an issuance or a deletion
 // takes them in, so neither waits on the other while holding what the
 // other needs (#1399). It holds the two in GRN byte order, as an
-// organization's deletion holds all of them (#1424). KEY SHARE is the lock the token's foreign keys
-// take anyway: it waits for an issuance or a deletion of the operator,
-// and for nothing else.
+// organization's deletion holds all of them (#1424). KEY SHARE is the
+// lock the token's foreign keys take anyway: it waits for an issuance
+// or a deletion of the operator, and for nothing else. A re-mint holds
+// it too, before its sweep.
 func (q *Queries) HoldOperatorRegistration(ctx context.Context, grn string) (string, error) {
 	row := q.db.QueryRow(ctx, holdOperatorRegistration, grn)
 	var grn_2 string
@@ -600,7 +601,7 @@ type MintOperatorEnrollmentParams struct {
 // invitation sweeps its own table: a row is written in one place, so
 // sweeping there keeps the table proportional to what is live. The
 // sweep skips a row another transaction holds, which a later sweep
-// takes, so the one row a mint waits on is its own operator's (#1424).
+// takes, so a mint waits on no other operator's row (#1424).
 //
 // The upsert is what makes a re-mint leave one live token (ADR-0067),
 // and the unique key it arbitrates on (000024) is what makes two

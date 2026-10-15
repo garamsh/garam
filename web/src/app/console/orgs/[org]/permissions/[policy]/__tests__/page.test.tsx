@@ -295,15 +295,24 @@ describe("policy page", () => {
     );
     const user = userEvent.setup();
     await renderPolicy();
+    const activate = screen.getByRole("button", { name: "Activate" });
+    // The header: the smallest element holding the policy's name and the
+    // control that activates it. The wait below reads only this, so each
+    // of its checks stays cheap on a page this large.
+    let header = screen.getByRole("heading", { level: 1 }).parentElement;
+    while (header !== null && !header.contains(activate)) {
+      header = header.parentElement;
+    }
+    if (header === null) throw new Error("no header holds Activate");
 
-    await user.click(screen.getByRole("button", { name: "Activate" }));
+    await user.click(activate);
     const dialog = await screen.findByRole("alertdialog");
     await user.click(
       within(dialog).getByRole("button", { name: "Activate policy" }),
     );
 
     expect(
-      await screen.findByText("Activated: v1 takes part in checks."),
+      await within(header).findByText("Activated: v1 takes part in checks."),
     ).toBeInTheDocument();
   });
 });

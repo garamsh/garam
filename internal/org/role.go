@@ -102,7 +102,7 @@ const (
 	// Reading the agents an org holds and watching one work. The org
 	// owns the constants for the reason it owns the policy ones: the
 	// api server enforces them, and internal/agent does not import
-	// this package — it keeps its own copy of the org service type
+	// this package — it derives an org's GRN through internal/grn
 	// rather than depend on it.
 	ActionAgentRead = "agent:read"
 	// ActionAgentWatch is watching an agent work (ADR-0022). Reading an

@@ -346,13 +346,16 @@ go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{e
 | `internal/errorx` | 9 — every domain | earns its place |
 | `internal/grn` | 9 — every domain | earns its place |
 | `internal/pgxerr` | 8 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` | earns its place |
+| `internal/pgxtype` | 8 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` | earns its place |
 | `internal/listfilter` | 2 — `org` `agent` | under the threshold; placed by ADR-0052 and not by the count |
 | `internal/wire` | 1 — `authz` | permitted by the wire-format carve-out, not by the count |
 | `internal/keyfile` | 1 — `ca` | under the threshold; belongs with the domain that owns it |
 | `internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
 
 `internal/grn` holds the `GRN` value type with `New`, `Parse`,
-`Validate`, `String` and `IsZero`, and depends on `errorx` only.
+`Validate`, `String` and `IsZero`, and `Org`, the GRN of an
+organization, which ADR-0001 makes root-owned (#1150). It depends on
+`errorx` only.
 
 `internal/errorx` holds the `Kind` enum aligned with gRPC status codes,
 the `Error` interface, and `New` / `Wrap` / `IsKind` / `KindOf`. It has
@@ -375,6 +378,14 @@ identity, the ninth domain, persists nothing and has no store. The watch
 boundary's store answers through it as well and is not a domain, which
 is why the query above names nine importers where the column counts
 eight.
+
+`internal/pgxtype` holds the timestamptz conversion the stores bind and
+scan: `Timestamptz` makes a present value of a `time.Time`, and `Time`
+reads one back as stored, nil where it is NULL. Every postgres-backed
+store binds through it, which is the same eight domains and the watch
+boundary `internal/pgxerr` counts; each had declared its own copy
+(#1150). It is a wire format and chooses no behaviour, so it is a
+package of its own rather than part of `pgxerr`, which is errors.
 
 `internal/listfilter` holds `Filter`, an offset and a limit where a
 limit of 0 means no limit, and `Parse`, which builds one from what a

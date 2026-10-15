@@ -128,7 +128,7 @@ func orgGRNOf(object grn.GRN) grn.GRN {
 	if object.ServiceType == serviceTypeOrg {
 		return object
 	}
-	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, object.Organization)
+	return grn.Org(object.Organization)
 }
 
 // checkInput is a parsed Check, CheckCurrent or Explain request.

@@ -45,7 +45,7 @@ func NewProofService(grants GrantStore, assignments AssignmentReader, policy Aud
 }
 
 func (s *proofService) Prove(ctx context.Context, audience, controller grn.GRN, agent *grn.GRN) (*ControllerProof, error) {
-	org := grn.New(grn.RootOwner, grn.DefaultProject, orgServiceType, audience.Organization)
+	org := grn.Org(audience.Organization)
 	grant, err := s.grants.CurrentGrant(ctx, org, audience)
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		return nil, ErrControllerNotDelegated

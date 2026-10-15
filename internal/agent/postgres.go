@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"time"
-
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -23,11 +21,6 @@ var _ Store = (*PostgresStore)(nil)
 // NewPostgresStore constructs a Postgres-backed Store.
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 	return &PostgresStore{pool: pool, q: db.New(pool)}
-}
-
-// stamp converts a time.Time to a valid pgtype.Timestamptz.
-func stamp(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
 // limit converts a list filter's limit: 0 means "no limit" (SQL NULL).

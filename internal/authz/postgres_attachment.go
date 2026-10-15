@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -17,7 +18,7 @@ func (s *PostgresStore) AttachPolicy(ctx context.Context, policyGRN, subjectGRN 
 	row, err := s.q.AttachPolicy(ctx, db.AttachPolicyParams{
 		PolicyGrn:  policyGRN.String(),
 		SubjectGrn: subjectGRN.String(),
-		CreatedAt:  stamp(time.Now().UTC()),
+		CreatedAt:  pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "attach policy", ErrPolicyNotFound, ErrAttachmentAlreadyExists)

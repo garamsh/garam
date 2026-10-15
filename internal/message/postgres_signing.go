@@ -10,6 +10,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/message/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Compile-time check that PostgresStore holds the signing keys too.
@@ -53,7 +54,7 @@ func (s *PostgresStore) RotateSigningKeys(ctx context.Context, prepare func(keys
 			ID:               string(key.ID),
 			PublicKey:        key.PublicKey,
 			SealedPrivateKey: key.SealedPrivateKey,
-			SignsFrom:        stamp(now.Add(key.Lead)),
+			SignsFrom:        pgxtype.Timestamptz(now.Add(key.Lead)),
 		})
 		return pgxerr.Classify(err, "insert signing key", nil, nil)
 	})

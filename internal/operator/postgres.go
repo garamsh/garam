@@ -2,7 +2,6 @@ package operator
 
 import (
 	"context"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,6 +10,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // PostgresStore implements Store against PostgreSQL. The queries are
@@ -46,7 +46,7 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 		Grn:          o.grn.String(),
 		OrgGrn:       o.orgGRN.String(),
 		RegisteredBy: o.registeredBy.String(),
-		CreatedAt:    stamp(o.createdAt),
+		CreatedAt:    pgxtype.Timestamptz(o.createdAt),
 		Name:         o.Name,
 		Description:  o.Description,
 	}); err != nil {
@@ -56,8 +56,8 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 		TokenHash:   e.TokenHash(),
 		OperatorGrn: e.operator.String(),
 		MintedBy:    e.mintedBy.String(),
-		MintedAt:    stamp(e.mintedAt),
-		ExpiresAt:   stamp(e.expiresAt),
+		MintedAt:    pgxtype.Timestamptz(e.mintedAt),
+		ExpiresAt:   pgxtype.Timestamptz(e.expiresAt),
 	}); err != nil {
 		return nil, pgxerr.Classify(err, "mint enrollment token", nil, nil)
 	}
@@ -126,8 +126,8 @@ func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
 		TokenHash:   e.TokenHash(),
 		OperatorGrn: e.operator.String(),
 		MintedBy:    e.mintedBy.String(),
-		MintedAt:    stamp(e.mintedAt),
-		ExpiresAt:   stamp(e.expiresAt),
+		MintedAt:    pgxtype.Timestamptz(e.mintedAt),
+		ExpiresAt:   pgxtype.Timestamptz(e.expiresAt),
 	}); err != nil {
 		return pgxerr.Classify(err, "mint enrollment token", nil, nil)
 	}
@@ -178,7 +178,7 @@ func credentialParams(c *IssuedCredential) db.InsertOperatorCredentialParams {
 		OperatorGrn:    c.operator.String(),
 		CredentialHash: c.Hash(),
 		IssuedBy:       c.issuedBy.String(),
-		IssuedAt:       stamp(c.issuedAt),
+		IssuedAt:       pgxtype.Timestamptz(c.issuedAt),
 	}
 }
 
@@ -396,9 +396,4 @@ func optionalText(s *string) pgtype.Text {
 		return pgtype.Text{}
 	}
 	return pgtype.Text{String: *s, Valid: true}
-}
-
-// stamp converts a time.Time to a valid pgtype.Timestamptz.
-func stamp(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
 }

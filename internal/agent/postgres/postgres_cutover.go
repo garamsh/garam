@@ -7,12 +7,12 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/agent/postgres/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // inSnapshot runs fn in one read-only repeatable-read transaction, so
@@ -192,7 +192,7 @@ func (s *Store) Freeze(ctx context.Context, req agent.FreezeRequest) (*agent.Cut
 			AudienceGrn:  req.Audience.String(),
 			GrantID:      req.GrantID,
 			OperationRef: req.OperationRef,
-			CreatedAt:    stamp(now),
+			CreatedAt:    pgxtype.Timestamptz(now),
 		})
 		if err != nil {
 			return storageError(err, "insert cutover", nil, agent.ErrCutoverAttemptOpen)
@@ -226,7 +226,7 @@ func (s *Store) Switch(ctx context.Context, req agent.CutoverRequest) (*agent.Cu
 			return agent.ErrCutoverAttemptEnded
 		}
 		row, err := q.SwitchCutover(ctx, db.SwitchCutoverParams{
-			AgentGrn: req.Agent.String(), ImportID: string(req.ImportID), SwitchedAt: stamp(now),
+			AgentGrn: req.Agent.String(), ImportID: string(req.ImportID), SwitchedAt: pgxtype.Timestamptz(now),
 		})
 		if err != nil {
 			return storageError(err, "switch cutover", nil, nil)
@@ -258,7 +258,7 @@ func (s *Store) RollBack(ctx context.Context, req agent.CutoverRequest) (*agent.
 			return agent.ErrReverseMigrationRequired
 		}
 		row, err := q.RollBackCutover(ctx, db.RollBackCutoverParams{
-			AgentGrn: req.Agent.String(), ImportID: string(req.ImportID), EndedAt: stamp(now),
+			AgentGrn: req.Agent.String(), ImportID: string(req.ImportID), EndedAt: pgxtype.Timestamptz(now),
 		})
 		if err != nil {
 			return storageError(err, "roll back cutover", nil, nil)
@@ -315,17 +315,9 @@ func attemptOf(row db.AgentCutover) (*agent.CutoverAttempt, error) {
 		ImportID:   agent.ImportID(row.ImportID),
 		Stage:      stage,
 		CreatedAt:  row.CreatedAt.Time,
-		SwitchedAt: optionalTime(row.SwitchedAt),
-		EndedAt:    optionalTime(row.EndedAt),
+		SwitchedAt: pgxtype.Time(row.SwitchedAt),
+		EndedAt:    pgxtype.Time(row.EndedAt),
 	}
 	copy(a.FrozenDigest[:], row.FrozenDigest)
 	return a, nil
-}
-
-func optionalTime(t pgtype.Timestamptz) *time.Time {
-	if !t.Valid {
-		return nil
-	}
-	v := t.Time
-	return &v
 }

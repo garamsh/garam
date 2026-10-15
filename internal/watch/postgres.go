@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 	"github.com/garamsh/garam/internal/watch/db"
 )
 
@@ -152,8 +153,8 @@ func (r *PostgresRelay) Announce(ctx context.Context, agent grn.GRN, e Event, fe
 		AgentGrn:  fence.Agent.String(),
 		TokenHash: fence.TokenHash,
 		Serial:    fence.Serial,
-		NotBefore: pgtype.Timestamptz{Time: fence.NotBefore, Valid: true},
-		NotAfter:  pgtype.Timestamptz{Time: fence.NotAfter, Valid: true},
+		NotBefore: pgxtype.Timestamptz(fence.NotBefore),
+		NotAfter:  pgxtype.Timestamptz(fence.NotAfter),
 	})
 	if err != nil {
 		return errorx.Wrap(err, "watch relay: admit", errorx.KindUnavailable)

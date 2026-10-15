@@ -7,6 +7,7 @@ import (
 	"github.com/garamsh/garam/internal/agent/postgres/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Compile-time check that Store satisfies agent.SupervisorTokenStore.
@@ -33,7 +34,7 @@ func (s *Store) RecordSupervisorToken(ctx context.Context, holder agent.Supervis
 			return storageError(err, "hold supervisor credential", agent.ErrSupervisorCredentialInvalid, nil)
 		}
 		if err := q.RecordSupervisorToken(ctx, db.RecordSupervisorTokenParams{
-			TokenHash: t.Hash(), CredentialID: holder.ID, IssuedAt: stamp(t.IssuedAt), ExpiresAt: stamp(t.ExpiresAt),
+			TokenHash: t.Hash(), CredentialID: holder.ID, IssuedAt: pgxtype.Timestamptz(t.IssuedAt), ExpiresAt: pgxtype.Timestamptz(t.ExpiresAt),
 		}); err != nil {
 			return storageError(err, "record supervisor token", nil, nil)
 		}

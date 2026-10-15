@@ -17,6 +17,10 @@ func TestNewAndString(t *testing.T) {
 	assert.Equal(t, "grn:garam:default:user:alice", g.String())
 }
 
+func TestOrg(t *testing.T) {
+	assert.Equal(t, "grn:root:default:org:acme", grn.Org("acme").String())
+}
+
 func TestIsZero(t *testing.T) {
 	assert.True(t, grn.GRN{}.IsZero())
 	assert.False(t, grn.New("garam", "default", "user", "alice").IsZero())

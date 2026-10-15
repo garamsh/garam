@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Compile-time check that PostgresStore satisfies TokenStore.
@@ -63,8 +64,8 @@ func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder
 				CredentialID: holder.ID,
 				OperatorGrn:  holder.Operator.String(),
 				AudienceGrn:  audience,
-				IssuedAt:     stamp(t.IssuedAt),
-				ExpiresAt:    stamp(t.ExpiresAt),
+				IssuedAt:     pgxtype.Timestamptz(t.IssuedAt),
+				ExpiresAt:    pgxtype.Timestamptz(t.ExpiresAt),
 			})
 		},
 		func() error {

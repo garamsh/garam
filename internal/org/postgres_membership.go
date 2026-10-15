@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // AddMember persists a new org Membership.
@@ -16,7 +17,7 @@ func (s *PostgresStore) AddMember(ctx context.Context, m *Membership) error {
 		OrgGrn:    m.orgGRN.String(),
 		UserGrn:   m.userGRN.String(),
 		Role:      string(m.role),
-		CreatedAt: stamp(m.createdAt),
+		CreatedAt: pgxtype.Timestamptz(m.createdAt),
 	})
 	return pgxerr.Classify(err, "add member", nil, ErrMemberAlreadyExists)
 }

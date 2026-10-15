@@ -235,7 +235,7 @@ func TestService_CreateAssignsTheAgentToTheCallingOperator(t *testing.T) {
 	assert.Equal(t, ServiceType, created.ServiceType)
 	stored, err := store.Get(ctx, created)
 	require.NoError(t, err)
-	assert.Equal(t, grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, "acme"), stored.Organization())
+	assert.Equal(t, grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme"), stored.Organization())
 	assert.Equal(t, ProvisioningStatePending, stored.ProvisioningState())
 
 	second, err := svc.Create(ctx, operator)
@@ -270,7 +270,7 @@ func TestService_IssueCertificateAnswersOnlyForAnAgentTheOperatorHolds(t *testin
 
 	// An agent of the organization that nobody was assigned: the
 	// relation is what answers, not the row's existence.
-	unassignedOrg := grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, "acme")
+	unassignedOrg := grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme")
 	unassignedGRN, err := NewGRN(unassignedOrg)
 	require.NoError(t, err)
 	unassigned, err := New(unassignedGRN, unassignedOrg)
@@ -501,7 +501,7 @@ func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T
 // console wrote one before garam stopped accepting them (ADR-0090).
 func define(t *testing.T, store *memoryStore, operator grn.GRN, values Values) *Definition {
 	t.Helper()
-	d, err := NewDefinition(orgGRNOf(operator), operator, "field agent", values,
+	d, err := NewDefinition(grn.Org(operator.Organization), operator, "field agent", values,
 		grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada"))
 	require.NoError(t, err)
 	store.keepDefinition(d)

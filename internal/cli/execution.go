@@ -68,7 +68,7 @@ func (a lifecycleAuthorization) Authorize(ctx context.Context, caller, agentGRN,
 	if caller.Organization != agentGRN.Organization {
 		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "the caller holds no lifecycle authority over this agent")
 	}
-	orgGRN := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, agentGRN.Organization)
+	orgGRN := grn.Org(agentGRN.Organization)
 	var (
 		grant agent.Grant
 		err   error

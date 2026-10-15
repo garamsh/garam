@@ -9,6 +9,7 @@ import (
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // CreateProject persists a new Project.
@@ -19,8 +20,8 @@ func (s *PostgresStore) CreateProject(ctx context.Context, p *Project) error {
 		Name:      p.name,
 		Roles:     strs(p.roles),
 		Policies:  strs(p.policies),
-		CreatedAt: stamp(p.createdAt),
-		UpdatedAt: stamp(p.updatedAt),
+		CreatedAt: pgxtype.Timestamptz(p.createdAt),
+		UpdatedAt: pgxtype.Timestamptz(p.updatedAt),
 	})
 	return pgxerr.Classify(err, "create project", nil, nil)
 }
@@ -63,7 +64,7 @@ func (s *PostgresStore) UpdateProject(ctx context.Context, g grn.GRN, p ProjectP
 		Name:      text(p.Name),
 		Roles:     p.Roles,
 		Policies:  p.Policies,
-		UpdatedAt: stamp(time.Now().UTC()),
+		UpdatedAt: pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "update project", ErrProjectNotFound, nil)

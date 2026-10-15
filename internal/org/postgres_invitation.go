@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // CreateInvitation persists a new pending Invitation, and deletes the
@@ -23,8 +24,8 @@ func (s *PostgresStore) CreateInvitation(ctx context.Context, inv *Invitation) e
 		OrgGrn:    inv.orgGRN.String(),
 		Role:      string(inv.role),
 		CreatedBy: inv.createdBy.String(),
-		CreatedAt: stamp(inv.createdAt),
-		ExpiresAt: stamp(inv.expiresAt),
+		CreatedAt: pgxtype.Timestamptz(inv.createdAt),
+		ExpiresAt: pgxtype.Timestamptz(inv.expiresAt),
 	})
 	return pgxerr.Classify(err, "create invitation", nil, nil)
 }
@@ -60,7 +61,7 @@ func (s *PostgresStore) AcceptInvitation(ctx context.Context, token string, user
 	row, err := q.AcceptInvitation(ctx, db.AcceptInvitationParams{
 		Token:      token,
 		AcceptedBy: pgtype.Text{String: userGRN.String(), Valid: true},
-		AcceptedAt: stamp(now),
+		AcceptedAt: pgxtype.Timestamptz(now),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, unclaimable(ctx, q, "accept invitation", token, now)
@@ -77,7 +78,7 @@ func (s *PostgresStore) AcceptInvitation(ctx context.Context, token string, user
 		OrgGrn:    m.orgGRN.String(),
 		UserGrn:   m.userGRN.String(),
 		Role:      string(m.role),
-		CreatedAt: stamp(m.createdAt),
+		CreatedAt: pgxtype.Timestamptz(m.createdAt),
 	}); err != nil {
 		return nil, pgxerr.Classify(err, "add member", nil, ErrMemberAlreadyExists)
 	}
@@ -94,7 +95,7 @@ func (s *PostgresStore) AcceptInvitation(ctx context.Context, token string, user
 func (s *PostgresStore) ClaimInvitation(ctx context.Context, token string) (*Invitation, error) {
 	now := time.Now().UTC()
 	row, err := s.q.ClaimInvitation(ctx, db.ClaimInvitationParams{
-		ClaimedAt: stamp(now),
+		ClaimedAt: pgxtype.Timestamptz(now),
 		Token:     token,
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -112,7 +113,7 @@ func (s *PostgresStore) CompleteInvitationClaim(ctx context.Context, inv *Invita
 	n, err := s.q.CompleteInvitationClaim(ctx, db.CompleteInvitationClaimParams{
 		AcceptedBy: pgtype.Text{String: userGRN.String(), Valid: true},
 		Token:      inv.token,
-		ClaimedAt:  stamp(inv.acceptedAt),
+		ClaimedAt:  pgxtype.Timestamptz(inv.acceptedAt),
 	})
 	return claimRows(n, err, "complete invitation claim")
 }
@@ -121,7 +122,7 @@ func (s *PostgresStore) CompleteInvitationClaim(ctx context.Context, inv *Invita
 func (s *PostgresStore) ReleaseInvitationClaim(ctx context.Context, inv *Invitation) error {
 	n, err := s.q.ReleaseInvitationClaim(ctx, db.ReleaseInvitationClaimParams{
 		Token:     inv.token,
-		ClaimedAt: stamp(inv.acceptedAt),
+		ClaimedAt: pgxtype.Timestamptz(inv.acceptedAt),
 	})
 	return claimRows(n, err, "release invitation claim")
 }

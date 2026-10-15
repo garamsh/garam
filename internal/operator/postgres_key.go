@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // IssueKey records the key under the registration's row lock, so two
@@ -77,7 +78,7 @@ func (s *PostgresStore) IssueKey(ctx context.Context, k *IssuedKey, rotation Key
 		Algorithm:   KeyAlgorithm,
 		PublicJwk:   jwk,
 		IssuedBy:    k.issuedBy.String(),
-		IssuedAt:    stamp(k.issuedAt),
+		IssuedAt:    pgxtype.Timestamptz(k.issuedAt),
 	})
 	if err != nil {
 		return Key{}, pgxerr.Classify(err, "record operator key", nil, nil)
@@ -213,7 +214,7 @@ func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAsse
 		return pgxerr.Classify(err, "sweep operator assertions", nil, nil)
 	}
 	if _, err := q.SpendOperatorAssertion(ctx, db.SpendOperatorAssertionParams{
-		OperatorGrn: client, Jti: a.JTI, ExpiresAt: stamp(a.ReplayUntil()),
+		OperatorGrn: client, Jti: a.JTI, ExpiresAt: pgxtype.Timestamptz(a.ReplayUntil()),
 	}); err != nil {
 		return pgxerr.Classify(err, "spend operator assertion", ErrClientInvalid, nil)
 	}
@@ -225,8 +226,8 @@ func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAsse
 				KeyID:       a.KeyID,
 				OperatorGrn: client,
 				AudienceGrn: audience,
-				IssuedAt:    stamp(t.IssuedAt),
-				ExpiresAt:   stamp(t.ExpiresAt),
+				IssuedAt:    pgxtype.Timestamptz(t.IssuedAt),
+				ExpiresAt:   pgxtype.Timestamptz(t.ExpiresAt),
 			})
 		},
 		func() error {

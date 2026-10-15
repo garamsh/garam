@@ -4,9 +4,7 @@ package postgres
 
 import (
 	"context"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/internal/ca"
@@ -14,6 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Store implements ca.Store against PostgreSQL. What it writes for a
@@ -36,8 +35,8 @@ func (s *Store) Create(ctx context.Context, a *ca.Authority) error {
 		OrgGrn:      a.Organization.String(),
 		Certificate: a.Certificate,
 		SealedKey:   a.SealedKey,
-		NotAfter:    stamp(a.NotAfter),
-		CreatedAt:   stamp(a.CreatedAt),
+		NotAfter:    pgxtype.Timestamptz(a.NotAfter),
+		CreatedAt:   pgxtype.Timestamptz(a.CreatedAt),
 	})
 	return pgxerr.Classify(err, "create", nil, ca.ErrAuthorityAlreadyExists)
 }
@@ -66,9 +65,4 @@ func rowToAuthority(row db.CertificateAuthority) (*ca.Authority, error) {
 		NotAfter:     row.NotAfter.Time,
 		CreatedAt:    row.CreatedAt.Time,
 	}, nil
-}
-
-// stamp converts a time.Time to a valid pgtype.Timestamptz.
-func stamp(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // PostgresStore implements Store against PostgreSQL. The queries are
@@ -52,8 +53,8 @@ func (s *PostgresStore) fenced(ctx context.Context, op string, fence *Fence, fn 
 		AgentGrn:  fence.Agent.String(),
 		TokenHash: fence.TokenHash,
 		Serial:    fence.Serial,
-		NotBefore: stamp(fence.NotBefore),
-		NotAfter:  stamp(fence.NotAfter),
+		NotBefore: pgxtype.Timestamptz(fence.NotBefore),
+		NotAfter:  pgxtype.Timestamptz(fence.NotAfter),
 	})
 	if err != nil {
 		return errorx.Wrap(pgxerr.Classify(err, op+": admit", nil, nil), op, errorx.KindUnavailable)
@@ -140,7 +141,7 @@ func (s *PostgresStore) EnqueueWithinBudget(ctx context.Context, m *Message, cre
 			return pgxerr.Classify(err, "stored under key", nil, nil)
 		}
 		verdict, err := q.EnqueueWithinBudget(ctx, db.EnqueueWithinBudgetParams{
-			Created:        stamp(created),
+			Created:        pgxtype.Timestamptz(created),
 			ID:             string(m.id),
 			RecipientGrn:   m.recipient.String(),
 			SenderGrn:      m.sender.String(),
@@ -342,11 +343,6 @@ func rowToClaim(row db.Message) (*Claim, error) {
 		claimedAt: row.ClaimedAt.Time,
 		expiresAt: row.ClaimExpiresAt.Time,
 	}, nil
-}
-
-// stamp converts a time.Time to a valid pgtype.Timestamptz.
-func stamp(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
 }
 
 // interval converts a duration to the interval Postgres measures a

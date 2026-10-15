@@ -9,6 +9,7 @@ import (
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // CreateGroup persists a new Group.
@@ -19,8 +20,8 @@ func (s *PostgresStore) CreateGroup(ctx context.Context, g *Group) error {
 		Name:      g.name,
 		Roles:     strs(g.roles),
 		Policies:  strs(g.policies),
-		CreatedAt: stamp(g.createdAt),
-		UpdatedAt: stamp(g.updatedAt),
+		CreatedAt: pgxtype.Timestamptz(g.createdAt),
+		UpdatedAt: pgxtype.Timestamptz(g.updatedAt),
 	})
 	return pgxerr.Classify(err, "create group", nil, nil)
 }
@@ -62,7 +63,7 @@ func (s *PostgresStore) UpdateGroup(ctx context.Context, g grn.GRN, p GroupPatch
 		Name:      text(p.Name),
 		Roles:     p.Roles,
 		Policies:  p.Policies,
-		UpdatedAt: stamp(time.Now().UTC()),
+		UpdatedAt: pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "update group", ErrGroupNotFound, nil)

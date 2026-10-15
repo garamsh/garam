@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/internal/agent/postgres/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Compile-time check that Store satisfies agent.StandaloneStore.
@@ -28,8 +29,8 @@ func (s *Store) Approve(ctx context.Context, e agent.Enrollment) (*agent.Enrollm
 		RequestID:     string(e.RequestID),
 		ApprovedBy:    e.ApprovedBy.String(),
 		SecretSha256:  e.SecretSHA256[:],
-		ExpiresAt:     stamp(e.ExpiresAt),
-		CreatedAt:     stamp(e.CreatedAt),
+		ExpiresAt:     pgxtype.Timestamptz(e.ExpiresAt),
+		CreatedAt:     pgxtype.Timestamptz(e.CreatedAt),
 	}
 	if k := e.Keys; k != nil {
 		params.SupervisorKeySha256, params.AgentKeySha256 = k.Supervisor[:], k.Agent[:]
@@ -173,13 +174,13 @@ func (s *Store) enroll(ctx context.Context, req agent.EnrollmentRequest) (*agent
 		if signs {
 			if err := q.InsertCredential(ctx, db.InsertCredentialParams{
 				AgentGrn: row.AgentGrn, Serial: req.Agent.Credential.Serial, Lineage: lineage,
-				NotAfter: stamp(req.Agent.Credential.NotAfter),
+				NotAfter: pgxtype.Timestamptz(req.Agent.Credential.NotAfter),
 			}); err != nil {
 				return storageError(err, "record credential", nil, nil)
 			}
 			text := func(s string) pgtype.Text { return pgtype.Text{String: s, Valid: true} }
 			registration.Serial = text(req.Supervisor.Credential.Serial)
-			registration.NotAfter = stamp(req.Supervisor.Credential.NotAfter)
+			registration.NotAfter = pgxtype.Timestamptz(req.Supervisor.Credential.NotAfter)
 			spending.SupervisorCertificatePem = text(req.Supervisor.CertificatePEM)
 			spending.AgentCertificatePem = text(req.Agent.CertificatePEM)
 			spending.IssuerPem = text(req.Agent.IssuerPEM)
@@ -442,13 +443,13 @@ func (s *Store) Renew(ctx context.Context, req agent.SupervisorRenewal) (*agent.
 			SupervisorGrn: registered.Grn, PredecessorSerial: req.Presented.Serial,
 			RequestID: string(req.RequestID), RequestSha256: req.RequestSHA256[:],
 			Serial: signed.Credential.Serial, CertificatePem: signed.CertificatePEM, IssuerPem: signed.IssuerPEM,
-			ServerRootPem: signed.ServerRootPEM, NotAfter: stamp(signed.Credential.NotAfter), CreatedAt: now,
+			ServerRootPem: signed.ServerRootPEM, NotAfter: pgxtype.Timestamptz(signed.Credential.NotAfter), CreatedAt: now,
 		}); err != nil {
 			return storageError(err, "record renewal", nil, agent.ErrRenewalConflict)
 		}
 		if err := q.MoveSupervisorCertificate(ctx, db.MoveSupervisorCertificateParams{
 			Grn: registered.Grn, Serial: pgtype.Text{String: signed.Credential.Serial, Valid: true},
-			NotAfter: stamp(signed.Credential.NotAfter),
+			NotAfter: pgxtype.Timestamptz(signed.Credential.NotAfter),
 		}); err != nil {
 			return storageError(err, "move supervisor certificate", nil, nil)
 		}

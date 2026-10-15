@@ -1,9 +1,6 @@
 package authz
 
 import (
-	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/internal/authz/db"
@@ -23,9 +20,4 @@ var _ Store = (*PostgresStore)(nil)
 // NewPostgresStore constructs a Postgres-backed Store.
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 	return &PostgresStore{pool: pool, q: db.New(pool)}
-}
-
-// stamp converts a time.Time to a valid pgtype.Timestamptz.
-func stamp(t time.Time) pgtype.Timestamptz {
-	return pgtype.Timestamptz{Time: t, Valid: true}
 }

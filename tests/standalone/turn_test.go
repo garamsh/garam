@@ -15,7 +15,7 @@ import (
 // records the message completed once the runtime committed the turn
 // the message began, and Sherlock stores what the turn answered as its
 // own sources, both what a message_send carried and the reply the turn
-// ended with (internal/agent/service.go at v0.6.0). A reply is asserted
+// ended with (internal/agent/service.go at v0.8.0). A reply is asserted
 // only where it is the scenario's claim.
 
 // awaitCompleted waits until garam records the sender's message under

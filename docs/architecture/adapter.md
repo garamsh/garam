@@ -418,8 +418,8 @@ contract binds:
 | An outbox entry is `<id>.json`, written whole under a dot-prefixed temporary name, carrying `created_at` once | `tools/message_send/message_send.go`, `internal/message/message.go` | The forwarder could read a partial entry or invent an age |
 
 Read in Sherlock at
-[`v0.6.0`](https://github.com/garamsh/sherlock/tree/d75f552beb604c76453345d57279c168e81d3bee)
-(`d75f552beb604c76453345d57279c168e81d3bee`), the release garam's
+[`v0.8.0`](https://github.com/garamsh/sherlock/tree/162499052312c8830a0ac585021d9e14a2f3ce08)
+(`162499052312c8830a0ac585021d9e14a2f3ce08`), the release garam's
 real-runtime suites pin, in `docs/architecture/gateway.md` §Signed
 messages, which governs Sherlock's ingress. Against
 [`v0.4.0`](https://github.com/garamsh/sherlock/tree/6054666584e6a0f22c19d563e26240d6eefc1258),

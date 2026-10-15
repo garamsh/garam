@@ -93,6 +93,13 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 // MintOperatorEnrollment carries the operator's row over to the new
 // token, and 000024's unique constraint is what leaves no second row to
 // carry (ADR-0067).
+//
+// The transaction holds the registration FOR KEY SHARE before anything
+// else, the lock the insert's foreign key would take only after the
+// statement's sweep had locked other operators' expired rows. An
+// operator's or its organization's deletion therefore commits first,
+// or waits for this one, and never holds the registration while this
+// holds a row the deletion's cascade reaches (#1424).
 func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -101,6 +108,9 @@ func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
+	if _, err := q.HoldOperatorRegistration(ctx, e.operator.String()); err != nil {
+		return pgxerr.Classify(err, "hold operator", ErrOperatorNotFound, nil)
+	}
 	row, err := q.GetOperator(ctx, e.operator.String())
 	if err != nil {
 		return pgxerr.Classify(err, "read operator", ErrOperatorNotFound, nil)
@@ -127,17 +137,16 @@ func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
 	return nil
 }
 
-// ReissueCredential deletes the operator's credential and inserts c in
-// one transaction, under the registration's row lock. The delete
-// carries every token minted under the previous credential with it, by
-// 000038's foreign key, so the operator's next request on any of them
-// is refused.
+// ReissueCredential deletes the operator's credential and every token
+// minted under it, and inserts c, in one transaction under the
+// registration's row lock, so the operator's next request on any of
+// those tokens is refused. The tokens go first, in token_hash order,
+// as every statement waiting on several tokens takes them (#1424).
 //
 // The lock comes first because a deletion and every exchange take the
 // registration first too (#1418). A deletion therefore never holds the
 // registration while this holds the credential the deletion cascades
-// into, and the cascade's walk over the credential's tokens never runs
-// beside an exchange's sweep of the same operator.
+// into.
 func (s *PostgresStore) ReissueCredential(ctx context.Context, c *IssuedCredential) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -148,6 +157,9 @@ func (s *PostgresStore) ReissueCredential(ctx context.Context, c *IssuedCredenti
 	q := s.q.WithTx(tx)
 	if _, err := q.LockOperatorRegistration(ctx, c.operator.String()); err != nil {
 		return pgxerr.Classify(err, "hold operator", ErrOperatorNotFound, nil)
+	}
+	if err := q.DeleteOperatorCredentialTokens(ctx, c.operator.String()); err != nil {
+		return pgxerr.Classify(err, "void operator credential tokens", nil, nil)
 	}
 	if err := q.DeleteOperatorCredential(ctx, c.operator.String()); err != nil {
 		return pgxerr.Classify(err, "void operator credential", nil, nil)
@@ -241,9 +253,17 @@ func (s *PostgresStore) SetControlEndpoint(ctx context.Context, g grn.GRN, endpo
 }
 
 // Delete removes the record and the record of the certificate garam
-// last issued the operator, in one transaction. An unspent token needs
-// no statement: it references the registration and goes with it
-// (000023).
+// last issued the operator, in one transaction. An unspent enrollment
+// token needs no statement: it references the registration and goes
+// with it (000023).
+//
+// The transaction holds the registration first, as every writer of
+// the operator's credential, keys and tokens does, and then deletes
+// every token the operator holds or is the audience of in token_hash
+// order, the order every statement waiting on several tokens takes
+// them in. The cascades would take them in their own orders, and the
+// audience's reaches tokens of other operators whose registrations it
+// does not hold (#1424).
 //
 // The foreign-key reading is made here because only here is the
 // statement known: [pgxerr.Classify] maps 23503 to not found, which is
@@ -251,12 +271,12 @@ func (s *PostgresStore) SetControlEndpoint(ctx context.Context, g grn.GRN, endpo
 // opposite — the row is present and an agent definition still names
 // it (000018).
 //
-// The two statements are one transaction, which is what leaves both
-// rows standing when the foreign key refuses the second: the order
-// they run in decides nothing, and without the transaction the
-// certificate row would already be gone by the time the refusal
-// arrived, costing an operator its lineage on a call that deleted
-// nothing.
+// The statements are one transaction, which is what leaves every row
+// standing when the foreign key refuses the last: without it the
+// tokens and the certificate row would already be gone by the time
+// the refusal arrived, costing an operator its lineage on a call that
+// deleted nothing. Their order is the one above: the registration,
+// then the tokens, then the rest.
 func (s *PostgresStore) Delete(ctx context.Context, g grn.GRN) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -265,18 +285,22 @@ func (s *PostgresStore) Delete(ctx context.Context, g grn.GRN) error {
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
+	if _, err := q.LockOperatorRegistration(ctx, g.String()); err != nil {
+		return pgxerr.Classify(err, "hold operator", ErrOperatorNotFound, nil)
+	}
+	if err := q.DeleteOperatorTokens(ctx, g.String()); err != nil {
+		return pgxerr.Classify(err, "delete operator tokens", nil, nil)
+	}
 	if err := q.DeleteOperatorCertificate(ctx, g.String()); err != nil {
 		return pgxerr.Classify(err, "delete operator certificate", nil, nil)
 	}
-	n, err := q.DeleteOperator(ctx, g.String())
-	if err != nil {
+	// The registration is held FOR UPDATE, so the row is there to
+	// delete; an absent one was refused by the hold.
+	if _, err := q.DeleteOperator(ctx, g.String()); err != nil {
 		if pgxerr.IsForeignKeyViolation(err) {
 			return ErrOperatorNamedByDefinition
 		}
 		return pgxerr.Classify(err, "delete operator", nil, nil)
-	}
-	if n == 0 {
-		return ErrOperatorNotFound
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return errorx.Wrap(err, "commit")

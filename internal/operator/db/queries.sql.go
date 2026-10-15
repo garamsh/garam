@@ -138,21 +138,60 @@ const deleteOperatorCredential = `-- name: DeleteOperatorCredential :exec
 DELETE FROM operator_credentials WHERE operator_grn = $1
 `
 
-// Re-issuing is these two in one transaction: the delete takes the
-// previous credential and, by 000038's foreign key, every token minted
-// under it, and the insert writes the successor. An operator the
-// organization holds no record of fails the insert's foreign key.
 func (q *Queries) DeleteOperatorCredential(ctx context.Context, operatorGrn string) error {
 	_, err := q.db.Exec(ctx, deleteOperatorCredential, operatorGrn)
 	return err
 }
 
+const deleteOperatorCredentialTokens = `-- name: DeleteOperatorCredentialTokens :exec
+WITH doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM operator_tokens t
+    JOIN operator_credentials c ON c.id = t.credential_id
+    WHERE c.operator_grn = $1
+    ORDER BY t.token_hash
+    FOR UPDATE OF t)
+DELETE FROM operator_tokens WHERE token_hash IN (SELECT token_hash FROM doomed)
+`
+
+// Re-issuing is these three in one transaction: the first deletes
+// every token minted under the previous credential, in token_hash
+// order, which 000038's cascade would take in its own; the second the
+// credential, and the insert writes the successor. An operator the
+// organization holds no record of fails the insert's foreign key.
+func (q *Queries) DeleteOperatorCredentialTokens(ctx context.Context, operatorGrn string) error {
+	_, err := q.db.Exec(ctx, deleteOperatorCredentialTokens, operatorGrn)
+	return err
+}
+
 const deleteOperatorKeyTokens = `-- name: DeleteOperatorKeyTokens :exec
-DELETE FROM operator_tokens WHERE key_id = ANY($1::bigint[])
+WITH doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM operator_tokens t
+    WHERE t.key_id = ANY($1::bigint[])
+    ORDER BY t.token_hash
+    FOR UPDATE OF t)
+DELETE FROM operator_tokens WHERE token_hash IN (SELECT token_hash FROM doomed)
 `
 
 func (q *Queries) DeleteOperatorKeyTokens(ctx context.Context, keyIds []int64) error {
 	_, err := q.db.Exec(ctx, deleteOperatorKeyTokens, keyIds)
+	return err
+}
+
+const deleteOperatorTokens = `-- name: DeleteOperatorTokens :exec
+WITH doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM operator_tokens t
+    WHERE t.operator_grn = $1 OR t.audience_grn = $1
+    ORDER BY t.token_hash
+    FOR UPDATE OF t)
+DELETE FROM operator_tokens WHERE token_hash IN (SELECT token_hash FROM doomed)
+`
+
+// Every token the operator holds or is the audience of, which the
+// deletion's cascades would otherwise take in their own orders. Like
+// every statement that may wait on more than one token, it takes them
+// in token_hash order (#1424).
+func (q *Queries) DeleteOperatorTokens(ctx context.Context, operatorGrn string) error {
+	_, err := q.db.Exec(ctx, deleteOperatorTokens, operatorGrn)
 	return err
 }
 
@@ -286,9 +325,11 @@ SELECT grn FROM operators WHERE grn = $1 FOR KEY SHARE
 // An exchange holds its registration, and its audience's, before the
 // key or credential and the tokens, the order an issuance or a deletion
 // takes them in, so neither waits on the other while holding what the
-// other needs (#1399). KEY SHARE is the lock the token's foreign keys
-// take anyway: it waits for an issuance or a deletion of the operator,
-// and for nothing else.
+// other needs (#1399). It holds the two in GRN byte order, as an
+// organization's deletion holds all of them (#1424). KEY SHARE is the
+// lock the token's foreign keys take anyway: it waits for an issuance
+// or a deletion of the operator, and for nothing else. A re-mint holds
+// it too, before its sweep.
 func (q *Queries) HoldOperatorRegistration(ctx context.Context, grn string) (string, error) {
 	row := q.db.QueryRow(ctx, holdOperatorRegistration, grn)
 	var grn_2 string
@@ -533,7 +574,10 @@ func (q *Queries) MarkOperatorKeyExchanged(ctx context.Context, arg MarkOperator
 const mintOperatorEnrollment = `-- name: MintOperatorEnrollment :exec
 WITH pruned AS (
     DELETE FROM operator_enrollment_tokens
-    WHERE expires_at <= now() AND operator_grn <> $2
+    WHERE token_hash IN (
+        SELECT e.token_hash FROM operator_enrollment_tokens e
+        WHERE e.expires_at <= now() AND e.operator_grn <> $2
+        FOR UPDATE SKIP LOCKED)
 )
 INSERT INTO operator_enrollment_tokens (token_hash, operator_grn, minted_by, minted_at, expires_at)
 VALUES ($1, $2, $3,
@@ -555,7 +599,9 @@ type MintOperatorEnrollmentParams struct {
 
 // Minting sweeps the tokens that have expired, as creating an
 // invitation sweeps its own table: a row is written in one place, so
-// sweeping there keeps the table proportional to what is live.
+// sweeping there keeps the table proportional to what is live. The
+// sweep skips a row another transaction holds, which a later sweep
+// takes, so a mint waits on no other operator's row (#1424).
 //
 // The upsert is what makes a re-mint leave one live token (ADR-0067),
 // and the unique key it arbitrates on (000024) is what makes two
@@ -615,10 +661,6 @@ func (q *Queries) OperatorWasKeyed(ctx context.Context, operatorGrn string) (boo
 }
 
 const recordOperatorKeyToken = `-- name: RecordOperatorKeyToken :exec
-WITH swept AS (
-    DELETE FROM operator_tokens
-    WHERE operator_grn = $3 AND expires_at <= now()
-)
 INSERT INTO operator_tokens (token_hash, key_id, operator_grn, audience_grn, issued_at, expires_at)
 VALUES ($1, $2::bigint, $3,
         $4, $5, $6)
@@ -646,10 +688,6 @@ func (q *Queries) RecordOperatorKeyToken(ctx context.Context, arg RecordOperator
 }
 
 const recordOperatorToken = `-- name: RecordOperatorToken :exec
-WITH swept AS (
-    DELETE FROM operator_tokens
-    WHERE operator_grn = $3 AND expires_at <= now()
-)
 INSERT INTO operator_tokens (token_hash, credential_id, operator_grn, audience_grn, issued_at, expires_at)
 VALUES ($1, $2::bigint, $3,
         $4, $5, $6)
@@ -664,10 +702,6 @@ type RecordOperatorTokenParams struct {
 	ExpiresAt    pgtype.Timestamptz
 }
 
-// An exchange sweeps the operator's expired tokens in the statement
-// that records the new one, so the table stays proportional to what is
-// live without a job of its own. The two never touch one row: the
-// sweep deletes what has expired and the insert writes what has not.
 func (q *Queries) RecordOperatorToken(ctx context.Context, arg RecordOperatorTokenParams) error {
 	_, err := q.db.Exec(ctx, recordOperatorToken,
 		arg.TokenHash,
@@ -847,14 +881,34 @@ func (q *Queries) SweepOperatorAssertions(ctx context.Context, operatorGrn strin
 	return err
 }
 
+const sweepOperatorTokens = `-- name: SweepOperatorTokens :exec
+DELETE FROM operator_tokens WHERE token_hash IN (
+    SELECT t.token_hash FROM operator_tokens t
+    WHERE t.operator_grn = $1 AND t.expires_at <= now()
+    FOR UPDATE OF t SKIP LOCKED)
+`
+
+// An exchange sweeps the operator's expired tokens last, so the table
+// stays proportional to what is live without a job of its own. It
+// skips a token another transaction holds, which that transaction is
+// deleting or a later sweep takes, so it never waits (#1424).
+func (q *Queries) SweepOperatorTokens(ctx context.Context, operatorGrn string) error {
+	_, err := q.db.Exec(ctx, sweepOperatorTokens, operatorGrn)
+	return err
+}
+
 const trimOperatorKeyTokens = `-- name: TrimOperatorKeyTokens :exec
-DELETE FROM operator_tokens t
-WHERE t.key_id = $1::bigint
-  AND t.token_hash NOT IN (
-      SELECT k.token_hash FROM operator_tokens k
-      WHERE k.key_id = $1::bigint
-      ORDER BY k.issued_at DESC, k.token_hash DESC
-      LIMIT $2)
+WITH doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM operator_tokens t
+    WHERE t.key_id = $1::bigint
+      AND t.token_hash NOT IN (
+          SELECT k.token_hash FROM operator_tokens k
+          WHERE k.key_id = $1::bigint AND k.expires_at > now()
+          ORDER BY k.issued_at DESC, k.token_hash DESC
+          LIMIT $2)
+    ORDER BY t.token_hash
+    FOR UPDATE OF t)
+DELETE FROM operator_tokens WHERE token_hash IN (SELECT token_hash FROM doomed)
 `
 
 type TrimOperatorKeyTokensParams struct {
@@ -862,21 +916,25 @@ type TrimOperatorKeyTokensParams struct {
 	Keep  int32
 }
 
-// Keeps the key's newest tokens and drops the rest, the bound a
-// credential's tokens have too.
+// Keeps the key's newest live tokens and drops the rest, the bound and
+// the order a credential's trim has too.
 func (q *Queries) TrimOperatorKeyTokens(ctx context.Context, arg TrimOperatorKeyTokensParams) error {
 	_, err := q.db.Exec(ctx, trimOperatorKeyTokens, arg.KeyID, arg.Keep)
 	return err
 }
 
 const trimOperatorTokens = `-- name: TrimOperatorTokens :exec
-DELETE FROM operator_tokens t
-WHERE t.credential_id = $1::bigint
-  AND t.token_hash NOT IN (
-      SELECT k.token_hash FROM operator_tokens k
-      WHERE k.credential_id = $1::bigint
-      ORDER BY k.issued_at DESC, k.token_hash DESC
-      LIMIT $2)
+WITH doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM operator_tokens t
+    WHERE t.credential_id = $1::bigint
+      AND t.token_hash NOT IN (
+          SELECT k.token_hash FROM operator_tokens k
+          WHERE k.credential_id = $1::bigint AND k.expires_at > now()
+          ORDER BY k.issued_at DESC, k.token_hash DESC
+          LIMIT $2)
+    ORDER BY t.token_hash
+    FOR UPDATE OF t)
+DELETE FROM operator_tokens WHERE token_hash IN (SELECT token_hash FROM doomed)
 `
 
 type TrimOperatorTokensParams struct {
@@ -884,8 +942,10 @@ type TrimOperatorTokensParams struct {
 	Keep         int32
 }
 
-// Keeps the issuance's newest tokens and drops the rest, which bounds
-// what a leaked credential can write (ADR-0100).
+// Keeps the issuance's newest live tokens and drops the rest, which
+// bounds what a leaked credential can write (ADR-0100). It takes them
+// in token_hash order, and is the one statement of an exchange that
+// waits on a token (#1424).
 func (q *Queries) TrimOperatorTokens(ctx context.Context, arg TrimOperatorTokensParams) error {
 	_, err := q.db.Exec(ctx, trimOperatorTokens, arg.CredentialID, arg.Keep)
 	return err

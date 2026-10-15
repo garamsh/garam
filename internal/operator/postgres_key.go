@@ -122,10 +122,7 @@ func (s *PostgresStore) ListKeys(ctx context.Context, g grn.GRN) ([]Key, error) 
 // transaction, under the registration's row lock, which every exchange
 // of the operator holds first too. The two serialize on it: an
 // exchange either commits first and its token is deleted here, or
-// rereads the key withdrawn and records nothing. The hold also keeps
-// this walk over the key's tokens apart from an exchange's sweep of the
-// operator's expired ones, which visit shared tokens in opposite orders
-// (#1418).
+// rereads the key withdrawn and records nothing (#1418).
 func (s *PostgresStore) RevokeKey(ctx context.Context, g grn.GRN, kid string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -221,20 +218,24 @@ func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAsse
 		return pgxerr.Classify(err, "spend operator assertion", ErrClientInvalid, nil)
 	}
 	t.IssuedAt, t.ExpiresAt = now, now.Add(TokenTTL)
-	if err := q.RecordOperatorKeyToken(ctx, db.RecordOperatorKeyTokenParams{
-		TokenHash:   t.Hash(),
-		KeyID:       a.KeyID,
-		OperatorGrn: client,
-		AudienceGrn: audience,
-		IssuedAt:    stamp(t.IssuedAt),
-		ExpiresAt:   stamp(t.ExpiresAt),
-	}); err != nil {
-		return pgxerr.Classify(err, "record operator token", nil, nil)
-	}
-	if err := q.TrimOperatorKeyTokens(ctx, db.TrimOperatorKeyTokensParams{
-		KeyID: a.KeyID, Keep: LiveTokensPerCredential,
-	}); err != nil {
-		return pgxerr.Classify(err, "trim operator tokens", nil, nil)
+	err = recordTokens(ctx, q, client,
+		func() error {
+			return q.RecordOperatorKeyToken(ctx, db.RecordOperatorKeyTokenParams{
+				TokenHash:   t.Hash(),
+				KeyID:       a.KeyID,
+				OperatorGrn: client,
+				AudienceGrn: audience,
+				IssuedAt:    stamp(t.IssuedAt),
+				ExpiresAt:   stamp(t.ExpiresAt),
+			})
+		},
+		func() error {
+			return q.TrimOperatorKeyTokens(ctx, db.TrimOperatorKeyTokensParams{
+				KeyID: a.KeyID, Keep: LiveTokensPerCredential,
+			})
+		})
+	if err != nil {
+		return err
 	}
 	if err := q.MarkOperatorKeyExchanged(ctx, db.MarkOperatorKeyExchangedParams{At: decided, ID: a.KeyID}); err != nil {
 		return pgxerr.Classify(err, "mark operator key exchanged", nil, nil)

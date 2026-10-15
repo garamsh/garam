@@ -543,6 +543,17 @@ disconnects is a client that has
 stopped sending, which would otherwise hold a connection open until the
 shutdown bound above expired.
 
+The browser-facing listener keeps no connection alive: it answers each
+request with `Connection: close` and closes the connection after the
+response (`apiServer` in `internal/cli/serve.go`). The console's `/api`
+rewrite reaches it through Next.js's proxy, whose pooled sockets never
+time out and which ignores a server's `Keep-Alive` hint. A request
+that reused a socket at the moment the listener closed it for idleness
+was reset and answered 500 (#1428). A longer idle timeout would only
+make that rarer, so the cost is one connection per request on a
+cluster-local hop instead. The machine listener keeps its connections
+alive.
+
 ## The PodSecurity level is the deployment's
 
 The workloads the chart renders are written to satisfy PodSecurity

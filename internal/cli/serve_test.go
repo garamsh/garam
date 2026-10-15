@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -432,4 +433,54 @@ func TestAPIHandler_RefusesARequestBodyPastTheBound(t *testing.T) {
 
 	assert.Equal(t, http.StatusRequestEntityTooLarge, status, "past the bound the body is not read at all")
 	assert.JSONEq(t, `{"kind":"invalid_argument","message":"the request body is larger than a request may carry"}`, body)
+}
+
+// connectionsServed serves srv on a loopback port, sends two POSTs in
+// turn over one keep-alive client, and returns each response's
+// Connection header and how many connections the server accepted.
+func connectionsServed(t *testing.T, srv *http.Server) ([]string, int) {
+	t.Helper()
+	var accepted atomic.Int32
+	srv.ConnState = func(_ net.Conn, s http.ConnState) {
+		if s == http.StateNew {
+			accepted.Add(1)
+		}
+	}
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	go func() { _ = srv.Serve(ln) }()
+	t.Cleanup(func() { _ = srv.Close() })
+
+	client := &http.Client{Transport: &http.Transport{}}
+	t.Cleanup(client.CloseIdleConnections)
+	var headers []string
+	for range 2 {
+		resp, err := client.Post("http://"+ln.Addr().String()+"/", "application/json", strings.NewReader(`{}`))
+		require.NoError(t, err)
+		_, _ = io.Copy(io.Discard, resp.Body)
+		require.NoError(t, resp.Body.Close())
+		// net/http moves a Connection: close answer to resp.Close.
+		header := ""
+		if resp.Close {
+			header = "close"
+		}
+		headers = append(headers, header)
+	}
+	return headers, int(accepted.Load())
+}
+
+func TestAPIServer_ClosesEachConnectionAfterOneResponse(t *testing.T) {
+	noContent := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	headers, accepted := connectionsServed(t, apiServer("", noContent))
+	assert.Equal(t, []string{"close", "close"}, headers)
+	assert.Equal(t, 2, accepted, "the second request reused a connection")
+
+	// The control: a server left at net/http's default keeps the
+	// connection, so the client above would reuse one it could.
+	headers, accepted = connectionsServed(t, &http.Server{Handler: noContent})
+	assert.Equal(t, []string{"", ""}, headers)
+	assert.Equal(t, 1, accepted)
 }

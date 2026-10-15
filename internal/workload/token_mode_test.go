@@ -57,16 +57,7 @@ func (h *host) tokenConfig(tokens workload.AgentTokens, edit ...func(*workload.D
 // startTokens runs the supervisor in the token mode.
 func (h *host) startTokens(tokens workload.AgentTokens, edit ...func(*workload.Desired)) *running {
 	h.t.Helper()
-	s, err := workload.NewSupervisor(h.engine, h.garam, h.tokenConfig(tokens, edit...))
-	require.NoError(h.t, err)
-	ctx, cancel := context.WithCancel(context.Background())
-	r := &running{cancel: cancel, done: make(chan struct{})}
-	go func() {
-		defer close(r.done)
-		r.err = s.Run(ctx)
-	}()
-	h.t.Cleanup(func() { r.cancel(); <-r.done })
-	return r
+	return h.run(h.tokenConfig(tokens, edit...))
 }
 
 // serverOnlyClient reaches the adapter's control as the token mode's

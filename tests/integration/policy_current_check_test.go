@@ -9,7 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/grn"
@@ -120,8 +122,9 @@ func TestCheckCurrent_SeesAWithdrawalNoInvalidationReported(t *testing.T) {
 
 // TestCheckCurrent_RefusesWhenStorageIsUnreachable cuts the engine's
 // connection to Postgres while its cache allows: Check still allows,
-// and CheckCurrent fails with no decision. The code is not asserted
-// (#1165).
+// and CheckCurrent fails with no decision, answered Unavailable (#1165)
+// both on the connection the cut ended and on the dial after it, which
+// the proxy refuses. The call before the cut is the reachable control.
 func TestCheckCurrent_RefusesWhenStorageIsUnreachable(t *testing.T) {
 	p := pool(t)
 	orgGRN := newPolicyOrg(t, p)
@@ -143,9 +146,12 @@ func TestCheckCurrent_RefusesWhenStorageIsUnreachable(t *testing.T) {
 	checked, err = client.Check(context.Background(), readProject())
 	require.NoError(t, err)
 	assert.True(t, checked.GetAllowed(), "control: Check answers from the cache")
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	current, err = client.CheckCurrent(ctx, readProjectCurrent())
-	require.Error(t, err, "CheckCurrent decides nothing without storage")
-	assert.Nil(t, current)
+	for _, attempt := range []string{"on the connection the cut ended", "on the dial after it"} {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		current, err = client.CheckCurrent(ctx, readProjectCurrent())
+		cancel()
+		require.Error(t, err, "CheckCurrent decides nothing without storage, %s", attempt)
+		assert.Nil(t, current)
+		assert.Equal(t, codes.Unavailable, status.Code(err), "an unreachable store is Unavailable, %s", attempt)
+	}
 }

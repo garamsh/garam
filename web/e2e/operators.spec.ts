@@ -2,7 +2,64 @@ import type { Page } from "@playwright/test";
 
 import { axeViolations, expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
-import { seedDefinition, seedKeyExchange, seedMember } from "./seed";
+import {
+  recordedAuthority,
+  seedDefinition,
+  seedHostedOperator,
+  seedKeyExchange,
+  seedMember,
+} from "./seed";
+
+/** Where the seeded hosted operator's control service is registered. */
+const ENDPOINT = "https://control.example.test/garam";
+
+/** What the stub received of one reports read. */
+type ReportsRead = { path: string; authorization: string | undefined };
+
+/**
+ * Answers the reports read at the registered endpoint with `answer`
+ * under the agreed CORS contract, or as a refused connection, and
+ * keeps what each read carried. The control service is a stub; garam
+ * is real.
+ */
+async function stubReports(
+  page: Page,
+  consoleOrigin: string,
+  answer: { status: number; body: unknown } | "unreachable",
+): Promise<ReportsRead[]> {
+  const received: ReportsRead[] = [];
+  const cors = { "access-control-allow-origin": consoleOrigin };
+  await page.route(`${new URL(ENDPOINT).origin}/**`, async (route) => {
+    const request = route.request();
+    if (request.method() === "OPTIONS") {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          ...cors,
+          "access-control-allow-methods": "GET, POST, PUT",
+          "access-control-allow-headers":
+            "Authorization, Content-Type, Garam-Contract-Version",
+        },
+      });
+      return;
+    }
+    received.push({
+      path: new URL(request.url()).pathname,
+      authorization: (await request.allHeaders())["authorization"],
+    });
+    if (answer === "unreachable") {
+      await route.abort("connectionrefused");
+      return;
+    }
+    await route.fulfill({
+      status: answer.status,
+      headers: cors,
+      contentType: "application/json",
+      body: JSON.stringify(answer.body),
+    });
+  });
+  return received;
+}
 
 /** Takes the key a SecretReveal is showing, and closes it as kept. */
 async function keepSecret(page: Page, title: string): Promise<string> {
@@ -229,6 +286,105 @@ test.describe("operators", () => {
     await expect(
       page.getByRole("link", { name: "Staging cluster", exact: true }),
     ).toBeVisible();
+  });
+
+  test("shows what each operator reports running and its last contact, read under an authority garam bound to the read", async ({
+    page,
+    signedIn,
+    baseURL,
+  }) => {
+    await seedHostedOperator(signedIn, ENDPOINT, ["operator:read"]);
+    const digest = `sha256:${"ab".repeat(32)}`;
+    const received = await stubReports(page, new URL(baseURL!).origin, {
+      status: 200,
+      body: {
+        operators: [
+          {
+            grn: `grn:${signedIn.orgSlug}:default:operator:${signedIn.operatorIdentifier}`,
+            images: [
+              {
+                name: "manager",
+                ref: "ghcr.io/garamsh/operator:v0.4.0",
+                digest,
+              },
+              { name: "agent", ref: "ghcr.io/garamsh/gagent:v1.2.0" },
+            ],
+            reportedAt: new Date(Date.now() - 3_600_000).toISOString(),
+            lastContactAt: new Date(Date.now() - 60_000).toISOString(),
+          },
+        ],
+      },
+    });
+    const operators = `/console/orgs/${signedIn.orgSlug}/operators`;
+
+    await page.goto(operators);
+    await expectHydrated(page);
+    const table = page.getByRole("table", { name: "Operators" });
+    const seeded = table
+      .getByRole("row")
+      .filter({ hasText: signedIn.operatorName });
+    await expect(
+      seeded.getByText("ghcr.io/garamsh/gagent:v1.2.0", { exact: true }),
+    ).toBeVisible();
+    // The hosted operator is absent from the answer: it never reported.
+    const hosted = table.getByRole("row").filter({ hasText: "Hosted control" });
+    await expect(
+      hosted.getByText("Not reported", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      hosted.getByText("No contact recorded", { exact: true }),
+    ).toBeVisible();
+    expect(await axeViolations(page)).toEqual([]);
+
+    await page.goto(`${operators}/${signedIn.operatorIdentifier}`);
+    await expectHydrated(page);
+    await expect(page.getByText(digest, { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("ghcr.io/garamsh/operator:v0.4.0", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Not checked", { exact: true })).toBeHidden();
+    expect(await axeViolations(page)).toEqual([]);
+
+    // Each read carried its own authority, which garam recorded for
+    // exactly that read.
+    expect(received.length).toBeGreaterThanOrEqual(2);
+    for (const read of received) {
+      expect(read.path).toBe(`/garam/v1/orgs/${signedIn.orgSlug}/operators`);
+      expect(read.authorization).toMatch(/^Garam-Operation [A-Za-z0-9_-]{43}$/);
+      const recorded = await recordedAuthority(
+        read.authorization!.slice("Garam-Operation ".length),
+      );
+      expect(recorded).toMatchObject({
+        operation: "operator:read",
+        actorGrn: signedIn.userGrn,
+        audienceGrn: `grn:${signedIn.orgSlug}:default:operator:hosted`,
+        targetGrn: `grn:root:default:org:${signedIn.orgSlug}`,
+        requestTarget: read.path,
+      });
+    }
+  });
+
+  test("says the reports were not checked, and why, where the control service cannot be reached", async ({
+    page,
+    signedIn,
+    baseURL,
+  }) => {
+    await seedHostedOperator(signedIn, ENDPOINT, ["operator:read"]);
+    await stubReports(page, new URL(baseURL!).origin, "unreachable");
+
+    await page.goto(
+      `/console/orgs/${signedIn.orgSlug}/operators/${signedIn.operatorIdentifier}`,
+    );
+    await expectHydrated(page);
+    await expect(
+      page.getByText(
+        "The control service is unavailable, so its controls are disabled. Teams, people and agents are unaffected.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByText("Not checked", { exact: true })).toHaveCount(2);
+    await expect(page.getByText("Not reported", { exact: true })).toBeHidden();
+    expect(await axeViolations(page)).toEqual([]);
   });
 
   test("offers a member, whom the server denies changing operators, the reads alone", async ({

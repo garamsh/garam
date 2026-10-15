@@ -60,9 +60,9 @@ export function JsonEditor({
   const [ready, setReady] = useState(false);
   // The latest props, read by the editor's callbacks and by the mount
   // that finishes after a render has moved them on.
-  const latest = useRef({ value, onChange, problem });
+  const latest = useRef({ value, onChange });
   useEffect(() => {
-    latest.current = { value, onChange, problem };
+    latest.current = { value, onChange };
   });
 
   useEffect(() => {
@@ -77,7 +77,6 @@ export function JsonEditor({
         placeholder,
         onChange: (doc) => latest.current.onChange?.(doc),
       });
-      editor.current.setProblem(latest.current.problem ?? null);
       setReady(true);
     });
     return () => {
@@ -100,7 +99,8 @@ export function JsonEditor({
     );
   }, [label, invalid, describedBy, readOnly, ready]);
 
-  // Keyed on what the problem says, so an equal one leaves the mark.
+  // Keyed on what the problem says, so an equal one leaves the mark;
+  // `ready` marks the mounted editor once.
   const problemMessage = problem?.message;
   const problemPath = problem?.path;
   useEffect(() => {

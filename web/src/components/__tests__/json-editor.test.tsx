@@ -16,7 +16,7 @@ vi.mock("@/lib/codemirror", () => ({
 
 describe("JsonEditor", () => {
   it("marks a problem once, and again only when what it says changes", async () => {
-    const { rerender } = render(
+    const { container, rerender } = render(
       <JsonEditor value="{}" label="JSON" problem={{ message: "Bad." }} />,
     );
     await waitFor(() =>
@@ -25,13 +25,20 @@ describe("JsonEditor", () => {
         path: undefined,
       }),
     );
-    const settled = setProblem.mock.calls.length;
+    // Mounted: the editor has replaced the server-rendered text.
+    await waitFor(() =>
+      expect(
+        container.querySelector('[data-slot="json-editor"]'),
+      ).toHaveAttribute("aria-busy", "false"),
+    );
 
     // An equal problem in a fresh object, as every keystroke renders.
+    // The rerender flushes any effect the mount left pending, so the
+    // count is what the mount and this render marked between them.
     rerender(
       <JsonEditor value="{ }" label="JSON" problem={{ message: "Bad." }} />,
     );
-    expect(setProblem).toHaveBeenCalledTimes(settled);
+    expect(setProblem).toHaveBeenCalledTimes(1);
 
     // The control: a problem that says something else is marked.
     rerender(

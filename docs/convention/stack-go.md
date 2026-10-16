@@ -421,12 +421,21 @@ before invoking `go test`.
 | Test | `go test ./...` |
 | Test (one) | `go test -run TestName ./pkg/...` |
 | Vet | `go vet ./...` |
-| Format check | `gofmt -l .` |
-| Format apply | `gofmt -w .` |
+| Format check | `gofmt -l` over `git ls-files --cached --others --exclude-standard -z -- '*.go'` |
+| Format apply | `gofmt -w` over the same set |
 | Module tidy | `go mod tidy` |
 | Lint (if configured) | `golangci-lint run` |
 | Coverage | `go test -cover ./...` |
 | Generate (mockery) | `mockery` (config) or `go generate ./...` |
+
+The format rows take their set from git: CI checks out the tracked
+set, a `.` walk also reaches ignored trees CI never sees and `-w`
+rewrites them, `--cached --others --exclude-standard` adds back the
+untracked files the ignore files leave so that a new file fails here
+before it fails in CI, and the set reaches `gofmt` as arguments rather
+than through a shell substitution, because `gofmt` with no file
+arguments reads standard input: over an empty set `gofmt -l $(…)`
+blocks, where `xargs -0` hands the process `/dev/null` and it returns.
 
 Every tool the module invokes is built with a toolchain at least the
 module's `go` directive. `go install tool@version` and `go run

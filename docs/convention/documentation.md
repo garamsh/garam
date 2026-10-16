@@ -134,4 +134,4 @@ These are documentation too.
 - File names: lowercase kebab-case (`runtime-safety.md`). Uppercase is
   reserved for files a tool or a reader looks for by an exact name it
   did not choose: `README.md`, `AGENTS.md`, `CLAUDE.md`, and the names
-  GitHub requires under `.github/`.
+  a tool looks for under `.github/`.

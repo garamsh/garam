@@ -106,7 +106,15 @@ A case that travelled between projects is one case, so a report says whether it 
 
 ## Why the pull request asks what you read
 
-The template asks which convention files you opened, and a reviewer checks that answer against the diff. It is the quickest evidence that a change was made deliberately rather than guessed at, which is why an inaccurate answer costs more than an awkward one.
+The template asks which convention files you opened. That answer is a
+statement of fact in the pull request body, so
+`docs/convention/documentation.md` §GitHub artifacts, "Facts only",
+binds it, and read against the diff it is the quickest evidence that a
+change was made deliberately rather than guessed at, which is why an
+inaccurate answer costs more than an awkward one. The comparison catches
+an answer the diff contradicts — a stack file listed for a Markdown-only
+change — and not an unread file that happens to govern, which nothing in
+the pull request shows.
 
 ## This project
 

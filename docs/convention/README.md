@@ -74,10 +74,10 @@ entry-point name in `ci.md` among them. It states the same of a
 structural rule (`docs/architecture/README.md` §Rules, "Structural
 rules live in `structure.md`"): the package and file names the unit
 takes in its language. It also states a structural case its framework
-decides (§Rules, "Structural rules yield only to what a framework
-imposes"). It never restates the rule itself. These two tables and
-those rules are where the split is recorded — the files do not point
-at each other.
+decides (`docs/architecture/README.md` §Rules, "Structural rules
+yield only to what a framework imposes"). It never restates the rule
+itself. These two tables and those rules are where the split is
+recorded — the files do not point at each other.
 
 A stack built on another stack takes a row with a base in the Extends
 column. The derived file holds only the rules its stack changes — one

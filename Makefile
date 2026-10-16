@@ -160,6 +160,7 @@ lint:
 	@$(ACTIONLINT) -shellcheck= -pyflakes= $(WORKFLOW_FILES)
 	@$(SHFMT) -ln posix $(SHELL_SCRIPTS) >/dev/null
 	@./check-contents-list.sh
+	@./check-heading-prefixes.sh
 
 # gofmt and goimports list offending files but exit 0, so the gate is a
 # non-empty-output check; a file they cannot read or parse, a tracked
@@ -296,7 +297,7 @@ check-toolchain:
 # template content moves it. Left behind it names commits already
 # received, which is loud; moved past them it goes quiet, so it moves in
 # a diff a reviewer reads rather than in a computation nobody sees.
-TEMPLATE_SYNCED := 1310e430f2e1172069ec71d3822dbbd2730f3ff6
+TEMPLATE_SYNCED := 3d0c87aaf8d363fc304df45a588928febc97097a
 
 template-diff:
 	@TEMPLATE_SYNCED='$(TEMPLATE_SYNCED)' scripts/template-diff.sh

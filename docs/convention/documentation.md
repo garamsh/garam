@@ -35,6 +35,9 @@ Violations are grounds for PR rejection.
   checked against the library and `deprecated` cannot; a path and a line
   number with neither looks precise and goes on looking valid after the
   line moves.
+- A commit is cited by its full object name, never a prefix of it. A
+  prefix that resolves today can become ambiguous as the repository
+  grows, and nothing reports the day it does.
 - A file may state once at the top what it was checked against, and then
   every claim in it holds for that. That statement records a check; it
   promises nothing about later versions. A reader past it holds claims
@@ -48,8 +51,11 @@ Violations are grounds for PR rejection.
   in that same document, where whatever moves the number carries the
   citation with it. A renamed heading stops matching, so the citation
   breaks where a reader sees it; a reassigned number goes on resolving,
-  to whatever rule took it. The number a whole document is filed under,
-  an ADR's among them, is not a rule's: no edit to the rules inside a
+  to whatever rule took it. No heading in a file is a prefix of another
+  heading in the same file: a citation of the longer goes on resolving
+  against the shorter after the longer is deleted, so the break never
+  reaches a reader. The number a whole document is filed under, an
+  ADR's among them, is not a rule's: no edit to the rules inside a
   document moves it, so a citation keeps it.
 - Where the claim is about a package's health rather than a release
   (`unmaintained`, `legacy`), do not rest a rule on it: name what to use
@@ -81,7 +87,11 @@ These are documentation too.
   expression is shown to match what is present, and a run whose output
   nobody has read is not a basis at all.
 - **Stay inside the template.** No extra sections beyond the template
-  fields; leave no field empty — write `N/A` with a reason.
+  fields; leave no field empty — write `N/A` with a reason. A line a
+  tool appends to the body is outside the template and comes out,
+  whichever tool appends it and whatever the line says; a project that
+  keeps what such a line carries gives it a field in the template, which
+  is the project's, rather than a line beneath the fields.
 - **A closing keyword precedes each issue number.**
   `Closes #1, closes #2` links both; `Closes #1 and #2` links the first,
   and `Issue #1` links neither.

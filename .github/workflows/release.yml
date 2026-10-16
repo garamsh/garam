@@ -37,6 +37,7 @@ jobs:
       web-digest: ${{ steps.push.outputs.web-digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: scripts/record-runner-image.sh
 
       # ADR-0039: a release is a `vX.Y.Z` git tag and the image tag is
       # that tag without the `v`. The trigger admits every `v*`, and the
@@ -158,6 +159,14 @@ jobs:
       # The release is the only thing this workflow writes back.
       contents: write
     steps:
+      # Checked out only for scripts/record-runner-image.sh, so the
+      # job's write token is kept out of .git/config: nothing here
+      # needs git to hold it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: scripts/record-runner-image.sh
+
       # ADR-0039: the release records each image's digest alongside its
       # tag, so a consumer that would rather pin a digest reads one here
       # instead of discovering it.

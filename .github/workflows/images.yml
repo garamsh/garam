@@ -48,5 +48,7 @@ jobs:
   images:
     runs-on: ubuntu-24.04
     steps:
+      # Records the runner image, in the form ci.yml states.
+      - run: echo "Runner image ${ImageVersion:?}" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: make web-image-e2e

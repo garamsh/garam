@@ -109,8 +109,9 @@ PROTO_FILES = $(shell $(BUF) ls-files)
 # reading exactly like the run that read every file — so the paths are
 # listed here and an empty list fails below. The shell sweep takes two
 # roots: `scripts/`, and the repository root, where the template ships
-# `check-contents-list.sh` and where it stays so template-diff can
-# measure it against the path it comes from.
+# `check-contents-list.sh` and `check-heading-prefixes.sh` and where
+# they stay so template-diff can measure each against the path it comes
+# from.
 WORKFLOW_FILES = $(shell find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \))
 SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find scripts -type f -name '*.sh')
 
@@ -146,13 +147,14 @@ SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find sc
 # rather than taking it from each shebang, so a script that later says
 # bash fails here instead of being read as bash.
 #
-# check-contents-list.sh reads the Markdown, against
-# docs/convention/documentation.md §Format. It selects its own files and
-# prints that selector with the count it produced, and fails when the
-# count is zero, so the line below states no Markdown count — a second
-# selector here would be one more thing to keep equal to the script's.
+# check-contents-list.sh and check-heading-prefixes.sh read the
+# Markdown, against docs/convention/documentation.md §Format and
+# §Keep it current respectively. Each selects its own files and prints
+# that selector with the count it produced, and fails when the count is
+# zero, so the line below states no Markdown count — a second selector
+# here would be one more thing to keep equal to the scripts'.
 lint:
-	@echo 'lint: $(words $(GO_PKGS)) packages (go vet), $(words $(PROTO_FILES)) proto files (buf lint), $(words $(WORKFLOW_FILES)) workflows (actionlint), $(words $(SHELL_SCRIPTS)) shell scripts (shfmt); Markdown counted by check-contents-list.sh below'
+	@echo 'lint: $(words $(GO_PKGS)) packages (go vet), $(words $(PROTO_FILES)) proto files (buf lint), $(words $(WORKFLOW_FILES)) workflows (actionlint), $(words $(SHELL_SCRIPTS)) shell scripts (shfmt); Markdown counted by check-contents-list.sh and check-heading-prefixes.sh below'
 	@test -n '$(GO_PKGS)' && test -n '$(PROTO_FILES)' && test -n '$(WORKFLOW_FILES)' && test -n '$(SHELL_SCRIPTS)' \
 		|| { echo 'lint: nothing to lint — go list, the buf module, .github/workflows or the shell sweep matched no input; the counts above name which'; exit 1; }
 	@go vet $(GO_PKGS)

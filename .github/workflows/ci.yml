@@ -42,15 +42,8 @@ jobs:
   ci:
     runs-on: ubuntu-24.04
     steps:
-      # `ubuntu-24.04` names no digest, so the run records the image it
-      # resolved to (docs/convention/ci.md §Verify a pinned dependency
-      # before adopting it). runner-images writes ImageVersion into the
-      # image's /etc/environment at build time:
-      # actions/runner-images@e3fa5414d230773024d4a669a8402b50cd28f036
-      # images/ubuntu/scripts/build/configure-environment.sh:12.
-      # `:?` fails the step rather than record an empty value.
-      - run: echo "Runner image ${ImageVersion:?}" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: scripts/record-runner-image.sh
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -70,9 +63,8 @@ jobs:
   e2e:
     runs-on: ubuntu-24.04
     steps:
-      # Records the runner image, in the form the `ci` job states.
-      - run: echo "Runner image ${ImageVersion:?}" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: scripts/record-runner-image.sh
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -81,9 +73,8 @@ jobs:
   web-e2e:
     runs-on: ubuntu-24.04
     steps:
-      # Records the runner image, in the form the `ci` job states.
-      - run: echo "Runner image ${ImageVersion:?}" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: scripts/record-runner-image.sh
       - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
           package-json-file: web/package.json

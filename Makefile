@@ -162,7 +162,9 @@ lint:
 	@./check-contents-list.sh
 
 # gofmt and goimports list offending files but exit 0, so the gate is a
-# non-empty-output check. The set is git's: the tracked files CI checks
+# non-empty-output check; a file they cannot read or parse, a tracked
+# file deleted from the working tree among them, makes xargs exit 123
+# and fails the gate too. The set is git's: the tracked files CI checks
 # out plus untracked ones not ignored. Given an empty set, xargs still
 # runs each tool once on /dev/null and it reports nothing, so the files
 # are counted first and a count of zero fails.
@@ -172,8 +174,8 @@ FORMAT_COUNT = $(shell $(FORMAT_SELECT) | tr -cd '\0' | wc -c)
 format:
 	@echo 'format: $(FORMAT_COUNT) Go files (gofmt, goimports)'
 	@test '$(FORMAT_COUNT)' -gt 0 || { echo 'format: nothing to check — the sweep matched no Go file'; exit 1; }
-	@out="$$($(FORMAT_SELECT) | xargs -0 gofmt -l)"; test -z "$$out" || { echo "gofmt: $$out"; exit 1; }
-	@out="$$($(FORMAT_SELECT) | xargs -0 $(GOIMPORTS) -l)"; test -z "$$out" || { echo "goimports: $$out"; exit 1; }
+	@out="$$($(FORMAT_SELECT) | xargs -0 gofmt -l)" || { echo "gofmt: failed on the error above"; exit 1; }; test -z "$$out" || { echo "gofmt: $$out"; exit 1; }
+	@out="$$($(FORMAT_SELECT) | xargs -0 $(GOIMPORTS) -l)" || { echo "goimports: failed on the error above"; exit 1; }; test -z "$$out" || { echo "goimports: $$out"; exit 1; }
 
 # go has no negative package pattern, so the sweep is filtered here.
 # tests/integration and tests/e2e each need the Postgres db-up starts

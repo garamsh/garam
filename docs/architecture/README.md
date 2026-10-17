@@ -185,6 +185,16 @@ No pipeline stands behind this either: what `make ci` reads a file under `docs/`
 
 What this repository runs against itself. `docs/convention/ci.md` decides how a check is named and secured; this section records where one runs.
 
+The runner class every job is to run on is unbuilt.
+[ADR-0105](./adr/0105-garams-pipeline-runs-on-a-docker-capable-aurora-runner-class.md)
+moves every job to a Docker-capable aurora runner class, isolated from
+the nodes that hold cluster secrets. That class does not exist yet, so
+every job in `ci.yml`, `images.yml` and `release.yml` still names
+`ubuntu-24.04`, whose runs start nothing on this account, and every
+merge still rests on the exception in `AGENTS.md` §Roles. The pull
+request that moves the labels replaces this paragraph with the state it
+leaves.
+
 - `.github/workflows/ci.yml` triggers on `pull_request` into `main` and
   on nothing else; `.github/workflows/images.yml` on the same event and
   base except where a pull request changes only `docs/`;
@@ -725,8 +735,10 @@ ADRs:
   is denied, while the server still enforces every write. The
   permission check is built; the rest is unbuilt
 - [0105](./adr/0105-garams-pipeline-runs-on-a-docker-capable-aurora-runner-class.md)
-  — proposed: garam's six jobs run on a second aurora runner scale set
-  in `dind` mode, keeping every entry point CI invokes today, rather
-  than on the kubernetes-mode `aurora` class that run 39051854702
-  showed admits this repository but provides no daemon; the local gate
-  stands until aurora delivers the class. Unbuilt
+  — garam's six jobs run on one Docker-capable aurora runner class,
+  keeping every entry point CI invokes today, rather than on the
+  kubernetes-mode `aurora` class that run 39051854702 showed admits
+  this repository but provides no daemon; garam asks for the class
+  isolated from the nodes that hold cluster secrets, with `dind` on a
+  shared worker as aurora's fallback, and the local gate stands until
+  the class exists. Unbuilt

@@ -1,7 +1,10 @@
 # ADR 0105: garam's pipeline runs on a Docker-capable aurora runner class
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-17
+
+Accepted by the Garam PM on 2026-10-18 under the owner's delegation,
+recorded in the review on #1480.
 
 Drafted for #1477, which reserved this number. garam is read at
 `57fcdd227b19d57b0f613c89a4bf5b7511475f4d`, `garamsh/aurora` at
@@ -146,11 +149,29 @@ and three need what aurora's kubernetes class excludes by design.
 ## Decision
 
 garam's six jobs run on one runner class that provides a Docker
-daemon: a second aurora scale set in `containerMode.type: dind`
-(option C). Every job keeps the entry points it invokes today, so the
-pipeline stays one shape and `docs/convention/ci.md` §Core principle
-keeps holding: CI re-runs what a contributor already ran, by the same
-names.
+daemon (option C). Every job keeps the entry points it invokes today,
+so the pipeline stays one shape and `docs/convention/ci.md` §Core
+principle keeps holding: CI re-runs what a contributor already ran, by
+the same names.
+
+What garam asks of aurora is **a Docker-capable runner class isolated
+from the nodes that hold cluster secrets**. How the class is realised
+is aurora's, and garam ranks the ways in this order:
+
+1. **Isolated.** The class runs on a node that holds no cluster
+   Secret and no workload that does, such as a dedicated worker or VM.
+   A job that reaches that node through `dockerd` then reaches nothing
+   but the node.
+2. **Fallback: `dind` on a shared worker.** A second aurora scale set
+   in `containerMode.type: dind` on a worker that also holds cluster
+   secrets. aurora may choose it where the first is unavailable. It
+   carries the node-scope exposure §What aurora would have to change
+   names.
+
+The exposure is garam's problem as well as aurora's. Every worker
+holds a `garam-postgres` instance and an OpenBao voter, and ADR-0104
+(#1479) lets an OpenBao Transit provider hold garam's message signing
+keys there.
 
 No job moves to `runs-on: aurora` ahead of that class. Until aurora
 delivers it the local gate stands as it does (option D), and the
@@ -160,7 +181,11 @@ this one.
 ## What aurora would have to change
 
 Each of these is aurora's to decide; this records what the option asks
-for, not how aurora answers.
+for, not how aurora answers. The items assume a `dind` scale set,
+whether on a dedicated worker or a shared one. The node-scope exposure
+below is what the isolated realisation in §Decision removes and the
+fallback keeps, and a node outside the three workers also changes the
+slot item.
 
 - **A scale set in `dind` mode, in a namespace of its own.** The chart
   at 0.15.0 builds that mode with a `dind` sidecar running `dockerd`
@@ -272,8 +297,10 @@ adopting it then owes a mover and a record on each run.
   same three slots.
 - Until aurora delivers the class nothing changes here: the local gate
   stands, and a `v*` tag still publishes nothing.
-- A job on that class can reach the node it runs on. What that costs
-  is aurora's to weigh, and this ADR names it rather than settling it.
+- A job on that class can reach the node it runs on. On the isolated
+  realisation that node holds nothing else; on the fallback it holds
+  cluster secrets garam's own deployment depends on, which is why
+  garam ranks the two rather than leaving the choice unweighted.
 
 ## Signs the decision was wrong
 
@@ -282,6 +309,8 @@ adopting it then owes a mover and a record on each run.
   option left.
 - garam's jobs on the class queue for longer than the local gate takes
   to run, because three slots are shared across the organisation.
+- The class is realised on a worker that holds cluster secrets, and a
+  job escapes to the node.
 - A build on the `dind` class fails on the `emptyDir` work directory's
   space where it passes locally.
 - The jobs that fit aurora's kubernetes class turn out to be the ones

@@ -48,14 +48,14 @@ type ExecutionStore interface {
 	// CredentialCurrent answers whether c may act for the agent now,
 	// without a token and without taking the execution lock.
 	CredentialCurrent(ctx context.Context, agentGRN grn.GRN, c Credential) (bool, error)
-	// CreateManaged writes a, its execution row fenced in c.Lineage,
-	// its first assignment to c.Controller and c in one transaction,
-	// and answers c as stored with created true. Where an
+	// CreateManaged admits c.Agent onto c.Controller, fenced in
+	// c.Lineage, as IdentityAdmission describes, and writes c in the same
+	// transaction, and answers c as stored with created true. Where an
 	// earlier creation already holds c's reference it writes nothing
 	// and answers that one with created false; where one holds c's
 	// request identifier under another reference it refuses with
 	// ErrCreationConflict.
-	CreateManaged(ctx context.Context, a *Agent, c ManagedCreation) (*ManagedCreation, bool, error)
+	CreateManaged(ctx context.Context, c ManagedCreation) (*ManagedCreation, bool, error)
 	// GetManagedCreation answers the creation of agentGRN, or nil for
 	// an agent no managed creation made.
 	GetManagedCreation(ctx context.Context, agentGRN grn.GRN) (*ManagedCreation, error)

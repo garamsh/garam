@@ -108,21 +108,9 @@ type InitialCertificate struct {
 // earlier creation is answered. Its execution is fenced from birth in
 // a lineage of its own that holds no certificate yet.
 func (s *executionService) CreateManaged(ctx context.Context, caller grn.GRN, in ManagedCreationInput) (*ManagedCreation, bool, error) {
-	if err := operates(caller); err != nil {
-		return nil, false, err
-	}
-	if in.Controller.ServiceType != ServiceTypeOperator || in.Controller.Organization != caller.Organization {
-		return nil, false, errorx.New(errorx.KindNotFound, "controller not found")
-	}
-	b, err := s.operations.ResolveReference(ctx, caller, in.OperationRef)
+	b, err := authorizeCreation(ctx, s.operations, caller, in.Controller, in.RequestID, in.OperationRef, ErrCreationConflict)
 	if err != nil {
 		return nil, false, err
-	}
-	if b.Kind != OperationKindCreate || b.Audience != caller || b.Org != grn.Org(caller.Organization) {
-		return nil, false, ErrReferenceMismatch
-	}
-	if b.Target != in.Controller || b.RequestID != string(in.RequestID) {
-		return nil, false, ErrCreationConflict
 	}
 	creation, err := s.executions.GetManagedCreationByReference(ctx, in.OperationRef)
 	if err != nil {
@@ -134,11 +122,7 @@ func (s *executionService) CreateManaged(ctx context.Context, caller grn.GRN, in
 		if err != nil {
 			return nil, false, err
 		}
-		a, err := New(agentGRN, b.Org)
-		if err != nil {
-			return nil, false, err
-		}
-		creation, created, err = s.executions.CreateManaged(ctx, a, ManagedCreation{
+		creation, created, err = s.executions.CreateManaged(ctx, ManagedCreation{
 			Agent: agentGRN, Audience: caller, Controller: in.Controller, RequestID: in.RequestID,
 			OperationRef: in.OperationRef, Lineage: NewLineage(),
 		})

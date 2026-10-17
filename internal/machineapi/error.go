@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	machinegen "github.com/garamsh/garam/api/machine"
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/wire"
@@ -67,6 +68,9 @@ func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 			served(w, r, "", enrollmentValues)
 		case standaloneRoute(r):
 			standaloneContract(w, "")
+		case admissionRoute(r):
+			w.Header().Set(operator.ContractVersionHeader, agent.AdmissionContractVersion)
+			writeError(w, agent.ErrUnsupportedAdmissionContract)
 		case cutoverRoute(r):
 			served(w, r, "", cutoverValues)
 		case r.URL.Path == "/outbox-messages":
@@ -115,6 +119,12 @@ func cutoverRoute(r *http.Request) bool {
 func standaloneRoute(r *http.Request) bool {
 	p := r.URL.Path
 	return p == "/agent-enrollments" || p == "/supervisors/self/certificate"
+}
+
+// admissionRoute reports whether r is one of the agent-enrollment.v1
+// routes, both POSTs under /agent-enrollment-approvals.
+func admissionRoute(r *http.Request) bool {
+	return strings.HasPrefix(r.URL.Path, "/agent-enrollment-approvals")
 }
 
 // causeRecorder is the request-logging middleware's response writer,

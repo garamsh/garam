@@ -98,6 +98,19 @@ type AgentEnrollment struct {
 	ServerRootPem            pgtype.Text
 }
 
+type AgentEnrollmentApproval struct {
+	ID           pgtype.UUID
+	OrgGrn       string
+	RequestID    string
+	Placement    string
+	AudienceGrn  string
+	AssigneeGrn  string
+	OperationRef string
+	CreatedAt    pgtype.Timestamptz
+	AgentGrn     pgtype.Text
+	AdmittedAt   pgtype.Timestamptz
+}
+
 type AgentExecution struct {
 	AgentGrn           string
 	Mode               string

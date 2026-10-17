@@ -150,6 +150,17 @@ tags:
       that agent's credential lineage. Neither route carries a private
       key, and a retry under the same request identifier answers what
       the first request did rather than creating or issuing again.
+  - name: agent-enrollment
+    description: >-
+      `agent-enrollment.v1`, the one admission contract both placements
+      share (ADR-0102 §Common agent enrollment): prepare an approval,
+      admit the identity it binds, deliver the agent's tokens with
+      `mintAgentToken`, then activate with `activateAgent`. Admission
+      starts the agent fenced with no active generation and creates no
+      workload, and a retry under the same request identifier answers
+      what the first request did. Only `managed` placement admits
+      today. Every refusal the contract names carries `reason` in its
+      Error body.
   - name: standalone
     description: >-
       How a standalone host's supervisor obtains its own certificate
@@ -2368,8 +2379,178 @@ paths:
           $ref: '#/components/responses/StandaloneContractError'
         '422':
           $ref: '#/components/responses/StandaloneContractError'
+  /agent-enrollment-approvals:
+    post:
+      operationId: prepareAgentEnrollment
+      tags: [agent-enrollment]
+      security:
+        - machineToken: []
+        - machineBearer: []
+      summary: Prepare the approval agent-enrollment.v1 admits one agent under.
+      description: >-
+        The first of the contract's three stages (ADR-0102). The caller
+        is the hosted Operator control service and presents its own
+        token; a certificate is 401. It binds one approval to its
+        organization, `requestId`, `placement`, `assignee` and the
+        member's `agent:create` reference, rechecked from current state
+        as `createManagedAgent` rechecks it: an `agent:create`
+        reference handed to this caller in its own organization, minted
+        under this `requestId` for this `assignee`. Nothing is admitted
+        and no agent exists yet.
+
+
+        The first answer is 201. The same binding under the same
+        `requestId` answers the same approval with 200. Another binding
+        under that `requestId`, or a reference minted for another
+        assignee or request identifier, is 409 with reason
+        `binding_conflict`. A reference of another kind, or one current
+        state no longer authorizes, is 403; an unknown reference or
+        another audience's, and an assignee of another organization or
+        that is not an operator, is 404; authority garam cannot read as
+        current is 503.
+
+
+        `placement: direct` is 409 with reason `direct_placement_gated`
+        whatever else the body says, until #1355 decides how a directly
+        running runtime's writer is proven. A body naming `replaces` is
+        409 with reason `replacement_unavailable`: no reference kind
+        yet authorizes moving a managed agent to another assignee.
+      parameters:
+        - $ref: '#/components/parameters/agentEnrollmentContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentEnrollmentBinding'
+      responses:
+        '200':
+          description: The approval an identical earlier request prepared.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/AgentEnrollmentContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentEnrollmentApproval'
+        '201':
+          description: The approval.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/AgentEnrollmentContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentEnrollmentApproval'
+        '400':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
+        '401':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
+        '403':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
+        '404':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
+        '409':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
+  /agent-enrollment-approvals/{approval}/admission:
+    post:
+      operationId: admitAgentEnrollment
+      tags: [agent-enrollment]
+      security:
+        - machineToken: []
+        - machineBearer: []
+      summary: Admit the agent an approval binds, fenced and with no active generation.
+      description: >-
+        The second stage. The caller is the approval's own audience and
+        repeats the binding it prepared; a certificate is 401, and an
+        approval of another organization or another audience is 404.
+        garam rechecks the reference from current state as
+        `prepareAgentEnrollment` does, mints the agent's GRN and writes
+        the agent, its first assignment to `assignee` and its execution
+        in one transaction, which also spends the approval. The
+        execution is fenced from birth, in a credential lineage of its
+        own and with no active generation. Admission creates no
+        workload, process, memory, volume or message-channel
+        permission.
+
+
+        The first answer is 201. The same binding answers the same
+        `grn`, `epoch` and `lineage` with 200, however many times and
+        from however many concurrent requests, while the agent is still
+        assigned where admission put it; once it has moved, the retry is
+        409 with reason `superseded`. A body binding other than the
+        approval's is 409 with reason `binding_conflict` before the
+        approval is spent and `approval_spent` after; so is an approval
+        whose reference a `createManagedAgent` creation already spent.
+        Refusals by placement, `replaces` and current authority are
+        `prepareAgentEnrollment`'s.
+
+
+        The third stage, credential delivery, is `mintAgentToken`:
+        `assignee` mints the agent's garam token, and one whose
+        `audience` names the hosted control service, in the epoch and
+        lineage admission answered. The fourth, activation, is
+        `activateAgent` under `execution-fence.v2`, whose first
+        activation carries this reference as `operationRef`. Neither
+        delivery nor admission activates anything by itself.
+      parameters:
+        - $ref: '#/components/parameters/agentEnrollmentContractVersion'
+        - $ref: '#/components/parameters/approval'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentEnrollmentBinding'
+      responses:
+        '200':
+          description: The agent an identical earlier admission admitted.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/AgentEnrollmentContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentAdmission'
+        '201':
+          description: The admitted agent.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/AgentEnrollmentContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentAdmission'
+        '400':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
+        '401':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
+        '403':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
+        '404':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
+        '409':
+          $ref: '#/components/responses/AgentEnrollmentContractError'
 components:
   parameters:
+    agentEnrollmentContractVersion:
+      name: Garam-Contract-Version
+      in: header
+      required: true
+      description: >-
+        `agent-enrollment.v1`, presented beside a token (ADR-0102); any
+        other value is refused with 400 naming it.
+      x-go-name: AgentEnrollmentContractVersion
+      schema:
+        type: string
+    approval:
+      name: approval
+      in: path
+      required: true
+      description: Approval identifier, as `prepareAgentEnrollment` returned it.
+      x-go-name: ApprovalId
+      schema:
+        type: string
     standaloneContractVersion:
       name: Garam-Contract-Version
       in: header
@@ -3489,6 +3670,88 @@ components:
           description: >-
             The garam server root the recovered credential trusts, which
             the holder verifies garam's listener against (ADR-0040).
+    AgentEnrollmentBinding:
+      type: object
+      required: [requestId, placement, assignee, operationRef]
+      properties:
+        requestId:
+          type: string
+          pattern: '^[A-Za-z0-9._~-]{1,128}$'
+          description: The request identifier the member's reference was minted under.
+        placement:
+          type: string
+          enum: [managed, direct]
+          description: >-
+            Where the runtime runs: `managed`, provisioned by the
+            Operator, or `direct`, running independently of it, which is
+            refused until #1355 decides its writer proof.
+        assignee:
+          type: string
+          description: The operator GRN the agent is assigned to, its controller.
+        operationRef:
+          type: string
+          description: The member's durable `agent:create` reference.
+        replaces:
+          $ref: '#/components/schemas/AgentEnrollmentReplacement'
+    AgentEnrollmentReplacement:
+      type: object
+      required: [agent, expectedAssignee, expectedEpoch]
+      description: >-
+        The assignment a replacement expects to move the agent from.
+        Modelled and refused: a body naming it is 409 with reason
+        `replacement_unavailable`.
+      properties:
+        agent:
+          type: string
+        expectedAssignee:
+          type: string
+        expectedEpoch:
+          type: string
+    AgentEnrollmentApproval:
+      type: object
+      required: [approvalId, requestId, placement, assignee, operationRef]
+      properties:
+        approvalId:
+          type: string
+          format: uuid
+        requestId:
+          type: string
+        placement:
+          type: string
+          enum: [managed]
+        assignee:
+          type: string
+        operationRef:
+          type: string
+    AgentAdmission:
+      type: object
+      required: [grn, placement, assignee, epoch, lineage, mode, credentialDelivery]
+      properties:
+        grn:
+          type: string
+          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+        placement:
+          type: string
+          enum: [managed]
+        assignee:
+          type: string
+        epoch:
+          type: string
+          description: The first assignment's epoch. Opaque.
+        lineage:
+          type: string
+          format: uuid
+          description: The credential lineage the agent's tokens are minted in.
+        mode:
+          type: string
+          enum: [fenced]
+          description: >-
+            The execution's mode: fenced from admission, with no active
+            generation.
+        credentialDelivery:
+          type: string
+          enum: [mintAgentToken]
+          description: The operation `assignee` delivers the agent's tokens with.
     ManagedAgentRequest:
       type: object
       required: [requestId, operationRef]
@@ -3640,7 +3903,10 @@ components:
             routes set `digest_mismatch`, `attempt_open`,
             `attempt_ended`, `not_cut_over_eligible` or
             `reverse_migration_required`; `activateAgent` sets
-            `cutover_required` and nothing else. Branch on it only on
+            `cutover_required` and nothing else; the
+            `agent-enrollment.v1` routes set `binding_conflict`,
+            `approval_spent`, `superseded`, `direct_placement_gated` or
+            `replacement_unavailable`. Branch on it only on
             those routes; a new reason is a new contract value.
   headers:
     AssertionContractVersion:
@@ -3664,6 +3930,10 @@ components:
         enum: [no-cache]
     TokenContractVersion:
       description: The contract version this answer follows, `machine-token.v1`.
+      schema:
+        type: string
+    AgentEnrollmentContractVersion:
+      description: The contract version this answer follows, `agent-enrollment.v1`.
       schema:
         type: string
     StandaloneContractVersion:
@@ -3723,6 +3993,15 @@ components:
       headers:
         Garam-Contract-Version:
           $ref: '#/components/headers/TokenContractVersion'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    AgentEnrollmentContractError:
+      description: Error response of an agent-enrollment.v1 route.
+      headers:
+        Garam-Contract-Version:
+          $ref: '#/components/headers/AgentEnrollmentContractVersion'
       content:
         application/json:
           schema:

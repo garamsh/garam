@@ -232,66 +232,49 @@ func reissue(ctx context.Context, q *db.Queries, supervisor string, c *agent.Sup
 	return nil
 }
 
-// place writes where an approval puts its agent and answers the epoch:
-// a new agent with its fenced execution and first assignment, or a
-// replacement's reassignment from exactly the assignment it expected,
-// which ends the replaced registration and the activation its runtime
-// held. Either way the agent moves to lineage, which holds no
-// certificate until the caller records the enrolled one, so every
-// certificate it held before is fenced.
+// place admits the agent an approval binds onto its supervisor and
+// answers the epoch: a new agent, or a replacement from exactly the
+// assignment it expected, which also ends the replaced registration.
+// Either way the agent moves to lineage, which holds no certificate
+// until the caller records the enrolled one.
 func place(ctx context.Context, q *db.Queries, row db.AgentEnrollment, exec db.AgentExecution, held bool, lineage pgtype.UUID, now pgtype.Timestamptz) (int32, error) {
+	orgGRN, err := grn.Parse(row.OrgGrn)
+	if err != nil {
+		return 0, errorx.Wrap(err, "stored enrollment org", errorx.KindInternal)
+	}
+	agentGRN, err := grn.Parse(row.AgentGrn)
+	if err != nil {
+		return 0, errorx.Wrap(err, "stored enrollment agent", errorx.KindInternal)
+	}
+	supervisorGRN, err := grn.Parse(row.SupervisorGrn)
+	if err != nil {
+		return 0, errorx.Wrap(err, "stored enrollment supervisor", errorx.KindInternal)
+	}
+	a := agent.IdentityAdmission{Agent: agentGRN, Org: orgGRN, Assignee: supervisorGRN, Lineage: agent.Lineage(lineage.Bytes)}
 	if !row.ExpectedAssigneeGrn.Valid {
 		if held {
 			return 0, agent.ErrEnrollmentConflict
 		}
-		orgGRN, err := grn.Parse(row.OrgGrn)
-		if err != nil {
-			return 0, errorx.Wrap(err, "stored enrollment org", errorx.KindInternal)
+		epoch, err := admit(ctx, q, a, nil, now)
+		if errors.Is(err, agent.ErrAgentAlreadyExists) {
+			return 0, agent.ErrEnrollmentConflict
 		}
-		agentGRN, err := grn.Parse(row.AgentGrn)
-		if err != nil {
-			return 0, errorx.Wrap(err, "stored enrollment agent", errorx.KindInternal)
-		}
-		a, err := agent.New(agentGRN, orgGRN)
-		if err != nil {
-			return 0, err
-		}
-		if err := q.CreateManagedAgent(ctx, db.CreateManagedAgentParams{
-			Grn: row.AgentGrn, OrgGrn: row.OrgGrn, ProvisioningState: string(a.ProvisioningState()),
-			RuntimeState: string(a.RuntimeState()), CreatedAt: now,
-		}); err != nil {
-			return 0, storageError(err, "create agent", nil, agent.ErrEnrollmentConflict)
-		}
-		// Born fenced, as a managed agent is: no certificate of it
-		// admits anything until the lineage records its first.
-		if err := q.CreateFencedExecution(ctx, db.CreateFencedExecutionParams{
-			AgentGrn: row.AgentGrn, Lineage: lineage, UpdatedAt: now,
-		}); err != nil {
-			return 0, storageError(err, "create execution", nil, nil)
-		}
-		epoch, err := q.AssignFirst(ctx, db.AssignFirstParams{AgentGrn: row.AgentGrn, AssigneeGrn: row.SupervisorGrn, CreatedAt: now})
-		return epoch, storageError(err, "assign", nil, nil)
+		return epoch, err
 	}
 	if !held {
 		return 0, agent.ErrEnrollmentSuperseded
 	}
-	epoch, err := q.ReassignSupervisor(ctx, db.ReassignSupervisorParams{
-		AgentGrn: row.AgentGrn, AssigneeGrn: row.SupervisorGrn, UpdatedAt: now,
-		ExpectedAssigneeGrn: row.ExpectedAssigneeGrn.String, ExpectedEpoch: row.ExpectedEpoch.Int32,
-	})
+	expected, err := grn.Parse(row.ExpectedAssigneeGrn.String)
 	if err != nil {
-		return 0, storageError(err, "reassign", agent.ErrEnrollmentSuperseded, nil)
+		return 0, errorx.Wrap(err, "stored enrollment expected assignee", errorx.KindInternal)
+	}
+	a.Replaces = &agent.Replacement{Agent: agentGRN, Assignee: expected, Epoch: int(row.ExpectedEpoch.Int32)}
+	epoch, err := admit(ctx, q, a, &exec, now)
+	if err != nil {
+		return 0, err
 	}
 	if err := q.EndCurrentSupervisor(ctx, db.EndCurrentSupervisorParams{AgentGrn: row.AgentGrn, EndedAt: now}); err != nil {
 		return 0, storageError(err, "end supervisor", nil, nil)
-	}
-	if exec.ActivationID.Valid {
-		if err := end(ctx, q, exec.ActivationID, agent.EndReassigned, now.Time); err != nil {
-			return 0, err
-		}
-	}
-	if err := q.MoveLineage(ctx, db.MoveLineageParams{AgentGrn: row.AgentGrn, Lineage: lineage, UpdatedAt: now}); err != nil {
-		return 0, storageError(err, "move lineage", nil, nil)
 	}
 	return epoch, nil
 }

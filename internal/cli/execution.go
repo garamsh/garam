@@ -49,6 +49,13 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 		certificates{issuer: issuer, serverRoot: serverRoot})
 }
 
+// newAdmissionService composes agent-enrollment.v1's approval and
+// admission (ADR-0102) over the database and the delegated operation
+// authority that reads a member's reference.
+func newAdmissionService(pool *pgxpool.Pool, authority operator.AuthorityService, now func() time.Time) agent.AdmissionService {
+	return agent.NewAdmissionService(agent.NewPostgresStore(pool), agentpg.New(pool), operationAuthorities{service: authority}, now)
+}
+
 // lifecycleAuthorization decides lifecycle authority over one agent
 // from current state (agent.LifecycleAuthorizer). A hosted operator
 // holds it by its current grant in the agent's organization, which

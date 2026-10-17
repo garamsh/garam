@@ -707,7 +707,9 @@ ADRs:
   identifier, content digest and a lease-long expiry; it publishes its
   keys as a JWK Set and rotates them with overlap, and the agent
   verifies without trusting the path; garam's half is built, and the
-  adapter's forwarding and Sherlock's verification are not
+  adapter's forwarding and Sherlock's verification are not; where its
+  keys are held, and how a claim spends no attempt on a key that will
+  not sign, are superseded in part by 0104
 - [0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
   — an operator proves its existing registration with
   private_key_jwt using issued RSA PEM and Garam stores public keys;
@@ -724,3 +726,10 @@ ADRs:
   permission-check API what a caller may do and hides or disables what
   is denied, while the server still enforces every write. The
   permission check is built; the rest is unbuilt
+- [0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md)
+  — a deployment may hold its message signing keys in an OpenBao or
+  Vault Transit key that signs each hand-out inside the claim's
+  transaction, behind a key-custody seam replacing `message.Sealer`
+  as the keyring's; with no provider the file key-encryption key stays
+  the default, and the certificate authorities stay on it until G4.
+  Unbuilt

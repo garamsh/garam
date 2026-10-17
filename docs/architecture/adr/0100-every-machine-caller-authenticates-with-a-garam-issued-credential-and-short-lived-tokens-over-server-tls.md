@@ -70,8 +70,8 @@ What that costs is read off the tree rather than estimated.
   ([ADR-0078](./0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
 - **Two proofs rest on forwarding a certificate.** The controller proof
   and execution introspection take a leaf the hosted operator received
-  in its own handshake ([operators.md](../operators.md) §Controller
-  proof).
+  in its own handshake
+  ([operators.md](../operators.md) §Controller proof).
 - **The Operator does not meet the model's rotation.** The control
   service loads its own pair once and never renews it
   (`OP:cmd/control/main.go:219-254`). An agent's credential is copied
@@ -131,12 +131,12 @@ Actions Runner Controller's:
 - **Each registered operator holds its own credential, and the hosted
   control service is one of them.** The control service and each
   controller it acts for are distinct operator records of one
-  organization ([operators.md](../operators.md) §Delegated operation
-  authority), so a deployment of both holds two credentials. Each is
-  issued on its own operator's page and shown to whoever issues it,
-  who places it where that process reads it. garam issues neither on
-  the other's behalf, and one credential never authenticates two
-  records.
+  organization
+  ([operators.md](../operators.md) §Delegated operation authority), so a
+  deployment of both holds two credentials. Each is issued on its own
+  operator's page and shown to whoever issues it, who places it where
+  that process reads it. garam issues neither on the other's behalf, and
+  one credential never authenticates two records.
 - **A supervisor credential has the same shape.** An administrator
   registers a standalone host's supervisor for one agent and one host
   name on `agent:enroll`, as ADR-0082 has it, and is answered the
@@ -335,8 +335,9 @@ halves of that come apart.
 
 Today the adapter presents the agent's leaf to the control service
 over mTLS, and the control service forwards that leaf to garam's
-execution introspection ([adapter.md](../adapter.md) §Activation and
-runtime status; `OP:internal/execution/session.go:11-22`,
+execution introspection
+([adapter.md](../adapter.md) §Activation and runtime status;
+`OP:internal/execution/session.go:11-22`,
 `OP:internal/execution/activation.go:140-175`). That is replaced, and
 nothing else in the path moves.
 

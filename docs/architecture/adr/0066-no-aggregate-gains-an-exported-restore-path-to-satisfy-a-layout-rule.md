@@ -216,11 +216,12 @@ asked for.
 - **Amend `stack-go.md` §1 to describe the layout garam uses (#1022's
   option A).** It makes the contradiction vanish by manufacturing an
   argument nobody made — that the rule is wrong for every project — on
-  the strength of nobody having done the work. ADR-0051 §Rejected
-  alternatives already refused writing a one-project answer into
-  `docs/convention/`: *"the conventions bind every project and are the
-  PM's to change … `AGENTS.md` §What earns a rule also bars drawing a
-  rule from one project's evidence, and one project is all this has."*
+  the strength of nobody having done the work.
+  ADR-0051 §Rejected alternatives already refused writing a one-project
+  answer into `docs/convention/`: *"the conventions bind every project
+  and are the PM's to change … `AGENTS.md` §What earns a rule also bars
+  drawing a rule from one project's evidence, and one project is all
+  this has."*
 - **Write the decision as a narrowing of §1's reach — that the rule
   does not govern a domain's own persistence.** This is what #1022's
   ruling asks for, and it is the one form this record cannot take. Rule

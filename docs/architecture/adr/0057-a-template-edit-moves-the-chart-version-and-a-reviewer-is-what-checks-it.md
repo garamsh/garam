@@ -145,8 +145,8 @@ Raised on #929 as a Convention concern and measured in #931.
   check for it needs a base to compare against. A working tree has
   none, so such a check runs in a pipeline and not on a contributor's
   machine, against `docs/convention/ci.md` §Core principle — local and
-  CI checks are the same checks, invoked by the same names — and §One
-  entry point per task, which refuses an entry point that becomes a
+  CI checks are the same checks, invoked by the same names — and
+  §One entry point per task, which refuses an entry point that becomes a
   pipeline component. It would also spend runner minutes on every pull
   request to catch a case that arises on the few that touch the chart;
   #899 measured a superseded run at four job-runs and

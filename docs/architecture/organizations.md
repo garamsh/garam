@@ -97,8 +97,9 @@ organization does not own.
 
 `getOrgDeletionPreview` is what states this to a caller before the
 act, counted on the server rather than assembled from a list the
-caller happens to hold; [api-surface.md](./api-surface.md) §What
-decides the rest holds what authorizes it.
+caller happens to hold;
+[api-surface.md](./api-surface.md) §What decides the rest holds what
+authorizes it.
 
 This domain owns its action constants (`ActionOrgRead`,
 `ActionGroupRead`, `ActionProjectRead`, `ActionPolicyCreate`, …) —

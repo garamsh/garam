@@ -139,9 +139,10 @@ decision refuses.
   changes for the audience, and it is the half that was missing.
 - **`api-surface.md` §Not decided loses an entry and does not gain a
   replacement.** The state it recorded is now decided, and the fact now
-  lives where a reader meets it; §What a specification is authoritative
-  for records that the specifications carry it, rather than repeating
-  it, under that document's own rule that a fact one of them already
+  lives where a reader meets it;
+  §What a specification is authoritative for records that the
+  specifications carry it, rather than repeating it, under that
+  document's own rule that a fact one of them already
   answers is named there rather than copied.
 - **A pull request that changes either surface owes nothing to the
   version field.** That was already true and was not written down;

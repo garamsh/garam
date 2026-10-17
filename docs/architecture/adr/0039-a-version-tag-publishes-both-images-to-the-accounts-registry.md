@@ -134,9 +134,10 @@ named below is therefore a decision, not a demonstrated mechanism.
   account, asked of `garamsh/infra`** — trusted for this repository's
   OIDC subject only, and holding `ecr:GetAuthorizationToken` with the
   push actions on the two repository ARNs and nothing else. This
-  repository stores no AWS access key: `docs/convention/ci.md`
-  §Security baseline prefers short-lived federated credentials, and the
-  `id-token: write` permission is granted on the publishing job alone.
+  repository stores no AWS access key:
+  `docs/convention/ci.md` §Security baseline prefers short-lived
+  federated credentials, and the `id-token: write` permission is granted
+  on the publishing job alone.
 - **None of it is built.** No release workflow exists, the role does
   not exist, and neither repository exists. What is settled here is the
   registry, the names, the tag rule, the trigger and the credential
@@ -153,10 +154,11 @@ named below is therefore a decision, not a demonstrated mechanism.
 - **This asks two things of people outside this repository**: two ECR
   repositories from whoever owns the registry, and a push role from
   `garamsh/infra`. Which of them owns the repositories is open there,
-  not here — `garamsh/infra` `docs/architecture/aws.md` §Current
-  decisions puts them outside its module today. Immutability is set
-  when a repository is created — ECR can be switched afterwards, but a
-  tag pushed while it was mutable stays unproven.
+  not here — `garamsh/infra`
+  `docs/architecture/aws.md` §Current decisions puts them outside its
+  module today. Immutability is set when a repository is created — ECR
+  can be switched afterwards, but a tag pushed while it was mutable
+  stays unproven.
 - **A published web image is bound to one API URL.** The `/api/*`
   rewrite target is a build argument baked into the image (`ARG
   GARAM_API_URL` in `deploy/local/Dockerfile.web`, read by
@@ -169,9 +171,10 @@ named below is therefore a decision, not a demonstrated mechanism.
   reproduce.** Both Dockerfiles name their base images by tag
   (`golang:1.26.5-alpine3.24`, `node:24.18.1-alpine3.24`), and a tag
   moves, so two builds of one commit can differ while the image tag
-  says they cannot. `docs/convention/ci.md` §Verify a pinned dependency
-  before adopting it asks for a reference that cannot come to mean
-  something else; satisfying it is a change to those two files, not to
+  says they cannot.
+  `docs/convention/ci.md` §Verify a pinned dependency before adopting it
+  asks for a reference that cannot come to mean something else;
+  satisfying it is a change to those two files, not to
   this decision.
 - **The image tag is the only place a version appears.** Nothing stamps
   one into the binary (`deploy/local/Dockerfile` builds with no
@@ -254,20 +257,23 @@ named below is therefore a decision, not a demonstrated mechanism.
   mechanism", and that run demonstrated it; §Consequences' "A cluster
   cannot pull garam until the workflow, the role and the repositories
   exist" names a condition every part of which is now met; and the
-  2026-08-27 erratum's pointer at the chart's `README.md` §Pinning a
-  version as "what now states that neither image exists yet" no longer
-  describes that section. The decision is untouched, and `v0.1.0` is the
+  2026-08-27 erratum's pointer at the chart's
+  `README.md` §Pinning a version as "what now states that neither image
+  exists yet" no longer describes that section. The decision is
+  untouched, and `v0.1.0` is the
   first exercise of exactly what it specifies: a `vX.Y.Z` tag, the image
   tag without the `v`, both images to the account's registry under the
   names, on the trigger and the credential shape decided here. The
   chart's two image tags stay required, for a reason this release does
-  not supply — `deploy/charts/garam/README.md` §Values a deployment must
-  supply states it.
+  not supply —
+  `deploy/charts/garam/README.md` §Values a deployment must supply
+  states it.
 
 - 2026-09-02 — §Consequences' "A published web image is bound to one API
   URL" closes "That choice belongs to the change that builds the
-  release, and until it is made `deployment-contract.md` §Not
-  established says the answer is not known", and both halves are spent.
+  release, and until it is made
+  `deployment-contract.md` §Not established says the answer is not
+  known", and both halves are spent.
   #792 made the choice on 2026-09-01, in the same change that built the
   workflow: `.github/workflows/release.yml` bakes
   `GARAM_API_URL=http://garam-api:8080`, and that commit (593f5c3)

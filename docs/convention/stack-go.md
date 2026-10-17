@@ -294,10 +294,11 @@ a transport as unknown.
   `internal/wire`.** This applies "Each transport translates in one
   place" above: its two examples, an HTTP server and a gRPC service,
   make a transport a protocol, so garam's two HTTP surfaces are one
-  transport with one translation (`docs/architecture/overview.md`
-  §Non-functional goals, `docs/architecture/domains.md` §Shared code
-  below the domains). It is stated here because the table is one of
-  `errorx` kinds, which only ADR-0003 gives this project.
+  transport with one translation
+  (`docs/architecture/overview.md` §Non-functional goals,
+  `docs/architecture/domains.md` §Shared code below the domains). It
+  is stated here because the table is one of `errorx` kinds, which
+  only ADR-0003 gives this project.
 
 ## 5. Logging & observability
 

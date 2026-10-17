@@ -186,7 +186,7 @@ must be checked against current authority
 Its callers are delegated operation authority on both listeners and
 the controller proof on the machine listener
 ([operators.md](./operators.md) §Delegated operation authority,
-§Controller proof).
+`operators.md` §Controller proof).
 It decides as
 `Check` does, except that the org's active policies and their
 attachments are read from storage on every call: it neither reads nor

@@ -43,5 +43,5 @@ mislead.
 - There is one dev Postgres per machine, not per worktree, and `make
   integration e2e` owns databases apart from the stack's because the
   first of the two truncates (#112): `garam_test`, and one suffixed
-  database per linked worktree (#205). `deploy/local/README.md`
-  §Databases is the detail.
+  database per linked worktree (#205).
+  `deploy/local/README.md` §Databases is the detail.

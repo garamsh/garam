@@ -41,8 +41,9 @@ than leaving a boundary that says only what is absent here
 what `Chart.yaml`'s `version` names and when it moves (ADR-0042,
 [ADR-0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md)) —
 a rule no responsibility document held or reached before this route.
-The same file's §What it renders is authoritative for what each
-template renders and for what follows from that — the update strategy
+`deploy/charts/garam/README.md` §What it renders is authoritative for
+what each template renders and for what follows from that — the update
+strategy
 every Deployment sets and what an upgrade costs in service under it,
 and the hook phase the migration Job runs in.
 
@@ -69,8 +70,8 @@ names it nowhere
 It records what is. Changing any behaviour named below is a decision,
 not an edit here. Every claim names the path it can be checked against,
 per `docs/convention/documentation.md` §Keep it current; where the
-source answers a deployment question with nothing checkable, §Not
-established says so rather than guessing.
+source answers a deployment question with nothing checkable,
+§Not established says so rather than guessing.
 
 The client-CA prohibition below originates in the consuming repository's
 own record (`garamsh/gitops` issue #3), restated here against the source
@@ -129,8 +130,9 @@ default or the deployment's own choice, never a decision made here.
 private_key_jwt exchange
 ([ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md))
 once `GARAM_MACHINE_TOKEN_URL` is set, and no deployment sets it: the
-chart renders no value (`deploy/charts/garam/README.md` §Not set by
-this chart), and no deployment has adopted the workflow below.
+chart renders no value
+(`deploy/charts/garam/README.md` §Not set by this chart), and no
+deployment has adopted the workflow below.
 
 - Set `GARAM_MACHINE_TOKEN_URL` to the absolute https URL of the
   machine listener's `/oauth/token` as a caller outside the cluster
@@ -494,14 +496,15 @@ every message signed under the new one. So a deployment picks a
 stable name it owns once, rather than the cluster's DNS, so that
 moving or exposing the listener never changes it, and keeps it; the
 dev cluster's is `https://machine.dev.garam.sh`. The chart renders it
-from `machine.issuer` (`deploy/charts/garam/README.md` §Values a
-deployment must supply).
+from `machine.issuer`
+(`deploy/charts/garam/README.md` §Values a deployment must supply).
 
 A standalone host trusts that same value only where it names it:
 `garam standalone run --message-issuer` renders it into the runtime's
 configuration, exactly as `GARAM_MACHINE_ISSUER` spells it, beside the
-address the runtime fetches garam's key set at (`agents.md`
-§Standalone hosts), and turns the adapter's signing on with it.
+address the runtime fetches garam's key set at
+(`agents.md` §Standalone hosts), and turns the adapter's signing on
+with it.
 Nothing stands in for it: a host that names no issuer renders no entry,
 signs nothing and trusts no garam signature, and one that names another
 spelling refuses every message garam signs. A changed
@@ -517,7 +520,7 @@ an exact `iss` (Sherlock v0.4.0, `docs/architecture/gateway.md`
 Nothing checks the two against each other: a mismatch on either reads
 as 403 `signature rejected: issuer` on every message once the adapter's
 `GARAM_ADAPTER_SIGN_MESSAGES` is on, and not as an error at start
-(adapter.md §Stable identifiers and the outbox).
+(`adapter.md` §Stable identifiers and the outbox).
 
 ## The migrate job
 

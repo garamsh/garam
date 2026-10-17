@@ -41,16 +41,20 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
   ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)). That ADR supersedes ADR-0051's accessor and ends
   ADR-0066's reservation; an aggregate that does hold an invariant over
   its fields is not decided by it.
-- **Two domains of ten have converted.** `internal/user` and
-  `internal/ca` carry exported fields on what their stores persist, and
-  each store sits in `internal/<domain>/postgres/`. The other eight
-  keep their accessors and keep their store beside the aggregate until
-  each follows in its own pull request (#1083), so the tree reads in
-  two shapes meanwhile and the rule above is what both are measured
-  against. `internal/audit`, added after the ten, was written in the
-  converted shape: its writer sits in `internal/audit/postgres/`, and
-  its one aggregate keeps accessors because it holds an invariant over
-  its fields
+- **Three of the ten domains #1083 covers have converted.**
+  `internal/user`, `internal/ca` and `internal/watch` keep their store
+  in `internal/<domain>/postgres/`, and `go list -deps` on each reports
+  no `jackc/pgx`. `user` and `ca` carry exported fields on what their
+  stores persist; `watch`'s `Store` persists no aggregate, so it
+  exported none. `internal/machine` had no driver import to move. The
+  other six — `org`, `agent`, `message`, `authz`, `operator` and
+  `authn` — still import the driver into the domain package and keep
+  their accessors until each follows in its own pull request (#1083),
+  so the tree reads in two shapes meanwhile and the rule above is what
+  both are measured against. `internal/audit`, added after the ten, was
+  written in the converted shape: its writer sits in
+  `internal/audit/postgres/`, and its one aggregate keeps accessors
+  because it holds an invariant over its fields
   ([ADR-0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)).
 - **A boundary reaches a sibling directly, through the surface that
   sibling declares**

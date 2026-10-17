@@ -81,11 +81,14 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**Two of the ten have this shape today: `internal/user` and
-`internal/ca`.** The other eight keep `queries.sql`, `postgres.go` and
-`db/` directly under the domain, and each moves in its own pull request
-following #1083. Until then `ls internal/*/postgres/` names the
-converted domains and the shape above describes two of ten.
+**Three of the ten have this shape today: `internal/user`,
+`internal/ca` and `internal/watch`.** `internal/machine` persists
+through `internal/machine/postgres` and had no driver import to move.
+The other six — `org`, `agent`, `message`, `authz`, `operator` and
+`authn` — keep a store that imports `jackc/pgx` inside the domain
+package, and each moves in its own pull request following #1083. Until
+then `go list -deps` on a domain package names `jackc/pgx` exactly for
+those six, and the shape above describes three of ten.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,
 inside the same package, when one Postgres type carries the methods of
@@ -459,7 +462,7 @@ composition root does.
 | ca | yes (`store.go`) | yes (`postgres/postgres.go`) | not planned | — |
 | message.Store | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | message.ConsentStore | yes (`consent.go`) | yes (`postgres_consent.go`) | not planned | — |
-| watch | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| watch | yes (`store.go`) | yes (`postgres/postgres.go`) | not planned | — |
 | audit | no — the writer takes the caller's transaction (ADR-0106) | yes (`postgres/postgres.go`) | not planned | — |
 | machine.Recorder | yes (`recorder.go`) | yes (`postgres/postgres.go`) | not planned | — |
 

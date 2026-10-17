@@ -31,6 +31,7 @@ import (
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/watch"
+	watchpg "github.com/garamsh/garam/internal/watch/postgres"
 )
 
 // newServeMachineCommand constructs `garam serve machine`: the
@@ -264,7 +265,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// that process to deliver: garam cannot dial an adapter, so the
 	// count travels on the poll this process answers, and no stream is
 	// held here (ADR-0022).
-	watches, err := watch.NewService(watch.NewPostgresStore(pool), watch.NewPostgresRelay(pool), watch.Config{})
+	watches, err := watch.NewService(watchpg.New(pool), watchpg.NewRelay(pool), watch.Config{})
 	if err != nil {
 		return nil, err
 	}

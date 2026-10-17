@@ -103,7 +103,16 @@ WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_AD
 # given none reads the current directory, which fails only while no .go
 # file sits at the module root — a doc.go there is an ordinary idiom and
 # would make an empty list a run of zero tests exiting 0 (#870).
-GO_PKGS = $(shell go list ./...)
+GO_SELECT = go list ./...
+GO_PKGS = $(shell $(GO_SELECT))
+
+# The one way a Go entry point reports its packages: the count beside
+# the selector that chose them, failing on zero (stack-go.md §9).
+# $(call go-packages,<entry point>,<selector>,<packages>)
+define go-packages
+@echo "$(1): $(words $(3)) packages from $(2)"
+@test -n '$(strip $(3))' || { echo "$(1): nothing to run — $(2) selected no package"; exit 1; }
+endef
 
 # What buf lint will read, counted on lint's line. buf itself fails on a
 # module holding no .proto file; the guard below is for an ls-files that
@@ -161,9 +170,10 @@ SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find sc
 # zero, so the line below states no Markdown count — a second selector
 # here would be one more thing to keep equal to the scripts'.
 lint:
-	@echo 'lint: $(words $(GO_PKGS)) packages (go vet), $(words $(PROTO_FILES)) proto files (buf lint), $(words $(WORKFLOW_FILES)) workflows (actionlint), $(words $(SHELL_SCRIPTS)) shell scripts (shfmt); Markdown counted by check-contents-list.sh and check-heading-prefixes.sh below'
-	@test -n '$(GO_PKGS)' && test -n '$(PROTO_FILES)' && test -n '$(WORKFLOW_FILES)' && test -n '$(SHELL_SCRIPTS)' \
-		|| { echo 'lint: nothing to lint — go list, the buf module, .github/workflows or the shell sweep matched no input; the counts above name which'; exit 1; }
+	@echo 'lint: $(words $(PROTO_FILES)) proto files (buf lint), $(words $(WORKFLOW_FILES)) workflows (actionlint), $(words $(SHELL_SCRIPTS)) shell scripts (shfmt); go vet counted on its own line below, Markdown by check-contents-list.sh and check-heading-prefixes.sh'
+	@test -n '$(PROTO_FILES)' && test -n '$(WORKFLOW_FILES)' && test -n '$(SHELL_SCRIPTS)' \
+		|| { echo 'lint: nothing to lint — the buf module, .github/workflows or the shell sweep matched no input; the counts above name which'; exit 1; }
+	$(call go-packages,lint (go vet),$(GO_SELECT),$(GO_PKGS))
 	@go vet $(GO_PKGS)
 	@$(BUF) lint
 	@$(ACTIONLINT) -shellcheck= -pyflakes= $(WORKFLOW_FILES)
@@ -200,11 +210,13 @@ format:
 # namespace it names them (ADR-0097), and
 # scripts/image-test-ecr-test.sh, what test-image-push and
 # test-image-pin refuse before they reach AWS (ADR-0093).
-TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e %/tests/workload %/tests/standalone,$(GO_PKGS))
+TEST_EXCLUDE = %/tests/integration %/tests/e2e %/tests/workload %/tests/standalone
+TEST_SELECT = $(GO_SELECT) minus $(TEST_EXCLUDE)
+TEST_PKGS = $(filter-out $(TEST_EXCLUDE),$(GO_PKGS))
 
 test:
-	@echo 'test: $(words $(TEST_PKGS)) packages; tests/integration and tests/e2e not covered here — they need Postgres (make db-up integration e2e); tests/workload and tests/standalone need a Docker daemon and the pinned images (make workload-integration, make standalone-e2e)'
-	@test -n '$(TEST_PKGS)' || { echo 'test: nothing to test — the package list is empty, or the filter above matched all of it'; exit 1; }
+	$(call go-packages,test,$(TEST_SELECT),$(TEST_PKGS))
+	@echo 'test: tests/integration and tests/e2e not covered here — they need Postgres (make db-up integration e2e); tests/workload and tests/standalone need a Docker daemon and the pinned images (make workload-integration, make standalone-e2e)'
 	@go test -count=1 $(TEST_PKGS)
 	@scripts/image-build-test.sh
 	@scripts/image-test-ecr-test.sh
@@ -213,11 +225,11 @@ test:
 # resolve to no package, so build names what it compiles too. It skips a
 # test-only package swept in by ./... and fails on one named directly,
 # so the list holds those with a non-test file; go test covers the rest.
-BUILD_PKGS = $(shell go list -f '{{if .GoFiles}}{{.ImportPath}}{{end}}' ./...)
+BUILD_SELECT = go list -f '{{if .GoFiles}}{{.ImportPath}}{{end}}' ./...
+BUILD_PKGS = $(shell $(BUILD_SELECT))
 
 build:
-	@echo 'build: $(words $(BUILD_PKGS)) packages'
-	@test -n '$(BUILD_PKGS)' || { echo 'build: nothing to build — no package has a non-test Go file'; exit 1; }
+	$(call go-packages,build,$(BUILD_SELECT),$(BUILD_PKGS))
 	@go build $(BUILD_PKGS)
 
 # gen regenerates everything derived from a source of truth: the

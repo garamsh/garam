@@ -16,6 +16,15 @@ platform makes no such report itself (ADR-0018), and it is unbuilt —
 sender can do instead is ask, which it could not before: it reads the
 state of a message it sent, described below (ADR-0055).
 
+**Holding the signing keys outside garam is unbuilt.**
+[ADR-0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md)
+lets a deployment hold them in an OpenBao or Vault Transit key, which
+signs each hand-out so no private half reaches the database or garam's
+memory, and makes the signature part of the claim's transaction so a
+claim Transit cannot sign spends no attempt. Every key below is held as
+the signing paragraph describes until that lands; with no provider
+configured, it stays so.
+
 | Type | Responsibility |
 |------|----------------|
 | `Message` | one message addressed to a recipient, under an identifier of the queue's own |

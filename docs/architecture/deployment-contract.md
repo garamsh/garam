@@ -126,23 +126,25 @@ default or the deployment's own choice, never a decision made here.
 
 ## Operator key and enrollment rollout
 
-**Unbuilt for deployments.** garam serves key issuance and the
+**Off until a deployment sets it.** garam serves key issuance and the
 private_key_jwt exchange
 ([ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md))
-once `GARAM_MACHINE_TOKEN_URL` is set, and no deployment sets it: the
-chart renders no value
-(`deploy/charts/garam/README.md` §Not set by this chart), and no
+once `GARAM_MACHINE_TOKEN_URL` is set. The chart renders it from
+`machine.tokenUrl` on both `serve api` and `serve machine`, and renders
+it on neither while that value is empty, its default
+(`deploy/charts/garam/README.md` §Values a deployment must supply); no
 deployment has adopted the workflow below.
 
-- Set `GARAM_MACHINE_TOKEN_URL` to the absolute https URL of the
-  machine listener's `/oauth/token` as a caller outside the cluster
-  names it, with no query or fragment, on both `serve api` and
-  `serve machine`, and keep it for the deployment's life: every
-  assertion names it as its audience byte for byte, and changing it
-  refuses every Operator until each is given the new value. Unset,
-  `serve api` issues no key, refusing with 409 and the reason
-  `key_issuance_unconfigured`, and `serve machine` answers the
-  exchange 503. It is not `GARAM_MACHINE_ISSUER`, the message issuer.
+- Set `machine.tokenUrl` to the absolute https URL of the machine
+  listener's `/oauth/token` as a caller outside the cluster names it,
+  with no user information, query or fragment — the render refuses any
+  other shape, as the binary does at startup — and keep it for the
+  deployment's life: every assertion names it as its audience byte for
+  byte, and changing it refuses every Operator until each is given the
+  new value. Unset, `serve api` issues no key, refusing with 409 and
+  the reason `key_issuance_unconfigured`, and `serve machine` answers
+  the exchange 503. It is not `machine.issuer`
+  (`GARAM_MACHINE_ISSUER`), the message issuer.
 
 - Place each controller/control-service private key in its own
   owner-only file via the deployment's secret mechanism, never in

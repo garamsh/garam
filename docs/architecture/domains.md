@@ -19,7 +19,7 @@ garam's domains, named by the subject matter each owns, and what else under `int
 A domain is a boundary named for the subject matter it owns and never
 for a technical role
 ([structure.md](./structure.md) §Boundaries and dependency direction).
-garam has nine, and each has a responsibility
+garam has ten, and each has a responsibility
 document of its own named for the subject: the Go package implementing
 a domain is named in that document and is not the domain's name
 ([ADR-0048](./adr/0048-garams-domains-are-named-by-subject-matter.md)).
@@ -57,6 +57,8 @@ the Go package implementing it is in parentheses.
   an agent through, the consent that lets one cross an organization
   boundary, and the signature on every message garam hands out
   (`internal/message`)
+- [audit.md](./audit.md) — the record garam keeps of what it decided,
+  which holds message sends alone (`internal/audit`)
 
 ## The shape a domain takes
 
@@ -317,7 +319,7 @@ middle column below is a count of domains, and #783 records that
 column being counted four times and answering with four different
 numbers for want of saying what it counts, so the rule is here:
 
-- **Only a domain counts.** The nine sections above are the whole
+- **Only a domain counts.** The ten entries above are the whole
   list. A delivery surface, a sub-responsibility held in a boundary of
   its own and another shared package import these packages too, and
   none of those importers is a domain.
@@ -344,10 +346,10 @@ go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{e
 
 | Package | Domains importing it | Standing |
 |---|---|---|
-| `internal/errorx` | 9 — every domain | earns its place |
-| `internal/grn` | 9 — every domain | earns its place |
-| `internal/pgxerr` | 8 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` | earns its place |
-| `internal/pgxtype` | 8 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` | earns its place |
+| `internal/errorx` | 10 — every domain | earns its place |
+| `internal/grn` | 10 — every domain | earns its place |
+| `internal/pgxerr` | 9 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` `audit` | earns its place |
+| `internal/pgxtype` | 9 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` `audit` | earns its place |
 | `internal/listfilter` | 2 — `org` `agent` | under the threshold; placed by ADR-0052 and not by the count |
 | `internal/wire` | 1 — `authz` | permitted by the wire-format carve-out, not by the count |
 | `internal/keyfile` | 1 — `ca` | under the threshold; belongs with the domain that owns it |
@@ -371,19 +373,20 @@ transport-agnostic by design, so the same errors flow over any surface,
 and a pgx dependency there would end that. Which sqlstate becomes which
 kind is the package's own doc comment; it is code, and a copy here would
 be a second thing to keep true. Every postgres-backed store answers
-through it, which is eight domains: the five that each held their own
+through it, which is nine domains: the five that each held their own
 copy — `org`, `authz`, `ca`, `user`, `agent` — `operator`, which never
-had one, and the sign-in and messaging domains, whose stores read the
-driver's error inline until they were routed through it too. Machine
-identity, the ninth domain, persists nothing and has no store. The watch
+had one, the sign-in and messaging domains, whose stores read the
+driver's error inline until they were routed through it too, and
+audit, whose writer has answered through it from the start. Machine
+identity, the tenth domain, persists nothing and has no store. The watch
 boundary's store answers through it as well and is not a domain, which
-is why the query above names nine importers where the column counts
-eight.
+is why the query above names ten importers where the column counts
+nine.
 
 `internal/pgxtype` holds the timestamptz conversion the stores bind and
 scan: `Timestamptz` makes a present value of a `time.Time`, and `Time`
 reads one back as stored, nil where it is NULL. Every postgres-backed
-store binds through it, which is the same eight domains and the watch
+store binds through it, which is the same nine domains and the watch
 boundary `internal/pgxerr` counts; each had declared its own copy
 (#1150). It is a wire format and chooses no behaviour, so it is a
 package of its own rather than part of `pgxerr`, which is errors.
@@ -455,6 +458,7 @@ composition root does.
 | message.Store | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | message.ConsentStore | yes (`consent.go`) | yes (`postgres_consent.go`) | not planned | — |
 | watch | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| audit | no — the writer takes the caller's transaction (ADR-0106) | yes (`postgres/postgres.go`) | not planned | — |
 
 The rows are keyed by the Go package, because a store is named for the
 package that declares its interface rather than for the subject above
@@ -512,6 +516,5 @@ the adapter where it is used.
 |--------|---------------------|----------------|
 | workflow | `internal/workflow` | workflow definition and execution |
 | doc | `internal/doc` | permissioned document |
-| audit | `internal/audit` | decision and change events |
 | token | `internal/token` | API token exchange (browser sessions live in `internal/authn`) |
 | secret | `internal/secret` | a reference to a secret an external store holds — never the value (ADR-0036) |

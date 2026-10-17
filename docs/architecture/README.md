@@ -291,6 +291,8 @@ Responsibility documents:
 - [messaging.md](./messaging.md) — the durable queue a message reaches
   an agent through, the consent that lets one cross an organization
   boundary, and the signature on every message garam hands out
+- [audit.md](./audit.md) — the record garam keeps of what it decided,
+  which holds message sends alone
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization policy domain: the rules
   that decide what a subject may do, and the engine that decides
@@ -756,6 +758,11 @@ ADRs:
   isolated from the nodes that hold cluster secrets, with `dind` on a
   shared worker as aurora's fallback, and the local gate stands until
   the class exists. Unbuilt
+- [0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)
+  — garam stays the only route a message takes, and every send it
+  decides writes one audit event without a body in the transaction of
+  its outcome, kept until either party's organization is deleted and
+  read by nobody through garam yet
 - [0107](./adr/0107-a-managed-replacement-is-authorized-by-an-agent-replace-reference-naming-the-agent-its-assignment-and-the-controller-it-moves-to.md)
   — a managed replacement under `agent-enrollment.v1` is authorized
   by a new `agent:replace` reference, held by owners and
@@ -763,3 +770,10 @@ ADRs:
   assignment and names the controller it moves to, which the grant
   must cover with the current one; `agent:create`, `agent:cutover` and
   `agent:recover` keep their reading
+- [0108](./adr/0108-a-reply-answered-outside-its-contract-is-offered-again-on-a-bounded-schedule-and-a-refusal-on-its-merits-is-not.md)
+  — the adapter offers again, on its per-entry backoff up to the retry
+  cap, a reply garam answered outside its contract, so an adapter
+  upgraded before garam forwards it without a restart; a refusal on
+  the entry's merits is still set aside until its file is replaced.
+  0083's decision stands, and its 404 row now reads as a later attempt
+  that may be admitted

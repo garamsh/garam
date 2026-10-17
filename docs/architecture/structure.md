@@ -47,7 +47,11 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
   keep their accessors and keep their store beside the aggregate until
   each follows in its own pull request (#1083), so the tree reads in
   two shapes meanwhile and the rule above is what both are measured
-  against.
+  against. `internal/audit`, added after the ten, was written in the
+  converted shape: its writer sits in `internal/audit/postgres/`, and
+  its one aggregate keeps accessors because it holds an invariant over
+  its fields
+  ([ADR-0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)).
 - **A boundary reaches a sibling directly, through the surface that
   sibling declares**
   ([ADR-0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md)).

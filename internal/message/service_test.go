@@ -33,6 +33,7 @@ type queue struct {
 	statusSender grn.GRN
 	statusID     message.ID
 	created      []time.Time
+	refusals     [][2]grn.GRN
 }
 
 func (q *queue) Enqueue(_ context.Context, m *message.Message, _ *message.Fence) (*message.Message, error) {
@@ -48,6 +49,13 @@ func (q *queue) EnqueueWithinBudget(_ context.Context, m *message.Message, creat
 	q.stored = append(q.stored, m)
 	q.created = append(q.created, created)
 	return m, nil
+}
+
+func (q *queue) Refuse(_ context.Context, sender, recipient grn.GRN, _ *message.Fence) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.refusals = append(q.refusals, [2]grn.GRN{sender, recipient})
+	return nil
 }
 
 func (q *queue) Claim(_ context.Context, _ grn.GRN, lease time.Duration, maxAttempts int, _ *message.Fence, _ func(*message.Claim) error) (*message.Claim, error) {
@@ -390,4 +398,21 @@ func TestService_ClaimWaitsOnTheKindTheStoreAnswersWith(t *testing.T) {
 
 	assert.ErrorIs(t, err, unreachable, "the control: another kind reaches the caller")
 	assert.Equal(t, 1, failing.queue.claims, "and is not waited on")
+}
+
+// TestService_RefuseRecordsOnlyASendBetweenTwoIdentities passes a
+// denied send to the store as its two parties, and refuses one whose
+// party is no identity before the store is reached. The valid send is
+// the control: the store is reachable, so the refusal is the check.
+func TestService_RefuseRecordsOnlyASendBetweenTwoIdentities(t *testing.T) {
+	q := &queue{}
+	s, err := message.NewService(q, message.Config{})
+	require.NoError(t, err)
+
+	require.NoError(t, s.Refuse(context.Background(), senderGRN(), recipientGRN(), fenceOf(senderGRN())))
+	assert.Equal(t, [][2]grn.GRN{{senderGRN(), recipientGRN()}}, q.refusals)
+
+	err = s.Refuse(context.Background(), senderGRN(), grn.GRN{}, nil)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "%v", err)
+	assert.Len(t, q.refusals, 1, "a send to no identity reached the store")
 }

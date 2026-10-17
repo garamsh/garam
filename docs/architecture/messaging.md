@@ -24,7 +24,7 @@ state of a message it sent, described below (ADR-0055).
 | `Consent` | one pair of organizations and the two halves of their cross-organization consent (ADR-0035); it stands while both halves do |
 | `Config` | the delivery parameters: lease, ceiling, attempts, and how long a claim waits |
 | `Fence` | what an agent's call presents to the agent execution fence: the agent, the certificate its connection verified and its execution token's hash (ADR-0080) |
-| `Service` | what a machine identity does to its own queue: post, post a durable reply within its budget, claim, renew, complete, and read the state of what it sent |
+| `Service` | what a machine identity does to its own queue: post, post a durable reply within its budget, record a post a policy denied, claim, renew, complete, and read the state of what it sent |
 | `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, and the send path asking whether both halves stand |
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
 | `SubmissionBudget` | how long after its creation a durable reply may still store a message, fixed by `durable-delivery.v1` (ADR-0083) |
@@ -151,6 +151,21 @@ message becomes ready when a lease runs out as well as when a sender
 stores one, and a lease running out is a moment passing that nothing
 announces. The interval is the delivery latency ADR-0013 accepted in
 place of a push.
+
+**Every send garam decides is recorded, with the outcome and never
+with a body**
+([ADR-0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)).
+The store writes the send's event through the audit domain's writer
+inside the transaction that writes the outcome, so a message write
+runs in a transaction whether or not a fence admits it: an authorized
+post's event names the message its key stores, a retry included; a
+crossing no consent carries records a refused send with no message,
+beside the refusal garam writes back; and a post the policy denies,
+which stores nothing, records its refused send alone, after the fence.
+A durable submission the budget refuses, or whose key holds another
+message, records nothing, and its sweep still commits. The record is
+the audit domain's and outlives this one's retention
+([audit.md](./audit.md)).
 
 **Every hand-out is signed**
 ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)).

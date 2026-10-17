@@ -507,10 +507,14 @@ pins it for this adapter.
   message with a non-empty identifier, this agent as sender, the
   entry's target as recipient and its identifier as key, while the file
   is still the one that was read. A 201 carrying a cross-organization
-  refusal fails that check. A refusal, an unsupported peer or a wrong
+  refusal fails that check. A refusal on the entry's merits or a wrong
   binding keeps the entry and logs it without a hot retry loop; an
   unreachable garam is retried with bounded backoff under the same
-  identity. An entry with no valid `created_at`, or past garam's
+  identity. An answer outside the contract keeps the entry and offers
+  it again on its own backoff, doubling up to the retry cap, so a garam
+  upgraded after the adapter is served without a restart
+  ([ADR-0108](./adr/0108-a-reply-answered-outside-its-contract-is-offered-again-on-a-bounded-schedule-and-a-refusal-on-its-merits-is-not.md)).
+  An entry with no valid `created_at`, or past garam's
   seven-day admission budget, is never deleted, re-keyed or re-stamped.
   An entry the file boundary refuses is set aside until its file is
   replaced; one the system could not open or read is tried again after

@@ -2066,8 +2066,10 @@ paths:
       tags: [policy]
       summary: Append a version to a policy. Requires the `admin` role.
       description: >-
-        Versions are append-only. The policy keeps evaluating its
-        default version until a rollback moves the pointer.
+        Versions are append-only. Appending leaves the policy's default
+        version where it is, so the policy keeps evaluating that version
+        until `rollbackPolicy` makes another stored version, the
+        appended one included, the default.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/policy'
@@ -2097,7 +2099,10 @@ paths:
       operationId: activatePolicy
       tags: [policy]
       summary: Activate a policy. Requires the `admin` role.
-      description: An active policy contributes its default version to checks.
+      description: >-
+        An active policy contributes its default version to checks.
+        Activation changes the policy's status and leaves its default
+        version where it is.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/policy'
@@ -2142,7 +2147,14 @@ paths:
     post:
       operationId: rollbackPolicy
       tags: [policy]
-      summary: Point a policy at an earlier version. Requires the `admin` role.
+      summary: Point a policy at a stored version. Requires the `admin` role.
+      description: >-
+        Makes any stored version of the policy its default, whether it
+        is older or newer than the current default; an appended version
+        becomes the default this way. The policy's status and versions
+        are unchanged: an active policy evaluates the new default from
+        then on, and a draft or archived one evaluates nothing until it
+        is activated.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/policy'
@@ -3042,7 +3054,9 @@ components:
           type: integer
           format: int32
           minimum: 1
-          description: An existing version of the policy.
+          description: >-
+            A stored version of the policy, older or newer than its
+            current default.
     PolicyAttachment:
       type: object
       required: [policyGrn, subjectGrn, createdAt]

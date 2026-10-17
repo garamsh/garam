@@ -114,7 +114,7 @@ sql:
   - engine: postgresql
     schema:
       - migrations/000001_init.up.sql
-      - migrations/000049_audit_send_events.up.sql
+      - migrations/000050_audit_send_events.up.sql
     queries: internal/audit/postgres/queries.sql
     gen:
       go:

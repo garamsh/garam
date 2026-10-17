@@ -752,7 +752,7 @@ func (p enginePolicies) CurrentStatements(context.Context, grn.GRN, []grn.GRN) (
 // chain, and the answered check is the control: an interceptor
 // carrying a cause on every call would pass both refusals.
 func TestLogRPCs_CarriesTheCauseTheEngineWithheld(t *testing.T) {
-	object := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, "acme")
+	object := grn.Org("acme")
 	tests := []struct {
 		name    string
 		err     error
@@ -981,7 +981,7 @@ type invitationOrgs struct {
 func (s invitationOrgs) GetInvitation(_ context.Context, token string) (*org.Invitation, error) {
 	switch token {
 	case s.token:
-		return org.NewInvitation(token, grn.New("root", "default", org.ServiceTypeOrg, "acme"),
+		return org.NewInvitation(token, grn.Org("acme"),
 			org.RoleMember, grn.New("root", "default", user.ServiceType, "owner"), time.Now().Add(time.Hour)), nil
 	case "unknown-tok-secret":
 		return nil, org.ErrInvitationNotFound

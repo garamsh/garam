@@ -39,7 +39,7 @@ func TestGetInvitation_ReadsEachStateFromPostgres(t *testing.T) {
 	orgs := org.NewPostgresStore(p)
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
-	acme := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, "acme")
+	acme := grn.Org("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "Acme Robotics")))
 	live, err := org.NewInvitationToken()
 	require.NoError(t, err)
@@ -147,7 +147,7 @@ func newInvitationStack(t *testing.T) *invitationStack {
 func (st *invitationStack) invite(t *testing.T, slug string) (grn.GRN, string) {
 	t.Helper()
 	ctx := context.Background()
-	g := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, slug)
+	g := grn.Org(slug)
 	require.NoError(t, st.orgs.CreateOrg(ctx, org.NewOrganization(g, slug)))
 	token, err := org.NewInvitationToken()
 	require.NoError(t, err)

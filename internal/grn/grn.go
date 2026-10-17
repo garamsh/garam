@@ -37,8 +37,8 @@ const (
 	DefaultProject = "default"
 )
 
-// orgServiceType is the service type of an organization's GRN.
-const orgServiceType = "org"
+// ServiceTypeOrg is the service type of an organization's GRN.
+const ServiceTypeOrg = "org"
 
 // GRN is a value-type resource identifier. Identity is by value; two
 // GRN structs with equal fields are equal.
@@ -63,7 +63,7 @@ func New(organization, project, serviceType, identifier string) GRN {
 // organization is root-owned (ADR-0001), so id is also the
 // organization segment of every resource beneath it.
 func Org(id string) GRN {
-	return New(RootOwner, DefaultProject, orgServiceType, id)
+	return New(RootOwner, DefaultProject, ServiceTypeOrg, id)
 }
 
 // String renders the GRN in canonical form.

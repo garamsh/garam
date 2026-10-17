@@ -33,7 +33,7 @@ func seedAgent(t *testing.T, f *fixture, orgSlug string) grn.GRN {
 }
 
 func orgGRNOf(slug string) grn.GRN {
-	return grn.New("root", "default", org.ServiceTypeOrg, slug)
+	return grn.Org(slug)
 }
 
 func userGRNOf(subject string) grn.GRN {

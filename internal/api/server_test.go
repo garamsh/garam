@@ -668,7 +668,7 @@ func TestOrgFlow_RoleEnforcement(t *testing.T) {
 
 	// A plain member can read but not update or delete.
 	member := f.sessionCookieFor(t, "member-sub", "Member")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 
 	rec = f.do(t, "GET", "/orgs/"+slug, "", member)
@@ -698,7 +698,7 @@ func TestListOrgMembers_Nicknames(t *testing.T) {
 	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
 	adaGRN := grn.New("root", "default", user.ServiceType, "ada-sub")
 	f.sessionCookieFor(t, "ada-sub", "Ada")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, adaGRN, org.RoleMember)))
 	f.permit(permission{ownerGRN, org.ActionOrgMemberList})
 
@@ -767,7 +767,7 @@ func TestInvitationFlow_Lifecycle(t *testing.T) {
 
 	// Members cannot invite; owners (admin+) can.
 	member := f.sessionCookieFor(t, "member-sub", "Member")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgInvite})
@@ -815,7 +815,7 @@ func TestAcceptInvitation_Expired(t *testing.T) {
 	f := newFixture(t)
 	invitee := f.sessionCookieFor(t, "invitee-sub", "Invitee")
 
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, "acme")
+	orgGRN := grn.Org("acme")
 	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
 	expired := org.NewInvitation("expired-tok", orgGRN, org.RoleMember, creator, time.Now().Add(-time.Hour))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), expired))

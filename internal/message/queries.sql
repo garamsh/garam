@@ -251,10 +251,14 @@ SELECT clock_timestamp()::timestamptz;
 SELECT pg_advisory_xact_lock(hashtext('message_signing_keys'));
 
 -- InsertSigningKey stores a new key that signs from signs_from, which
--- the caller derives from the instant it decided the key was due.
+-- the caller derives from the instant it decided the key was due. Its
+-- private half is either sealed into the row or named as a Transit key
+-- version (ADR-0104); the table's check refuses both and neither.
 -- name: InsertSigningKey :exec
-INSERT INTO message_signing_keys (id, public_key, sealed_private_key, signs_from)
-VALUES (sqlc.arg('id'), sqlc.arg('public_key'), sqlc.arg('sealed_private_key'),
+INSERT INTO message_signing_keys (id, public_key, sealed_private_key,
+                                  transit_mount, transit_key, transit_version, signs_from)
+VALUES (sqlc.arg('id'), sqlc.arg('public_key'), sqlc.narg('sealed_private_key'),
+        sqlc.narg('transit_mount'), sqlc.narg('transit_key'), sqlc.narg('transit_version'),
         sqlc.arg('signs_from'));
 
 -- WithdrawSigningKey stops a key signing and removes it from the

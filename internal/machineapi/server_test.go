@@ -303,7 +303,7 @@ type stubKeyring struct{}
 
 func (stubKeyring) Signer(context.Context) (message.Signer, error) { return stubKeyring{}, nil }
 
-func (stubKeyring) Sign(*message.Claim) (message.Signed, error) {
+func (stubKeyring) Sign(context.Context, *message.Claim) (message.Signed, error) {
 	return message.Signed{Content: "stub content", Signature: "stub.signature.value"}, nil
 }
 

@@ -71,6 +71,13 @@ PNPM := pnpm --dir web
 # `integration` and `e2e` report rather than dial.
 API_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port api 8080 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
 DB_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port postgres 5432 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
+# The dev OpenBao db-up starts beside Postgres, which `integration`
+# signs against (ADR-0104). Its TLS certificate names localhost, which
+# is what the address is rewritten to. GARAM_OPENBAO_PORT moves it as
+# GARAM_DB_PORT moves Postgres. The container is named so the suite
+# can read the CA and root token the dev server generated out of it.
+OPENBAO_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port openbao 8200 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
+OPENBAO_CONTAINER = $(shell $(COMPOSE_LOCAL) ps -q openbao 2>/dev/null)
 
 # Empty rather than half a URL when no Postgres is published, so
 # `integration` and `e2e` have one thing to test. Set it in the
@@ -311,22 +318,23 @@ export SEARCH_Q = $(Q)
 search:
 	@scripts/search.sh
 
-# db-up starts the stack's postgres service alone and makes sure the test
-# database exists next to `garam`. Postgres has no CREATE DATABASE IF NOT
-# EXISTS, so ask before creating. Each Go suite migrates it itself.
+# db-up starts the stack's postgres service, and the openbao service
+# `integration` signs against, and makes sure the test database exists
+# next to `garam`. Postgres has no CREATE DATABASE IF NOT EXISTS, so
+# ask before creating. Each Go suite migrates it itself.
 #
 # Whether the database exists is psql's output; whether there is an answer
 # at all is its exit status. The two are read separately, because one
 # non-zero status cannot tell a failed query from a clean negative.
 db-up:
-	$(COMPOSE_LOCAL) up -d --wait postgres
+	$(COMPOSE_LOCAL) up -d --wait postgres openbao
 	@present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
 		"SELECT 1 FROM pg_database WHERE datname='$(TEST_DB_NAME)'")" \
 		|| { echo "db-up: could not ask postgres whether $(TEST_DB_NAME) exists" >&2; exit 1; }; \
 		test -n "$$present" || $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $(TEST_DB_NAME)
 
 db-down:
-	$(COMPOSE_LOCAL) rm -sf postgres
+	$(COMPOSE_LOCAL) rm -sf postgres openbao
 
 # db-prune drops the per-worktree databases db-up created for worktrees
 # that are gone. It is in no whole-set name and in no workflow: a runner
@@ -368,12 +376,15 @@ E2E_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath
 E2E_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/e2e/...)
 
 # integration runs the store round-trips and the services over them in
-# process, against real Postgres (see db-up).
+# process, against real Postgres, and the Transit custodian against the
+# dev OpenBao (see db-up).
 integration:
-	@echo 'integration: $(words $(INTEGRATION_PKGS)) packages, $(words $(INTEGRATION_TEST_FILES)) test files, against $(TEST_DB_NAME)'
+	@echo 'integration: $(words $(INTEGRATION_PKGS)) packages, $(words $(INTEGRATION_TEST_FILES)) test files, against $(TEST_DB_NAME) and the openbao at $(OPENBAO_HOST_ADDR)'
 	@test -n '$(INTEGRATION_PKGS)' || { echo 'integration: nothing to run — no package under ./tests/integration/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "integration: no postgres published on this host — run make db-up" >&2; exit 1; }
-	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(INTEGRATION_PKGS)
+	@test -n '$(OPENBAO_HOST_ADDR)' && test -n '$(OPENBAO_CONTAINER)' || { echo "integration: no openbao published on this host — run make db-up" >&2; exit 1; }
+	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' GARAM_TEST_OPENBAO_ADDR='https://$(OPENBAO_HOST_ADDR)' \
+		GARAM_TEST_OPENBAO_CONTAINER='$(OPENBAO_CONTAINER)' go test -count=1 $(INTEGRATION_PKGS)
 
 # e2e runs the built binary as the processes a deployment runs, against
 # the same Postgres (see db-up).

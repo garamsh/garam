@@ -328,3 +328,63 @@ func TestMachineServer_RefusesARequestBodyPastTheBound(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, status, "past the bound the body is not read at all")
 	assert.JSONEq(t, `{"kind":"invalid_argument","message":"the request is not in the required form"}`, body)
 }
+
+// TestTransitCustodian_TakesTheProviderWholeOrNotAtAll holds ADR-0104's
+// configuration rule: nothing set keeps every key sealed under the
+// key-encryption key, everything set turns the provider on, and any
+// part set alone refuses the start rather than running on a provider
+// the deployment believes is there. The complete setting is the
+// control each partial one is read against.
+func TestTransitCustodian_TakesTheProviderWholeOrNotAtAll(t *testing.T) {
+	dir := t.TempDir()
+	root := writeServerRoot(t, dir)
+	complete := map[envName]string{
+		envTransitAddr:       "https://openbao.example:8200",
+		envTransitCAFile:     root,
+		envTransitTokenFile:  filepath.Join(dir, "token"),
+		envTransitSigningKey: "garam-message-signing",
+	}
+	set := func(t *testing.T, values map[envName]string) {
+		t.Helper()
+		for _, name := range []envName{envTransitAddr, envTransitCAFile, envTransitTokenFile, envTransitSigningKey, envTransitMount} {
+			t.Setenv(string(name), values[name])
+		}
+	}
+
+	set(t, nil)
+	custodian, err := transitCustodian()
+	require.NoError(t, err, "nothing set")
+	assert.Nil(t, custodian, "nothing set keeps the keys sealed under the key-encryption key")
+
+	set(t, complete)
+	custodian, err = transitCustodian()
+	require.NoError(t, err, "everything set")
+	assert.NotNil(t, custodian, "everything set turns the provider on")
+
+	without := func(name envName) map[envName]string {
+		values := map[envName]string{}
+		for k, v := range complete {
+			if k != name {
+				values[k] = v
+			}
+		}
+		return values
+	}
+	refused := map[string]map[envName]string{
+		"no address":          without(envTransitAddr),
+		"no CA file":          without(envTransitCAFile),
+		"no token file":       without(envTransitTokenFile),
+		"no key":              without(envTransitSigningKey),
+		"a mount alone":       {envTransitMount: "transit"},
+		"a plain http URL":    {envTransitAddr: "http://openbao.example:8200", envTransitCAFile: root, envTransitTokenFile: complete[envTransitTokenFile], envTransitSigningKey: "k"},
+		"a CA file not there": {envTransitAddr: complete[envTransitAddr], envTransitCAFile: filepath.Join(dir, "token"), envTransitTokenFile: complete[envTransitTokenFile], envTransitSigningKey: "k"},
+	}
+	for name, values := range refused {
+		t.Run(name, func(t *testing.T) {
+			set(t, values)
+			_, err := transitCustodian()
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), err.Error())
+		})
+	}
+}

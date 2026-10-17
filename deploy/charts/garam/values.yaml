@@ -155,6 +155,29 @@ machine:
   # images, and this reference is a digest, so which of the policies a
   # kubelet applies cannot change what runs.
   copyImage: alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+  # Holds the message signing keys in an OpenBao or Vault Transit key
+  # the deployment supplies, instead of sealing them under the
+  # key-encryption key (ADR-0104). Off while `address` is empty; set,
+  # the CA Secret, the token file and the key are required, and the
+  # render refuses a partial setting. None of these carries a secret:
+  # the token arrives as a file something the deployment runs writes
+  # and renews, as the process's UID and readable by it alone — see the
+  # README, §Message signing keys in OpenBao Transit.
+  transit:
+    # OpenBao's https base URL.
+    address: ""
+    # The Transit mount and the ecdsa-p256 key under it.
+    mount: transit
+    signingKey: ""
+    # The Secret holding the PEM root OpenBao's certificate is verified
+    # against, and its key.
+    caSecretName: ""
+    caKey: ca.crt
+    # Where in the machine container the token file is read from.
+    tokenFile: ""
+  # Annotations on the machine pod, for whatever the deployment uses to
+  # put the Transit token file there, such as OpenBao Agent's injector.
+  podAnnotations: {}
   # Reaches both of this pod's containers, the copy above and the process
   # it prepares for. A quota and a QoS class are each read across every
   # container of a pod, so one figure here covers both — see the README,

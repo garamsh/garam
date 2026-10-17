@@ -247,15 +247,16 @@ func (s *Server) ClaimMessage(w http.ResponseWriter, r *http.Request, agentGRN m
 	if !ok {
 		return
 	}
-	// Every hand-out is signed (ADR-0101), and the key is opened before
-	// anything is claimed: a claim taken and then not signed would spend
-	// one of the message's attempts on an answer the caller never got.
+	// Every hand-out is signed (ADR-0101). The key is opened before the
+	// wait, and the claim is signed inside the transaction that takes
+	// it, so a claim that cannot be signed spends none of the message's
+	// attempts on an answer the caller never got (ADR-0104).
 	signer, err := s.keys.Signer(r.Context())
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	claim, err := s.messages.Claim(r.Context(), claimant, recipient, messageFence(fence))
+	claim, signed, err := s.messages.Claim(r.Context(), claimant, recipient, messageFence(fence), signer)
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		// A poll that waited its time and found nothing is the ordinary
 		// answer rather than a refusal, so the caller has an empty
@@ -267,11 +268,6 @@ func (s *Server) ClaimMessage(w http.ResponseWriter, r *http.Request, agentGRN m
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	signed, err := signer.Sign(claim)
 	if err != nil {
 		writeError(w, err)
 		return

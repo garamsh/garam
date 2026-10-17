@@ -172,7 +172,7 @@ func (g *garamKeyring) RotateSigningKeys(_ context.Context, prepare func([]*mess
 	if err != nil || key == nil {
 		return err
 	}
-	g.keys = append(g.keys, &message.SigningKey{ID: key.ID, PublicKey: key.PublicKey, SealedPrivateKey: key.SealedPrivateKey, SignsFrom: now.Add(key.Lead)})
+	g.keys = append(g.keys, &message.SigningKey{ID: key.ID, PublicKey: key.PublicKey, Held: key.Held, SignsFrom: now.Add(key.Lead)})
 	return nil
 }
 
@@ -315,7 +315,7 @@ func garamSignature(t *testing.T, key *ecdsa.PrivateKey, kid string) string {
 func TestRun_ARuntimeVerifiesGaramsSignatureByTheRenderedEntry(t *testing.T) {
 	h := newHost(t)
 	keyring := &garamKeyring{}
-	keys, err := message.NewKeyring(keyring, keyring, testIssuer, message.Config{})
+	keys, err := message.NewKeyring(keyring, testIssuer, message.Config{}, message.NewFileCustodian(keyring))
 	require.NoError(t, err)
 	h.machineURL = stubGaramKeys(t, h, keys)
 	h.start()

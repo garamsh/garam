@@ -121,7 +121,8 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 		policies, policy_versions, policy_attachments, agents,
 		agent_assignments, agent_definitions, operators, certificate_authorities,
 		operator_certificates, operator_assertions,
-		messages, message_consents, message_signing_keys, agent_watches CASCADE`)
+		messages, message_consents, message_signing_keys, agent_watches,
+		audit_send_events CASCADE`)
 	require.NoError(t, err)
 }
 

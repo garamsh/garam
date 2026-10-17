@@ -46,6 +46,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
+	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/user"
@@ -476,6 +477,13 @@ type deniedEngine struct{}
 
 func (deniedEngine) Evaluate(context.Context, machineapi.EvalInput) (bool, error) { return false, nil }
 
+// refusalRecord is a message.Service that records a denied send and
+// serves nothing else: the listener records a denial before it answers
+// one (ADR-0106).
+type refusalRecord struct{ message.Service }
+
+func (refusalRecord) Refuse(context.Context, grn.GRN, grn.GRN, *message.Fence) error { return nil }
+
 // TestLogServed_CarriesTheCauseOfAMachineFailure is the machine
 // surface's half of the rule in runtime-safety.md §Errors reach a
 // handler: a handled error that becomes a 5xx leaves its chain on the
@@ -510,7 +518,7 @@ func TestLogServed_CarriesTheCauseOfAMachineFailure(t *testing.T) {
 
 	var refusedOut lines
 	url, client = machineListenerServing(t, recordingObservability(&refusedOut), sender,
-		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, deniedEngine{}, nil, nil, nil, nil, nil, nil))
+		machineapi.NewServer(nil, nil, refusalRecord{}, nil, nil, noGroups{}, deniedEngine{}, nil, nil, nil, nil, nil, nil))
 	resp, err = client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
@@ -692,7 +700,7 @@ func TestLogServed_CarriesTheCauseAMachineAnswerWithheld(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var out lines
 			url, client := machineListenerServing(t, recordingObservability(&out), sender,
-				machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, tt.engine, nil, nil, nil, nil, nil, nil))
+				machineapi.NewServer(nil, nil, refusalRecord{}, nil, nil, noGroups{}, tt.engine, nil, nil, nil, nil, nil, nil))
 
 			resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 			require.NoError(t, err)

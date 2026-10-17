@@ -281,6 +281,8 @@ Responsibility documents:
 - [messaging.md](./messaging.md) — the durable queue a message reaches
   an agent through, the consent that lets one cross an organization
   boundary, and the signature on every message garam hands out
+- [audit.md](./audit.md) — the record garam keeps of what it decided,
+  which holds message sends alone
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization policy domain: the rules
   that decide what a subject may do, and the engine that decides
@@ -738,3 +740,8 @@ ADRs:
   transaction, behind a key-custody seam replacing `message.Sealer`
   as the keyring's; with no provider the file key-encryption key stays
   the default, and the certificate authorities stay on it until G4
+- [0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)
+  — garam stays the only route a message takes, and every send it
+  decides writes one audit event without a body in the transaction of
+  its outcome, kept until either party's organization is deleted and
+  read by nobody through garam yet

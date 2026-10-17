@@ -457,6 +457,8 @@ collaborate on a shared plan.
   may act on is decided here, and every hand-out is signed under keys
   kept here (ADR-0101) or, where the deployment configures one, in an
   OpenBao Transit key `internal/message/transit` reaches (ADR-0104).
+- `internal/audit/` — the record of every message send garam decides,
+  written with the send's outcome and never with its body (ADR-0106).
 - `internal/delivery/` — the adapter's delivery loop: it claims a
   message for one agent, posts it into that agent's gateway under
   garam's identifier, completes the claim the platform says committed,
@@ -543,6 +545,7 @@ it and imports no request surface and no domain.
 | `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
 | `message.Keyring` | `internal/message` | the keys every hand-out is signed under: opens the one signing, rotates them, publishes the set (ADR-0101) |
 | `message.Custodian` | `internal/message` | holds a signing key's private half: sealed under the key-encryption key, or in an OpenBao Transit key (`internal/message/transit`) that signs for it (ADR-0104) |
+| `audit.Send` | `internal/audit` | one message send as garam decided it: the parties, the decision and the message it stored, never a body (ADR-0106) |
 | `watch.Event` | `internal/watch` | one forwarded turn event, carried and never stored |
 | `watch.Subscription` | `internal/watch` | one open watch: the stream its holder reads |
 | `watch.Service` | `internal/watch` | opens a watch, carries a forwarded event to the watchers of that agent, counts them |

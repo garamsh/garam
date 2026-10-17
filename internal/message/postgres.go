@@ -10,6 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/garamsh/garam/internal/audit"
+	auditpg "github.com/garamsh/garam/internal/audit/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message/db"
@@ -38,31 +40,40 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 // row until fn's writes commit, so a replacement of that execution
 // either waits for them or is what refuses them. A nil fence is a
 // write of an identity that is not an agent, which no execution
-// fences.
+// fences, so it runs on the pool.
 func (s *PostgresStore) fenced(ctx context.Context, op string, fence *Fence, fn func(q *db.Queries) error) error {
 	if fence == nil {
 		return fn(s.q)
 	}
+	return s.transaction(ctx, op, fence, func(q *db.Queries, _ pgx.Tx) error { return fn(q) })
+}
+
+// transaction runs fn in one local transaction, admitted first by the
+// fence where there is one, for writes that commit together or not at
+// all.
+func (s *PostgresStore) transaction(ctx context.Context, op string, fence *Fence, fn func(q *db.Queries, tx pgx.Tx) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return errorx.Wrap(err, op+": begin", errorx.KindUnavailable)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	q := s.q.WithTx(tx)
-	answer, err := q.AdmitExecution(ctx, db.AdmitExecutionParams{
-		AgentGrn:  fence.Agent.String(),
-		TokenHash: fence.TokenHash,
-		Serial:    fence.Serial,
-		NotBefore: pgxtype.Timestamptz(fence.NotBefore),
-		NotAfter:  pgxtype.Timestamptz(fence.NotAfter),
-	})
-	if err != nil {
-		return errorx.Wrap(pgxerr.Classify(err, op+": admit", nil, nil), op, errorx.KindUnavailable)
+	if fence != nil {
+		answer, err := q.AdmitExecution(ctx, db.AdmitExecutionParams{
+			AgentGrn:  fence.Agent.String(),
+			TokenHash: fence.TokenHash,
+			Serial:    fence.Serial,
+			NotBefore: pgxtype.Timestamptz(fence.NotBefore),
+			NotAfter:  pgxtype.Timestamptz(fence.NotAfter),
+		})
+		if err != nil {
+			return errorx.Wrap(pgxerr.Classify(err, op+": admit", nil, nil), op, errorx.KindUnavailable)
+		}
+		if err := refusalOf(answer); err != nil {
+			return err
+		}
 	}
-	if err := refusalOf(answer); err != nil {
-		return err
-	}
-	if err := fn(q); err != nil {
+	if err := fn(q, tx); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -98,15 +109,15 @@ func refusalOf(answer string) error {
 // window is deleted first, which keeps the table proportional to what
 // is live (ADR-0034). The sweep runs ahead of the insert rather than in
 // it, because a data-modifying CTE shares the insert's snapshot — the
-// conflicting row it deletes would still conflict.
+// conflicting row it deletes would still conflict. The send's audit
+// event commits with the insert, fenced or not (ADR-0106).
 func (s *PostgresStore) Enqueue(ctx context.Context, m *Message, fence *Fence) (*Message, error) {
-	var row db.Message
-	err := s.fenced(ctx, "enqueue", fence, func(q *db.Queries) error {
+	var stored *Message
+	err := s.transaction(ctx, "enqueue", fence, func(q *db.Queries, tx pgx.Tx) error {
 		if err := q.DeleteExpiredMessages(ctx, interval(RetentionWindow)); err != nil {
 			return pgxerr.Classify(err, "sweep", nil, nil)
 		}
-		var err error
-		row, err = q.EnqueueMessage(ctx, db.EnqueueMessageParams{
+		row, err := q.EnqueueMessage(ctx, db.EnqueueMessageParams{
 			ID:             string(m.id),
 			RecipientGrn:   m.recipient.String(),
 			SenderGrn:      m.sender.String(),
@@ -114,12 +125,18 @@ func (s *PostgresStore) Enqueue(ctx context.Context, m *Message, fence *Fence) (
 			Body:           pgtype.Text{String: m.body, Valid: true},
 			Author:         string(m.author),
 		})
-		return pgxerr.Classify(err, "enqueue", nil, nil)
+		if err != nil {
+			return pgxerr.Classify(err, "enqueue", nil, nil)
+		}
+		if stored, err = rowToMessage(row); err != nil {
+			return err
+		}
+		return auditpg.RecordSend(ctx, tx, sent(m, stored))
 	})
 	if err != nil {
 		return nil, err
 	}
-	return rowToMessage(row)
+	return stored, nil
 }
 
 // EnqueueWithinBudget answers what the sender's key stores, and tries
@@ -127,45 +144,85 @@ func (s *PostgresStore) Enqueue(ctx context.Context, m *Message, fence *Fence) (
 // stored result is answered after the budget too (ADR-0083). The
 // sweep rides it as it rides Enqueue. The key is read again after an
 // admitted insert, because the row admitted may be one a concurrent
-// submission stored first.
+// submission stored first. The send's audit event commits with what
+// the key stores; a refusal records none and still commits the sweep
+// (ADR-0106).
 func (s *PostgresStore) EnqueueWithinBudget(ctx context.Context, m *Message, created time.Time, fence *Fence) (*Message, error) {
 	key := db.MessageByKeyParams{SenderGrn: m.sender.String(), IdempotencyKey: m.idempotencyKey}
-	var row db.Message
-	err := s.fenced(ctx, "enqueue within budget", fence, func(q *db.Queries) error {
+	var stored *Message
+	var refused error
+	err := s.transaction(ctx, "enqueue within budget", fence, func(q *db.Queries, tx pgx.Tx) error {
 		if err := q.DeleteExpiredMessages(ctx, interval(RetentionWindow)); err != nil {
 			return pgxerr.Classify(err, "sweep", nil, nil)
 		}
-		var err error
-		row, err = q.MessageByKey(ctx, key)
-		if !errors.Is(err, pgx.ErrNoRows) {
-			return pgxerr.Classify(err, "stored under key", nil, nil)
+		row, err := q.MessageByKey(ctx, key)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			row, err = insertWithinBudget(ctx, q, key, m, created)
+		case err != nil:
+			err = pgxerr.Classify(err, "stored under key", nil, nil)
 		}
-		verdict, err := q.EnqueueWithinBudget(ctx, db.EnqueueWithinBudgetParams{
-			Created:        pgxtype.Timestamptz(created),
-			ID:             string(m.id),
-			RecipientGrn:   m.recipient.String(),
-			SenderGrn:      m.sender.String(),
-			IdempotencyKey: m.idempotencyKey,
-			Body:           m.body,
-			Author:         string(m.author),
-			Budget:         interval(SubmissionBudget),
-		})
+		if isRefusal(err) {
+			refused = err
+			return nil
+		}
 		if err != nil {
-			return pgxerr.Classify(err, "enqueue within budget", nil, nil)
-		}
-		if err := budgetRefusal(verdict); err != nil {
 			return err
 		}
-		row, err = q.MessageByKey(ctx, key)
-		return pgxerr.Classify(err, "stored under key", nil, nil)
+		if !sameSubmission(row, m) {
+			refused = ErrKeyHoldsAnotherMessage
+			return nil
+		}
+		if stored, err = rowToMessage(row); err != nil {
+			return err
+		}
+		return auditpg.RecordSend(ctx, tx, sent(m, stored))
 	})
 	if err != nil {
 		return nil, err
 	}
-	if !sameSubmission(row, m) {
-		return nil, ErrKeyHoldsAnotherMessage
+	if refused != nil {
+		return nil, refused
 	}
-	return rowToMessage(row)
+	return stored, nil
+}
+
+// isRefusal reports whether err is the budget's answer to a submission
+// rather than a failure to give one.
+func isRefusal(err error) bool {
+	return errors.Is(err, ErrCreatedLater) || errors.Is(err, ErrSubmissionExpired)
+}
+
+// insertWithinBudget tries the insert the budget gates for a key that
+// stores nothing, and reads back what the key stores once it is
+// admitted.
+func insertWithinBudget(ctx context.Context, q *db.Queries, key db.MessageByKeyParams, m *Message, created time.Time) (db.Message, error) {
+	verdict, err := q.EnqueueWithinBudget(ctx, db.EnqueueWithinBudgetParams{
+		Created:        pgxtype.Timestamptz(created),
+		ID:             string(m.id),
+		RecipientGrn:   m.recipient.String(),
+		SenderGrn:      m.sender.String(),
+		IdempotencyKey: m.idempotencyKey,
+		Body:           m.body,
+		Author:         string(m.author),
+		Budget:         interval(SubmissionBudget),
+	})
+	if err != nil {
+		return db.Message{}, pgxerr.Classify(err, "enqueue within budget", nil, nil)
+	}
+	if err := budgetRefusal(verdict); err != nil {
+		return db.Message{}, err
+	}
+	row, err := q.MessageByKey(ctx, key)
+	return row, pgxerr.Classify(err, "stored under key", nil, nil)
+}
+
+// Refuse writes the refused send's audit event alone, fenced as the
+// post it answers would have been (ADR-0106).
+func (s *PostgresStore) Refuse(ctx context.Context, sender, recipient grn.GRN, fence *Fence) error {
+	return s.transaction(ctx, "refuse", fence, func(_ *db.Queries, tx pgx.Tx) error {
+		return auditpg.RecordSend(ctx, tx, audit.Refused(sender, recipient))
+	})
 }
 
 // budgetRefusal reads the verdict EnqueueWithinBudget decided: nil for
@@ -217,32 +274,11 @@ func (s *PostgresStore) Claim(ctx context.Context, recipient grn.GRN, lease time
 		}
 		return handOut(claim)
 	}
-	if fence != nil {
-		err = s.fenced(ctx, "claim", fence, claimed)
-	} else {
-		err = s.unfenced(ctx, "claim", claimed)
-	}
+	err = s.transaction(ctx, "claim", fence, func(q *db.Queries, _ pgx.Tx) error { return claimed(q) })
 	if err != nil {
 		return nil, err
 	}
 	return claim, nil
-}
-
-// unfenced runs fn in one local transaction no execution fence admits,
-// for a write that must commit with what fn does after it.
-func (s *PostgresStore) unfenced(ctx context.Context, op string, fn func(q *db.Queries) error) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return errorx.Wrap(err, op+": begin", errorx.KindUnavailable)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	if err := fn(s.q.WithTx(tx)); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return errorx.Wrap(err, op+": commit", errorx.KindUnavailable)
-	}
-	return nil
 }
 
 // Renew extends a live claim's lease under the ceiling. A claim that

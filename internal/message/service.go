@@ -82,6 +82,10 @@ type Service interface {
 	// instant, and answers what the key already stores at any time
 	// (ADR-0083).
 	PostWithinBudget(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, author Author, created time.Time, fence *Fence) (*Message, error)
+	// Refuse records that a policy denied sender's post to recipient,
+	// and stores nothing else: a post the policy denies is answered as
+	// a refusal rather than stored (ADR-0106).
+	Refuse(ctx context.Context, sender, recipient grn.GRN, fence *Fence) error
 	// Claim hands the caller the oldest message addressed to it, waiting
 	// until one is ready rather than answering an empty queue at once,
 	// and returns ErrNoMessageReady when none arrives in that time. The
@@ -172,6 +176,16 @@ func (s *service) PostWithinBudget(ctx context.Context, sender, recipient grn.GR
 		return nil, err
 	}
 	return s.store.EnqueueWithinBudget(ctx, m, created, fence)
+}
+
+func (s *service) Refuse(ctx context.Context, sender, recipient grn.GRN, fence *Fence) error {
+	if err := sender.Validate(); err != nil {
+		return errorx.Wrap(err, "message: sender")
+	}
+	if err := recipient.Validate(); err != nil {
+		return errorx.Wrap(err, "message: recipient")
+	}
+	return s.store.Refuse(ctx, sender, recipient, fence)
 }
 
 func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN, fence *Fence, signer Signer) (*Claim, Signed, error) {

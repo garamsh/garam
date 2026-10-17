@@ -190,9 +190,9 @@ next reader meets them before meeting the sub-package that owns them.
   type that validates an assignment is not answered here, and it is
   not answered by pointing at this ADR either.
 - **Whether a domain gains a second `Store` implementation.** Nothing
-  here asks for an in-memory one; §Store implementation status in
-  [domains.md](../domains.md) still reads *not planned* for every
-  domain.
+  here asks for an in-memory one;
+  §Store implementation status in [domains.md](../domains.md) still
+  reads *not planned* for every domain.
 
 ## Consequences
 

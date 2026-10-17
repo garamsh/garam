@@ -42,14 +42,16 @@ account and no root, `migrations/`, and the `garam` binary that
 Merging the two gives each process what the other holds — a shell and an
 interpreter inside the image whose processes read the key-encryption key
 that seals every organization's certificate authority
-([deployment-contract.md](./deployment-contract.md) §What the binary
-enforces about key material), the schema migrations and that binary
+(`deployment-contract.md` §What the binary enforces about key material),
+the schema migrations
+and that binary
 inside the image whose process renders a browser's input — and that is
 what a proposal to build and pull one image instead of two has to
-answer. [ADR-0020](./adr/0020-published-artifacts.md) §Rejected
-alternatives refused a single image on that ground, and
-[ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
-§Decision leaves the two standing where it supersedes that ADR.
+answer.
+[ADR-0020](./adr/0020-published-artifacts.md) §Rejected alternatives
+refused a single image on that ground, and
+[ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md) §Decision
+leaves the two standing where it supersedes that ADR.
 
 **This document is authoritative for what the application is
 responsible for and where its boundary falls.** Five artifacts already
@@ -71,7 +73,7 @@ own things a reader might come here for, and none of them is restated:
   ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)).
 - `docs/convention/stack-nextjs.md` governs how the application is laid
   out inside `web/src/`: which folder holds what, and the two entry
-  points a feature declares (§Feature entry points and file naming).
+  points a feature declares (§13. Feature entry points and file naming).
   What may import what there is
   [structure.md](./structure.md) §Boundaries and dependency direction's
   ([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)),
@@ -316,8 +318,8 @@ the seam above, and answers each one allowed, denied or unknown
 ([api-surface.md](./api-surface.md) §What decides the rest). Unknown is
 an action the server answers it cannot decide, or a check that could
 not be asked or answered outside its contract; the last is logged on
-the server. What a page does with each answer is §What it does not
-decide.
+the server. What a page does with each answer is
+§What it does not decide.
 
 Sign-in state is read from the backend's `/me` and never inferred from
 the cookie (ADR-0009).
@@ -326,15 +328,17 @@ the cookie (ADR-0009).
 
 **Its peer is the merged Operator wire.** The console's create, read
 and publish calls are the control routes at garam-agent-operator `dev`
-`8e1116933408`: create (#244, `5e46800`) and the template, profile and
-execution reads, template publication and CORS answer (#277,
-`5ef745a`). garam#1217 records a run against them. The operators'
-reports are `GET /v1/orgs/{org}/operators` at garam-agent-operator
-`ba691a6` (#364). The console's calls are tested against a stub of that
-wire, with garam real: `web/e2e/control-service.spec.ts` for the agent
-and template calls, and `web/e2e/operators.spec.ts` for the reports. A
-recovery control is not built ([operators.md](./operators.md)
-§Delegated operation authority).
+`8e11169334086f00225654de1a57d5f16006412f`: create (#244,
+`5e4680077f03c4a1c39ae0d1d65e1ffb203c9577`) and the template, profile
+and execution reads, template publication and CORS answer (#277,
+`5ef745aabdd152b988ef04b50d283fd094183380`). garam#1217 records a run
+against them. The operators' reports are `GET /v1/orgs/{org}/operators`
+at garam-agent-operator
+`ba691a69ad0612ff5653d2facce5668ea12cbec9` (#364). The console's calls
+are tested against a stub of that wire, with garam real:
+`web/e2e/control-service.spec.ts` for the agent and template calls, and
+`web/e2e/operators.spec.ts` for the reports. A recovery control is not
+built ([operators.md](./operators.md) §Delegated operation authority).
 
 **One module, in the browser.** `web/src/lib/operation-authority.ts`
 holds the only call to a control service. The browser makes it,
@@ -357,8 +361,9 @@ origin; the console's own server never calls one.
   model's embeddings endpoint beside the model, absent where it names
   none, and publishing from a version on screen sends it unchanged.
   Which models need one is the control service's to decide and refuse
-  (garam-agent-operator ADR 0052 and ADR 0053 at `8e1116933408`); the
-  console shows the refusal.
+  (garam-agent-operator ADR 0052 and ADR 0053 at
+  `8e11169334086f00225654de1a57d5f16006412f`); the console shows the
+  refusal.
 - **It words what it refuses.** A refusal reads the sentence
   `web/src/lib/control-refusal-copy.ts` writes for the `kind` the
   control service named, or for the HTTP status where it named none,
@@ -381,8 +386,8 @@ origin; the console's own server never calls one.
 primitives and page templates exist (`web/src/styles/globals.css`,
 `web/src/components/`, `web/src/app/console/_components/`). Each area's
 migration lands under epic #1366, in its plan's order. Areas on the
-design system are marked in the table above; until an area is, §What
-it serves describes it as it is.
+design system are marked in the table above; until an area is,
+§What it serves describes it as it is.
 [ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
 holds the full decision and the reason for each part. This section is
 what a page owes once it is built on the system.
@@ -451,8 +456,7 @@ The boundary is as much of the responsibility as the contents.
     enforces every write, so a refusal that is reached still renders.
   - **An unanswered check shows the control.** The console infers no
     permission from a role it read
-    ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
-    §Role-aware UI).
+    ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md) §Role-aware UI).
   - **Asked once per page.** The API is `checkPermissions`, asked
     through `web/src/lib/permission-check.ts` (§How it reaches garam).
     Each migrated page asks `checkPermissions` once for every write it
@@ -501,8 +505,8 @@ prerequisite rather than a check.
 Tests are in two locations by decision, not by accident: Vitest owns
 the tests colocated under `web/src/`, Playwright owns `web/e2e/`, and
 each config names the other's territory so neither collects the other's
-files (ADR-0009, `docs/convention/stack-nextjs.md` §Testing — three
-layers, two locations).
+files (ADR-0009, `docs/convention/stack-nextjs.md`
+§12. Testing — three layers, two locations).
 
 ## Not established
 

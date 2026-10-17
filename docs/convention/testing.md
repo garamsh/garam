@@ -130,7 +130,8 @@ caught it.
 
 This section states when a generated mock earns its place and what kind
 of substitute stands in for state, not the tool or mechanism that does
-it. What to mock at each layer is in §Three layers' Mocks column.
+it. What to mock at each layer is in
+§Three layers — different goals, different scopes' Mocks column.
 
 - **A generated mock exists only where a test consumes it.** An
   interface earns its entry in the generator's configuration when the

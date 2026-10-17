@@ -16,15 +16,6 @@ platform makes no such report itself (ADR-0018), and it is unbuilt —
 sender can do instead is ask, which it could not before: it reads the
 state of a message it sent, described below (ADR-0055).
 
-**Holding the signing keys outside garam is unbuilt.**
-[ADR-0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md)
-lets a deployment hold them in an OpenBao or Vault Transit key, which
-signs each hand-out so no private half reaches the database or garam's
-memory, and makes the signature part of the claim's transaction so a
-claim Transit cannot sign spends no attempt. Every key below is held as
-the signing paragraph describes until that lands; with no provider
-configured, it stays so.
-
 | Type | Responsibility |
 |------|----------------|
 | `Message` | one message addressed to a recipient, under an identifier of the queue's own |
@@ -38,8 +29,10 @@ configured, it stays so.
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
 | `SubmissionBudget` | how long after its creation a durable reply may still store a message, fixed by `durable-delivery.v1` (ADR-0083) |
 | `Author` | who wrote a message: its sender, or garam for the refusal it writes itself — what a signature names as the sender garam vouches for (ADR-0101) |
-| `Keyring` | the keys messages are signed with: opens the one that signs now, before a claim is taken, and answers the published set (ADR-0101) |
-| `Signer` | signs one hand-out under the key the keyring opened, reading nothing |
+| `Keyring` | the keys messages are signed with: opens the one that signs now, before a claim's wait, and answers the published set (ADR-0101) |
+| `Signer` | signs one hand-out under the key the keyring opened, inside the transaction that claims it (ADR-0104) |
+| `Custodian` | holds a signing key's private half and never hands it back: makes a key, and signs under one it holds — sealed into its row under the key-encryption key, or a version of an OpenBao Transit key (`internal/message/transit`) (ADR-0104) |
+| `Holding` | where one key's private half is held: a `SealedKey` or a `TransitVersion`, and nothing else |
 | `SigningKeyStore` | the keys messages are signed with, read with the database's clock, rotated under one lock, withdrawn at once |
 | `Issuer` | the deployment's issuer: the machine listener's external https origin, compared byte for byte |
 
@@ -52,8 +45,9 @@ superseded generation or lineage writes nothing even on a connection
 already open. The fence is the `agent_execution_admit` database
 function the agents domain declares; this domain calls it and reads its
 answer into its own refusal, and imports no package of that domain
-(ADR-0080, [machine-identity.md](./machine-identity.md) §Generation and
-lineage). A message
+(ADR-0080,
+[machine-identity.md](./machine-identity.md) §Generation and lineage).
+A message
 may cross an organization boundary only where a relation permits it —
 one row per consenting pair, held by both organizations and withdrawable
 by either (ADR-0035); the refusal reaches the sender as an ordinary
@@ -166,9 +160,11 @@ characters — and a compact ES256 JWS binding the issuer, the sender
 garam vouches for, the recipient as audience and its organization, the
 message's identifier and a digest of the content, valid for the lease
 ceiling from when the claim was taken on the database's clock. The key
-is opened before the queue is asked, so a key garam cannot open refuses
-the claim as a server error with nothing claimed and none of the
-message's attempts spent. A renewal hands nothing out and carries no
+is opened before the queue is asked, and the claim is signed inside the
+transaction that takes it, so a key garam cannot open, and a signature
+Transit cannot make, each refuse the claim as a server error with
+nothing claimed and none of the message's attempts spent. A renewal
+hands nothing out and carries no
 signature. The sender garam vouches for is the row's author: the caller
 the listener authenticated for everything a caller posted, and garam's
 own issuer for the cross-organization refusal it writes under the
@@ -177,11 +173,26 @@ ADR-0101 §What a verifier checks is the contract a verifier holds garam
 to; `api/machine.yaml` is authoritative for the claim's members and the
 key-set route.
 
-The keys are rows of their own, never deleted, each sealed under the
-key-encryption key the certificate authorities are sealed under and
-bound to its row. Whichever path reads them first — a claim or the key
-set — creates the key that is due under a lock every replica takes,
-deciding on the database's clock read once the lock is held:
+The keys are rows of their own, never deleted. With no provider
+configured each is sealed under the key-encryption key the certificate
+authorities are sealed under and bound to its row. A deployment that
+sets `GARAM_TRANSIT_ADDR` holds every key it creates from then on in
+one OpenBao or Vault Transit key instead: each garam key is one version
+of it, made by `rotate`, its row naming the mount, the key and the
+version and holding no private material, and Transit signs every
+hand-out under that version
+([ADR-0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md)).
+The `kid` is the RFC 7638 thumbprint either way, and the published set
+is read from the rows alone. A sealed key that is current when the
+provider is turned on goes on signing, and the Transit key replacing it
+is announced with the full lead; a key held in a custody the process is
+not configured with does not sign there, and retiring it is the
+repair. A due key Transit does not make, whatever the reason, waits
+for the next read while the current key signs and the set is served;
+with none signing, claims are refused with Transit's failure.
+Whichever path reads them first — a claim or the key set — creates
+the key that is due under a lock every replica takes, deciding on the
+database's clock read once the lock is held:
 with no key signing, one that signs at once, which is a deployment's
 first and the replacement for one retired at once; otherwise the next
 one, announced two hours before it signs once the current one has
@@ -225,6 +236,7 @@ signed hand-outs or ADR-0101's issuer contract.
   digests and durable replay/outbox rules. An assertion's one-use
   `jti` cache is not the message redelivery record.
 
-ADR-0101 remains accepted. `internal/message/signing.go` and
+ADR-0101 stands but for where its keys are held, which ADR-0104
+supersedes. `internal/message/signing.go` and
 `api/machine.yaml` §message implement signed hand-outs and the public
 key set; ADR-0102 introduces no new message channel.

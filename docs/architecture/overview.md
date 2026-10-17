@@ -108,8 +108,8 @@ collaborate on a shared plan.
   execution are each an operation of their own, bound to the exact
   request target, and the console sends every one only to the control
   endpoint an administrator registered under `operator:delegate`
-  (#1170); [operators.md](./operators.md) §Delegated operation
-  authority holds the rest.
+  (#1170); [operators.md](./operators.md) §Delegated operation authority
+  holds the rest.
 - An administrator **approving a standalone host** for one agent,
   under `/orgs/{org}/agent-enrollments`, by the hash of the host's
   bootstrap secret and the fingerprints of its two keys, and revoking
@@ -305,14 +305,14 @@ collaborate on a shared plan.
   What it may then do is narrower: once the agent has been recovered,
   a certificate outside the new lineage is refused per request by the
   execution fence, though its connection still authenticates
-  ([machine-identity.md](./machine-identity.md) §Generation and
-  lineage). An operator is the other exception and it is not a
-  certificate mechanism either: deleting the operator withdraws the
-  record its certificate authenticates on, so every certificate naming
-  it is refused from the next connection while none of them is revoked
-  (ADR-0070). A standalone host's supervisor is the same: revoking or
-  replacing it ends the registration its certificate authenticates on
-  (ADR-0082).
+  (`machine-identity.md` §Generation and lineage). An operator is the
+  other exception and it is
+  not a certificate mechanism either: deleting the operator withdraws
+  the record its certificate authenticates on, so every certificate
+  naming it is refused from the next connection while none of them is
+  revoked (ADR-0070). A standalone host's supervisor is the same:
+  revoking or replacing it ends the registration its certificate
+  authenticates on (ADR-0082).
 - Proving an operator is the operator a record names by any means but
   the certificate. There is no service-account token and no exchange
   route: what registering hands over is a one-time enrollment ticket,
@@ -323,8 +323,9 @@ collaborate on a shared plan.
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies no
   sender (Sherlock at
-  [`40ef7ac`](https://github.com/garamsh/sherlock/tree/40ef7ac), read
-  when the repository was named `gagent`); the queue stops redelivering
+  [`40ef7acd02d134037132b8179380f54c7286d9a8`](https://github.com/garamsh/sherlock/tree/40ef7acd02d134037132b8179380f54c7286d9a8),
+  read when the repository was named `gagent`); the queue stops
+  redelivering
   an exhausted message and garam announces one to nobody. What a
   sender can do is ask (see In scope), which answers the question
   without discharging the obligation: ADR-0018 says garam tells, and a
@@ -333,19 +334,19 @@ collaborate on a shared plan.
   scope): the stream a browser reads, the watcher count on the poll, and
   the fan-out between the two listeners. Neither end of it is — no
   console route opens the stream, and the adapter forwards nothing: its
-  delivery loop is built and the §Watching half of
-  [adapter.md](./adapter.md) is not.
+  delivery loop is built and the
+  §Watching half of [adapter.md](./adapter.md) is not.
 - Whether anything can ask the adapter whether it is healthy. What
   readiness would mean for it is decided — a monitoring subscription it
   opens fresh, so an answer says the gateway served a request rather
   than that a port is bound
-  ([ADR-0013](./adr/0013-agent-messaging.md), §Readiness of
-  [adapter.md](./adapter.md)) — and none of it is built: nothing opens
-  that subscription and the adapter binds no listener, so it answers no
-  Kubernetes probe. Its calls are bounded and a failed one is logged,
-  so a stalled peer is no longer silent inside the pod; what is missing
-  is anything outside it learning that the loop stopped making
-  progress.
+  ([ADR-0013](./adr/0013-agent-messaging.md),
+  §Readiness of [adapter.md](./adapter.md)) — and none of it is built:
+  nothing opens that subscription and the adapter binds no listener, so
+  it answers no Kubernetes probe. Its calls are bounded and a failed one
+  is logged, so a stalled peer is no longer silent inside the pod; what
+  is missing is anything outside it learning that the loop stopped
+  making progress.
 - Separated execution. ADR-0077 moves desired runtime values and
   templates to the Operator control service, cutting over one GRN at a
   time, and garam's own templates are retired read-only rather than
@@ -410,9 +411,10 @@ collaborate on a shared plan.
   a development artefact rather than manifests for a cluster garam does
   not run. `deploy/local/minikube/README.md` is authoritative for what
   it runs, how it is brought up and torn down, and where its key
-  material and its images come from; that file's §What this proves and
-  what it does not is authoritative for what running it establishes
-  about a real deployment.
+  material and its images come from;
+  `minikube/README.md` §What this proves and what it does not is
+  authoritative for what
+  running it establishes about a real deployment.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/wire/` — the conversions onto the wire formats the request
@@ -453,7 +455,8 @@ collaborate on a shared plan.
 - `internal/message/` — the durable queue a message reaches an agent
   through; one reader claims a message at a time, whose queue a caller
   may act on is decided here, and every hand-out is signed under keys
-  kept here (ADR-0101).
+  kept here (ADR-0101) or, where the deployment configures one, in an
+  OpenBao Transit key `internal/message/transit` reaches (ADR-0104).
 - `internal/delivery/` — the adapter's delivery loop: it claims a
   message for one agent, posts it into that agent's gateway under
   garam's identifier, completes the claim the platform says committed,
@@ -486,12 +489,12 @@ and the adapter's, and by `workload` for its record and serving key;
 `wire` is reached by three packages and no others —
 `api`, `machineapi` and `authz`, the first two at their request
 boundaries and `authz` from its model, where the statement `Effect` it
-declares is the type every surface shares ([authz.md](./authz.md)
-§Components) — and `health` is shared by the three serve commands and
-imported by no domain. `machine` declares the trust root it verifies
-against and `cli` satisfies it from `ca` ([structure.md](./structure.md)
-§Boundaries and dependency direction). `api`
-sees several domains at once and enforces authentication (session
+declares is the type every surface shares
+([authz.md](./authz.md) §Components) — and `health` is shared by the
+three serve commands and imported by no domain. `machine` declares the
+trust root it verifies against and `cli` satisfies it from `ca`
+([structure.md](./structure.md) §Boundaries and dependency direction).
+`api` sees several domains at once and enforces authentication (session
 cookie) at the boundary; org-role checks go through the `Evaluator`
 seam, implemented by the authz gRPC client (ADR-0003 stage 2). The
 machine listener enforces its own authentication at its own boundary
@@ -502,8 +505,10 @@ Neither imports `internal/authz`; the wire contract is
 `proto/garam/authz/v1`, and the conversions onto it are declared once
 in `internal/wire`. Both surfaces compose four boundaries — the
 `agent`, `message` and `operator` domains, and `watch`, which is not a
-domain ([domains.md](./domains.md) §Sub-responsibilities in a boundary
-of their own). `watch` is extracted rather than
+domain
+(`domains.md` §Sub-responsibilities in a boundary of their own). `watch`
+is extracted
+rather than
 held by either of them because a watch has a lifecycle neither
 `message` nor `agent` contains, and its two ends fall on different
 listeners — opened on the browser one, fed on the machine one — which
@@ -537,6 +542,7 @@ it and imports no request surface and no domain.
 | `message.Message` | `internal/message` | one message addressed to a recipient |
 | `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
 | `message.Keyring` | `internal/message` | the keys every hand-out is signed under: opens the one signing, rotates them, publishes the set (ADR-0101) |
+| `message.Custodian` | `internal/message` | holds a signing key's private half: sealed under the key-encryption key, or in an OpenBao Transit key (`internal/message/transit`) that signs for it (ADR-0104) |
 | `watch.Event` | `internal/watch` | one forwarded turn event, carried and never stored |
 | `watch.Subscription` | `internal/watch` | one open watch: the stream its holder reads |
 | `watch.Service` | `internal/watch` | opens a watch, carries a forwarded event to the watchers of that agent, counts them |
@@ -576,7 +582,7 @@ it and imports no request surface and no domain.
 | Agents are provisioned by operators garam never dials | An operator is a peer, so a user can supply their own; garam is never the side that connects. | [adr/0012-agent-operator-model.md](./adr/0012-agent-operator-model.md) |
 | Messages reach an agent by polling, not by push | A queue in Postgres has no connection to route to, so any instance answers any poll. | [adr/0013-agent-messaging.md](./adr/0013-agent-messaging.md) |
 | garam signs every message it hands out | An agent judges a message by a signature that travels with it, not by the path it arrived on, so it can verify garam without trusting garam's transport. | [adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md) |
-| A deployment may hold message signing keys in OpenBao Transit; the file key-encryption key stays the default (unbuilt) | Transit signs, so no private half reaches the database or garam's memory, and an optional provider a deployment hosts itself is no vendor every deployment must reach; the authorities stay on the key-encryption key because they go at G4. | [adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md) |
+| A deployment may hold message signing keys in OpenBao Transit; the file key-encryption key stays the default | Transit signs, so no private half reaches the database or garam's memory, and an optional provider a deployment hosts itself is no vendor every deployment must reach; the authorities stay on the key-encryption key because they go at G4. | [adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md) |
 | Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
 | garam presents one pinned server certificate and certificates rotate without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; expiry is the only revocation, and a lifetime short enough to be one is unusable when every rotation is a restart. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
 | An organization registers an operator, and a definition may name no other | A definition naming an operator nobody registered was a definition no operator would ever claim, and nothing reported it. | [adr/0045-an-organization-registers-an-operator.md](./adr/0045-an-organization-registers-an-operator.md) |

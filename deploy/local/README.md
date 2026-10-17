@@ -14,8 +14,9 @@ local Kubernetes stack in `minikube/`, which generates that key material
 and hands the process a file it owns.
 
 This compose file is also what the test gates run against. `make db-up`
-starts only its `postgres` service for the Go suites `make integration`
-and `make e2e`, and `make db-down` removes that service again; `make
+starts only its `postgres` and `openbao` services for the Go suites
+`make integration` and `make e2e`, and `make db-down` removes them
+again; `make
 backend-up` starts everything but the profile-gated `web` service, which
 is the backend `make web-e2e` drives. Every concern shares the one
 compose project `garam-local` and its `postgres-data` volume — there is
@@ -58,6 +59,14 @@ gathers a database per worktree indefinitely, which reached 89 of them
 and 777 MB on one machine before anything counted (#934). It is not part
 of `make ci` — a runner starts empty and its databases go with it, so
 this is a local cost only.
+
+The `openbao` service is a dev-mode OpenBao, pinned by digest, which
+the Transit custodian's integration tests sign against (ADR-0104). It
+holds nothing between starts: each start generates a new CA and root
+token inside the container, where `make integration` has the suite read
+them, and each test makes a Transit mount of its own and removes it. It
+publishes host port 28200 by default, and `GARAM_OPENBAO_PORT` moves it
+as `GARAM_DB_PORT` moves Postgres.
 
 Postgres publishes host port 25432 by default. `GARAM_DB_PORT` overrides
 it, in `.env` or in the environment

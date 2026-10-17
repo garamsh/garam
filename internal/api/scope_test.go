@@ -95,7 +95,7 @@ func TestScopedPermissions_Matrix(t *testing.T) {
 	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
 
 	slug := createOrg(t, f, owner, "acme")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	aliceGRN := grn.New("root", "default", user.ServiceType, "alice-sub")
 	bobGRN := grn.New("root", "default", user.ServiceType, "bob-sub")
 	for _, g := range []grn.GRN{aliceGRN, bobGRN} {
@@ -155,7 +155,7 @@ func TestScopedPermissions_GroupWithoutRolesGrantsNothing(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	alice := f.sessionCookieFor(t, "alice-sub", "Alice")
 	slug := createOrg(t, f, owner, "acme")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	aliceGRN := grn.New("root", "default", user.ServiceType, "alice-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, aliceGRN, org.RoleMember)))
 
@@ -191,7 +191,7 @@ func TestScopedPermissions_DirectUserRoles(t *testing.T) {
 	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
 
 	slug := createOrg(t, f, owner, "acme")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	aliceGRN := grn.New("root", "default", user.ServiceType, "alice-sub")
 	bobGRN := grn.New("root", "default", user.ServiceType, "bob-sub")
 	strangerGRN := grn.New("root", "default", user.ServiceType, "stranger-sub")
@@ -237,7 +237,7 @@ func TestScopedPermissions_RolesAssignedOverHTTP(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	alice := f.sessionCookieFor(t, "alice-sub", "Alice")
 	slug := createOrg(t, f, owner, "acme")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	aliceGRN := grn.New("root", "default", user.ServiceType, "alice-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, aliceGRN, org.RoleMember)))
 

@@ -35,7 +35,7 @@ func (c *clockedKeys) RotateSigningKeys(_ context.Context, prepare func([]*Signi
 		return err
 	}
 	c.leads = append(c.leads, key.Lead)
-	c.keys = append(c.keys, &SigningKey{ID: key.ID, PublicKey: key.PublicKey, SealedPrivateKey: key.SealedPrivateKey, SignsFrom: c.now.Add(key.Lead)})
+	c.keys = append(c.keys, &SigningKey{ID: key.ID, PublicKey: key.PublicKey, Held: key.Held, SignsFrom: c.now.Add(key.Lead)})
 	sort.SliceStable(c.keys, func(i, j int) bool { return c.keys[i].SignsFrom.Before(c.keys[j].SignsFrom) })
 	return nil
 }
@@ -70,7 +70,7 @@ func signedBy(t *testing.T, ring Keyring, keys *clockedKeys) map[string]string {
 	require.NoError(t, err)
 	m, err := New(recipient, sender, "key-1", "hello")
 	require.NoError(t, err)
-	signed, err := signer.Sign(&Claim{message: m, id: "claim-1", claimedAt: keys.now, expiresAt: keys.now.Add(time.Minute)})
+	signed, err := signer.Sign(context.Background(), &Claim{message: m, id: "claim-1", claimedAt: keys.now, expiresAt: keys.now.Add(time.Minute)})
 	require.NoError(t, err)
 	encoded, _, ok := strings.Cut(signed.Signature, ".")
 	require.True(t, ok)
@@ -83,7 +83,7 @@ func signedBy(t *testing.T, ring Keyring, keys *clockedKeys) map[string]string {
 
 func newRing(t *testing.T, keys *clockedKeys) Keyring {
 	t.Helper()
-	ring, err := NewKeyring(keys, openSealer{}, "https://garam.example", Config{})
+	ring, err := NewKeyring(keys, "https://garam.example", Config{}, NewFileCustodian(openSealer{}))
 	require.NoError(t, err)
 	return ring
 }

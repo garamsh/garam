@@ -104,6 +104,7 @@ sql:
       - migrations/000004_agents.up.sql
       - migrations/000029_agent_execution_fence.up.sql
       - migrations/000037_message_signing.up.sql
+      - migrations/000048_message_signing_custody.up.sql
     queries: internal/message/queries.sql
     gen:
       go:

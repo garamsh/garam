@@ -18,11 +18,11 @@
 facts about an agent that nobody else holds: what the operator says
 about the pod, and what the agent says about itself. Neither has ever
 been reported. `agents.md` opened with that under rule 9, and
-`overview.md` §Out of scope named it: an agent is created at `pending`
-and `unknown` and stays there for the life of the process, which is
-indistinguishable from an agent that never started. The cluster holds
-exactly that case — one agent resource in CrashLoopBackOff that garam
-reports as it reports a healthy one.
+`overview.md` §Out of scope (today) named it: an agent is created at
+`pending` and `unknown` and stays there for the life of the process,
+which is indistinguishable from an agent that never started. The cluster
+holds exactly that case — one agent resource in CrashLoopBackOff that
+garam reports as it reports a healthy one.
 
 What is missing is only the report. The store has held
 `ReportProvisioningState` and `ReportRuntimeState` since the domain was
@@ -97,8 +97,8 @@ Concretely:
   reporting leaves the last report standing. Nothing here expires one.
 - The lifecycle ADR-0026 described — defined, claimed, running — is
   now observable end to end. `agents.md` no longer opens with rule 9's
-  unbuilt marker, and `overview.md` moves state reporting out of
-  §Out of scope.
+  unbuilt marker, and
+  `overview.md` moves state reporting out of §Out of scope (today).
 - An agent has to be told its epoch, and garam does not tell it. The
   epoch reaches the operator on `createAgent` and `claimDefinition`,
   and the operator passes it to the agent it constructs, as

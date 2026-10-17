@@ -9,8 +9,8 @@ Current architecture of the system and the decisions behind it. This file is the
 - **This file** — the index, and not one of those documents: §Index
   names every file that is one, and the current state stated here is
   this repository's own rather than the system's — where its checks run
-  (§Operation) and what its record has no detection for (§What nothing
-  detects).
+  (§Operation) and what its record has no detection for
+  (§What nothing detects).
 
 ## Rules
 
@@ -31,7 +31,7 @@ Current architecture of the system and the decisions behind it. This file is the
    [web-app.md](./web-app.md) and [api-surface.md](./api-surface.md)
    route that way to `deploy/charts/garam/README.md`, and
    [deployment-contract.md](./deployment-contract.md) §What it is names
-   that file's §Pinning a version.
+   `deploy/charts/garam/README.md` §Pinning a version.
 2. **ADRs are append-only.** Once merged, the body is frozen.
    Exceptions: updating the status field (`accepted` → `superseded by
    ADR-XXXX`), fixing typos or broken links, and appending a dated entry
@@ -113,8 +113,9 @@ Current architecture of the system and the decisions behind it. This file is the
    ([ADR-0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md)).
    #946 rewrote this rule and rule 3, put no passage in violation and
    sorted 40 of 40 the way the history already had, so it earned none.
-   #953 put [deployment-contract.md](./deployment-contract.md) §What it
-   is in violation until the same pull request repaired it, and
+   #953 put
+   [deployment-contract.md](./deployment-contract.md) §What it is in
+   violation until the same pull request repaired it, and
    [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)
    was owed. This paragraph earned ADR-0060 on the second arm alone: it
    puts no passage in violation, and #946 and #953 had answered its
@@ -160,8 +161,9 @@ Current architecture of the system and the decisions behind it. This file is the
    describes it.** A section describing a mechanism nothing implements,
    or one built in part, opens with that fact; underneath the
    description it reaches a reader who has already believed the
-   mechanism is there. [adapter.md](./adapter.md) §Readiness and
-   §Subscriptions open that way. A document with no `##` heading is one
+   mechanism is there.
+   [adapter.md](./adapter.md) §Readiness and §Subscriptions open that
+   way. A document with no `##` heading is one
    section: the fact opens its body, below the line naming what the
    document governs, as [messaging.md](./messaging.md) does. An ADR is
    outside this: a decision is unbuilt when it is taken, and rule 2
@@ -169,13 +171,13 @@ Current architecture of the system and the decisions behind it. This file is the
 
 ## What nothing detects
 
-Rule 1 requires a responsibility document's current decisions to be consolidated and synthesized. A decision restated at many sites in one document is neither, and rule 1 has said so since 981c537, which predates every pull request named below. Nothing detects a document that has accumulated those sites, and nothing detects one of them being left behind when the decision changes. The requirement is stated; the detection is what is absent.
+Rule 1 requires a responsibility document's current decisions to be consolidated and synthesized. A decision restated at many sites in one document is neither, and rule 1 has said so since 981c5371a05447f378cf71375ff1e792495afa69, which predates every pull request named below. Nothing detects a document that has accumulated those sites, and nothing detects one of them being left behind when the decision changes. The requirement is stated; the detection is what is absent.
 
 Rule 3 is not that detection, and it is not what let the sites accumulate. It pairs an ADR with the responsibility documents it affects, and its unit is the file: it is satisfied once the affected document is in the pull request. Of the four cases #558's investigation read, rule 3 reached one and was breached there: #393 added ADR-0035 and paired [domains.md](./domains.md) without opening [overview.md](./overview.md). In the other three it did what it says — the affected document was opened and moved, or no ADR landed for it to trigger on. What stayed stale in those three was a further site of a claim the document was already carrying at several, which is rule 1's ground and not rule 3's.
 
-An author who has moved one site cannot find the rest by searching for the decision they just made, and that is a fact about the sites rather than about the search. The ones left behind are the ones that do not name the new decision, so the search returns precisely the set that already moved. `git show 4b1bef1:docs/architecture/overview.md | grep -oiE '0035|consent'` returns nothing — 4b1bef1 is the revision before #556 corrected that document — while `grep -oE 'ADR-[0-9]{4}'` over the same input returns 76: the search ran, over a file citing ADRs throughout, and the stale statement of the cross-organization refusal named neither the number nor the decision's word.
+An author who has moved one site cannot find the rest by searching for the decision they just made, and that is a fact about the sites rather than about the search. The ones left behind are the ones that do not name the new decision, so the search returns precisely the set that already moved. `git show 4b1bef1f31a12bd32f092be355e0165c6e561fb3:docs/architecture/overview.md | grep -oiE '0035|consent'` returns nothing — 4b1bef1f31a12bd32f092be355e0165c6e561fb3 is the revision before #556 corrected that document — while `grep -oE 'ADR-[0-9]{4}'` over the same input returns 76: the search ran, over a file citing ADRs throughout, and the stale statement of the cross-organization refusal named neither the number nor the decision's word.
 
-Searching for the superseded decision instead is a genuine improvement over searching for the new one, and it is still a search. Two careful searches of `docs/architecture/overview.md` at 7dd0682 for the removed development-only sign-in provider disagreed in opposite directions inside one count: one missed line 268, which reads `dev-only local`, and one counted line 106, an §In scope bullet about org structure that may not carry the claim at all. Between those two searches over that document the unit being counted was not fixed; that is what the disagreement shows, and it is not evidence that no unit could be fixed. What holds either way is rule 1's ground: a document that does not accumulate the sites has nothing to enumerate.
+Searching for the superseded decision instead is a genuine improvement over searching for the new one, and it is still a search. Two careful searches of `docs/architecture/overview.md` at 7dd0682f05a449596bcc9fa49363ead04d7a7e81 for the removed development-only sign-in provider disagreed in opposite directions inside one count: one missed line 268, which reads `dev-only local`, and one counted line 106, an §In scope bullet about org structure that may not carry the claim at all. Between those two searches over that document the unit being counted was not fixed; that is what the disagreement shows, and it is not evidence that no unit could be fixed. What holds either way is rule 1's ground: a document that does not accumulate the sites has nothing to enumerate.
 
 No pipeline stands behind this either: what `make ci` reads a file under `docs/` for is one thing, each Markdown file's `## Contents` list against that file's own `##` headings (`check-contents-list.sh`, #889), so no run of it passes or fails on anything this section describes. What this repository's workflows do run is §Operation.
 
@@ -202,9 +204,10 @@ leaves.
   No workflow publishes the test image; an operator pushes it with
   `make test-image-push` and `make test-image-pin` (ADR-0093).
   `dev` is the default branch, and every pull request but the
-  promotion pull request targets it (`docs/convention/git.md`
-  §Promotion), so the base filter selects the promotion pull request
-  and no pull request into `dev` starts a runner (#1059).
+  promotion pull request targets it
+  (`docs/convention/git.md` §Promotion), so the base filter selects the
+  promotion pull request and no pull request into `dev` starts a runner
+  (#1059).
 - **A superseded run is cancelled; a release run is not.** `ci.yml` and
   `images.yml` each declare a concurrency group keyed on
   `github.workflow` and `github.ref` — under their one trigger that ref
@@ -260,7 +263,7 @@ leaves.
   answers a different question than the caller asked (#886).
 - **The after-merge run is not taken.** A `push: branches: [main]` trigger ran on `ci.yml` until #811. Both triggers read the merge result, so what that one alone covered is a `main` that moved between the pull request's run and the merge.
 - **Nothing mechanical covers that gap; the role that merges does.** The obligation is stated once, in `AGENTS.md` §Roles; this bullet records that the gap is covered and is not that statement. The mechanical replacement is a required status check with *branches must be up to date*, which is a repository setting and so the account owner's.
-- **Mutation testing runs in no workflow, and that is the decision rather than an omission.** `make mutation` rewrites one operator at a time under `internal/` and reports the mutants no test noticed. Four full runs on 2026-09-02 each spent around 35 minutes of CPU on twelve cores and took between 5 minutes 42 seconds and 32 minutes of wall time; the spread is the per-mutant timeout, which the target's own comment accounts for. A runner with four cores has a third of those and slower ones. `internal/` holds 33 of the module's 40 Go packages; the seven outside it are `cmd/garam`, the three generated from `api/openapi.yaml`, `api/machine.yaml` and `proto/`, and `migrations`, `tests/e2e` and `tests/integration`, which hold test files only (`go list ./... | grep -v /internal/`). So triggering on changes under it would exclude a pull request that changes Go outside `internal/` as well as the ones that change no Go at all, and would still fire on almost every pull request that changes Go and roughly double what it costs: of the 120 commits to 3fbcf93, 47 changed a Go, specification or migration file, and 41 of those touch `internal/` while six do not. A schedule spends the same minutes on a report no pull request is waiting for, and attributes a new survivor to no change rather than to the one that raised it. What the run buys is an audit of the suite rather than a gate on one change, which is why a person invokes it (#875).
+- **Mutation testing runs in no workflow, and that is the decision rather than an omission.** `make mutation` rewrites one operator at a time under `internal/` and reports the mutants no test noticed. Four full runs on 2026-09-02 each spent around 35 minutes of CPU on twelve cores and took between 5 minutes 42 seconds and 32 minutes of wall time; the spread is the per-mutant timeout, which the target's own comment accounts for. A runner with four cores has a third of those and slower ones. `internal/` holds 33 of the module's 40 Go packages; the seven outside it are `cmd/garam`, the three generated from `api/openapi.yaml`, `api/machine.yaml` and `proto/`, and `migrations`, `tests/e2e` and `tests/integration`, which hold test files only (`go list ./... | grep -v /internal/`). So triggering on changes under it would exclude a pull request that changes Go outside `internal/` as well as the ones that change no Go at all, and would still fire on almost every pull request that changes Go and roughly double what it costs: of the 120 commits to 3fbcf9367ad6b66d1ae5e553eb5630471c589036, 47 changed a Go, specification or migration file, and 41 of those touch `internal/` while six do not. A schedule spends the same minutes on a report no pull request is waiting for, and attributes a new survivor to no change rather than to the one that raised it. What the run buys is an audit of the suite rather than a gate on one change, which is why a person invokes it (#875).
 
 ## Index
 
@@ -676,8 +679,9 @@ ADRs:
 - [0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — a structural rule yields to a stack file only where the stack's
   framework imposes the case, taken from the conventions template at
-  `b02fe37` with six more template commits; `web/` is governed by
-  `structure.md` again, and `db32912` makes `internal/cli` the
+  `b02fe378e81c03eaf38540372430f15bbfbc4396` with six more template
+  commits; `web/` is governed by `structure.md` again, and
+  `db3291285a9f89edf571a41bcdaee8528d77b021` makes `internal/cli` the
   composition site `stack-go.md` provides
 - [0095](./adr/0095-development-images-live-under-dev-and-garam-holds-releases-only.md)
   — development images live under `dev/`, and `garam/` holds
@@ -686,10 +690,11 @@ ADRs:
   own identity, and the costs the PM stated against it are accepted.
   Supersedes ADR-0071's repository decision only; superseded by 0097
 - [0096](./adr/0096-garam-syncs-the-convention-template-to-f7de866.md)
-  — garam syncs the conventions template to `f7de866`, taking every
-  commit since `6fbfd5d` that lands on a file it keeps; `stack-go.md`
-  §Service layout keeps naming an implementation package for its
-  technology, and
+  — garam syncs the conventions template to
+  `f7de866df7185d523589c2bb69b80458e2247f7d`, taking every commit
+  since `6fbfd5d52cb65c20dd8bcc92fc6f24da88f05831` that lands on a
+  file it keeps; `stack-go.md` §Service layout keeps naming an
+  implementation package for its technology, and
   three adapted stack files keep their checked-against headers
 - [0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)
   — development images live under `garam-dev/`, as the owner set it
@@ -698,7 +703,8 @@ ADRs:
   name `garam-dev/<image>`. Supersedes 0095, and ADR-0093's
   repository URI and namespace
 - [0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)
-  — garam syncs the conventions template to `b29f0f1`: the
+  — garam syncs the conventions template to
+  `b29f0f104c68b42bfb363351a8e0e3cdc9b52829`: the
   composition-site rule moves from `stack-go.md` into `structure.md`,
   the template's §Rules every shape carries and bootstrap line are
   declined, and the section-scope rule is taken where Garam keeps the
@@ -741,8 +747,7 @@ ADRs:
   Vault Transit key that signs each hand-out inside the claim's
   transaction, behind a key-custody seam replacing `message.Sealer`
   as the keyring's; with no provider the file key-encryption key stays
-  the default, and the certificate authorities stay on it until G4.
-  Unbuilt
+  the default, and the certificate authorities stay on it until G4
 - [0105](./adr/0105-garams-pipeline-runs-on-a-docker-capable-aurora-runner-class.md)
   — garam's six jobs run on one Docker-capable aurora runner class,
   keeping every entry point CI invokes today, rather than on the

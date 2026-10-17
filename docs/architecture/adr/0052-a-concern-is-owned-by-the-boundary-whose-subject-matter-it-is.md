@@ -146,15 +146,15 @@ in §Context are what it rests on.
 - **Read "owns" as provenance and fold `listfilter` into
   `internal/org`.** The destination the threshold names, taken
   literally. It creates the tree's first domain-to-domain edge,
-  breaches the concrete-types rule, and makes organizations validate
-  the agents listing's paging against `runtime-safety.md` §Trust
-  boundaries. Each is a cost of the reading rather than of this
+  breaches the concrete-types rule, and makes organizations validate the
+  agents listing's paging against `runtime-safety.md` §Trust boundaries.
+  Each is a cost of the reading rather than of this
   concern, which is why the reading is what this ADR decides.
 - **Read "owns" as provenance but carve out an exception for this
   package.** An exception decides one case and leaves the next to be
-  argued from scratch, which is the state ADR-0047 §Rejected
-  alternatives calls "a conditional rule turns every case into an
-  argument about which branch garam is on".
+  argued from scratch, which is the state
+  ADR-0047 §Rejected alternatives calls "a conditional rule turns every
+  case into an argument about which branch garam is on".
 - **Add a branch to the threshold's escape clause for a partial
   prohibition.** The clause extracts a concern where a boundary "may
   not reach a sibling at all", and `domains.md` forbids less than that

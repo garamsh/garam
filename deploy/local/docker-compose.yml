@@ -1,8 +1,9 @@
 # The whole garam stack on one machine, and also the dev/e2e Postgres:
-# `make db-up` starts only the postgres service from this file, so both
-# concerns share the one compose project (and its volume). They do not
-# share a database — the stack owns `garam`, the two Go suites own
-# `garam_test`, because `make integration` truncates. See README.md.
+# `make db-up` starts only the postgres and openbao services from this
+# file, so both concerns share the one compose project (and its
+# volume). They do not share a database — the stack owns `garam`, the
+# two Go suites own `garam_test`, because `make integration`
+# truncates. See README.md.
 name: garam-local
 
 services:
@@ -35,6 +36,28 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
+
+  # The OpenBao the Transit provider's integration tests sign against
+  # (ADR-0104), started by `make db-up` beside postgres. Dev mode: one
+  # in-memory, unsealed server over TLS, whose CA and root token it
+  # generates inside the container at every start, where
+  # tests/integration reads them. Nothing in the stack above uses it.
+  #
+  # Digest as well as tag, the digest of the multi-platform index.
+  # Dependabot's docker-compose entry moves the pair, as it does
+  # postgres's.
+  openbao:
+    image: openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf
+    command: ["server", "-dev", "-dev-tls", "-dev-tls-cert-dir=/openbao/file"]
+    ports:
+      - "${GARAM_OPENBAO_PORT:-28200}:8200"
+    # The server's own status command, over the TLS it serves: healthy
+    # means initialised and unsealed rather than a port open.
+    healthcheck:
+      test: ["CMD-SHELL", "BAO_ADDR=https://127.0.0.1:8200 BAO_CACERT=/openbao/file/vault-ca.pem bao status >/dev/null"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
 
   # One-shot: applies pending migrations and exits. The servers wait for
   # it to succeed.

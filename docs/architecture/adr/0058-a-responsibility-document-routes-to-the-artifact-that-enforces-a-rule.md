@@ -129,19 +129,19 @@ boundary.
   document holds or routes to. Sweeping 23 working artifacts against
   the same 17 documents — run twice, once by this ADR's author and once
   independently — measured ten further statements absent, each with a
-  control. Three of them sit inside `deploy/charts/garam/README.md`
-  §Pinning a version itself (lines 365, 370 and 376: the registry's
-  refusal of an anonymous pull, `0.1.0` as the first released version,
-  and the still-absent `appVersion`), so a reader following the route
-  written here meets them. The other seven do not: `strategy:
-  type: Recreate` and the service gap an upgrade therefore is, the
-  migrate Job's hook phase, `deploy/local/minikube/`, the per-worktree
-  test database and `make db-prune`, this repository's hard-wrapped
-  prose and `make search`, the single `os.Getenv` call `envOr` wraps,
-  and the web build's `standalone` output. None of the seven is closed
-  off by a boundary the way the version rule was, so each is an
-  ordinary rule 1 omission rather than this decision's case and is
-  reported for an issue of its own rather than settled here.
+  control. Three of them sit inside
+  `deploy/charts/garam/README.md` §Pinning a version itself (lines 365,
+  370 and 376: the registry's refusal of an anonymous pull, `0.1.0` as
+  the first released version, and the still-absent `appVersion`), so a
+  reader following the route written here meets them. The other seven do
+  not: `strategy: type: Recreate` and the service gap an upgrade
+  therefore is, the migrate Job's hook phase, `deploy/local/minikube/`,
+  the per-worktree test database and `make db-prune`, this repository's
+  hard-wrapped prose and `make search`, the single `os.Getenv` call
+  `envOr` wraps, and the web build's `standalone` output. None of the
+  seven is closed off by a boundary the way the version rule was, so
+  each is an ordinary rule 1 omission rather than this decision's case
+  and is reported for an issue of its own rather than settled here.
 
 ## Consequences
 
@@ -173,19 +173,19 @@ boundary.
   value, so the boundary could be refined to admit rules about the
   chart while still excluding its values. The distinction is real and
   it does not survive contact with what the boundary is for. Applied
-  evenly it readmits most of the chart's prose: §Choosing a release
-  name states "A published web image reaches the api Service a release
-  named `garam` renders", §Workload identities states "The name is
-  taken verbatim, and the chart composes none", §Exposure is the
-  cluster owner's states "Nothing that terminates TLS may stand in
-  front of port 8443" — each a rule about the chart rather than a value
-  in it, and each therefore no longer excluded. That is two descriptions
-  of one deployment, which is the defect ADR-0042 exists to remove. It
-  would also contradict the routes already in place: `web-app.md` names
-  §Choosing a release name and `api-surface.md` names the file for what
-  may stand in front of a listener, and a boundary admitting rules
-  about the chart says both documents should have restated those rules
-  instead of routing to them.
+  evenly it readmits most of the chart's prose: §Choosing a release name
+  states "A published web image reaches the api Service a release named
+  `garam` renders", §Workload identities states "The name is taken
+  verbatim, and the chart composes none",
+  §Exposure is the cluster owner's states "Nothing that terminates TLS
+  may stand in front of port 8443" — each a rule about the chart rather
+  than a value in it, and each therefore no longer excluded. That is two
+  descriptions of one deployment, which is the defect ADR-0042 exists to
+  remove. It would also contradict the routes already in place:
+  `web-app.md` names §Choosing a release name and `api-surface.md` names
+  the file for what may stand in front of a listener, and a boundary
+  admitting rules about the chart says both documents should have
+  restated those rules instead of routing to them.
 - **Writing the version rule into `deployment-contract.md` under the
   boundary as it stands.** The move #937 and #946 each declined, for
   the reason each stated. It also misfiles the rule: that document

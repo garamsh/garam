@@ -135,8 +135,8 @@ Then run them as §Invocation says, with `-migrations ./migrations`.
   untagged one after a day (ADR-0093).
   A pin therefore holds its image until it moves. To move it to
   another commit, ask the Garam PM, and an operator pushes that
-  commit's image and moves `pinned-<consumer>` to it (§Pushing and
-  pinning).
+  commit's image and moves `pinned-<consumer>` to it
+  (§Pushing and pinning).
 - **The GHCR package.** Images published before ADR-0093 were in
   `ghcr.io/garamsh/garam-test`. It was deleted on 2026-10-09, once
   the ECR repository held a pinned image that its one consumer pulls
@@ -145,10 +145,10 @@ Then run them as §Invocation says, with `-migrations ./migrations`.
   commit's image exists once an operator has pushed it, which happens
   when a pin moves to it.
 - **What it refuses outside a test database.** `/testprincipal` is
-  this command at that commit, and refuses everything §What it
-  refuses lists: a server off the machine, a database it did not
-  create, and a partial database. `/garam` is the ordinary server and
-  refuses nothing of its own here; it serves whatever database it is
+  this command at that commit, and refuses everything
+  §What it refuses lists: a server off the machine, a database it did
+  not create, and a partial database. `/garam` is the ordinary server
+  and refuses nothing of its own here; it serves whatever database it is
   given, so give it the `databaseUrl` `prepare` printed.
 
 ### Pushing and pinning

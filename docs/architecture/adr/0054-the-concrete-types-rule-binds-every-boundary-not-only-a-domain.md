@@ -26,21 +26,22 @@ carries this rule, which `#824` moved there verbatim under rule 6:
 **Every other bullet in that section is stated over boundaries.** This
 one is stated over domains, and garam has boundaries that are not
 domains: `internal/watch` and `internal/delivery`.
-[domains.md](../domains.md) §Sub-responsibilities in a boundary of their
-own holds each in a boundary of its own and says of the pair, outright,
+[domains.md](../domains.md)
+§Sub-responsibilities in a boundary of their own holds each in a
+boundary of its own and says of the pair, outright,
 "Neither is a domain". So whether the rule binds those two is not
 decided by its text. It was not decided by its text in `domains.md`
 either, and the move carried the ambiguity rather than creating it.
 
-**The categories the question turns on are already defined.** A
-boundary is "a domain, a feature, a bounded context" (§Boundaries and
-dependency direction). What composes several boundaries is not itself
-one of them (§The shape), which is what `domains.md` §Delivery surfaces
-cites to say `internal/api`, `internal/machineapi` and `internal/cli`
-are not boundaries. The tree therefore holds three kinds of folder
-under `internal/` — boundaries, what composes them, and shared code
-below them — and the rule as written names only the domains among the
-first.
+**The categories the question turns on are already defined.** A boundary
+is "a domain, a feature, a bounded context"
+(§Boundaries and dependency direction). What composes several boundaries
+is not itself one of them (§The shape), which is what
+`domains.md` §Delivery surfaces cites to say `internal/api`,
+`internal/machineapi` and `internal/cli` are not boundaries. The tree
+therefore holds three kinds of folder under `internal/` — boundaries,
+what composes them, and shared code below them — and the rule as written
+names only the domains among the first.
 
 ### Widening to every boundary forbids nothing the tree does
 
@@ -82,11 +83,12 @@ A rule that permits everything a tree does can be describing it rather
 than binding it. This one forbids an edge nobody has drawn: a watch
 taking `agent.Agent`, whose subject it is about, or handing a domain
 one of its own types. That edge is the one the boundary exists to keep
-out — `domains.md` §Sub-responsibilities makes the watch its own
-boundary because "a watch has a lifecycle neither the agents domain nor
-the messaging one contains", and it stays separable only while it
-addresses the agent by GRN. The same holds for the delivery loop, which
-runs outside garam as a client of the machine listener.
+out — `domains.md` §Sub-responsibilities in a boundary of their own
+makes the watch its own boundary because "a watch has a lifecycle
+neither the agents domain nor the messaging one contains", and it stays
+separable only while it addresses the agent by GRN. The same holds for
+the delivery loop, which runs outside garam as a client of the machine
+listener.
 
 ## Decision
 
@@ -114,9 +116,9 @@ a reader to derive it from §The shape.
 ## What this does not decide
 
 - **Whether `internal/watch` or `internal/delivery` should be
-  domains.** [domains.md](../domains.md) §Sub-responsibilities in a
-  boundary of their own says they are not, with a reason recorded for
-  each, and nothing here reopens it.
+  domains.** [domains.md](../domains.md)
+  §Sub-responsibilities in a boundary of their own says they are not,
+  with a reason recorded for each, and nothing here reopens it.
 - **Where the rule lives.** `#824` settled that under rule 6 and this
   changes only what the rule says.
 - **What a composing layer may do with what it composes.** §The shape
@@ -132,8 +134,9 @@ a reader to derive it from §The shape.
 
 - **A reviewer reads the rule's unit off the rule.** `#825`'s question
   — does this bind `internal/watch`? — is answered in the bullet
-  instead of by reading §The shape and `domains.md`
-  §Sub-responsibilities against each other.
+  instead of by reading §The shape and
+  `domains.md` §Sub-responsibilities in a boundary of their own against
+  each other.
 - **The next boundary that is not a domain is bound on arrival.**
   garam has met this twice; a rule listing the two by name would have
   to be edited a third time.
@@ -157,8 +160,8 @@ a reader to derive it from §The shape.
   cost already paid once.
 - **Restate it over every folder under `internal/`.** This is the
   reading `#825` warned against, and it is the one that would forbid
-  what the delivery surfaces do deliberately. It also contradicts §The
-  shape, which is where the word *boundary* is defined.
+  what the delivery surfaces do deliberately. It also contradicts
+  §The shape, which is where the word *boundary* is defined.
 - **Name `internal/watch` and `internal/delivery` in the rule.** An
   enumeration decides today's tree and leaves the next boundary to be
   argued from scratch, which is the state

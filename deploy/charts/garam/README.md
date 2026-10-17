@@ -11,6 +11,7 @@ The description of how garam is deployed: the five workloads it runs, the ports 
 - Not set by this chart
 - Exposure is the cluster owner's
 - Key material and secrets
+- Message signing keys in OpenBao Transit
 - Pinning a version
 - What keeps it true
 - What the checks are complete over
@@ -90,8 +91,8 @@ bound to that one instead.
 renders under the release name `garam`, read against a second release
 name that must render something else (§What keeps it true). The other
 half — that the image a deployment pins was built with the address that
-deployment's release renders — is outside every check here (§What the
-checks are complete over).
+deployment's release renders — is outside every check here
+(§What the checks are complete over).
 
 ## Workload identities
 
@@ -177,8 +178,8 @@ What is unrepairable is the fix that looks obvious from that failure:
 minting a replacement key. A different key opens no authority already
 sealed and there is no path from one key to another, so every
 organization loses the authority it already has
-(`docs/architecture/deployment-contract.md` §The key-encryption key
-cannot be regenerated, which carries what the only remedy costs).
+(`deployment-contract.md` §The key-encryption key cannot be regenerated,
+which carries what the only remedy costs).
 
 ## Values a deployment must supply
 
@@ -233,10 +234,10 @@ is one whose sign-in method is silently absent.
 a security parameter: it bounds every certificate garam signs for an
 agent or an operator, expiry is the only revocation garam has, and the
 binary refuses to start outside one hour and thirty days
-(`docs/architecture/deployment-contract.md` §What the binary enforces
-about key material). Lowering it is safe only where each of those
-identities renews and rewrites its own files without a restart, which
-this chart does not deploy and cannot check.
+(`deployment-contract.md` §What the binary enforces about key material).
+Lowering it is safe only where each of those identities renews and
+rewrites its own files without a restart, which this chart does not
+deploy and cannot check.
 
 `machine.agentTokenLifetime` defaults to the binary's own `1h` and
 bounds every agent token garam mints (ADR-0100): the binary refuses to
@@ -324,9 +325,9 @@ listener:
   by TCP passthrough or directly, never through an HTTP router that
   re-originates the connection.
 - **There is no client CA bundle to mount, and creating one is
-  forbidden** (`docs/architecture/deployment-contract.md` §What the
-  binary enforces about key material). The chart offers no value for
-  one.
+  forbidden**, per
+  `deployment-contract.md` §What the binary enforces about key material.
+  The chart offers no value for one.
 
 The other listeners carry no such constraint: `serve api` and the web
 app sit behind an ordinary TLS-terminating proxy — the session cookie's
@@ -342,8 +343,8 @@ Secret of its own.
 Key material reaches a process as a file readable only by its owner
 (ADR-0015), the binary refuses to start otherwise, and plain Secret
 projection satisfies neither half of that rule
-(`docs/architecture/deployment-contract.md` §What the binary enforces
-about key material). `templates/machine.yaml` renders the shape that
+(`deployment-contract.md` §What the binary enforces about key material).
+`templates/machine.yaml` renders the shape that
 does satisfy it: an initContainer running as `image.server.runAsUser`
 copies the projected volume with `install -m 0600` onto a memory-backed
 `emptyDir`. That volume is projected `0440`, so the pod's `fsGroup` —
@@ -370,9 +371,8 @@ deployment this chart has been rendered against (#1093): what issues
 the listener's pair and what holds the key-encryption key are
 different systems there. Moving the key-encryption key into the issued
 Secret to fit one name would change how every organization's authority
-is sealed, which is not a packaging decision to take
-(`docs/architecture/deployment-contract.md` §The key-encryption key
-cannot be regenerated).
+is sealed, which is not a packaging decision to take, per
+`deployment-contract.md` §The key-encryption key cannot be regenerated.
 
 **The copy is made once, and rotation is the deployment's other half.**
 The listener re-reads its certificate and key on every handshake, so a
@@ -382,8 +382,7 @@ refreshes it, so a pair replaced in the Secret reaches the projected
 volume and not the file the process opens: under this chart alone,
 rotation is still a pod restart. Whatever a deployment adds to refresh
 that copy carries both obligations
-(`docs/architecture/deployment-contract.md` §What the binary enforces
-about key material):
+(`deployment-contract.md` §What the binary enforces about key material):
 
 - It replaces the pair by renaming over the file, never by writing in
   place. A reader that opens a half-written file refuses the handshake.
@@ -392,12 +391,41 @@ about key material):
   or other bit set.
 
 The chart generates no key material, and the key-encryption key is why
-— it cannot be regenerated
-(`docs/architecture/deployment-contract.md` §The key-encryption key
-cannot be regenerated), so a chart that minted one would leave every
+— it cannot be regenerated, per
+`deployment-contract.md` §The key-encryption key cannot be regenerated:
+a chart that minted one would leave every
 certificate authority in the database unopenable on its second
 install. Supplying it, keeping it beyond the cluster's life, and
 choosing where it lives are the deployment's.
+
+## Message signing keys in OpenBao Transit
+
+`machine.transit` holds the keys garam signs messages with in an
+OpenBao or Vault Transit key instead of sealing them under the
+key-encryption key
+([ADR-0104](../../../docs/architecture/adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md)).
+It is off while `machine.transit.address` is empty, and the render then
+carries none of its variables. Set, `caSecretName`, `tokenFile` and
+`signingKey` are required and the render refuses without each, naming
+it: garam refuses to start holding part of the setting. What the
+deployment owes OpenBao — the key, the policy and the auth role — is
+stated in
+`deployment-contract.md` §A Transit provider for message signing keys.
+
+- **The policy** grants `update` on `<mount>/keys/<key>/rotate` and
+  `<mount>/sign/<key>` and nothing else: those are the two calls garam
+  makes.
+- **The CA** is read from the Secret `caSecretName` names, under
+  `caKey`, and projected as it is: it is public, so it is not copied to
+  an owner-only file.
+- **The token is not in this chart.** `tokenFile` names where in the
+  machine container the binary reads it, on every call, and whatever
+  writes and renews it is the deployment's. The file is held to the
+  arrival rule above — owned by `image.server.runAsUser`, no group or
+  other bit — and replaced by renaming over it. `machine.podAnnotations`
+  is how a writer that injects itself into the pod, such as OpenBao
+  Agent's injector, is asked for; the chart renders no writer and no
+  volume for one.
 
 ## Pinning a version
 
@@ -568,8 +596,9 @@ print.
   deployment sets in its own values is that deployment's and reaches no
   file this opens.
 
-`chart-package` reaches one thing §Not established in
-`docs/architecture/deployment-contract.md` says garam does not publish: a
+`chart-package` reaches one thing
+§Not established in `docs/architecture/deployment-contract.md` says
+garam does not publish: a
 resource figure. Nothing stops the chart from publishing an answer to the
 rest — a read-only root filesystem, replica safety above one, a bound on
 startup — and each of those stays reviewed rather than checked.
@@ -600,11 +629,11 @@ Two things sit outside any of them:
 
 ## What it is not
 
-**It renders nothing that refreshes the key-material copy.** §Key
-material and secrets states what a deployment adds and what that
+**It renders nothing that refreshes the key-material copy.**
+§Key material and secrets states what a deployment adds and what that
 addition owes. Rendering it here would move an obligation
-`docs/architecture/deployment-contract.md` §What the binary enforces
-about key material places on the deployment, and what a refresher
+`deployment-contract.md` §What the binary enforces about key material
+places on the deployment, and what a refresher
 reads, how often, and what it does with a renewed pair that does not
 chain to the root already loaded are decisions rather than packaging.
 #1093 carries the case for taking them; until they are taken, rotation

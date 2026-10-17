@@ -31,13 +31,17 @@ func (s *Store) MintAuthority(ctx context.Context, b operator.Binding, tokenHash
 	if b.RequestTarget != nil {
 		target = pgtype.Text{String: string(*b.RequestTarget), Valid: true}
 	}
+	var destination pgtype.Text
+	if b.Destination != nil {
+		destination = pgtype.Text{String: b.Destination.String(), Valid: true}
+	}
 	ref, err := s.q.MintOperationAuthority(ctx, db.MintOperationAuthorityParams{
 		Ref: string(b.Ref), OrgGrn: b.Org.String(), AudienceGrn: b.Audience.String(),
 		RequestID: string(b.RequestID), DelegationID: string(b.Grant), ActorGrn: b.Actor.String(),
 		Operation: string(b.Operation), TargetGrn: b.Target.String(),
 		AssigneeGrn: assignee, AssignmentEpoch: epoch, BodySha256: string(b.Digest),
-		RequestTarget: target,
-		TokenHash:     tokenHash, TokenExpiresAt: pgxtype.Timestamptz(expiresAt), CreatedAt: pgxtype.Timestamptz(now),
+		RequestTarget: target, DestinationGrn: destination,
+		TokenHash: tokenHash, TokenExpiresAt: pgxtype.Timestamptz(expiresAt), CreatedAt: pgxtype.Timestamptz(now),
 	})
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "", operator.ErrAuthorityRequestConflict
@@ -104,6 +108,13 @@ func bindingFromRow(row db.OperationAuthority) (operator.Binding, error) {
 			return operator.Binding{}, errorx.Wrap(err, "stored authority request target", errorx.KindInternal)
 		}
 		b.RequestTarget = &target
+	}
+	if row.DestinationGrn.Valid {
+		destination, err := grn.Parse(row.DestinationGrn.String)
+		if err != nil {
+			return operator.Binding{}, errorx.Wrap(err, "stored authority destination", errorx.KindInternal)
+		}
+		b.Destination = &destination
 	}
 	return b, nil
 }

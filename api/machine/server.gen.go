@@ -405,6 +405,7 @@ const (
 	AgentCutover         OperationBindingOperation = "agent:cutover"
 	AgentExecutionRead   OperationBindingOperation = "agent:execution-read"
 	AgentRecover         OperationBindingOperation = "agent:recover"
+	AgentReplace         OperationBindingOperation = "agent:replace"
 	AgentTemplatePublish OperationBindingOperation = "agent-template:publish"
 	AgentTemplateRead    OperationBindingOperation = "agent-template:read"
 	ExecutionProfileRead OperationBindingOperation = "execution-profile:read"
@@ -423,6 +424,8 @@ func (e OperationBindingOperation) Valid() bool {
 	case AgentExecutionRead:
 		return true
 	case AgentRecover:
+		return true
+	case AgentReplace:
 		return true
 	case AgentTemplatePublish:
 		return true
@@ -530,7 +533,7 @@ type AgentAdmission struct {
 	// CredentialDelivery The operation `assignee` delivers the agent's tokens with.
 	CredentialDelivery AgentAdmissionCredentialDelivery `json:"credentialDelivery"`
 
-	// Epoch The first assignment's epoch. Opaque.
+	// Epoch The epoch admission assigned: a new agent's first, or the one a replacement raised. Opaque.
 	Epoch string `json:"epoch"`
 	Grn   string `json:"grn"`
 
@@ -565,7 +568,10 @@ type AgentEnrollmentApproval struct {
 	Assignee     string                           `json:"assignee"`
 	OperationRef string                           `json:"operationRef"`
 	Placement    AgentEnrollmentApprovalPlacement `json:"placement"`
-	RequestId    string                           `json:"requestId"`
+
+	// Replaces The agent a replacement moves and the assignment it expects to move it from (ADR-0107).
+	Replaces  *AgentEnrollmentReplacement `json:"replaces,omitempty"`
+	RequestId string                      `json:"requestId"`
 }
 
 // AgentEnrollmentApprovalPlacement defines model for AgentEnrollmentApproval.Placement.
@@ -576,13 +582,13 @@ type AgentEnrollmentBinding struct {
 	// Assignee The operator GRN the agent is assigned to, its controller.
 	Assignee string `json:"assignee"`
 
-	// OperationRef The member's durable `agent:create` reference.
+	// OperationRef The member's durable `agent:create` reference, or for a replacement its `agent:replace` reference.
 	OperationRef string `json:"operationRef"`
 
 	// Placement Where the runtime runs: `managed`, provisioned by the Operator, or `direct`, running independently of it, which is refused until #1355 decides its writer proof.
 	Placement AgentEnrollmentBindingPlacement `json:"placement"`
 
-	// Replaces The assignment a replacement expects to move the agent from. Modelled and refused: a body naming it is 409 with reason `replacement_unavailable`.
+	// Replaces The agent a replacement moves and the assignment it expects to move it from (ADR-0107).
 	Replaces *AgentEnrollmentReplacement `json:"replaces,omitempty"`
 
 	// RequestId The request identifier the member's reference was minted under.
@@ -592,7 +598,7 @@ type AgentEnrollmentBinding struct {
 // AgentEnrollmentBindingPlacement Where the runtime runs: `managed`, provisioned by the Operator, or `direct`, running independently of it, which is refused until #1355 decides its writer proof.
 type AgentEnrollmentBindingPlacement string
 
-// AgentEnrollmentReplacement The assignment a replacement expects to move the agent from. Modelled and refused: a body naming it is 409 with reason `replacement_unavailable`.
+// AgentEnrollmentReplacement The agent a replacement moves and the assignment it expects to move it from (ADR-0107).
 type AgentEnrollmentReplacement struct {
 	Agent            string `json:"agent"`
 	ExpectedAssignee string `json:"expectedAssignee"`
@@ -626,7 +632,7 @@ type AuthorityIntrospection struct {
 	Authority string `json:"authority"`
 }
 
-// BoundAssignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover` only.
+// BoundAssignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover`, `agent:execution-read`, `agent:cutover` and `agent:replace` only.
 type BoundAssignment struct {
 	// Epoch Opaque.
 	Epoch       string `json:"epoch"`
@@ -840,7 +846,7 @@ type Error struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
 
-	// Reason Which refusal this is, where the kind alone does not say, set only on a route whose contract lists its reasons (ADR-0086) and absent everywhere else. The `agent-cutover.v1` routes set `digest_mismatch`, `attempt_open`, `attempt_ended`, `not_cut_over_eligible` or `reverse_migration_required`; `activateAgent` sets `cutover_required` and nothing else; the `agent-enrollment.v1` routes set `binding_conflict`, `approval_spent`, `superseded`, `direct_placement_gated` or `replacement_unavailable`. Branch on it only on those routes; a new reason is a new contract value.
+	// Reason Which refusal this is, where the kind alone does not say, set only on a route whose contract lists its reasons (ADR-0086) and absent everywhere else. The `agent-cutover.v1` routes set `digest_mismatch`, `attempt_open`, `attempt_ended`, `not_cut_over_eligible` or `reverse_migration_required`; `activateAgent` sets `cutover_required` and nothing else; the `agent-enrollment.v1` routes set `binding_conflict`, `approval_spent`, `superseded` or `direct_placement_gated`. Branch on it only on those routes; a new reason is a new contract value.
 	Reason *string `json:"reason,omitempty"`
 }
 
@@ -1069,10 +1075,13 @@ type OperationBinding struct {
 	// ActorGrn The user the operation is performed for.
 	ActorGrn string `json:"actorGrn"`
 
-	// Assignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover` only.
+	// Assignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover`, `agent:execution-read`, `agent:cutover` and `agent:replace` only.
 	Assignment  *BoundAssignment `json:"assignment,omitempty"`
 	AudienceGrn string           `json:"audienceGrn"`
 	BodySha256  string           `json:"bodySha256"`
+
+	// DestinationGrn Present for `agent:replace` alone: the controller the replacement moves the agent to, which `admitAgentEnrollment` compares with the binding's assignee (ADR-0107).
+	DestinationGrn *string `json:"destinationGrn,omitempty"`
 
 	// ExpiresAt When the presented authority stops being usable. Absent on a reference check.
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
@@ -1087,7 +1096,7 @@ type OperationBinding struct {
 	// RequestTarget Present for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read`, `agent:cutover` and `operator:read`, absent for every other operation. For `agent:cutover` it is garam's own cutover route the reference is carried to, and garam compares it (ADR-0086). Otherwise it is the exact origin-form request target the console sent: the escaped path and the raw query, with no scheme or authority, including any path prefix of the registered control endpoint. Compare it, before decoding, routing or reading any data, with the target the request arrived with, byte for byte; the empty body's digest does not tell one read from another.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// TargetGrn The controller for `agent:create`; the agent for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover`; the organization for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
+	// TargetGrn The controller for `agent:create`; the agent for `agent:configure`, `agent:recover`, `agent:execution-read`, `agent:cutover` and `agent:replace`; the organization for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
 	TargetGrn string `json:"targetGrn"`
 }
 

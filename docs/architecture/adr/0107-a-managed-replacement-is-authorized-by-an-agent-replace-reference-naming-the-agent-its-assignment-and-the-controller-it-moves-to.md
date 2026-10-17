@@ -1,7 +1,10 @@
 # ADR 0107: A managed replacement is authorized by an agent:replace reference naming the agent, its assignment and the controller it moves to
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-18
+
+Accepted by the Garam PM on 2026-10-18 under the owner's delegation,
+recorded in the review on #1491.
 
 Drafted for #1487, which reserves this number. garam is read at
 `d0e290d6d10fd1ad548d1105173e43cb1bdb6ac1`, the merge of #1486. A

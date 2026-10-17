@@ -16,22 +16,26 @@ const (
 	OperationKindConfigure OperationKind = "agent:configure"
 	OperationKindRecover   OperationKind = "agent:recover"
 	OperationKindCutover   OperationKind = "agent:cutover"
+	OperationKindReplace   OperationKind = "agent:replace"
 )
 
 // OperationBinding is what a handoff or an operation reference was
 // minted for. RequestID is the identifier the member minted it under;
-// Assignee and Epoch are the assignment snapshot it holds; BodySHA256
-// is the digest of the exact request it authorizes.
+// Assignee and Epoch are the assignment snapshot it holds; Destination
+// is the controller a replacement moves the agent to, and zero for
+// every other kind; BodySHA256 is the digest of the exact request it
+// authorizes.
 type OperationBinding struct {
-	Ref        string
-	Kind       OperationKind
-	Org        grn.GRN
-	Audience   grn.GRN
-	Target     grn.GRN
-	RequestID  string
-	Assignee   grn.GRN
-	Epoch      int
-	BodySHA256 [32]byte
+	Ref         string
+	Kind        OperationKind
+	Org         grn.GRN
+	Audience    grn.GRN
+	Target      grn.GRN
+	RequestID   string
+	Assignee    grn.GRN
+	Epoch       int
+	Destination grn.GRN
+	BodySHA256  [32]byte
 	// RequestTarget is the exact request target the binding was minted
 	// for, empty for an operation that binds none.
 	RequestTarget string

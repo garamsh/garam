@@ -159,7 +159,8 @@ tags:
       starts the agent fenced with no active generation and creates no
       workload, and a retry under the same request identifier answers
       what the first request did. Only `managed` placement admits
-      today. Every refusal the contract names carries `reason` in its
+      today, a new agent under an `agent:create` reference and a
+      replacement under an `agent:replace` one (ADR-0107). Every refusal the contract names carries `reason` in its
       Error body.
   - name: standalone
     description: >-
@@ -2410,11 +2411,23 @@ paths:
         current is 503.
 
 
+        A body naming `replaces` binds a replacement, which moves
+        `replaces.agent` to `assignee` under its GRN (ADR-0107). Its
+        `operationRef` is an owner's or administrator's `agent:replace`
+        reference instead, handed to this caller in its own
+        organization and minted under this `requestId` for
+        `replaces.agent`, at `replaces.expectedAssignee` and
+        `replaces.expectedEpoch`, with `assignee` as its destination;
+        the caller's current grant covers `agent:replace` for both
+        controllers. One minted for another agent, assignment,
+        destination or request identifier is 409 with reason
+        `binding_conflict`, and one the agent has moved away from is
+        403, as any reference current state no longer authorizes.
+
+
         `placement: direct` is 409 with reason `direct_placement_gated`
         whatever else the body says, until #1355 decides how a directly
-        running runtime's writer is proven. A body naming `replaces` is
-        409 with reason `replacement_unavailable`: no reference kind
-        yet authorizes moving a managed agent to another assignee.
+        running runtime's writer is proven.
       parameters:
         - $ref: '#/components/parameters/agentEnrollmentContractVersion'
       requestBody:
@@ -2482,8 +2495,19 @@ paths:
         approval's is 409 with reason `binding_conflict` before the
         approval is spent and `approval_spent` after; so is an approval
         whose reference a `createManagedAgent` creation already spent.
-        Refusals by placement, `replaces` and current authority are
+        Refusals by placement and current authority are
         `prepareAgentEnrollment`'s.
+
+
+        A replacement writes no agent. Under the agent's execution lock
+        it moves the assignment from exactly `replaces.expectedAssignee`
+        at `replaces.expectedEpoch` to `assignee`, raises the epoch,
+        ends the current activation and moves the agent into a new
+        lineage, which spends the approval; `grn` is `replaces.agent`.
+        Every token of the earlier lineage is refused from the next
+        request. An agent that has left the expected assignment before
+        the approval is spent is 409 with reason `superseded`, and a
+        retry is answered as a new agent's is.
 
 
         The third stage, credential delivery, is `mintAgentToken`:
@@ -2491,8 +2515,10 @@ paths:
         `audience` names the hosted control service, in the epoch and
         lineage admission answered. The fourth, activation, is
         `activateAgent` under `execution-fence.v2`, whose first
-        activation carries this reference as `operationRef`. Neither
-        delivery nor admission activates anything by itself.
+        activation carries this reference as `operationRef`; after a
+        replacement, an agent that was active names the activation the
+        replacement ended in `replaces` instead. Neither delivery nor
+        admission activates anything by itself.
       parameters:
         - $ref: '#/components/parameters/agentEnrollmentContractVersion'
         - $ref: '#/components/parameters/approval'
@@ -3293,7 +3319,7 @@ components:
           type: string
         operation:
           type: string
-          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover, operator:read]
+          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover, operator:read, agent:replace]
           description: >-
             Each operation is served on one route with one fixed HTTP
             method. A release that does not know an operation refuses
@@ -3303,12 +3329,20 @@ components:
           description: >-
             The controller for `agent:create`; the agent for
             `agent:configure`, `agent:recover`,
-            `agent:execution-read` and `agent:cutover`; the organization
+            `agent:execution-read`, `agent:cutover` and
+            `agent:replace`; the organization
             for
             `agent-template:read`, `agent-template:publish`,
             `execution-profile:read` and `operator:read`.
         assignment:
           $ref: '#/components/schemas/BoundAssignment'
+        destinationGrn:
+          type: string
+          description: >-
+            Present for `agent:replace` alone: the controller the
+            replacement moves the agent to, which
+            `admitAgentEnrollment` compares with the binding's assignee
+            (ADR-0107).
         requestId:
           type: string
         bodySha256:
@@ -3339,7 +3373,8 @@ components:
       description: >-
         Where the agent ran when an operation on it was authorized.
         Present for `agent:configure`, `agent:recover`,
-        `agent:execution-read` and `agent:cutover` only.
+        `agent:execution-read`, `agent:cutover` and `agent:replace`
+        only.
       properties:
         operatorGrn:
           type: string
@@ -3690,16 +3725,17 @@ components:
           description: The operator GRN the agent is assigned to, its controller.
         operationRef:
           type: string
-          description: The member's durable `agent:create` reference.
+          description: >-
+            The member's durable `agent:create` reference, or for a
+            replacement its `agent:replace` reference.
         replaces:
           $ref: '#/components/schemas/AgentEnrollmentReplacement'
     AgentEnrollmentReplacement:
       type: object
       required: [agent, expectedAssignee, expectedEpoch]
       description: >-
-        The assignment a replacement expects to move the agent from.
-        Modelled and refused: a body naming it is 409 with reason
-        `replacement_unavailable`.
+        The agent a replacement moves and the assignment it expects to
+        move it from (ADR-0107).
       properties:
         agent:
           type: string
@@ -3723,6 +3759,8 @@ components:
           type: string
         operationRef:
           type: string
+        replaces:
+          $ref: '#/components/schemas/AgentEnrollmentReplacement'
     AgentAdmission:
       type: object
       required: [grn, placement, assignee, epoch, lineage, mode, credentialDelivery]
@@ -3737,7 +3775,9 @@ components:
           type: string
         epoch:
           type: string
-          description: The first assignment's epoch. Opaque.
+          description: >-
+            The epoch admission assigned: a new agent's first, or the
+            one a replacement raised. Opaque.
         lineage:
           type: string
           format: uuid
@@ -3905,8 +3945,8 @@ components:
             `reverse_migration_required`; `activateAgent` sets
             `cutover_required` and nothing else; the
             `agent-enrollment.v1` routes set `binding_conflict`,
-            `approval_spent`, `superseded`, `direct_placement_gated` or
-            `replacement_unavailable`. Branch on it only on
+            `approval_spent`, `superseded` or `direct_placement_gated`.
+            Branch on it only on
             those routes; a new reason is a new contract value.
   headers:
     AssertionContractVersion:

@@ -498,7 +498,8 @@ and not in the same place on every surface.
     answers as a denied one, so the answer tells no one what exists.
   - **deny or unknown** for an action a mint decides together with a
     delegation grant: `agent:create`, `agent:configure`,
-    `agent:recover`, `agent:cutover`, `agent-template:publish`,
+    `agent:recover`, `agent:cutover`, `agent:replace`,
+    `agent-template:publish`,
     `execution-profile:read` and `agent:execution-read`
     ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
     The pair is put to the check the mint runs, through the one

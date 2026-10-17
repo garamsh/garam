@@ -99,16 +99,21 @@ type AgentEnrollment struct {
 }
 
 type AgentEnrollmentApproval struct {
-	ID           pgtype.UUID
-	OrgGrn       string
-	RequestID    string
-	Placement    string
-	AudienceGrn  string
-	AssigneeGrn  string
-	OperationRef string
-	CreatedAt    pgtype.Timestamptz
-	AgentGrn     pgtype.Text
-	AdmittedAt   pgtype.Timestamptz
+	ID                  pgtype.UUID
+	OrgGrn              string
+	RequestID           string
+	Placement           string
+	AudienceGrn         string
+	AssigneeGrn         string
+	OperationRef        string
+	CreatedAt           pgtype.Timestamptz
+	AgentGrn            pgtype.Text
+	AdmittedAt          pgtype.Timestamptz
+	ReplacedAgentGrn    pgtype.Text
+	ExpectedAssigneeGrn pgtype.Text
+	ExpectedEpoch       pgtype.Int4
+	AdmittedEpoch       pgtype.Int4
+	AdmittedLineage     pgtype.UUID
 }
 
 type AgentExecution struct {
@@ -217,6 +222,42 @@ type Invitation struct {
 	ExpiresAt  pgtype.Timestamptz
 	AcceptedBy pgtype.Text
 	AcceptedAt pgtype.Timestamptz
+}
+
+type OperationAuthority struct {
+	Ref             string
+	OrgGrn          string
+	AudienceGrn     string
+	RequestID       string
+	DelegationID    string
+	ActorGrn        string
+	Operation       string
+	TargetGrn       string
+	AssigneeGrn     pgtype.Text
+	AssignmentEpoch pgtype.Text
+	BodySha256      string
+	TokenHash       string
+	TokenExpiresAt  pgtype.Timestamptz
+	CreatedAt       pgtype.Timestamptz
+	DestinationGrn  pgtype.Text
+}
+
+type OperatorDelegation struct {
+	ID          string
+	OrgGrn      string
+	OperatorGrn string
+	RequestID   string
+	Replaces    pgtype.Text
+	Operations  []string
+	ExpiresAt   pgtype.Timestamptz
+	GrantedBy   string
+	GrantedAt   pgtype.Timestamptz
+	EndedAt     pgtype.Timestamptz
+}
+
+type OperatorDelegationController struct {
+	DelegationID  string
+	ControllerGrn string
 }
 
 type Org struct {

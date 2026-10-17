@@ -438,7 +438,7 @@ paths:
 
         Some actions are decided by more than that `Check`.
         `agent:create`, `agent:configure`, `agent:recover`,
-        `agent:cutover`, `agent-template:publish`,
+        `agent:cutover`, `agent:replace`, `agent-template:publish`,
         `execution-profile:read` and `agent:execution-read` are minted
         through `mintOperationAuthority`, which reads a delegation grant
         to the operator (ADR-0078), holds the operation against it, and
@@ -1934,14 +1934,18 @@ paths:
         authorizes one exact credential recovery, whose request body
         `bodySha256` digests (ADR-0078). `agent:cutover` authorizes one
         stage of moving a legacy agent's source to the audience
-        (ADR-0086). `agent-template:read`, `agent-template:publish`,
+        (ADR-0086). `agent:replace` targets the agent, is authorized on
+        it, binds where it runs now and binds `destination`, the
+        controller a replacement under `agent-enrollment.v1` moves it to
+        (ADR-0107). `agent-template:read`, `agent-template:publish`,
         `execution-profile:read` and `operator:read` target this
         organization and are authorized on it; `operator:read` reads
         what the Operator reports for every operator of it (#1374).
         `agent:execution-read` targets the agent, is
         authorized on it and binds where it runs now. The audience's
         current grant must cover the operation and, where it names one,
-        the controller.
+        the controller; for `agent:replace`, both the controller the
+        agent is on and `destination`.
 
 
         Those five operations and `agent:cutover` also bind
@@ -3672,7 +3676,7 @@ components:
           format: date-time
     DelegatedOperation:
       type: string
-      enum: [agent:create, agent:configure, agent:activate, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover, operator:read]
+      enum: [agent:create, agent:configure, agent:activate, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover, operator:read, agent:replace]
       description: >-
         `agent:activate` bounds the hosted operator's own lifecycle
         authority; no user mints it. `agent-template:read`,
@@ -3692,13 +3696,13 @@ components:
           description: GRN of the hosted operator that will act.
         operation:
           type: string
-          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover, operator:read]
+          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover, operator:read, agent:replace]
         target:
           type: string
           description: >-
             Controller GRN for `agent:create`; agent GRN for
-            `agent:configure`, `agent:recover`, `agent:execution-read`
-            and `agent:cutover`; this organization's GRN for
+            `agent:configure`, `agent:recover`, `agent:execution-read`,
+            `agent:cutover` and `agent:replace`; this organization's GRN for
             `agent-template:read`, `agent-template:publish`,
             `execution-profile:read` and `operator:read`.
         requestId:
@@ -3725,6 +3729,12 @@ components:
             as `/agents/{agent}/cutover/switch`, and garam compares it
             with the target that route receives. garam binds it as given
             and decodes nothing.
+        destination:
+          type: string
+          description: >-
+            Required for `agent:replace` and refused with 400 for every
+            other operation: the GRN of the controller of this
+            organization the replacement moves the agent to (ADR-0107).
     OperationAuthority:
       type: object
       required: [authority, expiresAt, operationRef, grantId]

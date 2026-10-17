@@ -140,6 +140,12 @@ const (
 	// decides which service an agent's settings come from, so
 	// membership alone does not grant it.
 	ActionAgentCutover = "agent:cutover"
+	// ActionAgentReplace is asking a delegated operator to move an
+	// existing agent to another controller under its GRN (ADR-0107).
+	// It ends the agent's activation and fences every token and
+	// certificate of its lineage, so membership alone does not grant
+	// it.
+	ActionAgentReplace = "agent:replace"
 
 	// ActionAgentTemplateRead is reading the org's retired agent
 	// templates (ADR-0075, ADR-0088) and the templates the delegated
@@ -175,7 +181,7 @@ var actions = []string{
 	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,
 	ActionAgentRead, ActionAgentWatch, ActionAgentRename, ActionAgentCreate,
-	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentCutover,
+	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentCutover, ActionAgentReplace,
 	ActionAgentTemplateRead, ActionAgentTemplatePublish,
 	ActionExecutionProfileRead, ActionAgentExecutionRead,
 }
@@ -230,6 +236,7 @@ var machineActions = []struct {
 	{ActionExecutionProfileRead, true},
 	{ActionAgentExecutionRead, false},
 	{ActionAgentCutover, false},
+	{ActionAgentReplace, false},
 }
 
 // machineActionsHeld returns the machine actions an owner or admin

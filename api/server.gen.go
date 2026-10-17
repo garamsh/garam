@@ -87,6 +87,7 @@ const (
 	DelegatedOperationAgentCutover         DelegatedOperation = "agent:cutover"
 	DelegatedOperationAgentExecutionRead   DelegatedOperation = "agent:execution-read"
 	DelegatedOperationAgentRecover         DelegatedOperation = "agent:recover"
+	DelegatedOperationAgentReplace         DelegatedOperation = "agent:replace"
 	DelegatedOperationAgentTemplatePublish DelegatedOperation = "agent-template:publish"
 	DelegatedOperationAgentTemplateRead    DelegatedOperation = "agent-template:read"
 	DelegatedOperationExecutionProfileRead DelegatedOperation = "execution-profile:read"
@@ -107,6 +108,8 @@ func (e DelegatedOperation) Valid() bool {
 	case DelegatedOperationAgentExecutionRead:
 		return true
 	case DelegatedOperationAgentRecover:
+		return true
+	case DelegatedOperationAgentReplace:
 		return true
 	case DelegatedOperationAgentTemplatePublish:
 		return true
@@ -167,6 +170,7 @@ const (
 	OperationAuthorityRequestOperationAgentCutover         OperationAuthorityRequestOperation = "agent:cutover"
 	OperationAuthorityRequestOperationAgentExecutionRead   OperationAuthorityRequestOperation = "agent:execution-read"
 	OperationAuthorityRequestOperationAgentRecover         OperationAuthorityRequestOperation = "agent:recover"
+	OperationAuthorityRequestOperationAgentReplace         OperationAuthorityRequestOperation = "agent:replace"
 	OperationAuthorityRequestOperationAgentTemplatePublish OperationAuthorityRequestOperation = "agent-template:publish"
 	OperationAuthorityRequestOperationAgentTemplateRead    OperationAuthorityRequestOperation = "agent-template:read"
 	OperationAuthorityRequestOperationExecutionProfileRead OperationAuthorityRequestOperation = "execution-profile:read"
@@ -185,6 +189,8 @@ func (e OperationAuthorityRequestOperation) Valid() bool {
 	case OperationAuthorityRequestOperationAgentExecutionRead:
 		return true
 	case OperationAuthorityRequestOperationAgentRecover:
+		return true
+	case OperationAuthorityRequestOperationAgentReplace:
 		return true
 	case OperationAuthorityRequestOperationAgentTemplatePublish:
 		return true
@@ -669,14 +675,17 @@ type OperationAuthorityRequest struct {
 	Audience string `json:"audience"`
 
 	// BodySha256 Lowercase hexadecimal SHA-256 of the exact request body the Operator receives; for a GET, that of the empty body.
-	BodySha256 string                             `json:"bodySha256"`
-	Operation  OperationAuthorityRequestOperation `json:"operation"`
-	RequestId  RequestId                          `json:"requestId"`
+	BodySha256 string `json:"bodySha256"`
+
+	// Destination Required for `agent:replace` and refused with 400 for every other operation: the GRN of the controller of this organization the replacement moves the agent to (ADR-0107).
+	Destination *string                            `json:"destination,omitempty"`
+	Operation   OperationAuthorityRequestOperation `json:"operation"`
+	RequestId   RequestId                          `json:"requestId"`
 
 	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read`, `agent:cutover` and `operator:read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. For `agent:cutover` it is the machine listener's cutover route of the agent, such as `/agents/{agent}/cutover/switch`, and garam compares it with the target that route receives. garam binds it as given and decodes nothing.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
+	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read`, `agent:cutover` and `agent:replace`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
 	Target string `json:"target"`
 }
 

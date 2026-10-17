@@ -396,12 +396,14 @@ SELECT t.grn, t.name, t.agent_values FROM agent_templates t
 WHERE t.org_grn = $1
 ORDER BY t.grn;
 
--- An agent-enrollment.v1 approval (ADR-0102). Either unique key
+-- An agent-enrollment.v1 approval (ADR-0102), with the agent and
+-- assignment a replacement expects (ADR-0107). Either unique key
 -- refusing the row writes nothing, and the caller reads what holds it.
 -- name: InsertEnrollmentApproval :execrows
 INSERT INTO agent_enrollment_approvals (
-    id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at,
+    replaced_agent_grn, expected_assignee_grn, expected_epoch
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT DO NOTHING;
 
 -- name: GetEnrollmentApprovalByRequest :one
@@ -417,3 +419,13 @@ SELECT * FROM agent_enrollment_approvals WHERE id = $1 FOR UPDATE;
 
 -- name: SpendEnrollmentApproval :exec
 UPDATE agent_enrollment_approvals SET agent_grn = $2, admitted_at = $3 WHERE id = $1;
+
+-- name: SpendReplacementApproval :exec
+UPDATE agent_enrollment_approvals SET admitted_epoch = $2, admitted_lineage = $3, admitted_at = $4
+WHERE id = $1;
+
+-- The admitted replacement a reference spent, which a first activation
+-- after it may carry (ADR-0107).
+-- name: GetAdmittedReplacementByReference :one
+SELECT * FROM agent_enrollment_approvals
+WHERE operation_ref = $1 AND replaced_agent_grn IS NOT NULL AND admitted_at IS NOT NULL;

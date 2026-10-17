@@ -185,6 +185,9 @@ func bindingOf(b operator.Binding, expiresAt time.Time) (*agent.OperationBinding
 	if b.RequestTarget != nil {
 		out.RequestTarget = string(*b.RequestTarget)
 	}
+	if b.Destination != nil {
+		out.Destination = *b.Destination
+	}
 	if b.Assignment != nil {
 		epoch, err := strconv.Atoi(b.Assignment.Epoch)
 		if err != nil {

@@ -757,8 +757,8 @@ ADRs:
   shared worker as aurora's fallback, and the local gate stands until
   the class exists. Unbuilt
 - [0107](./adr/0107-a-managed-replacement-is-authorized-by-an-agent-replace-reference-naming-the-agent-its-assignment-and-the-controller-it-moves-to.md)
-  — proposed: a managed replacement under `agent-enrollment.v1` is
-  authorized by a new `agent:replace` reference, held by owners and
+  — a managed replacement under `agent-enrollment.v1` is authorized
+  by a new `agent:replace` reference, held by owners and
   administrators, that targets the replaced agent, snapshots its
   assignment and names the controller it moves to, which the grant
   must cover with the current one; `agent:create`, `agent:cutover` and

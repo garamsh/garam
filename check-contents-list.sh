@@ -63,6 +63,6 @@ if [ "$count" -eq 0 ]; then
 	exit 1
 fi
 if [ "$status" -ne 0 ]; then
-	echo "rule: docs/convention/documentation.md §Format" >&2
+	echo "rule: docs/convention/documentation.md §Format, \"A \`## Contents\` list indexes a file's \`##\` headings\"" >&2
 fi
 exit "$status"

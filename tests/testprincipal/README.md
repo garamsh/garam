@@ -84,7 +84,9 @@ nothing verifies that a module cache copy serves.
 The test image holds this command, `garam` and the migrations of one
 Garam commit, for a CI that cannot read this repository (ADR-0092). An
 operator pushes it to an ECR repository of its own, which
-`garamsh/infra` declares; no workflow publishes it (ADR-0093):
+`garamsh/aurora`'s `infrastructure/aws/main.tf` declares at
+`4df93d567fddb9afe9e5120449053222dee2b7c7`; no workflow publishes
+it (ADR-0093):
 
 ```sh
 REPOSITORY=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
@@ -119,14 +121,18 @@ docker rm "$id"
 Then run them as §Invocation says, with `-migrations ./migrations`.
 
 - **Access.** The repository is private to the account. A consumer
-  pulls with an AWS role the repository's policy grants, held in
-  `garamsh/infra`; ADR-0093 grants it to
-  `arn:aws:iam::486152169996:role/garam-agent-operator-github-actions`,
-  the role `garamsh/garam-agent-operator`'s workflows assume.
-- **Retention.** The repository's lifecycle policy, held in
-  `garamsh/infra`, keeps an image tagged `pinned-<consumer>` whatever
-  its age, up to 50 pins; expires any other tagged image 90 days after
-  it was pushed; and expires an untagged one after a day (ADR-0093).
+  pulls with an AWS role whose own policy grants reads on it.
+  `garamsh/aurora`'s `infrastructure/modules/aws/ecr-ci-pull.tf`
+  declares that role at
+  `4df93d567fddb9afe9e5120449053222dee2b7c7`:
+  `arn:aws:iam::486152169996:role/github-actions-garam-agent-operator-pull`,
+  the role `garamsh/garam-agent-operator`'s promotion suite assumes.
+- **Retention.** The repository's lifecycle policy, declared in
+  `garamsh/aurora`'s `infrastructure/modules/aws/ecr-repositories.tf`
+  at `4df93d567fddb9afe9e5120449053222dee2b7c7`, keeps an image
+  tagged `pinned-<consumer>` whatever its age, up to 50 pins; expires
+  any other tagged image 90 days after it was pushed; and expires an
+  untagged one after a day (ADR-0093).
   A pin therefore holds its image until it moves. To move it to
   another commit, ask the Garam PM, and an operator pushes that
   commit's image and moves `pinned-<consumer>` to it (§Pushing and

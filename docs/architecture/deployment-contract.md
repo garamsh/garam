@@ -662,7 +662,9 @@ that would assert one:
 - [ADR-0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)
   — an operator pushes the test image to its ECR repository in the
   account, no workflow holds a credential for it, and its retention is
-  that repository's lifecycle policy in `garamsh/infra`
+  that repository's lifecycle policy, which `garamsh/aurora`'s
+  `infrastructure/modules/aws/ecr-repositories.tf` declares at
+  `4df93d567fddb9afe9e5120449053222dee2b7c7`
 - [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the listener presents one certificate signed by a garam server
   authority the deployment holds, every identity pins that root, and a

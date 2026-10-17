@@ -800,3 +800,11 @@ ADRs:
   sections as `##` headings, further sections allowed; ADRs already
   merged keep the form they were written in, and review rather than
   `make ci` checks it, because ADR numbers do not follow merge order
+- [0111](./adr/0111-a-directly-attached-runtime-is-activated-by-a-one-agent-host-authority-on-the-generation-it-reports-and-its-store-lock.md)
+  — a directly attached runtime is activated by an ADR-0082 supervisor
+  in an attach mode that reads the runtime's status itself at a pinned
+  loopback literal and rests on Sherlock's store lock and generation
+  under same-host trust; a new direct agent restarts once under its
+  GRN, the audience Garam signs, after its predecessor exits, and
+  outbox entries under the earlier ID are set aside and left in place;
+  unbuilt

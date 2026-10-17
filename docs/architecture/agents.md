@@ -215,22 +215,36 @@ separate managed/standalone identity models. §Separated execution and
   enters the runtime or workspace. Admission grants no Sherlock
   command/channel permission ([messaging.md](./messaging.md)).
 
-**Open: independent writer proof blocks direct attachment.** Current
-`internal/workload` proves a recorded Docker generation's exit by
-container ID/nonce; runtime status alone cannot prove exclusive
-ownership of an arbitrary process.
-ADR-0102 §Direct attachment proof remains an implementation gate records
-the proposed local attachment lease and process-owning-supervisor
-options. The PM chose neither; the owner must select and validate a
-proof contract before this new connector activates. Identity admission
-does not close that gate, and it does not block Operator asymmetric
-exchange.
+**Direct attachment's writer proof is decided and unbuilt.**
+[ADR-0111](./adr/0111-a-directly-attached-runtime-is-activated-by-a-one-agent-host-authority-on-the-generation-it-reports-and-its-store-lock.md)
+selects it. Until the implementation lands, `direct_placement_gated`
+still refuses direct placement, and nothing below runs.
 
-The direct connector is an implementation obligation, waiting on
-#1355. Legacy v1/v2 approval bindings and supervisor credential retry
-behavior remain unchanged until explicitly migrated; an
-`agent-enrollment.v1` retry answers the recorded binding and re-issues
-nothing.
+- **The authority is an ADR-0082 supervisor in an attach mode.** It is
+  registered for the one agent and admitted under
+  `agent-enrollment.v1` through `admit`. It starts and signals nothing,
+  and it holds no Docker socket. Its activation forward is the
+  standalone one with the container check replaced: the supervisor
+  reads `/agents/<GRN>/status` itself at a pinned loopback literal,
+  `127.0.0.1:<port>` or `[::1]:<port>`. It forwards only a generation
+  that reports `serving` under the GRN with the request's epoch and
+  revision, and that it has never claimed before.
+- **The writer evidence is the runtime's own.** Sherlock's store lock is
+  taken before its generation is minted, so a fresh generation
+  `serving` holds the store. Same-host trust is the stated assumption,
+  and the status read carries no credential on loopback.
+- **A new direct agent restarts once under its GRN.** Garam signs the
+  audience as the GRN, and admission allocates it, so no running
+  runtime can already carry it. The new process starts only after the
+  old one exits. Outbox entries written under the earlier ID are set
+  aside and left in place.
+- **The placement is one host, one local filesystem and loopback.** A
+  `tls:` placement, shared volumes and multi-node placement are
+  outside it.
+
+Legacy v1/v2 approval bindings and supervisor credential retry behavior
+remain unchanged until explicitly migrated; an `agent-enrollment.v1`
+retry answers the recorded binding and re-issues nothing.
 
 ## Tokens in place of certificates
 

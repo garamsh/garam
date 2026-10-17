@@ -146,7 +146,9 @@ modes, the two audiences and a recovery against the real listener, and
 sets the target an adapter of a commonly enrolled agent meets. The
 token mode above is built on the existing v2 contracts, which ADR-0102
 leaves unchanged; consuming `agent-enrollment.v1` and the direct
-connector are not, and wait on #1355.
+connector are not.
+[ADR-0111](./adr/0111-a-directly-attached-runtime-is-activated-by-a-one-agent-host-authority-on-the-generation-it-reports-and-its-store-lock.md)
+decides the direct connector, and it is unbuilt.
 
 - Managed and direct connectors hold agent API access scoped to the
   current assignee, epoch and lineage; an Operator's long-lived PEM
@@ -176,11 +178,13 @@ connector are not, and wait on #1355.
 
 `internal/cli/delivery.go`, §Token mode and
 §Activation and runtime status are authoritative for what the adapter
-runs now. Independent
-direct writer
-proof remains blocked on the owner decision named in
-[agents.md](./agents.md) §Common managed and direct enrollment; an
-attachment lease is only a recommendation, not an accepted mechanism.
+runs now. Under ADR-0111 a direct adapter runs as a host process in
+the runtime's network namespace. It dials Sherlock at the same pinned
+loopback literal the supervisor reads, and reaches the attach-mode
+supervisor through `GARAM_ADAPTER_CONTROL_SOCKET`, with no new setting
+or route. It sets aside an outbox entry written under an earlier
+`agent_id`, as it does today, and leaves the file in place
+([agents.md](./agents.md) §Common managed and direct enrollment).
 The acceptance sequence is
 in the existing machine-identity migration plan.
 

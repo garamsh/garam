@@ -756,3 +756,10 @@ ADRs:
   isolated from the nodes that hold cluster secrets, with `dind` on a
   shared worker as aurora's fallback, and the local gate stands until
   the class exists. Unbuilt
+- [0108](./adr/0108-a-reply-answered-outside-its-contract-is-offered-again-on-a-bounded-schedule-and-a-refusal-on-its-merits-is-not.md)
+  — the adapter offers again, on its per-entry backoff up to the retry
+  cap, a reply garam answered outside its contract, so an adapter
+  upgraded before garam forwards it without a restart; a refusal on
+  the entry's merits is still set aside until its file is replaced.
+  0083's decision stands, and its 404 row now reads as a later attempt
+  that may be admitted

@@ -108,13 +108,15 @@ which had refused that change while a layout rule was the only reason
 offered for it. A store beside its aggregate is therefore not a defect
 in a domain that has not converted, and is one in a domain that has.
 
-A domain that persists nothing has none of the storage files above:
-`internal/machine` is its types, its service, the listener it builds,
-and the three seams it reads through — a trust root for the caller, the
-registration that admits the caller (ADR-0070), and a certificate for
-itself. All three are satisfied by the composition root, so the package
-imports neither `internal/ca` nor `internal/operator` and the domains
-cooperate through `grn.GRN` alone.
+`internal/machine` persists only the evidence of how each caller
+authenticated (ADR-0109), and its package holds none of the storage
+files above. It is its types, its service, the listener it builds, and
+the seams it reads and writes through: a trust root for the caller, the
+registration that admits the caller (ADR-0070), a certificate for
+itself, and the recorder that evidence goes to. The composition root
+satisfies all of them, so the package imports neither `internal/ca` nor
+`internal/operator` and the domains cooperate through `grn.GRN` alone.
+The recorder's store is `internal/machine/postgres`.
 
 `queries.sql` and `db/` are a source and its output, not two copies. Every
 generated file says so in its first line, and `make check-gen` fails on any
@@ -459,6 +461,7 @@ composition root does.
 | message.ConsentStore | yes (`consent.go`) | yes (`postgres_consent.go`) | not planned | — |
 | watch | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | audit | no — the writer takes the caller's transaction (ADR-0106) | yes (`postgres/postgres.go`) | not planned | — |
+| machine.Recorder | yes (`recorder.go`) | yes (`postgres/postgres.go`) | not planned | — |
 
 The rows are keyed by the Go package, because a store is named for the
 package that declares its interface rather than for the subject above

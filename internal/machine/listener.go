@@ -33,7 +33,10 @@ import (
 // connection whose certificate authenticated is refused rather than
 // read as either, because two credentials naming two identities have
 // no single answer to who is calling.
-func NewServer(s Service, tokens Tokens, certificate ServerCertificate, next http.Handler) *http.Server {
+//
+// Each request it hands an identity is noted in evidence by the method
+// that proved it, here where that is decided (ADR-0109).
+func NewServer(s Service, tokens Tokens, evidence *Evidence, certificate ServerCertificate, next http.Handler) *http.Server {
 	// TLS 1.3 only: both ends of this surface are garam's, so neither
 	// needs an older one.
 	// Every connection is served a clone of base, so base names the
@@ -85,7 +88,7 @@ func NewServer(s Service, tokens Tokens, certificate ServerCertificate, next htt
 		return cfg, nil
 	}
 	return &http.Server{
-		Handler:   identify(tokens, next),
+		Handler:   identify(tokens, evidence, next),
 		TLSConfig: base,
 		// The cell has to exist before the handshake writes to it, and
 		// this is the one hook that runs first: net/http derives the
@@ -155,7 +158,8 @@ func authenticatedOf(ctx context.Context) (*authenticated, bool) {
 // A token that proves nothing leaves the request without an identity,
 // as a certificate that does not authenticate leaves its connection,
 // and the reason travels beside it for the handler's refusal to carry.
-func identify(tokens Tokens, next http.Handler) http.Handler {
+// An identity it hands next is noted in evidence first.
+func identify(tokens Tokens, evidence *Evidence, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cell, ok := authenticatedOf(r.Context())
 		certified := ok && cell.identity != nil
@@ -183,8 +187,10 @@ func identify(tokens Tokens, next http.Handler) http.Handler {
 			}
 			identity := Identity{grn: bearer.Subject, method: MethodToken, serial: bearer.Serial,
 				notBefore: bearer.IssuedAt, notAfter: bearer.ExpiresAt}
+			evidence.Note(r.Context(), Sighting{Caller: bearer.Subject, Path: PathToken})
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, identity)))
 		case certified:
+			evidence.Note(r.Context(), Sighting{Caller: cell.identity.GRN(), Path: PathCertificate})
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, *cell.identity)))
 		default:
 			next.ServeHTTP(w, r)

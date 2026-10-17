@@ -9,6 +9,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 )
 
@@ -62,6 +63,7 @@ func (s *Server) ExchangeToken(w http.ResponseWriter, r *http.Request, params ma
 			writeError(w, err)
 			return
 		}
+		machine.ReportIssuance(r, machine.Issuance{Subject: token.Supervisor, Until: token.ExpiresAt})
 		writeJSON(w, http.StatusCreated, machinegen.MachineToken{
 			Token: token.Value, Grn: token.Supervisor.String(), ExpiresAt: token.ExpiresAt,
 		})
@@ -81,6 +83,7 @@ func (s *Server) ExchangeToken(w http.ResponseWriter, r *http.Request, params ma
 		writeError(w, err)
 		return
 	}
+	machine.ReportIssuance(r, machine.Issuance{Subject: token.Operator, Audience: token.Audience != nil, Until: token.ExpiresAt})
 	answer := machinegen.MachineToken{Token: token.Value, Grn: token.Operator.String(), ExpiresAt: token.ExpiresAt}
 	if token.Audience != nil {
 		named := token.Audience.String()

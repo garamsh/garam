@@ -12,6 +12,7 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 )
 
@@ -66,6 +67,7 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 		writeOAuthError(w, err)
 		return
 	}
+	machine.ReportIssuance(r, machine.Issuance{Subject: token.Operator, Audience: token.Audience != nil, Until: token.ExpiresAt})
 	writeJSON(w, http.StatusOK, machinegen.OAuthToken{
 		AccessToken: token.Value,
 		TokenType:   machinegen.Bearer,

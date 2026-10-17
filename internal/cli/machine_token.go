@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
@@ -210,6 +211,54 @@ func exchangeMethod(r *http.Request) (string, bool) {
 			return exchangeSupervisorSharedSecret, true
 		}
 		return exchangeUnrecognised, true
+	}
+	return "", false
+}
+
+// evidenceWindow is how often one process writes a caller's evidence
+// for one path at most (ADR-0109): a gate read in days loses nothing to
+// a minute, and the write it saves is on the request's path.
+const evidenceWindow = time.Minute
+
+// recordIssuances notes each token an exchange or a mint issued, under
+// the path the route and the credential's prefix name, and under the
+// audience path as well where the token names one (ADR-0109). The
+// subject is the one the handler resolved and reported, so a refused
+// request, which reports none, records nothing.
+func recordIssuances(evidence *machine.Evidence) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			path, ok := issuancePath(r)
+			if !ok {
+				next.ServeHTTP(w, r)
+				return
+			}
+			r, issued := machine.AwaitIssuance(r)
+			next.ServeHTTP(w, r)
+			issuance, ok := issued()
+			if !ok {
+				return
+			}
+			evidence.Note(r.Context(), machine.Sighting{Caller: issuance.Subject, Path: path, IssuedUntil: issuance.Until})
+			if issuance.Audience {
+				evidence.Note(r.Context(), machine.Sighting{Caller: issuance.Subject, Path: machine.PathAudienceToken,
+					IssuedUntil: issuance.Until})
+			}
+		})
+	}
+}
+
+// issuancePath names the evidence path of a request to a route that
+// issues a token.
+func issuancePath(r *http.Request) (machine.Path, bool) {
+	if r.Pattern == http.MethodPost+" /agents/{agent}/tokens" {
+		return machine.PathAgentMint, true
+	}
+	switch method, _ := exchangeMethod(r); method {
+	case exchangeOperatorPrivateKeyJWT:
+		return machine.PathPrivateKeyJWT, true
+	case exchangeOperatorSharedSecret, exchangeSupervisorSharedSecret:
+		return machine.PathSharedSecret, true
 	}
 	return "", false
 }

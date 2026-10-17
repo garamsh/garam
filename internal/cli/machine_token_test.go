@@ -17,6 +17,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 )
 
@@ -227,4 +228,69 @@ func TestCountTokenExchanges_TellsTheCohortsApartByExchangeMethod(t *testing.T) 
 	assert.Contains(t, scraped, tokenExchangesMetric+`{method="operator_private_key_jwt",outcome="failed"} 1`)
 	assert.NotContains(t, scraped, strings.Repeat("a", 64), "no credential value reaches a label")
 	assert.NotContains(t, scraped, liveToken)
+}
+
+// heldSightings is the evidence Recorder in memory.
+type heldSightings struct{ written []machine.Sighting }
+
+func (h *heldSightings) Record(_ context.Context, s machine.Sighting) error {
+	h.written = append(h.written, s)
+	return nil
+}
+
+// TestRecordIssuances_NotesEachIssuanceUnderItsPath holds ADR-0109's
+// second recording point: a token an exchange or a mint issued is
+// noted under the path its route and credential name, keyed by the
+// subject the handler reported and stamped with the token's expiry, and
+// a token naming an audience is noted on the audience path as well. A
+// refused exchange reports nothing and is noted nowhere, which the
+// issued one beside it on the same route is the control for; a route
+// that issues nothing is noted nowhere either.
+func TestRecordIssuances_NotesEachIssuanceUnderItsPath(t *testing.T) {
+	recorder := &heldSightings{}
+	evidence := machine.NewEvidence(recorder, time.Minute, nil)
+	until := time.Date(2026, 10, 18, 10, 0, 0, 0, time.UTC)
+	operatorGRN := grn.New("acme", grn.DefaultProject, "operator", "manager")
+	supervisorGRN := grn.New("acme", grn.DefaultProject, "supervisor", "host-1")
+	agentGRN := grn.New("acme", grn.DefaultProject, "agent", "bot-1")
+	reports := map[string]*machine.Issuance{}
+	answer := func(w http.ResponseWriter, r *http.Request) {
+		if issued := reports[r.Header.Get("X-Case")]; issued != nil {
+			machine.ReportIssuance(r, *issued)
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		w.WriteHeader(http.StatusUnauthorized)
+	}
+	mux := http.NewServeMux()
+	for _, pattern := range []string{"POST /tokens", "POST /oauth/token", "POST /agents/{agent}/tokens", "GET /identity"} {
+		mux.Handle(pattern, recordIssuances(evidence)(http.HandlerFunc(answer)))
+	}
+	operatorSecret := operator.CredentialScheme + " " + operator.CredentialPrefix + strings.Repeat("a", 64)
+	supervisorSecret := operator.CredentialScheme + " " + agent.SupervisorCredentialPrefix + strings.Repeat("b", 64)
+	send := func(c, method, path, authorization string, issued *machine.Issuance) {
+		req := httptest.NewRequest(method, path, nil)
+		req.Header.Set("Authorization", authorization)
+		req.Header.Set("X-Case", c)
+		reports[c] = issued
+		mux.ServeHTTP(httptest.NewRecorder(), req)
+	}
+
+	send("refused secret", http.MethodPost, "/tokens", operatorSecret, nil)
+	send("operator secret", http.MethodPost, "/tokens", operatorSecret,
+		&machine.Issuance{Subject: operatorGRN, Until: until})
+	send("supervisor secret", http.MethodPost, "/tokens", supervisorSecret,
+		&machine.Issuance{Subject: supervisorGRN, Until: until})
+	send("assertion", http.MethodPost, "/oauth/token", "", &machine.Issuance{Subject: operatorGRN, Audience: true, Until: until})
+	send("mint", http.MethodPost, "/agents/"+agentGRN.String()+"/tokens", "Garam-Token "+liveToken,
+		&machine.Issuance{Subject: agentGRN, Until: until})
+	send("identity", http.MethodGet, "/identity", "Garam-Token "+liveToken, &machine.Issuance{Subject: agentGRN, Until: until})
+
+	assert.Equal(t, []machine.Sighting{
+		{Caller: operatorGRN, Path: machine.PathSharedSecret, IssuedUntil: until},
+		{Caller: supervisorGRN, Path: machine.PathSharedSecret, IssuedUntil: until},
+		{Caller: operatorGRN, Path: machine.PathPrivateKeyJWT, IssuedUntil: until},
+		{Caller: operatorGRN, Path: machine.PathAudienceToken, IssuedUntil: until},
+		{Caller: agentGRN, Path: machine.PathAgentMint, IssuedUntil: until},
+	}, recorder.written)
 }

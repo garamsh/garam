@@ -113,15 +113,23 @@ func (b *openBao) call(t *testing.T, token, method, path string, body any) map[s
 }
 
 // signingKey is a Transit mount of the test's own holding one
-// ecdsa-p256 key, and the token garam is given for it: one carrying
-// only the three paths ADR-0104 names a deployment owes garam.
+// ecdsa-p256 key, and the token garam is given for it.
 type signingKey struct {
 	mount     string
 	tokenFile string
 	bao       *openBao
 }
 
+// newSigningKey grants the token the two paths garam calls and nothing
+// else: the policy a deployment owes garam (ADR-0104's erratum).
 func newSigningKey(t *testing.T, b *openBao) signingKey {
+	t.Helper()
+	return newSigningKeyGranting(t, b, "keys/messages/rotate", "sign/messages")
+}
+
+// newSigningKeyGranting grants the token update on each of paths under
+// the mount.
+func newSigningKeyGranting(t *testing.T, b *openBao, paths ...string) signingKey {
 	t.Helper()
 	suffix := make([]byte, 6)
 	_, err := rand.Read(suffix)
@@ -133,10 +141,11 @@ func newSigningKey(t *testing.T, b *openBao) signingKey {
 		b.call(t, b.root, http.MethodDelete, "sys/policies/acl/"+mount, nil)
 	})
 	b.call(t, b.root, http.MethodPost, mount+"/keys/messages", map[string]string{"type": "ecdsa-p256"})
-	policy := `path "` + mount + `/keys/messages" { capabilities = ["read"] }
-path "` + mount + `/keys/messages/rotate" { capabilities = ["update"] }
-path "` + mount + `/sign/messages" { capabilities = ["update"] }`
-	b.call(t, b.root, http.MethodPut, "sys/policies/acl/"+mount, map[string]string{"policy": policy})
+	var policy strings.Builder
+	for _, path := range paths {
+		policy.WriteString(`path "` + mount + `/` + path + `" { capabilities = ["update"] }` + "\n")
+	}
+	b.call(t, b.root, http.MethodPut, "sys/policies/acl/"+mount, map[string]string{"policy": policy.String()})
 	auth := b.call(t, b.root, http.MethodPost, "auth/token/create", map[string]any{
 		"policies": []string{mount}, "no_default_policy": true, "ttl": "15m",
 	})
@@ -260,6 +269,35 @@ func TestTransitSigning_MovingOntoTransitKeepsTheSealedKeySigningForTheLead(t *t
 	_, err = verify(set, string(testIssuer), s.recipientGRN.String(), after.Message.Id, *after.Content, *after.Signature)
 	require.NoError(t, err)
 	assert.Len(t, set.Keys, 2, "the sealed key stays published while what it signed can be valid")
+}
+
+// TestTransitSigning_AProviderThatRefusesRotationLeavesTheSealedKeySigning
+// holds ADR-0104's deferral against a refusal rather than an outage: a
+// token whose policy lacks rotate makes the move onto Transit fail with
+// a 403, and the set stays served and the sealed key goes on signing.
+// The same move under a token granting rotate is the control: it
+// announces the Transit key.
+func TestTransitSigning_AProviderThatRefusesRotationLeavesTheSealedKeySigning(t *testing.T) {
+	bao := newOpenBao(t)
+	s := newSigningStack(t)
+	s.post(t, "before")
+	sealedKid := kidOf(t, *s.claim(t).Signature)
+
+	unrotatable := newSigningKeyGranting(t, bao, "sign/messages")
+	refused := s.listenerHolding(t, unrotatable.custodian(t, bao.addr))
+	set := keySet(t, refused)
+	assert.Equal(t, []string{sealedKid}, kidsOf(set), "the set is served, holding the sealed key alone")
+	status, answer := machineSend(t, s.sender, http.MethodPost, refused+"/messages",
+		`{"recipient":"`+s.recipientGRN.String()+`","idempotencyKey":"key-2","body":"during"}`)
+	require.Equal(t, http.StatusCreated, status, string(answer))
+	during := claimOn(t, s, refused)
+	assert.Equal(t, sealedKid, kidOf(t, *during.Signature), "the sealed key goes on signing")
+	_, err := verify(set, string(testIssuer), s.recipientGRN.String(), during.Message.Id, *during.Content, *during.Signature)
+	require.NoError(t, err)
+
+	granted := newSigningKey(t, bao)
+	assert.Len(t, keySet(t, s.listenerHolding(t, granted.custodian(t, bao.addr))).Keys, 2,
+		"the control: a token granting rotate announces the Transit key")
 }
 
 // TestTransitSigning_RotationMakesTheNextVersionAndRetirementWithdrawsIt

@@ -187,11 +187,12 @@ is read from the rows alone. A sealed key that is current when the
 provider is turned on goes on signing, and the Transit key replacing it
 is announced with the full lead; a key held in a custody the process is
 not configured with does not sign there, and retiring it is the
-repair. A due key Transit cannot be reached to make waits for the next
-read while the current key signs; with none signing, claims are
-refused as unavailable. Whichever path reads them first — a claim or
-the key set — creates the key that is due under a lock every replica
-takes, deciding on the database's clock read once the lock is held:
+repair. A due key Transit does not make, whatever the reason, waits
+for the next read while the current key signs and the set is served;
+with none signing, claims are refused with Transit's failure.
+Whichever path reads them first — a claim or the key set — creates
+the key that is due under a lock every replica takes, deciding on the
+database's clock read once the lock is held:
 with no key signing, one that signs at once, which is a deployment's
 first and the replacement for one retired at once; otherwise the next
 one, announced two hours before it signs once the current one has

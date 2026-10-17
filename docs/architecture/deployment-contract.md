@@ -176,10 +176,10 @@ deployment has adopted the workflow below.
   switch is authorized. Inventory and the plan's acceptance evidence
   gate later removals. gitops#14 and infra#331 remain owner gates.
 - Message signing still seals private keys under the key-encryption
-  key, unless the deployment holds them in Transit (§A Transit provider
-  for message signing keys). Retiring per-organization certificate
-  authorities alone never authorizes removing that key, message trust
-  roots or signing rows.
+  key, unless the deployment holds them in Transit
+  (§A Transit provider for message signing keys). Retiring
+  per-organization certificate authorities alone never authorizes
+  removing that key, message trust roots or signing rows.
 
 The existing plan,
 `docs/plans/2026-10-09-machine-identity-migration.md`, names sequence
@@ -453,9 +453,9 @@ Vault Transit key
 `internal/message/transit`); one that sets none of `GARAM_TRANSIT_*`
 seals them under the key-encryption key as before, and one that sets
 part of it does not start. The chart's `machine.transit` values render
-the variables, and `deploy/charts/garam/README.md` §Message signing
-keys in OpenBao Transit is authoritative for them. The deployment
-supplies:
+the variables, and
+`deploy/charts/garam/README.md` §Message signing keys in OpenBao Transit
+is authoritative for them. The deployment supplies:
 
 - **OpenBao over `https`**, under a certificate the root in
   `GARAM_TRANSIT_CA_FILE` verifies. No other scheme is accepted, the
@@ -466,11 +466,12 @@ supplies:
   it, and its `min_encryption_version` is never raised past a version
   the published set holds as signing or next — that version would stop
   signing.
-- **An ACL policy of the three paths ADR-0104 names on that key**:
-  `read` on `<mount>/keys/<key>`, and `update` on
-  `<mount>/keys/<key>/rotate` and `<mount>/sign/<key>`. garam calls
-  `rotate` and `sign`, and `tests/integration/transit_signing_test.go`
-  runs it under a token holding those three and nothing else.
+- **An ACL policy of two paths on that key**: `update` on
+  `<mount>/keys/<key>/rotate` and `<mount>/sign/<key>`, the two garam
+  calls; it reads the public half from `rotate`'s answer and never
+  reads the key, as ADR-0104's erratum of 2026-10-18 records.
+  `tests/integration/transit_signing_test.go` runs it under a token
+  holding those two and nothing else.
 - **A token file**, `GARAM_TRANSIT_TOKEN_FILE`, owner-only and owned by
   the process's UID: it is read through `internal/keyfile` like every
   key file above, but on every call rather than at start, so a renewed
@@ -482,8 +483,9 @@ supplies:
 **What the binary does with it:** the published set is read from
 Postgres and keeps being served while OpenBao is unreachable; a claim
 garam cannot sign is refused as a server error with no attempt spent;
-a key due while OpenBao is unreachable waits for the next read while
-the current key signs; readiness does not report OpenBao, and the start
+a key due that OpenBao does not make — unreachable, or refusing — waits
+for the next read while the current key signs, and a refusal is logged
+as an error; readiness does not report OpenBao, and the start
 does not reach it. Turning the provider on announces a Transit key with
 the full two-hour lead while the current sealed key goes on signing,
 so the key-encryption key must still be present then — it is, because

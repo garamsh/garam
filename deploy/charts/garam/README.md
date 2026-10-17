@@ -409,9 +409,12 @@ carries none of its variables. Set, `caSecretName`, `tokenFile` and
 `signingKey` are required and the render refuses without each, naming
 it: garam refuses to start holding part of the setting. What the
 deployment owes OpenBao — the key, the policy and the auth role — is
-`docs/architecture/deployment-contract.md` §A Transit provider for
-message signing keys.
+stated in
+`deployment-contract.md` §A Transit provider for message signing keys.
 
+- **The policy** grants `update` on `<mount>/keys/<key>/rotate` and
+  `<mount>/sign/<key>` and nothing else: those are the two calls garam
+  makes.
 - **The CA** is read from the Secret `caSecretName` names, under
   `caKey`, and projected as it is: it is public, so it is not copied to
   an owner-only file.

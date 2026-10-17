@@ -262,40 +262,42 @@ func TestKeyring_MovingCustodyAnnouncesTheNewKeyWithTheFullLead(t *testing.T) {
 	assert.Len(t, ring.keys, 2, "once the provider's key signs, nothing more is due")
 }
 
-// TestKeyring_AKeyTheProviderCannotBeReachedToMakeWaits holds
-// ADR-0104's unavailable case on rotation: the keys already held go on
-// signing and being published, and only a keyring with no key signing
-// is refused, as unavailable. A failure of another kind is the
-// control: it fails the read, so what waits is the unreachable
-// provider alone.
-func TestKeyring_AKeyTheProviderCannotBeReachedToMakeWaits(t *testing.T) {
-	sealed := message.NewFileCustodian(plainSealer{})
-	unreachable := errorx.New(errorx.KindUnavailable, "transit: rotate: unreachable")
+// TestKeyring_ADueKeyThatCannotBeMadeWaitsWhileAKeySigns holds
+// ADR-0104's deferral, decided by whether a key still signs and not by
+// why the provider failed: an unreachable provider, a refused policy
+// and a key of the wrong type each leave the stored set served and the
+// current key signing. Only a keyring with no key signing is refused,
+// with the provider's own failure; the same provider beside a signing
+// key is the control that makes that refusal the missing key's.
+func TestKeyring_ADueKeyThatCannotBeMadeWaitsWhileAKeySigns(t *testing.T) {
+	failures := map[string]error{
+		"unreachable": errorx.New(errorx.KindUnavailable, "transit: rotate: unreachable"),
+		"refused":     errorx.New(errorx.KindInternal, "transit: rotate: HTTP 403: permission denied"),
+		"wrong type":  errorx.New(errorx.KindFailedPrecondition, "transit: key k is aes256-gcm96"),
+	}
+	for name, failure := range failures {
+		t.Run(name, func(t *testing.T) {
+			sealed := message.NewFileCustodian(plainSealer{})
+			ring := &keyring{now: epoch}
+			_ = published(t, newSigner(t, ring))
+			moved, err := message.NewKeyring(ring, "https://garam.example", message.Config{},
+				&heldElsewhere{mount: "transit", unreachable: failure}, sealed)
+			require.NoError(t, err)
+			assert.Equal(t, []message.KeyID{ring.keys[0].ID}, published(t, moved), "the set is served")
+			_, err = moved.Signer(context.Background())
+			require.NoError(t, err, "the current key signs")
+			assert.Len(t, ring.keys, 1, "nothing was stored for the key that could not be made")
 
-	ring := &keyring{now: epoch}
-	_ = published(t, newSigner(t, ring))
-	moved, err := message.NewKeyring(ring, "https://garam.example", message.Config{},
-		&heldElsewhere{mount: "transit", unreachable: unreachable}, sealed)
-	require.NoError(t, err)
-	assert.Equal(t, []message.KeyID{ring.keys[0].ID}, published(t, moved), "the set is served")
-	_, err = moved.Signer(context.Background())
-	require.NoError(t, err, "the current key signs")
-	assert.Len(t, ring.keys, 1)
-
-	empty := &keyring{now: epoch}
-	first, err := message.NewKeyring(empty, "https://garam.example", message.Config{},
-		&heldElsewhere{mount: "transit", unreachable: unreachable})
-	require.NoError(t, err)
-	assert.Empty(t, published(t, first), "an empty set is served")
-	_, err = first.Signer(context.Background())
-	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "with no key signing, a claim is refused as unavailable: %v", err)
-
-	misconfigured, err := message.NewKeyring(ring, "https://garam.example", message.Config{},
-		&heldElsewhere{mount: "transit", unreachable: errorx.New(errorx.KindFailedPrecondition, "transit: key k is aes256-gcm96")}, sealed)
-	require.NoError(t, err)
-	_, err = misconfigured.PublishedKeys(context.Background())
-	assert.Error(t, err, "the control: a provider that answered and refused fails the read")
+			empty := &keyring{now: epoch}
+			first, err := message.NewKeyring(empty, "https://garam.example", message.Config{},
+				&heldElsewhere{mount: "transit", unreachable: failure})
+			require.NoError(t, err)
+			assert.Empty(t, published(t, first), "an empty set is served")
+			_, err = first.Signer(context.Background())
+			require.Error(t, err)
+			assert.ErrorIs(t, err, failure, "with no key signing, a claim is refused with the provider's failure")
+		})
+	}
 }
 
 // TestKeyring_AKeyNoConfiguredCustodyHoldsDoesNotSign holds the move

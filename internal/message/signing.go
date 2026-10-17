@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/url"
 	"strings"
@@ -264,10 +263,12 @@ func (r *keyring) PublishedKeys(ctx context.Context) ([]PublishedKey, error) {
 // Both paths that read them create it, so a set fetched before anything
 // is handed out already holds the key that will sign.
 //
-// A key the creating custodian cannot reach to make is deferred rather
-// than failed (ADR-0104): the keys already stored go on signing and
-// being published, the next read tries again, and the failure is
-// answered as deferred for a caller that has no key to sign with.
+// A due key that could not be made, for whatever reason, is deferred
+// rather than failed (ADR-0104): the keys already stored go on being
+// published, the one signing goes on signing, and the next read tries
+// again. Whether a key still signs decides who meets the failure: it is
+// answered as deferred, and only a caller with no key to sign with
+// takes it as its own.
 func (r *keyring) keys(ctx context.Context) (keys []*SigningKey, now time.Time, deferred, err error) {
 	keys, now, err = r.store.SigningKeys(ctx)
 	if err != nil {
@@ -283,17 +284,28 @@ func (r *keyring) keys(ctx context.Context) (keys []*SigningKey, now time.Time, 
 		}
 		return r.generate(ctx, lead)
 	})
-	var unreached *custodyUnreached
-	if errors.As(err, &unreached) {
-		slog.WarnContext(ctx, "message signing key not created; the next read tries again",
-			slog.String("error", err.Error()))
-		return keys, now, err, nil
-	}
 	if err != nil {
-		return nil, time.Time{}, nil, err
+		logDeferred(ctx, err, signingAt(keys, now) != nil)
+		return keys, now, err, nil
 	}
 	keys, now, err = r.store.SigningKeys(ctx)
 	return keys, now, nil, err
+}
+
+// logDeferred reports a rotation that failed, once per read. A provider
+// that cannot be reached is expected to come back; any other failure —
+// a refused policy, a key of the wrong type — fails every read until
+// someone changes the deployment, so it is logged as an error.
+func logDeferred(ctx context.Context, err error, signing bool) {
+	kind := errorx.KindOf(err)
+	level := slog.LevelError
+	if kind == errorx.KindUnavailable {
+		level = slog.LevelWarn
+	}
+	slog.Log(ctx, level, "message signing key not created; the next read tries again",
+		slog.String("kind", kind.String()),
+		slog.Bool("key_signing", signing),
+		slog.String("error", err.Error()))
 }
 
 // keyDue answers whether a key is due and the lead it is created with.
@@ -385,14 +397,9 @@ func stoppedSigning(later []*SigningKey, now time.Time) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// generate has the creating custodian make a key. A custodian that
-// could not be reached is told apart, so the rotation it was making is
-// deferred rather than failing the read that asked for it.
+// generate has the creating custodian make a key.
 func (r *keyring) generate(ctx context.Context, lead time.Duration) (*NewSigningKey, error) {
 	held, err := r.creating.Create(ctx)
-	if errorx.IsKind(err, errorx.KindUnavailable) {
-		return nil, &custodyUnreached{err: err}
-	}
 	if err != nil {
 		return nil, err
 	}
@@ -402,13 +409,6 @@ func (r *keyring) generate(ctx context.Context, lead time.Duration) (*NewSigning
 	}
 	return &NewSigningKey{ID: id, PublicKey: held.PublicKey, Held: held.Held, Lead: lead}, nil
 }
-
-// custodyUnreached is a key the creating custodian could not be
-// reached to make.
-type custodyUnreached struct{ err error }
-
-func (e *custodyUnreached) Error() string { return e.err.Error() }
-func (e *custodyUnreached) Unwrap() error { return e.err }
 
 // open answers a signer under the key from the custodian that holds
 // it. A key no configured custodian holds is a deployment that moved

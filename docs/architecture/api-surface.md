@@ -71,8 +71,8 @@ v1/v2 paths are what admit an agent.
 - The `Bearer` alias resolves the same opaque access tokens as
   `Garam-Token`, with the same route confinement, per-request reads, v2
   contract selection and refusal of combined credentials
-  ([machine-identity.md](./machine-identity.md)
-  §Asymmetric Operator exchange). It changes no execution or operation
+  (`machine-identity.md` §Asymmetric Operator exchange). It changes no
+  execution or operation
   header and reaches no certificate renewal route.
 - `issueOperatorKey`, `listOperatorKeys` and `revokeOperatorKey` on
   the browser-facing listener answer a private PEM once and public
@@ -308,8 +308,9 @@ requires and answers `Garam-Contract-Version: operation-authority.v1`
 beside a certificate and `operation-authority.v2` beside a token, and a
 request naming none or another is refused naming the one its
 credential takes (ADR-0079, ADR-0100). The specifications are
-authoritative for their forms, and [operators.md](./operators.md)
-§Delegated operation authority for what they decide.
+authoritative for their forms, and
+[operators.md](./operators.md) §Delegated operation authority for what
+they decide.
 
 **An agent's execution is a versioned contract of its own on the
 machine listener** (ADR-0078). Activation, deactivation, introspection
@@ -438,8 +439,7 @@ and not in the same place on every surface.
   An agent's protected calls, its own renewal among them, are also
   decided per request by its execution fence, and the lifecycle routes
   by the caller's current authority
-  ([machine-identity.md](./machine-identity.md)
-  §Generation and lineage).
+  (`machine-identity.md` §Generation and lineage).
 - **What a machine caller may send** is the exception, and the
   recipient's organization decides which of two things answers it. A
   recipient of the caller's own organization is a policy question: the
@@ -489,8 +489,8 @@ and not in the same place on every surface.
   identifier segment its own path takes. Every write is still decided
   when it arrives, so an answer is a hint the console renders by and
   not a grant
-  ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
-  §Role-aware UI). Each pair is answered allow, deny or unknown:
+  ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md) §Role-aware UI).
+  Each pair is answered allow, deny or unknown:
   - **allow or deny**, where enforcement is the engine's `Check` alone:
     the same statements and groups, put to the same `Check`. It never
     calls `Explain`, so no answer says why. A missing group or project

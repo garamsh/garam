@@ -305,8 +305,8 @@ collaborate on a shared plan.
   What it may then do is narrower: once the agent has been recovered,
   a certificate outside the new lineage is refused per request by the
   execution fence, though its connection still authenticates
-  ([machine-identity.md](./machine-identity.md)
-  §Generation and lineage). An operator is the other exception and it is
+  (`machine-identity.md` §Generation and lineage). An operator is the
+  other exception and it is
   not a certificate mechanism either: deleting the operator withdraws
   the record its certificate authenticates on, so every certificate
   naming it is refused from the next connection while none of them is
@@ -411,8 +411,9 @@ collaborate on a shared plan.
   a development artefact rather than manifests for a cluster garam does
   not run. `deploy/local/minikube/README.md` is authoritative for what
   it runs, how it is brought up and torn down, and where its key
-  material and its images come from; that file's
-  §What this proves and what it does not is authoritative for what
+  material and its images come from;
+  `minikube/README.md` §What this proves and what it does not is
+  authoritative for what
   running it establishes about a real deployment.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
@@ -503,8 +504,9 @@ Neither imports `internal/authz`; the wire contract is
 `proto/garam/authz/v1`, and the conversions onto it are declared once
 in `internal/wire`. Both surfaces compose four boundaries — the
 `agent`, `message` and `operator` domains, and `watch`, which is not a
-domain ([domains.md](./domains.md)
-§Sub-responsibilities in a boundary of their own). `watch` is extracted
+domain
+(`domains.md` §Sub-responsibilities in a boundary of their own). `watch`
+is extracted
 rather than
 held by either of them because a watch has a lifecycle neither
 `message` nor `agent` contains, and its two ends fall on different

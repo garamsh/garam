@@ -114,7 +114,7 @@ reach it, so `internal/cli` is the file that section names for garam
 **The placement is what the in-process integration tests rest on.** Only
 a test in its own directory can import a main package, which
 `docs/convention/stack-go.md` §Project envelope states where it moves
-the site out of `main.go`, and §Testing of that file designates
+the site out of `main.go`, and §7. Testing of that file designates
 `tests/` for the integration and E2E tests that wire multiple domains
 ([ADR-0096](./adr/0096-garam-syncs-the-convention-template-to-f7de866.md)).
 `tests/integration/issue_certificate_test.go` and

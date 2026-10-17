@@ -99,7 +99,7 @@ it.
 - **A writer replaces a file by renaming within its directory**, so a
   reader sees the old token or the new one. A Kubernetes Secret volume
   swaps its files that way; the standalone supervisor's copy into the
-  container does not (agents.md §The host's runner), and the next rule
+  container does not (`agents.md` §The host's runner), and the next rule
   is what absorbs it.
 - **A file that is missing, part-written or anything but one token is
   undecided.** The call is not made, nothing is refused or paused, and
@@ -572,9 +572,8 @@ supervisor when standalone.
 - **Every protected call carries the activation's token**, as
   `Authorization: Garam-Execution <token>`, or in a `Garam-Execution`
   header of its own in the token mode
-  ([machine-identity.md](./machine-identity.md)
-  §Generation and lineage), and the adapter makes none before it holds
-  one.
+  (`machine-identity.md` §Generation and lineage), and the adapter makes
+  none before it holds one.
 - **It activates the generation the runtime reports, while it reports
   `serving`.** A runtime already draining is not activated (ADR-0085).
   It reads Sherlock's loopback status, then asks the authority with that

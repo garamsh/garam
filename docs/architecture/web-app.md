@@ -42,8 +42,8 @@ account and no root, `migrations/`, and the `garam` binary that
 Merging the two gives each process what the other holds — a shell and an
 interpreter inside the image whose processes read the key-encryption key
 that seals every organization's certificate authority
-([deployment-contract.md](./deployment-contract.md)
-§What the binary enforces about key material), the schema migrations
+(`deployment-contract.md` §What the binary enforces about key material),
+the schema migrations
 and that binary
 inside the image whose process renders a browser's input — and that is
 what a proposal to build and pull one image instead of two has to
@@ -73,7 +73,7 @@ own things a reader might come here for, and none of them is restated:
   ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)).
 - `docs/convention/stack-nextjs.md` governs how the application is laid
   out inside `web/src/`: which folder holds what, and the two entry
-  points a feature declares (§Feature entry points and file naming).
+  points a feature declares (§13. Feature entry points and file naming).
   What may import what there is
   [structure.md](./structure.md) §Boundaries and dependency direction's
   ([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)),
@@ -506,7 +506,7 @@ Tests are in two locations by decision, not by accident: Vitest owns
 the tests colocated under `web/src/`, Playwright owns `web/e2e/`, and
 each config names the other's territory so neither collects the other's
 files (ADR-0009, `docs/convention/stack-nextjs.md`
-§Testing — three layers, two locations).
+§12. Testing — three layers, two locations).
 
 ## Not established
 

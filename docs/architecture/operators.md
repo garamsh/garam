@@ -321,8 +321,7 @@ single-mode cutover is its own repository's (Operator ADR-0068).
   `failed_precondition` and the reason `key_issuance_unconfigured`,
   since the state holds until the deployment sets the URL rather than
   being a fault (#1394), and the exchange answers 503
-  ([deployment-contract.md](./deployment-contract.md)
-  §Operator key and enrollment rollout).
+  (`deployment-contract.md` §Operator key and enrollment rollout).
 - **Planned rotation holds two live keys.** The predecessor reads
   `retiring` for `RolloverWindow`, 24 hours, and is then withdrawn
   without a write; a third live key is refused. `immediate` withdraws
@@ -345,8 +344,8 @@ single-mode cutover is its own repository's (Operator ADR-0068).
   writes that key. Its PM supersedes ADR-0008's certificate renewal
   writer before cutover; garam edits no Operator convention or source.
 
-[machine-identity.md](./machine-identity.md)
-§Asymmetric Operator exchange owns the exchange and the token reads.
+`machine-identity.md` §Asymmetric Operator exchange owns the exchange
+and the token reads.
 
 ## Credential and tokens
 
@@ -598,9 +597,9 @@ the Operator control service; garam's routes for both are built.
   having stopped.
 - **An agent's leaf** — what the adapter presents with a runtime status
   report or an activation request — is proven by execution
-  introspection ([machine-identity.md](./machine-identity.md)
-  §Generation and lineage), never relayed through the controller to
-  obtain a controller's leaf. Its 200 is a status answer: a report is
+  introspection (`machine-identity.md` §Generation and lineage), never
+  relayed through the controller to obtain a controller's leaf. Its 200
+  is a status answer: a report is
   accepted only when `credential` and `generation` are both `current`
   and the identity, assignee, epoch and activation are the ones
   expected, and an expired or superseded certificate answers

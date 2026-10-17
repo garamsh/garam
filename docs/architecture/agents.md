@@ -402,8 +402,8 @@ in #1157.
   switch (below), and from the switch the operator's certificate route
   and its definition no longer reach it. The machine
   listener checks the generation per request
-  ([machine-identity.md](./machine-identity.md)
-  §Generation and lineage), and every write it protects takes the row's
+  (`machine-identity.md` §Generation and lineage), and every write it
+  protects takes the row's
   lock in its own transaction, which is what orders a replacement
   against writes already admitted (ADR-0078, ADR-0080). A restart is a
   new activation, not a new certificate; a revision still pending
@@ -645,7 +645,7 @@ supervisor that stops leaves the workload running.
   reaches the rootless daemon, which is the host user alone.
 - **A v2 host copies tokens in, and keeps the agent's current.** The
   adapter receives the agent token and the control token in place of
-  a key and certificate (adapter.md §Token mode). The supervisor
+  a key and certificate (`adapter.md` §Token mode). The supervisor
   exchanges its credential for its own token and mints the agent's,
   holds both in memory, and replaces each at a point drawn from two
   thirds to three quarters of its life; a refresh that fails while the
@@ -698,7 +698,7 @@ supervisor that stops leaves the workload running.
   `GARAM_ADAPTER_SIGN_MESSAGES`, and where it renders none the adapter
   signs nothing, so a host never signs to a runtime that does not trust
   garam, and an unconfigured host is as it was. The order
-  adapter.md §Stable identifiers and the outbox asks for holds within
+  `adapter.md` §Stable identifiers and the outbox asks for holds within
   one generation: the runtime starts with its entry before the adapter
   starts. **The floor is Sherlock `v0.4.0`, and naming the issuer is
   what asserts it.** `keys-ca-file` arrives there

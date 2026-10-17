@@ -41,8 +41,9 @@ than leaving a boundary that says only what is absent here
 what `Chart.yaml`'s `version` names and when it moves (ADR-0042,
 [ADR-0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md)) —
 a rule no responsibility document held or reached before this route.
-The same file's §What it renders is authoritative for what each
-template renders and for what follows from that — the update strategy
+`deploy/charts/garam/README.md` §What it renders is authoritative for
+what each template renders and for what follows from that — the update
+strategy
 every Deployment sets and what an upgrade costs in service under it,
 and the hook phase the migration Job runs in.
 

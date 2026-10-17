@@ -31,7 +31,7 @@ Current architecture of the system and the decisions behind it. This file is the
    [web-app.md](./web-app.md) and [api-surface.md](./api-surface.md)
    route that way to `deploy/charts/garam/README.md`, and
    [deployment-contract.md](./deployment-contract.md) §What it is names
-   that file's §Pinning a version.
+   `deploy/charts/garam/README.md` §Pinning a version.
 2. **ADRs are append-only.** Once merged, the body is frozen.
    Exceptions: updating the status field (`accepted` → `superseded by
    ADR-XXXX`), fixing typos or broken links, and appending a dated entry
@@ -113,8 +113,9 @@ Current architecture of the system and the decisions behind it. This file is the
    ([ADR-0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md)).
    #946 rewrote this rule and rule 3, put no passage in violation and
    sorted 40 of 40 the way the history already had, so it earned none.
-   #953 put [deployment-contract.md](./deployment-contract.md)
-   §What it is in violation until the same pull request repaired it, and
+   #953 put
+   [deployment-contract.md](./deployment-contract.md) §What it is in
+   violation until the same pull request repaired it, and
    [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)
    was owed. This paragraph earned ADR-0060 on the second arm alone: it
    puts no passage in violation, and #946 and #953 had answered its

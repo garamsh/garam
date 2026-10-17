@@ -222,15 +222,12 @@ test:
 	@scripts/image-test-ecr-test.sh
 
 # `go build ./...` exits 0 having done nothing should that pattern ever
-# resolve to no package, so build names what it compiles too. It skips a
-# test-only package swept in by ./... and fails on one named directly,
-# so the list holds those with a non-test file; go test covers the rest.
-BUILD_SELECT = go list -f '{{if .GoFiles}}{{.ImportPath}}{{end}}' ./...
-BUILD_PKGS = $(shell $(BUILD_SELECT))
-
+# resolve to no package, so build counts the packages it selects first.
+# It runs the pattern rather than the list: go build skips a test-only
+# package swept in by ./... and fails on one named directly.
 build:
-	$(call go-packages,build,$(BUILD_SELECT),$(BUILD_PKGS))
-	@go build $(BUILD_PKGS)
+	$(call go-packages,build,$(GO_SELECT),$(GO_PKGS))
+	@go build ./...
 
 # gen regenerates everything derived from a source of truth: the
 # OpenAPI server, sqlc queries, protobuf code, and mocks.

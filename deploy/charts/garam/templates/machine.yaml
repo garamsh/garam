@@ -108,6 +108,7 @@ spec:
               value: {{ required "machine.agentTokenLifetime is required" .Values.machine.agentTokenLifetime | quote }}
             - name: GARAM_MACHINE_ISSUER
               value: {{ required "machine.issuer is required" .Values.machine.issuer | quote }}
+{{- include "garam.machineTokenUrlEnv" . }}
 {{- $transit := .Values.machine.transit }}
 {{- if $transit.address }}
             # The message signing keys are held in Transit (ADR-0104).

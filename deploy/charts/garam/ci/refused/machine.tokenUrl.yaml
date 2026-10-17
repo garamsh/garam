@@ -1,0 +1,6 @@
+# A token endpoint carrying a query. The render must refuse and name
+# machine.tokenUrl: serve api and serve machine refuse any value that is
+# not an https URL with a host and no user information, query or
+# fragment at startup (ADR-0102), so the render refuses first.
+machine:
+  tokenUrl: https://machine.garam.example/oauth/token?tenant=a

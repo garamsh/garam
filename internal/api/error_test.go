@@ -41,7 +41,7 @@ func TestRegisterPassword_ConflictCarriesNoneOfTheDriversText(t *testing.T) {
 		f.do(t, "POST", "/auth/password/register", registerBody(first, "alice", registeredPassword)).Code,
 		"the control: the first registration lands")
 
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, "acme")
+	orgGRN := grn.Org("acme")
 	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t),
 		org.NewInvitation("second-tok", orgGRN, org.RoleMember, creator, time.Now().UTC().Add(time.Hour))))

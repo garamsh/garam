@@ -99,11 +99,6 @@ func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (
 	return &authzv1.ExplainResponse{Allowed: allowed, Traces: traces}, nil
 }
 
-// serviceTypeOrg is the GRN service type of an organization. The
-// engine needs it to scope a request to the org whose policies apply;
-// it carries no other domain knowledge (ADR-0007).
-const serviceTypeOrg = "org"
-
 // readStatements is one of PolicySource's two reads.
 type readStatements func(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Statement, error)
 
@@ -125,7 +120,7 @@ func applicable(ctx context.Context, in checkInput, read readStatements) ([]Stat
 // root-owned, so an org's identifier is the organization segment of
 // every resource beneath it (ADR-0001).
 func orgGRNOf(object grn.GRN) grn.GRN {
-	if object.ServiceType == serviceTypeOrg {
+	if object.ServiceType == grn.ServiceTypeOrg {
 		return object
 	}
 	return grn.Org(object.Organization)

@@ -776,4 +776,4 @@ ADRs:
   written where each path is decided, at most once a minute per process,
   and never holds a credential. It goes with the tenant, outlives a
   deleted caller, and is read with
-  `internal/machine/postgres/inventory.sql`. Proposed
+  `internal/machine/postgres/inventory.sql`

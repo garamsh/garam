@@ -1,12 +1,15 @@
 # ADR 0109: Each machine caller's last authentication by each path is kept in Postgres for the G3 gate
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-18
 
 Drafted for #1494, acceptance criterion 1. That issue reserves this
 number, and the PM approved the design on 2026-10-18 in the dispatch
 that assigned it. Facts about garam hold at
 `28754663e27e20dd43c9451d53829ba112ed23ad`.
+
+Accepted by the Garam PM on 2026-10-18 under the owner's delegation,
+recorded in the review on #1496.
 
 ## Context
 

@@ -146,6 +146,7 @@ sql:
       - migrations/000036_agent_recovery_chain.up.sql
       - migrations/000040_agent_recovery_unsigned.up.sql
       - migrations/000042_supervisor_credentials.up.sql
+      - migrations/000049_agent_enrollment_approvals.up.sql
     queries: internal/agent/postgres/queries.sql
     gen:
       go:

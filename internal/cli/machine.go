@@ -289,7 +289,8 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			memberGroups{store: org.NewPostgresStore(pool)}, machineapi.NewGRPCEvaluator(cfg.Engine),
 			authority, identities, newProofService(pool, cfg.Engine, cfg.Now),
 			newExecutionService(pool, cfg.Engine, authority, identities, issuer, cfg.ServerRoot, cfg.Now),
-			newSupervisorService(pool, cfg.Engine, issuer, cfg.ServerRoot, cfg.Now), keyring),
+			newSupervisorService(pool, cfg.Engine, issuer, cfg.ServerRoot, cfg.Now),
+			newAdmissionService(pool, authority, cfg.Now), keyring),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineTokens, machineapi.ConfineSupervisors, machineapi.RecoverPanics,
 				obs.logMachineRequests, countMachineRequests(requests), countTokenExchanges(exchanges)},

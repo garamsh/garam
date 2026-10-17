@@ -54,6 +54,9 @@ type Server struct {
 	// supervisors is how a standalone host's supervisor enrolls and
 	// renews (ADR-0082).
 	supervisors agent.SupervisorService
+	// admissions is agent-enrollment.v1's approval and admission
+	// (ADR-0102).
+	admissions agent.AdmissionService
 	// keys signs each message handed out and publishes the keys it
 	// signs with (ADR-0101).
 	keys message.Keyring
@@ -72,11 +75,12 @@ var _ machinegen.ServerInterface = (*Server)(nil)
 // verifies a certificate again on a decision, what proves a
 // controller's current authority to that operator, what activates,
 // inspects, recovers and renews an agent's execution, how a standalone
-// host's supervisor enrolls and renews, and what signs each message
-// handed out.
-func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, certificates machine.Service, proofs operator.ProofService, executions agent.ExecutionService, supervisors agent.SupervisorService, keys message.Keyring) *Server {
+// host's supervisor enrolls and renews, what prepares and admits an
+// agent-enrollment.v1 approval, and what signs each message handed
+// out.
+func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, certificates machine.Service, proofs operator.ProofService, executions agent.ExecutionService, supervisors agent.SupervisorService, admissions agent.AdmissionService, keys message.Keyring) *Server {
 	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator, authority: authority,
-		certificates: certificates, proofs: proofs, executions: executions, supervisors: supervisors, keys: keys}
+		certificates: certificates, proofs: proofs, executions: executions, supervisors: supervisors, admissions: admissions, keys: keys}
 }
 
 // caller returns the GRN the request proved, by certificate or by

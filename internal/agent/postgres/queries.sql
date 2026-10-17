@@ -395,3 +395,25 @@ ORDER BY d.agent_grn;
 SELECT t.grn, t.name, t.agent_values FROM agent_templates t
 WHERE t.org_grn = $1
 ORDER BY t.grn;
+
+-- An agent-enrollment.v1 approval (ADR-0102). Either unique key
+-- refusing the row writes nothing, and the caller reads what holds it.
+-- name: InsertEnrollmentApproval :execrows
+INSERT INTO agent_enrollment_approvals (
+    id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT DO NOTHING;
+
+-- name: GetEnrollmentApprovalByRequest :one
+SELECT * FROM agent_enrollment_approvals WHERE org_grn = $1 AND request_id = $2;
+
+-- name: GetEnrollmentApproval :one
+SELECT * FROM agent_enrollment_approvals WHERE org_grn = $1 AND id = $2;
+
+-- LockEnrollmentApproval is what concurrent admissions of one approval
+-- serialize on: the first spends it and the rest read what it wrote.
+-- name: LockEnrollmentApproval :one
+SELECT * FROM agent_enrollment_approvals WHERE id = $1 FOR UPDATE;
+
+-- name: SpendEnrollmentApproval :exec
+UPDATE agent_enrollment_approvals SET agent_grn = $2, admitted_at = $3 WHERE id = $1;

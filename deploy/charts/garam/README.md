@@ -247,6 +247,23 @@ lifetime has passed, so a quarter of it is the margin its propagation
 into the agent's Pod has to fit in; a deployment whose propagation
 does not fit raises the lifetime rather than refreshing later.
 
+`machine.tokenUrl` turns on the operator key exchange
+([ADR-0102](../../../docs/architecture/adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md))
+and is empty by default. It renders `GARAM_MACHINE_TOKEN_URL` on both
+`serve api` and `serve machine` from one value, through one helper, so
+the key `serve api` issues and the audience `serve machine` compares
+cannot disagree. Empty renders the variable on neither: `serve api`
+then refuses key issuance with 409 `key_issuance_unconfigured` and
+`serve machine` answers the exchange 503. The value is the machine
+listener's `/oauth/token` as a caller outside the cluster names it; it
+is kept for the deployment's life, because every assertion names it as
+its audience byte for byte; and it is not `machine.issuer`, the message
+issuer. Set, the render refuses what the binary refuses at startup —
+anything but an https URL with a host and no user information, query
+or fragment — and names the value. No private key passes through it:
+an operator's key stays the owner-only file
+`deployment-contract.md` §Operator key and enrollment rollout names.
+
 `resources` is empty on every workload. No figure has been measured for
 any garam process and setting none is not neutral, both of which
 `docs/architecture/deployment-contract.md` §Not established states — so
@@ -287,7 +304,6 @@ that the source no longer reads.
 | `GARAM_ADAPTER_OUTBOX_DIR` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_CONTROL_SOCKET` | Same: the adapter's own deployment, which on a standalone host is its supervisor (ADR-0085). |
 | `GARAM_ADAPTER_SIGN_MESSAGES` | Same: the adapter's own deployment, which alone knows whether the runtime beside it accepts a signature (ADR-0101). |
-| `GARAM_MACHINE_TOKEN_URL` | The private_key_jwt exchange is unbuilt for deployments (ADR-0102). Unset, `serve api` issues no operator key and `serve machine` answers its token route 503, which is every release of this chart until a deployment adopts it (`docs/architecture/deployment-contract.md`). |
 | `GARAM_MIGRATIONS_DIR` | The migrations ship inside the image and the default resolves to them there. A value here could only point the Job away from them. |
 
 Two things sit outside that comparison:

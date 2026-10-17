@@ -317,7 +317,7 @@ func TestMachineServer_RefusesARequestBodyPastTheBound(t *testing.T) {
 	sender := machineGRN("acme", "bot-1")
 	recipient := machineGRN("acme", "bot-2")
 	url, client := machineListenerServing(t, recordingObservability(&lines{}), sender,
-		machineapi.NewServer(nil, nil, refusalRecord{}, nil, nil, noGroups{}, deniedEngine{}, nil, nil, nil, nil, nil, nil))
+		machineapi.NewServer(nil, nil, refusalRecord{}, nil, nil, noGroups{}, deniedEngine{}, nil, nil, nil, nil, nil, nil, nil))
 
 	status, body := postSubmission(t, client, url, submission(recipient, 1024))
 	require.Equal(t, http.StatusForbidden, status, "the control: refused for whom it names")

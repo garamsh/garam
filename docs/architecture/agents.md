@@ -152,11 +152,29 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## Common managed and direct enrollment
 
-**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
-sets one target admission contract, `agent-enrollment.v1`, in place of
-separate target managed/standalone identity models. §Separated execution
-and §Standalone hosts describe the existing implementations and
-compatibility cohorts, not common enrollment already shipped.
+**Built for managed placement; direct placement is unbuilt.**
+[ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+sets one admission contract, `agent-enrollment.v1`, in place of
+separate managed/standalone identity models. §Separated execution and
+§Standalone hosts describe the older cohorts, which stay served.
+
+- **What is built.** The hosted control service prepares an approval
+  under a member's `agent:create` reference, then admits the agent it
+  binds; `api/machine.yaml` §prepareAgentEnrollment and
+  §admitAgentEnrollment are authoritative for the wire and the
+  refusal reasons. Credential delivery is `mintAgentToken` and
+  activation `activateAgent`, unchanged. `AdmissionService`
+  (`internal/agent/admission_service.go`) holds both stages for both
+  placements; direct placement and a replacement are refused by name.
+- **One admission write.** Admitting an identity is one store
+  primitive, `admit` (`internal/agent/postgres/postgres_admission.go`),
+  which `agent-enrollment.v1`, `managed-enrollment.v1`/`.v2` creation
+  and standalone spending each call: a new agent fenced from birth
+  with its first assignment, or a move from exactly the expected
+  assignment into a new lineage. An `agent-enrollment.v1` admission
+  also records the managed creation row, so one reference creates one
+  agent under either managed contract and its first activation
+  carries that reference as a `managed-enrollment` creation's does.
 
 - Provisioning and enrollment are separate. A managed runtime is
   provisioned by the Operator; a direct runtime may already be running
@@ -197,10 +215,16 @@ proof contract before this new connector activates. Identity admission
 does not close that gate, and it does not block Operator asymmetric
 exchange.
 
-The new wire and direct connector are implementation obligations,
-not additions to the current `api/machine.yaml` §enrollment and
-§standalone. Legacy v1/v2 approval bindings and supervisor credential
-retry behavior remain unchanged until explicitly migrated.
+The direct connector is an implementation obligation, waiting on
+#1355. Legacy v1/v2 approval bindings and supervisor credential retry
+behavior remain unchanged until explicitly migrated; an
+`agent-enrollment.v1` retry answers the recorded binding and re-issues
+nothing.
+
+**Open: which reference authorizes a managed replacement.** No
+reference kind authorizes moving a managed agent to another assignee,
+so `agent-enrollment.v1` refuses a replacement with
+`replacement_unavailable`.
 
 ## Tokens in place of certificates
 

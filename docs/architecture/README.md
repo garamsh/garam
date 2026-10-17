@@ -763,6 +763,13 @@ ADRs:
   decides writes one audit event without a body in the transaction of
   its outcome, kept until either party's organization is deleted and
   read by nobody through garam yet
+- [0108](./adr/0108-a-reply-answered-outside-its-contract-is-offered-again-on-a-bounded-schedule-and-a-refusal-on-its-merits-is-not.md)
+  — the adapter offers again, on its per-entry backoff up to the retry
+  cap, a reply garam answered outside its contract, so an adapter
+  upgraded before garam forwards it without a restart; a refusal on
+  the entry's merits is still set aside until its file is replaced.
+  0083's decision stands, and its 404 row now reads as a later attempt
+  that may be admitted
 - [0109](./adr/0109-each-machine-callers-last-authentication-by-each-path-is-kept-in-postgres-for-the-g3-gate.md)
   — garam keeps one Postgres row per machine caller and authentication
   path, holding the first and last sighting and the last refresh. It is

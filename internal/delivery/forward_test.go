@@ -100,14 +100,15 @@ func TestRun_ForwardsAReplyAndRemovesItOnAnAcknowledgementOfIt(t *testing.T) {
 	assert.Zero(t, queue.legacyPosts(), "nothing goes to POST /messages")
 }
 
-// TestRun_KeepsAnEntryGaramDoesNotAcceptAndOffersItNoMore covers the
-// definite answers durable-delivery.v1 pins: a server without the route
-// (404), one answering outside the contract, an expired entry (410) and
-// a conflicting key (409). Each keeps the entry, is offered once, and
-// never falls back to POST /messages. An entry garam's clock has not
-// reached (400 out_of_range) is the control: it is kept too, and
-// offered again.
-func TestRun_KeepsAnEntryGaramDoesNotAcceptAndOffersItNoMore(t *testing.T) {
+// TestRun_KeepsAnEntryGaramRefusesOnItsMeritsAndOffersItNoMore covers
+// the definite answers durable-delivery.v1 pins on an entry: an expired
+// entry (410) and a conflicting key (409). Each keeps the entry, is
+// offered once, and never falls back to POST /messages. The controls
+// are kept too, and offered again: an entry garam's clock has not
+// reached (400 out_of_range), and one a peer not serving the contract
+// answered, a server without the route (404) or one answering outside
+// it (ADR-0108).
+func TestRun_KeepsAnEntryGaramRefusesOnItsMeritsAndOffersItNoMore(t *testing.T) {
 	answers := map[string]func() (int, string, any){
 		"entry-old-server": func() (int, string, any) {
 			return http.StatusNotFound, "", machinegen.Error{Kind: "not_found", Message: "no route"}
@@ -133,15 +134,52 @@ func TestRun_KeepsAnEntryGaramDoesNotAcceptAndOffersItNoMore(t *testing.T) {
 	}
 	forwarding(t, queue, dir)
 
-	eventually(t, func() bool { return count(queue.submissions(), "entry-future") >= 3 },
-		"the control: an entry garam's clock has not reached is offered again")
+	offeredAgain := []string{"entry-future", "entry-old-server", "entry-unversioned"}
+	eventually(t, func() bool {
+		for _, id := range offeredAgain {
+			if count(queue.submissions(), id) < 3 {
+				return false
+			}
+		}
+		return true
+	}, "the controls: an entry the clock or the peer was not ready for is offered again")
 	for id := range answers {
 		assert.FileExists(t, filepath.Join(dir, id+".json"), "%s is kept", id)
-		if id != "entry-future" {
-			assert.Equal(t, 1, count(queue.submissions(), id), "%s is offered once", id)
-		}
+	}
+	for _, id := range []string{"entry-expired", "entry-conflict"} {
+		assert.Equal(t, 1, count(queue.submissions(), id), "%s is offered once", id)
 	}
 	assert.Zero(t, queue.legacyPosts(), "no answer falls back to POST /messages")
+}
+
+// TestRun_ForwardsAReplyOnceGaramServesItsContractWithoutARestart is
+// an adapter upgraded before garam: the reply is answered outside
+// durable-delivery.v1 until garam serves it, and the same process then
+// forwards it under the same key and creation instant (ADR-0108).
+func TestRun_ForwardsAReplyOnceGaramServesItsContractWithoutARestart(t *testing.T) {
+	queue := newGaramQueue(t, time.Second)
+	unserved := 3
+	queue.answerOutbox(func(s outboxSubmission) (int, string, any) {
+		if unserved > 0 {
+			unserved--
+			return http.StatusNotFound, "", machinegen.Error{Kind: "not_found", Message: "no route"}
+		}
+		return http.StatusCreated, delivery.DeliveryContract, machinegen.Message{
+			Id: "stored-1", Sender: agentGRN().String(), Recipient: s.Recipient, IdempotencyKey: s.IdempotencyKey,
+		}
+	})
+	dir := t.TempDir()
+	writeEntry(t, dir, entryFor("entry-1", "reply"))
+	forwarding(t, queue, dir)
+
+	eventually(t, gone(filepath.Join(dir, "entry-1.json")), "the reply goes once garam serves the contract")
+	submissions := queue.submissions()
+	require.Len(t, submissions, 4, "three offers answered outside the contract and the one acknowledged")
+	for _, s := range submissions {
+		assert.Equal(t, "entry-1", s.IdempotencyKey)
+		assert.True(t, createdAt.Equal(s.CreatedAt))
+	}
+	assert.Zero(t, queue.legacyPosts(), "nothing falls back to POST /messages")
 }
 
 func count(submissions []outboxSubmission, key string) int {

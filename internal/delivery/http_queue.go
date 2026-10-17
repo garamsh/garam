@@ -172,7 +172,7 @@ func (q *HTTPQueue) Post(ctx context.Context, o Outbound) (*Stored, error) {
 		return nil, q.answered(resp, presented)
 	}
 	// A server older than the route answers 404 naming no contract, and
-	// one newer names another: neither is offered the entry again.
+	// one newer names another: neither is a verdict on the entry.
 	if resp.Header.Get(contractHeader) != q.contract {
 		return nil, errorx.Wrap(ErrUnsupportedPeer, "delivery: garam answered outside "+q.contract)
 	}

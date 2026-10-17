@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"time"
@@ -25,8 +26,9 @@ type forwarding struct {
 	// aside is every entry set aside, by name, with the file it was:
 	// it is not offered again unless that file is replaced.
 	aside map[string]os.FileInfo
-	// later is when an entry whose creation garam's clock has not yet
-	// reached is offered again, and how long it waited last.
+	// later is when an entry is offered again, and how long it waited
+	// last: one whose creation garam's clock has not yet reached, or
+	// one garam answered outside the contract (ADR-0108).
 	later map[string]retry
 	// backoff is how long the whole outbox waits after garam did not
 	// answer, doubling up to its cap.
@@ -157,6 +159,13 @@ func (s *service) offer(ctx context.Context, f *forwarding, name string) bool {
 		s.later(f, name)
 		slog.WarnContext(ctx, "reply not forwarded yet; garam's clock has not reached its creation",
 			slog.String("entry", entry.ID))
+		return true
+	case errors.Is(err, ErrUnsupportedPeer):
+		// The peer is not this entry's verdict: an upgrade may serve
+		// the contract while this process runs (ADR-0108).
+		s.later(f, name)
+		slog.WarnContext(ctx, "reply not forwarded yet; garam does not serve its contract",
+			slog.String("entry", entry.ID), slog.String("error", err.Error()))
 		return true
 	}
 	s.setAside(ctx, f, name, entry, err.Error())

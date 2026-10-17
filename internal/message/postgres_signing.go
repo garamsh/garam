@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/message/db"
@@ -50,13 +51,22 @@ func (s *PostgresStore) RotateSigningKeys(ctx context.Context, prepare func(keys
 		if err != nil || key == nil {
 			return err
 		}
-		err = q.InsertSigningKey(ctx, db.InsertSigningKeyParams{
-			ID:               string(key.ID),
-			PublicKey:        key.PublicKey,
-			SealedPrivateKey: key.SealedPrivateKey,
-			SignsFrom:        pgxtype.Timestamptz(now.Add(key.Lead)),
-		})
-		return pgxerr.Classify(err, "insert signing key", nil, nil)
+		params := db.InsertSigningKeyParams{
+			ID:        string(key.ID),
+			PublicKey: key.PublicKey,
+			SignsFrom: pgxtype.Timestamptz(now.Add(key.Lead)),
+		}
+		switch held := key.Held.(type) {
+		case SealedKey:
+			params.SealedPrivateKey = held
+		case TransitVersion:
+			params.TransitMount = pgtype.Text{String: held.Mount, Valid: true}
+			params.TransitKey = pgtype.Text{String: held.Key, Valid: true}
+			params.TransitVersion = pgtype.Int4{Int32: int32(held.Version), Valid: true}
+		default:
+			return errorx.New(errorx.KindInternal, "insert signing key: no holding for its private half")
+		}
+		return pgxerr.Classify(q.InsertSigningKey(ctx, params), "insert signing key", nil, nil)
 	})
 	return errorx.Wrap(err, "rotate signing keys")
 }
@@ -84,10 +94,10 @@ func readSigningKeys(ctx context.Context, q *db.Queries) ([]*SigningKey, time.Ti
 	keys := make([]*SigningKey, 0, len(rows))
 	for _, row := range rows {
 		key := &SigningKey{
-			ID:               KeyID(row.ID),
-			PublicKey:        row.PublicKey,
-			SealedPrivateKey: row.SealedPrivateKey,
-			SignsFrom:        row.SignsFrom.Time,
+			ID:        KeyID(row.ID),
+			PublicKey: row.PublicKey,
+			Held:      heldIn(row),
+			SignsFrom: row.SignsFrom.Time,
 		}
 		if row.WithdrawnAt.Valid {
 			withdrawn := row.WithdrawnAt.Time
@@ -96,4 +106,14 @@ func readSigningKeys(ctx context.Context, q *db.Queries) ([]*SigningKey, time.Ti
 		keys = append(keys, key)
 	}
 	return keys, now.Time, nil
+}
+
+// heldIn reads where a row's private half is held. The table's check
+// admits a row holding exactly one of the two, so a row naming no
+// Transit version is a sealed one.
+func heldIn(row db.MessageSigningKey) Holding {
+	if row.TransitVersion.Valid {
+		return TransitVersion{Mount: row.TransitMount.String, Key: row.TransitKey.String, Version: int(row.TransitVersion.Int32)}
+	}
+	return SealedKey(row.SealedPrivateKey)
 }

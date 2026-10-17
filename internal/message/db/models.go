@@ -124,6 +124,9 @@ type MessageSigningKey struct {
 	CreatedAt        pgtype.Timestamptz
 	SignsFrom        pgtype.Timestamptz
 	WithdrawnAt      pgtype.Timestamptz
+	TransitMount     pgtype.Text
+	TransitKey       pgtype.Text
+	TransitVersion   pgtype.Int4
 }
 
 type Org struct {

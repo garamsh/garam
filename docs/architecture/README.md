@@ -737,5 +737,4 @@ ADRs:
   Vault Transit key that signs each hand-out inside the claim's
   transaction, behind a key-custody seam replacing `message.Sealer`
   as the keyring's; with no provider the file key-encryption key stays
-  the default, and the certificate authorities stay on it until G4.
-  Unbuilt
+  the default, and the certificate authorities stay on it until G4

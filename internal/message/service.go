@@ -84,8 +84,11 @@ type Service interface {
 	PostWithinBudget(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, author Author, created time.Time, fence *Fence) (*Message, error)
 	// Claim hands the caller the oldest message addressed to it, waiting
 	// until one is ready rather than answering an empty queue at once,
-	// and returns ErrNoMessageReady when none arrives in that time.
-	Claim(ctx context.Context, caller, recipient grn.GRN, fence *Fence) (*Claim, error)
+	// and returns ErrNoMessageReady when none arrives in that time. The
+	// claim is signed by signer before it is taken for good, so a claim
+	// that cannot be signed spends none of the message's attempts
+	// (ADR-0104).
+	Claim(ctx context.Context, caller, recipient grn.GRN, fence *Fence, signer Signer) (*Claim, Signed, error)
 	// Renew extends the caller's hold on a message it is still working
 	// on, no further than the ceiling.
 	Renew(ctx context.Context, caller, recipient grn.GRN, id ClaimID, fence *Fence) (*Claim, error)
@@ -171,9 +174,15 @@ func (s *service) PostWithinBudget(ctx context.Context, sender, recipient grn.GR
 	return s.store.EnqueueWithinBudget(ctx, m, created, fence)
 }
 
-func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN, fence *Fence) (*Claim, error) {
+func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN, fence *Fence, signer Signer) (*Claim, Signed, error) {
 	if err := addressesFenced(caller, recipient, fence); err != nil {
-		return nil, err
+		return nil, Signed{}, err
+	}
+	var signed Signed
+	sign := func(c *Claim) error {
+		var err error
+		signed, err = signer.Sign(ctx, c)
+		return err
 	}
 	// A message becomes ready either because a sender stored one or
 	// because a lease ran out, and the second is a moment passing rather
@@ -183,20 +192,23 @@ func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN, fence *F
 	// ADR-0013 accepted in place of a push.
 	deadline := time.Now().Add(s.cfg.Wait)
 	for {
-		claim, err := s.store.Claim(ctx, recipient, s.cfg.Lease, s.cfg.Attempts, fence)
+		claim, err := s.store.Claim(ctx, recipient, s.cfg.Lease, s.cfg.Attempts, fence, sign)
 		// The store has one not-found to answer this with, so the kind
 		// names it and no sentinel needs telling apart.
 		if !errorx.IsKind(err, errorx.KindNotFound) {
-			return claim, err
+			if err != nil {
+				return nil, Signed{}, err
+			}
+			return claim, signed, nil
 		}
 		if !time.Now().Before(deadline) {
-			return nil, ErrNoMessageReady
+			return nil, Signed{}, ErrNoMessageReady
 		}
 		select {
 		case <-ctx.Done():
 			// The caller stopped waiting, so there is nobody to hand a
 			// message to and nothing to report.
-			return nil, ErrNoMessageReady
+			return nil, Signed{}, ErrNoMessageReady
 		case <-time.After(s.cfg.PollInterval):
 		}
 	}

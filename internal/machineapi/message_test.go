@@ -173,13 +173,13 @@ func (s *messageService) PostWithinBudget(_ context.Context, sender, recipient g
 	return message.New(recipient, sender, key, body)
 }
 
-func (s *messageService) Claim(_ context.Context, caller, recipient grn.GRN, fence *message.Fence) (*message.Claim, error) {
+func (s *messageService) Claim(_ context.Context, caller, recipient grn.GRN, fence *message.Fence, _ message.Signer) (*message.Claim, message.Signed, error) {
 	s.calls = append(s.calls, messageCall{method: "claim", caller: caller, recipient: recipient})
 	s.fences = append(s.fences, fence)
 	if s.err != nil {
-		return nil, s.err
+		return nil, message.Signed{}, s.err
 	}
-	return nil, message.ErrNoMessageReady
+	return nil, message.Signed{}, message.ErrNoMessageReady
 }
 
 func (s *messageService) Renew(_ context.Context, caller, recipient grn.GRN, id message.ClaimID, _ *message.Fence) (*message.Claim, error) {

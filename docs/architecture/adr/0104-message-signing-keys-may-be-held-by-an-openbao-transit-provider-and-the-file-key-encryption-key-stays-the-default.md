@@ -22,6 +22,7 @@ recorded in the review on #1479.
 - Consequences
 - Signs the decision was wrong
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -379,3 +380,13 @@ what it needs once the implementation has merged (#1476).
   deletes keys, where one key's versions need three paths.
 - **OpenBao reachability in readiness**, for the reason in
   §When OpenBao cannot be reached.
+
+## Errata
+
+- 2026-10-18 — the implementation reads the public half from
+  `rotate`'s answer and never calls `read` on the key; the policy garam
+  needs is those two paths. §Context's three-path measurement and
+  §What a deployment owes' "exactly the three paths measured above"
+  were wrong about `read` being needed, as #1482 showed; the decision
+  stands, and a deployment grants `update` on
+  `<mount>/keys/<key>/rotate` and `<mount>/sign/<key>` alone.

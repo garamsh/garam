@@ -427,10 +427,11 @@ they arrive at rather than as what they held at startup, so every read
 answers with the files as they are now and a replaced pair is presented
 on the next handshake without a restart (ADR-0040). The key goes
 through the rule above on every read; the certificate beside it is
-public. It depends on `errorx` only. One domain reads it — the
-certificate authorities domain, for the key-encryption key — and the
-composition root reads the machine listener's pair and the adapter's
-through it.
+public. It depends on `errorx` only. Two domains read it — the
+certificate authorities domain, for the key-encryption key, and the
+messaging domain's `internal/message/transit`, for the OpenBao token
+on every call (ADR-0104) — and the composition root reads the machine
+listener's pair and the adapter's through it.
 
 `internal/health` holds what liveness and readiness mean and the two
 probes every serve command mounts (ADR-0021). No domain imports it; the

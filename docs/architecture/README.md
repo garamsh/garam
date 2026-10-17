@@ -168,6 +168,17 @@ Current architecture of the system and the decisions behind it. This file is the
    document governs, as [messaging.md](./messaging.md) does. An ADR is
    outside this: a decision is unbuilt when it is taken, and rule 2
    freezes the body afterwards.
+10. **An ADR carries the four sections of
+    [adr/0000-template.md](./adr/0000-template.md) as `##` headings,**
+    spelled as the template spells them: `## Context`, `## Decision`,
+    `## Consequences` and `## Signs the decision was wrong`. Further
+    sections are allowed. This binds an ADR a pull request adds after
+    the rule merged; one merged before it keeps the form it was written
+    in, since adding a section is none of rule 2's exceptions
+    ([ADR-0110](./adr/0110-a-new-adr-carries-the-four-sections-of-the-adr-template-as-headings.md)).
+    A reviewer reads it with
+    `rg -c '^## (Context|Decision|Consequences|Signs the decision was wrong)$'`
+    on the added file, which gives 4.
 
 ## What nothing detects
 
@@ -784,3 +795,8 @@ ADRs:
   and never holds a credential. It goes with the tenant, outlives a
   deleted caller, and is read with
   `internal/machine/postgres/inventory.sql`
+- [0110](./adr/0110-a-new-adr-carries-the-four-sections-of-the-adr-template-as-headings.md)
+  — every ADR added after this one carries the template's four
+  sections as `##` headings, further sections allowed; ADRs already
+  merged keep the form they were written in, and review rather than
+  `make ci` checks it, because ADR numbers do not follow merge order

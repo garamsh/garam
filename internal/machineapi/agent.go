@@ -173,6 +173,7 @@ func (s *Server) MintAgentToken(w http.ResponseWriter, r *http.Request, agentGRN
 		writeError(w, err)
 		return
 	}
+	machine.ReportIssuance(r, machine.Issuance{Subject: token.Agent, Audience: token.Audience != nil, Until: token.ExpiresAt})
 	answer := machinegen.AgentToken{Token: token.Value, Grn: token.Agent.String(), Epoch: token.Epoch,
 		ExpiresAt: token.ExpiresAt, ServerRootPem: string(token.ServerRootPEM)}
 	if token.Audience != nil {

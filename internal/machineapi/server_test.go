@@ -357,6 +357,7 @@ func serveTLSTokens(t *testing.T, srv *machineapi.Server, caller grn.GRN, tokens
 	served := machine.NewServer(
 		machine.NewService(trustRoots{store: store}, everyRecordHeld{}, machine.Config{}),
 		tokens,
+		nil,
 		loopback(t),
 		machinegen.HandlerWithOptions(srv, machinegen.StdHTTPServerOptions{
 			ErrorHandlerFunc: machineapi.BindingError, Middlewares: middlewares,

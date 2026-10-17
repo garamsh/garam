@@ -24,6 +24,7 @@ import (
 	"github.com/garamsh/garam/internal/health"
 	"github.com/garamsh/garam/internal/keyfile"
 	"github.com/garamsh/garam/internal/machine"
+	machinepg "github.com/garamsh/garam/internal/machine/postgres"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/message/transit"
@@ -273,6 +274,10 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// trust roots, records and clock.
 	identities := machine.NewService(certificateAuthorities{store: authorities},
 		identityRegistrations{operators: operatorStore, supervisors: agentpg.New(pool)}, machine.Config{Now: cfg.Now})
+	// The listener notes how each request authenticated, and the issuing
+	// routes what they issued, as the evidence the certificate path's
+	// retirement is gated on (ADR-0109).
+	evidence := machine.NewEvidence(machinepg.New(pool), evidenceWindow, cfg.Now)
 
 	// The generated router matches before the middleware runs, so the
 	// log line can name the route rather than the path. The last
@@ -293,13 +298,13 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			newAdmissionService(pool, authority, cfg.Now), keyring),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineTokens, machineapi.ConfineSupervisors, machineapi.RecoverPanics,
-				obs.logMachineRequests, countMachineRequests(requests), countTokenExchanges(exchanges)},
+				obs.logMachineRequests, countMachineRequests(requests), countTokenExchanges(exchanges), recordIssuances(evidence)},
 			// A parameter the router cannot bind is refused before any
 			// handler runs, so this is the only place the surface's own
 			// error body reaches that refusal.
 			ErrorHandlerFunc: machineapi.BindingError,
 		})
-	return obs.machineServer(identities, identityTokens{operators: operatorStore, agents: agentStore, supervisors: agentpg.New(pool)}, cfg.Certificate, handler), nil
+	return obs.machineServer(identities, identityTokens{operators: operatorStore, agents: agentStore, supervisors: agentpg.New(pool)}, evidence, cfg.Certificate, handler), nil
 }
 
 // machineServer is the listener `serve machine` serves: TLS a client
@@ -311,8 +316,8 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 // The wrapping is assigned rather than passed in, because NewServer
 // puts that check outside the handler it is given and the check runs
 // per request too.
-func (o *observability) machineServer(identities machine.Service, tokens machine.Tokens, certificate machine.ServerCertificate, next http.Handler) *http.Server {
-	srv := machine.NewServer(identities, tokens, certificate,
+func (o *observability) machineServer(identities machine.Service, tokens machine.Tokens, evidence *machine.Evidence, certificate machine.ServerCertificate, next http.Handler) *http.Server {
+	srv := machine.NewServer(identities, tokens, evidence, certificate,
 		otelhttp.NewHandler(next, serviceMachine))
 	srv.Handler = o.recoverPanics(http.MaxBytesHandler(srv.Handler, maxRequestBody))
 	// A handshake that fails outright — a client that speaks no TLS

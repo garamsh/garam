@@ -763,3 +763,10 @@ ADRs:
   decides writes one audit event without a body in the transaction of
   its outcome, kept until either party's organization is deleted and
   read by nobody through garam yet
+- [0109](./adr/0109-each-machine-callers-last-authentication-by-each-path-is-kept-in-postgres-for-the-g3-gate.md)
+  — garam keeps one Postgres row per machine caller and authentication
+  path, holding the first and last sighting and the last refresh. It is
+  written where each path is decided, at most once a minute per process,
+  and never holds a credential. It goes with the tenant, outlives a
+  deleted caller, and is read with
+  `internal/machine/postgres/inventory.sql`. Proposed

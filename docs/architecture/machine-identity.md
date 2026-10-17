@@ -1,7 +1,8 @@
 # Machine Identity
 
 Who is calling on the listener a machine identity authenticates on
-(ADR-0014, ADR-0015, ADR-0100). Implemented by `internal/machine`.
+(ADR-0014, ADR-0015, ADR-0100), and the evidence of how each caller
+authenticated (ADR-0109). Implemented by `internal/machine`.
 
 | Type | Responsibility |
 |------|----------------|
@@ -12,6 +13,8 @@ Who is calling on the listener a machine identity authenticates on
 | `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
 | `Tokens` | answers what a token a request presents stands for, read for that request beside the record it rests on (ADR-0100) |
 | `Method` | how a request's identity was proven: a certificate the handshake verified, or a token the request presented |
+| `Evidence` | notes each caller's authentication by path, at most once a minute per caller and path per process, and never fails a request (ADR-0109) |
+| `Recorder` | keeps that evidence; satisfied by `internal/machine/postgres` |
 
 An agent, an operator and a supervisor are the same kind of caller
 here and the listener does not branch on which. It asks one question
@@ -44,7 +47,9 @@ its validity period and one not marked for client authentication, so
 neither refusal at authentication is code this repository holds. What
 is read again after the handshake is below.
 
-The package holds no store and reaches no database: `TrustRoot` is the
+The package holds no store and reaches no database; the one store
+beside it, `internal/machine/postgres`, keeps the evidence
+§Authentication evidence describes behind `Recorder`. `TrustRoot` is the
 seam the composition root satisfies from `internal/ca`, which keeps the
 two domains cooperating through `grn.GRN` alone. Verification needs the
 authority's certificate and never its key. `Registration` is a seam of
@@ -231,9 +236,8 @@ refusals, and §machineBearer for the alias.
   operator shared secret, supervisor shared secret, operator
   private_key_jwt — and outcome, which `garam_machine_requests_total`
   cannot, since both cohorts present a token afterwards. An idle
-  operator shows in no metric; its keys' `last_exchanged_at` and its
-  tokens' issuance, credential or key, are what an inventory reads.
-  Neither carries a key, assertion or token.
+  operator shows in no metric; §Authentication evidence is what an
+  inventory reads. Neither carries a key, assertion or token.
 - The agent's API token, its execution fence and Sherlock's message
   issuer verification remain distinct. Common enrollment admits
   managed placement alone,
@@ -300,6 +304,41 @@ authenticates beside a token until G3.
   a connection presented — a renewal, the execution fence — refuses a
   token's identity by itself as well, so that refusal does not rest on
   the route set alone.
+
+## Authentication evidence
+
+**Built; read by the G3 gate**
+([ADR-0109](./adr/0109-each-machine-callers-last-authentication-by-each-path-is-kept-in-postgres-for-the-g3-gate.md)).
+The certificate path is retired only once each cohort is shown on the
+new paths and no request has taken the old one for seven days
+(`docs/plans/2026-10-09-machine-identity-migration.md`). This section
+covers what records that.
+
+- **One row per caller and path** in `machine_authentication_evidence`
+  (`migrations/000052`). The paths are `certificate`, `token`,
+  `exchange_shared_secret`, `exchange_private_key_jwt`, `agent_mint` and
+  `audience_token`, and `machine.Path` names them. A row holds when its
+  path was first and last seen. For an issuance it also holds when the
+  last recorded token expires and the last refresh, meaning an issuance
+  made while that token was still accepted. No column holds a credential
+  or any part of one.
+- **Recorded where each path is decided.** `identify` notes the
+  certificate or token path of every request it hands an identity. The
+  exchange and mint handlers report what they issued through
+  `machine.ReportIssuance`, and `recordIssuances` in
+  `internal/cli/machine_token.go` records it under the path the route
+  and credential prefix name. A refused issuance reports nothing.
+- **Best effort and coalesced.** One write per caller, path and process
+  a minute, bounded at a second. A failed write is logged and the
+  request goes on.
+- **Kept until the tenant goes.** Rows cascade from the organization,
+  and a deleted caller's rows stay as the evidence that it stopped.
+- **A restart is not visible here.** It stays with joint acceptance
+  (#1495).
+- **The read is `internal/machine/postgres/inventory.sql`**, run with
+  `psql -f`. It is authoritative for the cohort each caller is counted
+  in and for what an idle caller looks like: a registered row with
+  every path empty.
 
 ## Generation and lineage
 

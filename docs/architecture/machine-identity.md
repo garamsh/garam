@@ -235,7 +235,8 @@ refusals, and §machineBearer for the alias.
   tokens' issuance, credential or key, are what an inventory reads.
   Neither carries a key, assertion or token.
 - The agent's API token, its execution fence and Sherlock's message
-  issuer verification remain distinct. Common enrollment is unbuilt,
+  issuer verification remain distinct. Common enrollment admits
+  managed placement alone,
   [agents.md](./agents.md) §Common managed and direct enrollment;
   message verification is [messaging.md](./messaging.md).
 
@@ -356,18 +357,20 @@ route but those, its own renewal and its identity
 ([agents.md](./agents.md) §Standalone hosts). The hosted control
 service alone creates a managed agent and obtains its first
 certificate, on the routes tagged `enrollment`, authoritative for
-theirs and `managed-enrollment.v1` and `.v2`.
+theirs and `managed-enrollment.v1` and `.v2`, and prepares and admits
+one under `agent-enrollment.v1` on those tagged `agent-enrollment`,
+which take its token alone.
 Each request rereads the caller's credential and registration; each
-but creation rereads its grant, or a supervisor's registration and
-assignment, and current policy too, and creation rereads the member's
-`agent:create` reference instead. An agent's own certificate and a
-controller's are refused.
-Activation, deactivation, recovery, creation and initial issuance are
-each bounded by a ten-second server deadline over both their authority
-reads and their write, and past it answer unavailable without saying
-whether the write committed (ADR-0080). Introspection answers a
-forwarded credential's standing and a generation's from one snapshot;
-a 200 is a status answer, and only `credential` and `generation` both
-`current`, with the expected binding, is positive. The credential's
-GRN still answers who is calling; these answer whether that caller is
-still the one allowed to act.
+but creation and admission rereads its grant, or a supervisor's
+registration and assignment, and current policy too, and those reread
+the member's `agent:create` reference instead. An agent's own
+certificate and a controller's are refused.
+Activation, deactivation, recovery, creation, admission and initial
+issuance are each bounded by a ten-second server deadline over both
+their authority reads and their write, and past it answer unavailable
+without saying whether the write committed (ADR-0080). Introspection
+answers a forwarded credential's standing and a generation's from one
+snapshot; a 200 is a status answer, and only `credential` and
+`generation` both `current`, with the expected binding, is positive. The
+credential's GRN still answers who is calling; these answer whether that
+caller is still the one allowed to act.

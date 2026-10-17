@@ -59,9 +59,9 @@ below is about what garam admits rather than about what it reaches.
 
 **Built in part.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
 adds a standard client-assertion exchange and a common agent admission
-contract. The exchange, the OAuth `Bearer` alias and key issuance are
-served; `agent-enrollment.v1` is not, and the managed and standalone
-v1/v2 paths are what admit an agent.
+contract. The exchange, the OAuth `Bearer` alias, key issuance and
+`agent-enrollment.v1`'s managed placement are served; its direct
+placement is not.
 
 - `machine-token.v2` is `exchangeClientAssertion`, `POST /oauth/token`
   on the machine listener: RFC 7523's client assertion parameters, the
@@ -78,11 +78,12 @@ v1/v2 paths are what admit an agent.
   the browser-facing listener answer a private PEM once and public
   metadata thereafter; no secret is read back
   ([operators.md](./operators.md) §Issued PEM identity).
-- **`agent-enrollment.v1` is unbuilt.** It adds one admission contract,
-  whose managed and direct cases differ by authorized placement; it
-  allocates no workload and activates nothing. The current
-  managed/standalone v1/v2 paths keep their approval bindings, retry
-  behavior and refusal semantics.
+- `agent-enrollment.v1` is `prepareAgentEnrollment` and
+  `admitAgentEnrollment`, served to a token alone, whose managed and
+  direct cases differ by placement; it allocates no workload and
+  activates nothing, and only managed placement admits. Its refusals
+  name a `reason`. The managed/standalone v1/v2 paths keep their
+  approval bindings, retry behavior and refusal semantics.
 
 [agents.md](./agents.md) §Common managed and direct enrollment owns
 admission; [operators.md](./operators.md) §Issued PEM identity owns

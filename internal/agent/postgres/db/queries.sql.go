@@ -373,6 +373,60 @@ func (q *Queries) GetEnrollment(ctx context.Context, arg GetEnrollmentParams) (A
 	return i, err
 }
 
+const getEnrollmentApproval = `-- name: GetEnrollmentApproval :one
+SELECT id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at, agent_grn, admitted_at FROM agent_enrollment_approvals WHERE org_grn = $1 AND id = $2
+`
+
+type GetEnrollmentApprovalParams struct {
+	OrgGrn string
+	ID     pgtype.UUID
+}
+
+func (q *Queries) GetEnrollmentApproval(ctx context.Context, arg GetEnrollmentApprovalParams) (AgentEnrollmentApproval, error) {
+	row := q.db.QueryRow(ctx, getEnrollmentApproval, arg.OrgGrn, arg.ID)
+	var i AgentEnrollmentApproval
+	err := row.Scan(
+		&i.ID,
+		&i.OrgGrn,
+		&i.RequestID,
+		&i.Placement,
+		&i.AudienceGrn,
+		&i.AssigneeGrn,
+		&i.OperationRef,
+		&i.CreatedAt,
+		&i.AgentGrn,
+		&i.AdmittedAt,
+	)
+	return i, err
+}
+
+const getEnrollmentApprovalByRequest = `-- name: GetEnrollmentApprovalByRequest :one
+SELECT id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at, agent_grn, admitted_at FROM agent_enrollment_approvals WHERE org_grn = $1 AND request_id = $2
+`
+
+type GetEnrollmentApprovalByRequestParams struct {
+	OrgGrn    string
+	RequestID string
+}
+
+func (q *Queries) GetEnrollmentApprovalByRequest(ctx context.Context, arg GetEnrollmentApprovalByRequestParams) (AgentEnrollmentApproval, error) {
+	row := q.db.QueryRow(ctx, getEnrollmentApprovalByRequest, arg.OrgGrn, arg.RequestID)
+	var i AgentEnrollmentApproval
+	err := row.Scan(
+		&i.ID,
+		&i.OrgGrn,
+		&i.RequestID,
+		&i.Placement,
+		&i.AudienceGrn,
+		&i.AssigneeGrn,
+		&i.OperationRef,
+		&i.CreatedAt,
+		&i.AgentGrn,
+		&i.AdmittedAt,
+	)
+	return i, err
+}
+
 const getEnrollmentByID = `-- name: GetEnrollmentByID :one
 SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE id = $1
 `
@@ -935,6 +989,43 @@ func (q *Queries) InsertEnrollment(ctx context.Context, arg InsertEnrollmentPara
 	return result.RowsAffected(), nil
 }
 
+const insertEnrollmentApproval = `-- name: InsertEnrollmentApproval :execrows
+INSERT INTO agent_enrollment_approvals (
+    id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+ON CONFLICT DO NOTHING
+`
+
+type InsertEnrollmentApprovalParams struct {
+	ID           pgtype.UUID
+	OrgGrn       string
+	RequestID    string
+	Placement    string
+	AudienceGrn  string
+	AssigneeGrn  string
+	OperationRef string
+	CreatedAt    pgtype.Timestamptz
+}
+
+// An agent-enrollment.v1 approval (ADR-0102). Either unique key
+// refusing the row writes nothing, and the caller reads what holds it.
+func (q *Queries) InsertEnrollmentApproval(ctx context.Context, arg InsertEnrollmentApprovalParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertEnrollmentApproval,
+		arg.ID,
+		arg.OrgGrn,
+		arg.RequestID,
+		arg.Placement,
+		arg.AudienceGrn,
+		arg.AssigneeGrn,
+		arg.OperationRef,
+		arg.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertInitialCertificate = `-- name: InsertInitialCertificate :exec
 INSERT INTO agent_initial_certificates (
     agent_grn, request_id, operation_ref, epoch, request_sha256, lineage,
@@ -1440,6 +1531,30 @@ func (q *Queries) LockEnrollment(ctx context.Context, id pgtype.UUID) (AgentEnro
 	return i, err
 }
 
+const lockEnrollmentApproval = `-- name: LockEnrollmentApproval :one
+SELECT id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at, agent_grn, admitted_at FROM agent_enrollment_approvals WHERE id = $1 FOR UPDATE
+`
+
+// LockEnrollmentApproval is what concurrent admissions of one approval
+// serialize on: the first spends it and the rest read what it wrote.
+func (q *Queries) LockEnrollmentApproval(ctx context.Context, id pgtype.UUID) (AgentEnrollmentApproval, error) {
+	row := q.db.QueryRow(ctx, lockEnrollmentApproval, id)
+	var i AgentEnrollmentApproval
+	err := row.Scan(
+		&i.ID,
+		&i.OrgGrn,
+		&i.RequestID,
+		&i.Placement,
+		&i.AudienceGrn,
+		&i.AssigneeGrn,
+		&i.OperationRef,
+		&i.CreatedAt,
+		&i.AgentGrn,
+		&i.AdmittedAt,
+	)
+	return i, err
+}
+
 const lockExecution = `-- name: LockExecution :one
 SELECT agent_grn, mode, lineage, activation_id, token_hash, latest_activation_id, updated_at FROM agent_executions WHERE agent_grn = $1 FOR UPDATE
 `
@@ -1772,6 +1887,21 @@ func (q *Queries) SpendEnrollment(ctx context.Context, arg SpendEnrollmentParams
 		arg.ServerRootPem,
 		arg.ID,
 	)
+	return err
+}
+
+const spendEnrollmentApproval = `-- name: SpendEnrollmentApproval :exec
+UPDATE agent_enrollment_approvals SET agent_grn = $2, admitted_at = $3 WHERE id = $1
+`
+
+type SpendEnrollmentApprovalParams struct {
+	ID         pgtype.UUID
+	AgentGrn   pgtype.Text
+	AdmittedAt pgtype.Timestamptz
+}
+
+func (q *Queries) SpendEnrollmentApproval(ctx context.Context, arg SpendEnrollmentApprovalParams) error {
+	_, err := q.db.Exec(ctx, spendEnrollmentApproval, arg.ID, arg.AgentGrn, arg.AdmittedAt)
 	return err
 }
 

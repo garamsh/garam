@@ -102,7 +102,7 @@ func TestConfineTokens_ATokenReachesTheRoutesThatListIt(t *testing.T) {
 	subject := operatorGRN("acme")
 	operators := &operatorService{certificate: &operator.Certificate{Subject: subject}}
 	srv := machineapi.NewServer(&agentService{}, operators, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, certified := serveTLSTokens(t, srv, subject, presentedTokens{"garam_ot_live": subject},
 		machineapi.ConfineTokens)
 	client := anonymous(t)
@@ -140,7 +140,7 @@ func TestServer_ARouteReadingTheCertificateRefusesAToken(t *testing.T) {
 	subject := operatorGRN("acme")
 	operators := &operatorService{certificate: &operator.Certificate{Subject: subject}}
 	srv := machineapi.NewServer(&agentService{}, operators, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, certified := serveTLSTokens(t, srv, subject, presentedTokens{"garam_ot_live": subject})
 
 	req, err := http.NewRequest(http.MethodPost, url+"/identity/certificate", nil)
@@ -169,7 +169,7 @@ func TestServer_ARouteReadingTheCertificateRefusesAToken(t *testing.T) {
 func TestServer_InitialIssuanceRefusesATokenItself(t *testing.T) {
 	subject := operatorGRN("acme")
 	srv := machineapi.NewServer(&agentService{}, &operatorService{}, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, certified := serveTLSTokens(t, srv, subject, presentedTokens{"garam_ot_live": subject})
 	path := url + "/agents/" + agentGRN("acme", "bot").String() + "/initial-certificate"
 
@@ -269,7 +269,7 @@ func TestServer_MintsAnAgentTokenForTheCallingOperator(t *testing.T) {
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
 	agents := &agentService{}
 	srv := machineapi.NewServer(agents, &operatorService{}, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, _ := serveTLSTokens(t, srv, controller, presentedTokens{"garam_ot_live": controller},
 		machineapi.ConfineTokens)
 	client := anonymous(t)
@@ -314,7 +314,7 @@ func TestServer_AnAgentTokenCarriesItsExecutionTokenInAHeaderOfItsOwn(t *testing
 	controller := operatorGRN("acme")
 	messages := &messageService{}
 	srv := machineapi.NewServer(&agentService{}, &operatorService{}, messages, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot, "garam_ot_live": controller},
 		machineapi.ConfineTokens)
 	client := anonymous(t)
@@ -345,7 +345,7 @@ func TestServer_AnAgentTokenCarriesItsExecutionTokenInAHeaderOfItsOwn(t *testing
 func TestServer_AnAgentTokenRenewsNoCertificate(t *testing.T) {
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
 	srv := machineapi.NewServer(&agentService{}, &operatorService{}, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot}, machineapi.ConfineTokens)
 
 	status, _, body := tokenRequest(t, anonymous(t), http.MethodPost, url+"/agents/"+bot.String()+"/certificate",
@@ -360,7 +360,7 @@ func TestServer_AnAgentTokenRenewsNoCertificate(t *testing.T) {
 func TestServer_ADurableSubmissionTakesTheValueItsCredentialTakes(t *testing.T) {
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
 	srv := machineapi.NewServer(&agentService{}, &operatorService{}, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, certified := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot}, machineapi.ConfineTokens)
 	client := anonymous(t)
 
@@ -393,7 +393,7 @@ func TestServer_ABearerTokenTakesWhatAGaramTokenTakes(t *testing.T) {
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
 	srv := machineapi.NewServer(&agentService{}, &operatorService{}, messages, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot}, machineapi.ConfineTokens)
 	client := anonymous(t)
 	execution, err := agent.NewToken()

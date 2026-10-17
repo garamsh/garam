@@ -15,41 +15,13 @@ import (
 	"github.com/garamsh/garam/internal/pgxtype"
 )
 
-func (s *Store) CreateManaged(ctx context.Context, a *agent.Agent, c agent.ManagedCreation) (*agent.ManagedCreation, bool, error) {
+func (s *Store) CreateManaged(ctx context.Context, c agent.ManagedCreation) (*agent.ManagedCreation, bool, error) {
 	err := s.inTx(ctx, "create managed agent", func(q *db.Queries) error {
-		at := pgxtype.Timestamptz(a.CreatedAt())
-		if err := q.CreateManagedAgent(ctx, db.CreateManagedAgentParams{
-			Grn:               a.GRN().String(),
-			OrgGrn:            a.Organization().String(),
-			ProvisioningState: string(a.ProvisioningState()),
-			RuntimeState:      string(a.RuntimeState()),
-			CreatedAt:         at,
-		}); err != nil {
-			return storageError(err, "create agent", nil, agent.ErrAgentAlreadyExists)
-		}
-		lineage := pgUUID(uuid.UUID(c.Lineage))
-		if err := q.CreateFencedExecution(ctx, db.CreateFencedExecutionParams{
-			AgentGrn: a.GRN().String(), Lineage: lineage, UpdatedAt: at,
-		}); err != nil {
-			return storageError(err, "create execution", nil, nil)
-		}
-		epoch, err := q.AssignFirst(ctx, db.AssignFirstParams{
-			AgentGrn: a.GRN().String(), AssigneeGrn: c.Controller.String(), CreatedAt: at,
-		})
+		now, err := q.Now(ctx)
 		if err != nil {
-			return storageError(err, "assign", nil, nil)
+			return storageError(err, "read clock", nil, nil)
 		}
-		c.Epoch = int(epoch)
-		return storageError(q.InsertManagedCreation(ctx, db.InsertManagedCreationParams{
-			AgentGrn:      a.GRN().String(),
-			AudienceGrn:   c.Audience.String(),
-			ControllerGrn: c.Controller.String(),
-			RequestID:     string(c.RequestID),
-			OperationRef:  c.OperationRef,
-			Epoch:         epoch,
-			Lineage:       lineage,
-			CreatedAt:     at,
-		}), "record creation", nil, agent.ErrCreationConflict)
+		return createManaged(ctx, q, &c, now)
 	})
 	if errorx.IsKind(err, errorx.KindAlreadyExists) {
 		// A unique key refused the write, so this one wrote nothing:

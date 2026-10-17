@@ -27,6 +27,10 @@ spec:
     metadata:
       labels:
         {{- include "garam.selectorLabels" (dict "root" $ "component" "machine") | nindent 8 }}
+      {{- with .Values.machine.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
 {{- include "garam.serviceAccountName" (dict "root" $ "component" "machine") }}
 {{- include "garam.imagePullSecrets" . }}
@@ -104,6 +108,22 @@ spec:
               value: {{ required "machine.agentTokenLifetime is required" .Values.machine.agentTokenLifetime | quote }}
             - name: GARAM_MACHINE_ISSUER
               value: {{ required "machine.issuer is required" .Values.machine.issuer | quote }}
+{{- $transit := .Values.machine.transit }}
+{{- if $transit.address }}
+            # The message signing keys are held in Transit (ADR-0104).
+            # The token file is written and renewed by what the
+            # deployment runs, and re-read on every call.
+            - name: GARAM_TRANSIT_ADDR
+              value: {{ $transit.address | quote }}
+            - name: GARAM_TRANSIT_CA_FILE
+              value: {{ printf "/etc/garam/transit/%s" (required "machine.transit.caKey is required" $transit.caKey) | quote }}
+            - name: GARAM_TRANSIT_TOKEN_FILE
+              value: {{ required "machine.transit.tokenFile is required beside machine.transit.address: it names the file the OpenBao token is read from" $transit.tokenFile | quote }}
+            - name: GARAM_TRANSIT_SIGNING_KEY
+              value: {{ required "machine.transit.signingKey is required beside machine.transit.address: it names the Transit key messages are signed under" $transit.signingKey | quote }}
+            - name: GARAM_TRANSIT_MOUNT
+              value: {{ required "machine.transit.mount is required" $transit.mount | quote }}
+{{- end }}
           ports:
             - name: mtls
               containerPort: 8443
@@ -124,6 +144,11 @@ spec:
             - name: key-material
               mountPath: /run/garam/key-material
               readOnly: true
+{{- if $transit.address }}
+            - name: transit-ca
+              mountPath: /etc/garam/transit
+              readOnly: true
+{{- end }}
           resources: {{- toYaml .Values.machine.resources | nindent 12 }}
 {{- $km := .Values.machine.keyMaterial }}
 {{- $secret := required "machine.keyMaterial.secretName is required: it names the Secret holding the listener's certificate and key, the root that signed them, and the key-encryption key, less whichever of the four names a Secret of its own" $km.secretName }}
@@ -164,6 +189,16 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 1Mi
+{{- if $transit.address }}
+        # The root OpenBao is verified against. It is public, so it is
+        # projected as it is rather than copied to an owner-only file.
+        - name: transit-ca
+          secret:
+            secretName: {{ required "machine.transit.caSecretName is required beside machine.transit.address: it names the Secret holding the root OpenBao's certificate is verified against" $transit.caSecretName }}
+            items:
+              - key: {{ $transit.caKey }}
+                path: {{ $transit.caKey }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service

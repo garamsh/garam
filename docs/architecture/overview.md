@@ -453,7 +453,8 @@ collaborate on a shared plan.
 - `internal/message/` — the durable queue a message reaches an agent
   through; one reader claims a message at a time, whose queue a caller
   may act on is decided here, and every hand-out is signed under keys
-  kept here (ADR-0101).
+  kept here (ADR-0101) or, where the deployment configures one, in an
+  OpenBao Transit key `internal/message/transit` reaches (ADR-0104).
 - `internal/delivery/` — the adapter's delivery loop: it claims a
   message for one agent, posts it into that agent's gateway under
   garam's identifier, completes the claim the platform says committed,
@@ -537,6 +538,7 @@ it and imports no request surface and no domain.
 | `message.Message` | `internal/message` | one message addressed to a recipient |
 | `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
 | `message.Keyring` | `internal/message` | the keys every hand-out is signed under: opens the one signing, rotates them, publishes the set (ADR-0101) |
+| `message.Custodian` | `internal/message` | holds a signing key's private half: sealed under the key-encryption key, or in an OpenBao Transit key (`internal/message/transit`) that signs for it (ADR-0104) |
 | `watch.Event` | `internal/watch` | one forwarded turn event, carried and never stored |
 | `watch.Subscription` | `internal/watch` | one open watch: the stream its holder reads |
 | `watch.Service` | `internal/watch` | opens a watch, carries a forwarded event to the watchers of that agent, counts them |
@@ -576,7 +578,7 @@ it and imports no request surface and no domain.
 | Agents are provisioned by operators garam never dials | An operator is a peer, so a user can supply their own; garam is never the side that connects. | [adr/0012-agent-operator-model.md](./adr/0012-agent-operator-model.md) |
 | Messages reach an agent by polling, not by push | A queue in Postgres has no connection to route to, so any instance answers any poll. | [adr/0013-agent-messaging.md](./adr/0013-agent-messaging.md) |
 | garam signs every message it hands out | An agent judges a message by a signature that travels with it, not by the path it arrived on, so it can verify garam without trusting garam's transport. | [adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md) |
-| A deployment may hold message signing keys in OpenBao Transit; the file key-encryption key stays the default (unbuilt) | Transit signs, so no private half reaches the database or garam's memory, and an optional provider a deployment hosts itself is no vendor every deployment must reach; the authorities stay on the key-encryption key because they go at G4. | [adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md) |
+| A deployment may hold message signing keys in OpenBao Transit; the file key-encryption key stays the default | Transit signs, so no private half reaches the database or garam's memory, and an optional provider a deployment hosts itself is no vendor every deployment must reach; the authorities stay on the key-encryption key because they go at G4. | [adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md) |
 | Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
 | garam presents one pinned server certificate and certificates rotate without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; expiry is the only revocation, and a lifetime short enough to be one is unusable when every rotation is a restart. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
 | An organization registers an operator, and a definition may name no other | A definition naming an operator nobody registered was a definition no operator would ever claim, and nothing reported it. | [adr/0045-an-organization-registers-an-operator.md](./adr/0045-an-organization-registers-an-operator.md) |

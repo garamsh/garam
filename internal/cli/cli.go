@@ -63,6 +63,21 @@
 //	                       authorities are sealed under, readable by its
 //	                       owner alone (required for serve machine and
 //	                       issue-certificate)
+//	GARAM_TRANSIT_ADDR     https base URL of the OpenBao or Vault that
+//	                       holds the message signing keys (ADR-0104;
+//	                       optional for serve machine — unset, they are
+//	                       sealed under GARAM_CA_KEY_FILE as before).
+//	                       Set, the next three are required; unset, none
+//	                       of GARAM_TRANSIT_* may be
+//	GARAM_TRANSIT_CA_FILE  the PEM root OpenBao's certificate is verified
+//	                       against; the system roots are not consulted
+//	GARAM_TRANSIT_TOKEN_FILE  the token garam presents to OpenBao,
+//	                       readable by its owner alone and read on every
+//	                       call; what writes and renews it is the
+//	                       deployment's
+//	GARAM_TRANSIT_SIGNING_KEY  the ecdsa-p256 Transit key messages are
+//	                       signed under
+//	GARAM_TRANSIT_MOUNT    the Transit mount (default "transit")
 //	GARAM_MACHINE_TOKEN_URL  absolute https URL of the machine listener's
 //	                       /oauth/token, which an operator's assertion
 //	                       names as its audience (ADR-0102; optional for
@@ -201,6 +216,11 @@ const (
 	envMachineServerRootFile envName = "GARAM_MACHINE_SERVER_ROOT_FILE"
 	envMachineIssuer         envName = "GARAM_MACHINE_ISSUER"
 	envMachineTokenURL       envName = "GARAM_MACHINE_TOKEN_URL"
+	envTransitAddr           envName = "GARAM_TRANSIT_ADDR"
+	envTransitCAFile         envName = "GARAM_TRANSIT_CA_FILE"
+	envTransitTokenFile      envName = "GARAM_TRANSIT_TOKEN_FILE"
+	envTransitSigningKey     envName = "GARAM_TRANSIT_SIGNING_KEY"
+	envTransitMount          envName = "GARAM_TRANSIT_MOUNT"
 	envAdapterAgent          envName = "GARAM_ADAPTER_AGENT"
 	envAdapterMachineURL     envName = "GARAM_ADAPTER_MACHINE_URL"
 	envAdapterGatewayURL     envName = "GARAM_ADAPTER_GATEWAY_URL"

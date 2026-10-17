@@ -2,14 +2,11 @@ package message
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
-	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
-	"math/big"
+	"errors"
+	"log/slog"
 	"net/url"
 	"strings"
 	"time"
@@ -75,10 +72,10 @@ type SigningKey struct {
 	ID KeyID
 	// PublicKey is the uncompressed P-256 point.
 	PublicKey []byte
-	// SealedPrivateKey opens only under the key-encryption key and only
-	// for this key's row.
-	SealedPrivateKey []byte
-	SignsFrom        time.Time
+	// Held is where the private half is held: sealed into this row, or
+	// kept by a Transit key (ADR-0104).
+	Held      Holding
+	SignsFrom time.Time
 	// WithdrawnAt is when a person retired the key at once, and nil for
 	// a key nobody retired.
 	WithdrawnAt *time.Time
@@ -87,10 +84,10 @@ type SigningKey struct {
 // NewSigningKey is a key to store, which signs once Lead has passed on
 // the database's clock.
 type NewSigningKey struct {
-	ID               KeyID
-	PublicKey        []byte
-	SealedPrivateKey []byte
-	Lead             time.Duration
+	ID        KeyID
+	PublicKey []byte
+	Held      Holding
+	Lead      time.Duration
 }
 
 // PublishedKey is the public half of a published key, as the two
@@ -122,35 +119,47 @@ type Keyring interface {
 	PublishedKeys(ctx context.Context) ([]PublishedKey, error)
 }
 
-// Signer signs hand-outs under one opened key. Signing reads nothing,
-// so it fails only where the process cannot encode or draw randomness.
+// Signer signs hand-outs under one opened key. Where its custodian
+// signs remotely, signing can fail on the network, so a claim is
+// signed inside the transaction that takes it (ADR-0104).
 type Signer interface {
 	// Sign signs one claim. Every claim signs afresh, and every attempt
 	// of one message carries the same content and identifier.
-	Sign(c *Claim) (Signed, error)
+	Sign(ctx context.Context, c *Claim) (Signed, error)
 }
 
 type keyring struct {
-	store    SigningKeyStore
-	sealer   Sealer
-	issuer   Issuer
-	validity time.Duration
+	store SigningKeyStore
+	// creating holds every key created from now on; the custodians
+	// after it sign the keys created before a deployment moved custody
+	// (ADR-0104).
+	creating   Custodian
+	custodians []Custodian
+	issuer     Issuer
+	validity   time.Duration
 }
 
-// NewKeyring constructs the Keyring. A signature is valid for the lease
-// ceiling cfg sets from when its claim was taken, so it does not
-// outlive that claim.
-func NewKeyring(store SigningKeyStore, sealer Sealer, issuer Issuer, cfg Config) (Keyring, error) {
+// NewKeyring constructs the Keyring. Every key it creates is held by
+// creating, and a key held by one of previous still signs while it is
+// current. A signature is valid for the lease ceiling cfg sets from
+// when its claim was taken, so it does not outlive that claim.
+func NewKeyring(store SigningKeyStore, issuer Issuer, cfg Config, creating Custodian, previous ...Custodian) (Keyring, error) {
 	if _, err := ParseIssuer(string(issuer)); err != nil {
 		return nil, err
 	}
-	return &keyring{store: store, sealer: sealer, issuer: issuer, validity: withDefaults(cfg).LeaseCeiling}, nil
+	return &keyring{
+		store:      store,
+		creating:   creating,
+		custodians: append([]Custodian{creating}, previous...),
+		issuer:     issuer,
+		validity:   withDefaults(cfg).LeaseCeiling,
+	}, nil
 }
 
-// openKey is one signing key with its private half opened.
+// openKey is one signing key, opened by the custodian that holds it.
 type openKey struct {
 	id       KeyID
-	private  *ecdsa.PrivateKey
+	signer   KeySigner
 	issuer   Issuer
 	validity time.Duration
 }
@@ -177,22 +186,25 @@ type signatureHeader struct {
 }
 
 func (r *keyring) Signer(ctx context.Context) (Signer, error) {
-	keys, now, err := r.keys(ctx)
+	keys, now, deferred, err := r.keys(ctx)
 	if err != nil {
 		return nil, err
 	}
 	key := signingAt(keys, now)
+	if key == nil && deferred != nil {
+		return nil, deferred
+	}
 	if key == nil {
 		return nil, errorx.New(errorx.KindInternal, "message: no signing key after rotation")
 	}
-	private, err := r.open(ctx, key)
+	signer, err := r.open(ctx, key)
 	if err != nil {
 		return nil, err
 	}
-	return &openKey{id: key.ID, private: private, issuer: r.issuer, validity: r.validity}, nil
+	return &openKey{id: key.ID, signer: signer, issuer: r.issuer, validity: r.validity}, nil
 }
 
-func (s *openKey) Sign(c *Claim) (Signed, error) {
+func (s *openKey) Sign(ctx context.Context, c *Claim) (Signed, error) {
 	m := c.Message()
 	body, err := Content(m)
 	if err != nil {
@@ -203,7 +215,7 @@ func (s *openKey) Sign(c *Claim) (Signed, error) {
 		return Signed{}, err
 	}
 	digest := sha256.Sum256([]byte(body))
-	signature, err := compactJWS(s.private, s.id, signedClaims{
+	signature, err := compactJWS(ctx, s.signer, s.id, signedClaims{
 		Iss:           string(s.issuer),
 		Sub:           sub,
 		Aud:           m.recipient.String(),
@@ -233,7 +245,7 @@ func (s *openKey) vouchedSender(m *Message) (string, error) {
 }
 
 func (r *keyring) PublishedKeys(ctx context.Context) ([]PublishedKey, error) {
-	keys, now, err := r.keys(ctx)
+	keys, now, _, err := r.keys(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -251,25 +263,37 @@ func (r *keyring) PublishedKeys(ctx context.Context) ([]PublishedKey, error) {
 // keys reads the keys, and first creates the one that is due if any is.
 // Both paths that read them create it, so a set fetched before anything
 // is handed out already holds the key that will sign.
-func (r *keyring) keys(ctx context.Context) ([]*SigningKey, time.Time, error) {
-	keys, now, err := r.store.SigningKeys(ctx)
+//
+// A key the creating custodian cannot reach to make is deferred rather
+// than failed (ADR-0104): the keys already stored go on signing and
+// being published, the next read tries again, and the failure is
+// answered as deferred for a caller that has no key to sign with.
+func (r *keyring) keys(ctx context.Context) (keys []*SigningKey, now time.Time, deferred, err error) {
+	keys, now, err = r.store.SigningKeys(ctx)
 	if err != nil {
-		return nil, time.Time{}, err
+		return nil, time.Time{}, nil, err
 	}
-	if _, due := keyDue(keys, now); !due {
-		return keys, now, nil
+	if _, due := r.keyDue(keys, now); !due {
+		return keys, now, nil, nil
 	}
 	err = r.store.RotateSigningKeys(ctx, func(keys []*SigningKey, now time.Time) (*NewSigningKey, error) {
-		lead, due := keyDue(keys, now)
+		lead, due := r.keyDue(keys, now)
 		if !due {
 			return nil, nil
 		}
 		return r.generate(ctx, lead)
 	})
-	if err != nil {
-		return nil, time.Time{}, err
+	var unreached *custodyUnreached
+	if errors.As(err, &unreached) {
+		slog.WarnContext(ctx, "message signing key not created; the next read tries again",
+			slog.String("error", err.Error()))
+		return keys, now, err, nil
 	}
-	return r.store.SigningKeys(ctx)
+	if err != nil {
+		return nil, time.Time{}, nil, err
+	}
+	keys, now, err = r.store.SigningKeys(ctx)
+	return keys, now, nil, err
 }
 
 // keyDue answers whether a key is due and the lead it is created with.
@@ -277,8 +301,10 @@ func (r *keyring) keys(ctx context.Context) ([]*SigningKey, time.Time, error) {
 // — the replacement signs immediately: there is no earlier set it could
 // be missing from, and nothing else can sign meanwhile. Otherwise the
 // next key is announced SigningKeyLead before the current one has
-// signed for SigningKeyLifetime, and only one is announced at a time.
-func keyDue(keys []*SigningKey, now time.Time) (time.Duration, bool) {
+// signed for SigningKeyLifetime, or at once where the current one is
+// held in a custody new keys are no longer created in (ADR-0104), and
+// only one is announced at a time.
+func (r *keyring) keyDue(keys []*SigningKey, now time.Time) (time.Duration, bool) {
 	current := signingAt(keys, now)
 	if current == nil {
 		return 0, true
@@ -288,7 +314,7 @@ func keyDue(keys []*SigningKey, now time.Time) (time.Duration, bool) {
 			return 0, false
 		}
 	}
-	if now.Before(current.SignsFrom.Add(SigningKeyLifetime - SigningKeyLead)) {
+	if r.creating.Holds(current.Held) && now.Before(current.SignsFrom.Add(SigningKeyLifetime-SigningKeyLead)) {
 		return 0, false
 	}
 	return SigningKeyLead, true
@@ -359,52 +385,43 @@ func stoppedSigning(later []*SigningKey, now time.Time) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// generate makes a P-256 key and seals its private half to its own row.
+// generate has the creating custodian make a key. A custodian that
+// could not be reached is told apart, so the rotation it was making is
+// deferred rather than failing the read that asked for it.
 func (r *keyring) generate(ctx context.Context, lead time.Duration) (*NewSigningKey, error) {
-	private, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, errorx.Wrap(err, "message: generate signing key", errorx.KindInternal)
+	held, err := r.creating.Create(ctx)
+	if errorx.IsKind(err, errorx.KindUnavailable) {
+		return nil, &custodyUnreached{err: err}
 	}
-	public, err := private.PublicKey.Bytes()
-	if err != nil {
-		return nil, errorx.Wrap(err, "message: signing key public half", errorx.KindInternal)
-	}
-	raw, err := private.Bytes()
-	if err != nil {
-		return nil, errorx.Wrap(err, "message: signing key private half", errorx.KindInternal)
-	}
-	id, err := Thumbprint(public)
 	if err != nil {
 		return nil, err
 	}
-	sealed, err := r.sealer.Seal(ctx, keyBinding(id), raw)
+	id, err := Thumbprint(held.PublicKey)
 	if err != nil {
-		return nil, errorx.Wrap(err, "message: seal signing key")
+		return nil, err
 	}
-	return &NewSigningKey{ID: id, PublicKey: public, SealedPrivateKey: sealed, Lead: lead}, nil
+	return &NewSigningKey{ID: id, PublicKey: held.PublicKey, Held: held.Held, Lead: lead}, nil
 }
 
-// open recovers a key's private half from its sealed row. A key that
-// does not open is garam's failure and not the caller's, whatever the
-// sealer called it: under another key-encryption key it would
-// otherwise read as a precondition the caller could change. The key is
-// named so the log says which one to retire.
-func (r *keyring) open(ctx context.Context, k *SigningKey) (*ecdsa.PrivateKey, error) {
-	raw, err := r.sealer.Open(ctx, keyBinding(k.ID), k.SealedPrivateKey)
-	if err != nil {
-		return nil, errorx.Wrap(err, "message: open signing key "+string(k.ID), errorx.KindInternal)
-	}
-	private, err := ecdsa.ParseRawPrivateKey(elliptic.P256(), raw)
-	if err != nil {
-		return nil, errorx.Wrap(err, "message: signing key "+string(k.ID), errorx.KindInternal)
-	}
-	return private, nil
-}
+// custodyUnreached is a key the creating custodian could not be
+// reached to make.
+type custodyUnreached struct{ err error }
 
-// keyBinding ties sealed bytes to one signing key's row, in a namespace
-// no certificate authority's binding shares.
-func keyBinding(id KeyID) []byte {
-	return []byte("message-signing-key:" + string(id))
+func (e *custodyUnreached) Error() string { return e.err.Error() }
+func (e *custodyUnreached) Unwrap() error { return e.err }
+
+// open answers a signer under the key from the custodian that holds
+// it. A key no configured custodian holds is a deployment that moved
+// custody away from its current key (ADR-0104), which retiring that
+// key repairs, so the key is named.
+func (r *keyring) open(ctx context.Context, k *SigningKey) (KeySigner, error) {
+	for _, c := range r.custodians {
+		if c.Holds(k.Held) {
+			return c.Open(ctx, k)
+		}
+	}
+	return nil, errorx.New(errorx.KindInternal,
+		"message: open signing key "+string(k.ID)+": no configured custody holds it")
 }
 
 // coordinates splits an uncompressed P-256 point into its two
@@ -432,7 +449,7 @@ func Thumbprint(public []byte) (KeyID, error) {
 // compactJWS signs the claims under key as a JWS in compact
 // serialization (RFC 7515), the signature being ES256's fixed-length
 // r and s.
-func compactJWS(key *ecdsa.PrivateKey, kid KeyID, claims signedClaims) (string, error) {
+func compactJWS(ctx context.Context, key KeySigner, kid KeyID, claims signedClaims) (string, error) {
 	header, err := json.Marshal(signatureHeader{Alg: signatureAlgorithm, Kid: string(kid), Typ: SignatureType})
 	if err != nil {
 		return "", errorx.Wrap(err, "message: signature header", errorx.KindInternal)
@@ -442,18 +459,13 @@ func compactJWS(key *ecdsa.PrivateKey, kid KeyID, claims signedClaims) (string, 
 		return "", errorx.Wrap(err, "message: signature claims", errorx.KindInternal)
 	}
 	input := encode(header) + "." + encode(payload)
-	digest := sha256.Sum256([]byte(input))
-	der, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
+	raw, err := key.Sign(ctx, []byte(input))
 	if err != nil {
-		return "", errorx.Wrap(err, "message: sign", errorx.KindInternal)
+		return "", err
 	}
-	var rs struct{ R, S *big.Int }
-	if _, err := asn1.Unmarshal(der, &rs); err != nil {
-		return "", errorx.Wrap(err, "message: signature encoding", errorx.KindInternal)
+	if len(raw) != 64 {
+		return "", errorx.New(errorx.KindInternal, "message: signature is not ES256's 64 bytes")
 	}
-	raw := make([]byte, 64)
-	rs.R.FillBytes(raw[:32])
-	rs.S.FillBytes(raw[32:])
 	return input + "." + encode(raw), nil
 }
 

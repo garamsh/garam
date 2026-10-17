@@ -26,6 +26,7 @@ import (
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/internal/message/transit"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/watch"
@@ -87,6 +88,10 @@ func serveMachine(cmd *cobra.Command) error {
 	if err != nil {
 		return errorx.Wrap(err, string(envMachineIssuer))
 	}
+	signingCustodian, err := transitCustodian()
+	if err != nil {
+		return err
+	}
 	tokenURL, err := operator.ParseTokenEndpoint(envOr(envMachineTokenURL, ""))
 	if err != nil {
 		return errorx.Wrap(err, string(envMachineTokenURL))
@@ -101,11 +106,12 @@ func serveMachine(cmd *cobra.Command) error {
 	defer func() { _ = conn.Close() }()
 
 	srv, err := NewMachineServer(pool, MachineConfig{
-		Sealer:      keys.sealer,
-		Issuer:      issuer,
-		Certificate: keys.listener,
-		ServerRoot:  keys.serverRoot,
-		Authority:   ca.Config{CertificateLifetime: lifetime},
+		Sealer:           keys.sealer,
+		SigningCustodian: signingCustodian,
+		Issuer:           issuer,
+		Certificate:      keys.listener,
+		ServerRoot:       keys.serverRoot,
+		Authority:        ca.Config{CertificateLifetime: lifetime},
 		// The delivery parameters default narrow (ADR-0018), and the
 		// defaults are what this process runs on until something asks
 		// for another value.
@@ -147,8 +153,12 @@ func serveMachine(cmd *cobra.Command) error {
 type MachineConfig struct {
 	// Sealer opens the sealed private keys of the certificate
 	// authorities (ADR-0016) and of the keys messages are signed with
-	// (ADR-0101).
+	// (ADR-0101) where those are sealed into their rows.
 	Sealer ca.Sealer
+	// SigningCustodian holds every message signing key created from now
+	// on, and the keys sealed under Sealer still sign while current
+	// (ADR-0104). Nil seals new keys under Sealer too, as before.
+	SigningCustodian message.Custodian
 	// Issuer is the value every message signature names as its issuer:
 	// this listener's external https origin (ADR-0101).
 	Issuer message.Issuer
@@ -228,10 +238,18 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	if err != nil {
 		return nil, err
 	}
-	// Each hand-out is signed under a key sealed by the same
-	// key-encryption key as the authorities, valid for the lease ceiling
-	// the queue holds a claim to (ADR-0101).
-	keyring, err := message.NewKeyring(message.NewPostgresStore(pool), cfg.Sealer, cfg.Issuer, cfg.Delivery)
+	// Each hand-out is signed under a key the configured custodian
+	// holds, valid for the lease ceiling the queue holds a claim to
+	// (ADR-0101). With none configured the key is sealed by the same
+	// key-encryption key as the authorities; with one, a key sealed
+	// before it still signs until its replacement begins (ADR-0104).
+	sealed := message.NewFileCustodian(cfg.Sealer)
+	var keyring message.Keyring
+	if cfg.SigningCustodian == nil {
+		keyring, err = message.NewKeyring(message.NewPostgresStore(pool), cfg.Issuer, cfg.Delivery, sealed)
+	} else {
+		keyring, err = message.NewKeyring(message.NewPostgresStore(pool), cfg.Issuer, cfg.Delivery, cfg.SigningCustodian, sealed)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -365,6 +383,36 @@ func machineKeyMaterial(certFile, keyFile, caKeyFile, serverRootFile string) (ma
 			"GARAM_MACHINE_SERVER_ROOT_FILE: no certificate in "+serverRootFile)
 	}
 	return machineKeys{listener: pair, sealer: sealer, serverRoot: serverRoot}, nil
+}
+
+// transitCustodian reads the Transit provider's configuration, and
+// answers nil where the deployment sets none of it (ADR-0104). Setting
+// part of it is refused, so a deployment never runs believing its keys
+// are in Transit while garam seals them under the key-encryption key.
+func transitCustodian() (message.Custodian, error) {
+	settings := transit.Settings{
+		Address:   envOr(envTransitAddr, ""),
+		CAFile:    envOr(envTransitCAFile, ""),
+		TokenFile: envOr(envTransitTokenFile, ""),
+		Key:       envOr(envTransitSigningKey, ""),
+		Mount:     envOr(envTransitMount, ""),
+	}
+	if settings.Address == "" {
+		if settings != (transit.Settings{}) {
+			return nil, errorx.New(errorx.KindInvalidArgument,
+				"GARAM_TRANSIT_* is set without GARAM_TRANSIT_ADDR, which turns the Transit provider on")
+		}
+		return nil, nil
+	}
+	if settings.CAFile == "" || settings.TokenFile == "" || settings.Key == "" {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"GARAM_TRANSIT_CA_FILE, GARAM_TRANSIT_TOKEN_FILE and GARAM_TRANSIT_SIGNING_KEY are required beside GARAM_TRANSIT_ADDR")
+	}
+	custodian, err := transit.New(settings)
+	if err != nil {
+		return nil, errorx.Wrap(err, "GARAM_TRANSIT_*")
+	}
+	return custodian, nil
 }
 
 // certificateAuthorities reads the authority a presented certificate

@@ -50,7 +50,7 @@ func (q *queue) EnqueueWithinBudget(_ context.Context, m *message.Message, creat
 	return m, nil
 }
 
-func (q *queue) Claim(_ context.Context, _ grn.GRN, lease time.Duration, maxAttempts int, _ *message.Fence) (*message.Claim, error) {
+func (q *queue) Claim(_ context.Context, _ grn.GRN, lease time.Duration, maxAttempts int, _ *message.Fence, _ func(*message.Claim) error) (*message.Claim, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.claims++
@@ -149,7 +149,7 @@ func TestService_ActsOnlyOnTheQueueTheCallerIsAddressedBy(t *testing.T) {
 		{
 			name: "claim",
 			act: func(s message.Service, caller grn.GRN) error {
-				_, err := s.Claim(ctx, caller, bot, fenceOf(bot))
+				_, _, err := s.Claim(ctx, caller, bot, fenceOf(bot), nil)
 				return err
 			},
 		},
@@ -207,7 +207,7 @@ func TestService_ClaimWaitsForAMessageRatherThanAnsweringAnEmptyQueue(t *testing
 	defer cancel()
 
 	start := time.Now()
-	claim, err := s.Claim(ctx, recipientGRN(), recipientGRN(), fenceOf(recipientGRN()))
+	claim, _, err := s.Claim(ctx, recipientGRN(), recipientGRN(), fenceOf(recipientGRN()), nil)
 	waited := time.Since(start)
 
 	assert.Nil(t, claim)
@@ -235,7 +235,7 @@ func TestService_ClaimStopsWaitingWhenTheCallerDoes(t *testing.T) {
 	}()
 
 	start := time.Now()
-	_, err = s.Claim(ctx, recipientGRN(), recipientGRN(), fenceOf(recipientGRN()))
+	_, _, err = s.Claim(ctx, recipientGRN(), recipientGRN(), fenceOf(recipientGRN()), nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady)
 	assert.Less(t, time.Since(start), cfg.Wait, "the poll held its wait out after the caller had gone")
 }
@@ -354,8 +354,8 @@ type answering struct {
 	err error
 }
 
-func (a *answering) Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int, fence *message.Fence) (*message.Claim, error) {
-	_, _ = a.queue.Claim(ctx, recipient, lease, maxAttempts, fence)
+func (a *answering) Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int, fence *message.Fence, handOut func(*message.Claim) error) (*message.Claim, error) {
+	_, _ = a.queue.Claim(ctx, recipient, lease, maxAttempts, fence, handOut)
 	return nil, a.err
 }
 
@@ -375,7 +375,7 @@ func TestService_ClaimWaitsOnTheKindTheStoreAnswersWith(t *testing.T) {
 	s, err := message.NewService(store, cfg)
 	require.NoError(t, err)
 
-	claim, err := s.Claim(context.Background(), recipientGRN(), recipientGRN(), fenceOf(recipientGRN()))
+	claim, _, err := s.Claim(context.Background(), recipientGRN(), recipientGRN(), fenceOf(recipientGRN()), nil)
 
 	assert.Nil(t, claim)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady, "an empty queue is answered as an empty queue")
@@ -386,7 +386,7 @@ func TestService_ClaimWaitsOnTheKindTheStoreAnswersWith(t *testing.T) {
 	s, err = message.NewService(failing, cfg)
 	require.NoError(t, err)
 
-	_, err = s.Claim(context.Background(), recipientGRN(), recipientGRN(), fenceOf(recipientGRN()))
+	_, _, err = s.Claim(context.Background(), recipientGRN(), recipientGRN(), fenceOf(recipientGRN()), nil)
 
 	assert.ErrorIs(t, err, unreachable, "the control: another kind reaches the caller")
 	assert.Equal(t, 1, failing.queue.claims, "and is not waited on")

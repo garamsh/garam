@@ -191,29 +191,58 @@ func sameSubmission(row db.Message, m *Message) bool {
 
 // Claim hands the recipient's oldest ready message to one reader and
 // holds it for lease, or returns ErrNoMessageReady. A message that has
-// been handed out maxAttempts times is not ready for anyone.
-func (s *PostgresStore) Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int, fence *Fence) (*Claim, error) {
+// been handed out maxAttempts times is not ready for anyone. The claim
+// and handOut share one transaction, fenced or not, so a hand-out that
+// fails rolls the claim back.
+func (s *PostgresStore) Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int, fence *Fence, handOut func(*Claim) error) (*Claim, error) {
 	claimID, err := newClaimID()
 	if err != nil {
 		return nil, err
 	}
-	var row db.Message
-	err = s.fenced(ctx, "claim", fence, func(q *db.Queries) error {
+	var claim *Claim
+	claimed := func(q *db.Queries) error {
 		// The lease travels as an interval, so Postgres's clock decides
 		// when the claim lapses and this process's never does.
-		var err error
-		row, err = q.ClaimMessage(ctx, db.ClaimMessageParams{
+		row, err := q.ClaimMessage(ctx, db.ClaimMessageParams{
 			ClaimID:      pgtype.Text{String: string(claimID), Valid: true},
 			Lease:        interval(lease),
 			RecipientGrn: recipient.String(),
 			MaxAttempts:  attemptBound(maxAttempts),
 		})
-		return pgxerr.Classify(err, "claim", ErrNoMessageReady, nil)
-	})
+		if err != nil {
+			return pgxerr.Classify(err, "claim", ErrNoMessageReady, nil)
+		}
+		if claim, err = rowToClaim(row); err != nil || handOut == nil {
+			return err
+		}
+		return handOut(claim)
+	}
+	if fence != nil {
+		err = s.fenced(ctx, "claim", fence, claimed)
+	} else {
+		err = s.unfenced(ctx, "claim", claimed)
+	}
 	if err != nil {
 		return nil, err
 	}
-	return rowToClaim(row)
+	return claim, nil
+}
+
+// unfenced runs fn in one local transaction no execution fence admits,
+// for a write that must commit with what fn does after it.
+func (s *PostgresStore) unfenced(ctx context.Context, op string, fn func(q *db.Queries) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return errorx.Wrap(err, op+": begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if err := fn(s.q.WithTx(tx)); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errorx.Wrap(err, op+": commit", errorx.KindUnavailable)
+	}
+	return nil
 }
 
 // Renew extends a live claim's lease under the ceiling. A claim that

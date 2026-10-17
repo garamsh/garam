@@ -174,8 +174,10 @@ this chart), and no deployment has adopted the workflow below.
   switch is authorized. Inventory and the plan's acceptance evidence
   gate later removals. gitops#14 and infra#331 remain owner gates.
 - Message signing still seals private keys under the key-encryption
-  key. Retiring per-organization certificate authorities alone never
-  authorizes removing that key, message trust roots or signing rows.
+  key, unless the deployment holds them in Transit (§A Transit provider
+  for message signing keys). Retiring per-organization certificate
+  authorities alone never authorizes removing that key, message trust
+  roots or signing rows.
 
 The existing plan,
 `docs/plans/2026-10-09-machine-identity-migration.md`, names sequence
@@ -442,38 +444,50 @@ alone. What binds instead is who signs them
 
 ## A Transit provider for message signing keys
 
-**Unbuilt.** [ADR-0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md) decides it; no code reads the
-variables below yet, and a deployment that sets none of them is
-unaffected. Once built, a deployment that sets `GARAM_TRANSIT_ADDR`
-holds its message signing keys in an OpenBao or Vault Transit key,
-and supplies:
+A deployment that sets `GARAM_TRANSIT_ADDR` holds every message
+signing key `garam serve machine` creates from then on in an OpenBao or
+Vault Transit key
+([ADR-0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md),
+`internal/message/transit`); one that sets none of `GARAM_TRANSIT_*`
+seals them under the key-encryption key as before, and one that sets
+part of it does not start. The chart's `machine.transit` values render
+the variables, and `deploy/charts/garam/README.md` §Message signing
+keys in OpenBao Transit is authoritative for them. The deployment
+supplies:
 
 - **OpenBao over `https`**, under a certificate the root in
-  `GARAM_TRANSIT_CA_FILE` verifies. No other scheme is accepted and the
-  system roots are not consulted.
+  `GARAM_TRANSIT_CA_FILE` verifies. No other scheme is accepted, the
+  system roots are not consulted, and a redirect is not followed.
 - **One `ecdsa-p256` Transit key** the deployment creates, which garam
-  never creates, configures or deletes. It stays non-exportable, is not
-  deleted while a key row names it, and its `min_encryption_version` is
-  never raised past a version the published set holds as signing or
-  next — that version would stop signing.
-- **An ACL policy of three paths on that key**: `read` on
-  `<mount>/keys/<key>`, and `update` on `<mount>/keys/<key>/rotate` and
-  `<mount>/sign/<key>`. That is all garam calls, and the measurement in
-  ADR-0104's pull request shows it is enough.
+  never creates, configures or deletes; garam refuses a key of another
+  type. It stays non-exportable, is not deleted while a key row names
+  it, and its `min_encryption_version` is never raised past a version
+  the published set holds as signing or next — that version would stop
+  signing.
+- **An ACL policy of the three paths ADR-0104 names on that key**:
+  `read` on `<mount>/keys/<key>`, and `update` on
+  `<mount>/keys/<key>/rotate` and `<mount>/sign/<key>`. garam calls
+  `rotate` and `sign`, and `tests/integration/transit_signing_test.go`
+  runs it under a token holding those three and nothing else.
 - **A token file**, `GARAM_TRANSIT_TOKEN_FILE`, owner-only and owned by
-  the process's UID, as every key file above. garam re-reads it on each
-  call and logs in with nothing, so the auth role binding the machine
-  workload's account to the policy, and whatever writes and renews the
-  file, are the deployment's.
+  the process's UID: it is read through `internal/keyfile` like every
+  key file above, but on every call rather than at start, so a renewed
+  token takes effect on the next call and a file not yet written fails
+  a claim rather than the start. garam logs in with nothing, so the
+  auth role binding the machine workload's account to the policy, and
+  whatever writes and renews the file, are the deployment's.
 
-**What the binary will do with it:** the published set is read from
+**What the binary does with it:** the published set is read from
 Postgres and keeps being served while OpenBao is unreachable; a claim
 garam cannot sign is refused as a server error with no attempt spent;
-readiness does not report OpenBao. Turning the provider on announces a
-Transit key with the full two-hour lead while the current key goes on
-signing, so the key-encryption key must still be present then — it is,
-because the authorities need it until G4. Turning it off leaves a
-Transit key that cannot sign there until
+a key due while OpenBao is unreachable waits for the next read while
+the current key signs; readiness does not report OpenBao, and the start
+does not reach it. Turning the provider on announces a Transit key with
+the full two-hour lead while the current sealed key goes on signing,
+so the key-encryption key must still be present then — it is, because
+the authorities need it until G4. Turning it off leaves the current
+Transit key unable to sign there: claims are refused until the sealed
+key announced in its place begins two hours later, or at once after
 `garam retire-message-signing-key` retires it.
 
 ## The message issuer is kept for the deployment's life

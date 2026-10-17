@@ -145,7 +145,7 @@ func TestOutbox_AStoredResultIsAnsweredAfterTheBudget(t *testing.T) {
 	created := o.clock(t).Add(-time.Minute)
 	delivered, err := o.submit(t, bot, ada, "delivered", "hello", created, nil)
 	require.NoError(t, err)
-	claim, err := o.s.Claim(ctx, ada, time.Minute, 3, nil)
+	claim, err := o.s.Claim(ctx, ada, time.Minute, 3, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, delivered.ID(), claim.Message().ID())
 	require.NoError(t, o.s.Complete(ctx, ada, claim.ID(), nil))

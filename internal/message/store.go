@@ -38,8 +38,10 @@ type Store interface {
 	// claim that is never completed lapses when the lease runs out and
 	// the message is handed to the next caller, up to maxAttempts hands
 	// in total: a message that spends them stops being redelivered
-	// (ADR-0018).
-	Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int, fence *Fence) (*Claim, error)
+	// (ADR-0018). handOut, where not nil, runs on the claim before it is
+	// committed, and an error from it leaves the message as it was, its
+	// attempt unspent (ADR-0104).
+	Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int, fence *Fence, handOut func(*Claim) error) (*Claim, error)
 	// Renew extends a live claim's lease by lease, no further than
 	// ceiling past the moment the claim was taken, and returns the hold
 	// as it now stands. A claim that lapsed, was handed on, or was

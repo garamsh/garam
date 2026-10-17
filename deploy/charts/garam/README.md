@@ -11,6 +11,7 @@ The description of how garam is deployed: the five workloads it runs, the ports 
 - Not set by this chart
 - Exposure is the cluster owner's
 - Key material and secrets
+- Message signing keys in OpenBao Transit
 - Pinning a version
 - What keeps it true
 - What the checks are complete over
@@ -398,6 +399,32 @@ cannot be regenerated), so a chart that minted one would leave every
 certificate authority in the database unopenable on its second
 install. Supplying it, keeping it beyond the cluster's life, and
 choosing where it lives are the deployment's.
+
+## Message signing keys in OpenBao Transit
+
+`machine.transit` holds the keys garam signs messages with in an
+OpenBao or Vault Transit key instead of sealing them under the
+key-encryption key
+([ADR-0104](../../../docs/architecture/adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md)).
+It is off while `machine.transit.address` is empty, and the render then
+carries none of its variables. Set, `caSecretName`, `tokenFile` and
+`signingKey` are required and the render refuses without each, naming
+it: garam refuses to start holding part of the setting. What the
+deployment owes OpenBao — the key, the policy and the auth role — is
+`docs/architecture/deployment-contract.md` §A Transit provider for
+message signing keys.
+
+- **The CA** is read from the Secret `caSecretName` names, under
+  `caKey`, and projected as it is: it is public, so it is not copied to
+  an owner-only file.
+- **The token is not in this chart.** `tokenFile` names where in the
+  machine container the binary reads it, on every call, and whatever
+  writes and renews it is the deployment's. The file is held to the
+  arrival rule above — owned by `image.server.runAsUser`, no group or
+  other bit — and replaced by renaming over it. `machine.podAnnotations`
+  is how a writer that injects itself into the pod, such as OpenBao
+  Agent's injector, is asked for; the chart renders no writer and no
+  volume for one.
 
 ## Pinning a version
 

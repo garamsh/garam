@@ -1,10 +1,11 @@
 # The configuration the minimal file leaves out — Google sign-in, an
 # account created and annotated for every workload, an image pinned by
-# digest as well as by tag, and key material split across two Secrets,
-# the four branches in the templates — so the render `make chart`
-# checks covers both sides of each. The minimal file covers the other
-# side of each: no name, so no account and no binding; no digest; and
-# one Secret holding all four files.
+# digest as well as by tag, key material split across two Secrets, and
+# message signing keys in Transit with the machine pod annotated, the
+# branches in the templates — so the render `make chart` checks covers
+# both sides of each. The minimal file covers the other side of each:
+# no name, so no account and no binding; no digest; one Secret holding
+# all four files; and keys sealed under the key-encryption key.
 #
 # `resources` is set nowhere here. No template branches on it, so a
 # value covers nothing, and `helm package` ships this file inside the
@@ -67,6 +68,16 @@ machine:
     kekSecretName: garam-machine-ca-kek
   certificateLifetime: 1h
   issuer: https://machine.garam.example
+  # The message signing keys in Transit, with an injector's annotation
+  # putting the token file in the pod (ADR-0104). The minimal file
+  # leaves both unset, so each branch renders on both sides.
+  transit:
+    address: https://openbao.garam.example:8200
+    signingKey: garam-message-signing
+    caSecretName: garam-openbao-ca
+    tokenFile: /vault/secrets/token
+  podAnnotations:
+    vault.hashicorp.com/agent-inject: "true"
 web:
   serviceAccount:
     name: garam-web

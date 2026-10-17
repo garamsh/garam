@@ -372,25 +372,35 @@ func (q *Queries) GrantConsent(ctx context.Context, arg GrantConsentParams) (Mes
 }
 
 const insertSigningKey = `-- name: InsertSigningKey :exec
-INSERT INTO message_signing_keys (id, public_key, sealed_private_key, signs_from)
+INSERT INTO message_signing_keys (id, public_key, sealed_private_key,
+                                  transit_mount, transit_key, transit_version, signs_from)
 VALUES ($1, $2, $3,
-        $4)
+        $4, $5, $6,
+        $7)
 `
 
 type InsertSigningKeyParams struct {
 	ID               string
 	PublicKey        []byte
 	SealedPrivateKey []byte
+	TransitMount     pgtype.Text
+	TransitKey       pgtype.Text
+	TransitVersion   pgtype.Int4
 	SignsFrom        pgtype.Timestamptz
 }
 
 // InsertSigningKey stores a new key that signs from signs_from, which
-// the caller derives from the instant it decided the key was due.
+// the caller derives from the instant it decided the key was due. Its
+// private half is either sealed into the row or named as a Transit key
+// version (ADR-0104); the table's check refuses both and neither.
 func (q *Queries) InsertSigningKey(ctx context.Context, arg InsertSigningKeyParams) error {
 	_, err := q.db.Exec(ctx, insertSigningKey,
 		arg.ID,
 		arg.PublicKey,
 		arg.SealedPrivateKey,
+		arg.TransitMount,
+		arg.TransitKey,
+		arg.TransitVersion,
 		arg.SignsFrom,
 	)
 	return err
@@ -581,7 +591,7 @@ func (q *Queries) RenewClaim(ctx context.Context, arg RenewClaimParams) (Message
 }
 
 const signingKeys = `-- name: SigningKeys :many
-SELECT id, public_key, sealed_private_key, created_at, signs_from, withdrawn_at FROM message_signing_keys
+SELECT id, public_key, sealed_private_key, created_at, signs_from, withdrawn_at, transit_mount, transit_key, transit_version FROM message_signing_keys
 ORDER BY signs_from, created_at, id
 `
 
@@ -605,6 +615,9 @@ func (q *Queries) SigningKeys(ctx context.Context) ([]MessageSigningKey, error) 
 			&i.CreatedAt,
 			&i.SignsFrom,
 			&i.WithdrawnAt,
+			&i.TransitMount,
+			&i.TransitKey,
+			&i.TransitVersion,
 		); err != nil {
 			return nil, err
 		}

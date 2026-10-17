@@ -1,0 +1,9 @@
+# Transit turned on with no key. The render must refuse and name
+# machine.transit.signingKey: garam refuses to start holding part of
+# the provider's setting (ADR-0104), so the render refuses first.
+machine:
+  transit:
+    address: https://openbao.garam.example:8200
+    caSecretName: garam-openbao-ca
+    tokenFile: /vault/secrets/token
+    signingKey: ""

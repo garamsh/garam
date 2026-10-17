@@ -7,6 +7,7 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"sort"
 	"sync"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/message"
 )
 
@@ -44,7 +46,7 @@ func (r *keyring) RotateSigningKeys(_ context.Context, prepare func([]*message.S
 	}
 	r.leads = append(r.leads, key.Lead)
 	r.keys = append(r.keys, &message.SigningKey{
-		ID: key.ID, PublicKey: key.PublicKey, SealedPrivateKey: key.SealedPrivateKey, SignsFrom: r.now.Add(key.Lead),
+		ID: key.ID, PublicKey: key.PublicKey, Held: key.Held, SignsFrom: r.now.Add(key.Lead),
 	})
 	sort.SliceStable(r.keys, func(i, j int) bool { return r.keys[i].SignsFrom.Before(r.keys[j].SignsFrom) })
 	return nil
@@ -82,7 +84,7 @@ var epoch = time.Date(2026, time.October, 9, 12, 0, 0, 0, time.UTC)
 
 func newSigner(t *testing.T, ring *keyring) message.Keyring {
 	t.Helper()
-	s, err := message.NewKeyring(ring, plainSealer{}, "https://garam.example", message.Config{})
+	s, err := message.NewKeyring(ring, "https://garam.example", message.Config{}, message.NewFileCustodian(plainSealer{}))
 	require.NoError(t, err)
 	return s
 }
@@ -192,6 +194,128 @@ func TestSigner_ARetiredKeyLeavesTheSetAtOnceAndIsReplacedAtOnce(t *testing.T) {
 	assert.NotContains(t, ids, first)
 }
 
+// heldElsewhere is a Custodian standing in for one that holds keys
+// outside garam, as Transit does: each key is a version it keeps, and
+// unreachable makes every key it is asked for fail as a provider that
+// cannot be reached does.
+type heldElsewhere struct {
+	mount       string
+	versions    []*ecdsa.PrivateKey
+	unreachable error
+}
+
+func (h *heldElsewhere) Create(context.Context) (*message.HeldKey, error) {
+	if h.unreachable != nil {
+		return nil, h.unreachable
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	h.versions = append(h.versions, key)
+	point, err := key.PublicKey.Bytes()
+	if err != nil {
+		return nil, err
+	}
+	return &message.HeldKey{PublicKey: point, Held: message.TransitVersion{Mount: h.mount, Key: "k", Version: len(h.versions)}}, nil
+}
+
+func (h *heldElsewhere) Holds(held message.Holding) bool {
+	v, ok := held.(message.TransitVersion)
+	return ok && v.Mount == h.mount
+}
+
+func (h *heldElsewhere) Open(context.Context, *message.SigningKey) (message.KeySigner, error) {
+	return nil, errors.New("these tests sign nothing")
+}
+
+// TestKeyring_MovingCustodyAnnouncesTheNewKeyWithTheFullLead holds how
+// a deployment moves onto a provider (ADR-0104): the sealed key goes on
+// signing, and a key held by the provider is announced at once with
+// the full lead, as any next key is, so no verifier meets a key it was
+// not given two hours ahead. The control is the same store read by a
+// keyring that still creates sealed keys: nothing is due.
+func TestKeyring_MovingCustodyAnnouncesTheNewKeyWithTheFullLead(t *testing.T) {
+	ring := &keyring{now: epoch}
+	sealed := message.NewFileCustodian(plainSealer{})
+	_ = published(t, newSigner(t, ring))
+	require.Len(t, ring.keys, 1)
+	ring.at(epoch.Add(time.Hour))
+
+	_ = published(t, newSigner(t, ring))
+	assert.Len(t, ring.keys, 1, "the control: a keyring creating sealed keys finds nothing due")
+
+	provider := &heldElsewhere{mount: "transit"}
+	moved, err := message.NewKeyring(ring, "https://garam.example", message.Config{}, provider, sealed)
+	require.NoError(t, err)
+	ids := published(t, moved)
+
+	require.Len(t, ring.keys, 2, "the move announced a key")
+	assert.Equal(t, message.SigningKeyLead, ring.leads[1], "with the full lead")
+	assert.True(t, provider.Holds(ring.keys[1].Held), "held by the provider")
+	assert.Equal(t, []message.KeyID{ring.keys[0].ID, ring.keys[1].ID}, ids, "both published")
+	_, err = moved.Signer(context.Background())
+	require.NoError(t, err, "the sealed key still signs until its replacement begins")
+
+	ring.at(epoch.Add(time.Hour + message.SigningKeyLead))
+	_ = published(t, moved)
+	assert.Len(t, ring.keys, 2, "once the provider's key signs, nothing more is due")
+}
+
+// TestKeyring_AKeyTheProviderCannotBeReachedToMakeWaits holds
+// ADR-0104's unavailable case on rotation: the keys already held go on
+// signing and being published, and only a keyring with no key signing
+// is refused, as unavailable. A failure of another kind is the
+// control: it fails the read, so what waits is the unreachable
+// provider alone.
+func TestKeyring_AKeyTheProviderCannotBeReachedToMakeWaits(t *testing.T) {
+	sealed := message.NewFileCustodian(plainSealer{})
+	unreachable := errorx.New(errorx.KindUnavailable, "transit: rotate: unreachable")
+
+	ring := &keyring{now: epoch}
+	_ = published(t, newSigner(t, ring))
+	moved, err := message.NewKeyring(ring, "https://garam.example", message.Config{},
+		&heldElsewhere{mount: "transit", unreachable: unreachable}, sealed)
+	require.NoError(t, err)
+	assert.Equal(t, []message.KeyID{ring.keys[0].ID}, published(t, moved), "the set is served")
+	_, err = moved.Signer(context.Background())
+	require.NoError(t, err, "the current key signs")
+	assert.Len(t, ring.keys, 1)
+
+	empty := &keyring{now: epoch}
+	first, err := message.NewKeyring(empty, "https://garam.example", message.Config{},
+		&heldElsewhere{mount: "transit", unreachable: unreachable})
+	require.NoError(t, err)
+	assert.Empty(t, published(t, first), "an empty set is served")
+	_, err = first.Signer(context.Background())
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "with no key signing, a claim is refused as unavailable: %v", err)
+
+	misconfigured, err := message.NewKeyring(ring, "https://garam.example", message.Config{},
+		&heldElsewhere{mount: "transit", unreachable: errorx.New(errorx.KindFailedPrecondition, "transit: key k is aes256-gcm96")}, sealed)
+	require.NoError(t, err)
+	_, err = misconfigured.PublishedKeys(context.Background())
+	assert.Error(t, err, "the control: a provider that answered and refused fails the read")
+}
+
+// TestKeyring_AKeyNoConfiguredCustodyHoldsDoesNotSign holds the move
+// off a provider: a process no longer configured with the custody its
+// current key is held in cannot sign with it, and says which key, so
+// the key can be retired (ADR-0104).
+func TestKeyring_AKeyNoConfiguredCustodyHoldsDoesNotSign(t *testing.T) {
+	ring := &keyring{now: epoch}
+	provider := &heldElsewhere{mount: "transit"}
+	onProvider, err := message.NewKeyring(ring, "https://garam.example", message.Config{}, provider)
+	require.NoError(t, err)
+	_ = published(t, onProvider)
+	require.Len(t, ring.keys, 1)
+
+	_, err = newSigner(t, ring).Signer(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), string(ring.keys[0].ID), "the key to retire is named")
+	assert.True(t, errorx.IsKind(err, errorx.KindInternal))
+}
+
 // TestThumbprint_AgreesWithAnIndependentJOSELibrary holds the kid to
 // RFC 7638 by computing it a second way, with go-jose.
 func TestThumbprint_AgreesWithAnIndependentJOSELibrary(t *testing.T) {
@@ -237,7 +361,7 @@ func TestParseIssuer_AcceptsAnHTTPSOriginAlone(t *testing.T) {
 			assert.Error(t, err)
 			// The keyring takes the same rule, so no caller reaches
 			// signing with an issuer the parse would have refused.
-			_, err = message.NewKeyring(&keyring{}, plainSealer{}, message.Issuer(tt.issuer), message.Config{})
+			_, err = message.NewKeyring(&keyring{}, message.Issuer(tt.issuer), message.Config{}, message.NewFileCustodian(plainSealer{}))
 			assert.Error(t, err, "the keyring took it")
 		})
 	}

@@ -19,6 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
@@ -148,6 +149,9 @@ func keySet(t *testing.T, url string) jose.JSONWebKeySet {
 // signingStack is one organization's listener with two agents of it,
 // one to send and one to receive.
 type signingStack struct {
+	pool         *pgxpool.Pool
+	sealer       ca.Sealer
+	engine       grpc.ClientConnInterface
 	url          string
 	sender       *http.Client
 	recipient    *http.Client
@@ -156,6 +160,14 @@ type signingStack struct {
 }
 
 func newSigningStack(t *testing.T) signingStack {
+	t.Helper()
+	return newSigningStackHolding(t, nil)
+}
+
+// newSigningStackHolding is newSigningStack with its signing keys
+// created in signing, or sealed into their rows where signing is nil
+// (ADR-0104).
+func newSigningStackHolding(t *testing.T, signing message.Custodian) signingStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
@@ -168,11 +180,11 @@ func newSigningStack(t *testing.T) signingStack {
 	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 	_, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
+	url := machineListenerHolding(t, p, sealer, engine, signing)
 	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	senderGRN, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
-	return signingStack{url: url, sender: sender, recipient: recipient, senderGRN: senderGRN, recipientGRN: recipientGRN}
+	return signingStack{pool: p, sealer: sealer, engine: engine, url: url, sender: sender, recipient: recipient, senderGRN: senderGRN, recipientGRN: recipientGRN}
 }
 
 // post stores one message from the sender to the recipient.
@@ -379,7 +391,7 @@ func TestMessageSigningKeys_ConcurrentRotationsStoreOneKey(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, replicas)
 	for i := range replicas {
-		ring, err := message.NewKeyring(message.NewPostgresStore(p), sealer, testIssuer, message.Config{})
+		ring, err := message.NewKeyring(message.NewPostgresStore(p), testIssuer, message.Config{}, message.NewFileCustodian(sealer))
 		require.NoError(t, err)
 		wg.Add(1)
 		go func() {
@@ -405,4 +417,12 @@ func TestMessageSigningKeys_ConcurrentRotationsStoreOneKey(t *testing.T) {
 	require.NoError(t, p.QueryRow(ctx, `SELECT signs_from FROM message_signing_keys`).Scan(&signsFrom))
 	assert.False(t, signsFrom.Before(released),
 		"the key begins at %s, before the lock was released at %s: the rotation decided on a clock read before it held the lock", signsFrom, released)
+}
+
+// unsigned signs nothing, for a test of the queue whose subject is not
+// the signature.
+type unsigned struct{}
+
+func (unsigned) Sign(context.Context, *message.Claim) (message.Signed, error) {
+	return message.Signed{}, nil
 }

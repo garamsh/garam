@@ -45,6 +45,7 @@ export const DelegationParser = parserFor<Delegation>()(
         "agent:execution-read",
         "agent:cutover",
         "operator:read",
+        "agent:replace",
       ]),
     ),
     expiresAt: z.string(),

@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -131,6 +132,10 @@ func (s *authorityService) Mint(ctx context.Context, r MintRequest) (*Minted, er
 		return nil, ErrRequestTargetRequired
 	case !r.Operation.BindsRequestTarget() && r.RequestTarget != nil:
 		return nil, ErrRequestTargetRefused
+	case r.Operation.BindsDestination() && r.Destination == nil:
+		return nil, ErrDestinationRequired
+	case !r.Operation.BindsDestination() && r.Destination != nil:
+		return nil, ErrDestinationRefused
 	}
 	if err := validateOwnership(r.Audience, r.Org); err != nil {
 		return nil, err
@@ -145,14 +150,14 @@ func (s *authorityService) Mint(ctx context.Context, r MintRequest) (*Minted, er
 	b := Binding{
 		Ref: OperationRef(uuid.NewString()), Grant: grant.ID, Org: r.Org, Actor: r.Actor,
 		Audience: r.Audience, Operation: r.Operation, Target: r.Target,
-		RequestID: r.RequestID, Digest: r.Digest, RequestTarget: r.RequestTarget,
+		RequestID: r.RequestID, Digest: r.Digest, RequestTarget: r.RequestTarget, Destination: r.Destination,
 	}
 	controller, object, err := s.placement(ctx, &b)
 	if err != nil {
 		return nil, err
 	}
 	now := s.now()
-	if !grant.Covers(b.Operation, controller, now) {
+	if !covers(grant, b, controller, now) {
 		return nil, ErrNotDelegated
 	}
 	if err := s.AuthorizeOperation(ctx, r.Actor, r.Org, object, r.Operation); err != nil {
@@ -185,7 +190,8 @@ func (s *authorityService) AuthorizeDelegation(ctx context.Context, actor, org g
 // that will run the new agent, and the actor's authority is decided on
 // the organization, as defining an agent is. An operation on an
 // existing agent targets the agent, records where it runs now, and is
-// decided on the agent. A read or publication of what the Operator
+// decided on the agent; a replacement's destination is a controller of
+// the organization. A read or publication of what the Operator
 // holds for the organization targets the organization, names no
 // controller, and is decided on the organization.
 func (s *authorityService) placement(ctx context.Context, b *Binding) (controller, object grn.GRN, err error) {
@@ -203,6 +209,11 @@ func (s *authorityService) placement(ctx context.Context, b *Binding) (controlle
 	case b.Operation.TargetsAgent():
 		if b.Target.ServiceType != agentServiceType || b.Target.Organization != b.Org.Identifier {
 			return grn.GRN{}, grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "target must be an agent of this organization")
+		}
+		if b.Destination != nil {
+			if err := validateOwnership(*b.Destination, b.Org); err != nil {
+				return grn.GRN{}, grn.GRN{}, err
+			}
 		}
 		a, err := s.assignments.CurrentAssignment(ctx, b.Target)
 		if err != nil {
@@ -244,8 +255,9 @@ func (s *authorityService) Reference(ctx context.Context, caller grn.GRN, ref Op
 
 // recheck decides a stored binding against current state: its own grant
 // still current and covering it, the bound controller still registered,
-// the placement of an operation on an agent unchanged, and the actor
-// still authorized. The audience's registration needs no read of its
+// the placement of an operation on an agent unchanged or, for a
+// replacement, the one it moves the agent to, and the actor still
+// authorized. The audience's registration needs no read of its
 // own: its deletion removes the binding by cascade.
 func (s *authorityService) recheck(ctx context.Context, b Binding) error {
 	grant, err := s.grants.GetGrant(ctx, b.Grant)
@@ -264,12 +276,12 @@ func (s *authorityService) recheck(ctx context.Context, b Binding) error {
 		if err != nil {
 			return err
 		}
-		if b.Assignment == nil || current != *b.Assignment {
+		if !b.holds(current) {
 			return ErrAuthorityRevoked
 		}
 		controller, object = current.Assignee, b.Target
 	}
-	if !grant.Covers(b.Operation, controller, s.now()) {
+	if !covers(grant, b, controller, s.now()) {
 		return ErrAuthorityRevoked
 	}
 	if err := s.AuthorizeOperation(ctx, b.Actor, b.Org, object, b.Operation); err != nil {
@@ -279,6 +291,35 @@ func (s *authorityService) recheck(ctx context.Context, b Binding) error {
 		return err
 	}
 	return nil
+}
+
+// covers reports whether grant, at now, covers b for controller and,
+// where b moves an agent, for the controller it moves the agent to.
+func covers(grant *Grant, b Binding, controller grn.GRN, now time.Time) bool {
+	return grant.Covers(b.Operation, controller, now) &&
+		(b.Destination == nil || grant.Covers(b.Operation, *b.Destination, now))
+}
+
+// holds reports whether an operation on an agent is current at
+// current: the placement it was minted for or, for a replacement, the
+// one admitting it writes, on its destination one epoch past. garam
+// writes every epoch as a decimal.
+func (b *Binding) holds(current Assignment) bool {
+	if b.Assignment == nil {
+		return false
+	}
+	if current == *b.Assignment {
+		return true
+	}
+	if b.Destination == nil || current.Assignee != *b.Destination {
+		return false
+	}
+	from, err := strconv.Atoi(b.Assignment.Epoch)
+	if err != nil {
+		return false
+	}
+	to, err := strconv.Atoi(current.Epoch)
+	return err == nil && to == from+1
 }
 
 // authorize asks Authorizer and refuses on anything but an allow. A

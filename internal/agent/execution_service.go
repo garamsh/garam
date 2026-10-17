@@ -37,9 +37,10 @@ var (
 	// ErrActivationIntentRequired refuses a first activation of a
 	// managed agent that carries no reference: until one activation
 	// has succeeded, a generation starts only on its creation's
-	// reference or on a configure reference (ADR-0078).
+	// reference, a configure reference (ADR-0078) or the reference of
+	// the replacement that moved it (ADR-0107).
 	ErrActivationIntentRequired = errorx.New(errorx.KindPermissionDenied,
-		"a managed agent's first activation carries its creation reference or a configure reference")
+		"a managed agent's first activation carries its creation, configure or replacement reference")
 )
 
 // ExecutionService is what a lifecycle authority does to an agent's
@@ -296,7 +297,9 @@ func (s *executionService) Activate(ctx context.Context, caller grn.GRN, in Acti
 // was minted to configure this agent, through this caller, for the
 // assignment the agent is on now. A creation's reference is admitted
 // for the first activation of the agent it created alone: it names no
-// activation to replace, and the store refuses it once one exists.
+// activation to replace, and the store refuses it once one exists. A
+// replacement's is admitted while the agent is where it moved it, so
+// an agent replaced before it ever ran can start (ADR-0107).
 func (s *executionService) checkReference(ctx context.Context, caller grn.GRN, in ActivationInput, assignment *Assignment) error {
 	b, err := s.operations.ResolveReference(ctx, caller, *in.OperationRef)
 	if err != nil {
@@ -317,6 +320,18 @@ func (s *executionService) checkReference(ctx context.Context, caller grn.GRN, i
 			return err
 		}
 		if !creation.placedOn(assignment) {
+			return ErrReferenceMismatch
+		}
+		return nil
+	case OperationKindReplace:
+		if b.Audience != caller || b.Target != in.Agent {
+			return ErrReferenceMismatch
+		}
+		replaced, err := s.executions.GetReplacement(ctx, b.Ref)
+		if err != nil {
+			return err
+		}
+		if replaced == nil || replaced.Agent != in.Agent || !replaced.placedOn(assignment) {
 			return ErrReferenceMismatch
 		}
 		return nil

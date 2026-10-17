@@ -165,13 +165,24 @@ separate managed/standalone identity models. §Separated execution and
   refusal reasons. Credential delivery is `mintAgentToken` and
   activation `activateAgent`, unchanged. `AdmissionService`
   (`internal/agent/admission_service.go`) holds both stages for both
-  placements; direct placement and a replacement are refused by name.
+  placements; direct placement is refused by name.
+- **A managed replacement rests on `agent:replace`.** An owner's or
+  administrator's reference names the agent, the assignment it is on
+  and the controller it moves to, and the hosted service's grant
+  covers both controllers
+  ([ADR-0107](./adr/0107-a-managed-replacement-is-authorized-by-an-agent-replace-reference-naming-the-agent-its-assignment-and-the-controller-it-moves-to.md)).
+  The approval records the expected assignment and, spent, the epoch
+  and lineage the move wrote; the agent keeps the managed creation
+  that made it, if any. The reference stays current at the
+  assignment the replacement writes, so a retry is answered and an
+  agent replaced before it ever ran starts on it.
 - **One admission write.** Admitting an identity is one store
   primitive, `admit` (`internal/agent/postgres/postgres_admission.go`),
   which `agent-enrollment.v1`, `managed-enrollment.v1`/`.v2` creation
   and standalone spending each call: a new agent fenced from birth
   with its first assignment, or a move from exactly the expected
-  assignment into a new lineage. An `agent-enrollment.v1` admission
+  assignment into a new lineage, which a managed replacement and a
+  standalone one share. An `agent-enrollment.v1` admission
   also records the managed creation row, so one reference creates one
   agent under either managed contract and its first activation
   carries that reference as a `managed-enrollment` creation's does.
@@ -220,11 +231,6 @@ The direct connector is an implementation obligation, waiting on
 behavior remain unchanged until explicitly migrated; an
 `agent-enrollment.v1` retry answers the recorded binding and re-issues
 nothing.
-
-**Open: which reference authorizes a managed replacement.** No
-reference kind authorizes moving a managed agent to another assignee,
-so `agent-enrollment.v1` refuses a replacement with
-`replacement_unavailable`.
 
 ## Tokens in place of certificates
 

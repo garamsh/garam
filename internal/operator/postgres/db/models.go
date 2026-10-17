@@ -8,6 +8,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AgentEnrollmentApproval struct {
+	ID                  pgtype.UUID
+	OrgGrn              string
+	RequestID           string
+	Placement           string
+	AudienceGrn         string
+	AssigneeGrn         string
+	OperationRef        string
+	CreatedAt           pgtype.Timestamptz
+	AgentGrn            pgtype.Text
+	AdmittedAt          pgtype.Timestamptz
+	ReplacedAgentGrn    pgtype.Text
+	ExpectedAssigneeGrn pgtype.Text
+	ExpectedEpoch       pgtype.Int4
+	AdmittedEpoch       pgtype.Int4
+	AdmittedLineage     pgtype.UUID
+}
+
 type Group struct {
 	Grn       string
 	OrgGrn    string
@@ -50,6 +68,7 @@ type OperationAuthority struct {
 	TokenExpiresAt  pgtype.Timestamptz
 	CreatedAt       pgtype.Timestamptz
 	RequestTarget   pgtype.Text
+	DestinationGrn  pgtype.Text
 }
 
 type Operator struct {

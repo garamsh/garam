@@ -46,7 +46,7 @@ func (s *admissionService) Prepare(ctx context.Context, caller grn.GRN, b Enroll
 	if err := b.admissible(); err != nil {
 		return nil, false, err
 	}
-	if _, err := authorizeCreation(ctx, s.operations, caller, b.Assignee, b.RequestID, b.OperationRef, ErrApprovalBindingConflict); err != nil {
+	if _, err := authorizeAdmission(ctx, s.operations, caller, b); err != nil {
 		return nil, false, err
 	}
 	a := EnrollmentApproval{
@@ -85,15 +85,17 @@ func (s *admissionService) Admit(ctx context.Context, caller grn.GRN, id Approva
 	}
 	// The reference is current before anything is admitted or an
 	// earlier admission answered.
-	ref, err := authorizeCreation(ctx, s.operations, caller, b.Assignee, b.RequestID, b.OperationRef, ErrApprovalBindingConflict)
+	ref, err := authorizeAdmission(ctx, s.operations, caller, b)
 	if err != nil {
 		return nil, false, err
 	}
 	created := false
 	if approval.Admitted == nil {
-		agentGRN, err := NewGRN(ref.Org)
-		if err != nil {
-			return nil, false, err
+		agentGRN := ref.Target
+		if b.Replaces == nil {
+			if agentGRN, err = NewGRN(ref.Org); err != nil {
+				return nil, false, err
+			}
 		}
 		approval.Admitted, created, err = s.approvals.Admit(ctx, id, ManagedCreation{
 			Agent: agentGRN, Audience: caller, Controller: b.Assignee, RequestID: b.RequestID,
@@ -113,6 +115,49 @@ func (s *admissionService) Admit(ctx context.Context, caller grn.GRN, id Approva
 		}
 	}
 	return approval, created, nil
+}
+
+// authorizeAdmission reads b's reference fresh for caller and answers
+// it once it authorizes b: an agent:create reference for a new agent,
+// an agent:replace one for a replacement.
+func authorizeAdmission(ctx context.Context, operations OperationResolver, caller grn.GRN, b EnrollmentBinding) (*OperationBinding, error) {
+	if b.Replaces == nil {
+		return authorizeCreation(ctx, operations, caller, b.Assignee, b.RequestID, b.OperationRef, ErrApprovalBindingConflict)
+	}
+	return authorizeReplacement(ctx, operations, caller, b)
+}
+
+// authorizeReplacement reads b's reference fresh for caller and
+// answers its binding once it is an agent:replace reference handed to
+// caller in its own organization, minted under b's request identifier
+// for the agent b replaces, at the assignment b expects, with b's
+// assignee as its destination (ADR-0107). A reference of another kind,
+// audience or organization is ErrReferenceMismatch; one minted for any
+// other agent, assignment, destination or request identifier is
+// ErrApprovalBindingConflict.
+func authorizeReplacement(ctx context.Context, operations OperationResolver, caller grn.GRN, b EnrollmentBinding) (*OperationBinding, error) {
+	if err := operates(caller); err != nil {
+		return nil, err
+	}
+	if b.Assignee.ServiceType != ServiceTypeOperator || b.Assignee.Organization != caller.Organization {
+		return nil, errorx.New(errorx.KindNotFound, "controller not found")
+	}
+	r := b.Replaces
+	if validateOwnership(r.Agent, grn.Org(caller.Organization)) != nil {
+		return nil, ErrAgentNotFound
+	}
+	ref, err := operations.ResolveReference(ctx, caller, b.OperationRef)
+	if err != nil {
+		return nil, err
+	}
+	if ref.Kind != OperationKindReplace || ref.Audience != caller || ref.Org != grn.Org(caller.Organization) {
+		return nil, ErrReferenceMismatch
+	}
+	if ref.Target != r.Agent || ref.Assignee != r.Assignee || ref.Epoch != r.Epoch ||
+		ref.Destination != b.Assignee || ref.RequestID != string(b.RequestID) {
+		return nil, ErrApprovalBindingConflict
+	}
+	return ref, nil
 }
 
 // authorizeCreation reads ref fresh for caller and answers its binding

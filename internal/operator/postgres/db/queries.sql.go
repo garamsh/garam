@@ -167,7 +167,7 @@ func (q *Queries) GetDelegationByRequest(ctx context.Context, arg GetDelegationB
 }
 
 const getOperationAuthority = `-- name: GetOperationAuthority :one
-SELECT ref, org_grn, audience_grn, request_id, delegation_id, actor_grn, operation, target_grn, assignee_grn, assignment_epoch, body_sha256, token_hash, token_expires_at, created_at, request_target FROM operation_authorities WHERE ref = $1
+SELECT ref, org_grn, audience_grn, request_id, delegation_id, actor_grn, operation, target_grn, assignee_grn, assignment_epoch, body_sha256, token_hash, token_expires_at, created_at, request_target, destination_grn FROM operation_authorities WHERE ref = $1
 `
 
 func (q *Queries) GetOperationAuthority(ctx context.Context, ref string) (OperationAuthority, error) {
@@ -189,12 +189,13 @@ func (q *Queries) GetOperationAuthority(ctx context.Context, ref string) (Operat
 		&i.TokenExpiresAt,
 		&i.CreatedAt,
 		&i.RequestTarget,
+		&i.DestinationGrn,
 	)
 	return i, err
 }
 
 const getOperationAuthorityByToken = `-- name: GetOperationAuthorityByToken :one
-SELECT ref, org_grn, audience_grn, request_id, delegation_id, actor_grn, operation, target_grn, assignee_grn, assignment_epoch, body_sha256, token_hash, token_expires_at, created_at, request_target FROM operation_authorities WHERE token_hash = $1
+SELECT ref, org_grn, audience_grn, request_id, delegation_id, actor_grn, operation, target_grn, assignee_grn, assignment_epoch, body_sha256, token_hash, token_expires_at, created_at, request_target, destination_grn FROM operation_authorities WHERE token_hash = $1
 `
 
 func (q *Queries) GetOperationAuthorityByToken(ctx context.Context, tokenHash string) (OperationAuthority, error) {
@@ -216,6 +217,7 @@ func (q *Queries) GetOperationAuthorityByToken(ctx context.Context, tokenHash st
 		&i.TokenExpiresAt,
 		&i.CreatedAt,
 		&i.RequestTarget,
+		&i.DestinationGrn,
 	)
 	return i, err
 }
@@ -281,13 +283,14 @@ const mintOperationAuthority = `-- name: MintOperationAuthority :one
 INSERT INTO operation_authorities
     (ref, org_grn, audience_grn, request_id, delegation_id, actor_grn, operation,
      target_grn, assignee_grn, assignment_epoch, body_sha256, request_target,
-     token_hash, token_expires_at, created_at)
+     destination_grn, token_hash, token_expires_at, created_at)
 VALUES ($1, $2, $3, $4,
         $5, $6, $7,
         $8, $9, $10,
         $11, $12, $13,
         $14,
-        $15)
+        $15,
+        $16)
 ON CONFLICT (org_grn, audience_grn, request_id) DO UPDATE
     SET token_hash = EXCLUDED.token_hash, token_expires_at = EXCLUDED.token_expires_at
     WHERE operation_authorities.delegation_id = EXCLUDED.delegation_id
@@ -298,6 +301,7 @@ ON CONFLICT (org_grn, audience_grn, request_id) DO UPDATE
       AND operation_authorities.assignee_grn IS NOT DISTINCT FROM EXCLUDED.assignee_grn
       AND operation_authorities.assignment_epoch IS NOT DISTINCT FROM EXCLUDED.assignment_epoch
       AND operation_authorities.request_target IS NOT DISTINCT FROM EXCLUDED.request_target
+      AND operation_authorities.destination_grn IS NOT DISTINCT FROM EXCLUDED.destination_grn
 RETURNING ref
 `
 
@@ -314,6 +318,7 @@ type MintOperationAuthorityParams struct {
 	AssignmentEpoch pgtype.Text
 	BodySha256      string
 	RequestTarget   pgtype.Text
+	DestinationGrn  pgtype.Text
 	TokenHash       string
 	TokenExpiresAt  pgtype.Timestamptz
 	CreatedAt       pgtype.Timestamptz
@@ -338,6 +343,7 @@ func (q *Queries) MintOperationAuthority(ctx context.Context, arg MintOperationA
 		arg.AssignmentEpoch,
 		arg.BodySha256,
 		arg.RequestTarget,
+		arg.DestinationGrn,
 		arg.TokenHash,
 		arg.TokenExpiresAt,
 		arg.CreatedAt,

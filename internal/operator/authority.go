@@ -83,7 +83,8 @@ type OperationRef string
 // Binding is everything an operation authority binds: who asked, which
 // operator may act, on what, under which grant, and for which body. An
 // operation on an existing agent also binds the placement it was
-// authorized for, and a read or a publication the request target.
+// authorized for, a read or a publication the request target, and a
+// replacement the controller it moves the agent to.
 type Binding struct {
 	Ref           OperationRef
 	Grant         GrantID
@@ -96,10 +97,12 @@ type Binding struct {
 	RequestID     RequestID
 	Digest        BodyDigest
 	RequestTarget *RequestTarget
+	Destination   *grn.GRN
 }
 
 // MintRequest is a member's request to hand an operator one operation.
-// RequestTarget is present exactly where the operation binds one.
+// RequestTarget and Destination are each present exactly where the
+// operation binds one.
 type MintRequest struct {
 	Actor         grn.GRN
 	Org           grn.GRN
@@ -109,6 +112,7 @@ type MintRequest struct {
 	RequestID     RequestID
 	Digest        BodyDigest
 	RequestTarget *RequestTarget
+	Destination   *grn.GRN
 }
 
 // Minted is what a mint answers: the secret, once, and the durable
@@ -145,6 +149,12 @@ var (
 	// ErrRequestTargetRefused refuses a request target on an operation
 	// that binds only its body, whose authority stays as it was.
 	ErrRequestTargetRefused = errorx.New(errorx.KindInvalidArgument, "this operation binds no request_target")
+	// ErrDestinationRequired refuses a replacement minted without the
+	// controller it moves the agent to.
+	ErrDestinationRequired = errorx.New(errorx.KindInvalidArgument, "this operation binds a destination")
+	// ErrDestinationRefused refuses a destination on an operation that
+	// binds none.
+	ErrDestinationRefused = errorx.New(errorx.KindInvalidArgument, "this operation binds no destination")
 	// ErrAuthorityNotFound is one answer for an unknown, expired, or
 	// another audience's authority, so a caller learns nothing about
 	// authorities it does not hold.

@@ -105,6 +105,7 @@ var actionRules = map[string]actionRule{
 	org.ActionAgentConfigure:       {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentRecover:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentCutover:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
+	org.ActionAgentReplace:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentExecutionRead:   {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentTemplateRead:    {on: []apigen.PermissionResourceType{onOrg, kindTemplate}},
 	org.ActionAgentTemplatePublish: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},

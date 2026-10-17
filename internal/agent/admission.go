@@ -45,20 +45,18 @@ var (
 	// decides how a directly running runtime's writer is proven.
 	ErrDirectPlacementGated = errorx.New(errorx.KindFailedPrecondition,
 		"direct placement is refused until its writer proof is decided (#1355)")
-	// ErrReplacementUnavailable refuses a replacement: no reference
-	// kind yet authorizes moving a managed agent to another assignee.
-	ErrReplacementUnavailable = errorx.New(errorx.KindFailedPrecondition,
-		"no reference authorizes replacing a managed agent's assignment")
 	// ErrApprovalBindingConflict refuses a binding other than the one
 	// an approval under the same request identifier holds, and a
-	// reference minted for another assignee or request identifier.
+	// reference minted for another assignee or request identifier, or
+	// for a replacement another agent or expected assignment.
 	ErrApprovalBindingConflict = errorx.New(errorx.KindAlreadyExists,
 		"the binding conflicts with the approval prepared under this request identifier")
 	// ErrApprovalSpent refuses admitting a spent approval for another
 	// binding, and an approval whose reference another creation spent.
 	ErrApprovalSpent = errorx.New(errorx.KindAlreadyExists, "the approval was spent on another admission")
 	// ErrAdmissionSuperseded refuses the retry of an admission whose
-	// agent has moved since.
+	// agent has moved since, and a replacement whose agent left the
+	// assignment it expected before admission spent it.
 	ErrAdmissionSuperseded = errorx.New(errorx.KindFailedPrecondition,
 		"the admitted agent is no longer where admission put it")
 	// ErrApprovalNotFound answers an approval the caller's
@@ -82,8 +80,9 @@ func ParseApprovalID(s string) (ApprovalID, error) {
 
 // EnrollmentBinding is what an approval binds and what admitting it
 // repeats: the request identifier, the placement, the assignee and the
-// member's agent:create reference. Replaces is the assignment a
-// replacement expects, and nil for a new agent.
+// member's reference, agent:create for a new agent. Replaces is the
+// agent a replacement moves and the assignment it expects, and nil for
+// a new agent; its reference is agent:replace (ADR-0107).
 type EnrollmentBinding struct {
 	RequestID    RequestID
 	Placement    Placement
@@ -95,18 +94,16 @@ type EnrollmentBinding struct {
 // admissible refuses what the contract models and does not admit yet,
 // before any authority is read.
 func (b EnrollmentBinding) admissible() error {
-	switch {
-	case b.Placement == PlacementDirect:
+	if b.Placement == PlacementDirect {
 		return ErrDirectPlacementGated
-	case b.Replaces != nil:
-		return ErrReplacementUnavailable
 	}
 	return nil
 }
 
 // EnrollmentApproval is an approval as stored: the binding the
-// audience prepared and, once admission spent it, the managed creation
-// it admitted.
+// audience prepared and, once admission spent it, what it admitted: the
+// managed creation of a new agent, or the agent a replacement moved
+// with the controller, epoch and lineage it moved it to.
 type EnrollmentApproval struct {
 	ID        ApprovalID
 	Org       grn.GRN
@@ -120,8 +117,10 @@ type EnrollmentApproval struct {
 // binds reports whether b is the binding the approval holds.
 func (a *EnrollmentApproval) binds(b EnrollmentBinding) bool {
 	held := a.Binding
+	sameReplaced := held.Replaces == nil && b.Replaces == nil ||
+		held.Replaces != nil && b.Replaces != nil && *held.Replaces == *b.Replaces
 	return held.RequestID == b.RequestID && held.Placement == b.Placement && held.Assignee == b.Assignee &&
-		held.OperationRef == b.OperationRef && held.Replaces == nil && b.Replaces == nil
+		held.OperationRef == b.OperationRef && sameReplaced
 }
 
 // IdentityAdmission is what admitting an identity writes, under

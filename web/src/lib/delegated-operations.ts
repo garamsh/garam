@@ -19,4 +19,5 @@ export const DELEGATED_OPERATION_LABEL: Record<DelegatedOperation, string> = {
   "agent:execution-read": "Read an agent's execution",
   "agent:cutover": "Cut an agent over to the Operator",
   "operator:read": "Read operator status",
+  "agent:replace": "Move an agent to another controller",
 };

@@ -37,8 +37,9 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // PolicyService manages the org-scoped policy documents the engine
-// owns (ADR-0002). Versions are append-only; activation and rollback
-// move the default-version pointer.
+// owns (ADR-0002). Versions are append-only; rollback moves the
+// default-version pointer, and activation and archiving change only
+// the status.
 type PolicyServiceClient interface {
 	// CreatePolicy stores a new draft policy with its first version.
 	CreatePolicy(ctx context.Context, in *CreatePolicyRequest, opts ...grpc.CallOption) (*CreatePolicyResponse, error)
@@ -54,7 +55,8 @@ type PolicyServiceClient interface {
 	// ArchivePolicy retires a policy: it is retained with its versions
 	// and stops contributing statements to checks.
 	ArchivePolicy(ctx context.Context, in *ArchivePolicyRequest, opts ...grpc.CallOption) (*ArchivePolicyResponse, error)
-	// RollbackPolicy points the policy at an existing earlier version.
+	// RollbackPolicy points the policy at any stored version, older or
+	// newer than its current default.
 	RollbackPolicy(ctx context.Context, in *RollbackPolicyRequest, opts ...grpc.CallOption) (*RollbackPolicyResponse, error)
 	// AttachPolicy binds the policy to a subject, so it applies to that
 	// subject instead of to the whole org (ADR-0008).
@@ -183,8 +185,9 @@ func (c *policyServiceClient) ListPolicyAttachments(ctx context.Context, in *Lis
 // for forward compatibility.
 //
 // PolicyService manages the org-scoped policy documents the engine
-// owns (ADR-0002). Versions are append-only; activation and rollback
-// move the default-version pointer.
+// owns (ADR-0002). Versions are append-only; rollback moves the
+// default-version pointer, and activation and archiving change only
+// the status.
 type PolicyServiceServer interface {
 	// CreatePolicy stores a new draft policy with its first version.
 	CreatePolicy(context.Context, *CreatePolicyRequest) (*CreatePolicyResponse, error)
@@ -200,7 +203,8 @@ type PolicyServiceServer interface {
 	// ArchivePolicy retires a policy: it is retained with its versions
 	// and stops contributing statements to checks.
 	ArchivePolicy(context.Context, *ArchivePolicyRequest) (*ArchivePolicyResponse, error)
-	// RollbackPolicy points the policy at an existing earlier version.
+	// RollbackPolicy points the policy at any stored version, older or
+	// newer than its current default.
 	RollbackPolicy(context.Context, *RollbackPolicyRequest) (*RollbackPolicyResponse, error)
 	// AttachPolicy binds the policy to a subject, so it applies to that
 	// subject instead of to the whole org (ADR-0008).

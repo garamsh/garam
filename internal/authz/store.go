@@ -8,8 +8,9 @@ import (
 )
 
 // Store persists policies and their append-only versions (ADR-0002).
-// A stored version is never rewritten: activation and rollback move
-// the policy's default-version pointer instead.
+// A stored version is never rewritten: rollback moves the policy's
+// default-version pointer instead, and activation and archiving change
+// only its status.
 type Store interface {
 	// CreatePolicy stores a draft policy together with its first
 	// version, atomically.

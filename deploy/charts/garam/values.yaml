@@ -141,6 +141,18 @@ machine:
   # keys-url, where it reaches this listener, and not from this value.
   # Required; the binary refuses any other shape at startup.
   issuer: ""
+  # The operator exchange's token endpoint (ADR-0102): this listener's
+  # /oauth/token as a caller outside the cluster names it, such as
+  # https://machine.dev.garam.sh/oauth/token. It renders on both
+  # `serve api` and `serve machine` from this one value. Every operator
+  # assertion names it as its audience byte for byte, so keep it for the
+  # deployment's life. It is not `issuer` above, the message issuer.
+  # Empty renders nothing: `serve api` then issues no operator key (409
+  # key_issuance_unconfigured) and `serve machine` answers the exchange
+  # 503. Set, the render refuses what the binary refuses at startup: an
+  # https URL with a host and no user information, query or fragment.
+  # No private key passes through this value or any other here.
+  tokenUrl: ""
   # Runs the copy that gives the process a file it owns. The garam image
   # is scratch and carries no shell. Pinned by digest, the reference
   # deploy/local/minikube/garam.yaml already uses.

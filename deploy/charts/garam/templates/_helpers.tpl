@@ -78,6 +78,36 @@ cluster already holds; the value never passes through this chart.
 {{- end -}}
 
 {{/*
+The operator exchange's token endpoint (ADR-0102), read by `serve api`,
+which names it in every key it issues, and by `serve machine`, which
+compares every assertion's aud with it byte for byte. One value renders
+both, so the two cannot disagree. Unset renders nothing, and the binary
+then issues no key and answers the exchange 503.
+
+Set, it is held to what the binary's ParseTokenEndpoint accepts: an
+https URL with a host and no user information, opaque part, query or
+fragment. urlParse reports none of the binary's three empty cases — a
+bare `@`, `?` or `#` — so each is read off the string: an `@` before
+the first `/` after `://` is user information, and a `?` or `#`
+anywhere is a query or a fragment. A value net/url cannot parse at all
+is refused by urlParse itself, with its own message rather than this
+one.
+
+Indented for a container's env list, the one depth both callers use,
+so an unset value leaves no blank line behind.
+*/}}
+{{- define "garam.machineTokenUrlEnv" -}}
+{{- with .Values.machine.tokenUrl }}
+{{- $u := urlParse . }}
+{{- if or (ne $u.scheme "https") (not $u.host) (regexMatch "^[^:]*://[^/]*@" .) $u.opaque (contains "?" .) (contains "#" .) }}
+{{- fail (printf "machine.tokenUrl %q is refused: it must be an absolute https URL with a host and no user information, query or fragment, the shape serve api and serve machine accept at startup (ADR-0102)" .) }}
+{{- end }}
+            - name: GARAM_MACHINE_TOKEN_URL
+              value: {{ . | quote }}
+{{- end }}
+{{- end -}}
+
+{{/*
 Indented for a pod spec, the one depth all five workloads call it from,
 so an empty list leaves no blank line behind.
 */}}

@@ -146,8 +146,11 @@ boundary the same way it reads any other subject's.
 Policies are org-managed data in Postgres (ADR-0002): `policies`
 carries the metadata, status, and default-version pointer;
 `policy_versions` is append-only, enforced by a schema trigger. A
-stored version is never rewritten — activation and rollback move the
-pointer, and versions disappear only with the policy that owns them.
+stored version is never rewritten, and versions disappear only with
+the policy that owns them. Appending a version leaves the pointer where
+it is; rollback moves it to any stored version, older or newer than
+the current default; activation and archiving change the status and
+leave the pointer alone.
 
 | State | Meaning |
 |-------|---------|

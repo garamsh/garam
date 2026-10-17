@@ -153,7 +153,8 @@ func (s *PolicyGRPCServer) ArchivePolicy(ctx context.Context, req *authzv1.Archi
 	return &authzv1.ArchivePolicyResponse{Policy: policyToProto(p)}, nil
 }
 
-// RollbackPolicy points the policy at an earlier stored version.
+// RollbackPolicy points the policy at any stored version, older or
+// newer than its current default.
 func (s *PolicyGRPCServer) RollbackPolicy(ctx context.Context, req *authzv1.RollbackPolicyRequest) (*authzv1.RollbackPolicyResponse, error) {
 	g, err := grn.Parse(req.GetPolicyGrn())
 	if err != nil {

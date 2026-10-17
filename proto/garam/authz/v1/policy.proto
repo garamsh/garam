@@ -5,8 +5,9 @@ package garam.authz.v1;
 import "google/protobuf/timestamp.proto";
 
 // PolicyService manages the org-scoped policy documents the engine
-// owns (ADR-0002). Versions are append-only; activation and rollback
-// move the default-version pointer.
+// owns (ADR-0002). Versions are append-only; rollback moves the
+// default-version pointer, and activation and archiving change only
+// the status.
 service PolicyService {
   // CreatePolicy stores a new draft policy with its first version.
   rpc CreatePolicy(CreatePolicyRequest) returns (CreatePolicyResponse);
@@ -28,7 +29,8 @@ service PolicyService {
   // and stops contributing statements to checks.
   rpc ArchivePolicy(ArchivePolicyRequest) returns (ArchivePolicyResponse);
 
-  // RollbackPolicy points the policy at an existing earlier version.
+  // RollbackPolicy points the policy at any stored version, older or
+  // newer than its current default.
   rpc RollbackPolicy(RollbackPolicyRequest) returns (RollbackPolicyResponse);
 
   // AttachPolicy binds the policy to a subject, so it applies to that

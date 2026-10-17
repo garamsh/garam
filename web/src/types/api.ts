@@ -871,7 +871,7 @@ export interface paths {
         put?: never;
         /**
          * Append a version to a policy. Requires the `admin` role.
-         * @description Versions are append-only. The policy keeps evaluating its default version until a rollback moves the pointer.
+         * @description Versions are append-only. Appending leaves the policy's default version where it is, so the policy keeps evaluating that version until `rollbackPolicy` makes another stored version, the appended one included, the default.
          */
         post: operations["addPolicyVersion"];
         delete?: never;
@@ -891,7 +891,7 @@ export interface paths {
         put?: never;
         /**
          * Activate a policy. Requires the `admin` role.
-         * @description An active policy contributes its default version to checks.
+         * @description An active policy contributes its default version to checks. Activation changes the policy's status and leaves its default version where it is.
          */
         post: operations["activatePolicy"];
         delete?: never;
@@ -929,7 +929,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Point a policy at an earlier version. Requires the `admin` role. */
+        /**
+         * Point a policy at a stored version. Requires the `admin` role.
+         * @description Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft or archived one evaluates nothing until it is activated.
+         */
         post: operations["rollbackPolicy"];
         delete?: never;
         options?: never;
@@ -1335,7 +1338,7 @@ export interface components {
         PolicyRollback: {
             /**
              * Format: int32
-             * @description An existing version of the policy.
+             * @description A stored version of the policy, older or newer than its current default.
              */
             version: number;
         };

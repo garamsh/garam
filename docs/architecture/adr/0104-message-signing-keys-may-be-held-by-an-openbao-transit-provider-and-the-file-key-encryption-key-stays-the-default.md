@@ -1,6 +1,6 @@
 # ADR 0104: Message signing keys may be held by an OpenBao Transit provider, and the file key-encryption key stays the default
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-18
 
 Drafted for #1476, which reserves this number and records the owner's
@@ -11,6 +11,9 @@ about OpenBao hold for the image
 `openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf`,
 the digest of its multi-platform index, run in dev mode; the commands
 and their output are in this decision's pull request.
+
+Accepted by the Garam PM on 2026-10-18 under the owner's delegation,
+recorded in the review on #1479.
 
 ## Contents
 - Context

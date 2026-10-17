@@ -115,7 +115,7 @@ begun.
 |---|---|---|
 | 1 | Garam #1353 | Pair accepted ADR-0102 with affected documents and this plan; acceptance records the profile/custody target, not implementation or merge |
 | 2 | Garam #1356, built | Issue RSA PEM once, store public key only, register key incarnation/state, add `machine-token.v2` on `/oauth/token`, shared replay store, key/token revocation and explicit Bearer alias; preserve every G1 and certificate test |
-| 3 | Garam, new common enrollment implementation issue | Publish `agent-enrollment.v1` wire, approval/admission/refusal forms and public idempotent result; use existing execution lock and scoped authority model for both placements |
+| 3 | Garam #1478, built for managed placement | Publish `agent-enrollment.v1` wire, approval/admission/refusal forms and public idempotent result; use existing execution lock and scoped authority model for both placements |
 | 4 | Garam #1352 (G2), built | Adapter/supervisor token transport, per-request files, v2 control headers; the direct connector binding is split out to #1355's decision |
 | 5 | Operator PM, new coordinated O1 issues | Review shared contract first, then scope both binaries' PEM exchange, controller introspection, audience/epoch proofs, common managed admission and rendered short-lived token refresh; one cutover release, no compatibility switch |
 | 6 | Sherlock PM, local proposal/implementation issues | Proposal #1067 compares authenticated origin and channel admission while retaining authorization above Sherlock; Option B needs owner decision; no Operator or Garam private keys |

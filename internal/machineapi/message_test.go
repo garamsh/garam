@@ -222,6 +222,8 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 		version = agent.StandaloneContractVersion
 	case cutoverPath(req.URL.Path):
 		version = agent.CutoverContractVersion
+	case strings.HasPrefix(req.URL.Path, "/agent-enrollment-approvals"):
+		version = agent.AdmissionContractVersion
 	case strings.HasSuffix(req.URL.Path, "/outbox-messages"):
 		version = message.DeliveryContractVersion
 	case strings.HasSuffix(req.URL.Path, "/tokens"):
@@ -880,14 +882,14 @@ func TestServer_AClaimGaramCannotSignSpendsNoAttempt(t *testing.T) {
 
 	unsigned := &messageService{}
 	url, client := serveTLS(t, machineapi.NewServer(&agentService{}, nil, unsigned, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, unopenableKeyring{}), caller)
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, unopenableKeyring{}), caller)
 	status, body := send(t, client, http.MethodPost, url+claims, "")
 	assert.Equal(t, http.StatusInternalServerError, status, body)
 	assert.Empty(t, unsigned.calls, "the queue was asked for a claim garam could not sign")
 
 	signed := &messageService{}
 	url, client = serveTLS(t, machineapi.NewServer(&agentService{}, nil, signed, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{}), caller)
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{}), caller)
 	status, body = send(t, client, http.MethodPost, url+claims, "")
 	assert.Equal(t, http.StatusNoContent, status, body)
 	assert.Equal(t, []messageCall{{method: "claim", caller: caller, recipient: caller}}, signed.calls)

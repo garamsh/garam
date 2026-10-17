@@ -264,7 +264,7 @@ func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string,
 	t.Helper()
 	// The identity endpoint answers out of the request alone, so the
 	// listener is assembled with no service behind it.
-	return machineListenerServing(t, obs, subject, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil))
+	return machineListenerServing(t, obs, subject, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil))
 }
 
 // machineListenerServing is machineListener for a test that needs a
@@ -491,7 +491,7 @@ func TestLogServed_CarriesTheCauseOfAMachineFailure(t *testing.T) {
 
 	var out lines
 	url, client := machineListenerServing(t, recordingObservability(&out), sender,
-		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, unreachableEngine{err: cause}, nil, nil, nil, nil, nil, nil))
+		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, unreachableEngine{err: cause}, nil, nil, nil, nil, nil, nil, nil))
 
 	resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 	require.NoError(t, err)
@@ -510,7 +510,7 @@ func TestLogServed_CarriesTheCauseOfAMachineFailure(t *testing.T) {
 
 	var refusedOut lines
 	url, client = machineListenerServing(t, recordingObservability(&refusedOut), sender,
-		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, deniedEngine{}, nil, nil, nil, nil, nil, nil))
+		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, deniedEngine{}, nil, nil, nil, nil, nil, nil, nil))
 	resp, err = client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
@@ -692,7 +692,7 @@ func TestLogServed_CarriesTheCauseAMachineAnswerWithheld(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var out lines
 			url, client := machineListenerServing(t, recordingObservability(&out), sender,
-				machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, tt.engine, nil, nil, nil, nil, nil, nil))
+				machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, tt.engine, nil, nil, nil, nil, nil, nil, nil))
 
 			resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 			require.NoError(t, err)

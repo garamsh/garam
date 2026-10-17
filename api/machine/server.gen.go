@@ -14,6 +14,84 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AgentAdmissionCredentialDelivery.
+const (
+	MintAgentToken AgentAdmissionCredentialDelivery = "mintAgentToken"
+)
+
+// Valid indicates whether the value is a known member of the AgentAdmissionCredentialDelivery enum.
+func (e AgentAdmissionCredentialDelivery) Valid() bool {
+	switch e {
+	case MintAgentToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentAdmissionMode.
+const (
+	AgentAdmissionModeFenced AgentAdmissionMode = "fenced"
+)
+
+// Valid indicates whether the value is a known member of the AgentAdmissionMode enum.
+func (e AgentAdmissionMode) Valid() bool {
+	switch e {
+	case AgentAdmissionModeFenced:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentAdmissionPlacement.
+const (
+	AgentAdmissionPlacementManaged AgentAdmissionPlacement = "managed"
+)
+
+// Valid indicates whether the value is a known member of the AgentAdmissionPlacement enum.
+func (e AgentAdmissionPlacement) Valid() bool {
+	switch e {
+	case AgentAdmissionPlacementManaged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentEnrollmentApprovalPlacement.
+const (
+	AgentEnrollmentApprovalPlacementManaged AgentEnrollmentApprovalPlacement = "managed"
+)
+
+// Valid indicates whether the value is a known member of the AgentEnrollmentApprovalPlacement enum.
+func (e AgentEnrollmentApprovalPlacement) Valid() bool {
+	switch e {
+	case AgentEnrollmentApprovalPlacementManaged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentEnrollmentBindingPlacement.
+const (
+	AgentEnrollmentBindingPlacementDirect  AgentEnrollmentBindingPlacement = "direct"
+	AgentEnrollmentBindingPlacementManaged AgentEnrollmentBindingPlacement = "managed"
+)
+
+// Valid indicates whether the value is a known member of the AgentEnrollmentBindingPlacement enum.
+func (e AgentEnrollmentBindingPlacement) Valid() bool {
+	switch e {
+	case AgentEnrollmentBindingPlacementDirect:
+		return true
+	case AgentEnrollmentBindingPlacementManaged:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ClientAssertionRequestClientAssertionType.
 const (
 	UrnIetfParamsOauthClientAssertionTypeJwtBearer ClientAssertionRequestClientAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
@@ -445,12 +523,80 @@ type ActivationRequest struct {
 	Token *string `json:"token,omitempty"`
 }
 
+// AgentAdmission defines model for AgentAdmission.
+type AgentAdmission struct {
+	Assignee string `json:"assignee"`
+
+	// CredentialDelivery The operation `assignee` delivers the agent's tokens with.
+	CredentialDelivery AgentAdmissionCredentialDelivery `json:"credentialDelivery"`
+
+	// Epoch The first assignment's epoch. Opaque.
+	Epoch string `json:"epoch"`
+	Grn   string `json:"grn"`
+
+	// Lineage The credential lineage the agent's tokens are minted in.
+	Lineage openapi_types.UUID `json:"lineage"`
+
+	// Mode The execution's mode: fenced from admission, with no active generation.
+	Mode      AgentAdmissionMode      `json:"mode"`
+	Placement AgentAdmissionPlacement `json:"placement"`
+}
+
+// AgentAdmissionCredentialDelivery The operation `assignee` delivers the agent's tokens with.
+type AgentAdmissionCredentialDelivery string
+
+// AgentAdmissionMode The execution's mode: fenced from admission, with no active generation.
+type AgentAdmissionMode string
+
+// AgentAdmissionPlacement defines model for AgentAdmission.Placement.
+type AgentAdmissionPlacement string
+
 // AgentAssignment An agent and the operator that runs it, at the epoch that binding holds.
 type AgentAssignment struct {
 	// Epoch Rises with every assignment and fences the operator it replaced. An agent presents it when it connects.
 	Epoch    int    `json:"epoch"`
 	Grn      string `json:"grn"`
 	Operator string `json:"operator"`
+}
+
+// AgentEnrollmentApproval defines model for AgentEnrollmentApproval.
+type AgentEnrollmentApproval struct {
+	ApprovalId   openapi_types.UUID               `json:"approvalId"`
+	Assignee     string                           `json:"assignee"`
+	OperationRef string                           `json:"operationRef"`
+	Placement    AgentEnrollmentApprovalPlacement `json:"placement"`
+	RequestId    string                           `json:"requestId"`
+}
+
+// AgentEnrollmentApprovalPlacement defines model for AgentEnrollmentApproval.Placement.
+type AgentEnrollmentApprovalPlacement string
+
+// AgentEnrollmentBinding defines model for AgentEnrollmentBinding.
+type AgentEnrollmentBinding struct {
+	// Assignee The operator GRN the agent is assigned to, its controller.
+	Assignee string `json:"assignee"`
+
+	// OperationRef The member's durable `agent:create` reference.
+	OperationRef string `json:"operationRef"`
+
+	// Placement Where the runtime runs: `managed`, provisioned by the Operator, or `direct`, running independently of it, which is refused until #1355 decides its writer proof.
+	Placement AgentEnrollmentBindingPlacement `json:"placement"`
+
+	// Replaces The assignment a replacement expects to move the agent from. Modelled and refused: a body naming it is 409 with reason `replacement_unavailable`.
+	Replaces *AgentEnrollmentReplacement `json:"replaces,omitempty"`
+
+	// RequestId The request identifier the member's reference was minted under.
+	RequestId string `json:"requestId"`
+}
+
+// AgentEnrollmentBindingPlacement Where the runtime runs: `managed`, provisioned by the Operator, or `direct`, running independently of it, which is refused until #1355 decides its writer proof.
+type AgentEnrollmentBindingPlacement string
+
+// AgentEnrollmentReplacement The assignment a replacement expects to move the agent from. Modelled and refused: a body naming it is 409 with reason `replacement_unavailable`.
+type AgentEnrollmentReplacement struct {
+	Agent            string `json:"agent"`
+	ExpectedAssignee string `json:"expectedAssignee"`
+	ExpectedEpoch    string `json:"expectedEpoch"`
 }
 
 // AgentToken defines model for AgentToken.
@@ -694,7 +840,7 @@ type Error struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
 
-	// Reason Which refusal this is, where the kind alone does not say, set only on a route whose contract lists its reasons (ADR-0086) and absent everywhere else. The `agent-cutover.v1` routes set `digest_mismatch`, `attempt_open`, `attempt_ended`, `not_cut_over_eligible` or `reverse_migration_required`; `activateAgent` sets `cutover_required` and nothing else. Branch on it only on those routes; a new reason is a new contract value.
+	// Reason Which refusal this is, where the kind alone does not say, set only on a route whose contract lists its reasons (ADR-0086) and absent everywhere else. The `agent-cutover.v1` routes set `digest_mismatch`, `attempt_open`, `attempt_ended`, `not_cut_over_eligible` or `reverse_migration_required`; `activateAgent` sets `cutover_required` and nothing else; the `agent-enrollment.v1` routes set `binding_conflict`, `approval_spent`, `superseded`, `direct_placement_gated` or `replacement_unavailable`. Branch on it only on those routes; a new reason is a new contract value.
 	Reason *string `json:"reason,omitempty"`
 }
 
@@ -1072,6 +1218,12 @@ type ActivationId = string
 // AgentGrn defines model for agent.
 type AgentGrn = string
 
+// AgentEnrollmentContractVersion defines model for agentEnrollmentContractVersion.
+type AgentEnrollmentContractVersion = string
+
+// ApprovalId defines model for approval.
+type ApprovalId = string
+
 // ClaimId defines model for claim.
 type ClaimId = string
 
@@ -1105,6 +1257,9 @@ type StandaloneContractVersion = string
 // TokenContractVersion defines model for tokenContractVersion.
 type TokenContractVersion = string
 
+// AgentEnrollmentContractError defines model for AgentEnrollmentContractError.
+type AgentEnrollmentContractError = Error
+
 // ContractError defines model for ContractError.
 type ContractError = Error
 
@@ -1125,6 +1280,18 @@ type StandaloneContractError = Error
 
 // TokenContractError defines model for TokenContractError.
 type TokenContractError = Error
+
+// PrepareAgentEnrollmentParams defines parameters for PrepareAgentEnrollment.
+type PrepareAgentEnrollmentParams struct {
+	// AgentEnrollmentContractVersion `agent-enrollment.v1`, presented beside a token (ADR-0102); any other value is refused with 400 naming it.
+	AgentEnrollmentContractVersion AgentEnrollmentContractVersion `json:"Garam-Contract-Version"`
+}
+
+// AdmitAgentEnrollmentParams defines parameters for AdmitAgentEnrollment.
+type AdmitAgentEnrollmentParams struct {
+	// AgentEnrollmentContractVersion `agent-enrollment.v1`, presented beside a token (ADR-0102); any other value is refused with 400 naming it.
+	AgentEnrollmentContractVersion AgentEnrollmentContractVersion `json:"Garam-Contract-Version"`
+}
 
 // EnrollStandaloneAgentParams defines parameters for EnrollStandaloneAgent.
 type EnrollStandaloneAgentParams struct {
@@ -1234,6 +1401,12 @@ type ExchangeTokenParams struct {
 	TokenContractVersion TokenContractVersion `json:"Garam-Contract-Version"`
 }
 
+// PrepareAgentEnrollmentJSONRequestBody defines body for PrepareAgentEnrollment for application/json ContentType.
+type PrepareAgentEnrollmentJSONRequestBody = AgentEnrollmentBinding
+
+// AdmitAgentEnrollmentJSONRequestBody defines body for AdmitAgentEnrollment for application/json ContentType.
+type AdmitAgentEnrollmentJSONRequestBody = AgentEnrollmentBinding
+
 // EnrollStandaloneAgentJSONRequestBody defines body for EnrollStandaloneAgent for application/json ContentType.
 type EnrollStandaloneAgentJSONRequestBody = StandaloneEnrollmentRequest
 
@@ -1299,6 +1472,12 @@ type ExchangeTokenJSONRequestBody = TokenExchange
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// PrepareAgentEnrollment Prepare the approval agent-enrollment.v1 admits one agent under.
+	// (POST /agent-enrollment-approvals)
+	PrepareAgentEnrollment(w http.ResponseWriter, r *http.Request, params PrepareAgentEnrollmentParams)
+	// AdmitAgentEnrollment Admit the agent an approval binds, fenced and with no active generation.
+	// (POST /agent-enrollment-approvals/{approval}/admission)
+	AdmitAgentEnrollment(w http.ResponseWriter, r *http.Request, approvalId ApprovalId, params AdmitAgentEnrollmentParams)
 	// EnrollStandaloneAgent Spend an administrator's approval and obtain a supervisor's credential, or its and its agent's first certificates.
 	// (POST /agent-enrollments)
 	EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, params EnrollStandaloneAgentParams)
@@ -1414,6 +1593,105 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// PrepareAgentEnrollment operation middleware
+func (siw *ServerInterfaceWrapper) PrepareAgentEnrollment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PrepareAgentEnrollmentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var AgentEnrollmentContractVersion AgentEnrollmentContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &AgentEnrollmentContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.AgentEnrollmentContractVersion = AgentEnrollmentContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PrepareAgentEnrollment(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AdmitAgentEnrollment operation middleware
+func (siw *ServerInterfaceWrapper) AdmitAgentEnrollment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "approval" -------------
+	var approvalId ApprovalId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "approval", r.PathValue("approval"), &approvalId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "approval", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AdmitAgentEnrollmentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var AgentEnrollmentContractVersion AgentEnrollmentContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &AgentEnrollmentContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.AgentEnrollmentContractVersion = AgentEnrollmentContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AdmitAgentEnrollment(w, r, approvalId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // EnrollStandaloneAgent operation middleware
 func (siw *ServerInterfaceWrapper) EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request) {
@@ -2870,6 +3148,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/initial-certificate", wrapper.IssueInitialCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agent-enrollments", wrapper.EnrollStandaloneAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/supervisors/self/certificate", wrapper.RenewSupervisorCertificate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agent-enrollment-approvals", wrapper.PrepareAgentEnrollment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agent-enrollment-approvals/{approval}/admission", wrapper.AdmitAgentEnrollment)
 
 	return m
 }

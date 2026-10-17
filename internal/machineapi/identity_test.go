@@ -231,6 +231,7 @@ func TestServer_EnrollmentsAndTheKeySetAreTheOnlyRoutesAnUncertifiedCallerReache
 		"message":    "m-1",
 		"ref":        "ref-1",
 		"activation": "00000000-0000-0000-0000-000000000001",
+		"approval":   "00000000-0000-0000-0000-000000000002",
 	})
 	enrol, ok := routes[enrollmentRoute]
 	require.True(t, ok, "the exemption names no operation the specification declares")

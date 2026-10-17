@@ -44,6 +44,9 @@ var tokenRoutes = map[string]bool{
 	http.MethodPost + " /agents/{agent}/cutover/switch":                        true,
 	http.MethodPost + " /agents/{agent}/cutover/rollback":                      true,
 	http.MethodPost + " /operators/{controller}/managed-agents":                true,
+	// agent-enrollment.v1, which takes a token alone (ADR-0102).
+	http.MethodPost + " /agent-enrollment-approvals":                      true,
+	http.MethodPost + " /agent-enrollment-approvals/{approval}/admission": true,
 }
 
 // clientAssertionRoute is the router's pattern for the client

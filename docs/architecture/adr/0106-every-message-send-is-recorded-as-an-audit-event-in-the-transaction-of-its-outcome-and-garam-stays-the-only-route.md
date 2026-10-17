@@ -1,12 +1,15 @@
 # ADR 0106: Every message send is recorded as an audit event in the transaction of its outcome, and garam stays the only route
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-18
 
 Drafted for #1216, which reserves this number and records the PM's
 decision of 2026-10-07, under the owner's delegation, to keep routing
 every message through garam and record each send as an audit event.
 Facts about garam hold at `af6b783cbcd6664d0d665a944300d946afc84a68`.
+
+Accepted by the Garam PM on 2026-10-18 under the owner's delegation,
+recorded in the review on #1489.
 
 ## Context
 

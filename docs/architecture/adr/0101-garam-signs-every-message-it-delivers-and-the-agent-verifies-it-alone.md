@@ -1,6 +1,6 @@
 # ADR 0101: garam signs every message it delivers, and the agent verifies it alone
 
-> Status: accepted
+> Status: superseded in part by ADR-0104
 > Date: 2026-10-09
 
 Drafted for #1252, which reserved this number and records the owner's

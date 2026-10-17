@@ -8,6 +8,7 @@ What a garam deployment must plan for that no manifest can carry: what readiness
 - Operator key and enrollment rollout
 - What the binary enforces about key material
 - The key-encryption key cannot be regenerated
+- A Transit provider for message signing keys
 - The message issuer is kept for the deployment's life
 - The migrate job
 - Termination
@@ -308,7 +309,9 @@ log. That one is replaceable where an authority is not:
 `garam retire-message-signing-key <kid>` withdraws it, and the next
 hand-out signs under a new key sealed by the key present. A verifier
 holding the published set as a file refuses the new key's signatures
-until the file is replaced.
+until the file is replaced. A deployment that configures the Transit
+provider below stops sealing new message keys under it; the
+authorities stay sealed under it until G4 retires them.
 
 Nothing detects the substitution at start: the arrival checks above
 pass on any well-formed key, and nothing compares it against what the
@@ -436,6 +439,42 @@ alone. What binds instead is who signs them
   certificate operation, and registering a GRN that already holds a
   certificate is permitted — the token it mints beside the record is
   one that operator does not need and does not have to spend.
+
+## A Transit provider for message signing keys
+
+**Unbuilt.** [ADR-0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md) decides it; no code reads the
+variables below yet, and a deployment that sets none of them is
+unaffected. Once built, a deployment that sets `GARAM_TRANSIT_ADDR`
+holds its message signing keys in an OpenBao or Vault Transit key,
+and supplies:
+
+- **OpenBao over `https`**, under a certificate the root in
+  `GARAM_TRANSIT_CA_FILE` verifies. No other scheme is accepted and the
+  system roots are not consulted.
+- **One `ecdsa-p256` Transit key** the deployment creates, which garam
+  never creates, configures or deletes. It stays non-exportable, is not
+  deleted while a key row names it, and its `min_encryption_version` is
+  never raised past a version the published set holds as signing or
+  next — that version would stop signing.
+- **An ACL policy of three paths on that key**: `read` on
+  `<mount>/keys/<key>`, and `update` on `<mount>/keys/<key>/rotate` and
+  `<mount>/sign/<key>`. That is all garam calls, and the measurement in
+  ADR-0104's pull request shows it is enough.
+- **A token file**, `GARAM_TRANSIT_TOKEN_FILE`, owner-only and owned by
+  the process's UID, as every key file above. garam re-reads it on each
+  call and logs in with nothing, so the auth role binding the machine
+  workload's account to the policy, and whatever writes and renews the
+  file, are the deployment's.
+
+**What the binary will do with it:** the published set is read from
+Postgres and keeps being served while OpenBao is unreachable; a claim
+garam cannot sign is refused as a server error with no attempt spent;
+readiness does not report OpenBao. Turning the provider on announces a
+Transit key with the full two-hour lead while the current key goes on
+signing, so the key-encryption key must still be present then — it is,
+because the authorities need it until G4. Turning it off leaves a
+Transit key that cannot sign there until
+`garam retire-message-signing-key` retires it.
 
 ## The message issuer is kept for the deployment's life
 
@@ -692,3 +731,7 @@ that would assert one:
   — garam signs every message it hands out under keys the
   key-encryption key seals, and names itself by an issuer the
   deployment keeps for its life
+- [ADR-0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md)
+  — a deployment may hold its message signing keys in an OpenBao
+  Transit key it supplies, and the authorities stay on the
+  key-encryption key

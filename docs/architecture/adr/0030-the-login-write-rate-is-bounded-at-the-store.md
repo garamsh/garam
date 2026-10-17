@@ -104,9 +104,10 @@ whole deployment rather than per process.
   handler is no longer the only one. Registration does not make a
   third: it writes only once the invitation is known live, and a live
   token is what an unauthenticated caller does not hold (ADR-0006).
-  ADR-0041 §"The rate bound is extended, because ADR-0030 does not
-  reach here" quotes this sentence and gives the attempt a bound of
-  its own, `MaxLivePasswordAttempts`, decided in the statement that
+  ADR-0041
+  §"The rate bound is extended, because ADR-0030 does not reach here"
+  quotes this sentence and gives the attempt a bound of its own,
+  `MaxLivePasswordAttempts`, decided in the statement that
   writes — the shape §Consequences generalizes, applied to the write
   ADR-0041 adds. The decision here is untouched: the login write rate
   is bounded at the store, and `MaxLiveOAuthStates` bounds

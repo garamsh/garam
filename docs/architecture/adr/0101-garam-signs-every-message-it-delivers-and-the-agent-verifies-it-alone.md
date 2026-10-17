@@ -132,8 +132,8 @@ content nor a detached signature over it. The payload is:
   as received**, after the transport's own decoding — not a JSON text
   quoting it. No canonical form is needed, because the octets are what
   the verifier holds; for garam the string is `garam-message.v1`, whose
-  encoding is already the same on every redelivery (adapter.md §Stable
-  identifiers and the outbox).
+  encoding is already the same on every redelivery
+  (adapter.md §Stable identifiers and the outbox).
 - **garam produces the content as well as the signature.** The claim
   answer carries both, and the adapter forwards each byte for byte. A
   renewal hands nothing out and carries neither.
@@ -302,9 +302,9 @@ deferred, and this ADR does not sign one.** Signing it needs a key the
 agent holds and garam can verify, which is machine identity, the
 ground #1251's ADR-0100 is drafting. Until an ADR decides it, garam
 knows a reply's sender by what authenticated the agent's
-`POST /outbox-messages` (adapter.md §Stable identifiers and the
-outbox), and when garam delivers that reply to its recipient it signs
-it as any other message, `sub` being that sender.
+`POST /outbox-messages` (adapter.md §Stable identifiers and the outbox),
+and when garam delivers that reply to its recipient it signs it as any
+other message, `sub` being that sender.
 
 ### Order against ADR-0100
 
@@ -370,12 +370,12 @@ being refused.
 
 - **Responsibility documents paired by the pull request that implements
   each step** (rule 3): [messaging.md](../messaging.md) for signing at
-  each hand-out and the keys it signs with; adapter.md §The delivery
-  loop and §Stable identifiers and the outbox, for content the adapter
-  forwards and no longer encodes, and §Foreign facts this rests on for
-  Sherlock's verification once a release carries it; api-surface.md
-  §What admits a caller, for a third operation a caller with no
-  certificate reaches;
+  each hand-out and the keys it signs with;
+  adapter.md §The delivery loop and §Stable identifiers and the outbox,
+  for content the adapter forwards and no longer encodes, and
+  §Foreign facts this rests on for Sherlock's verification once a
+  release carries it; api-surface.md §What admits a caller, for a third
+  operation a caller with no certificate reaches;
   [deployment-contract.md](../deployment-contract.md) for the issuer a
   deployment sets and for the key-encryption key now sealing message
   keys as well.

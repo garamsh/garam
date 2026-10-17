@@ -110,31 +110,31 @@ files are adapted.
 - **The composition-site rule is `structure.md`'s, and `stack-go.md`
   states only its Go path.**
   [ADR-0094](./0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
-  found `internal/cli` to be "the composition site that `stack-go.md`
-  §Project envelope itself provides", so that the two files decided
-  the case the same way. That consequence is restated here. Under rule
-  6 the rule now lives in `structure.md`, and `stack-go.md` spells it
-  in Go. The one case that file still decides is where the site goes
-  when a test has to reach it. Go imposes that case, since only a test
-  in its own directory can import a main package, so rule 8 leaves it
-  to the stack file. `internal/cli` remains the site, for the reason
-  ADR-0094 gave: `tests/integration` reaches it through
+  found `internal/cli` to be "the composition site that
+  `stack-go.md` §Project envelope itself provides", so that the two
+  files decided the case the same way. That consequence is restated
+  here. Under rule 6 the rule now lives in `structure.md`, and
+  `stack-go.md` spells it in Go. The one case that file still decides is
+  where the site goes when a test has to reach it. Go imposes that case,
+  since only a test in its own directory can import a main package, so
+  rule 8 leaves it to the stack file. `internal/cli` remains the site,
+  for the reason ADR-0094 gave: `tests/integration` reaches it through
   `cli.NewRootCommand()`.
 - **A reviewer cites the rule against a Go change by `structure.md`.**
-  A unit that constructs its own dependencies breaches `structure.md`
-  §Where the composition root lives. Before this sync, the citation was
-  `stack-go.md` §Project envelope.
+  A unit that constructs its own dependencies breaches
+  `structure.md` §Where the composition root lives. Before this sync,
+  the citation was `stack-go.md` §Project envelope.
 - **This ADR pairs with [structure.md](../structure.md) and with the
   index.** The first now carries the rule, and the second lists this
   ADR.
 
 ## Signs the decision was wrong
 
-- A later template commit changes the wording of §Rules every shape
-  carries, and nobody here notices, because Garam holds the bullets in
-  `structure.md` and not in the section the template edits. If that
-  happens, a sync needs to read that section's history as well as the
-  files Garam keeps.
+- A later template commit changes the wording of
+  §Rules every shape carries, and nobody here notices, because Garam
+  holds the bullets in `structure.md` and not in the section the
+  template edits. If that happens, a sync needs to read that section's
+  history as well as the files Garam keeps.
 - A reviewer cites `stack-go.md` to refuse a Go unit that constructs
   its own dependency, and cannot find the rule there. That would mean
   the route from `stack-go.md` to `structure.md` is too weak for a Go

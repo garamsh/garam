@@ -45,8 +45,9 @@ superseded generation or lineage writes nothing even on a connection
 already open. The fence is the `agent_execution_admit` database
 function the agents domain declares; this domain calls it and reads its
 answer into its own refusal, and imports no package of that domain
-(ADR-0080, [machine-identity.md](./machine-identity.md) §Generation and
-lineage). A message
+(ADR-0080,
+[machine-identity.md](./machine-identity.md) §Generation and lineage).
+A message
 may cross an organization boundary only where a relation permits it —
 one row per consenting pair, held by both organizations and withdrawable
 by either (ADR-0035); the refusal reaches the sender as an ordinary

@@ -153,10 +153,10 @@ answers stand in the repository, which is the shape
   written after it, so the record of these four stays #948's report
   and the table above; `1703863`, `7090dd8`, `40a0c32` and `1d67d5c`
   are left as they are.
-- **Review is what holds it**, under `docs/convention/review.md`
-  §What each check verifies, whose Architecture row fails a diff
-  where "a decision or a domain changed without the documents that
-  describe it".
+- **Review is what holds it**, under
+  `docs/convention/review.md` §What each check verifies, whose
+  Architecture row fails a diff where "a decision or a domain changed
+  without the documents that describe it".
 
 ## Rejected alternatives
 

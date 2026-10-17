@@ -10,5 +10,5 @@ Active work and its current state.
   ADR-0100's deployed cohorts and ADR-0101's separate message trust.
 
 A new plan starts as `YYYY-MM-DD-<topic>.md`. A plan whose work has
-shipped or is dropped is deleted, not archived — `docs/convention/documentation.md`
-§Keep it current.
+shipped or is dropped is deleted, not archived —
+`docs/convention/documentation.md` §Keep it current.

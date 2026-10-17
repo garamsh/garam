@@ -17,8 +17,9 @@ garam's domains, named by the subject matter each owns, and what else under `int
 ## What a domain is here
 
 A domain is a boundary named for the subject matter it owns and never
-for a technical role ([structure.md](./structure.md) §Boundaries and
-dependency direction). garam has nine, and each has a responsibility
+for a technical role
+([structure.md](./structure.md) §Boundaries and dependency direction).
+garam has nine, and each has a responsibility
 document of its own named for the subject: the Go package implementing
 a domain is named in that document and is not the domain's name
 ([ADR-0048](./adr/0048-garams-domains-are-named-by-subject-matter.md)).
@@ -128,10 +129,10 @@ announced by triggers the schema carries in `migrations/`, and
 
 Three folders under `internal/` hold a responsibility that belongs to a
 domain's subject rather than to one of its own. None is a domain,
-and each is a boundary for a reason recorded below — `structure.md`
-§Boundaries and dependency direction makes a boundary a domain, a
-feature or a bounded context, so being a feature of another subject and
-owning a folder are not in tension.
+and each is a boundary for a reason recorded below —
+`structure.md` §Boundaries and dependency direction makes a boundary a
+domain, a feature or a bounded context, so being a feature of another
+subject and owning a folder are not in tension.
 
 ### Watching an agent work
 
@@ -139,9 +140,9 @@ owning a folder are not in tension.
 browser reads, the watcher count on the poll, and the fan-out between
 the two listeners — and nothing reaches either end of it: no route
 under `web/src/app/console/` opens the stream, and nothing under
-`internal/delivery/` forwards an event ([adapter.md](./adapter.md)
-§Watching). [overview.md](./overview.md) §Out of scope (today) records
-it.
+`internal/delivery/` forwards an event
+([adapter.md](./adapter.md) §Watching).
+[overview.md](./overview.md) §Out of scope (today) records it.
 
 Who is watching an agent work, and what is carried to them while they
 are (ADR-0022). Implemented by `internal/watch`. The subject is the
@@ -167,8 +168,8 @@ event announced while nobody watches reaches no one and is not kept. A
 watcher sees from when it opened, and one that falls behind loses events
 rather than holding up the rest — the platform these events come from
 drops them for a slow subscriber already (ADR-0013; Sherlock at
-[`40ef7ac`](https://github.com/garamsh/sherlock/tree/40ef7ac), read
-when the repository was named `gagent`),
+[`40ef7acd02d134037132b8179380f54c7286d9a8`](https://github.com/garamsh/sherlock/tree/40ef7acd02d134037132b8179380f54c7286d9a8),
+read when the repository was named `gagent`),
 so the same answer one hop later is not a new failure mode.
 
 The two ends of a watch are in different processes — a browser opens the
@@ -399,10 +400,10 @@ neither domain that pages with it, and a concern is owned by the
 boundary whose subject it is rather than by the one it was extracted
 from
 ([ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)).
-`111bdd5` (#402) extracted the type out of `internal/org`, where it
-was `org.ListFilter`, when the agents domain gained pagination; that
-is where it was born and, under the decision above, not what owns
-it.
+`111bdd55a1bd1225d73ea0415e995ee31a6564b5` (#402) extracted the type
+out of `internal/org`, where it was `org.ListFilter`, when the agents
+domain gained pagination; that is where it was born and, under the
+decision above, not what owns it.
 
 `internal/wire` holds the conversions onto the wire formats the request
 surfaces share: the statement `Effect` and a policy's status with their

@@ -151,12 +151,12 @@ asks that it be kept.
 - **Nothing checks this.** `make ci` reads `docs/` for one thing, each
   Markdown file's `## Contents` list against its own `##` headings, and
   no target can tell which file a decision's final state belongs in.
-  Review holds it, under `docs/convention/review.md` §What each check
-  verifies, whose Architecture row fails a diff where "a decision or a
-  domain changed without the documents that describe it". Recording
-  that here is what stops the next measurement filing the absence as an
-  unnoticed gap, the same shape ADR-0058, ADR-0060 and ADR-0061 each
-  recorded.
+  Review holds it, under
+  `docs/convention/review.md` §What each check verifies, whose
+  Architecture row fails a diff where "a decision or a domain changed
+  without the documents that describe it". Recording that here is what
+  stops the next measurement filing the absence as an unnoticed gap, the
+  same shape ADR-0058, ADR-0060 and ADR-0061 each recorded.
 
 ## Rejected alternatives
 

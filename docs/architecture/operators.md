@@ -298,11 +298,11 @@ single-mode cutover is its own repository's (Operator ADR-0068).
   `operator:register`, as registering it was; any other is
   `operator:reissue`.** A withdrawn key still counts, so re-keying
   after a revocation is `operator:reissue`'s: the PM's review of #1360
-  held that any key change on an existing operator is, as ADR-0102
-  §Operator identity and custody says. The store refuses a first
-  issuance under the registration's row lock, in the transaction that
-  would write, so a concurrent issuance cannot split the check from
-  the write.
+  held that any key change on an existing operator is, as
+  ADR-0102 §Operator identity and custody says. The store refuses a
+  first issuance under the registration's row lock, in the transaction
+  that would write, so a concurrent issuance cannot split the check
+  from the write.
 - **garam answers the private key once and keeps the public JWK.** The
   key is RSA 3072 as PKCS#8 `PRIVATE KEY` PEM, answered with
   `Cache-Control: no-store`; `migrations/000043`'s `operator_keys`
@@ -321,8 +321,7 @@ single-mode cutover is its own repository's (Operator ADR-0068).
   `failed_precondition` and the reason `key_issuance_unconfigured`,
   since the state holds until the deployment sets the URL rather than
   being a fault (#1394), and the exchange answers 503
-  ([deployment-contract.md](./deployment-contract.md) §Operator key
-  and enrollment rollout).
+  (`deployment-contract.md` §Operator key and enrollment rollout).
 - **Planned rotation holds two live keys.** The predecessor reads
   `retiring` for `RolloverWindow`, 24 hours, and is then withdrawn
   without a write; a third live key is refused. `immediate` withdraws
@@ -345,8 +344,8 @@ single-mode cutover is its own repository's (Operator ADR-0068).
   writes that key. Its PM supersedes ADR-0008's certificate renewal
   writer before cutover; garam edits no Operator convention or source.
 
-[machine-identity.md](./machine-identity.md) §Asymmetric Operator
-exchange owns the exchange and the token reads.
+`machine-identity.md` §Asymmetric Operator exchange owns the exchange
+and the token reads.
 
 ## Credential and tokens
 
@@ -475,7 +474,8 @@ organization, names no controller, binds the exact request target and
 is held by every role, because it is the action that lists the
 operators garam holds. The status belongs to the control service
 (ADR-0077), which serves it at `GET /v1/orgs/{org}/operators`
-(garam-agent-operator #364 at `ba691a6`, its ADR 0074). The answer
+(garam-agent-operator #364 at
+`ba691a69ad0612ff5653d2facce5668ea12cbec9`, its ADR 0074). The answer
 holds one entry per controller that reached that service:
 - its GRN;
 - its images, each a name, a reference and, where known, a digest;
@@ -502,8 +502,9 @@ the Operator's (`garamsh/garam-agent-operator#220`).
 **Recovery from the console is unbuilt.** The `agent:recover` handoff
 garam mints is built, and so is the Operator route an administrator
 finalizes a prepared recovery through (`garamsh/garam-agent-operator`
-`ad444ed`, `docs/architecture/control.md`, its ADR 0057); the console
-offers no recovery control.
+`ad444ede20c83992701fd563e7a0c916827979a4`,
+`docs/architecture/control.md`, its ADR 0057); the console offers no
+recovery control.
 
 The same binding under the same grant mints a fresh token for the same
 reference, which is how a handoff that expired or whose answer was lost
@@ -596,9 +597,9 @@ the Operator control service; garam's routes for both are built.
   having stopped.
 - **An agent's leaf** — what the adapter presents with a runtime status
   report or an activation request — is proven by execution
-  introspection ([machine-identity.md](./machine-identity.md)
-  §Generation and lineage), never relayed through the controller to
-  obtain a controller's leaf. Its 200 is a status answer: a report is
+  introspection (`machine-identity.md` §Generation and lineage), never
+  relayed through the controller to obtain a controller's leaf. Its 200
+  is a status answer: a report is
   accepted only when `credential` and `generation` are both `current`
   and the identity, assignee, epoch and activation are the ones
   expected, and an expired or superseded certificate answers

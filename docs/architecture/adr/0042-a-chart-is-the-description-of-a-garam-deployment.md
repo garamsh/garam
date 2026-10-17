@@ -25,9 +25,10 @@ night:
 - `#480` — the pull-secret claim, contradicted by a live
   `ImagePullBackOff`.
 - `#485` — two claims contradicted by the code they describe.
-- `deployment-contract.md` §The key-encryption key cannot be
-  regenerated, which told a consumer the machine listener's pair was
-  "safe to have issued by cert-manager or any other issuer". It
+- `deployment-contract.md`
+  §The key-encryption key cannot be regenerated, which told a consumer
+  the machine listener's pair was "safe to have issued by cert-manager
+  or any other issuer". It
   contradicted
   [ADR-0037](./0037-the-machine-listener-presents-a-per-organization-certificate.md),
   which decided that the listener presents its organization's own
@@ -39,10 +40,11 @@ night:
   ADR it contradicted and another repository built on it; #495 removed
   it.
 
-Each was a sentence nothing could run. `docs/convention/ci.md` §One
-entry point per task already says what separates a check that did the
-work from one that read like it; the contract had no entry point at all,
-so every claim in it rested on a reader remembering to check it.
+Each was a sentence nothing could run.
+`docs/convention/ci.md` §One entry point per task already says what
+separates a check that did the work from one that read like it; the
+contract had no entry point at all, so every claim in it rested on a
+reader remembering to check it.
 
 A chart is manifests, so the two-places problem does not disappear by
 naming the artefact differently. What removes it is that the chart is
@@ -122,8 +124,9 @@ Two facts bound what may be relied on here, each read on 2026-08-25:
   rather than only the first. The chart renders no such refresh: what
   would perform it belongs to the cluster the deployment owns, and
   nothing here could be run against a cluster to show it works. Both
-  obligations are stated in `deploy/charts/garam/README.md` §Key
-  material and secrets, where whoever adds the refresh reads them.
+  obligations are stated in
+  `deploy/charts/garam/README.md` §Key material and secrets, where
+  whoever adds the refresh reads them.
 - **`make chart` is what keeps the chart true, and `make ci` runs it.**
   It lints and renders every value file under `deploy/charts/garam/ci/`,
   and it compares the environment names the render carries against the

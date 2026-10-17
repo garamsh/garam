@@ -62,14 +62,14 @@ by the identity the connection proved rather than by an assignment, and
 both run the execution fence first, so the certificate must still be
 inside its validity and current in its lineage on that request, and
 once the GRN has cut over the call carries its activation's token
-([machine-identity.md](./machine-identity.md) §Generation and
-lineage). Renewal is `ExecutionService`'s, not `Service`'s: it is the
-one route the assignment comparison does not stand on, and the
-successor joins the renewing certificate's lineage. An expired
-certificate has no such connection, so the operator route is what
-recovers one while the GRN has not cut over; after cutover that route
-refuses it and the control service's recovery is what replaces a lost
-certificate (§Separated execution).
+([machine-identity.md](./machine-identity.md) §Generation and lineage).
+Renewal is `ExecutionService`'s, not `Service`'s: it is the one route
+the assignment comparison does not stand on, and the successor joins the
+renewing certificate's lineage. An expired certificate has no such
+connection, so the operator route is what recovers one while the GRN has
+not cut over; after cutover that route refuses it and the control
+service's recovery is what replaces a lost certificate
+(§Separated execution).
 
 garam accepts no desired value (ADR-0090): no route writes a
 definition, and migration 000035's trigger refuses an insert into
@@ -119,7 +119,7 @@ flags that Garam Agent Operator's `cmd/main.go` declares
 ([`garamsh/garam-agent-operator`](https://github.com/garamsh/garam-agent-operator)),
 which is authoritative for what every agent that operator constructs
 is built from. Read at
-[`2d795f5`](https://github.com/garamsh/garam-agent-operator/blob/2d795f5/cmd/main.go),
+[`2d795f5f562c8d3509a443288c6531c01a92458f`](https://github.com/garamsh/garam-agent-operator/blob/2d795f5f562c8d3509a443288c6531c01a92458f/cmd/main.go),
 when the repository was named `gagent-operator`, they were
 `--agent-image`, `--agent-copy-image`, `--agent-tools-image` and
 `--agent-storage-size`; that list is the reading at that commit and not
@@ -138,7 +138,7 @@ that can. garam is on no part of that chain. Sherlock
 ([`garamsh/sherlock`](https://github.com/garamsh/sherlock)) stated the
 same boundary from the agent's own side, for the tool set it loads, at
 `internal/config/config.go:79-82` in
-[`eeea6a9`](https://github.com/garamsh/sherlock/blob/eeea6a9/internal/config/config.go#L79-L82),
+[`eeea6a9cafef6742593a37d3a6baac1dd66cc98b`](https://github.com/garamsh/sherlock/blob/eeea6a9cafef6742593a37d3a6baac1dd66cc98b/internal/config/config.go#L79-L82),
 read when the repository was named `gagent`.
 
 Nothing in garam requires a version or a capability of an agent today.
@@ -154,9 +154,9 @@ release of that contract and no compatibility window (ADR-0049).
 
 **Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
 sets one target admission contract, `agent-enrollment.v1`, in place of
-separate target managed/standalone identity models. §Separated
-execution and §Standalone hosts describe the existing implementations
-and compatibility cohorts, not common enrollment already shipped.
+separate target managed/standalone identity models. §Separated execution
+and §Standalone hosts describe the existing implementations and
+compatibility cohorts, not common enrollment already shipped.
 
 - Provisioning and enrollment are separate. A managed runtime is
   provisioned by the Operator; a direct runtime may already be running
@@ -189,12 +189,13 @@ and compatibility cohorts, not common enrollment already shipped.
 **Open: independent writer proof blocks direct attachment.** Current
 `internal/workload` proves a recorded Docker generation's exit by
 container ID/nonce; runtime status alone cannot prove exclusive
-ownership of an arbitrary process. ADR-0102 §Direct attachment proof
-remains an implementation gate records the proposed local attachment
-lease and process-owning-supervisor options. The PM chose neither;
-the owner must select and validate a proof contract before this new
-connector activates. Identity admission does not close that gate, and
-it does not block Operator asymmetric exchange.
+ownership of an arbitrary process.
+ADR-0102 §Direct attachment proof remains an implementation gate records
+the proposed local attachment lease and process-owning-supervisor
+options. The PM chose neither; the owner must select and validate a
+proof contract before this new connector activates. Identity admission
+does not close that gate, and it does not block Operator asymmetric
+exchange.
 
 The new wire and direct connector are implementation obligations,
 not additions to the current `api/machine.yaml` §enrollment and
@@ -285,14 +286,13 @@ it did until G3.
 
 **Built here is garam's half of four parts: managed creation and its
 initial issuance (below), the controller proof
-([operators.md](./operators.md) §Controller proof), the generation
-fence ([machine-identity.md](./machine-identity.md) §Generation and
-lineage) and a legacy agent's cutover (below); closing new
-definitions and retiring garam's templates (below) are garam's alone
-and built.** The adapter this
-repository ships reaches the fence through the lifecycle authority,
-never directly: it asks that authority to activate the generation
-beside it and carries the token it is answered with
+([operators.md](./operators.md) §Controller proof), the generation fence
+([machine-identity.md](./machine-identity.md) §Generation and lineage)
+and a legacy agent's cutover (below); closing new definitions and
+retiring garam's templates (below) are garam's alone and built.** The
+adapter this repository ships reaches the fence through the lifecycle
+authority, never directly: it asks that authority to activate the
+generation beside it and carries the token it is answered with
 ([adapter.md](./adapter.md) §Activation and runtime status); it
 introspects nothing. The Operator control service's use of managed
 creation is garamsh/garam-agent-operator#211 and #218's, per #1167.
@@ -362,7 +362,8 @@ in #1157.
   v0.8.0). That set is never garam's to forward: it is swapped in the
   Operator-side spec. The Operator's
   import and release are built
-  (`garamsh/garam-agent-operator` `ad444ed`,
+  (`garamsh/garam-agent-operator`
+  `ad444ede20c83992701fd563e7a0c916827979a4`,
   `docs/architecture/control.md`, its ADR 0050).
 - **A managed agent is created by request, not by claim.** The control
   service presents a member's `agent:create` reference and the request
@@ -401,13 +402,13 @@ in #1157.
   switch (below), and from the switch the operator's certificate route
   and its definition no longer reach it. The machine
   listener checks the generation per request
-  ([machine-identity.md](./machine-identity.md) §Generation and
-  lineage), and every write it protects takes the row's lock in its own
-  transaction, which is what orders a replacement against writes
-  already admitted (ADR-0078, ADR-0080). A restart is a new
-  activation, not a new certificate; a revision still pending carries
-  a durable `agent:configure` reference, rechecked fresh, and one the
-  runtime already applied needs none. A managed agent's first
+  (`machine-identity.md` §Generation and lineage), and every write it
+  protects takes the row's
+  lock in its own transaction, which is what orders a replacement
+  against writes already admitted (ADR-0078, ADR-0080). A restart is a
+  new activation, not a new certificate; a revision still pending
+  carries a durable `agent:configure` reference, rechecked fresh, and
+  one the runtime already applied needs none. A managed agent's first
   activation carries its own creation's reference or such a configure
   reference, and an activation carrying no reference is refused until
   one has succeeded; the creation reference starts that first
@@ -644,7 +645,7 @@ supervisor that stops leaves the workload running.
   reaches the rootless daemon, which is the host user alone.
 - **A v2 host copies tokens in, and keeps the agent's current.** The
   adapter receives the agent token and the control token in place of
-  a key and certificate (adapter.md §Token mode). The supervisor
+  a key and certificate (`adapter.md` §Token mode). The supervisor
   exchanges its credential for its own token and mints the agent's,
   holds both in memory, and replaces each at a point drawn from two
   thirds to three quarters of its life; a refresh that fails while the
@@ -696,9 +697,9 @@ supervisor that stops leaves the workload running.
   the supervisor renders garam's entry it also sets the adapter's
   `GARAM_ADAPTER_SIGN_MESSAGES`, and where it renders none the adapter
   signs nothing, so a host never signs to a runtime that does not trust
-  garam, and an unconfigured host is as it was. The order adapter.md
-  §Stable identifiers and the outbox asks for holds within one
-  generation: the runtime starts with its entry before the adapter
+  garam, and an unconfigured host is as it was. The order
+  `adapter.md` §Stable identifiers and the outbox asks for holds within
+  one generation: the runtime starts with its entry before the adapter
   starts. **The floor is Sherlock `v0.4.0`, and naming the issuer is
   what asserts it.** `keys-ca-file` arrives there
   (garamsh/sherlock#1008), and nothing the supervisor reads from an

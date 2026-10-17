@@ -191,14 +191,14 @@ takes the second.
   cannot be defined in one file and left undefined in the other, and
   that is bought here by stating the obligation instead.
 - **One description with a generator.** The cost is not that a
-  specification may not be part-generated: `docs/convention/README.md`
-  §Scope allows one file to be generated in one part and authored in
-  the rest. It is that the input would be a third file, authored
-  nowhere a caller reads, while ADR-0004 and ADR-0019 make each
-  specification the source of truth for its own listener; and that the
-  two schemas differ in name, so the generator needs a pairing table
-  neither file carries. #941 rules out building one under it in any
-  case.
+  specification may not be part-generated:
+  `docs/convention/README.md` §Scope allows one file to be generated in
+  one part and authored in the rest. It is that the input would be a
+  third file, authored nowhere a caller reads, while ADR-0004 and
+  ADR-0019 make each specification the source of truth for its own
+  listener; and that the two schemas differ in name, so the generator
+  needs a pairing table neither file carries. #941 rules out building
+  one under it in any case.
 - **A `make lint` check comparing the two files.** It can compare only
   what it can pair, so it needs that same table, and what it would then
   assert is byte-identity — the reading rejected above. Under this

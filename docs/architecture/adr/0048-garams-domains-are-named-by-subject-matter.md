@@ -175,12 +175,13 @@ territory, and this one is architecture's.
   surfaces, which is what makes the spread describable. Collapsing it
   is a change to the tree.
 - **What owns `keyfile` and `health`.** They fail the threshold; which
-  boundary takes each is [structure.md](../structure.md) §Open
-  questions.
+  boundary takes each is
+  [structure.md](../structure.md) §Open questions.
 - **How `domains.md` is divided into files.** It still carries every
-  subject in one document, which `docs/convention/documentation.md`
-  §Keep it maintainable does not permit; `#620` carries that split, and it
-  depends on this decision having settled what the subjects are.
+  subject in one document, which
+  `docs/convention/documentation.md` §Keep it maintainable does not
+  permit; `#620` carries that split, and it depends on this decision
+  having settled what the subjects are.
 
 ## Consequences
 
@@ -263,9 +264,9 @@ territory, and this one is architecture's.
   excludes. Under that rule `go list` names nine importers of
   `pgxerr`, eight of them domains and `internal/watch` the ninth, and
   three of `listfilter`, two of them domains and `internal/api` the
-  delivery surface; run against `5a70c6c` it returns the 6 and the 3
-  the table has. [domains.md](../domains.md) §Shared code below the
-  domains states the same rule beside the current counts and carries
+  delivery surface; run against `5a70c6c` it returns the 6 and the 3 the
+  table has. [domains.md](../domains.md) §Shared code below the domains
+  states the same rule beside the current counts and carries
   the query. This entry corrects the two counts only: what standing a
   count of 2 earns `listfilter` is not decided here, and the Standing
   column stands as the body has it.

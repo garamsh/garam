@@ -71,9 +71,9 @@ v1/v2 paths are what admit an agent.
 - The `Bearer` alias resolves the same opaque access tokens as
   `Garam-Token`, with the same route confinement, per-request reads, v2
   contract selection and refusal of combined credentials
-  ([machine-identity.md](./machine-identity.md) §Asymmetric Operator
-  exchange). It changes no execution or operation header and reaches
-  no certificate renewal route.
+  ([machine-identity.md](./machine-identity.md)
+  §Asymmetric Operator exchange). It changes no execution or operation
+  header and reaches no certificate renewal route.
 - `issueOperatorKey`, `listOperatorKeys` and `revokeOperatorKey` on
   the browser-facing listener answer a private PEM once and public
   metadata thereafter; no secret is read back
@@ -400,8 +400,7 @@ route, and a supervisor renews its own on
 recovery, which the hosted control service asks for under an
 administrator's handoff and which replaces the agent's credential
 lineage instead
-([machine-identity.md](./machine-identity.md) §Generation and
-lineage).
+([machine-identity.md](./machine-identity.md) §Generation and lineage).
 
 **Policy engine.** Nothing. Both listeners hold a client of their own,
 and the transport carries no credential because the processes run
@@ -439,8 +438,8 @@ and not in the same place on every surface.
   An agent's protected calls, its own renewal among them, are also
   decided per request by its execution fence, and the lifecycle routes
   by the caller's current authority
-  ([machine-identity.md](./machine-identity.md) §Generation and
-  lineage).
+  ([machine-identity.md](./machine-identity.md)
+  §Generation and lineage).
 - **What a machine caller may send** is the exception, and the
   recipient's organization decides which of two things answers it. A
   recipient of the caller's own organization is a policy question: the
@@ -547,8 +546,7 @@ member a caller of its own listener can meet
 That prose lives in the two files rather than here: each
 `info.description` names the caller its file is written for, and each
 enum's `description` is authoritative for what its members mean to that
-caller. Nothing compares one file with the other (§What nothing
-checks).
+caller. Nothing compares one file with the other (§What nothing checks).
 
 That authority is enforced rather than asserted. `make gen` writes
 `api/server.gen.go` and `api/machine/server.gen.go` from the two
@@ -656,9 +654,9 @@ generated Go file. What does move is `web/src/types/api.ts`, generated
 from `api/openapi.yaml` and held against it by `make web-check-gen`, so
 the browser client's types follow a response set while the server's do
 not — and `api/machine.yaml` has no consumer of that kind at all. What
-`make gen` writes from it is the generated Go §What a specification is
-authoritative for names, which a response set leaves as untouched as it
-leaves `api/server.gen.go`.
+`make gen` writes from it is the generated Go
+§What a specification is authoritative for names, which a response set
+leaves as untouched as it leaves `api/server.gen.go`.
 
 **Nor does it cover the two specifications against each other.**
 `AgentProvisioningState` and `ProvisioningState` describe one stored
@@ -700,8 +698,8 @@ has four places to reach, guarded by different things:
   changed**, under the same rule.
 
 The third is the one that has been missed twice. Reaching it depends on
-an author having read this far, which is weaker than a check; §Not
-decided says what closing that would take.
+an author having read this far, which is weaker than a check;
+§Not decided says what closing that would take.
 
 ## Not decided
 

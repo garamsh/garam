@@ -131,8 +131,9 @@ out of the release, because under a release named `garam` the two agree.
 about them; it reads nothing else a pod carries, and #503 records the
 review that verified it fired correctly and did not ask what it covered.
 So each chart check now names what it is complete over — in the line it
-prints and in `deploy/charts/garam/README.md` §What the checks are
-complete over, which also names what no check reads: volumes and mounts,
+prints and in
+`deploy/charts/garam/README.md` §What the checks are complete over,
+which also names what no check reads: volumes and mounts,
 probe paths and ports, the security context, resource figures, the hook
 annotations on the migrate Job, and the annotation keys on an account.
 

@@ -120,8 +120,9 @@ could close a cycle; one that permits it holds the direction instead.
   against.
 - **What owns a concern once it is extracted below the domains.** The
   threshold says when a concern leaves the domain that held it and not
-  what owns it afterwards. [structure.md](../structure.md) §Open
-  questions holds that, where it binds nothing until garam meets it.
+  what owns it afterwards.
+  [structure.md](../structure.md) §Open questions holds that, where it
+  binds nothing until garam meets it.
 
 ## Consequences
 
@@ -191,8 +192,8 @@ could close a cycle; one that permits it holds the direction instead.
   ADR. The §Consequences bullet is the one that misleads rather than
   dangles: its condition has been met, so the shape's rules stand in
   one place and not two. That place is
-  [structure.md](../structure.md) — §Boundaries and dependency
-  direction carries the sibling rule and the dependency direction,
+  [structure.md](../structure.md) — §Boundaries and dependency direction
+  carries the sibling rule and the dependency direction,
   and §When a new boundary is earned carries the threshold §Context
   quotes. The decision is untouched: a domain still reaches a sibling
   through the surface that sibling declares.

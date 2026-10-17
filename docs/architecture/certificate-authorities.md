@@ -73,6 +73,12 @@ That key is as availability-critical as the database — losing it loses
 every organization's CA with no recovery short of new authorities and a
 reissue for every certificate — and why it is held this way rather than
 in a KMS is [ADR-0016](./adr/0016-ca-key-custody.md).
+[ADR-0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md)
+keeps `Sealer` to that one implementation: the OpenBao Transit provider
+it adds holds message signing keys and seals no authority, because the
+authorities go at G4, Transit's `rewrap` does not reach ciphertext
+bound to a row, and an authority's key is opened into memory to issue
+under either sealer.
 
 **An authority is lost the same way when its organization is deleted,
 and nothing here brings one back.** The row is keyed on the

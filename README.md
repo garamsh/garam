@@ -162,8 +162,11 @@ the commit built.
 Nothing here pushes the result. Pushing takes a credential of your
 own for the `garam-dev/` repositories, which this repository neither
 holds nor grants, and the release's push role admits `v*` tags only.
-Those repositories are `garamsh/infra`'s to declare, and its
-`ba73529` (garamsh/infra#309) declares them.
+Those repositories are `garamsh/aurora`'s to declare, and its
+`infrastructure/aws/main.tf` declares them at
+`4df93d567fddb9afe9e5120449053222dee2b7c7`.
+`garamsh/infra`'s `ba7352930033f0eb1632ddb4340bb8fd2ba8b9c3`
+(garamsh/infra#309) declared them before aurora absorbed it.
 `GARAM_WEB_IMAGE=<registry>/garam-dev/garam-web:<tag> make web-image-e2e`
 checks the web image you built before you push it.
 A deployment running it sets `image.*.repository` to the `garam-dev/`

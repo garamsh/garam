@@ -656,7 +656,9 @@ ADRs:
   pins, under their own AWS identity with `make test-image-push` and
   `make test-image-pin`; no workflow holds a
   credential for it, so no image appears per `dev` commit; the
-  repository's lifecycle policy in `garamsh/infra` expires an unpinned
+  repository's lifecycle policy, which `garamsh/aurora`'s
+  `infrastructure/modules/aws/ecr-repositories.tf` declares at
+  `4df93d567fddb9afe9e5120449053222dee2b7c7`, expires an unpinned
   image 90 days after its push and bounds pins by a count of 50, not
   by age; supersedes ADR-0092's registry, its commit tag, its
   publishing from `dev` and its retention; its repository URI and its

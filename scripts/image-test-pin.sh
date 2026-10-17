@@ -10,9 +10,12 @@
 # under that tag loses it in the same call.
 #
 # Moving the tag depends on the repository exempting `pinned-*` from
-# its tag immutability, an exclusion filter garamsh/infra declares
-# (ADR-0093). Without it a consumer's first pin succeeds and every
-# later one is refused by the registry.
+# its tag immutability, an exclusion filter garamsh/aurora declares in
+# infrastructure/modules/aws/ecr-repositories.tf for the prefix its
+# infrastructure/aws/main.tf gives the repository, read at
+# 4df93d567fddb9afe9e5120449053222dee2b7c7 (ADR-0093). Without it a
+# consumer's first pin succeeds and every later one is refused by the
+# registry.
 #
 #   scripts/image-test-pin.sh <commit> <consumer>
 set -eu

@@ -24,7 +24,7 @@ const policyDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRea
 // policyFixture stubs the PolicyManager seam with the policy the
 // handlers address, and returns its GRN.
 func policyFixture(orgSlug string) (grn.GRN, *api.Policy) {
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, orgSlug)
+	orgGRN := grn.Org(orgSlug)
 	g := grn.New(orgSlug, "default", "policy", "9f2ac1b40d8e7a35")
 	at := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 	return g, &api.Policy{
@@ -133,7 +133,7 @@ func TestPolicies_MemberIsDenied(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 
 	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
 	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
@@ -184,7 +184,7 @@ func TestPolicies_RequireOrgMembership(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	outsider := f.sessionCookieFor(t, "outsider-sub", "Outsider")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyRead})
 	f.policies.EXPECT().ListPolicies(mock.Anything, orgGRN).Return(nil, nil)

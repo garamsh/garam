@@ -40,7 +40,7 @@ func TestGroupFlow_RoleEnforcement(t *testing.T) {
 
 	// A member of the org reads groups but cannot change them.
 	member := f.sessionCookieFor(t, "member-sub", "Member")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/groups", `{"name":"eng"}`, member)

@@ -40,7 +40,7 @@ func TestProjectFlow_RoleEnforcement(t *testing.T) {
 	)
 
 	member := f.sessionCookieFor(t, "member-sub", "Member")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/projects", `{"name":"web"}`, member)
@@ -96,7 +96,7 @@ func TestProjectMembers_Lifecycle(t *testing.T) {
 
 	// A plain org member lists project members but cannot add them.
 	member := f.sessionCookieFor(t, "member-sub", "Member")
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 
 	rec = f.do(t, "GET", "/orgs/"+slug+"/projects/"+project+"/members", "", member)

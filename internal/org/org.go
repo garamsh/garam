@@ -49,7 +49,6 @@ func checkMemberOrg(container, member grn.GRN) error {
 // ServiceType* are the canonical GRN service-type prefixes used by
 // this package.
 const (
-	ServiceTypeOrg     = "org"
 	ServiceTypeGroup   = "group"
 	ServiceTypeProject = "project"
 )

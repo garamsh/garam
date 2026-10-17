@@ -724,3 +724,9 @@ ADRs:
   permission-check API what a caller may do and hides or disables what
   is denied, while the server still enforces every write. The
   permission check is built; the rest is unbuilt
+- [0105](./adr/0105-garams-pipeline-runs-on-a-docker-capable-aurora-runner-class.md)
+  — proposed: garam's six jobs run on a second aurora runner scale set
+  in `dind` mode, keeping every entry point CI invokes today, rather
+  than on the kubernetes-mode `aurora` class that run 39051854702
+  showed admits this repository but provides no daemon; the local gate
+  stands until aurora delivers the class. Unbuilt

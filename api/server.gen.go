@@ -969,7 +969,7 @@ type PolicyDocument = json.RawMessage
 
 // PolicyRollback defines model for PolicyRollback.
 type PolicyRollback struct {
-	// Version An existing version of the policy.
+	// Version A stored version of the policy, older or newer than its current default.
 	Version int32 `json:"version"`
 }
 
@@ -1436,7 +1436,7 @@ type ServerInterface interface {
 	// DetachPolicy Detach a policy from a subject. Requires the `admin` role.
 	// (DELETE /orgs/{org}/policies/{policy}/attachments/{subject})
 	DetachPolicy(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug, subjectGrn SubjectGrn)
-	// RollbackPolicy Point a policy at an earlier version. Requires the `admin` role.
+	// RollbackPolicy Point a policy at a stored version. Requires the `admin` role.
 	// (POST /orgs/{org}/policies/{policy}/rollback)
 	RollbackPolicy(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
 	// ListPolicyVersions List a policy's versions. Requires the `admin` role.

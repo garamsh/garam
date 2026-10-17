@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/garamsh/garam/internal/audit"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 )
@@ -121,6 +122,19 @@ const (
 	// own.
 	AuthorGaram Author = "garam"
 )
+
+// sent is the audit event the post of submitted writes beside what its
+// key stores (ADR-0106). The parties are the submission's and the
+// message is what the key stores, which a retry finds already there.
+// garam's own refusal stands in for a crossing it refused, so its event
+// is that send's, with the parties swapped back and no message: the
+// one stored is the refusal, not what was sent.
+func sent(submitted, stored *Message) audit.Send {
+	if submitted.author == AuthorGaram {
+		return audit.Refused(submitted.recipient, submitted.sender)
+	}
+	return audit.Authorized(submitted.sender, submitted.recipient, string(stored.id), stored.createdAt)
+}
 
 // parseAuthor reads an author. The set is closed, so anything else is a
 // caller or a row this process does not understand.

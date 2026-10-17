@@ -22,7 +22,9 @@ import (
 type Store interface {
 	// Enqueue stores the message and returns what is stored. A sender
 	// key already used returns the message stored under it, so a sender
-	// that retries stores one message and not two.
+	// that retries stores one message and not two. Each call that
+	// answers writes the send's audit event with what it stores
+	// (ADR-0106).
 	Enqueue(ctx context.Context, m *Message, fence *Fence) (*Message, error)
 	// EnqueueWithinBudget stores the message of a durable submission
 	// created at created, or returns what the sender's key already
@@ -31,8 +33,12 @@ type Store interface {
 	// returns ErrKeyHoldsAnotherMessage. Where the key stores nothing,
 	// the database's clock decides when the insert runs: created after
 	// it returns ErrCreatedLater, and created SubmissionBudget or more
-	// before it ErrSubmissionExpired.
+	// before it ErrSubmissionExpired. It writes the send's audit event
+	// as Enqueue does, and none where it returns an error.
 	EnqueueWithinBudget(ctx context.Context, m *Message, created time.Time, fence *Fence) (*Message, error)
+	// Refuse writes the audit event of a send from sender to recipient
+	// that a policy denied, and stores no message (ADR-0106).
+	Refuse(ctx context.Context, sender, recipient grn.GRN, fence *Fence) error
 	// Claim hands the recipient's oldest ready message to exactly one
 	// caller and holds it for lease, or returns ErrNoMessageReady. A
 	// claim that is never completed lapses when the lease runs out and

@@ -40,7 +40,7 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errorx.Wrap(err, "recipient", errorx.KindInvalidArgument))
 		return
 	}
-	admitted, err := s.authorizeSend(r.Context(), sender, recipient)
+	admitted, err := s.authorizeSend(r.Context(), sender, recipient, messageFence(fence))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -84,7 +84,7 @@ func (s *Server) PostOutboxMessage(w http.ResponseWriter, r *http.Request, param
 		writeError(w, errorx.Wrap(err, "recipient", errorx.KindInvalidArgument))
 		return
 	}
-	admitted, err := s.authorizeSend(r.Context(), sender, recipient)
+	admitted, err := s.authorizeSend(r.Context(), sender, recipient, messageFence(fence))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -144,12 +144,15 @@ func crossingRefusal(sender, recipient grn.GRN, key string) (from, to grn.GRN, r
 // engine's answer; one across the organization boundary is admitted on
 // the consent relation alone. A cross-boundary recipient no standing
 // consent covers is not an error: admitted is false, and PostMessage
-// answers the post with the refusal message ADR-0013 asks for.
+// answers the post with the refusal message ADR-0013 asks for. A
+// policy's denial is the error, and it is recorded as a refused send
+// before it is answered (ADR-0106); the post's own write records the
+// other outcomes.
 //
 // Both GRNs are validated here because sendingStatements splices the
 // organization identifier into a resource pattern, where a wildcard
 // would widen the statement past the organization it was scoped to.
-func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) (bool, error) {
+func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN, fence *message.Fence) (bool, error) {
 	if err := sender.Validate(); err != nil {
 		return false, err
 	}
@@ -159,8 +162,18 @@ func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) (
 	if sender.Organization != recipient.Organization {
 		return s.consentStands(ctx, sender, recipient)
 	}
-	return s.policyAdmits(ctx, sender, recipient)
+	admitted, err := s.policyAdmits(ctx, sender, recipient)
+	if errors.Is(err, errSendDenied) {
+		if refused := s.messages.Refuse(ctx, sender, recipient, fence); refused != nil {
+			return false, refused
+		}
+	}
+	return admitted, err
 }
+
+// errSendDenied is a policy's denial of one send, which is a refusal
+// garam records rather than a failure to decide.
+var errSendDenied = errorx.New(errorx.KindPermissionDenied, "sender may not send to this recipient")
 
 // consentStands reports whether both organizations still hold the
 // consent a message crossing between them needs (ADR-0035). The engine
@@ -199,7 +212,7 @@ func (s *Server) policyAdmits(ctx context.Context, sender, recipient grn.GRN) (b
 		return false, err
 	}
 	if !allowed {
-		return false, errorx.New(errorx.KindPermissionDenied, "sender may not send to this recipient")
+		return false, errSendDenied
 	}
 	return true, nil
 }

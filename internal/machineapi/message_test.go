@@ -155,6 +155,10 @@ type messageService struct {
 	calls []messageCall
 	// fences is what each claim was handed to judge its caller by.
 	fences []*message.Fence
+	// refusals is each send a policy denied, as the surface recorded it.
+	refusals []messageCall
+	// refuseErr is what recording a refusal answers.
+	refuseErr error
 }
 
 func (s *messageService) Post(_ context.Context, sender, recipient grn.GRN, key, body string, author message.Author, _ *message.Fence) (*message.Message, error) {
@@ -171,6 +175,11 @@ func (s *messageService) PostWithinBudget(_ context.Context, sender, recipient g
 		return nil, s.err
 	}
 	return message.New(recipient, sender, key, body)
+}
+
+func (s *messageService) Refuse(_ context.Context, sender, recipient grn.GRN, _ *message.Fence) error {
+	s.refusals = append(s.refusals, messageCall{method: "refuse", caller: sender, recipient: recipient})
+	return s.refuseErr
 }
 
 func (s *messageService) Claim(_ context.Context, caller, recipient grn.GRN, fence *message.Fence, _ message.Signer) (*message.Claim, message.Signed, error) {
@@ -537,6 +546,36 @@ func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 		posted(other, refused, "key-3"),
 		posted(sender, refused, "key-4"),
 	}, messages.calls, "the refused message reached the queue")
+}
+
+// TestServer_RecordsAPolicyDenialBeforeAnsweringIt holds the refusal
+// to the record of it: the send a policy denies reaches the queue as a
+// refused send and nothing else (ADR-0106). The admitted send beside
+// it records no refusal, so the record is the denial's. A record that
+// cannot be written is the answer, so no refusal goes unrecorded.
+func TestServer_RecordsAPolicyDenialBeforeAnsweringIt(t *testing.T) {
+	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
+	refused := agentGRN("acme", "deadbeefdeadbeef")
+	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
+	messages := &messageService{}
+	policies := &engine{attached: map[grn.GRN][]machineapi.Statement{
+		sender: {denySending("no-talking", refused.String())},
+	}}
+	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, policies, sender)
+
+	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
+	require.Equal(t, http.StatusCreated, status, body)
+	assert.Empty(t, messages.refusals, "an admitted send was recorded as refused")
+
+	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-2"))
+	require.Equal(t, http.StatusForbidden, status, body)
+	assert.Equal(t, []messageCall{{method: "refuse", caller: sender, recipient: refused}}, messages.refusals)
+
+	messages.refuseErr = errorx.New(errorx.KindUnavailable, "postgres is not accepting connections")
+	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-3"))
+	assert.Equal(t, http.StatusServiceUnavailable, status, body)
+	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls,
+		"a denied message reached the queue")
 }
 
 // TestServer_AGroupAttachedPolicyDecidesWhatItsMembersSend moves one

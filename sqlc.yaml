@@ -113,6 +113,16 @@ sql:
         sql_package: pgx/v5
   - engine: postgresql
     schema:
+      - migrations/000001_init.up.sql
+      - migrations/000050_audit_send_events.up.sql
+    queries: internal/audit/postgres/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/audit/postgres/db
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema:
       - migrations/000011_agent_watches.up.sql
       - migrations/000001_init.up.sql
       - migrations/000004_agents.up.sql

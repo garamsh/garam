@@ -785,9 +785,10 @@ ADRs:
   deleted caller, and is read with
   `internal/machine/postgres/inventory.sql`
 - [0111](./adr/0111-a-directly-attached-runtime-is-activated-by-a-one-agent-host-authority-on-the-generation-it-reports-and-its-store-lock.md)
-  — proposed: a directly attached runtime is activated by an ADR-0082
-  supervisor in an attach mode that reads the runtime's status itself
-  and rests on Sherlock's store lock and generation under same-host
-  trust; a new direct agent restarts once under its GRN, the audience
-  Garam signs; compared against a minimal attachment binding and a
-  process-owning authority
+  — a directly attached runtime is activated by an ADR-0082 supervisor
+  in an attach mode that reads the runtime's status itself at a pinned
+  loopback literal and rests on Sherlock's store lock and generation
+  under same-host trust; a new direct agent restarts once under its
+  GRN, the audience Garam signs, after its predecessor exits, and
+  outbox entries under the earlier ID are set aside and left in place;
+  unbuilt

@@ -1,7 +1,13 @@
 # ADR 0111: A directly attached runtime is activated by a one-agent host authority on the generation it reports and its store lock
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-18
+
+Accepted by the Garam PM on 2026-10-18 under the owner's delegation,
+recorded in the review on #1498. The review added four points from the
+Sherlock PM's answers: restart ordering, a pinned loopback literal, the
+status read, and outbox entries written under an earlier ID. They stand
+under §Decision.
 
 Drafted for #1355, which reserves this number. It compares the models
 #1355 names and recommends one, for the PM to decide under the owner's
@@ -88,6 +94,28 @@ accepted decision here would lift.
   store is not keyed by it, so restarting under another ID keeps
   memory. Entries already in the outbox keep the ID they were written
   under (ADR 0016 §Consequences).
+- **The lock is taken before the listener binds.** `serveAgent` calls
+  `startQueue` and only then `gateway.Serve`. It logs "agent listening"
+  between the two, so that line is written before the bind.
+
+### What the Sherlock PM answered
+
+The Sherlock PM answered on 2026-10-18, from the same revision, and the
+Garam PM relayed the answers in the review on #1498.
+
+- **Outbox entries are provenance only.** The serving agent never reads
+  an entry back. It compares none of the entry's `agent_id`,
+  `assignment_epoch` and `generation`, so nothing in Sherlock refuses or
+  misroutes an entry written under an earlier ID.
+- **The drain order is a contract.** The listener closes, then memory,
+  and the writer lock is released last. It is ADR 0022's Decision.
+  `Serve` and `Store.Close` in `internal/memory/sqlite/sqlite.go`
+  implement it, and
+  `TestServe_WriterLockIsReleasedOnlyAfterMemoryCloses` tests it.
+  Sherlock notifies Garam before any change to it merges.
+- **The gateway never sets `SO_REUSEPORT`.** A second bind of the same
+  address fails with `EADDRINUSE`. `127.0.0.1` and `[::1]` are distinct
+  addresses, so one process can hold each.
 
 ### What was measured on this host
 
@@ -255,6 +283,38 @@ store lock, which Sherlock's generation stands for.
   person who removes the lock file, hard-links the store or shares the
   volume is misusing the placement. The deployment documents say so,
   and this record does not claim to detect it.
+- **The runtime address is a pinned loopback literal.** It is
+  `127.0.0.1:<port>` or `[::1]:<port>`, never `localhost`. The
+  supervisor and the adapter are configured with the same literal that
+  the runtime binds. Sherlock accepts `localhost` as loopback, and that
+  name can resolve to either family, so two processes could each hold
+  one. A pinned literal leaves one address for one process.
+- **A restart starts the new process only after the old one has
+  exited.** This binds whoever restarts the runtime, since the attach
+  mode starts and signals nothing. A free port is not a free lock: the
+  old process frees its port before its lock, and the new one takes the
+  lock before it binds. A start refused with "another process owns the
+  memory store" is retried rather than repaired. The supervisor reads
+  readiness only from a `/status` answer, never from the "agent
+  listening" log line, which is written before the bind.
+- **The status read carries no credential in this placement.** Without
+  `tls:` the gateway serves loopback and authenticates no caller
+  (Sherlock ADR 0012), so the read rests on same-host trust below. A
+  `tls:` placement would present a client certificate the gateway
+  verifies against its `client-ca`. That is C2, and outside this record.
+  Sherlock has no caller-only setting: a certificate that authenticates
+  a caller is also the transport origin of any unsigned message that
+  caller posts. The supervisor posts no message, so it is never an
+  origin.
+- **Outbox entries written under an earlier ID are not forwarded, and
+  no drain is required before the restart.** This is Garam's call. The
+  adapter sets aside every entry whose `agent_id` is not the agent's
+  GRN ("the entry is another agent's", `outboundOf` in
+  `internal/delivery/forward.go`), before any call to Garam. It leaves
+  the file in the outbox and logs the entry. Before attachment no Garam
+  message reached a runtime under another ID, so none of those entries
+  answers one. An existing-GRN runtime changes no ID, and its entries
+  are forwarded as before.
 - **Same-host trust is the stated assumption.** This is #1355's option
   C1. A process that can bind the runtime's loopback port, or run as the
   runtime's account, is inside the trust boundary. The adapter's message
@@ -346,6 +406,16 @@ directory, written owner-only by the supervisor.
   reused unchanged.
 - Every new direct agent restarts its runtime once under its GRN. An
   existing-GRN runtime attaches without a restart.
+- The entries the adapter sets aside under an earlier ID stay in
+  `outbox/` on the agent's volume indefinitely, and Garam leaves them
+  there. Sherlock never removes an outbox entry, as the Sherlock PM
+  answered on 2026-10-18 and the Garam PM relayed. Its copy, verify and
+  restore carry those entries byte for byte (Sherlock
+  `docs/architecture/deployment.md` §Snapshot and restore, at
+  `d63ac48957cea7214cdd4cfb06b45b1b859e3d7d`). Only entries written
+  before attachment are affected, so the set is bounded and does not
+  grow after the restart. Removing a runtime's files is not the
+  adapter's to do.
 - A runtime on another store at the same address can be attached. Its
   predecessor is fenced at Garam but may go on writing its own memory.
   The record accepts that divergence rather than proving it absent.

@@ -377,5 +377,5 @@ what it needs once the implementation has merged (#1476).
   file serves both with none.
 - **One Transit key per garam key.** It needs a policy that creates and
   deletes keys, where one key's versions need three paths.
-- **OpenBao reachability in readiness**, for the reason in §When OpenBao
-  cannot be reached.
+- **OpenBao reachability in readiness**, for the reason in
+  §When OpenBao cannot be reached.

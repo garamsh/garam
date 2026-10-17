@@ -82,9 +82,10 @@ kinds correctly; nothing in it says a real engine hands them back.
 was measured here.** Adding one `'500'` to one operation in
 `api/openapi.yaml` and running `make gen` leaves `api/server.gen.go`
 byte-identical — so `make check-gen`, which
-[api-surface.md](../api-surface.md) §What a specification is
-authoritative for calls the reason the authority "is enforced rather
-than asserted", cannot see a response at all. The same edit does move
+[api-surface.md](../api-surface.md)
+§What a specification is authoritative for calls the reason the
+authority "is enforced rather than asserted", cannot see a response at
+all. The same edit does move
 `web/src/types/api.ts`, which gains
 `500: components["responses"]["Error"];` in that operation's response
 union.

@@ -62,12 +62,13 @@ its tickets lasted.
 
 Three kinds of route read them again on every request:
 
-- **The controller proof** ([operators.md](./operators.md) §Controller
-  proof) asks `Recheck` of the caller's identity — its credential's
-  dates against the clock, then its record — and `Verify` of the
-  controller certificate the caller forwards, which proves the identity
-  it is presented for by its SAN, by its organization's authority, by
-  its validity at the decision and by its record. A controller token
+- **The controller proof**
+  ([operators.md](./operators.md) §Controller proof) asks `Recheck` of
+  the caller's identity — its credential's dates against the clock,
+  then its record — and `Verify` of the controller certificate the
+  caller forwards, which proves the identity it is presented for by its
+  SAN, by its organization's authority, by its validity at the decision
+  and by its record. A controller token
   forwarded under `operation-authority.v2` is the operator domain's to
   prove instead. The chain is verified
   at a time inside the certificate's validity and the validity at the
@@ -77,11 +78,11 @@ Three kinds of route read them again on every request:
   same way, and `Prove` of the agent certificate it forwards. That
   proof establishes only that the certificate names the agent and
   chains to its organization's authority; whether it is valid now and
-  in the current lineage is the execution fence's to judge (§Generation
-  and lineage), so an expired agent certificate is answered as fenced
-  rather than as unproven. An agent token forwarded under
-  `execution-fence.v2` is proven the same way by the agent domain, and
-  judged by the same fence.
+  in the current lineage is the execution fence's to judge
+  (§Generation and lineage), so an expired agent certificate is
+  answered as fenced rather than as unproven. An agent token forwarded
+  under `execution-fence.v2` is proven the same way by the agent
+  domain, and judged by the same fence.
 - **An agent's protected calls** are judged by the execution fence on
   the certificate's serial and dates as the handshake read them, so a
   certificate that expired on an open connection is refused there
@@ -247,9 +248,9 @@ issued, and `docs/plans/2026-10-09-machine-identity-migration.md` is
 the order it lands in. What runs now is its step G1, the four pull
 requests G1a to G1d, and G2, the adapter presenting an agent token
 from a file and a standalone host running on its supervisor credential
-([adapter.md](./adapter.md) §Token mode, [agents.md](./agents.md)
-§Standalone hosts); a certificate still authenticates beside a token
-until G3.
+([adapter.md](./adapter.md) §Token mode,
+[agents.md](./agents.md) §Standalone hosts); a certificate still
+authenticates beside a token until G3.
 
 - **A request may present a token instead of a certificate**, as
   `Authorization: Garam-Token <token>` or, the same token,
@@ -306,7 +307,8 @@ carries the execution token its lifecycle authority obtained
 ([adapter.md](./adapter.md) §Activation and runtime status). A
 standalone host's supervisor serves that adapter-facing contract
 (ADR-0085), and so does the Operator control service
-(`garamsh/garam-agent-operator` `ad444ed`, `internal/execution`).
+(`garamsh/garam-agent-operator`
+`ad444ede20c83992701fd563e7a0c916827979a4`, `internal/execution`).
 Acceptance with each, joined to garam and Sherlock, is recorded as
 verified on #1157 and #1180; #1157 left scenario 5's managed move to
 `garamsh/garam-agent-operator#296`. Until a

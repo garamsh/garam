@@ -33,9 +33,10 @@ not:
   `docs/architecture/adr/`, which is a change to `docs/architecture/`
   itself.
 - **`stack-go.md` §Project envelope and §7 moved** (`e0ffe77`, #381,
-  and `f7de866`, #414). [structure.md](../structure.md) §Where the
-  composition root lives cited §7's sentence that `package main` cannot
-  be imported, and `e0ffe77` deletes that sentence.
+  and `f7de866`, #414).
+  [structure.md](../structure.md) §Where the composition root lives
+  cited §7's sentence that `package main` cannot be imported, and
+  `e0ffe77` deletes that sentence.
 - **Two template changes met Garam decisions.** They went to the PM on
   #1235 before anything was written.
 
@@ -65,10 +66,11 @@ landed in, and this ADR does not restate them.
   convention file does not send the reader to another. The commit's
   new "Shared concept, named file" bullet is taken.
 - **`f7de866` (#414) is placed differently.** Its paragraph goes at the
-  end of `testing.md` §Three layers, after Garam's own paragraph on the
-  Postgres integration layer (#900). The template places it after the
-  testcontainers exception. Garam's paragraph applies that rule and its
-  exception, so it stays next to them.
+  end of `testing.md` §Three layers — different goals, different scopes,
+  after Garam's own paragraph on the Postgres integration layer (#900).
+  The template places it after the testcontainers exception. Garam's
+  paragraph applies that rule and its exception, so it stays next to
+  them.
 
 **Two local positions are kept and stated, on the PM's decision on
 #1235.** These are the remaining two exceptions.
@@ -117,9 +119,9 @@ taken, declined with a reason, or lands on a file Garam does not keep.
   alternatives are still in view. No ADR before this one has it.
 - **`stack-go.md` §1 no longer reaches a domain whose unexported fields
   close its aggregate.** It does not change which of Garam's domains
-  are defective. [structure.md](../structure.md) §Boundaries and
-  dependency direction already requires a persisted value to be an
-  exported field
+  are defective.
+  [structure.md](../structure.md) §Boundaries and dependency direction
+  already requires a persisted value to be an exported field
   ([ADR-0069](./0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)).
   So the eight domains #1083 has yet to convert remain measured against
   that rule, and §1 reaches each of them once it converts.

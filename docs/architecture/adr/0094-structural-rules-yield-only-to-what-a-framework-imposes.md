@@ -29,8 +29,9 @@ the stack-specific file that applies governs". Two cases turned on it.
   `import { listProviders } from "@/features/auth"` placed in
   `web/src/features/orgs/`, which is an import through the declared
   surface.
-- **The composition root.** [structure.md](../structure.md) §Where the
-  composition root lives puts garam's in `internal/cli`.
+- **The composition root.**
+  [structure.md](../structure.md) §Where the composition root lives puts
+  garam's in `internal/cli`.
   `docs/convention/stack-go.md` §Project envelope puts construction in
   `cmd/<binary>/main.go` and nowhere else. That section cited rule 8 to
   say the stack file governs, and recorded `internal/cli` as a

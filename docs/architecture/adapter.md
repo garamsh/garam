@@ -34,10 +34,11 @@ they own its placement.
 
 It runs beside exactly one agent, in that agent's pod. It has to,
 because the gateway binds loopback unless mTLS is configured (Sherlock
-at `sherlock@40ef7ac`, the historical reading §Foreign facts this rests
-on anchors) and because it must outlive the agent process during
-shutdown — a native sidecar rather than an ordinary container, for the
-reason in [ADR-0018](./adr/0018-delivery-acknowledgement.md).
+at `sherlock@40ef7acd02d134037132b8179380f54c7286d9a8`, the historical
+reading §Foreign facts this rests on anchors) and because it must
+outlive the agent process during shutdown — a native sidecar rather than
+an ordinary container, for the reason in
+[ADR-0018](./adr/0018-delivery-acknowledgement.md).
 
 It reaches garam as the agent in one of two credential modes, and
 verifies garam's listener against the garam server root in both —
@@ -98,7 +99,7 @@ it.
 - **A writer replaces a file by renaming within its directory**, so a
   reader sees the old token or the new one. A Kubernetes Secret volume
   swaps its files that way; the standalone supervisor's copy into the
-  container does not (agents.md §The host's runner), and the next rule
+  container does not (`agents.md` §The host's runner), and the next rule
   is what absorbs it.
 - **A file that is missing, part-written or anything but one token is
   undecided.** The call is not made, nothing is refused or paused, and
@@ -173,8 +174,9 @@ connector are not, and wait on #1355.
   per-caller authorization above the platform; a local ACL needs a
   separate owner decision and is not a token-mode prerequisite.
 
-`internal/cli/delivery.go`, §Token mode and §Activation and runtime
-status are authoritative for what the adapter runs now. Independent
+`internal/cli/delivery.go`, §Token mode and
+§Activation and runtime status are authoritative for what the adapter
+runs now. Independent
 direct writer
 proof remains blocked on the owner decision named in
 [agents.md](./agents.md) §Common managed and direct enrollment; an
@@ -234,9 +236,9 @@ indistinguishable from a turn that never started.
 
 The adapter never has to tell those apart. Success completes;
 everything else retries; an attempt count ends what would otherwise
-loop forever. The platform notifies no sender (§Foreign facts this
-rests on), which is why telling the sender at exhaustion is **garam's
-obligation**
+loop forever. The platform notifies no sender
+(§Foreign facts this rests on), which is why telling the sender at
+exhaustion is **garam's obligation**
 ([ADR-0018](./adr/0018-delivery-acknowledgement.md) §Consequences,
 [overview.md](./overview.md) §Out of scope (today)). **It is recorded
 as one and not discharged**: an adapter may not treat an exhausted
@@ -287,8 +289,9 @@ renewal both answer with the watcher count, and the machine listener
 serves the route a forward arrives on. Nothing under
 `internal/delivery/` reads that count or posts a turn event, so what
 follows is the rule the adapter takes when it is built rather than a
-description of what runs. [overview.md](./overview.md) §Out of scope
-(today) records it, beside the §Readiness half.
+description of what runs.
+[overview.md](./overview.md) §Out of scope (today) records it, beside
+the §Readiness half.
 
 **Forward turn events only while garam says someone is watching, and read
 that from the claim.** Every claim and every renewal answers with a
@@ -378,20 +381,20 @@ there.
 Named because this contract would be **wrong** if any of them changed,
 not because they were mentioned. Read in Sherlock
 ([`garamsh/sherlock`](https://github.com/garamsh/sherlock)) at
-[`40ef7ac`](https://github.com/garamsh/sherlock/tree/40ef7ac), when the
-repository was named `gagent`; each path below is the one it had at
-that commit, and none is claimed to hold on the current branch. The
-repository carries no tags — none on 2026-09-27 either — so a commit is
-the only anchor, and an unanchored citation goes on looking valid after
-it has lost what it points at. The sections above restate several of
-these rows as `sherlock@40ef7ac`, and the same commit is the anchor for
-those restatements.
+[`40ef7acd02d134037132b8179380f54c7286d9a8`](https://github.com/garamsh/sherlock/tree/40ef7acd02d134037132b8179380f54c7286d9a8),
+when the repository was named `gagent`; each path below is the one it
+had at that commit, and none is claimed to hold on the current branch.
+The repository carries no tags — none on 2026-09-27 either — so a commit
+is the only anchor, and an unanchored citation goes on looking valid
+after it has lost what it points at. The sections above restate several
+of these rows as `sherlock@40ef7acd02d134037132b8179380f54c7286d9a8`,
+and the same commit is the anchor for those restatements.
 
 The last two rows are not that reading's. They arrived on 2026-08-25
-from [ADR-0013](./adr/0013-agent-messaging.md) §Decision, which is
-where they were read. The 40ef7ac rows that said the gateway mints the
-identifier are gone: the contract no longer rests on them, and the
-table below holds what replaced them.
+from [ADR-0013](./adr/0013-agent-messaging.md) §Decision, which is where
+they were read. The 40ef7acd02d134037132b8179380f54c7286d9a8 rows that
+said the gateway mints the identifier are gone: the contract no longer
+rests on them, and the table below holds what replaced them.
 
 | Fact | Where | What breaks without it |
 |---|---|---|
@@ -420,8 +423,9 @@ contract binds:
 Read in Sherlock at
 [`v0.8.0`](https://github.com/garamsh/sherlock/tree/162499052312c8830a0ac585021d9e14a2f3ce08)
 (`162499052312c8830a0ac585021d9e14a2f3ce08`), the release garam's
-real-runtime suites pin, in `docs/architecture/gateway.md` §Signed
-messages, which governs Sherlock's ingress. Against
+real-runtime suites pin, in
+`docs/architecture/gateway.md` §Signed messages, which governs
+Sherlock's ingress. Against
 [`v0.4.0`](https://github.com/garamsh/sherlock/tree/6054666584e6a0f22c19d563e26240d6eefc1258),
 the first release a signing adapter can run beside, that section only
 gains the deployment order §Stable identifiers and the outbox repeats.
@@ -568,8 +572,8 @@ supervisor when standalone.
 - **Every protected call carries the activation's token**, as
   `Authorization: Garam-Execution <token>`, or in a `Garam-Execution`
   header of its own in the token mode
-  ([machine-identity.md](./machine-identity.md) §Generation and
-  lineage), and the adapter makes none before it holds one.
+  (`machine-identity.md` §Generation and lineage), and the adapter makes
+  none before it holds one.
 - **It activates the generation the runtime reports, while it reports
   `serving`.** A runtime already draining is not activated (ADR-0085).
   It reads Sherlock's loopback status, then asks the authority with that
@@ -598,6 +602,6 @@ for the control socket setting.
 ## Not decided
 
 - A durable inbox on the platform's side was unbuilt and unscheduled at
-  `sherlock@40ef7ac` — treat it as unavailable rather than refused. If
-  it arrives, the completion rule does not change; the redelivery causes
-  reduce by one.
+  `sherlock@40ef7acd02d134037132b8179380f54c7286d9a8` — treat it as
+  unavailable rather than refused. If it arrives, the completion rule
+  does not change; the redelivery causes reduce by one.

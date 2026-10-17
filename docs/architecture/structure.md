@@ -114,7 +114,7 @@ reach it, so `internal/cli` is the file that section names for garam
 **The placement is what the in-process integration tests rest on.** Only
 a test in its own directory can import a main package, which
 `docs/convention/stack-go.md` §Project envelope states where it moves
-the site out of `main.go`, and §Testing of that file designates
+the site out of `main.go`, and §7. Testing of that file designates
 `tests/` for the integration and E2E tests that wire multiple domains
 ([ADR-0096](./adr/0096-garam-syncs-the-convention-template-to-f7de866.md)).
 `tests/integration/issue_certificate_test.go` and
@@ -128,8 +128,9 @@ the wiring — and a copy does not fail when the shipped wiring breaks.
 `stack-go.md` used to put construction in `cmd/<binary>/main.go` and
 nowhere else, and this section recorded `internal/cli` as diverging from
 it. #756 put the question to the template, which answered it in
-`garamsh/convention-driven-project@db32912` (#337). ADR-0094 adopts that
-answer, so the divergence record ends and no question is left open.
+`garamsh/convention-driven-project@db3291285a9f89edf571a41bcdaee8528d77b021`
+(#337). ADR-0094 adopts that answer, so the divergence record ends and
+no question is left open.
 
 ## When a new boundary is earned
 
@@ -204,8 +205,9 @@ A conversion to a wire format the boundaries already share is not a shared kerne
 - [ADR-0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)
   — the composition-site rule is this document's. The ADR records the
   template sync that moved the rule out of
-  `docs/convention/stack-go.md` and into §Where the composition root
-  lives, which leaves that file only the Go path of the site.
+  `docs/convention/stack-go.md` and into
+  §Where the composition root lives, which leaves that file only the
+  Go path of the site.
 
 ## Open questions
 

@@ -27,7 +27,8 @@ its attempts, sits until the sweep deletes it thirty days later
 ([ADR-0034](./0034-a-delivered-message-keeps-its-key-and-drops-its-body.md)),
 and nothing tells its sender in that time.
 [messaging.md](../messaging.md) opens with that under rule 9 and
-[overview.md](../overview.md) §Out of scope names the exhaustion half.
+[overview.md](../overview.md) §Out of scope (today) names the exhaustion
+half.
 
 Two agents cannot coordinate on that. A sender that cannot tell a
 message nothing has looked at from one a reader is working on has no

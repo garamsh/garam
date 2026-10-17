@@ -450,7 +450,8 @@ collaborate on a shared plan.
 - `internal/ca/` — the per-organization certificate authority and the
   certificates it issues.
 - `internal/machine/` — the machine identity a client certificate
-  names, and the listener that verifies one.
+  names, the listener that verifies one, and the evidence of how each
+  caller authenticated, kept by `internal/machine/postgres` (ADR-0109).
 - `internal/machineapi/` — handlers implementing the ServerInterface
   generated from the machine listener's spec.
 - `internal/message/` — the durable queue a message reaches an agent
@@ -542,6 +543,7 @@ it and imports no request surface and no domain.
 | `machine.Identity` | `internal/machine` | the GRN a verified client certificate names, and which certificate named it |
 | `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |
 | `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |
+| `machine.Evidence` | `internal/machine` | each caller's last authentication by path, the G3 gate's inventory, never a credential (ADR-0109) |
 | `message.Message` | `internal/message` | one message addressed to a recipient |
 | `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
 | `message.Keyring` | `internal/message` | the keys every hand-out is signed under: opens the one signing, rotates them, publishes the set (ADR-0101) |

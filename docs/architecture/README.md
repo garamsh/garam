@@ -777,3 +777,10 @@ ADRs:
   the entry's merits is still set aside until its file is replaced.
   0083's decision stands, and its 404 row now reads as a later attempt
   that may be admitted
+- [0109](./adr/0109-each-machine-callers-last-authentication-by-each-path-is-kept-in-postgres-for-the-g3-gate.md)
+  — garam keeps one Postgres row per machine caller and authentication
+  path, holding the first and last sighting and the last refresh. It is
+  written where each path is decided, at most once a minute per process,
+  and never holds a credential. It goes with the tenant, outlives a
+  deleted caller, and is read with
+  `internal/machine/postgres/inventory.sql`

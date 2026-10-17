@@ -149,11 +149,17 @@ func serve(t *testing.T, dir string, svc machine.Service, next http.Handler) str
 // serveTokens is serve answering presented tokens from tokens.
 func serveTokens(t *testing.T, dir string, svc machine.Service, tokens machine.Tokens, next http.Handler) string {
 	t.Helper()
+	return serveEvidence(t, dir, svc, tokens, nil, next)
+}
+
+// serveEvidence is serveTokens noting each identity in evidence.
+func serveEvidence(t *testing.T, dir string, svc machine.Service, tokens machine.Tokens, evidence *machine.Evidence, next http.Handler) string {
+	t.Helper()
 	pair, err := keyfile.NewPair(certPath(dir), keyPath(dir))
 	require.NoError(t, err)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	srv := machine.NewServer(svc, tokens, pair, next)
+	srv := machine.NewServer(svc, tokens, evidence, pair, next)
 	go func() { _ = srv.ServeTLS(lis, "", "") }()
 	t.Cleanup(func() { _ = srv.Close() })
 	return "https://" + lis.Addr().String()

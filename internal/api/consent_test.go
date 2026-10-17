@@ -231,5 +231,5 @@ func TestConsents_WithdrawRefusesAnOrgThatIsNotThere(t *testing.T) {
 // orgGRNForTest builds the GRN of the org the slug names, as the
 // surface's own helper does.
 func orgGRNForTest(slug string) grn.GRN {
-	return grn.New("root", "default", org.ServiceTypeOrg, slug)
+	return grn.Org(slug)
 }

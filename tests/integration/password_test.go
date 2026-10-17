@@ -175,7 +175,7 @@ func TestRegisterPassword_ADuplicateCarriesNoneOfPostgresText(t *testing.T) {
 	orgs := org.NewPostgresStore(p)
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
-	acme := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, "acme")
+	acme := grn.Org("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	// Two live invitations, because one is spent by the registration
 	// that lands and the second call has to reach the user row.
@@ -234,7 +234,7 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 	orgs := org.NewPostgresStore(p)
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
-	acme := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, "acme")
+	acme := grn.Org("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	token, err := org.NewInvitationToken()
 	require.NoError(t, err)

@@ -30,7 +30,7 @@ const registeredPassword = "correct-horse-battery-staple"
 // than from an account.
 func inviteTo(t *testing.T, f *fixture, slug, token string) string {
 	t.Helper()
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	orgGRN := grn.Org(slug)
 	require.NoError(t, f.orgs.CreateOrg(testCtx(t), org.NewOrganization(orgGRN, slug)))
 	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
 	inv := org.NewInvitation(token, orgGRN, org.RoleMember, creator, time.Now().UTC().Add(time.Hour))
@@ -306,7 +306,7 @@ func TestRegisterPassword_RefusesWithoutALiveInvitation(t *testing.T) {
 	require.Equal(t, http.StatusCreated,
 		f.do(t, "POST", "/auth/password/register", registerBody(live, "alice", registeredPassword)).Code)
 
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, "acme")
+	orgGRN := grn.Org("acme")
 	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
 	expired := org.NewInvitation("expired-tok", orgGRN, org.RoleMember, creator, time.Now().UTC().Add(-time.Hour))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), expired))
@@ -334,7 +334,7 @@ func TestRegisterPassword_RefusesAUsernameThatIsTakenOrUnusable(t *testing.T) {
 	require.Equal(t, http.StatusCreated,
 		f.do(t, "POST", "/auth/password/register", registerBody(first, "alice", registeredPassword)).Code)
 
-	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, "acme")
+	orgGRN := grn.Org("acme")
 	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
 	second := org.NewInvitation("second-tok", orgGRN, org.RoleMember, creator, time.Now().UTC().Add(time.Hour))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), second))

@@ -267,6 +267,36 @@ func (q *Queries) GetActivationByRequest(ctx context.Context, arg GetActivationB
 	return i, err
 }
 
+const getAdmittedReplacementByReference = `-- name: GetAdmittedReplacementByReference :one
+SELECT id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at, agent_grn, admitted_at, replaced_agent_grn, expected_assignee_grn, expected_epoch, admitted_epoch, admitted_lineage FROM agent_enrollment_approvals
+WHERE operation_ref = $1 AND replaced_agent_grn IS NOT NULL AND admitted_at IS NOT NULL
+`
+
+// The admitted replacement a reference spent, which a first activation
+// after it may carry (ADR-0107).
+func (q *Queries) GetAdmittedReplacementByReference(ctx context.Context, operationRef string) (AgentEnrollmentApproval, error) {
+	row := q.db.QueryRow(ctx, getAdmittedReplacementByReference, operationRef)
+	var i AgentEnrollmentApproval
+	err := row.Scan(
+		&i.ID,
+		&i.OrgGrn,
+		&i.RequestID,
+		&i.Placement,
+		&i.AudienceGrn,
+		&i.AssigneeGrn,
+		&i.OperationRef,
+		&i.CreatedAt,
+		&i.AgentGrn,
+		&i.AdmittedAt,
+		&i.ReplacedAgentGrn,
+		&i.ExpectedAssigneeGrn,
+		&i.ExpectedEpoch,
+		&i.AdmittedEpoch,
+		&i.AdmittedLineage,
+	)
+	return i, err
+}
+
 const getCutoverAgent = `-- name: GetCutoverAgent :one
 SELECT e.mode, s.assignee_grn, s.epoch
 FROM agent_executions e
@@ -374,7 +404,7 @@ func (q *Queries) GetEnrollment(ctx context.Context, arg GetEnrollmentParams) (A
 }
 
 const getEnrollmentApproval = `-- name: GetEnrollmentApproval :one
-SELECT id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at, agent_grn, admitted_at FROM agent_enrollment_approvals WHERE org_grn = $1 AND id = $2
+SELECT id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at, agent_grn, admitted_at, replaced_agent_grn, expected_assignee_grn, expected_epoch, admitted_epoch, admitted_lineage FROM agent_enrollment_approvals WHERE org_grn = $1 AND id = $2
 `
 
 type GetEnrollmentApprovalParams struct {
@@ -396,12 +426,17 @@ func (q *Queries) GetEnrollmentApproval(ctx context.Context, arg GetEnrollmentAp
 		&i.CreatedAt,
 		&i.AgentGrn,
 		&i.AdmittedAt,
+		&i.ReplacedAgentGrn,
+		&i.ExpectedAssigneeGrn,
+		&i.ExpectedEpoch,
+		&i.AdmittedEpoch,
+		&i.AdmittedLineage,
 	)
 	return i, err
 }
 
 const getEnrollmentApprovalByRequest = `-- name: GetEnrollmentApprovalByRequest :one
-SELECT id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at, agent_grn, admitted_at FROM agent_enrollment_approvals WHERE org_grn = $1 AND request_id = $2
+SELECT id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at, agent_grn, admitted_at, replaced_agent_grn, expected_assignee_grn, expected_epoch, admitted_epoch, admitted_lineage FROM agent_enrollment_approvals WHERE org_grn = $1 AND request_id = $2
 `
 
 type GetEnrollmentApprovalByRequestParams struct {
@@ -423,6 +458,11 @@ func (q *Queries) GetEnrollmentApprovalByRequest(ctx context.Context, arg GetEnr
 		&i.CreatedAt,
 		&i.AgentGrn,
 		&i.AdmittedAt,
+		&i.ReplacedAgentGrn,
+		&i.ExpectedAssigneeGrn,
+		&i.ExpectedEpoch,
+		&i.AdmittedEpoch,
+		&i.AdmittedLineage,
 	)
 	return i, err
 }
@@ -991,23 +1031,28 @@ func (q *Queries) InsertEnrollment(ctx context.Context, arg InsertEnrollmentPara
 
 const insertEnrollmentApproval = `-- name: InsertEnrollmentApproval :execrows
 INSERT INTO agent_enrollment_approvals (
-    id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at,
+    replaced_agent_grn, expected_assignee_grn, expected_epoch
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 ON CONFLICT DO NOTHING
 `
 
 type InsertEnrollmentApprovalParams struct {
-	ID           pgtype.UUID
-	OrgGrn       string
-	RequestID    string
-	Placement    string
-	AudienceGrn  string
-	AssigneeGrn  string
-	OperationRef string
-	CreatedAt    pgtype.Timestamptz
+	ID                  pgtype.UUID
+	OrgGrn              string
+	RequestID           string
+	Placement           string
+	AudienceGrn         string
+	AssigneeGrn         string
+	OperationRef        string
+	CreatedAt           pgtype.Timestamptz
+	ReplacedAgentGrn    pgtype.Text
+	ExpectedAssigneeGrn pgtype.Text
+	ExpectedEpoch       pgtype.Int4
 }
 
-// An agent-enrollment.v1 approval (ADR-0102). Either unique key
+// An agent-enrollment.v1 approval (ADR-0102), with the agent and
+// assignment a replacement expects (ADR-0107). Either unique key
 // refusing the row writes nothing, and the caller reads what holds it.
 func (q *Queries) InsertEnrollmentApproval(ctx context.Context, arg InsertEnrollmentApprovalParams) (int64, error) {
 	result, err := q.db.Exec(ctx, insertEnrollmentApproval,
@@ -1019,6 +1064,9 @@ func (q *Queries) InsertEnrollmentApproval(ctx context.Context, arg InsertEnroll
 		arg.AssigneeGrn,
 		arg.OperationRef,
 		arg.CreatedAt,
+		arg.ReplacedAgentGrn,
+		arg.ExpectedAssigneeGrn,
+		arg.ExpectedEpoch,
 	)
 	if err != nil {
 		return 0, err
@@ -1532,7 +1580,7 @@ func (q *Queries) LockEnrollment(ctx context.Context, id pgtype.UUID) (AgentEnro
 }
 
 const lockEnrollmentApproval = `-- name: LockEnrollmentApproval :one
-SELECT id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at, agent_grn, admitted_at FROM agent_enrollment_approvals WHERE id = $1 FOR UPDATE
+SELECT id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at, agent_grn, admitted_at, replaced_agent_grn, expected_assignee_grn, expected_epoch, admitted_epoch, admitted_lineage FROM agent_enrollment_approvals WHERE id = $1 FOR UPDATE
 `
 
 // LockEnrollmentApproval is what concurrent admissions of one approval
@@ -1551,6 +1599,11 @@ func (q *Queries) LockEnrollmentApproval(ctx context.Context, id pgtype.UUID) (A
 		&i.CreatedAt,
 		&i.AgentGrn,
 		&i.AdmittedAt,
+		&i.ReplacedAgentGrn,
+		&i.ExpectedAssigneeGrn,
+		&i.ExpectedEpoch,
+		&i.AdmittedEpoch,
+		&i.AdmittedLineage,
 	)
 	return i, err
 }
@@ -1902,6 +1955,28 @@ type SpendEnrollmentApprovalParams struct {
 
 func (q *Queries) SpendEnrollmentApproval(ctx context.Context, arg SpendEnrollmentApprovalParams) error {
 	_, err := q.db.Exec(ctx, spendEnrollmentApproval, arg.ID, arg.AgentGrn, arg.AdmittedAt)
+	return err
+}
+
+const spendReplacementApproval = `-- name: SpendReplacementApproval :exec
+UPDATE agent_enrollment_approvals SET admitted_epoch = $2, admitted_lineage = $3, admitted_at = $4
+WHERE id = $1
+`
+
+type SpendReplacementApprovalParams struct {
+	ID              pgtype.UUID
+	AdmittedEpoch   pgtype.Int4
+	AdmittedLineage pgtype.UUID
+	AdmittedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) SpendReplacementApproval(ctx context.Context, arg SpendReplacementApprovalParams) error {
+	_, err := q.db.Exec(ctx, spendReplacementApproval,
+		arg.ID,
+		arg.AdmittedEpoch,
+		arg.AdmittedLineage,
+		arg.AdmittedAt,
+	)
 	return err
 }
 

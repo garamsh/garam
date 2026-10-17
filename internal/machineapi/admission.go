@@ -27,12 +27,12 @@ var admissionReasons = []struct {
 	{agent.ErrApprovalSpent, "approval_spent"},
 	{agent.ErrAdmissionSuperseded, "superseded"},
 	{agent.ErrDirectPlacementGated, "direct_placement_gated"},
-	{agent.ErrReplacementUnavailable, "replacement_unavailable"},
 }
 
 // PrepareAgentEnrollment records the hosted control service's approval
-// of one admission under a member's agent:create reference, the first
-// stage of agent-enrollment.v1 (ADR-0102).
+// of one admission under a member's agent:create reference, or a
+// replacement under an agent:replace one, the first stage of
+// agent-enrollment.v1 (ADR-0102, ADR-0107).
 func (s *Server) PrepareAgentEnrollment(w http.ResponseWriter, r *http.Request, params machinegen.PrepareAgentEnrollmentParams) {
 	r, cancel := lifecycleBudget(r)
 	defer cancel()
@@ -46,15 +46,22 @@ func (s *Server) PrepareAgentEnrollment(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	b := approval.Binding
-	writeJSON(w, createdOrReplayed(created), machinegen.AgentEnrollmentApproval{
+	answer := machinegen.AgentEnrollmentApproval{
 		ApprovalId: openapi_types.UUID(approval.ID), RequestId: string(b.RequestID),
 		Placement: machinegen.AgentEnrollmentApprovalPlacement(b.Placement), Assignee: b.Assignee.String(),
 		OperationRef: b.OperationRef,
-	})
+	}
+	if r := b.Replaces; r != nil {
+		answer.Replaces = &machinegen.AgentEnrollmentReplacement{
+			Agent: r.Agent.String(), ExpectedAssignee: r.Assignee.String(), ExpectedEpoch: strconv.Itoa(r.Epoch),
+		}
+	}
+	writeJSON(w, createdOrReplayed(created), answer)
 }
 
 // AdmitAgentEnrollment admits the agent an approval binds, fenced and
-// with no active generation, the second stage of agent-enrollment.v1.
+// with no active generation, the second stage of agent-enrollment.v1:
+// a new agent, or the move of an existing one a replacement binds.
 // The assignee then delivers its tokens with mintAgentToken.
 func (s *Server) AdmitAgentEnrollment(w http.ResponseWriter, r *http.Request, approvalID machinegen.ApprovalId, params machinegen.AdmitAgentEnrollmentParams) {
 	r, cancel := lifecycleBudget(r)

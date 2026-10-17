@@ -433,12 +433,19 @@ answered once, and a second recovery under it is refused
 agent, is decided on `agent:cutover` against it, records where the
 agent runs now and binds the request target of one of garam's cutover
 routes, so each stage of a legacy agent's cutover takes a reference of
-its own, rechecked when it is presented (ADR-0086).
+its own, rechecked when it is presented (ADR-0086). Replacement
+targets the agent, is decided on `agent:replace` against it, records
+where the agent runs now and binds the controller a managed
+replacement moves it to; the grant must cover both controllers at the
+mint and at every read, and the reference stays current at the
+assignment the replacement writes
+([ADR-0107](./adr/0107-a-managed-replacement-is-authorized-by-an-agent-replace-reference-naming-the-agent-its-assignment-and-the-controller-it-moves-to.md)).
 Every role holds `agent:create`; only owner and admin hold
-`agent:configure`, `agent:recover` and `agent:cutover`, because
-execution settings choose what runs on a host, a recovery fences every
-certificate the agent held, and a cutover moves which service owns the
-agent's settings.
+`agent:configure`, `agent:recover`, `agent:cutover` and
+`agent:replace`, because execution settings choose what runs on a
+host, a recovery fences every certificate the agent held, a cutover
+moves which service owns the agent's settings, and a replacement
+moves the agent to another controller and fences its lineage.
 `agent:activate` is a grant operation only, bounding the hosted
 operator's own lifecycle authority; no member mints it.
 

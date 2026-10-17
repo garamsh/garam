@@ -76,5 +76,9 @@ func bindingToAPI(b operator.Binding) machinegen.OperationBinding {
 		target := string(*b.RequestTarget)
 		out.RequestTarget = &target
 	}
+	if b.Destination != nil {
+		destination := b.Destination.String()
+		out.DestinationGrn = &destination
+	}
 	return out
 }

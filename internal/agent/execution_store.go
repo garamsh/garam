@@ -62,6 +62,10 @@ type ExecutionStore interface {
 	// GetManagedCreationByReference answers the creation ref
 	// authorized, or nil.
 	GetManagedCreationByReference(ctx context.Context, ref string) (*ManagedCreation, error)
+	// GetReplacement answers what the agent-enrollment.v1 replacement
+	// ref authorized admitted, or nil where it admitted nothing
+	// (ADR-0107).
+	GetReplacement(ctx context.Context, ref string) (*ManagedCreation, error)
 	// InstallInitialCertificate records req.Signed as the first
 	// certificate of req.Lineage and answers it with created true. A
 	// retry of the recorded request answers the recorded certificate

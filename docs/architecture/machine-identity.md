@@ -402,8 +402,10 @@ which take its token alone.
 Each request rereads the caller's credential and registration; each
 but creation and admission rereads its grant, or a supervisor's
 registration and assignment, and current policy too, and those reread
-the member's `agent:create` reference instead. An agent's own
-certificate and a controller's are refused.
+the member's `agent:create` reference instead, or for a replacement
+the `agent:replace` reference whose grant must cover both the
+controller the agent is on and the one it moves to (ADR-0107). An
+agent's own certificate and a controller's are refused.
 Activation, deactivation, recovery, creation, admission and initial
 issuance are each bounded by a ten-second server deadline over both
 their authority reads and their write, and past it answer unavailable

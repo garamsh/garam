@@ -78,6 +78,8 @@ sql:
       - migrations/000017_operators.up.sql
       - migrations/000028_operator_delegations.up.sql
       - migrations/000032_operator_control_endpoints.up.sql
+      - migrations/000049_agent_enrollment_approvals.up.sql
+      - migrations/000051_agent_replace.up.sql
     queries: internal/operator/postgres/queries.sql
     gen:
       go:
@@ -157,6 +159,8 @@ sql:
       - migrations/000040_agent_recovery_unsigned.up.sql
       - migrations/000042_supervisor_credentials.up.sql
       - migrations/000049_agent_enrollment_approvals.up.sql
+      - migrations/000028_operator_delegations.up.sql
+      - migrations/000051_agent_replace.up.sql
     queries: internal/agent/postgres/queries.sql
     gen:
       go:

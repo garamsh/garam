@@ -235,9 +235,18 @@ func parseMintRequest(actor, orgG grn.GRN, body apigen.OperationAuthorityRequest
 		}
 		requestTarget = &t
 	}
+	var destination *grn.GRN
+	if body.Destination != nil {
+		g, err := grn.Parse(*body.Destination)
+		if err != nil {
+			return operator.MintRequest{}, errorx.Wrap(err, "destination", errorx.KindInvalidArgument)
+		}
+		destination = &g
+	}
 	return operator.MintRequest{
 		Actor: actor, Org: orgG, Audience: audience, Operation: op,
 		Target: target, RequestID: requestID, Digest: digest, RequestTarget: requestTarget,
+		Destination: destination,
 	}, nil
 }
 

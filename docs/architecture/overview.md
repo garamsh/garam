@@ -102,8 +102,9 @@ collaborate on a shared plan.
   minted under it; every mint, read back and proof is decided from
   current state. Delegating is `operator:delegate`, creating
   `agent:create`, configuring `agent:configure`, recovering
-  `agent:recover` and cutting a legacy agent over `agent:cutover`
-  (ADR-0086). Reading the operator's published templates and
+  `agent:recover`, cutting a legacy agent over `agent:cutover`
+  (ADR-0086) and moving one to another controller `agent:replace`
+  (ADR-0107). Reading the operator's published templates and
   profiles, publishing a template version and reading an agent's
   execution are each an operation of their own, bound to the exact
   request target, and the console sends every one only to the control

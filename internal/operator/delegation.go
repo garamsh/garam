@@ -86,6 +86,12 @@ const (
 	// operator of the organization: its images and its last contact
 	// (#1374). It is the action a member already holds to list them.
 	OperationOperatorRead Operation = "operator:read"
+	// OperationAgentReplace moves an existing agent to another
+	// controller under its GRN, in a new lineage: a high-trust action
+	// no member role grants. Its authority binds the controller the
+	// agent moves to, which the grant covers beside the one it is on
+	// (ADR-0107).
+	OperationAgentReplace Operation = "agent:replace"
 )
 
 // ParseOperation parses an operation a grant may carry.
@@ -93,7 +99,7 @@ func ParseOperation(s string) (Operation, error) {
 	switch o := Operation(s); o {
 	case OperationAgentCreate, OperationAgentConfigure, OperationAgentActivate, OperationAgentRecover,
 		OperationTemplateRead, OperationTemplatePublish, OperationProfileRead, OperationExecutionRead,
-		OperationAgentCutover, OperationOperatorRead:
+		OperationAgentCutover, OperationOperatorRead, OperationAgentReplace:
 		return o, nil
 	}
 	return "", errorx.New(errorx.KindInvalidArgument, "unknown operation "+s)
@@ -110,7 +116,13 @@ func (o Operation) IsMintable() bool {
 // it is minted.
 func (o Operation) TargetsAgent() bool {
 	return o == OperationAgentConfigure || o == OperationAgentRecover || o == OperationExecutionRead ||
-		o == OperationAgentCutover
+		o == OperationAgentCutover || o == OperationAgentReplace
+}
+
+// BindsDestination reports whether an authority for the operation
+// binds the controller it moves the agent to.
+func (o Operation) BindsDestination() bool {
+	return o == OperationAgentReplace
 }
 
 // TargetsOrg reports whether the operation acts on what the Operator

@@ -83,16 +83,16 @@ test "$found" -eq "$((listed - 1))" \
 # live database, and the derivation is held against the Makefile's.
 self="garam_test$(git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')"
 test "$self" = "$TEST_DB_NAME" \
-	|| fail "the Makefile names $TEST_DB_NAME and this script derives $self — Makefile:59 and the rule here no longer agree"
+	|| fail "the Makefile names $TEST_DB_NAME and this script derives $self — the Makefile's TEST_DB_NAME and the rule here no longer agree"
 printf '%s\n' "$keep" | grep -qxF "$self" \
 	|| fail "$self is the database this worktree runs against and the keep set does not hold it — the enumeration is broken"
 
 echo "db-prune: $total databases on this server, $found worktrees tracked, $live of them still on disk"
 
 # `garam_test%` is wider than what the naming creates: only `garam_test`
-# and `garam_test_<worktree>` come from Makefile:59, and a third name
-# matching that pattern was created by something else and is left alone
-# rather than swept up by the width of the filter.
+# and `garam_test_<worktree>` come from the Makefile's TEST_DB_NAME,
+# and a third name matching that pattern was created by something else
+# and is left alone rather than swept up by the width of the filter.
 kept=''
 doomed=''
 foreign=''

@@ -500,11 +500,28 @@ and not in the same place on every surface.
   ([ADR-0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)).
   No event carries a key, token, credential or certificate
   ([machine-identity.md](./machine-identity.md) §Credential events).
+- **A list answers only the objects its caller may read.**
+  `listGroups`, `listProjects`, `listAgents`, `listAgentTemplates` and
+  `listPolicies` are authorized on their read action on the
+  organization, and then drop each object whose own read the caller is
+  denied: the read `getGroup`, `getProject`, `getAgent`,
+  `getAgentTemplate` and `listPolicyVersions` each make on the object.
+  A Deny on one object therefore hides it from the list as it refuses
+  its read. Every object of a page is asked in one `CheckBatch` call
+  to the engine
+  ([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md),
+  [authz.md](./authz.md)). **A short page does not mean the end.** The
+  page is filtered as read, so `limit` and `offset` count the stored
+  rows, and a page can hold fewer objects than its limit with more
+  after it; a client pages until a page comes back empty. Lists gated
+  on a parent object — a group's or project's members, a policy's
+  versions and attachments, an operator's keys — are not filtered: the
+  parent's read is what decides them.
 - **A caller's own teams are one filtered list.** `listGroups` with
   `member=me` answers only the groups the signed-in caller belongs to,
-  ordered and paged as the unfiltered list is, and authorized on the
-  same `group:read` on the organization. The filter names the caller
-  and nobody else, because who else belongs to a group is
+  ordered, paged and filtered as the unfiltered list is, and authorized
+  on the same `group:read` on the organization. The filter names the
+  caller and nobody else, because who else belongs to a group is
   `listGroupMembers`', which is decided per group.
 - **A member may ask what it may do, and the answer decides nothing.**
   `checkPermissions` takes up to 50 pairs of an action and a resource

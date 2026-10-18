@@ -76,6 +76,10 @@ type Store interface {
 	// does too.
 	RemoveProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error
 	ListProjectMembers(ctx context.Context, projectGRN grn.GRN) ([]grn.GRN, error)
+	// ListProjectsByMember returns the org's Projects the member
+	// belongs to; a list reads it to collect what each project's roles
+	// grant the member.
+	ListProjectsByMember(ctx context.Context, orgGRN, memberGRN grn.GRN) ([]grn.GRN, error)
 
 	// Membership — org-scoped, carries a Role.
 	AddMember(ctx context.Context, m *Membership) error

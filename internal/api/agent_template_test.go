@@ -44,6 +44,7 @@ func retiredTemplate(slug, id, name string) *agent.Template {
 func TestAgentTemplate_WritesAreClosedAndReadsStay(t *testing.T) {
 	f := newFixture(t)
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).Return(true, nil)
+	f.evaluator.EXPECT().EvaluateBatch(mock.Anything, mock.Anything).Return([]bool{true}, nil)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	kept := retiredTemplate(slug, "7c1e2a9b3d4f5a60", "Researcher")
@@ -101,8 +102,8 @@ func TestAgentTemplate_ReadingIsItsOwnAction(t *testing.T) {
 // TestAgentTemplate_IsAuthorizedOnTheTemplateItNames records what each
 // template read asks the evaluator about. A read that asked about the
 // organization instead would let a policy scoped to one template reach
-// every other one; the list, which names no template, asks about the
-// organization and is the control.
+// every other one. The list asks about the organization, and then about
+// each template it would answer, in one batch.
 func TestAgentTemplate_IsAuthorizedOnTheTemplateItNames(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -120,6 +121,17 @@ func TestAgentTemplate_IsAuthorizedOnTheTemplateItNames(t *testing.T) {
 			asked = append(asked, question{in.Action, in.Object})
 			return in.Subject == userGRNOf("maintainer-sub"), nil
 		})
+	f.evaluator.EXPECT().EvaluateBatch(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.BatchInput) ([]bool, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			allowed := make([]bool, len(in.Objects))
+			for i, o := range in.Objects {
+				asked = append(asked, question{in.Action, o.Object})
+				allowed[i] = in.Subject == userGRNOf("maintainer-sub")
+			}
+			return allowed, nil
+		})
 	maintainer := f.sessionCookieFor(t, "maintainer-sub", "Maintainer")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("maintainer-sub"), org.RoleMember)))
 	kept := retiredTemplate(slug, "7c1e2a9b3d4f5a60", "Researcher")
@@ -136,6 +148,7 @@ func TestAgentTemplate_IsAuthorizedOnTheTemplateItNames(t *testing.T) {
 	assert.ElementsMatch(t, []question{
 		{org.ActionAgentTemplateRead, kept.GRN},
 		{org.ActionAgentTemplateRead, orgGRNOf(slug)},
+		{org.ActionAgentTemplateRead, kept.GRN},
 	}, asked)
 }
 

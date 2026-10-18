@@ -25,6 +25,14 @@ service AuthzService {
   // be dropped unread by such an engine, which would then answer from
   // its cache.
   rpc CheckCurrent(CheckCurrentRequest) returns (CheckCurrentResponse);
+
+  // CheckBatch answers Check's question for one subject and one action
+  // over many objects of the subject's organization, in one call
+  // (ADR-0115). Each object is decided as a Check would decide it given
+  // the shared statements and the object's own, over the persisted
+  // policies read once for the call. One object outside subject_org
+  // refuses the whole call, as Check refuses it.
+  rpc CheckBatch(CheckBatchRequest) returns (CheckBatchResponse);
 }
 
 // Effect is a statement's outcome when it matches (ADR-0002).
@@ -84,6 +92,35 @@ message CheckCurrentRequest {
 message CheckCurrentResponse {
   // allowed is decided as CheckResponse.allowed is.
   bool allowed = 1;
+}
+
+// CheckBatchRequest is CheckRequest's question asked of many objects.
+// Its subject_grn, action, subject_groups and subject_org are
+// CheckRequest's, and hold for every object.
+message CheckBatchRequest {
+  string subject_grn = 1;
+  string action = 2;
+  // statements are the caller's role-derived grants that hold for every
+  // object, such as an org role's.
+  repeated Statement statements = 3;
+  repeated string subject_groups = 4;
+  string subject_org = 5;
+  repeated CheckBatchObject objects = 6;
+}
+
+// CheckBatchObject is one object of a CheckBatchRequest.
+message CheckBatchObject {
+  string object_grn = 1;
+  // statements are grants that reach the subject through this object
+  // alone, such as a group's roles scoped to the group. The engine
+  // unions them with the request's statements for this object only.
+  repeated Statement statements = 2;
+}
+
+message CheckBatchResponse {
+  // allowed holds one decision per object, in the request's order, each
+  // decided as CheckResponse.allowed is.
+  repeated bool allowed = 1;
 }
 
 // ExplainRequest mirrors CheckRequest.

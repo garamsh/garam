@@ -314,7 +314,7 @@ export interface paths {
         };
         /**
          * List an organization's groups. Requires the `member` role.
-         * @description Authorized on `group:read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group.
+         * @description Authorized on `group:read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group. Leaves out each group whose own `group:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
          */
         get: operations["listGroups"];
         put?: never;
@@ -393,7 +393,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List an organization's projects. Requires the `member` role. */
+        /**
+         * List an organization's projects. Requires the `member` role.
+         * @description Authorized on `project:read` on the organization. Leaves out each project whose own `project:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+         */
         get: operations["listProjects"];
         put?: never;
         /** Create a project in an organization. Requires the `admin` role. */
@@ -471,7 +474,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List an organization's agents. Requires the `member` role. */
+        /**
+         * List an organization's agents. Requires the `member` role.
+         * @description Authorized on `agent:read` on the organization. Leaves out each agent whose own `agent:read` the caller is denied. The page is filtered as read: `limit` and `offset` count stored entries, so a page can hold fewer than `limit` with more after it, and only an empty page is the end.
+         */
         get: operations["listAgents"];
         put?: never;
         post?: never;
@@ -574,7 +580,7 @@ export interface paths {
         };
         /**
          * List an organization's agent templates. Requires the `member` role.
-         * @description The organization's templates, ordered by name. Authorized on `agent-template:read`. Templates are retired read-only (ADR-0088): no operation creates, changes or deletes one, and each is listed as the record of what it said.
+         * @description The organization's templates, ordered by name. Authorized on `agent-template:read`. Templates are retired read-only (ADR-0088): no operation creates, changes or deletes one, and each is listed as the record of what it said. Leaves out each template whose own `agent-template:read` the caller is denied.
          */
         get: operations["listAgentTemplates"];
         put?: never;
@@ -958,7 +964,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List an organization's policies. Requires the `admin` role. */
+        /**
+         * List an organization's policies. Requires the `admin` role.
+         * @description Authorized on `policy:read` on the organization. Leaves out each policy whose own `policy:read` the caller is denied.
+         */
         get: operations["listPolicies"];
         put?: never;
         /**

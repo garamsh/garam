@@ -714,12 +714,13 @@ func (allowingEngine) Check(context.Context, *authzv1.CheckRequest) (*authzv1.Ch
 
 // TestAuthzService_AnEngineWithoutCheckCurrentRefusesIt serves the
 // service without CheckCurrent, as an older engine registers it: its
-// Check allows, and CheckCurrent is refused as unimplemented.
+// Check allows, and CheckCurrent is refused as unimplemented. An engine
+// that old predates CheckBatch too.
 func TestAuthzService_AnEngineWithoutCheckCurrentRefusesIt(t *testing.T) {
 	older := authzv1.AuthzService_ServiceDesc
 	older.Methods = nil
 	for _, m := range authzv1.AuthzService_ServiceDesc.Methods {
-		if m.MethodName != "CheckCurrent" {
+		if m.MethodName != "CheckCurrent" && m.MethodName != "CheckBatch" {
 			older.Methods = append(older.Methods, m)
 		}
 	}
@@ -735,4 +736,97 @@ func TestAuthzService_AnEngineWithoutCheckCurrentRefusesIt(t *testing.T) {
 	current, err := client.CheckCurrent(context.Background(), currentRequest(checkRequest()))
 	assert.Equal(t, codes.Unimplemented, status.Code(err))
 	assert.Nil(t, current)
+}
+
+// countingPolicies counts the reads a call makes of the persisted
+// statements it serves.
+type countingPolicies struct {
+	staticPolicies
+	reads *int
+}
+
+func (p countingPolicies) Statements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Grant, error) {
+	*p.reads++
+	return p.staticPolicies.Statements(ctx, orgGRN, subjects)
+}
+
+// batchRequest asks group:read for alice, a member of acme, over
+// objects, with shared holding for every one of them.
+func batchRequest(shared []*authzv1.Statement, objects ...*authzv1.CheckBatchObject) *authzv1.CheckBatchRequest {
+	return &authzv1.CheckBatchRequest{
+		SubjectGrn: "grn:root:default:user:alice",
+		Action:     "group:read",
+		Statements: shared,
+		SubjectOrg: "grn:root:default:org:acme",
+		Objects:    objects,
+	}
+}
+
+// TestGRPCServer_CheckBatchDecidesEachObjectAsCheckDoes puts each
+// object of one batch to Check as well, with the shared statements and
+// that object's own, and requires the two answers to agree and to be
+// the decision each object's statements make. The persisted Deny on
+// one group is the per-object Deny a list must honour; the group
+// allowed only by its own statement, and the next one that statement
+// does not reach, show that an object's statements stay with it.
+func TestGRPCServer_CheckBatchDecidesEachObjectAsCheckDoes(t *testing.T) {
+	acme := orgGRN("acme")
+	denyHidden := authz.Statement{
+		Sid:      "deny-hidden",
+		Effect:   wire.EffectDeny,
+		Action:   []string{"group:read"},
+		Resource: []string{"grn:acme:default:group:hidden"},
+	}
+	reads := 0
+	client := newAuthzClient(t, countingPolicies{staticPolicies{acme: {denyHidden}}, &reads})
+
+	shared := []*authzv1.Statement{allowStatement("org-role-member", []string{"group:read"}, []string{"grn:acme:default:group:eng", "grn:acme:default:group:hidden"})}
+	ownOps := []*authzv1.Statement{allowStatement("group-role-ops", []string{"group:read"}, []string{"grn:acme:default:group:ops"})}
+	objects := []*authzv1.CheckBatchObject{
+		{ObjectGrn: "grn:acme:default:group:eng"},
+		{ObjectGrn: "grn:acme:default:group:hidden"},
+		{ObjectGrn: "grn:acme:default:group:ops", Statements: ownOps},
+		{ObjectGrn: "grn:acme:default:group:qa"},
+	}
+	resp, err := client.CheckBatch(context.Background(), batchRequest(shared, objects...))
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true, false, true, false}, resp.GetAllowed())
+	assert.Equal(t, 1, reads, "one batch reads the persisted statements once")
+
+	for i, o := range objects {
+		one, err := client.Check(context.Background(), &authzv1.CheckRequest{
+			SubjectGrn: "grn:root:default:user:alice",
+			ObjectGrn:  o.GetObjectGrn(),
+			Action:     "group:read",
+			Statements: append(append([]*authzv1.Statement{}, shared...), o.GetStatements()...),
+			SubjectOrg: "grn:root:default:org:acme",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, one.GetAllowed(), resp.GetAllowed()[i], o.GetObjectGrn())
+	}
+}
+
+// TestGRPCServer_CheckBatchRefusesAnObjectOutsideTheSubjectsOrg reads
+// the batch without the foreign object as the control: it is answered,
+// so the refusal is the foreign object's and not the batch's.
+func TestGRPCServer_CheckBatchRefusesAnObjectOutsideTheSubjectsOrg(t *testing.T) {
+	client := newAuthzClient(t, staticPolicies{})
+	shared := []*authzv1.Statement{allowStatement("open", []string{"*"}, []string{"*"})}
+	own := &authzv1.CheckBatchObject{ObjectGrn: "grn:acme:default:group:eng"}
+
+	resp, err := client.CheckBatch(context.Background(), batchRequest(shared, own))
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true}, resp.GetAllowed())
+
+	_, err = client.CheckBatch(context.Background(), batchRequest(shared, own,
+		&authzv1.CheckBatchObject{ObjectGrn: "grn:globex:default:group:eng"}))
+	require.Error(t, err)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Contains(t, err.Error(), "subject is not a member")
+}
+
+func TestGRPCServer_CheckBatchOfNoObjectsAnswersNone(t *testing.T) {
+	resp, err := newAuthzClient(t, staticPolicies{}).CheckBatch(context.Background(), batchRequest(nil))
+	require.NoError(t, err)
+	assert.Empty(t, resp.GetAllowed())
 }

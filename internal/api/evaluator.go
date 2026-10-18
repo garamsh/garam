@@ -61,6 +61,26 @@ type EvalInput struct {
 	SubjectOrg    grn.GRN
 }
 
+// BatchInput is EvalInput's question asked of many objects in one
+// round trip (ADR-0115): Subject, Action, SubjectGroups and SubjectOrg
+// hold for every object, Statements are those that hold for every
+// object, and each object carries the statements that reach Subject
+// through it alone.
+type BatchInput struct {
+	Subject       grn.GRN
+	Action        string
+	SubjectGroups []grn.GRN
+	Statements    []Statement
+	SubjectOrg    grn.GRN
+	Objects       []BatchObject
+}
+
+// BatchObject is one object of a BatchInput.
+type BatchObject struct {
+	Object     grn.GRN
+	Statements []Statement
+}
+
 // Trace is one statement's part in an explained decision. Policy is
 // the persisted policy holding it, and the zero GRN for a statement
 // the caller collected. AttachedTo names the subjects of the question —
@@ -83,8 +103,10 @@ type Explanation struct {
 // Evaluator is the authorization seam between the api server and the
 // authz engine (ADR-0003). The gRPC client implements it; the api
 // package never imports the engine. Explain is asked the question
-// Evaluate is, and decides it the same way.
+// Evaluate is, and decides it the same way. EvaluateBatch answers one
+// decision per object, in order, each as Evaluate would decide it.
 type Evaluator interface {
 	Evaluate(ctx context.Context, in EvalInput) (bool, error)
+	EvaluateBatch(ctx context.Context, in BatchInput) ([]bool, error)
 	Explain(ctx context.Context, in EvalInput) (Explanation, error)
 }

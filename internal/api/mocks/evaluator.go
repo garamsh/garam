@@ -113,6 +113,74 @@ func (_c *MockEvaluator_Evaluate_Call) RunAndReturn(run func(ctx context.Context
 	return _c
 }
 
+// EvaluateBatch provides a mock function for the type MockEvaluator
+func (_mock *MockEvaluator) EvaluateBatch(ctx context.Context, in api.BatchInput) ([]bool, error) {
+	ret := _mock.Called(ctx, in)
+
+	if len(ret) == 0 {
+		panic("no return value specified for EvaluateBatch")
+	}
+
+	var r0 []bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, api.BatchInput) ([]bool, error)); ok {
+		return returnFunc(ctx, in)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, api.BatchInput) []bool); ok {
+		r0 = returnFunc(ctx, in)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]bool)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, api.BatchInput) error); ok {
+		r1 = returnFunc(ctx, in)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockEvaluator_EvaluateBatch_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EvaluateBatch'
+type MockEvaluator_EvaluateBatch_Call struct {
+	*mock.Call
+}
+
+// EvaluateBatch is a helper method to define mock.On call
+//   - ctx context.Context
+//   - in api.BatchInput
+func (_e *MockEvaluator_Expecter) EvaluateBatch(ctx any, in any) *MockEvaluator_EvaluateBatch_Call {
+	return &MockEvaluator_EvaluateBatch_Call{Call: _e.mock.On("EvaluateBatch", ctx, in)}
+}
+
+func (_c *MockEvaluator_EvaluateBatch_Call) Run(run func(ctx context.Context, in api.BatchInput)) *MockEvaluator_EvaluateBatch_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 api.BatchInput
+		if args[1] != nil {
+			arg1 = args[1].(api.BatchInput)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockEvaluator_EvaluateBatch_Call) Return(bools []bool, err error) *MockEvaluator_EvaluateBatch_Call {
+	_c.Call.Return(bools, err)
+	return _c
+}
+
+func (_c *MockEvaluator_EvaluateBatch_Call) RunAndReturn(run func(ctx context.Context, in api.BatchInput) ([]bool, error)) *MockEvaluator_EvaluateBatch_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Explain provides a mock function for the type MockEvaluator
 func (_mock *MockEvaluator) Explain(ctx context.Context, in api.EvalInput) (api.Explanation, error) {
 	ret := _mock.Called(ctx, in)

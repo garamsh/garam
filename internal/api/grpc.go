@@ -47,6 +47,39 @@ func (e *GRPCEvaluator) Evaluate(ctx context.Context, in EvalInput) (bool, error
 	return resp.GetAllowed(), nil
 }
 
+// EvaluateBatch sends the question to the engine as one CheckBatch
+// RPC. An answer that does not hold one decision per object is the
+// engine's fault.
+func (e *GRPCEvaluator) EvaluateBatch(ctx context.Context, in BatchInput) ([]bool, error) {
+	shared, err := statementsToProto(in.Statements)
+	if err != nil {
+		return nil, err
+	}
+	objects := make([]*authzv1.CheckBatchObject, 0, len(in.Objects))
+	for _, o := range in.Objects {
+		own, err := statementsToProto(o.Statements)
+		if err != nil {
+			return nil, err
+		}
+		objects = append(objects, &authzv1.CheckBatchObject{ObjectGrn: o.Object.String(), Statements: own})
+	}
+	resp, err := e.client.CheckBatch(ctx, &authzv1.CheckBatchRequest{
+		SubjectGrn:    in.Subject.String(),
+		Action:        in.Action,
+		Statements:    shared,
+		SubjectGroups: wire.GRNsToProto(in.SubjectGroups),
+		SubjectOrg:    in.SubjectOrg.String(),
+		Objects:       objects,
+	})
+	if err != nil {
+		return nil, wire.ErrorOf(err)
+	}
+	if len(resp.GetAllowed()) != len(in.Objects) {
+		return nil, errorx.New(errorx.KindInternal, "check batch answered a decision count other than its objects'")
+	}
+	return resp.GetAllowed(), nil
+}
+
 // Explain sends the question to the engine as an Explain RPC and
 // parses each trace once, here, where it crosses into this process.
 func (e *GRPCEvaluator) Explain(ctx context.Context, in EvalInput) (Explanation, error) {

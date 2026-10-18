@@ -415,6 +415,197 @@ func (x *CheckCurrentResponse) GetAllowed() bool {
 	return false
 }
 
+// CheckBatchRequest is CheckRequest's question asked of many objects.
+// Its subject_grn, action, subject_groups and subject_org are
+// CheckRequest's, and hold for every object.
+type CheckBatchRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	SubjectGrn string                 `protobuf:"bytes,1,opt,name=subject_grn,json=subjectGrn,proto3" json:"subject_grn,omitempty"`
+	Action     string                 `protobuf:"bytes,2,opt,name=action,proto3" json:"action,omitempty"`
+	// statements are the caller's role-derived grants that hold for every
+	// object, such as an org role's.
+	Statements    []*Statement        `protobuf:"bytes,3,rep,name=statements,proto3" json:"statements,omitempty"`
+	SubjectGroups []string            `protobuf:"bytes,4,rep,name=subject_groups,json=subjectGroups,proto3" json:"subject_groups,omitempty"`
+	SubjectOrg    string              `protobuf:"bytes,5,opt,name=subject_org,json=subjectOrg,proto3" json:"subject_org,omitempty"`
+	Objects       []*CheckBatchObject `protobuf:"bytes,6,rep,name=objects,proto3" json:"objects,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckBatchRequest) Reset() {
+	*x = CheckBatchRequest{}
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckBatchRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckBatchRequest) ProtoMessage() {}
+
+func (x *CheckBatchRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckBatchRequest.ProtoReflect.Descriptor instead.
+func (*CheckBatchRequest) Descriptor() ([]byte, []int) {
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CheckBatchRequest) GetSubjectGrn() string {
+	if x != nil {
+		return x.SubjectGrn
+	}
+	return ""
+}
+
+func (x *CheckBatchRequest) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *CheckBatchRequest) GetStatements() []*Statement {
+	if x != nil {
+		return x.Statements
+	}
+	return nil
+}
+
+func (x *CheckBatchRequest) GetSubjectGroups() []string {
+	if x != nil {
+		return x.SubjectGroups
+	}
+	return nil
+}
+
+func (x *CheckBatchRequest) GetSubjectOrg() string {
+	if x != nil {
+		return x.SubjectOrg
+	}
+	return ""
+}
+
+func (x *CheckBatchRequest) GetObjects() []*CheckBatchObject {
+	if x != nil {
+		return x.Objects
+	}
+	return nil
+}
+
+// CheckBatchObject is one object of a CheckBatchRequest.
+type CheckBatchObject struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ObjectGrn string                 `protobuf:"bytes,1,opt,name=object_grn,json=objectGrn,proto3" json:"object_grn,omitempty"`
+	// statements are grants that reach the subject through this object
+	// alone, such as a group's roles scoped to the group. The engine
+	// unions them with the request's statements for this object only.
+	Statements    []*Statement `protobuf:"bytes,2,rep,name=statements,proto3" json:"statements,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckBatchObject) Reset() {
+	*x = CheckBatchObject{}
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckBatchObject) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckBatchObject) ProtoMessage() {}
+
+func (x *CheckBatchObject) ProtoReflect() protoreflect.Message {
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckBatchObject.ProtoReflect.Descriptor instead.
+func (*CheckBatchObject) Descriptor() ([]byte, []int) {
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *CheckBatchObject) GetObjectGrn() string {
+	if x != nil {
+		return x.ObjectGrn
+	}
+	return ""
+}
+
+func (x *CheckBatchObject) GetStatements() []*Statement {
+	if x != nil {
+		return x.Statements
+	}
+	return nil
+}
+
+type CheckBatchResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// allowed holds one decision per object, in the request's order, each
+	// decided as CheckResponse.allowed is.
+	Allowed       []bool `protobuf:"varint,1,rep,packed,name=allowed,proto3" json:"allowed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CheckBatchResponse) Reset() {
+	*x = CheckBatchResponse{}
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CheckBatchResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CheckBatchResponse) ProtoMessage() {}
+
+func (x *CheckBatchResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CheckBatchResponse.ProtoReflect.Descriptor instead.
+func (*CheckBatchResponse) Descriptor() ([]byte, []int) {
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *CheckBatchResponse) GetAllowed() []bool {
+	if x != nil {
+		return x.Allowed
+	}
+	return nil
+}
+
 // ExplainRequest mirrors CheckRequest.
 type ExplainRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -430,7 +621,7 @@ type ExplainRequest struct {
 
 func (x *ExplainRequest) Reset() {
 	*x = ExplainRequest{}
-	mi := &file_garam_authz_v1_authz_proto_msgTypes[5]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -442,7 +633,7 @@ func (x *ExplainRequest) String() string {
 func (*ExplainRequest) ProtoMessage() {}
 
 func (x *ExplainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_garam_authz_v1_authz_proto_msgTypes[5]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -455,7 +646,7 @@ func (x *ExplainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExplainRequest.ProtoReflect.Descriptor instead.
 func (*ExplainRequest) Descriptor() ([]byte, []int) {
-	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{5}
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ExplainRequest) GetSubjectGrn() string {
@@ -510,7 +701,7 @@ type ExplainResponse struct {
 
 func (x *ExplainResponse) Reset() {
 	*x = ExplainResponse{}
-	mi := &file_garam_authz_v1_authz_proto_msgTypes[6]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -522,7 +713,7 @@ func (x *ExplainResponse) String() string {
 func (*ExplainResponse) ProtoMessage() {}
 
 func (x *ExplainResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_garam_authz_v1_authz_proto_msgTypes[6]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -535,7 +726,7 @@ func (x *ExplainResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExplainResponse.ProtoReflect.Descriptor instead.
 func (*ExplainResponse) Descriptor() ([]byte, []int) {
-	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{6}
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ExplainResponse) GetAllowed() bool {
@@ -572,7 +763,7 @@ type StatementTrace struct {
 
 func (x *StatementTrace) Reset() {
 	*x = StatementTrace{}
-	mi := &file_garam_authz_v1_authz_proto_msgTypes[7]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -584,7 +775,7 @@ func (x *StatementTrace) String() string {
 func (*StatementTrace) ProtoMessage() {}
 
 func (x *StatementTrace) ProtoReflect() protoreflect.Message {
-	mi := &file_garam_authz_v1_authz_proto_msgTypes[7]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -597,7 +788,7 @@ func (x *StatementTrace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatementTrace.ProtoReflect.Descriptor instead.
 func (*StatementTrace) Descriptor() ([]byte, []int) {
-	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{7}
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *StatementTrace) GetSid() string {
@@ -672,7 +863,26 @@ const file_garam_authz_v1_authz_proto_rawDesc = "" +
 	"\vsubject_org\x18\x06 \x01(\tR\n" +
 	"subjectOrg\"0\n" +
 	"\x14CheckCurrentResponse\x12\x18\n" +
-	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xeb\x01\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\"\x8b\x02\n" +
+	"\x11CheckBatchRequest\x12\x1f\n" +
+	"\vsubject_grn\x18\x01 \x01(\tR\n" +
+	"subjectGrn\x12\x16\n" +
+	"\x06action\x18\x02 \x01(\tR\x06action\x129\n" +
+	"\n" +
+	"statements\x18\x03 \x03(\v2\x19.garam.authz.v1.StatementR\n" +
+	"statements\x12%\n" +
+	"\x0esubject_groups\x18\x04 \x03(\tR\rsubjectGroups\x12\x1f\n" +
+	"\vsubject_org\x18\x05 \x01(\tR\n" +
+	"subjectOrg\x12:\n" +
+	"\aobjects\x18\x06 \x03(\v2 .garam.authz.v1.CheckBatchObjectR\aobjects\"l\n" +
+	"\x10CheckBatchObject\x12\x1d\n" +
+	"\n" +
+	"object_grn\x18\x01 \x01(\tR\tobjectGrn\x129\n" +
+	"\n" +
+	"statements\x18\x02 \x03(\v2\x19.garam.authz.v1.StatementR\n" +
+	"statements\".\n" +
+	"\x12CheckBatchResponse\x12\x18\n" +
+	"\aallowed\x18\x01 \x03(\bR\aallowed\"\xeb\x01\n" +
 	"\x0eExplainRequest\x12\x1f\n" +
 	"\vsubject_grn\x18\x01 \x01(\tR\n" +
 	"subjectGrn\x12\x1d\n" +
@@ -699,11 +909,13 @@ const file_garam_authz_v1_authz_proto_rawDesc = "" +
 	"\x06Effect\x12\x16\n" +
 	"\x12EFFECT_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fEFFECT_ALLOW\x10\x01\x12\x0f\n" +
-	"\vEFFECT_DENY\x10\x022\xfb\x01\n" +
+	"\vEFFECT_DENY\x10\x022\xd0\x02\n" +
 	"\fAuthzService\x12D\n" +
 	"\x05Check\x12\x1c.garam.authz.v1.CheckRequest\x1a\x1d.garam.authz.v1.CheckResponse\x12J\n" +
 	"\aExplain\x12\x1e.garam.authz.v1.ExplainRequest\x1a\x1f.garam.authz.v1.ExplainResponse\x12Y\n" +
-	"\fCheckCurrent\x12#.garam.authz.v1.CheckCurrentRequest\x1a$.garam.authz.v1.CheckCurrentResponseB\xb5\x01\n" +
+	"\fCheckCurrent\x12#.garam.authz.v1.CheckCurrentRequest\x1a$.garam.authz.v1.CheckCurrentResponse\x12S\n" +
+	"\n" +
+	"CheckBatch\x12!.garam.authz.v1.CheckBatchRequest\x1a\".garam.authz.v1.CheckBatchResponseB\xb5\x01\n" +
 	"\x12com.garam.authz.v1B\n" +
 	"AuthzProtoP\x01Z9github.com/garamsh/garam/proto/gen/garam/authz/v1;authzv1\xa2\x02\x03GAX\xaa\x02\x0eGaram.Authz.V1\xca\x02\x0eGaram\\Authz\\V1\xe2\x02\x1aGaram\\Authz\\V1\\GPBMetadata\xea\x02\x10Garam::Authz::V1b\x06proto3"
 
@@ -720,7 +932,7 @@ func file_garam_authz_v1_authz_proto_rawDescGZIP() []byte {
 }
 
 var file_garam_authz_v1_authz_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_garam_authz_v1_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_garam_authz_v1_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_garam_authz_v1_authz_proto_goTypes = []any{
 	(Effect)(0),                  // 0: garam.authz.v1.Effect
 	(*Statement)(nil),            // 1: garam.authz.v1.Statement
@@ -728,28 +940,36 @@ var file_garam_authz_v1_authz_proto_goTypes = []any{
 	(*CheckResponse)(nil),        // 3: garam.authz.v1.CheckResponse
 	(*CheckCurrentRequest)(nil),  // 4: garam.authz.v1.CheckCurrentRequest
 	(*CheckCurrentResponse)(nil), // 5: garam.authz.v1.CheckCurrentResponse
-	(*ExplainRequest)(nil),       // 6: garam.authz.v1.ExplainRequest
-	(*ExplainResponse)(nil),      // 7: garam.authz.v1.ExplainResponse
-	(*StatementTrace)(nil),       // 8: garam.authz.v1.StatementTrace
+	(*CheckBatchRequest)(nil),    // 6: garam.authz.v1.CheckBatchRequest
+	(*CheckBatchObject)(nil),     // 7: garam.authz.v1.CheckBatchObject
+	(*CheckBatchResponse)(nil),   // 8: garam.authz.v1.CheckBatchResponse
+	(*ExplainRequest)(nil),       // 9: garam.authz.v1.ExplainRequest
+	(*ExplainResponse)(nil),      // 10: garam.authz.v1.ExplainResponse
+	(*StatementTrace)(nil),       // 11: garam.authz.v1.StatementTrace
 }
 var file_garam_authz_v1_authz_proto_depIdxs = []int32{
-	0, // 0: garam.authz.v1.Statement.effect:type_name -> garam.authz.v1.Effect
-	1, // 1: garam.authz.v1.CheckRequest.statements:type_name -> garam.authz.v1.Statement
-	1, // 2: garam.authz.v1.CheckCurrentRequest.statements:type_name -> garam.authz.v1.Statement
-	1, // 3: garam.authz.v1.ExplainRequest.statements:type_name -> garam.authz.v1.Statement
-	8, // 4: garam.authz.v1.ExplainResponse.traces:type_name -> garam.authz.v1.StatementTrace
-	0, // 5: garam.authz.v1.StatementTrace.effect:type_name -> garam.authz.v1.Effect
-	2, // 6: garam.authz.v1.AuthzService.Check:input_type -> garam.authz.v1.CheckRequest
-	6, // 7: garam.authz.v1.AuthzService.Explain:input_type -> garam.authz.v1.ExplainRequest
-	4, // 8: garam.authz.v1.AuthzService.CheckCurrent:input_type -> garam.authz.v1.CheckCurrentRequest
-	3, // 9: garam.authz.v1.AuthzService.Check:output_type -> garam.authz.v1.CheckResponse
-	7, // 10: garam.authz.v1.AuthzService.Explain:output_type -> garam.authz.v1.ExplainResponse
-	5, // 11: garam.authz.v1.AuthzService.CheckCurrent:output_type -> garam.authz.v1.CheckCurrentResponse
-	9, // [9:12] is the sub-list for method output_type
-	6, // [6:9] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	0,  // 0: garam.authz.v1.Statement.effect:type_name -> garam.authz.v1.Effect
+	1,  // 1: garam.authz.v1.CheckRequest.statements:type_name -> garam.authz.v1.Statement
+	1,  // 2: garam.authz.v1.CheckCurrentRequest.statements:type_name -> garam.authz.v1.Statement
+	1,  // 3: garam.authz.v1.CheckBatchRequest.statements:type_name -> garam.authz.v1.Statement
+	7,  // 4: garam.authz.v1.CheckBatchRequest.objects:type_name -> garam.authz.v1.CheckBatchObject
+	1,  // 5: garam.authz.v1.CheckBatchObject.statements:type_name -> garam.authz.v1.Statement
+	1,  // 6: garam.authz.v1.ExplainRequest.statements:type_name -> garam.authz.v1.Statement
+	11, // 7: garam.authz.v1.ExplainResponse.traces:type_name -> garam.authz.v1.StatementTrace
+	0,  // 8: garam.authz.v1.StatementTrace.effect:type_name -> garam.authz.v1.Effect
+	2,  // 9: garam.authz.v1.AuthzService.Check:input_type -> garam.authz.v1.CheckRequest
+	9,  // 10: garam.authz.v1.AuthzService.Explain:input_type -> garam.authz.v1.ExplainRequest
+	4,  // 11: garam.authz.v1.AuthzService.CheckCurrent:input_type -> garam.authz.v1.CheckCurrentRequest
+	6,  // 12: garam.authz.v1.AuthzService.CheckBatch:input_type -> garam.authz.v1.CheckBatchRequest
+	3,  // 13: garam.authz.v1.AuthzService.Check:output_type -> garam.authz.v1.CheckResponse
+	10, // 14: garam.authz.v1.AuthzService.Explain:output_type -> garam.authz.v1.ExplainResponse
+	5,  // 15: garam.authz.v1.AuthzService.CheckCurrent:output_type -> garam.authz.v1.CheckCurrentResponse
+	8,  // 16: garam.authz.v1.AuthzService.CheckBatch:output_type -> garam.authz.v1.CheckBatchResponse
+	13, // [13:17] is the sub-list for method output_type
+	9,  // [9:13] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_garam_authz_v1_authz_proto_init() }
@@ -763,7 +983,7 @@ func file_garam_authz_v1_authz_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_garam_authz_v1_authz_proto_rawDesc), len(file_garam_authz_v1_authz_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   8,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

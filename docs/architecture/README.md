@@ -896,3 +896,8 @@ ADRs:
   recorded by the route that answered after the outcome and read per
   subject on that subject's own read; agent certificates and token
   exchanges are not recorded yet
+- [0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md)
+  — `listGroups`, `listProjects`, `listAgents`, `listAgentTemplates`
+  and `listPolicies` drop each object whose own read the caller is
+  denied, asked of the engine in one `CheckBatch` call per page; a page
+  is filtered as read, so a short page is not the end

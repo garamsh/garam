@@ -15,14 +15,7 @@ import (
 // when acting on target: the membership role, the subject's direct
 // roles, and the roles the target group or project grants its members.
 func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Membership, target grn.GRN, u *user.User) ([]Statement, error) {
-	statements := []Statement{{
-		Sid:      "org-role-" + string(m.Role),
-		Effect:   wire.EffectAllow,
-		Action:   m.Role.Actions(),
-		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
-		Origin:   Origin{Kind: OriginOrgRole, Roles: []string{string(m.Role)}},
-	}}
-	statements = append(statements, userStatements(orgGRN, u)...)
+	statements := memberStatements(orgGRN, m, u)
 	var derived []Statement
 	var err error
 	switch target.ServiceType {
@@ -35,6 +28,19 @@ func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Member
 		return nil, err
 	}
 	return append(statements, derived...), nil
+}
+
+// memberStatements returns what applies to the member whatever it acts
+// on: its membership role and its direct roles, both scoped to the org.
+func memberStatements(orgGRN grn.GRN, m *org.Membership, u *user.User) []Statement {
+	statements := []Statement{{
+		Sid:      "org-role-" + string(m.Role),
+		Effect:   wire.EffectAllow,
+		Action:   m.Role.Actions(),
+		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
+		Origin:   Origin{Kind: OriginOrgRole, Roles: []string{string(m.Role)}},
+	}}
+	return append(statements, userStatements(orgGRN, u)...)
 }
 
 // userStatements returns what the roles stored on the subject grant,
@@ -70,20 +76,24 @@ func (s *Server) groupStatements(r *http.Request, groupGRN, subject grn.GRN) ([]
 	if err != nil {
 		return nil, err
 	}
-	if !slices.Contains(members, subject) {
-		return nil, nil
-	}
+	return groupRoleStatements(g, slices.Contains(members, subject)), nil
+}
+
+// groupRoleStatements returns what g's roles grant a subject that is
+// one of its members, scoped to g's own GRN, and nothing to one that
+// is not.
+func groupRoleStatements(g *org.Group, member bool) []Statement {
 	actions := org.ActionsFor(g.Roles)
-	if len(actions) == 0 {
-		return nil, nil
+	if !member || len(actions) == 0 {
+		return nil
 	}
 	return []Statement{{
-		Sid:      "group-role-" + groupGRN.Identifier,
+		Sid:      "group-role-" + g.GRN.Identifier,
 		Effect:   wire.EffectAllow,
 		Action:   actions,
-		Resource: []string{groupGRN.String()},
-		Origin:   Origin{Kind: OriginGroupRole, Roles: g.Roles, Via: groupGRN},
-	}}, nil
+		Resource: []string{g.GRN.String()},
+		Origin:   Origin{Kind: OriginGroupRole, Roles: g.Roles, Via: g.GRN},
+	}}
 }
 
 // projectStatements returns what the project grants the subject as one
@@ -102,20 +112,24 @@ func (s *Server) projectStatements(r *http.Request, projectGRN, subject grn.GRN)
 	if err != nil {
 		return nil, err
 	}
-	if !slices.Contains(members, subject) {
-		return nil, nil
-	}
+	return projectRoleStatements(p, slices.Contains(members, subject)), nil
+}
+
+// projectRoleStatements returns what p's roles grant a subject that is
+// one of its members, scoped to p's own GRN, and nothing to one that
+// is not.
+func projectRoleStatements(p *org.Project, member bool) []Statement {
 	actions := org.ActionsFor(p.Roles)
-	if len(actions) == 0 {
-		return nil, nil
+	if !member || len(actions) == 0 {
+		return nil
 	}
 	return []Statement{{
-		Sid:      "project-role-" + projectGRN.Identifier,
+		Sid:      "project-role-" + p.GRN.Identifier,
 		Effect:   wire.EffectAllow,
 		Action:   actions,
-		Resource: []string{projectGRN.String()},
-		Origin:   Origin{Kind: OriginProjectRole, Roles: p.Roles, Via: projectGRN},
-	}}, nil
+		Resource: []string{p.GRN.String()},
+		Origin:   Origin{Kind: OriginProjectRole, Roles: p.Roles, Via: p.GRN},
+	}}
 }
 
 // orgScope is the resource pattern for everything the org owns. Org

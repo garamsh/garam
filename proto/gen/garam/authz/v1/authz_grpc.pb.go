@@ -23,6 +23,7 @@ const (
 	AuthzService_Check_FullMethodName        = "/garam.authz.v1.AuthzService/Check"
 	AuthzService_Explain_FullMethodName      = "/garam.authz.v1.AuthzService/Explain"
 	AuthzService_CheckCurrent_FullMethodName = "/garam.authz.v1.AuthzService/CheckCurrent"
+	AuthzService_CheckBatch_FullMethodName   = "/garam.authz.v1.AuthzService/CheckBatch"
 )
 
 // AuthzServiceClient is the client API for AuthzService service.
@@ -50,6 +51,13 @@ type AuthzServiceClient interface {
 	// be dropped unread by such an engine, which would then answer from
 	// its cache.
 	CheckCurrent(ctx context.Context, in *CheckCurrentRequest, opts ...grpc.CallOption) (*CheckCurrentResponse, error)
+	// CheckBatch answers Check's question for one subject and one action
+	// over many objects of the subject's organization, in one call
+	// (ADR-0115). Each object is decided as a Check would decide it given
+	// the shared statements and the object's own, over the persisted
+	// policies read once for the call. One object outside subject_org
+	// refuses the whole call, as Check refuses it.
+	CheckBatch(ctx context.Context, in *CheckBatchRequest, opts ...grpc.CallOption) (*CheckBatchResponse, error)
 }
 
 type authzServiceClient struct {
@@ -90,6 +98,16 @@ func (c *authzServiceClient) CheckCurrent(ctx context.Context, in *CheckCurrentR
 	return out, nil
 }
 
+func (c *authzServiceClient) CheckBatch(ctx context.Context, in *CheckBatchRequest, opts ...grpc.CallOption) (*CheckBatchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckBatchResponse)
+	err := c.cc.Invoke(ctx, AuthzService_CheckBatch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthzServiceServer is the server API for AuthzService service.
 // All implementations must embed UnimplementedAuthzServiceServer
 // for forward compatibility.
@@ -115,6 +133,13 @@ type AuthzServiceServer interface {
 	// be dropped unread by such an engine, which would then answer from
 	// its cache.
 	CheckCurrent(context.Context, *CheckCurrentRequest) (*CheckCurrentResponse, error)
+	// CheckBatch answers Check's question for one subject and one action
+	// over many objects of the subject's organization, in one call
+	// (ADR-0115). Each object is decided as a Check would decide it given
+	// the shared statements and the object's own, over the persisted
+	// policies read once for the call. One object outside subject_org
+	// refuses the whole call, as Check refuses it.
+	CheckBatch(context.Context, *CheckBatchRequest) (*CheckBatchResponse, error)
 	mustEmbedUnimplementedAuthzServiceServer()
 }
 
@@ -133,6 +158,9 @@ func (UnimplementedAuthzServiceServer) Explain(context.Context, *ExplainRequest)
 }
 func (UnimplementedAuthzServiceServer) CheckCurrent(context.Context, *CheckCurrentRequest) (*CheckCurrentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckCurrent not implemented")
+}
+func (UnimplementedAuthzServiceServer) CheckBatch(context.Context, *CheckBatchRequest) (*CheckBatchResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckBatch not implemented")
 }
 func (UnimplementedAuthzServiceServer) mustEmbedUnimplementedAuthzServiceServer() {}
 func (UnimplementedAuthzServiceServer) testEmbeddedByValue()                      {}
@@ -209,6 +237,24 @@ func _AuthzService_CheckCurrent_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthzService_CheckBatch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckBatchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthzServiceServer).CheckBatch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthzService_CheckBatch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthzServiceServer).CheckBatch(ctx, req.(*CheckBatchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthzService_ServiceDesc is the grpc.ServiceDesc for AuthzService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -227,6 +273,10 @@ var AuthzService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckCurrent",
 			Handler:    _AuthzService_CheckCurrent_Handler,
+		},
+		{
+			MethodName: "CheckBatch",
+			Handler:    _AuthzService_CheckBatch_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

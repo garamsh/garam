@@ -60,6 +60,9 @@ type Server struct {
 	// keys signs each message handed out and publishes the keys it
 	// signs with (ADR-0101).
 	keys message.Keyring
+	// credentialAudit records every credential issued, renewed or
+	// refused (ADR-0114); nil records nothing.
+	credentialAudit CredentialAudit
 }
 
 // Compile-time check that Server satisfies the generated interface.

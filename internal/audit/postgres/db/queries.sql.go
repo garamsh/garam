@@ -11,6 +11,114 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const listCredentials = `-- name: ListCredentials :many
+SELECT subject_grn, credential, action, outcome, replay, reason, serial, not_before, not_after, recorded_at
+FROM audit_credential_events
+WHERE org_grn = $1 AND subject_grn = $2
+ORDER BY recorded_at DESC, id DESC
+LIMIT $4 OFFSET $3
+`
+
+type ListCredentialsParams struct {
+	OrgGrn     string
+	SubjectGrn string
+	RowOffset  int32
+	RowLimit   pgtype.Int4
+}
+
+type ListCredentialsRow struct {
+	SubjectGrn string
+	Credential string
+	Action     string
+	Outcome    string
+	Replay     bool
+	Reason     pgtype.Text
+	Serial     pgtype.Text
+	NotBefore  pgtype.Timestamptz
+	NotAfter   pgtype.Timestamptz
+	RecordedAt pgtype.Timestamptz
+}
+
+// ListCredentials pages one subject's events, newest first.
+func (q *Queries) ListCredentials(ctx context.Context, arg ListCredentialsParams) ([]ListCredentialsRow, error) {
+	rows, err := q.db.Query(ctx, listCredentials,
+		arg.OrgGrn,
+		arg.SubjectGrn,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCredentialsRow
+	for rows.Next() {
+		var i ListCredentialsRow
+		if err := rows.Scan(
+			&i.SubjectGrn,
+			&i.Credential,
+			&i.Action,
+			&i.Outcome,
+			&i.Replay,
+			&i.Reason,
+			&i.Serial,
+			&i.NotBefore,
+			&i.NotAfter,
+			&i.RecordedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const recordCredential = `-- name: RecordCredential :exec
+INSERT INTO audit_credential_events (
+    subject_grn, org_grn, credential, action, outcome, replay, reason,
+    serial, not_before, not_after, recorded_at
+)
+VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7, $8,
+    $9, $10, clock_timestamp()
+)
+`
+
+type RecordCredentialParams struct {
+	SubjectGrn string
+	OrgGrn     string
+	Credential string
+	Action     string
+	Outcome    string
+	Replay     bool
+	Reason     pgtype.Text
+	Serial     pgtype.Text
+	NotBefore  pgtype.Timestamptz
+	NotAfter   pgtype.Timestamptz
+}
+
+// RecordCredential writes one machine credential event (ADR-0114),
+// stamped by the database's clock.
+func (q *Queries) RecordCredential(ctx context.Context, arg RecordCredentialParams) error {
+	_, err := q.db.Exec(ctx, recordCredential,
+		arg.SubjectGrn,
+		arg.OrgGrn,
+		arg.Credential,
+		arg.Action,
+		arg.Outcome,
+		arg.Replay,
+		arg.Reason,
+		arg.Serial,
+		arg.NotBefore,
+		arg.NotAfter,
+	)
+	return err
+}
+
 const recordSend = `-- name: RecordSend :exec
 INSERT INTO audit_send_events (
     sender_grn, recipient_grn, sender_org, recipient_org,

@@ -1483,6 +1483,65 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/credential-events:
+    get:
+      operationId: listCredentialEvents
+      tags: [org]
+      summary: List what garam issued, renewed and refused of one machine identity's credentials, newest first.
+      description: >-
+        Answers the credential events garam recorded for `subject`, an
+        operator, agent or supervisor of the organization (ADR-0114):
+        each issuance, renewal and refusal of its certificate, its
+        credential, its enrollment token or an agent token, newest
+        first, paged by `limit` and `offset` like every other list.
+
+
+        An event names what was decided and, for a certificate, its
+        serial and validity, read off the certificate garam answered;
+        for a token or an enrollment token, when it was minted and until
+        when it is accepted. A refusal names the class of the failure
+        and nothing the caller sent. No event carries a key, a token, a
+        credential, a certificate or any part or hash of one.
+
+
+        `replay` is an answer that repeated what an identical earlier
+        request issued, which issued nothing new. A refusal is recorded
+        only where garam could attribute the request to the subject: an
+        enrollment whose token or bootstrap secret did not resolve names
+        none, and a refusal of the member asking, before the subject's
+        credential was reached, is the member's and not the subject's.
+
+
+        It is authorized on the subject's own read: `operator:read` on
+        the organization for an operator, `agent:read` on the agent for
+        an agent, and `agent:read` on the organization for a supervisor.
+        A subject of another organization, or of any other kind, is
+        refused with 400.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - name: subject
+          in: query
+          required: true
+          description: The GRN of the operator, agent or supervisor.
+          schema:
+            type: string
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: The subject's credential events, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CredentialEvent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/operators:
     post:
       operationId: registerOperator
@@ -3667,6 +3726,43 @@ components:
           type: string
           format: date-time
         updatedAt:
+          type: string
+          format: date-time
+    CredentialEvent:
+      type: object
+      required: [subjectGrn, credential, action, outcome, replay, recordedAt]
+      properties:
+        subjectGrn:
+          type: string
+        credential:
+          type: string
+          enum: [operator_certificate, operator_credential, operator_enrollment_token, supervisor_certificate, supervisor_credential, agent_token]
+          x-enum-varnames: [EventOperatorCertificate, EventOperatorCredential, EventOperatorEnrollmentToken, EventSupervisorCertificate, EventSupervisorCredential, EventAgentToken]
+        action:
+          type: string
+          enum: [issue, renew]
+          x-enum-varnames: [EventIssue, EventRenew]
+        outcome:
+          type: string
+          enum: [issued, refused]
+          x-enum-varnames: [EventIssued, EventRefused]
+        replay:
+          type: boolean
+          description: An issued answer that repeated an earlier identical request's.
+        reason:
+          type: string
+          description: A refusal's error kind, such as `failed_precondition`; absent when issued.
+        serial:
+          type: string
+          description: An issued certificate's decimal serial.
+        notBefore:
+          type: string
+          format: date-time
+        notAfter:
+          type: string
+          format: date-time
+          description: Until when the issued credential is accepted; absent for one that does not expire.
+        recordedAt:
           type: string
           format: date-time
     OperatorEnrollmentState:

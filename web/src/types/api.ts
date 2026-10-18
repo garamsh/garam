@@ -694,6 +694,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/credential-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List what garam issued, renewed and refused of one machine identity's credentials, newest first.
+         * @description Answers the credential events garam recorded for `subject`, an operator, agent or supervisor of the organization (ADR-0114): each issuance, renewal and refusal of its certificate, its credential, its enrollment token or an agent token, newest first, paged by `limit` and `offset` like every other list.
+         *
+         *     An event names what was decided and, for a certificate, its serial and validity, read off the certificate garam answered; for a token or an enrollment token, when it was minted and until when it is accepted. A refusal names the class of the failure and nothing the caller sent. No event carries a key, a token, a credential, a certificate or any part or hash of one.
+         *
+         *     `replay` is an answer that repeated what an identical earlier request issued, which issued nothing new. A refusal is recorded only where garam could attribute the request to the subject: an enrollment whose token or bootstrap secret did not resolve names none, and a refusal of the member asking, before the subject's credential was reached, is the member's and not the subject's.
+         *
+         *     It is authorized on the subject's own read: `operator:read` on the organization for an operator, `agent:read` on the agent for an agent, and `agent:read` on the organization for a supervisor. A subject of another organization, or of any other kind, is refused with 400.
+         */
+        get: operations["listCredentialEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/operators": {
         parameters: {
             query?: never;
@@ -1619,6 +1645,30 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        CredentialEvent: {
+            subjectGrn: string;
+            /** @enum {string} */
+            credential: "operator_certificate" | "operator_credential" | "operator_enrollment_token" | "supervisor_certificate" | "supervisor_credential" | "agent_token";
+            /** @enum {string} */
+            action: "issue" | "renew";
+            /** @enum {string} */
+            outcome: "issued" | "refused";
+            /** @description An issued answer that repeated an earlier identical request's. */
+            replay: boolean;
+            /** @description A refusal's error kind, such as `failed_precondition`; absent when issued. */
+            reason?: string;
+            /** @description An issued certificate's decimal serial. */
+            serial?: string;
+            /** Format: date-time */
+            notBefore?: string;
+            /**
+             * Format: date-time
+             * @description Until when the issued credential is accepted; absent for one that does not expire.
+             */
+            notAfter?: string;
+            /** Format: date-time */
+            recordedAt: string;
         };
         /**
          * @description Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
@@ -3295,6 +3345,38 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    listCredentialEvents: {
+        parameters: {
+            query: {
+                /** @description The GRN of the operator, agent or supervisor. */
+                subject: string;
+                /** @description Maximum entries to return; 0 means no limit. */
+                limit?: components["parameters"]["limit"];
+                offset?: components["parameters"]["offset"];
+            };
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The subject's credential events, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialEvent"][];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
         };
     };
     listOperators: {

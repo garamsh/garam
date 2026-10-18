@@ -193,6 +193,72 @@ func (e AgentSupervisorState) Valid() bool {
 	}
 }
 
+// Defines values for CredentialEventAction.
+const (
+	EventIssue CredentialEventAction = "issue"
+	EventRenew CredentialEventAction = "renew"
+)
+
+// Valid indicates whether the value is a known member of the CredentialEventAction enum.
+func (e CredentialEventAction) Valid() bool {
+	switch e {
+	case EventIssue:
+		return true
+	case EventRenew:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CredentialEventCredential.
+const (
+	EventAgentToken              CredentialEventCredential = "agent_token"
+	EventOperatorCertificate     CredentialEventCredential = "operator_certificate"
+	EventOperatorCredential      CredentialEventCredential = "operator_credential"
+	EventOperatorEnrollmentToken CredentialEventCredential = "operator_enrollment_token"
+	EventSupervisorCertificate   CredentialEventCredential = "supervisor_certificate"
+	EventSupervisorCredential    CredentialEventCredential = "supervisor_credential"
+)
+
+// Valid indicates whether the value is a known member of the CredentialEventCredential enum.
+func (e CredentialEventCredential) Valid() bool {
+	switch e {
+	case EventAgentToken:
+		return true
+	case EventOperatorCertificate:
+		return true
+	case EventOperatorCredential:
+		return true
+	case EventOperatorEnrollmentToken:
+		return true
+	case EventSupervisorCertificate:
+		return true
+	case EventSupervisorCredential:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for CredentialEventOutcome.
+const (
+	EventIssued  CredentialEventOutcome = "issued"
+	EventRefused CredentialEventOutcome = "refused"
+)
+
+// Valid indicates whether the value is a known member of the CredentialEventOutcome enum.
+func (e CredentialEventOutcome) Valid() bool {
+	switch e {
+	case EventIssued:
+		return true
+	case EventRefused:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DelegatedOperation.
 const (
 	DelegatedOperationAgentActivate        DelegatedOperation = "agent:activate"
@@ -811,6 +877,37 @@ type AgentValues map[string]string
 type ControlEndpointWrite struct {
 	Url string `json:"url"`
 }
+
+// CredentialEvent defines model for CredentialEvent.
+type CredentialEvent struct {
+	Action     CredentialEventAction     `json:"action"`
+	Credential CredentialEventCredential `json:"credential"`
+
+	// NotAfter Until when the issued credential is accepted; absent for one that does not expire.
+	NotAfter  *time.Time             `json:"notAfter,omitempty"`
+	NotBefore *time.Time             `json:"notBefore,omitempty"`
+	Outcome   CredentialEventOutcome `json:"outcome"`
+
+	// Reason A refusal's error kind, such as `failed_precondition`; absent when issued.
+	Reason     *string   `json:"reason,omitempty"`
+	RecordedAt time.Time `json:"recordedAt"`
+
+	// Replay An issued answer that repeated an earlier identical request's.
+	Replay bool `json:"replay"`
+
+	// Serial An issued certificate's decimal serial.
+	Serial     *string `json:"serial,omitempty"`
+	SubjectGrn string  `json:"subjectGrn"`
+}
+
+// CredentialEventAction defines model for CredentialEvent.Action.
+type CredentialEventAction string
+
+// CredentialEventCredential defines model for CredentialEvent.Credential.
+type CredentialEventCredential string
+
+// CredentialEventOutcome defines model for CredentialEvent.Outcome.
+type CredentialEventOutcome string
 
 // DelegatedOperation `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it. `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
 type DelegatedOperation string
@@ -1511,6 +1608,16 @@ type ListAgentsParams struct {
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListCredentialEventsParams defines parameters for ListCredentialEvents.
+type ListCredentialEventsParams struct {
+	// Subject The GRN of the operator, agent or supervisor.
+	Subject string `form:"subject" json:"subject"`
+
+	// Limit Maximum entries to return; 0 means no limit.
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListGroupsParams defines parameters for ListGroups.
 type ListGroupsParams struct {
 	// Limit Maximum entries to return; 0 means no limit.
@@ -1768,6 +1875,9 @@ type ServerInterface interface {
 	// GrantOrgConsent Grant the org's half of a cross-organization consent. Requires the `admin` role.
 	// (PUT /orgs/{org}/consents/{other})
 	GrantOrgConsent(w http.ResponseWriter, r *http.Request, org Org, otherSlug OtherSlug)
+	// ListCredentialEvents List what garam issued, renewed and refused of one machine identity's credentials, newest first.
+	// (GET /orgs/{org}/credential-events)
+	ListCredentialEvents(w http.ResponseWriter, r *http.Request, org Org, params ListCredentialEventsParams)
 	// GetOrgDeletionPreview What deleting the organization would destroy. Requires the `owner` role.
 	// (GET /orgs/{org}/deletion-preview)
 	GetOrgDeletionPreview(w http.ResponseWriter, r *http.Request, org Org)
@@ -2865,6 +2975,74 @@ func (siw *ServerInterfaceWrapper) GrantOrgConsent(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GrantOrgConsent(w, r, org, otherSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCredentialEvents operation middleware
+func (siw *ServerInterfaceWrapper) ListCredentialEvents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCredentialEventsParams
+
+	// ------------- Required query parameter "subject" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "subject", r.URL.Query(), &params.Subject, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subject"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subject", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCredentialEvents(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4971,6 +5149,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-enrollments/{enrollment}", wrapper.WithdrawAgentEnrollment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-supervisors", wrapper.ListAgentSupervisors)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-supervisors/{supervisor}", wrapper.RevokeAgentSupervisor)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/credential-events", wrapper.ListCredentialEvents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)

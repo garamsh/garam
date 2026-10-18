@@ -491,6 +491,15 @@ and not in the same place on every surface.
   who may not perform the delete is told nothing about it. No role
   gained an action for this, because the owner already holds `org:*`
   ([authz.md](./authz.md) §Statement collection).
+- **A machine identity's credential events are read on its own
+  read.** `listCredentialEvents` answers what garam issued, renewed and
+  refused of one operator's, agent's or supervisor's credentials,
+  newest first and paged like any list, on `operator:read` on the
+  organization for an operator, `agent:read` on the agent for an agent
+  and `agent:read` on the organization for a supervisor
+  ([ADR-0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)).
+  No event carries a key, token, credential or certificate
+  ([machine-identity.md](./machine-identity.md) §Credential events).
 - **A caller's own teams are one filtered list.** `listGroups` with
   `member=me` answers only the groups the signed-in caller belongs to,
   ordered and paged as the unfiltered list is, and authorized on the

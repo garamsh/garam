@@ -15,3 +15,24 @@ VALUES (
     sqlc.arg('decision'), sqlc.narg('message_id'), sqlc.narg('message_created_at'),
     clock_timestamp()
 );
+
+-- RecordCredential writes one machine credential event (ADR-0114),
+-- stamped by the database's clock.
+-- name: RecordCredential :exec
+INSERT INTO audit_credential_events (
+    subject_grn, org_grn, credential, action, outcome, replay, reason,
+    serial, not_before, not_after, recorded_at
+)
+VALUES (
+    sqlc.arg('subject_grn'), sqlc.arg('org_grn'), sqlc.arg('credential'), sqlc.arg('action'),
+    sqlc.arg('outcome'), sqlc.arg('replay'), sqlc.narg('reason'), sqlc.narg('serial'),
+    sqlc.narg('not_before'), sqlc.narg('not_after'), clock_timestamp()
+);
+
+-- ListCredentials pages one subject's events, newest first.
+-- name: ListCredentials :many
+SELECT subject_grn, credential, action, outcome, replay, reason, serial, not_before, not_after, recorded_at
+FROM audit_credential_events
+WHERE org_grn = sqlc.arg('org_grn') AND subject_grn = sqlc.arg('subject_grn')
+ORDER BY recorded_at DESC, id DESC
+LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');

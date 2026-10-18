@@ -7,6 +7,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/internal/audit"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
@@ -116,9 +117,14 @@ func (s *Server) EnrollOperator(w http.ResponseWriter, r *http.Request) {
 	certificate, err := s.operators.Enroll(r.Context(), body.Token,
 		operator.CertificateRequest(body.CertificateRequestPem))
 	if err != nil {
+		// A refused enrollment names no subject garam can attribute it
+		// to: the token is what names one, and it did not resolve to
+		// a certificate (ADR-0114).
 		writeError(w, err)
 		return
 	}
+	s.issuedCertificate(r, certificate.Subject, audit.CredentialOperatorCertificate, audit.ActionIssue,
+		string(certificate.CertificatePEM), false)
 	writeJSON(w, http.StatusCreated, machinegen.EnrolledCertificate{
 		Grn:            certificate.Subject.String(),
 		CertificatePem: string(certificate.CertificatePEM),
@@ -146,9 +152,12 @@ func (s *Server) RenewIdentityCertificate(w http.ResponseWriter, r *http.Request
 		NotAfter:  identity.NotAfter(),
 	})
 	if err != nil {
+		s.refusedCredential(r, identity.GRN(), audit.CredentialOperatorCertificate, audit.ActionRenew, err)
 		writeError(w, err)
 		return
 	}
+	s.issuedCertificate(r, identity.GRN(), audit.CredentialOperatorCertificate, audit.ActionRenew,
+		string(certificate.CertificatePEM), false)
 	writeJSON(w, http.StatusCreated, machinegen.MachineCertificate{
 		Grn:            identity.GRN().String(),
 		CertificatePem: string(certificate.CertificatePEM),

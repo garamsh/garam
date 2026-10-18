@@ -18,6 +18,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
+	auditpg "github.com/garamsh/garam/internal/audit/postgres"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/ca"
@@ -133,7 +134,7 @@ func serveAPI(cmd *cobra.Command) error {
 			CookieSecure: cookieSecure,
 			TokenURL:     tokenURL,
 		},
-	)
+	).WithCredentialAudit(auditpg.NewCredentialStore(pool))
 
 	addr := envOr(envHTTPAddr, ":8080")
 	// A request needs both to be served: rows out of the database, and

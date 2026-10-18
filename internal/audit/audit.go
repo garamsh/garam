@@ -1,8 +1,8 @@
 // Package audit owns the record garam keeps of what it decided, held
 // by garam rather than by either party it decided between (ADR-0106).
 //
-// Send events are the only events it holds. Decision and change events
-// are not built.
+// It holds send events and machine credential events (ADR-0114).
+// Decision and change events are not built.
 package audit
 
 import (

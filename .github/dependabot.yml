@@ -93,7 +93,7 @@ updates:
     schedule:
       interval: "weekly"
 
-  # The action pins in .github/workflows/ — nine actions across ci.yml,
+  # The action pins in .github/workflows/ — ten actions across ci.yml,
   # images.yml and release.yml, one of which all three files use.
   #
   # Covers a newer release for an action pinned by full commit SHA,

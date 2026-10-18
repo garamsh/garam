@@ -46,16 +46,11 @@ GREMLINS := go tool gremlins
 # stale.
 HELM := go run helm.sh/helm/v4/cmd/helm@v4.2.4
 
-# One dev Postgres per machine, not per worktree:
-# deploy/local/docker-compose.yml pins `name: garam-local`, so every
-# worktree addresses the same compose project and container.
-#
-# The integration suite truncates every table and both Go suites
-# migrate from the same migrations/, so they share a database per
-# worktree on that one server. The suffix is git's own name for a
-# linked worktree — unique per worktree and fixed for its lifetime —
-# and empty in the main checkout, which keeps garam_test. The local
-# stack keeps `garam`.
+# One test database per worktree, on the one dev Postgres every
+# worktree shares (compose pins `name: garam-local`). The suffix is
+# git's name for a linked worktree and empty in the main checkout,
+# which keeps garam_test. Both Go suites migrate it and the integration
+# suite truncates every table, so no worktree shares another's.
 TEST_DB_NAME ?= garam_test$(shell git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')
 export TEST_DB_NAME
 
@@ -71,11 +66,10 @@ PNPM := pnpm --dir web
 # `integration` and `e2e` report rather than dial.
 API_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port api 8080 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
 DB_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port postgres 5432 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
-# The dev OpenBao db-up starts beside Postgres, which `integration`
-# signs against (ADR-0104). Its TLS certificate names localhost, which
-# is what the address is rewritten to. GARAM_OPENBAO_PORT moves it as
-# GARAM_DB_PORT moves Postgres. The container is named so the suite
-# can read the CA and root token the dev server generated out of it.
+# The dev OpenBao `integration` signs against (ADR-0104), rewritten to
+# localhost because its TLS certificate names that; GARAM_OPENBAO_PORT
+# moves it. The container is named so the suite can read the CA and
+# root token the dev server generated.
 OPENBAO_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port openbao 8200 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
 OPENBAO_CONTAINER = $(shell $(COMPOSE_LOCAL) ps -q openbao 2>/dev/null)
 
@@ -131,44 +125,12 @@ PROTO_FILES = $(shell $(BUF) ls-files)
 WORKFLOW_FILES = $(shell find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \))
 SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find scripts -type f -name '*.sh')
 
-# actionlint reads a `run:` block with shellcheck, and a python one with
-# pyflakes, when it finds them on PATH, and drops the rule where it does
-# not — reporting that in -verbose and nowhere else. The runner image
-# ships shellcheck and a contributor's machine mostly does not, so left
-# inferred this is not the same check in the two places. Both are named
-# off, so the absence is a decision rather than a property of the
-# machine, and what it leaves uncovered is recorded on #840.
-#
-# Three of its checks are keyed on `owner/repo@ref` and hold only for a
-# ref its bundled database names, and that database is keyed on
-# major-version tags: whether a `with:` key is an input the action
-# declares, whether the action's runner is too old, and the expression
-# rule's typing of `steps.<id>.outputs.<name>`, which falls back to
-# `map[string]string` otherwise. Neither the full commit SHA
-# docs/convention/ci.md §Reference implementation requires nor the exact
-# tag recorded beside it is such a ref, so all three reach no action
-# here, release.yml's four `steps.*.outputs.*` references included
-# (#854).
-# What reaches every workflow whatever the ref is the rest of the
-# expression, `needs:` and shell-name checking.
-#
-# shfmt is a formatter and this repository's shell layout is not the one
-# it prints, so it is run as the POSIX parser it is built on: output
-# discarded, exit status read. That status answers whether the file
-# parses and not whether it is formatted — a file diverging from shfmt's
-# layout passes, a syntax error fails, and a bashism fails only where
-# the POSIX grammar has no shape for it: `arr=(a b)` and `function f`
-# fail, while `[[ ]]`, `source` and `local` parse as ordinary commands
-# and pass. `-ln posix` fixes the dialect every script here declares
-# rather than taking it from each shebang, so a script that later says
-# bash fails here instead of being read as bash.
-#
-# check-contents-list.sh and check-heading-prefixes.sh read the
-# Markdown, against docs/convention/documentation.md §Format and
-# §Keep it current respectively. Each selects its own files and prints
-# that selector with the count it produced, and fails when the count is
-# zero, so the line below states no Markdown count — a second selector
-# here would be one more thing to keep equal to the scripts'.
+# actionlint runs with shellcheck and pyflakes named off, so it is one
+# check on every machine, and its ref-keyed checks reach no action
+# pinned by full SHA (#848, #854, #858). shfmt runs as a POSIX parser
+# with output discarded: it fails a syntax error or a bashism the POSIX
+# grammar cannot hold, never a layout (#904). The two Markdown scripts
+# count their own files and fail on zero (#1468).
 lint:
 	@echo 'lint: $(words $(PROTO_FILES)) proto files (buf lint), $(words $(WORKFLOW_FILES)) workflows (actionlint), $(words $(SHELL_SCRIPTS)) shell scripts (shfmt); go vet counted on its own line below, Markdown by check-contents-list.sh and check-heading-prefixes.sh'
 	@test -n '$(PROTO_FILES)' && test -n '$(WORKFLOW_FILES)' && test -n '$(SHELL_SCRIPTS)' \
@@ -197,19 +159,12 @@ format:
 	@out="$$($(FORMAT_SELECT) | xargs -0 gofmt -l)" || { echo "gofmt: failed on the error above"; exit 1; }; test -z "$$out" || { echo "gofmt: $$out"; exit 1; }
 	@out="$$($(FORMAT_SELECT) | xargs -0 $(GOIMPORTS) -l)" || { echo "goimports: failed on the error above"; exit 1; }; test -z "$$out" || { echo "goimports: $$out"; exit 1; }
 
-# go has no negative package pattern, so the sweep is filtered here.
-# tests/integration and tests/e2e each need the Postgres db-up starts
-# and fail without it, so test covers every other package and names the
-# two it left out. Should either filter stop matching, that suite is
-# swept back in and fails for want of a database rather than skipping
-# quietly.
-#
-# Two tests are outside Go, each needing git or nothing and no Docker,
-# and each printing its own count: scripts/image-build-test.sh, which
-# tags a development image-build accepts (ADR-0071) and under which
-# namespace it names them (ADR-0097), and
-# scripts/image-test-ecr-test.sh, what test-image-push and
-# test-image-pin refuse before they reach AWS (ADR-0093).
+# go has no negative package pattern, so the sweep is filtered here and
+# the four suites needing Postgres or a Docker daemon are named instead;
+# a filter that stops matching sweeps its suite back in to fail rather
+# than skip. The two shell tests need no Docker:
+# scripts/image-build-test.sh (ADR-0071, ADR-0097) and
+# scripts/image-test-ecr-test.sh (ADR-0093).
 TEST_EXCLUDE = %/tests/integration %/tests/e2e %/tests/workload %/tests/standalone
 TEST_SELECT = $(GO_SELECT) minus $(TEST_EXCLUDE)
 TEST_PKGS = $(filter-out $(TEST_EXCLUDE),$(GO_PKGS))
@@ -239,41 +194,21 @@ gen:
 	$(BUF) generate
 	$(GOIMPORTS) -w proto/gen
 
-# check-gen fails when the committed generated output and what the
-# generators are configured to produce disagree, in either direction:
-# output a generator still owns is modified, uncommitted, or deleted;
-# or tracked output no generator owns is left behind. No generator
-# deletes output it stops producing, so a removed config entry leaves
-# its files committed, and a status check over the owned set says
-# nothing about them.
-#
-# GEN_PATHS is the owned set, and the generator configs are its only
-# source of truth — no generator answers "what do I own". Each states
-# it differently: oapi-codegen names `output:` files, sqlc and buf name
-# `out:` directories, and mockery owns a mocks/ directory beside each
-# package it lists (its dir template is {{.InterfaceDir}}/mocks). The
-# paths are literal, not globs: a glob expands against the working tree
-# when the recipe runs, so a deleted generated directory falls outside
-# it and a pending deletion reads as a clean tree. A parse that stops
-# matching a config shrinks the owned set, which the ownership check
-# below turns into a failure rather than a pass.
+# The output each generator owns, read from its config, since no
+# generator answers "what do I own" and none deletes what it stops
+# producing. The paths are literal rather than globs: a glob expands
+# against the working tree, so a deleted generated directory would fall
+# outside it and read as clean (#360).
 GEN_PATHS := $(shell { sed -n 's/^output: //p' api/oapi-codegen.yaml api/machine-codegen.yaml; \
 	sed -n 's/^        out: //p' sqlc.yaml; \
 	sed -n 's/^    out: //p' buf.gen.yaml; \
 	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; } | sort -u)
 
-# git diff sees tracked paths only, so a generated file nobody added is
-# invisible to it. git status reports modified and untracked entries, skips
-# ignored ones, and exits 0 either way, so the gate checks for output.
-#
-# The checks against the owned set's shape run before gen, which would
-# otherwise heal them silently: a deleted owned path regenerates before
-# any status check could see it. The owned set cannot see output no
-# generator owns, but a generated file declares itself — every
-# generator here writes Go's "// Code generated ... DO NOT EDIT."
-# marker — so a tracked file carrying it that no owned path claims is
-# stale output. The scan reads the index, so output deleted in the
-# working tree but not yet staged is still seen and still fails.
+# check-gen fails on owned output that is modified, untracked or
+# deleted, and on tracked output carrying the "Code generated ... DO
+# NOT EDIT." marker that no owned path claims (#175, #360). The shape
+# checks run before gen, which would otherwise regenerate a deleted
+# path before any status could see it.
 check-gen:
 	@test -n '$(GEN_PATHS)' || { echo "check-gen: generator configs yielded no output paths — the parse above is broken"; exit 1; }
 	@out="$$(git ls-files --deleted -- $(GEN_PATHS))"; \
@@ -307,14 +242,9 @@ check-toolchain:
 	@scripts/check-toolchain.sh
 
 # The template commit this repository has taken every improvement from,
-# up to. Nothing derives it: an adapted file differs from the template by
-# design, so no comparison separates an improvement this project declined
-# from one it never saw, and where the two share no blob anywhere in
-# either history — docs/convention/stack-go.md, the file #775 was opened
-# for — there is nothing to compare at all. The pull request that takes
-# template content moves it. Left behind it names commits already
-# received, which is loud; moved past them it goes quiet, so it moves in
-# a diff a reviewer reads rather than in a computation nobody sees.
+# up to. Nothing can derive it, since an adapted file differs from the
+# template by design, so the pull request that takes template content
+# moves it in a diff a reviewer reads (#775, #777).
 TEMPLATE_SYNCED := 3d0c87aaf8d363fc304df45a588928febc97097a
 
 template-diff:
@@ -327,14 +257,11 @@ export SEARCH_Q = $(Q)
 search:
 	@scripts/search.sh
 
-# db-up starts the stack's postgres service, and the openbao service
-# `integration` signs against, and makes sure the test database exists
-# next to `garam`. Postgres has no CREATE DATABASE IF NOT EXISTS, so
-# ask before creating. Each Go suite migrates it itself.
-#
-# Whether the database exists is psql's output; whether there is an answer
-# at all is its exit status. The two are read separately, because one
-# non-zero status cannot tell a failed query from a clean negative.
+# db-up starts postgres and the openbao `integration` signs against, and
+# creates the test database beside `garam` if absent: Postgres has no
+# CREATE DATABASE IF NOT EXISTS, so it asks psql first. Output and exit
+# status are read apart, because one non-zero status cannot tell a
+# failed query from a clean negative (#344).
 db-up:
 	$(COMPOSE_LOCAL) up -d --wait postgres openbao
 	@present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
@@ -346,39 +273,24 @@ db-down:
 	$(COMPOSE_LOCAL) rm -sf postgres openbao
 
 # db-prune drops the per-worktree databases db-up created for worktrees
-# that are gone. It is in no whole-set name and in no workflow: a runner
-# starts empty and its databases go with it, so nothing there
-# accumulates and there would be nothing for a run to drop. It is
-# destructive on a developer machine, which is the other reason a person
-# invokes it.
-#
-# COMPOSE_LOCAL and TEST_DB_NAME are exported above; the script holds
-# what it keeps, the controls the keep set rests on, and the counts.
+# that are gone. It is in no whole-set name and no workflow: a runner
+# starts empty, and the target is destructive on a developer machine.
+# The script holds the keep set and the controls it rests on (#943).
 db-prune:
 	@scripts/db-prune.sh
 
-# backend-up starts the backend `make web-e2e` drives — postgres, the
-# one-shot migration, authz and api — from the same compose file, and
-# returns once api answers. The profile-gated `web` service stays down:
-# the browser suite builds and serves the app itself.
-#
-# It builds first, so what starts is the working tree rather than
-# whatever was built last — the migrations included, since they travel
-# in the same image. Nothing else here carries a source change: an
-# image that already exists satisfies compose, which starts the stale
-# one and reports it healthy. The build is cached, so an unchanged tree
-# costs seconds; the containers are recreated either way, because the
-# image id moves on every export whether or not a layer did.
+# backend-up starts what `make web-e2e` drives — postgres, the one-shot
+# migration, authz and api — and returns once api answers; the
+# profile-gated `web` service stays down. It builds first, migrations
+# included, because compose starts an existing image stale and reports
+# it healthy (#297).
 backend-up:
 	$(COMPOSE_LOCAL) up -d --build --wait api
 
-# What each of the two suites against real Postgres covers, listed once
-# so the targets report the set they ran rather than name a ./... pattern
-# whose match nobody sees. `go test` prints `[no test files]` and exits 0
-# for a package holding none — a build tag that stopped matching, a
-# renamed file — which reads exactly like the run that did the work. Only
-# packages holding a test file are listed, so that condition empties a
-# list and fails below instead of reaching go test.
+# Only packages holding a test file are listed, because `go test` exits
+# 0 with `[no test files]` on one holding none — a build tag that
+# stopped matching reads like the run that did the work. That condition
+# then empties a list and fails below.
 INTEGRATION_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/integration/...)
 INTEGRATION_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/integration/...)
 E2E_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/e2e/...)
@@ -403,15 +315,12 @@ e2e:
 	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(E2E_PKGS)
 
-# The Sherlock release the real-runtime suites below run against, by
-# tag and digest, and the one place it is recorded (#1220). v0.8.0
-# carries v0.4.0's ingress, which verifies garam's signature on a
-# message (ADR-0101), its issuer configuration, and v0.5.0's owner-only
-# state files (sherlock#1025). The PM moves it,
-# as AGENTS.md §Roles has the PM move a pinned dependency that names no
-# other mover: both images together, to a release garamsh/sherlock
-# published. A GARAM_TEST_RUNTIME_IMAGE or GARAM_TEST_WORKSPACE_IMAGE
-# in the environment still overrides it.
+# The Sherlock release the real-runtime suites run against, by tag and
+# digest, recorded here alone (#1220); v0.8.0 carries the ingress that
+# verifies garam's signature (ADR-0101), its issuer configuration and
+# owner-only state files (sherlock#1025). The PM moves both images
+# together to a published release (AGENTS.md §Roles). Either
+# GARAM_TEST_*_IMAGE in the environment overrides it.
 SHERLOCK_REGISTRY := 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam
 GARAM_TEST_RUNTIME_IMAGE ?= $(SHERLOCK_REGISTRY)/sherlock-agent:0.8.0@sha256:9e37375d5553757bd4417de2667f34ec1ebeef7437916ea7b6d2b58aed5a9963
 GARAM_TEST_WORKSPACE_IMAGE ?= $(SHERLOCK_REGISTRY)/sherlock-workspace:0.8.0@sha256:743f450fc86a35517f95e9ba702fc05750dc06d9e4e1254e745d67b6e2495b80
@@ -454,55 +363,13 @@ standalone-e2e:
 		GARAM_TEST_POSTGRES_CONTAINER="$$($(COMPOSE_LOCAL) ps -q postgres)" \
 		go test -count=1 -timeout 60m $(STANDALONE_PKGS)
 
-# mutation asks of every line what the hunt behind #875 asked of a few
-# by hand: whether the check at that line can fail. gremlins rewrites
-# one operator at a time and reports the mutants no test noticed.
-#
-# It is in no whole-set name and in no workflow. A full run over
-# internal/ takes minutes of every core it is given, `internal/` holds
-# every package the module ships so a path filter would exclude little,
-# and what the run buys is an audit of the suite rather than a gate on a
-# change. docs/architecture/README.md §Operation records that decision;
-# this target is what a contributor runs when the question is whether a
-# test could have failed.
-#
-# The coefficient is a ratio and not a duration: gremlins allows each
-# mutant's `go test` the coverage run's own duration times this number.
-# That duration is whatever Go's test cache made it — two runs behind
-# #875 measured it at 5.6 seconds and at 0.49 seconds — so 300 buys half
-# an hour per mutant in the first case and two and a half minutes in the
-# second. The smaller is enough for every mutant here that is not a
-# genuine hang. The default of 3 buys a second and a half either way,
-# which is less than compiling one package takes, so every mutant times
-# out and gremlins prints `Test efficacy: 0.00%` and exits 0 having
-# tested nothing.
-#
-# A long budget is paid for only by a mutant that hangs, which holds a
-# worker for the whole of it. Those two runs spent the same 36 minutes
-# of CPU and took 7 and 32 minutes of wall time, and the nine mutants
-# that hang in delivery/gateway.go are the whole difference.
-#
-# A run where every mutant timed out is the one docs/convention/ci.md
-# §One entry point per task says has to be told apart from the one that
-# did the work, and the counts below are what tell them apart. They are
-# read from the report gremlins writes rather than from its stream,
-# which says the same thing on both runs. The report is json.Marshal
-# output, so each key is followed directly by its value; a parse that
-# comes back empty fails the target rather than printing a zero nobody
-# checked.
-#
-# The report is removed first because gremlins writes none at all where
-# it found nothing to run — it prints `No results to report.` and exits
-# 0 — and a report left by the run before would then be read as this
-# one's.
-#
-# gremlins 0.6.0 copies the whole module directory into TMPDIR once per
-# worker (`internal/engine/workdir`), and a worker is a core by default.
-# The Go tree is four megabytes; the `web/node_modules` and `web/.next`
-# that `make web-install` and `make web-build` leave behind are another
-# 856, so a run on twelve cores after `make ci` writes ten gigabytes —
-# to a tmpfs, and so to RAM, wherever TMPDIR is one. Point TMPDIR at a
-# disk, or run this on a tree that has not built the frontend.
+# mutation runs gremlins over internal/ and reports the mutants no test
+# noticed; docs/architecture/README.md §Operation records why it is in
+# no workflow and what the coefficient and TMPDIR cost (#875). The
+# default coefficient times every mutant out and gremlins still exits
+# 0, so the counts are read from its report, removed first since it
+# writes none when it finds nothing, and zero tested fails. Point TMPDIR
+# at a disk: each worker copies the module, web/ builds included.
 MUTATION_COEFFICIENT := 300
 MUTATION_REPORT := mutation.json
 
@@ -561,16 +428,12 @@ web-lint:
 WEB_FORMAT_CANDIDATES = $(shell git -C web ls-files --cached --others --exclude-standard)
 
 # getFileInfo is prettier's documented answer for one path: `ignored`
-# applies .gitignore and .prettierignore as that default does, and a
-# null `inferredParser` is a file prettier opens and skips for want of a
-# parser. Without that second half an ignore file that swallowed every
-# source would still pass on a count the skipped files held above zero.
-# The exit status is read because a crash prints nothing, and an empty
-# list below has to mean an empty tree and nothing else.
-#
-# --silent because pnpm prints the install it verifies before `exec` on
-# stdout, and those lines would be counted as paths. Each path is quoted
-# because the App Router puts parentheses and brackets in these names.
+# applies both ignore files, and a null `inferredParser` is a file it
+# skips, so an ignore file that swallowed every source cannot pass on a
+# count of skipped files (#828). Each path is quoted for the App
+# Router's parentheses and brackets, --silent keeps pnpm's install
+# lines out of the paths, and the exit status is read because a crash
+# prints nothing.
 WEB_FORMAT_FILES = $(shell $(PNPM) --silent exec node -e 'const p=require("prettier");(async()=>{for(const f of process.argv.slice(1)){const i=await p.getFileInfo(f,{ignorePath:[".gitignore",".prettierignore"]});if(!i.ignored&&i.inferredParser)console.log(f)}})()' $(patsubst %,'%',$(WEB_FORMAT_CANDIDATES)))$(if $(filter-out 0,$(.SHELLSTATUS)),$(error web-format: prettier could not be asked which files it checks — the getFileInfo run above exited $(.SHELLSTATUS)))
 
 web-format:
@@ -619,30 +482,20 @@ web-e2e:
 	GARAM_API_URL=http://$(API_HOST_ADDR) GARAM_E2E_DATABASE_URL='$(WEB_E2E_DATABASE_URL)' $(PNPM) e2e
 
 # image-build builds the two images a release publishes, each from what
-# .github/workflows/release.yml says it is built from — the script reads
-# that file rather than restating it. Nothing else builds either: `build`
-# and `web-build` prove the Go module and the web app build, which is
-# not that the images do (#760).
-#
-# IMAGE_REGISTRY makes it a development build (ADR-0071): the release's
-# repositories under `garam-dev/` in that registry (ADR-0097), tagged
-# IMAGE_TAG or, when that is empty, the first twelve hex digits of HEAD.
-# The script refuses a bare release version or any other tag before it
-# builds, and pushes nothing.
+# .github/workflows/release.yml says it is built from; nothing else
+# builds either (#760, #850). IMAGE_REGISTRY makes it a development
+# build under `garam-dev/` in that registry, tagged IMAGE_TAG or HEAD's
+# first twelve hex digits (ADR-0071, ADR-0097); the script refuses any
+# other tag and pushes nothing.
 IMAGE_BUILD_ARGS = $(if $(IMAGE_REGISTRY),--registry '$(IMAGE_REGISTRY)') $(if $(IMAGE_TAG),--tag '$(IMAGE_TAG)')
 
 image-build:
 	scripts/image-build.sh $(IMAGE_BUILD_ARGS)
 
 # What image-build tagged the web image, asked of the script that tags
-# it. The repository comes from .github/workflows/release.yml's `tags:`,
-# and a second copy here was the copy that went stale: a rename in the
-# release left this naming an image an earlier run had built, which the
-# target then checked instead of the one it had just built (#870).
-#
-# Keyed on the build context, which is what makes an image the web
-# app's. Empty when the release builds none from it, which the target
-# reports rather than run against nothing.
+# it by the build context, so a rename in release.yml cannot leave this
+# naming an image an earlier run built (#870). Empty when the release
+# builds none from the web context, which the target reports.
 WEB_IMAGE = $(shell scripts/image-build.sh --names $(IMAGE_BUILD_ARGS) | sed -n 's|^web ||p')
 
 # web-image-e2e checks the built image rather than the app: that the
@@ -669,14 +522,12 @@ test-image:
 test-image-e2e: test-image
 	tests/image/test-image.sh '$(TEST_IMAGE_REPOSITORY):$(shell git rev-parse HEAD)'
 
-# An operator pushes the test image to its ECR repository and moves a
-# consumer's pin there, under their own AWS credentials (ADR-0093): no
-# workflow holds one for it. test-image-push builds and checks HEAD as
-# test-image-e2e does and pushes it under HEAD's first twelve hex
-# digits (ADR-0071's commit-derived tag); test-image-pin moves
-# `pinned-$(CONSUMER)` to the image of $(COMMIT).
-# Neither is in `ci`, which holds no AWS credential. Both scripts hold
-# the repository themselves, so no make variable can redirect them.
+# An operator pushes the test image to ECR and moves a consumer's pin
+# under their own AWS credentials (ADR-0093), so neither target is in
+# `ci`. test-image-push checks HEAD as test-image-e2e does and pushes it
+# under its first twelve hex digits (ADR-0071); test-image-pin moves
+# `pinned-$(CONSUMER)` to the image of $(COMMIT). Both scripts hold the
+# repository, so no make variable can redirect them.
 test-image-push:
 	scripts/image-test-push.sh
 
@@ -701,20 +552,11 @@ CHART_TEMPLATES = $(wildcard $(CHART_DIR)/templates/*.yaml)
 # templates' one branch.
 CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
 
-# Every environment variable garam reads, derived from the two files that
-# read them rather than listed here. The Go side is the envName block in
-# internal/cli: envOr wraps the module's only os.Getenv call and takes a
-# name declared there, so this reads the declarations rather than the
-# spelling of the calls — a wrapper around envOr no longer shrinks what
-# this check covers, which is what a call-site pattern could not promise
-# (#734). The two guards chart-render runs first are what keep the block
-# equal to the reads. web/src/env.ts is the web app's only reader and is
-# parsed for its own shape.
-#
-# Both sides read the same character class. A class the sweep does not
-# accept drops the name out of the enumerated set silently: the chart
-# does not set it either, so the comparison below finds nothing to
-# report and passes on a name neither side ever saw (#864).
+# Every environment variable garam reads, from its declarations: the
+# envName block in internal/cli, and web/src/env.ts parsed for its own
+# shape. The guards chart-render runs first keep the block equal to the
+# reads (#734), and both sides read one character class, since a name
+# outside it drops out of both sets and passes unseen (#864).
 CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z][A-Z0-9_]*"' --include=*.go internal cmd | sed 's/.*"\([A-Z][A-Z0-9_]*\)"/\1/' | sort -u)
 CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' web/src/env.ts)
 
@@ -841,33 +683,11 @@ chart-identity:
 				echo "chart-identity: $${p%.name}.create=true rendered with no $$p — the chart composed a name, and a composed name moves the subject another repository binds a role to"; exit 1; fi; \
 		done
 
-# chart-package reads the artifact `helm package` produces, which the
-# three targets above never open: everything not excluded ships, `ci/`
-# included, so a file reaches a consumer without passing through any of
-# them. A resource name set there reads as a figure garam measured, and
-# none is (docs/architecture/deployment-contract.md §Not established).
-# Its zero-guard counts lines that set a `resources:` key: counting any
-# line holding the word counted this README's own prose, so an artifact
-# carrying no workload at all still reported a search that read
-# something (#864).
-#
 # chart-names renders under the longest release name Helm accepts and
-# holds every object name to 63 characters. Rendering cannot see this
-# class on its own: `helm template` produced a 67-character Service
-# name and only an apply reported it (#725), and the two release names
-# the checks above render under are too short to reach the boundary.
-#
-# 63 binds for three different reasons — a Service name is a DNS-1035
-# label, a Job's name becomes its pods' `job-name` label value, and a
-# Deployment name reaches pod hostnames — so the check is on the name
-# rather than on the kind.
-#
-# `^  name: ` is the object's own name at exactly two spaces: a
-# container, an env entry and a secretKeyRef all sit deeper.
-#
-# Each render lands in a file before it is parsed: piped into sed only
-# sed's status reaches set -e, so a render that failed contributed no
-# name and the other value file kept the count above zero (#864).
+# holds every object name to 63 characters, which an apply enforces and
+# a render does not (#725, #732). `^  name: ` is an object's own name,
+# and each render lands in a file before it is parsed, so a failed
+# render fails set -e rather than contributing no name (#864).
 CHART_LONG_RELEASE := garam-production-eu-west-1-primary-tenant-alpha-01234
 
 chart-names:
@@ -886,23 +706,11 @@ chart-names:
 		echo "chart-names: $$total distinct object names, longest $$(awk '{ if (length($$0) > m) m = length($$0) } END { print m }' "$$out/names"), none over 63"
 
 # chart-rewrite holds the `/api/*` target a release bakes into the web
-# image against the api Service this chart renders under the release
-# name `garam`. Both are true and each is written where the other is not
-# read: the target is a build argument in a workflow, the Service name
-# comes out of a template, and until #861 no check opened two of them at
-# once. Renaming either leaves every published image reaching a name
-# nothing renders, and the failure is a browser request that 404s —
-# every object Ready, no probe on that path (ADR-0023), no log line.
-#
-# The second render is the control. It is the release name chart-names
-# proves the chart survives, and the URL it names is one no published
-# image reaches (ADR-0056), so it is also where the constraint this
-# check records is visible: equality under `garam` proves nothing unless
-# the two renders differ.
-#
-# The build argument is read here and enumerated in
-# scripts/image-build.sh, which asks a different question of the same
-# file — what the release builds, rather than what one image is bound to.
+# image against the api Service rendered under release `garam`, two
+# facts nothing else reads together (#861). The render under
+# $(CHART_LONG_RELEASE) is the control and must differ, or the equality
+# proves nothing (ADR-0056). scripts/image-build.sh reads the same file
+# for what the release builds.
 CHART_BAKED_API_URL = $(shell sed -n 's/^ *GARAM_API_URL=\(.*\)$$/\1/p' .github/workflows/release.yml)
 
 chart-rewrite:
@@ -928,25 +736,12 @@ chart-rewrite:
 			|| { echo "chart-rewrite: release $(CHART_LONG_RELEASE) renders $$control as well, so the equality above holds under every release name and this check reads nothing"; exit 1; }; \
 		echo "chart-rewrite: release garam renders $$rendered; release $(CHART_LONG_RELEASE) renders $$control, which no published web image reaches"
 
-# chart-guards renders each values file under $(CHART_DIR)/ci/refused/
-# and holds that the render is refused, naming the value the file is
-# named after. A value documented as guarded and not guarded reads as
-# protection and is worse than none (#726), and rendering under the
-# valid values above cannot see one: the render succeeds, and what is
-# missing arrives at runtime or not at all.
-#
-# The message is checked, not only the exit status. A render refused
-# for an unrelated reason is not this guard firing, and would pass a
-# check that read the status alone. What the message must carry is
-# `execution error at (<template>): <value> ` — helm's own form for a
-# template that stopped itself, opening with the value the guard names.
-# Searching the whole of helm's output for the value instead matched
-# the values file's path, which carries the same string, so any failure
-# that named the file passed (#864).
-#
-# The control is the last line: the values every other check renders
-# must still render. Without it a chart that refused everything would
-# pass every case above.
+# chart-guards renders each values file under ci/refused/ and holds that
+# helm refuses it with `execution error at (<template>): <value> `,
+# naming the value the file is named after (#726, #740). The message is
+# matched rather than the status or the file's path, which carries the
+# same string (#864). The last render is the control:
+# minimal-values.yaml must still render.
 CHART_REFUSED = $(wildcard $(CHART_DIR)/ci/refused/*.yaml)
 
 chart-guards:
@@ -972,6 +767,11 @@ chart-security:
 		CHART_IDENTITIES='$(CHART_IDENTITIES)' CHART_VALUES='$(CHART_VALUES)' \
 		scripts/chart-security.sh
 
+# chart-package searches the artifact `helm package` produces, which no
+# other check opens, for a resource name set as a key: no figure is one
+# garam measured (deployment-contract.md §Not established). Its zero
+# guard counts lines setting `resources:`, not lines holding the word,
+# which this chart's README carries in prose (#582, #864).
 chart-package:
 	@echo 'chart-package: $(words $(CHART_RESOURCE_NAMES)) resource names searched for as keys in the packaged artifact — resource quantities only, $(CHART_DIR)/README.md §What the checks are complete over'
 	@set -e; \
@@ -1010,19 +810,10 @@ KUBECTL_MINIKUBE := kubectl --context minikube
 KUBECTL_LOCAL := $(KUBECTL_MINIKUBE) --namespace garam-local
 MINIKUBE_DIR := deploy/local/minikube
 
-# The operator, pinned to the commit that carries the manifest: a release
-# asset can be replaced under its tag and a commit cannot. v1.30.0 is the
-# current stable release and the first patched for all four advisories
-# github.com/cloudnative-pg/cloudnative-pg publishes; GHSA-7qwx-x8ff-3px9
-# is what puts that floor at 1.30.0 rather than 1.29.2, and the GitHub
-# Advisory Database does not carry it — re-check the four at the
-# project's own advisories. Nothing proposes a bump for this pin either,
-# and no scheduled review is named for it; naming no mover of its own,
-# it is the PM's to move under AGENTS.md §Roles.
-#
-# The database's Postgres major is no longer this pin's to move:
-# deploy/local/minikube/postgres.yaml names its own image rather than
-# taking the default this operator version carries.
+# The CloudNativePG operator, pinned to the commit carrying the
+# manifest; deploy/local/minikube/README.md §What runs records why
+# v1.30.0 and where its advisories are re-checked. Nothing proposes a
+# bump, so it is the PM's to move (AGENTS.md §Roles).
 CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/4b5e244a7d031f67e025c83c1555e7726ecbbfa1/releases/cnpg-1.30.0.yaml
 
 minikube-up: minikube-start minikube-db minikube-secret minikube-rebuild

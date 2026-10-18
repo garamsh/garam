@@ -139,11 +139,11 @@ sql:
       - migrations/000001_init.up.sql
       - migrations/000004_agents.up.sql
       - migrations/000029_agent_execution_fence.up.sql
-    queries: internal/watch/queries.sql
+    queries: internal/watch/postgres/queries.sql
     gen:
       go:
         package: db
-        out: internal/watch/db
+        out: internal/watch/postgres/db
         sql_package: pgx/v5
   - engine: postgresql
     schema:

@@ -6,7 +6,7 @@ import {
   type ArchivePolicyState,
 } from "@/features/orgs/actions";
 
-import { ActionDialog } from "../../_components/action-dialog";
+import { ActionDialog } from "../../../../../_components/action-dialog";
 
 const initialState: ArchivePolicyState = { status: "idle" };
 

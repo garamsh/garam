@@ -9,6 +9,7 @@ import {
 } from "@/app/console/orgs/[org]/operators/[operator]/connect/_components/connect-wizard";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { OperatorKey } from "@/features/orgs";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 import { API_URL, fieldOneKey } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -239,6 +240,33 @@ describe("connect wizard", () => {
       await screen.findByRole("alertdialog", { name: "Save the private key" }),
     ).toBeInTheDocument();
     expect(posted).toEqual([{ rotation: "immediate" }]);
+  });
+
+  it("keeps the replacement open with garam's refusal, and stays on issuing", async () => {
+    answerIssuance(() =>
+      HttpResponse.json(
+        { kind: "permission_denied", message: "denied: operator:reissue" },
+        { status: 403 },
+      ),
+    );
+    const user = userEvent.setup();
+    render(wizard("issue", [fieldOneKey], true));
+
+    await user.click(screen.getByRole("radio", { name: /Replace now/ }));
+    await user.click(screen.getByRole("button", { name: "Replace key now" }));
+    const confirm = screen.getByRole("alertdialog", {
+      name: "Replace Field one's key now?",
+    });
+    await user.click(
+      within(confirm).getByRole("button", { name: "Replace key now" }),
+    );
+
+    expect(await within(confirm).findByRole("alert")).toHaveTextContent(
+      REFUSAL_COPY.permissionDenied,
+    );
+    expect(confirm).toBeInTheDocument();
+    await user.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(currentStep()).toHaveTextContent("Issue a key");
   });
 
   it("resumes on placing a key issued earlier, without its private half or token URL", () => {

@@ -3,6 +3,7 @@
 import { Check, Copy, Download } from "lucide-react";
 import { useId, useState } from "react";
 
+import { Refusal } from "@/components/refusal";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -115,14 +116,12 @@ function OpenSecretReveal({
           )}
         </div>
         {downloaded === false && (
-          <p role="alert" className="text-destructive">
-            Could not download the {noun}. Copy it instead.
-          </p>
+          <Refusal>Could not download the {noun}. Copy it instead.</Refusal>
         )}
         {outcome === "failed" && (
-          <p role="alert" className="text-destructive">
+          <Refusal>
             Could not copy the {noun}. Select it above and copy it yourself.
-          </p>
+          </Refusal>
         )}
         <div className="flex items-start gap-2">
           <input

@@ -29,6 +29,8 @@ import { CUTOVER_STAGE_LABEL } from "../../../../_components/cutover-marker";
 import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
+import { RefusedRead } from "../../../../_components/refused-read";
+import { Section } from "../../../../_components/section";
 import {
   DetailPage,
   type DetailTab,
@@ -100,10 +102,7 @@ export default async function AgentPage({ params }: Params) {
     return (
       <>
         {fallback}
-        <Banner tone="warn" title="This agent is not shown to you">
-          garam refused to show this agent to you. An owner or admin of the
-          organization can grant it.
-        </Banner>
+        <RefusedRead subject="this agent" />
       </>
     );
   }
@@ -164,6 +163,7 @@ export default async function AgentPage({ params }: Params) {
       label: "Execution",
       content: (
         <Section
+          className="rounded-xl border bg-card p-4"
           title="Execution"
           description="What the hosted operator's control service holds for this agent."
         >
@@ -194,6 +194,7 @@ export default async function AgentPage({ params }: Params) {
       label: "Settings",
       content: (
         <Section
+          className="rounded-xl border bg-card p-4"
           title="Name"
           description="The organization's word for this agent. Its identifier, operator and values stay as they are."
         >
@@ -235,27 +236,6 @@ export default async function AgentPage({ params }: Params) {
   );
 }
 
-/** A titled card holding one part of a tab. */
-function Section({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-3 rounded-xl border bg-card p-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-base">{title}</h2>
-        <p className="text-muted-foreground">{description}</p>
-      </div>
-      {children}
-    </section>
-  );
-}
-
 /**
  * What operators and the agent itself reported, apart from what the
  * organization asked for (ADR-0053). `Last report` is when one last
@@ -272,6 +252,7 @@ function Reported({
 }) {
   return (
     <Section
+      className="rounded-xl border bg-card p-4"
       title="Reported"
       description="What the operator and the agent itself last reported."
     >
@@ -319,6 +300,7 @@ function Requested({
   const { operatorGrn, values, createdAt, cutover } = definition;
   return (
     <Section
+      className="rounded-xl border bg-card p-4"
       title="Requested"
       description="What this organization defined for the agent."
     >

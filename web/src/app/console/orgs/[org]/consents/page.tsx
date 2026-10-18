@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { Handshake } from "lucide-react";
 
-import { Banner } from "@/components/banner";
 import { getOrg, lookupOrgConsents, slugFromGrn } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
+import { RefusedRead } from "../../../_components/refused-read";
 import { ListPage } from "../../../_components/templates/list-page";
 import { ConsentCard } from "./_components/consent-card";
 import { GrantConsentDialog } from "./_components/grant-consent-dialog";
@@ -63,10 +63,7 @@ export default async function ConsentsPage({ params }: Params) {
       primaryAction={mayGrant ? <GrantConsentDialog org={org} /> : undefined}
     >
       {consents.status === "forbidden" ? (
-        <Banner tone="info" title="Consents not shown">
-          The server did not let you read this organization&apos;s consent
-          relations. An owner or admin of the organization can grant it.
-        </Banner>
+        <RefusedRead subject="this organization's consent relations" />
       ) : consents.data.length === 0 ? (
         <EmptyState
           icon={Handshake}

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 
-import { Banner } from "@/components/banner";
 import { getOrg, lookupOrgMembers, slugFromGrn } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
+import { RefusedRead } from "../../../_components/refused-read";
 import { ListPage } from "../../../_components/templates/list-page";
 import { InviteDialog } from "./_components/invite-dialog";
 import { MemberTable } from "./_components/member-table";
@@ -54,10 +54,7 @@ export default async function PeoplePage({ params }: Params) {
   if (members.status === "forbidden") {
     return (
       <ListPage title={TITLE} description={DESCRIPTION} primaryAction={invite}>
-        <Banner tone="warn" title="You cannot list this organization's people">
-          garam refused to show you who belongs to this organization. Access to
-          its members is granted by its roles and policies.
-        </Banner>
+        <RefusedRead subject="this organization's people" />
       </ListPage>
     );
   }

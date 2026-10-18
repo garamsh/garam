@@ -173,7 +173,9 @@ describe("policy page", () => {
     ).toBeInTheDocument();
     const attachments = await openTab(/^Attachments/);
 
-    expect(attachments.getByText("Attachments not shown")).toBeInTheDocument();
+    expect(
+      attachments.getByText("You can't view this policy's attachments"),
+    ).toBeInTheDocument();
     expect(attachments.queryByText("No attachments")).not.toBeInTheDocument();
   });
 

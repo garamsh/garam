@@ -28,6 +28,12 @@ type stubAuthzServer struct {
 	allowed bool
 	err     error
 	got     *authzv1.CheckRequest
+	// explained is what Explain answers.
+	explained *authzv1.ExplainResponse
+}
+
+func (s *stubAuthzServer) Explain(context.Context, *authzv1.ExplainRequest) (*authzv1.ExplainResponse, error) {
+	return s.explained, nil
 }
 
 func (s *stubAuthzServer) Check(_ context.Context, req *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
@@ -111,4 +117,34 @@ func TestGRPCEvaluator_SendsTheQuestionAndReadsTheEnginesRefusal(t *testing.T) {
 	_, err = newGRPCEvaluator(t, &stubAuthzServer{err: status.Error(codes.Unavailable, "boom")}).
 		Evaluate(context.Background(), evalInput())
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "got %v", err)
+}
+
+// TestGRPCEvaluator_ExplainParsesEachTrace holds the trace a policy
+// statement comes back as: its policy and the subjects it reached are
+// parsed into GRNs, and a statement the caller sent comes back naming
+// neither. A trace whose policy GRN does not parse is the engine's
+// fault and fails the call as internal; the trace beside it that
+// parses is the control.
+func TestGRPCEvaluator_ExplainParsesEachTrace(t *testing.T) {
+	policy := grn.New("acme", grn.DefaultProject, "policy", "p1")
+	eng := grn.New("acme", grn.DefaultProject, "group", "eng")
+	traced := []*authzv1.StatementTrace{
+		{Sid: "deny", Matched: true, Effect: authzv1.Effect_EFFECT_DENY, PolicyGrn: policy.String(), AttachedTo: []string{eng.String()}},
+		{Sid: "org-role-owner", Matched: true, Effect: authzv1.Effect_EFFECT_ALLOW},
+	}
+	ex, err := newGRPCEvaluator(t, &stubAuthzServer{explained: &authzv1.ExplainResponse{Traces: traced}}).
+		Explain(context.Background(), evalInput())
+	require.NoError(t, err)
+	assert.False(t, ex.Allowed)
+	assert.Equal(t, []api.Trace{
+		{Sid: "deny", Matched: true, Effect: wire.EffectDeny, Policy: policy, AttachedTo: []grn.GRN{eng}},
+		{Sid: "org-role-owner", Matched: true, Effect: wire.EffectAllow, AttachedTo: []grn.GRN{}},
+	}, ex.Traces)
+
+	corrupt := &authzv1.ExplainResponse{Traces: []*authzv1.StatementTrace{
+		traced[1],
+		{Sid: "deny", Matched: true, Effect: authzv1.Effect_EFFECT_DENY, PolicyGrn: "not-a-grn"},
+	}}
+	_, err = newGRPCEvaluator(t, &stubAuthzServer{explained: corrupt}).Explain(context.Background(), evalInput())
+	assert.True(t, errorx.IsKind(err, errorx.KindInternal), "got %v", err)
 }

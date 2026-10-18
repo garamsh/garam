@@ -106,4 +106,12 @@ message StatementTrace {
   string sid = 1;
   bool matched = 2;
   Effect effect = 3;
+  // policy_grn is the persisted policy holding the statement, and empty
+  // for a statement the caller sent.
+  string policy_grn = 4;
+  // attached_to names the subjects of the request — subject_grn or one
+  // of subject_groups — that the policy is attached to. It is empty for
+  // a policy that applies org-wide and for a statement the caller sent
+  // (ADR-0008).
+  repeated string attached_to = 5;
 }

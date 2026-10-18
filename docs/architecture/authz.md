@@ -361,15 +361,18 @@ channels.
 
 ## Explain
 
-**Nothing calls this.** The RPC is implemented and served on the policy
-listener (`internal/authz/server.go`), and no caller reaches it:
-neither specification carries the operation, no CLI subcommand asks it,
-and nothing in `web/` does. So the reproducibility below is the RPC's
-own, and not something any surface offers today.
-
 The `Explain` RPC reports which statements matched and which produced
-the final decision, across both origins. A denied request must be
-reproducible after the fact.
+the final decision, across both origins. It decides over the set
+`Check` decides over, read from the same cache, so its decision is
+`Check`'s. A persisted statement's trace names the policy holding it
+and the subjects of the request that policy is attached to — none for
+one applying org-wide — so a denied request is reproducible after the
+fact down to the attachment that carried it.
+
+Its one caller is `explainPermission` on the browser-facing listener,
+which names a policy only to a caller who may read it
+([api-surface.md](./api-surface.md) §What decides the rest). No CLI
+subcommand asks it, and the machine listener does not.
 
 ## Constraints
 

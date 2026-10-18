@@ -202,7 +202,7 @@ func (s *fakeStore) ActivePolicies(_ context.Context, orgGRN grn.GRN) ([]authz.A
 		for _, a := range p.attachments {
 			subjects = append(subjects, a.Subject())
 		}
-		out = append(out, authz.ActivePolicy{Document: p.versions[p.defaultVersion-1].Document(), Subjects: subjects})
+		out = append(out, authz.ActivePolicy{GRN: p.policy.GRN(), Document: p.versions[p.defaultVersion-1].Document(), Subjects: subjects})
 	}
 	return out, nil
 }

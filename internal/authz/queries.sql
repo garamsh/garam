@@ -65,11 +65,12 @@ SELECT count(*) FROM policy_attachments WHERE policy_grn = $1;
 SELECT * FROM policy_attachments WHERE policy_grn = $1 ORDER BY subject_grn;
 
 -- ActivePolicies returns what each active policy of the org currently
--- evaluates: its default version's document, and the subjects it is
--- attached to. An empty subject list means the policy applies org-wide
+-- evaluates: its GRN, its default version's document, and the subjects
+-- it is attached to. An empty subject list means the policy applies org-wide
 -- (ADR-0008).
 -- name: ActivePolicies :many
-SELECT v.document,
+SELECT p.grn,
+       v.document,
        coalesce(array_agg(a.subject_grn) FILTER (WHERE a.subject_grn IS NOT NULL), '{}')::text[] AS subject_grns
 FROM policies p
 JOIN policy_versions v ON v.policy_grn = p.grn AND v.version = p.default_version

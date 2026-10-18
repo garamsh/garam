@@ -493,6 +493,127 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/permission-explanation:
+    get:
+      operationId: explainPermission
+      tags: [org]
+      summary: Explain why the signed-in caller may or may not take one action. Requires membership.
+      description: >-
+        Explains the pair `checkPermissions` would answer for the same
+        caller, action and resource, from the same inputs: the same role
+        statements, groups and attached policies, asked of the policy
+        engine's `Explain`, which decides as its `Check` does. The
+        `decision` is the one `checkPermissions` answers for the pair.
+
+
+        Where the engine decides (`basis` is `statements`), `statements`
+        holds the statements that decided: every matching `Deny` when
+        the answer is `deny` because one matched, every matching `Allow`
+        when it is `allow`, and none when it is `deny` because nothing
+        allows it. Each names the path through which it reaches the
+        caller: their org role, the roles stored on them, a group's or
+        project's roles, or a policy that applies org-wide, is attached
+        to them, or is attached to a group they belong to. A policy
+        reaching by two paths is named once for each.
+
+
+        A policy statement is named only where the caller holds
+        `policy:read` on that policy, the check `getPolicy` makes.
+        Every other one is answered once, as `unreadable-policy`, with
+        its effect and nothing else: no policy, statement or path.
+
+
+        The actions `checkPermissions` puts to more than the engine's
+        `Check` — a delegation grant, the organization's current policy,
+        or the check delegation writes run — are explained no further
+        than its answer: `basis` is `operation`, `statements` is empty,
+        and the operation decides. An action garam does not define is
+        answered `deny` with `basis` `undefined-action`.
+
+
+        The pair is the query's `action`, `resourceType` and
+        `resourceId`, refused with 400 as `checkPermissions` refuses one,
+        and where only one of the last two is given. A caller who is not
+        a member of the organization is refused with 403.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/permissionAction'
+        - $ref: '#/components/parameters/permissionResourceType'
+        - $ref: '#/components/parameters/permissionResourceId'
+      responses:
+        '200':
+          description: The decision and what decided it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionExplanation'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/permission-holders:
+    get:
+      operationId: listPermissionHolders
+      tags: [org]
+      summary: List the members and agents the engine allows one action. Requires `org:member-list`.
+      description: >-
+        Answers which principals of the organization the policy engine
+        allows `action` on the resource, each asked as enforcement asks
+        it: a member with their org role, the roles stored on them, the
+        roles of the target group or project they belong to, their
+        groups and the policies reaching them; an agent, which holds no
+        role, with its groups and the policies reaching it.
+
+
+        It requires `org:member-list` on the organization, the check
+        `listOrgMembers` makes, since the answer names members. Agents
+        are asked only where the caller also holds `agent:read` on the
+        organization, the check `listAgents` makes; otherwise none is
+        listed.
+
+
+        The candidates are the organization's members in ascending GRN
+        order followed by its agents in ascending GRN order. A page asks
+        `limit` of them from `offset`, at most fifty, and answers those
+        the engine allows, so a page may hold fewer holders than it asked
+        candidates, none at all among them. `nextOffset` is where the next
+        page starts, and absent on the last.
+
+
+        Only actions the engine's `Check` alone decides are answered.
+        One `checkPermissions` puts to more than that is refused with
+        400, since the engine is not what decides who holds it. An
+        action garam does not define is held by no one. The resource is
+        named and refused as `explainPermission` names and refuses it.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/permissionAction'
+        - $ref: '#/components/parameters/permissionResourceType'
+        - $ref: '#/components/parameters/permissionResourceId'
+        - name: limit
+          in: query
+          description: How many candidates to ask, from 1 to 50.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 50
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: The holders among the candidates this page asked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionHolders'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/members:
     get:
       operationId: listOrgMembers
@@ -2537,6 +2658,30 @@ components:
       x-go-name: SubjectGrn
       schema:
         type: string
+    permissionAction:
+      name: action
+      in: query
+      required: true
+      description: The action asked about.
+      schema:
+        type: string
+        example: policy:update
+    permissionResourceType:
+      name: resourceType
+      in: query
+      description: >-
+        The kind of resource asked about. Without it and
+        `resourceId`, the organization itself.
+      schema:
+        $ref: '#/components/schemas/PermissionResourceType'
+    permissionResourceId:
+      name: resourceId
+      in: query
+      description: >-
+        The last segment of the resource's identifier, given with
+        `resourceType`.
+      schema:
+        type: string
     limit:
       name: limit
       in: query
@@ -2774,11 +2919,13 @@ components:
       required: [type, id]
       properties:
         type:
-          type: string
-          enum: [group, project, agent, agent-template, policy]
+          $ref: '#/components/schemas/PermissionResourceType'
         id:
           type: string
           example: eng
+    PermissionResourceType:
+      type: string
+      enum: [group, project, agent, agent-template, policy]
     PermissionCheckAnswer:
       type: object
       required: [results]
@@ -2808,6 +2955,100 @@ components:
         control and let the operation answer.
       enum: [allow, deny, unknown]
       x-enum-varnames: [DecisionAllow, DecisionDeny, DecisionUnknown]
+    PermissionExplanation:
+      type: object
+      required: [action, decision, basis, statements]
+      properties:
+        action:
+          type: string
+        resource:
+          $ref: '#/components/schemas/PermissionResource'
+        decision:
+          $ref: '#/components/schemas/PermissionDecision'
+        basis:
+          $ref: '#/components/schemas/PermissionBasis'
+        statements:
+          type: array
+          description: >-
+            The statements that decided, where `basis` is `statements`;
+            empty otherwise, and where nothing allows the action.
+          items:
+            $ref: '#/components/schemas/ExplainedStatement'
+    PermissionBasis:
+      type: string
+      description: >-
+        `statements` is a decision the policy engine reached, explained
+        by `statements`. `operation` is an action the operation decides
+        past the engine's `Check`, explained no further than the
+        decision. `undefined-action` is a name garam does not define.
+      enum: [statements, operation, undefined-action]
+      x-enum-varnames: [BasisStatements, BasisOperation, BasisUndefinedAction]
+    ExplainedStatement:
+      type: object
+      description: >-
+        One statement that decided and the path through which it
+        reaches the caller. `source` says which fields are present:
+        `roles` for the four role sources, `group` for `group-role`,
+        `project` for `project-role`, and `sid`, `policy` and
+        `attachment` for `policy` — with `group` where `attachment` is
+        `group`. `unreadable-policy` carries `effect` alone.
+      required: [effect, source]
+      properties:
+        effect:
+          type: string
+          enum: [Allow, Deny]
+          x-enum-varnames: [StatementEffectAllow, StatementEffectDeny]
+        source:
+          type: string
+          enum: [org-role, direct-role, group-role, project-role, policy, unreadable-policy]
+          x-enum-varnames: [SourceOrgRole, SourceDirectRole, SourceGroupRole, SourceProjectRole, SourcePolicy, SourceUnreadablePolicy]
+        sid:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        group:
+          type: string
+          description: The group's slug.
+        project:
+          type: string
+          description: The project's slug.
+        policy:
+          type: string
+          description: The policy's identifier, as `getPolicy` addresses it.
+        attachment:
+          type: string
+          description: >-
+            How the policy reaches the caller: it applies to the whole
+            `organization`, is attached to the `caller`, or is attached
+            to the `group` named beside it.
+          enum: [organization, caller, group]
+          x-enum-varnames: [AttachmentOrganization, AttachmentCaller, AttachmentGroup]
+    PermissionHolders:
+      type: object
+      required: [holders]
+      properties:
+        holders:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionHolder'
+        nextOffset:
+          type: integer
+          description: The offset of the next page; absent on the last.
+    PermissionHolder:
+      type: object
+      required: [type, grn]
+      properties:
+        type:
+          type: string
+          enum: [user, agent]
+          x-enum-varnames: [HolderUser, HolderAgent]
+        grn:
+          type: string
+        nickname:
+          type: string
+          description: A user's nickname, where its row could be read.
     OrgDeletionCounts:
       type: object
       description: >-

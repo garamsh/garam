@@ -617,8 +617,13 @@ it and imports no request surface and no domain.
 - **Testable in isolation** — every domain exposes an interface; unit
   tests substitute at module boundaries (mocks, in-memory test doubles
   where they exist).
-- **Storage-agnostic** — Postgres, SQLite, Redis plug into the same
-  `Store` interface without domain code changes.
+- **Storage behind each domain's own interface** — each domain declares
+  the store it needs, and its Postgres implementation moves to
+  `internal/<domain>/postgres/`
+  ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md));
+  a second implementation would plug in behind that domain's interface.
+  [domains.md](./domains.md) §Store implementation status records which
+  domains have moved, and that no other store is planned.
 - **Reproducible generation** — oapi-codegen, sqlc, buf, and mockery
   output is committed; CI regenerates and fails on drift
   (`make check-gen`).

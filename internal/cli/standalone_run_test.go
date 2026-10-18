@@ -12,6 +12,7 @@ import (
 // garam's spelling, and none at all where none is named, since no
 // address the host reaches garam at stands in for an identity.
 func TestMessageIssuerOf_TakesOnlyTheIssuerNamedInGaramsSpelling(t *testing.T) {
+	// Internal: run reads the issuer only after garam has answered.
 	issuer, err := messageIssuerOf("https://machine.dev.garam.sh")
 	require.NoError(t, err)
 	assert.Equal(t, "https://machine.dev.garam.sh", string(issuer))

@@ -1,396 +1,125 @@
-// Internal test package: the provider assembly and the readiness check
-// over the engine channel are white-box seams — the serve command
-// cannot run in a unit test, so both are exercised directly.
-package cli
+package cli_test
 
 import (
 	"context"
-	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httptrace"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
 
-	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/authn"
-	"github.com/garamsh/garam/internal/authz"
-	authzmocks "github.com/garamsh/garam/internal/authz/mocks"
 	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/health"
-	"github.com/garamsh/garam/internal/wire"
-	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
-func TestGoogleProvider_NotConfigured(t *testing.T) {
-	// No credentials: no provider, and no discovery round trip — the
-	// default issuer would answer here, so a nil provider can only
-	// come from construction never being attempted.
-	p, err := googleProvider(context.Background(), authn.GoogleConfig{})
-	require.NoError(t, err)
-	assert.Nil(t, p)
+// unreachableDatabase is a well-formed URL nothing answers on. A pool
+// is built from it without dialling, so a serve command gets as far as
+// its first query.
+const unreachableDatabase = "postgres://garam@127.0.0.1:1/garam"
+
+// serveAPIEnv sets what `serve api` reads to a start that opens no
+// connection, with overrides applied over it.
+func serveAPIEnv(t *testing.T, overrides map[string]string) {
+	t.Helper()
+	env := map[string]string{
+		"GARAM_DATABASE_URL":      unreachableDatabase,
+		"GARAM_AUTHZ_ADDR":        "127.0.0.1:1",
+		"GARAM_HTTP_ADDR":         "",
+		"GARAM_SESSION_TTL":       "",
+		"GARAM_COOKIE_SECURE":     "",
+		"GARAM_MACHINE_TOKEN_URL": "",
+		"GOOGLE_CLIENT_ID":        "",
+		"GOOGLE_CLIENT_SECRET":    "",
+		"GOOGLE_REDIRECT_URL":     "",
+	}
+	for name, value := range overrides {
+		env[name] = value
+	}
+	for name, value := range env {
+		t.Setenv(name, value)
+	}
 }
 
+// refusedStart runs `serve api` over overrides, which are expected to
+// stop it before it listens, and answers the error it stopped with. An
+// unreadable GARAM_SESSION_TTL is set beneath them unless they name it,
+// so a start nothing refused earlier still ends, on that variable.
+func refusedStart(t *testing.T, overrides map[string]string) error {
+	t.Helper()
+	if _, named := overrides["GARAM_SESSION_TTL"]; !named {
+		overrides["GARAM_SESSION_TTL"] = "a week"
+	}
+	serveAPIEnv(t, overrides)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := runRootContext(ctx, t, "serve", "api")
+	require.Error(t, err)
+	return err
+}
+
+// servedAPI runs `serve api` on a loopback port until the test ends and
+// answers its base URL once the listener answers liveness.
+func servedAPI(t *testing.T) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := ln.Addr().String()
+	require.NoError(t, ln.Close())
+	serveAPIEnv(t, map[string]string{"GARAM_HTTP_ADDR": addr})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan error, 1)
+	go func() {
+		_, err := runRootContext(ctx, t, "serve", "api")
+		stopped <- err
+	}()
+	t.Cleanup(func() {
+		cancel()
+		assert.NoError(t, <-stopped, "a requested stop is not a failure")
+	})
+
+	url := "http://" + addr
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		resp, err := http.Get(url + health.LivePath)
+		if !assert.NoError(c, err) {
+			return
+		}
+		_ = resp.Body.Close()
+		assert.Equal(c, http.StatusOK, resp.StatusCode)
+	}, 10*time.Second, 10*time.Millisecond, "serve api never answered liveness")
+	return url
+}
+
+func TestGoogleProvider_NotConfigured(t *testing.T) {
+	// No credentials: no provider, and no discovery round trip, so the
+	// start reaches the variable read after the provider.
+	err := refusedStart(t, map[string]string{})
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "got %v", err)
+	assert.Contains(t, err.Error(), "GARAM_SESSION_TTL")
+}
+
+// TestGoogleProvider_RefusesPartialCredentials is read against
+// TestGoogleProvider_NotConfigured: with neither credential the same
+// start goes past the provider, so the refusal is the credential check.
 func TestGoogleProvider_RefusesPartialCredentials(t *testing.T) {
 	tests := []struct {
 		name string
-		cfg  authn.GoogleConfig
+		env  map[string]string
 	}{
-		{"client id without secret", authn.GoogleConfig{ClientID: "client-id"}},
-		{"secret without client id", authn.GoogleConfig{ClientSecret: "secret"}},
+		{"client id without secret", map[string]string{"GOOGLE_CLIENT_ID": "client-id"}},
+		{"secret without client id", map[string]string{"GOOGLE_CLIENT_SECRET": "secret"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := googleProvider(context.Background(), tc.cfg)
-			require.Error(t, err)
+			err := refusedStart(t, tc.env)
 			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "kind: %v", err)
-		})
-	}
-}
-
-// TestGoogleProvider_DiscoveryFailure is also the control for the two
-// gates above: a fully configured provider reaches construction, so
-// their refusals come from the credential check and not from a helper
-// that refuses everything.
-func TestGoogleProvider_DiscoveryFailure(t *testing.T) {
-	// Port 1 is reserved and unservable, so discovery cannot connect.
-	_, err := googleProvider(context.Background(), authn.GoogleConfig{
-		ClientID:     "client-id",
-		ClientSecret: "secret",
-		Issuer:       "http://127.0.0.1:1",
-	})
-	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "kind: %v", err)
-}
-
-// channelTo returns a client channel for addr, closed with the test.
-func channelTo(t *testing.T, addr string) *grpc.ClientConn {
-	t.Helper()
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	return conn
-}
-
-// TestEnvBool_RefusesAValueItCannotRead covers the three outcomes the
-// setting has: a spelling that reads as true, "false", the one spelling
-// that must still disable Secure, and a value that reads as neither and
-// stops the process rather than landing silently on the weaker setting.
-func TestEnvBool_RefusesAValueItCannotRead(t *testing.T) {
-	const key = "GARAM_COOKIE_SECURE"
-
-	// The control for the refusal below: these are what stops being
-	// accepted if the parse is what refuses rather than the value.
-	t.Run("a spelling that reads as true", func(t *testing.T) {
-		t.Setenv(key, "True")
-		got, err := envBool(key, "true")
-		require.NoError(t, err)
-		assert.True(t, got)
-	})
-	t.Run("false still disables it", func(t *testing.T) {
-		t.Setenv(key, "false")
-		got, err := envBool(key, "true")
-		require.NoError(t, err)
-		assert.False(t, got)
-	})
-	t.Run("unset takes the fallback", func(t *testing.T) {
-		t.Setenv(key, "")
-		got, err := envBool(key, "true")
-		require.NoError(t, err)
-		assert.True(t, got)
-	})
-
-	t.Run("a value it cannot read", func(t *testing.T) {
-		t.Setenv(key, "yes")
-		_, err := envBool(key, "true")
-		require.Error(t, err)
-		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
-		assert.Contains(t, err.Error(), key, "the error names the variable, as GARAM_SESSION_TTL's does")
-	})
-}
-
-func TestAuthzChannel_RefusesAChannelThatReachesNoEngine(t *testing.T) {
-	// A gRPC server on a port of the kernel's choosing is the engine;
-	// the address nothing serves is the same channel without one, which
-	// is what the check has to tell apart.
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	engine := grpc.NewServer()
-	go func() { _ = engine.Serve(lis) }()
-	t.Cleanup(engine.Stop)
-
-	served, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	require.NoError(t, authzChannel{conn: channelTo(t, lis.Addr().String())}.Check(served))
-
-	// Port 1 is reserved and unservable, so this channel never reaches
-	// Ready and the check's own deadline is what ends the wait.
-	unserved, cancelUnserved := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancelUnserved()
-	err = authzChannel{conn: channelTo(t, "127.0.0.1:1")}.Check(unserved)
-	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable))
-}
-
-// panickingProbe is a readiness dependency whose check is the
-// programmer bug a recover middleware exists for. The probes are
-// mounted beside a surface's operations rather than inside them, so
-// nothing but the server-level recovery an assembly puts outermost
-// answers a panic raised here.
-type panickingProbe struct{}
-
-func (panickingProbe) Name() string { return "readiness" }
-
-func (panickingProbe) Check(context.Context) error { panic("readiness defect") }
-
-// presentProbe is that dependency answering. It is the control for each
-// panic below: the same handler on the same path answers 200 with it,
-// so what the 500 reports is the panic rather than a probe mounted
-// somewhere a caller cannot reach.
-type presentProbe struct{}
-
-func (presentProbe) Name() string { return "readiness" }
-
-func (presentProbe) Check(context.Context) error { return nil }
-
-// readiness runs one GET of the readiness probe against handler and
-// returns the status and body it answered with.
-func readiness(t *testing.T, handler http.Handler) (int, string) {
-	t.Helper()
-	server := httptest.NewServer(handler)
-	t.Cleanup(server.Close)
-
-	resp, err := server.Client().Get(server.URL + health.ReadyPath)
-	require.NoError(t, err, "the client read no answer at all")
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
-	return resp.StatusCode, string(body)
-}
-
-// TestAPIHandler_AnswersAPanicOnARouteTheGeneratedSliceDoesNotReach is
-// `serve api`'s wiring. The composition root puts /metrics and the two
-// probes on the mux it hands the generated router as BaseRouter, and
-// oapi-codegen applies the middleware slice inside each operation's own
-// wrapper rather than around the router — so a route registered beside
-// the spec operations carries none of it, however the slice is written.
-//
-// Without the server-level middleware apiHandler puts outermost, the
-// client's own Get fails and the require below never reaches a status.
-// The body is what says which middleware answered: the surface's writes
-// the specification's Error as JSON, and this one writes plain text
-// because no specification describes the path it is answering for.
-//
-// The line names no route: otelhttp clones the request before the mux
-// matches, so the pattern the mux writes reaches nothing outside it —
-// which is what this middleware is. That is the wiring's behaviour and
-// not this test's subject, so it is left unasserted.
-func TestAPIHandler_AnswersAPanicOnARouteTheGeneratedSliceDoesNotReach(t *testing.T) {
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
-
-	var served lines
-	status, _ := readiness(t, recordingObservability(&served).apiHandler(srv, presentProbe{}))
-	require.Equal(t, http.StatusOK, status, "the probe this handler mounts is reachable")
-
-	var out lines
-	status, body := readiness(t, recordingObservability(&out).apiHandler(srv, panickingProbe{}))
-
-	require.Equal(t, http.StatusInternalServerError, status)
-	assert.Equal(t, "internal error\n", body, "no internals reach the body")
-
-	line := decodeLine(t, &out)
-	assert.Equal(t, "http panic", line["msg"])
-	assert.Equal(t, float64(http.StatusInternalServerError), line["status"])
-	assert.NotEmpty(t, line["trace_id"])
-	assert.Contains(t, line["error"], "panic: readiness defect",
-		"the line is the only record this panic leaves")
-}
-
-// TestEngineProbeHandler_AnswersAPanicOnTheEnginesOtherListener is
-// `serve authz`'s wiring for the port beside its gRPC one. Nothing on
-// that port is a spec operation, so the recovery this assembly puts
-// outermost is the only one a panic here meets.
-func TestEngineProbeHandler_AnswersAPanicOnTheEnginesOtherListener(t *testing.T) {
-	var served lines
-	status, _ := readiness(t, recordingObservability(&served).engineProbeHandler(presentProbe{}))
-	require.Equal(t, http.StatusOK, status, "the probe this handler mounts is reachable")
-
-	var out lines
-	status, body := readiness(t, recordingObservability(&out).engineProbeHandler(panickingProbe{}))
-
-	require.Equal(t, http.StatusInternalServerError, status)
-	assert.Equal(t, "internal error\n", body, "no internals reach the body")
-
-	line := decodeLine(t, &out)
-	assert.Equal(t, "http panic", line["msg"])
-	assert.Equal(t, "GET "+health.ReadyPath, line["operation"])
-	assert.Contains(t, line["error"], "panic: readiness defect",
-		"the line is the only record this panic leaves")
-}
-
-// panickingEngine is the engine handler a recover interceptor exists
-// for. Check is the programmer bug; Explain answers, so one connection
-// carries both a call that panics and a call that must still be served
-// after it.
-type panickingEngine struct {
-	authzv1.UnimplementedAuthzServiceServer
-}
-
-func (panickingEngine) Check(context.Context, *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
-	panic("policy engine defect")
-}
-
-func (panickingEngine) Explain(context.Context, *authzv1.ExplainRequest) (*authzv1.ExplainResponse, error) {
-	return &authzv1.ExplainResponse{Allowed: true}, nil
-}
-
-// TestEngineServer_AnswersAPanicAndKeepsServing panics a real handler
-// through a real server, because an interceptor called directly proves
-// the interceptor and not the wiring. The server is the one serveAuthz
-// serves the engine on, assembled by the function that assembles it
-// there, so an interceptor dropped from that chain is dropped here.
-//
-// The second call is what makes this evidence. Without the
-// interceptor grpc-go reaches no frame that stops the panic and the
-// process ends — this test binary among them — so a run that gets far
-// enough to answer Explain has already shown the process survived, and
-// answering it on the same connection shows the server did too rather
-// than merely staying alive with nothing left listening.
-//
-// The status message is asserted for what it does not carry. It
-// travels to the caller, and a stack is not something a caller of the
-// engine is owed; the stack goes to the line instead, which decodeLine
-// holds to exactly one by parsing the whole buffer.
-func TestEngineServer_AnswersAPanicAndKeepsServing(t *testing.T) {
-	var out lines
-	obs := recordingObservability(&out)
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	engine := obs.engineServer()
-	authzv1.RegisterAuthzServiceServer(engine, panickingEngine{})
-	go func() { _ = engine.Serve(lis) }()
-	t.Cleanup(engine.Stop)
-
-	conn, err := grpc.NewClient(lis.Addr().String(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	client := authzv1.NewAuthzServiceClient(conn)
-
-	_, err = client.Check(context.Background(), &authzv1.CheckRequest{SubjectGrn: testSubject})
-
-	require.Error(t, err, "the caller is answered rather than left with a dead connection")
-	assert.Equal(t, codes.Internal, status.Code(err))
-	assert.Equal(t, "internal error", status.Convert(err).Message())
-	assert.NotContains(t, status.Convert(err).Message(), "policy engine defect",
-		"the panic value does not travel to the caller")
-
-	// Read before the second call, so decodeLine's whole-buffer parse
-	// holds the panic to one line: recovering outside logRPCs is what
-	// keeps it from also emitting the served line for the same call.
-	line := decodeLine(t, &out)
-	assert.Equal(t, "rpc panic", line["msg"])
-	assert.Equal(t, codes.Internal.String(), line["code"])
-	assert.Equal(t, "/garam.authz.v1.AuthzService/Check", line["operation"])
-	assert.Contains(t, line["error"], "policy engine defect", "the panic reaches the line")
-	assert.Contains(t, line["error"], "goroutine", "and so does the stack")
-
-	explained, err := client.Explain(context.Background(), &authzv1.ExplainRequest{SubjectGrn: testSubject})
-	require.NoError(t, err, "the server still serves the connection the panic was answered on")
-	assert.True(t, explained.GetAllowed())
-}
-
-// enginePolicySeam stands the engine's policy service and the api's
-// seam to it on either side of a real gRPC hop, and answers every store
-// call with err. The two packages never import each other (ADR-0003),
-// so the composition root is where the pair can be held together.
-func enginePolicySeam(t *testing.T, out *lines, err error) api.PolicyManager {
-	t.Helper()
-	store := authzmocks.NewMockStore(t)
-	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, mock.Anything).Return(nil, err)
-
-	lis, listenErr := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, listenErr)
-	engine := recordingObservability(out).engineServer()
-	authzv1.RegisterPolicyServiceServer(engine, authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store)))
-	go func() { _ = engine.Serve(lis) }()
-	t.Cleanup(engine.Stop)
-
-	conn, dialErr := grpc.NewClient(lis.Addr().String(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, dialErr)
-	t.Cleanup(func() { _ = conn.Close() })
-	return api.NewGRPCPolicyManager(conn)
-}
-
-// TestEngineSeam_DisclosesOverTheHopWhatItWouldInProcess holds the
-// client's answer for one store error against what the same error
-// reads as in process. wire.MessageOf decides what a caller may be
-// told from the type of every link in a chain; a gRPC status carries
-// text and no types, so the hop is where that decision is lost.
-//
-// The driver's error is what must not cross — a plain error stands for
-// it, because wire.authored reads the link's type and never its words.
-// The authored sentinel beside it is the control: withholding
-// everything would pass the first case and fail this one, so the two
-// are read together. The third holds the other half of
-// runtime-safety.md §Errors reach a handler — the client is told
-// nothing, and the engine's own line carries the cause.
-func TestEngineSeam_DisclosesOverTheHopWhatItWouldInProcess(t *testing.T) {
-	driver := errors.New("policy attachment crosses orgs (SQLSTATE P0001)")
-	tests := []struct {
-		name    string
-		stored  error
-		logged  bool
-		refused string
-	}{
-		{
-			name:    "unauthored",
-			stored:  errorx.Wrap(driver, "attach policy", errorx.KindFailedPrecondition),
-			refused: "SQLSTATE",
-		},
-		{
-			name:   "authored",
-			stored: errorx.New(errorx.KindNotFound, "policy not found"),
-		},
-		{
-			name:    "unauthored fault of this process",
-			stored:  errorx.Wrap(driver, "list active policies", errorx.KindInternal),
-			logged:  true,
-			refused: "SQLSTATE",
-		},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			var out lines
-			seam := enginePolicySeam(t, &out, tc.stored)
-
-			_, err := seam.ActivatePolicy(context.Background(),
-				grn.New("acme", "default", "policy", "9f2ac1b40d8e7a35"))
-
-			require.Error(t, err)
-			assert.Equal(t, errorx.KindOf(tc.stored), errorx.KindOf(err), "the kind crosses the hop")
-			assert.Equal(t, wire.MessageOf(tc.stored), wire.MessageOf(err),
-				"the hop tells a caller what the same error tells one in process")
-			if tc.refused != "" {
-				assert.NotContains(t, wire.MessageOf(err), tc.refused)
-			}
-			if tc.logged {
-				assert.Contains(t, decodeLine(t, &out)["error"], tc.refused,
-					"the cause the client is not told reaches the engine's line")
-			}
+			assert.Contains(t, err.Error(), "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET")
 		})
 	}
 }
@@ -402,14 +131,15 @@ func passwordLogin(n int) string {
 	return `{"username":"","password":"` + strings.Repeat("x", n) + `"}`
 }
 
-// postTo runs one POST through handler and returns the status and body.
-func postTo(t *testing.T, handler http.Handler, path, body string) (int, string) {
+// postTo sends one POST to url and returns the status and body.
+func postTo(t *testing.T, url, body string) (int, string) {
 	t.Helper()
-	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, req)
-	return recorder.Code, recorder.Body.String()
+	resp, err := http.Post(url, "application/json", strings.NewReader(body))
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	got, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return resp.StatusCode, string(got)
 }
 
 // TestAPIHandler_RefusesARequestBodyPastTheBound holds the browser
@@ -422,65 +152,55 @@ func postTo(t *testing.T, handler http.Handler, path, body string) (int, string)
 // that too — for the username, which names no account — so a refusal
 // alone would hold as readily for a route refusing everything.
 func TestAPIHandler_RefusesARequestBodyPastTheBound(t *testing.T) {
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
-	handler := recordingObservability(&lines{}).apiHandler(srv)
+	login := servedAPI(t) + "/auth/password/login"
 
-	status, body := postTo(t, handler, "/auth/password/login", passwordLogin(1024))
+	status, body := postTo(t, login, passwordLogin(1024))
 	require.Equal(t, http.StatusUnauthorized, status, "the control: refused for what it says")
 	require.JSONEq(t, `{"kind":"unauthenticated","message":"username or password is incorrect"}`, body)
 
-	status, body = postTo(t, handler, "/auth/password/login", passwordLogin(maxRequestBody))
+	status, body = postTo(t, login, passwordLogin(1<<20))
 
 	assert.Equal(t, http.StatusRequestEntityTooLarge, status, "past the bound the body is not read at all")
 	assert.JSONEq(t, `{"kind":"invalid_argument","message":"the request body is larger than a request may carry"}`, body)
 }
 
-// connectionsServed serves srv on a loopback port, sends two POSTs in
-// turn over one keep-alive client, and returns each response's
-// Connection header and how many connections the server accepted.
-func connectionsServed(t *testing.T, srv *http.Server) ([]string, int) {
+// connectionsReused sends two GETs of url in turn over one keep-alive
+// client, and returns whether each response asked to close its
+// connection and whether each request reused one.
+func connectionsReused(t *testing.T, url string) (closed, reused []bool) {
 	t.Helper()
-	var accepted atomic.Int32
-	srv.ConnState = func(_ net.Conn, s http.ConnState) {
-		if s == http.StateNew {
-			accepted.Add(1)
-		}
-	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	go func() { _ = srv.Serve(ln) }()
-	t.Cleanup(func() { _ = srv.Close() })
-
 	client := &http.Client{Transport: &http.Transport{}}
 	t.Cleanup(client.CloseIdleConnections)
-	var headers []string
 	for range 2 {
-		resp, err := client.Post("http://"+ln.Addr().String()+"/", "application/json", strings.NewReader(`{}`))
+		var got httptrace.GotConnInfo
+		ctx := httptrace.WithClientTrace(context.Background(), &httptrace.ClientTrace{
+			GotConn: func(info httptrace.GotConnInfo) { got = info },
+		})
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		require.NoError(t, err)
+		resp, err := client.Do(req)
 		require.NoError(t, err)
 		_, _ = io.Copy(io.Discard, resp.Body)
 		require.NoError(t, resp.Body.Close())
 		// net/http moves a Connection: close answer to resp.Close.
-		header := ""
-		if resp.Close {
-			header = "close"
-		}
-		headers = append(headers, header)
+		closed = append(closed, resp.Close)
+		reused = append(reused, got.Reused)
 	}
-	return headers, int(accepted.Load())
+	return closed, reused
 }
 
 func TestAPIServer_ClosesEachConnectionAfterOneResponse(t *testing.T) {
-	noContent := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	headers, accepted := connectionsServed(t, apiServer("", noContent))
-	assert.Equal(t, []string{"close", "close"}, headers)
-	assert.Equal(t, 2, accepted, "the second request reused a connection")
+	closed, reused := connectionsReused(t, servedAPI(t)+health.LivePath)
+	assert.Equal(t, []bool{true, true}, closed)
+	assert.Equal(t, []bool{false, false}, reused, "the second request reused a connection")
 
 	// The control: a server left at net/http's default keeps the
 	// connection, so the client above would reuse one it could.
-	headers, accepted = connectionsServed(t, &http.Server{Handler: noContent})
-	assert.Equal(t, []string{"", ""}, headers)
-	assert.Equal(t, 1, accepted)
+	keeping := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(keeping.Close)
+	closed, reused = connectionsReused(t, keeping.URL)
+	assert.Equal(t, []bool{false, false}, closed)
+	assert.Equal(t, []bool{false, true}, reused)
 }

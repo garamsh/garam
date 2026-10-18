@@ -112,6 +112,7 @@ func newTokenSession(t *testing.T, g *tokenGaram) *supervisorTokens {
 // until a point inside two thirds to three quarters of its life and
 // replaced after it. No credential or token is in any URL.
 func TestSupervisorTokens_ExchangeAndMintInsideTheRefreshWindow(t *testing.T) {
+	// Internal: run reaches these only after garam enrolls the host.
 	g := &tokenGaram{life: 400 * time.Millisecond}
 	session := newTokenSession(t, g)
 
@@ -147,6 +148,7 @@ func TestSupervisorTokens_ExchangeAndMintInsideTheRefreshWindow(t *testing.T) {
 // unanswered refresh to the token still live, and a refused supervisor
 // token to an exchange afresh: the mint that follows is the control.
 func TestSupervisorTokens_KeepsALiveTokenThroughAFailedRefresh(t *testing.T) {
+	// Internal: run reaches these only after garam enrolls the host.
 	g := &tokenGaram{life: 400 * time.Millisecond}
 	session := newTokenSession(t, g)
 	first, err := session.Current(context.Background())
@@ -178,6 +180,7 @@ func TestSupervisorTokens_KeepsALiveTokenThroughAFailedRefresh(t *testing.T) {
 // Authorization, execution-fence.v2, and the agent token it forwards in
 // the body in place of a certificate.
 func TestSupervisorTokens_ActivatesUnderExecutionFenceV2(t *testing.T) {
+	// Internal: run reaches these only after garam enrolls the host.
 	g := &tokenGaram{life: time.Hour}
 	session := newTokenSession(t, g)
 	token, err := session.Current(context.Background())
@@ -204,6 +207,7 @@ func TestSupervisorTokens_ActivatesUnderExecutionFenceV2(t *testing.T) {
 // credential file others can read, as every key file is (ADR-0015);
 // the owner-only file beside it is the control.
 func TestNewSupervisorTokens_ReadsTheCredentialOwnerOnly(t *testing.T) {
+	// Internal: run reaches these only after garam enrolls the host.
 	server := httptest.NewTLSServer(http.NotFoundHandler())
 	t.Cleanup(server.Close)
 	dir := t.TempDir()
@@ -227,6 +231,7 @@ func TestNewSupervisorTokens_ReadsTheCredentialOwnerOnly(t *testing.T) {
 // out for the rest of its life. A mint garam did not answer, which
 // keeps the live token, is the control.
 func TestSupervisorTokens_DropsTheAgentTokenGaramRefusedToRenew(t *testing.T) {
+	// Internal: run reaches these only after garam enrolls the host.
 	g := &tokenGaram{life: 400 * time.Millisecond}
 	session := newTokenSession(t, g)
 	first, err := session.Current(context.Background())

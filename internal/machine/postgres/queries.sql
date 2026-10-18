@@ -2,12 +2,13 @@
 -- organization is read rather than trusted, so a sighting for one that
 -- is gone writes nothing. An issuance that arrives while the token the
 -- row last recorded is still accepted is a refresh. The database's
--- clock stamps it.
+-- clock stamps it, read once: clock_timestamp() advances between calls
+-- inside one statement, and a sighting is one instant.
 -- name: RecordSighting :exec
 INSERT INTO machine_authentication_evidence (caller_grn, path, org_grn, first_at, last_at, issued_until)
 SELECT sqlc.arg('caller_grn')::text, sqlc.arg('path')::text, grn,
-       clock_timestamp(), clock_timestamp(), sqlc.narg('issued_until')::timestamptz
-FROM orgs
+       clock.at, clock.at, sqlc.narg('issued_until')::timestamptz
+FROM orgs, (SELECT clock_timestamp() AS at) AS clock
 WHERE grn = sqlc.arg('org_grn')::text
 ON CONFLICT (caller_grn, path) DO UPDATE SET
     last_at         = EXCLUDED.last_at,

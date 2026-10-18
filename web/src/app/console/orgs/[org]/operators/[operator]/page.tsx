@@ -45,6 +45,7 @@ import { ControlEndpointForm } from "./_components/control-endpoint-form";
 import { DelegationForm } from "./_components/delegation-form";
 import { DeleteOperatorForm } from "./_components/delete-operator-form";
 import { KeysPanel } from "./_components/keys-panel";
+import { MintEnrollmentForm } from "./_components/mint-enrollment-form";
 import { NamingDefinitions } from "./_components/naming-definitions";
 import { OperatorDetailsForm } from "./_components/operator-details-form";
 import { ReissueCredentialForm } from "./_components/reissue-credential-form";
@@ -359,6 +360,23 @@ export default async function OperatorPage({ params, searchParams }: Params) {
           <ReissueCredentialForm org={org} operator={operator} name={o.name} />
         </SettingsCard>
       )}
+      <SettingsCard
+        title="Enrollment token"
+        description="For an operator that never obtained a certificate, or whose token was lost or ran out before it enrolled."
+      >
+        <MintEnrollmentForm
+          org={org}
+          operator={operator}
+          name={o.name}
+          blocked={
+            o.enrollmentState === "enrolled"
+              ? "It has enrolled, so garam issues it no token: that would be a second way into an identity that has one. An operator whose certificate was lost or ran out is recovered with garam's out-of-band certificate command."
+              : allowed("register")
+                ? null
+                : "Issuing one needs operator:register, and the server answered that no policy grants it to you."
+          }
+        />
+      </SettingsCard>
       {!allowed("update") && !allowed("reissue") && (
         <p className="text-muted-foreground">
           You can view this operator but not change it.

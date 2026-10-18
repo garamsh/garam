@@ -404,6 +404,45 @@ test.describe("operators", () => {
     expect(await axeViolations(page)).toEqual([]);
   });
 
+  test("issues a fresh enrollment token to an operator holding no certificate, shown once", async ({
+    page,
+    signedIn,
+  }) => {
+    const seeded = `/console/orgs/${signedIn.orgSlug}/operators/${signedIn.operatorIdentifier}`;
+    const certificate = page
+      .getByText("Certificate", { exact: true })
+      .locator("xpath=following-sibling::dd[1]");
+
+    // The seeded operator registered without a spendable token and
+    // never enrolled.
+    await page.goto(seeded);
+    await expect(certificate).toContainText("None");
+
+    await page.goto(`${seeded}?tab=settings`);
+    await expectHydrated(page);
+    await page
+      .getByRole("button", {
+        name: "Issue a new enrollment token",
+        exact: true,
+      })
+      .click();
+    const confirm = page.getByRole("alertdialog", {
+      name: `Issue ${signedIn.operatorName} a new enrollment token?`,
+    });
+    expect(await axeViolations(page, ['[role="alertdialog"]'])).toEqual([]);
+    await confirm
+      .getByRole("button", { name: "Issue token", exact: true })
+      .click();
+    const token = await keepSecret(page, "Save the enrollment token");
+    expect(token).toMatch(/^[0-9a-f]{48}$/);
+
+    // garam now holds a spendable token for it, and the page shows no
+    // token after the reveal closed.
+    await page.goto(seeded);
+    await expect(certificate).toContainText("Awaiting enrollment");
+    await expect(page.getByText(token)).toHaveCount(0);
+  });
+
   test("offers a member, whom the server denies changing operators, the reads alone", async ({
     page,
     context,

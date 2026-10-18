@@ -35,7 +35,8 @@ export type RefusalOperation =
   | "registerPassword"
   | "createPolicy"
   | "addPolicyVersion"
-  | "grantOrgConsent";
+  | "grantOrgConsent"
+  | "mintOperatorEnrollment";
 
 /** `status kind`, the stable pair a refusal is matched by. */
 type RefusalKey = `${number} ${string}`;
@@ -60,6 +61,14 @@ const CONSENT_WITH_ITSELF =
 const CONSENT_PARTNER_NOT_FOUND =
   "No organization has that identifier. Check it with the other organization and try again.";
 
+// garam refuses a token for an operator it has issued a certificate,
+// whether or not that certificate has since run out (ADR-0067).
+const OPERATOR_ALREADY_ENROLLED =
+  "This operator has enrolled, so garam won't issue it another token: that would be a second way into an identity that already has one. An operator whose certificate was lost or ran out is recovered with garam's out-of-band certificate command.";
+
+const OPERATOR_IDENTIFIER_INVALID =
+  "That isn't an operator identifier garam accepts. Reload the page and try again from the operator's own page.";
+
 const BY_OPERATION: Record<
   RefusalOperation,
   Partial<Record<RefusalKey, string>>
@@ -83,6 +92,10 @@ const BY_OPERATION: Record<
     "400 invalid_argument": CONSENT_WITH_ITSELF,
     "404 not_found": CONSENT_PARTNER_NOT_FOUND,
   },
+  mintOperatorEnrollment: {
+    "400 invalid_argument": OPERATOR_IDENTIFIER_INVALID,
+    "409 failed_precondition": OPERATOR_ALREADY_ENROLLED,
+  },
 };
 
 /**
@@ -104,6 +117,8 @@ export const REFUSAL_COPY = {
   policyDocumentRefused: POLICY_DOCUMENT_REFUSED,
   consentWithItself: CONSENT_WITH_ITSELF,
   consentPartnerNotFound: CONSENT_PARTNER_NOT_FOUND,
+  operatorAlreadyEnrolled: OPERATOR_ALREADY_ENROLLED,
+  operatorIdentifierInvalid: OPERATOR_IDENTIFIER_INVALID,
 } as const;
 
 const GENERIC: Partial<Record<RefusalKey, string>> = {

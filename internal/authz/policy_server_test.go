@@ -3,16 +3,13 @@ package authz_test
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/authz"
-	"github.com/garamsh/garam/internal/authz/mocks"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
@@ -20,17 +17,22 @@ import (
 
 const validDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"s1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`
 
+// newPolicyServer serves the policy lifecycle over store, with the
+// cache its writes invalidate.
+func newPolicyServer(store authz.Store) (*authz.PolicyGRPCServer, *authz.PolicyCache) {
+	cache := authz.NewPolicyCache(store)
+	return authz.NewPolicyGRPCServer(store, cache), cache
+}
+
 // TestPolicyGRPCServer_CreatePolicyRejectsBadInput reads the accepted
 // row against the four refused ones: each of those is the accepted
 // request with one field spoiled, so a CreatePolicy that refuses
 // everything stops satisfying the first row while still satisfying the
-// rest.
+// rest. The accepted request is the one policy stored.
 func TestPolicyGRPCServer_CreatePolicyRejectsBadInput(t *testing.T) {
 	acme := orgGRN("acme")
-	store := mocks.NewMockStore(t)
-	store.EXPECT().CreatePolicy(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-		Return(authz.NewPolicy(policyGRN(t, acme), acme, "n"), nil).Once()
-	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+	store := newFakeStore()
+	srv, _ := newPolicyServer(store)
 
 	cases := map[string]struct {
 		req  *authzv1.CreatePolicyRequest
@@ -38,7 +40,7 @@ func TestPolicyGRPCServer_CreatePolicyRejectsBadInput(t *testing.T) {
 	}{
 		"accepted": {
 			&authzv1.CreatePolicyRequest{
-				OrgGrn: "grn:root:default:org:acme", Name: "n", Document: validDocument,
+				OrgGrn: acme.String(), Name: "n", Document: validDocument,
 				CreatedBy: "grn:root:default:user:ada",
 			},
 			codes.OK,
@@ -48,16 +50,16 @@ func TestPolicyGRPCServer_CreatePolicyRejectsBadInput(t *testing.T) {
 			codes.InvalidArgument,
 		},
 		"bad author": {
-			&authzv1.CreatePolicyRequest{OrgGrn: "grn:root:default:org:acme", Name: "n", Document: validDocument, CreatedBy: "nope"},
+			&authzv1.CreatePolicyRequest{OrgGrn: acme.String(), Name: "n", Document: validDocument, CreatedBy: "nope"},
 			codes.InvalidArgument,
 		},
 		"empty name": {
-			&authzv1.CreatePolicyRequest{OrgGrn: "grn:root:default:org:acme", Name: "", Document: validDocument, CreatedBy: "grn:root:default:user:ada"},
+			&authzv1.CreatePolicyRequest{OrgGrn: acme.String(), Name: "", Document: validDocument, CreatedBy: "grn:root:default:user:ada"},
 			codes.InvalidArgument,
 		},
 		"bad document": {
 			&authzv1.CreatePolicyRequest{
-				OrgGrn: "grn:root:default:org:acme", Name: "n", Document: `{"Version":"v"}`,
+				OrgGrn: acme.String(), Name: "n", Document: `{"Version":"v"}`,
 				CreatedBy: "grn:root:default:user:ada",
 			},
 			codes.InvalidArgument,
@@ -72,24 +74,24 @@ func TestPolicyGRPCServer_CreatePolicyRejectsBadInput(t *testing.T) {
 			}
 		})
 	}
+
+	stored, err := store.ListPolicies(context.Background(), acme)
+	require.NoError(t, err)
+	require.Len(t, stored, 1)
+	assert.Equal(t, "n", stored[0].Name())
 }
 
 // TestPolicyGRPCServer_AddPolicyVersion reads both halves of the RPC:
-// the store is handed the policy, document and author the request
-// named, and the response carries the version the store returned. The
-// stored version's document, author and number all differ from the
-// request's, so a response that echoes the request, reads the author
-// where the policy belongs, or drops the number stops matching.
+// the store holds a second version with the document and author the
+// request named, and the response carries that stored version. The
+// request's author differs from the first version's, so a version that
+// keeps its predecessor's author stops matching.
 func TestPolicyGRPCServer_AddPolicyVersion(t *testing.T) {
-	g := policyGRN(t, orgGRN("acme"))
-	ada, bob := subjectGRN("ada"), subjectGRN("bob")
-	stored := policyDocument("stored", wire.EffectDeny)
-	storedAt := time.Date(2026, 7, 25, 9, 30, 0, 0, time.UTC)
-	store := mocks.NewMockStore(t)
-	store.EXPECT().AddPolicyVersion(mock.Anything, g, documentOf(t, validDocument), ada).
-		Return(authz.NewPolicyVersion(g, 4, stored, bob, storedAt), nil).Once()
+	store := newFakeStore()
+	g := store.seed(t, orgGRN("acme"), wire.PolicyStatusDraft, policyDocument("original", wire.EffectDeny))
+	ada := subjectGRN("ada")
+	srv, _ := newPolicyServer(store)
 
-	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
 	resp, err := srv.AddPolicyVersion(context.Background(), &authzv1.AddPolicyVersionRequest{
 		PolicyGrn: g.String(),
 		Document:  validDocument,
@@ -97,12 +99,19 @@ func TestPolicyGRPCServer_AddPolicyVersion(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	versions, err := store.ListPolicyVersions(context.Background(), g)
+	require.NoError(t, err)
+	require.Len(t, versions, 2)
+	stored := versions[1]
+	assert.Equal(t, documentOf(t, validDocument), stored.Document())
+	assert.Equal(t, ada, stored.CreatedBy())
+
 	v := resp.GetVersion()
 	assert.Equal(t, g.String(), v.GetPolicyGrn())
-	assert.Equal(t, int32(4), v.GetVersion())
-	assert.Equal(t, bob.String(), v.GetCreatedBy())
-	assert.Equal(t, storedAt, v.GetCreatedAt().AsTime())
-	assert.Equal(t, stored, documentOf(t, v.GetDocument()))
+	assert.Equal(t, int32(2), v.GetVersion())
+	assert.Equal(t, ada.String(), v.GetCreatedBy())
+	assert.Equal(t, stored.CreatedAt(), v.GetCreatedAt().AsTime())
+	assert.Equal(t, stored.Document(), documentOf(t, v.GetDocument()))
 }
 
 // TestPolicyGRPCServer_ListPolicyVersions holds two versions of one
@@ -111,56 +120,39 @@ func TestPolicyGRPCServer_AddPolicyVersion(t *testing.T) {
 // carries its neighbour's field, its own author in place of its
 // policy, or nothing at all stops matching.
 func TestPolicyGRPCServer_ListPolicyVersions(t *testing.T) {
-	g := policyGRN(t, orgGRN("acme"))
-	ada, bob := subjectGRN("ada"), subjectGRN("bob")
-	original, revised := policyDocument("original", wire.EffectAllow), policyDocument("revised", wire.EffectDeny)
-	createdAt := time.Date(2026, 7, 25, 9, 30, 0, 0, time.UTC)
-	store := mocks.NewMockStore(t)
-	store.EXPECT().ListPolicyVersions(mock.Anything, g).
-		Return([]*authz.PolicyVersion{
-			authz.NewPolicyVersion(g, 1, original, ada, createdAt),
-			authz.NewPolicyVersion(g, 2, revised, bob, createdAt.Add(time.Hour)),
-		}, nil).Once()
+	store := newFakeStore()
+	g := store.seed(t, orgGRN("acme"), wire.PolicyStatusDraft, policyDocument("original", wire.EffectAllow))
+	_, err := store.AddPolicyVersion(context.Background(), g, policyDocument("revised", wire.EffectDeny), subjectGRN("bob"))
+	require.NoError(t, err)
+	stored, err := store.ListPolicyVersions(context.Background(), g)
+	require.NoError(t, err)
+	srv, _ := newPolicyServer(store)
 
-	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
 	resp, err := srv.ListPolicyVersions(context.Background(), &authzv1.ListPolicyVersionsRequest{
 		PolicyGrn: g.String(),
 	})
 	require.NoError(t, err)
-	require.Len(t, resp.GetVersions(), 2)
-
-	first, second := resp.GetVersions()[0], resp.GetVersions()[1]
-	assert.Equal(t, g.String(), first.GetPolicyGrn())
-	assert.Equal(t, int32(1), first.GetVersion())
-	assert.Equal(t, ada.String(), first.GetCreatedBy())
-	assert.Equal(t, createdAt, first.GetCreatedAt().AsTime())
-	assert.Equal(t, original, documentOf(t, first.GetDocument()))
-	assert.Equal(t, int32(2), second.GetVersion())
-	assert.Equal(t, bob.String(), second.GetCreatedBy())
-	assert.Equal(t, createdAt.Add(time.Hour), second.GetCreatedAt().AsTime())
-	assert.Equal(t, revised, documentOf(t, second.GetDocument()))
+	require.Len(t, resp.GetVersions(), len(stored))
+	for i, got := range resp.GetVersions() {
+		assert.Equal(t, g.String(), got.GetPolicyGrn())
+		assert.Equal(t, int32(stored[i].Version()), got.GetVersion())
+		assert.Equal(t, stored[i].CreatedBy().String(), got.GetCreatedBy())
+		assert.Equal(t, stored[i].CreatedAt(), got.GetCreatedAt().AsTime())
+		assert.Equal(t, stored[i].Document(), documentOf(t, got.GetDocument()))
+	}
 }
 
 func TestPolicyGRPCServer_ActivateInvalidatesTheOrgCache(t *testing.T) {
 	acme := orgGRN("acme")
-	store := mocks.NewMockStore(t)
-	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return(nil, nil).Once()
-	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, wire.PolicyStatusActive).
-		Return(authz.NewPolicy(policyGRN(t, acme), acme, "read-only"), nil).Once()
-	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("activated", wire.EffectAllow)}, nil).Once()
-
-	cache := authz.NewPolicyCache(store)
-	srv := authz.NewPolicyGRPCServer(store, cache)
+	store := newFakeStore()
+	g := store.seed(t, acme, wire.PolicyStatusDraft, policyDocument("activated", wire.EffectAllow))
+	srv, cache := newPolicyServer(store)
 
 	before, err := cache.Statements(context.Background(), acme, nil)
 	require.NoError(t, err)
 	assert.Empty(t, before)
 
-	_, err = srv.ActivatePolicy(context.Background(), &authzv1.ActivatePolicyRequest{
-		PolicyGrn: "grn:acme:default:policy:p1",
-	})
+	_, err = srv.ActivatePolicy(context.Background(), &authzv1.ActivatePolicyRequest{PolicyGrn: g.String()})
 	require.NoError(t, err)
 
 	after, err := cache.Statements(context.Background(), acme, nil)
@@ -171,24 +163,15 @@ func TestPolicyGRPCServer_ActivateInvalidatesTheOrgCache(t *testing.T) {
 
 func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
 	acme := orgGRN("acme")
-	store := mocks.NewMockStore(t)
-	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("active", wire.EffectAllow)}, nil).Once()
-	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, wire.PolicyStatusArchived).
-		Return(authz.NewPolicy(policyGRN(t, acme), acme, "read-only"), nil).Once()
-	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return(nil, nil).Once()
-
-	cache := authz.NewPolicyCache(store)
-	srv := authz.NewPolicyGRPCServer(store, cache)
+	store := newFakeStore()
+	g := store.seed(t, acme, wire.PolicyStatusActive, policyDocument("active", wire.EffectAllow))
+	srv, cache := newPolicyServer(store)
 
 	before, err := cache.Statements(context.Background(), acme, nil)
 	require.NoError(t, err)
 	require.Len(t, before, 1)
 
-	_, err = srv.ArchivePolicy(context.Background(), &authzv1.ArchivePolicyRequest{
-		PolicyGrn: "grn:acme:default:policy:p1",
-	})
+	_, err = srv.ArchivePolicy(context.Background(), &authzv1.ArchivePolicyRequest{PolicyGrn: g.String()})
 	require.NoError(t, err)
 
 	after, err := cache.Statements(context.Background(), acme, nil)
@@ -201,12 +184,9 @@ func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
 // differing only in the string. An archive that refuses whatever it is
 // given stops satisfying the first row.
 func TestPolicyGRPCServer_ArchiveRejectsBadGRN(t *testing.T) {
-	acme := orgGRN("acme")
-	g := policyGRN(t, acme)
-	store := mocks.NewMockStore(t)
-	store.EXPECT().SetPolicyStatus(mock.Anything, g, wire.PolicyStatusArchived).
-		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
-	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+	store := newFakeStore()
+	g := store.seed(t, orgGRN("acme"), wire.PolicyStatusActive, policyDocument("active", wire.EffectAllow))
+	srv, _ := newPolicyServer(store)
 
 	cases := map[string]struct {
 		policy string
@@ -228,13 +208,9 @@ func TestPolicyGRPCServer_ArchiveRejectsBadGRN(t *testing.T) {
 // it is what stops being accepted if the guard below zero is moved one
 // place up.
 func TestPolicyGRPCServer_RollbackRejectsAndReportsMissing(t *testing.T) {
-	acme := orgGRN("acme")
-	store := mocks.NewMockStore(t)
-	store.EXPECT().SetPolicyDefaultVersion(mock.Anything, mock.Anything, 1).
-		Return(authz.NewPolicy(policyGRN(t, acme), acme, "read-only"), nil).Once()
-	store.EXPECT().SetPolicyDefaultVersion(mock.Anything, mock.Anything, 7).
-		Return(nil, authz.ErrPolicyVersionNotFound).Once()
-	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+	store := newFakeStore()
+	g := store.seed(t, orgGRN("acme"), wire.PolicyStatusDraft, policyDocument("original", wire.EffectAllow))
+	srv, _ := newPolicyServer(store)
 
 	cases := map[string]struct {
 		version int32
@@ -247,7 +223,7 @@ func TestPolicyGRPCServer_RollbackRejectsAndReportsMissing(t *testing.T) {
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
 			_, err := srv.RollbackPolicy(context.Background(), &authzv1.RollbackPolicyRequest{
-				PolicyGrn: "grn:acme:default:policy:p1",
+				PolicyGrn: g.String(),
 				Version:   c.version,
 			})
 			assert.Equal(t, c.want, status.Code(err))
@@ -257,23 +233,14 @@ func TestPolicyGRPCServer_RollbackRejectsAndReportsMissing(t *testing.T) {
 
 func TestPolicyGRPCServer_AttachInvalidatesTheOrgCache(t *testing.T) {
 	acme := orgGRN("acme")
-	g, ada := policyGRN(t, acme), subjectGRN("ada")
-	store := mocks.NewMockStore(t)
-	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("org-wide", wire.EffectAllow)}, nil).Once()
-	store.EXPECT().GetPolicy(mock.Anything, g).
-		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
-	store.EXPECT().AttachPolicy(mock.Anything, g, ada).
-		Return(&authz.PolicyAttachment{}, nil).Once()
-	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{attachedPolicy("ada-only", wire.EffectAllow, ada)}, nil).Once()
+	ada := subjectGRN("ada")
+	store := newFakeStore()
+	g := store.seed(t, acme, wire.PolicyStatusActive, policyDocument("ada-only", wire.EffectAllow))
+	srv, cache := newPolicyServer(store)
 
-	cache := authz.NewPolicyCache(store)
-	srv := authz.NewPolicyGRPCServer(store, cache)
-
-	before, err := cache.Statements(context.Background(), acme, nil)
+	before, err := cache.Statements(context.Background(), acme, []grn.GRN{subjectGRN("bob")})
 	require.NoError(t, err)
-	require.Len(t, before, 1)
+	require.Len(t, before, 1, "unattached, the policy reaches everyone")
 
 	_, err = srv.AttachPolicy(context.Background(), &authzv1.AttachPolicyRequest{
 		PolicyGrn:  g.String(),
@@ -298,16 +265,11 @@ func TestPolicyGRPCServer_AttachInvalidatesTheOrgCache(t *testing.T) {
 // detach that reports missing whatever it is given stops satisfying
 // the first row.
 func TestPolicyGRPCServer_DetachReportsMissing(t *testing.T) {
-	acme := orgGRN("acme")
-	g, ada, bob := policyGRN(t, acme), subjectGRN("ada"), subjectGRN("bob")
-	store := mocks.NewMockStore(t)
-	store.EXPECT().GetPolicy(mock.Anything, g).
-		Return(authz.NewPolicy(g, acme, "read-only"), nil).Twice()
-	store.EXPECT().DetachPolicy(mock.Anything, g, ada).Return(nil).Once()
-	store.EXPECT().DetachPolicy(mock.Anything, g, bob).
-		Return(authz.ErrAttachmentNotFound).Once()
+	ada, bob := subjectGRN("ada"), subjectGRN("bob")
+	store := newFakeStore()
+	g := store.seed(t, orgGRN("acme"), wire.PolicyStatusDraft, policyDocument("draft", wire.EffectAllow), ada)
+	srv, _ := newPolicyServer(store)
 
-	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
 	cases := map[string]struct {
 		subject grn.GRN
 		want    codes.Code
@@ -329,29 +291,27 @@ func TestPolicyGRPCServer_DetachReportsMissing(t *testing.T) {
 // TestPolicyGRPCServer_DetachRefusesTheLastAttachment maps the store's
 // refusal to failed_precondition: a caller telling that apart from the
 // not_found above can tell "no such attachment" from "this one stays".
-// The detach the store allows is the control — the same call over the
-// same policy, differing only in what the store answers, so a detach
-// that refuses whatever it is given stops satisfying the first row.
+// The detach of the other attachment is the control — the same call
+// over the same policy, made first while it is not the last — so a
+// detach that refuses whatever it is given stops satisfying the first
+// row. The refused attachment is still stored.
 func TestPolicyGRPCServer_DetachRefusesTheLastAttachment(t *testing.T) {
-	acme := orgGRN("acme")
-	g, ada, bob := policyGRN(t, acme), subjectGRN("ada"), subjectGRN("bob")
-	store := mocks.NewMockStore(t)
-	store.EXPECT().GetPolicy(mock.Anything, g).
-		Return(authz.NewPolicy(g, acme, "read-only"), nil).Twice()
-	store.EXPECT().DetachPolicy(mock.Anything, g, bob).Return(nil).Once()
-	store.EXPECT().DetachPolicy(mock.Anything, g, ada).
-		Return(authz.ErrLastAttachment).Once()
+	ada, bob := subjectGRN("ada"), subjectGRN("bob")
+	store := newFakeStore()
+	g := store.seed(t, orgGRN("acme"), wire.PolicyStatusActive, policyDocument("attached", wire.EffectAllow), ada, bob)
+	srv, _ := newPolicyServer(store)
 
-	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
-	cases := map[string]struct {
+	// In order: the second detach is refused because the first succeeded.
+	cases := []struct {
+		name    string
 		subject grn.GRN
 		want    codes.Code
 	}{
-		"an attachment that is not the last": {bob, codes.OK},
-		"the last one":                       {ada, codes.FailedPrecondition},
+		{"an attachment that is not the last", bob, codes.OK},
+		{"the last one", ada, codes.FailedPrecondition},
 	}
-	for name, c := range cases {
-		t.Run(name, func(t *testing.T) {
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
 			_, err := srv.DetachPolicy(context.Background(), &authzv1.DetachPolicyRequest{
 				PolicyGrn:  g.String(),
 				SubjectGrn: c.subject.String(),
@@ -359,6 +319,11 @@ func TestPolicyGRPCServer_DetachRefusesTheLastAttachment(t *testing.T) {
 			assert.Equal(t, c.want, status.Code(err))
 		})
 	}
+
+	left, err := store.ListPolicyAttachments(context.Background(), g)
+	require.NoError(t, err)
+	require.Len(t, left, 1)
+	assert.Equal(t, ada, left[0].Subject())
 }
 
 // TestPolicyGRPCServer_AttachmentRejectsBadGRN reads the attach whose
@@ -366,14 +331,10 @@ func TestPolicyGRPCServer_DetachRefusesTheLastAttachment(t *testing.T) {
 // attach that refuses whatever it is given stops satisfying the first
 // row while still satisfying the other two.
 func TestPolicyGRPCServer_AttachmentRejectsBadGRN(t *testing.T) {
-	acme := orgGRN("acme")
-	g, ada := policyGRN(t, acme), subjectGRN("ada")
-	store := mocks.NewMockStore(t)
-	store.EXPECT().GetPolicy(mock.Anything, g).
-		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
-	store.EXPECT().AttachPolicy(mock.Anything, g, ada).
-		Return(&authz.PolicyAttachment{}, nil).Once()
-	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+	ada := subjectGRN("ada")
+	store := newFakeStore()
+	g := store.seed(t, orgGRN("acme"), wire.PolicyStatusDraft, policyDocument("draft", wire.EffectAllow))
+	srv, _ := newPolicyServer(store)
 
 	cases := map[string]struct {
 		req  *authzv1.AttachPolicyRequest
@@ -391,37 +352,28 @@ func TestPolicyGRPCServer_AttachmentRejectsBadGRN(t *testing.T) {
 	}
 }
 
-// TestPolicyGRPCServer_ListPolicyAttachments answers for the listing
-// alone: the store is a mock, so an attach made through the server
-// could not reach the list it returns. What the response carries is
-// what the store held, one entry each. The two attachments name one
-// policy and two different subjects at two different times, so an
+// TestPolicyGRPCServer_ListPolicyAttachments reads each entry of the
+// response against the stored attachment it stands for. The two name
+// one policy and two different subjects at two different times, so an
 // entry that carries its neighbour's subject, its own policy in place
 // of its subject, or nothing at all stops matching.
 func TestPolicyGRPCServer_ListPolicyAttachments(t *testing.T) {
-	g := policyGRN(t, orgGRN("acme"))
-	ada, bob := subjectGRN("ada"), subjectGRN("bob")
-	attachedAt := time.Date(2026, 7, 25, 9, 30, 0, 0, time.UTC)
-	store := mocks.NewMockStore(t)
-	store.EXPECT().ListPolicyAttachments(mock.Anything, g).
-		Return([]*authz.PolicyAttachment{
-			authz.NewPolicyAttachment(g, ada, attachedAt),
-			authz.NewPolicyAttachment(g, bob, attachedAt.Add(time.Hour)),
-		}, nil).Once()
+	store := newFakeStore()
+	g := store.seed(t, orgGRN("acme"), wire.PolicyStatusDraft, policyDocument("draft", wire.EffectAllow), subjectGRN("ada"), subjectGRN("bob"))
+	stored, err := store.ListPolicyAttachments(context.Background(), g)
+	require.NoError(t, err)
+	srv, _ := newPolicyServer(store)
 
-	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
 	resp, err := srv.ListPolicyAttachments(context.Background(), &authzv1.ListPolicyAttachmentsRequest{
 		PolicyGrn: g.String(),
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.GetAttachments(), 2)
-
-	first, second := resp.GetAttachments()[0], resp.GetAttachments()[1]
-	assert.Equal(t, g.String(), first.GetPolicyGrn())
-	assert.Equal(t, ada.String(), first.GetSubjectGrn())
-	assert.Equal(t, attachedAt, first.GetCreatedAt().AsTime())
-	assert.Equal(t, bob.String(), second.GetSubjectGrn())
-	assert.Equal(t, attachedAt.Add(time.Hour), second.GetCreatedAt().AsTime())
+	for i, got := range resp.GetAttachments() {
+		assert.Equal(t, g.String(), got.GetPolicyGrn())
+		assert.Equal(t, stored[i].Subject().String(), got.GetSubjectGrn())
+		assert.Equal(t, stored[i].CreatedAt(), got.GetCreatedAt().AsTime())
+	}
 }
 
 // documentOf parses the document a response carries, so a response

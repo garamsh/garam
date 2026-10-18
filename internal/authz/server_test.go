@@ -488,7 +488,8 @@ func TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset(t *testing.T) {
 // against that cache. The decision the in-flight check returned is the
 // control: the policy did allow before it was archived, so the refusal
 // afterwards is the archive rather than an engine that refuses
-// everything.
+// everything. It keeps the mock because the interleaving is driven
+// from inside the store call.
 func TestGRPCServer_RefusesFromAPolicyArchivedDuringAFill(t *testing.T) {
 	acme := orgGRN("acme")
 	gate := newGatedFill()

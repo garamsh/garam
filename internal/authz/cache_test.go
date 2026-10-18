@@ -48,6 +48,8 @@ func groupGRN(id string) grn.GRN {
 	return grn.New("acme", grn.DefaultProject, "group", id)
 }
 
+// TestPolicyCache_LoadsOncePerOrg keeps the mock: how often the cache
+// reads the store is its subject.
 func TestPolicyCache_LoadsOncePerOrg(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	acme, other := orgGRN("acme"), orgGRN("other")
@@ -80,12 +82,10 @@ func TestPolicyCache_LoadsOncePerOrg(t *testing.T) {
 func TestPolicyCache_StatementsBySubject(t *testing.T) {
 	acme := orgGRN("acme")
 	ada, bob, eng := subjectGRN("ada"), subjectGRN("bob"), groupGRN("eng")
-	store := mocks.NewMockStore(t)
-	store.EXPECT().ActivePolicies(mock.Anything, acme).Return([]authz.ActivePolicy{
-		orgWidePolicy("org-wide", wire.EffectAllow),
-		attachedPolicy("ada-only", wire.EffectAllow, ada),
-		attachedPolicy("eng-only", wire.EffectAllow, eng),
-	}, nil).Once()
+	store := newFakeStore()
+	store.seed(t, acme, wire.PolicyStatusActive, policyDocument("org-wide", wire.EffectAllow))
+	store.seed(t, acme, wire.PolicyStatusActive, policyDocument("ada-only", wire.EffectAllow), ada)
+	store.seed(t, acme, wire.PolicyStatusActive, policyDocument("eng-only", wire.EffectAllow), eng)
 	cache := authz.NewPolicyCache(store)
 
 	cases := map[string]struct {
@@ -116,7 +116,8 @@ func TestPolicyCache_StatementsBySubject(t *testing.T) {
 // alone would also pass on a cache that only dropped what it was
 // named, so other is what says the drop was not selective. Each
 // ActivePolicies expectation is exhausted by the one load it stands
-// for, so a load that should have come from the cache fails the test.
+// for, so a load that should have come from the cache fails the test;
+// that load count is why it keeps the mock.
 func TestPolicyCache_InvalidateAllDropsEveryOrg(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	acme, other := orgGRN("acme"), orgGRN("other")
@@ -153,7 +154,7 @@ func TestPolicyCache_InvalidateAllDropsEveryOrg(t *testing.T) {
 // on a cache that never drops anything, or on one that drops
 // everything. Each ActivePolicies expectation is exhausted by the one
 // load it stands for, so a load that should have come from the cache
-// fails the test.
+// fails the test; that load count is why it keeps the mock.
 func TestPolicyCache_InvalidateDropsOnlyTheOrgNamed(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	acme, other := orgGRN("acme"), orgGRN("other")
@@ -232,7 +233,8 @@ func (g *gatedFill) answer(active []authz.ActivePolicy) func(context.Context, gr
 // PolicyGRPCServer.ArchivePolicy's own Invalidate lands when a check
 // misses at the same moment. The store call count is the second
 // assertion because an empty answer alone would also hold for a cache
-// that served an empty entry it should not have had.
+// that served an empty entry it should not have had. It keeps the mock
+// because the interleaving is driven from inside the store call.
 func TestPolicyCache_HonoursAnInvalidationRaisedDuringAFill(t *testing.T) {
 	acme := orgGRN("acme")
 	ada := subjectGRN("ada")
@@ -266,6 +268,8 @@ func TestPolicyCache_HonoursAnInvalidationRaisedDuringAFill(t *testing.T) {
 // listener's half of the same window. A reopened connection drops every
 // org because it cannot know what it missed, and a fill in flight when
 // that happens carries exactly what the reconnect exists to distrust.
+// It keeps the mock because the interleaving is driven from inside the
+// store call.
 func TestPolicyCache_InvalidateAllDuringAFillIsAlsoHonoured(t *testing.T) {
 	acme := orgGRN("acme")
 	ada := subjectGRN("ada")
@@ -303,9 +307,8 @@ func TestPolicyCache_InvalidateAllDuringAFillIsAlsoHonoured(t *testing.T) {
 func TestPolicyCache_ConcurrentMissesConvergeOnOneSnapshot(t *testing.T) {
 	acme := orgGRN("acme")
 	ada := subjectGRN("ada")
-	store := mocks.NewMockStore(t)
-	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("acme-allow", wire.EffectAllow)}, nil)
+	store := newFakeStore()
+	store.seed(t, acme, wire.PolicyStatusActive, policyDocument("acme-allow", wire.EffectAllow))
 
 	cache := authz.NewPolicyCache(store)
 	const callers = 8
@@ -331,28 +334,31 @@ func TestPolicyCache_ConcurrentMissesConvergeOnOneSnapshot(t *testing.T) {
 }
 
 // TestPolicyCache_CurrentStatementsReadsTheStoreOnEveryCall holds a
-// stale cache: CurrentStatements reads the store on each call, and
-// Statements still answers from the cache.
+// stale cache: CurrentStatements answers with what the store holds at
+// each call, and Statements still answers from the cache.
 func TestPolicyCache_CurrentStatementsReadsTheStoreOnEveryCall(t *testing.T) {
-	store := mocks.NewMockStore(t)
 	acme, ada := orgGRN("acme"), subjectGRN("ada")
-	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("before", wire.EffectAllow)}, nil).Once()
+	store := newFakeStore()
+	before := store.seed(t, acme, wire.PolicyStatusActive, policyDocument("before", wire.EffectAllow))
 	cache := authz.NewPolicyCache(store)
 	cached, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
 	require.NoError(t, err)
 	require.Equal(t, "before", cached[0].Sid)
 
-	store.EXPECT().ActivePolicies(mock.Anything, acme).Return([]authz.ActivePolicy{
-		orgWidePolicy("after", wire.EffectDeny),
-		attachedPolicy("bob-only", wire.EffectAllow, subjectGRN("bob")),
-	}, nil).Twice()
-	for range 2 {
-		current, err := cache.CurrentStatements(context.Background(), acme, []grn.GRN{ada})
-		require.NoError(t, err)
-		require.Len(t, current, 1, "a policy attached to another subject does not apply")
-		assert.Equal(t, "after", current[0].Sid)
-	}
+	_, err = store.SetPolicyStatus(context.Background(), before, wire.PolicyStatusArchived)
+	require.NoError(t, err)
+	store.seed(t, acme, wire.PolicyStatusActive, policyDocument("after", wire.EffectDeny))
+	store.seed(t, acme, wire.PolicyStatusActive, policyDocument("bob-only", wire.EffectAllow), subjectGRN("bob"))
+	current, err := cache.CurrentStatements(context.Background(), acme, []grn.GRN{ada})
+	require.NoError(t, err)
+	require.Len(t, current, 1, "a policy attached to another subject does not apply")
+	assert.Equal(t, "after", current[0].Sid)
+
+	store.seed(t, acme, wire.PolicyStatusActive, policyDocument("later", wire.EffectAllow))
+	current, err = cache.CurrentStatements(context.Background(), acme, []grn.GRN{ada})
+	require.NoError(t, err)
+	require.Len(t, current, 2, "the second call read the store again")
+	assert.Equal(t, "later", current[1].Sid)
 
 	stale, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
 	require.NoError(t, err)
@@ -360,7 +366,8 @@ func TestPolicyCache_CurrentStatementsReadsTheStoreOnEveryCall(t *testing.T) {
 }
 
 // TestPolicyCache_CurrentStatementsFailsWhenTheStoreDoes fails with
-// the store even though the cache holds the org.
+// the store even though the cache holds the org. It keeps the mock to
+// make the store fail.
 func TestPolicyCache_CurrentStatementsFailsWhenTheStoreDoes(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	acme := orgGRN("acme")

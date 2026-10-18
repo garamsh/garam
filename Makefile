@@ -324,14 +324,17 @@ e2e:
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(E2E_PKGS)
 
 # The Sherlock release the real-runtime suites run against, by tag and
-# digest, recorded here alone (#1220); v0.8.0 carries the ingress that
-# verifies garam's signature (ADR-0101), its issuer configuration and
-# owner-only state files (sherlock#1025). The PM moves both images
+# digest, recorded here alone (#1220). v0.9.0 keeps v0.8.0's ingress
+# that verifies garam's signature (ADR-0101), its issuer configuration
+# and owner-only state files (sherlock#1025), and its contracts
+# (sherlock#1110); it adds `sherlock workspace read|write|list|exec`
+# and `sherlock workspace mcp`, and a plain `sherlock workspace` now
+# refuses a positional argument (#1568). The PM moves both images
 # together to a published release (AGENTS.md §Roles). Either
 # GARAM_TEST_*_IMAGE in the environment overrides it.
 SHERLOCK_REGISTRY := 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam
-GARAM_TEST_RUNTIME_IMAGE ?= $(SHERLOCK_REGISTRY)/sherlock-agent:0.8.0@sha256:9e37375d5553757bd4417de2667f34ec1ebeef7437916ea7b6d2b58aed5a9963
-GARAM_TEST_WORKSPACE_IMAGE ?= $(SHERLOCK_REGISTRY)/sherlock-workspace:0.8.0@sha256:743f450fc86a35517f95e9ba702fc05750dc06d9e4e1254e745d67b6e2495b80
+GARAM_TEST_RUNTIME_IMAGE ?= $(SHERLOCK_REGISTRY)/sherlock-agent:0.9.0@sha256:1bb1ee0b5464b8d166c2948f3feae0dd217649a9e94cdb7655175c8789ecae2a
+GARAM_TEST_WORKSPACE_IMAGE ?= $(SHERLOCK_REGISTRY)/sherlock-workspace:0.9.0@sha256:da953edcd972aa325a37bce801de324a4c4ac576077807af13724041dce984f6
 export GARAM_TEST_RUNTIME_IMAGE GARAM_TEST_WORKSPACE_IMAGE
 
 # workload-integration runs a standalone host's supervisor against a

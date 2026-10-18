@@ -1,6 +1,6 @@
 # ADR 0115: A list drops each object its caller may not read, asked of the engine in one batch
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-19
 
 Drafted for #1569, for which the Garam PM reserved this number on

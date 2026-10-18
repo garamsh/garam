@@ -27,6 +27,7 @@ import { checkPermissions } from "@/lib/permission-check";
 import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
+import { RefusedRead } from "../../../../_components/refused-read";
 import { DetailPage } from "../../../../_components/templates/detail-page";
 import {
   OperatorReportsProvider,
@@ -155,10 +156,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
   if (record.status === "forbidden") {
     return (
       <Unavailable>
-        <Banner tone="info" title="You cannot view this operator">
-          garam refused to show this operator to you. Access to it is granted by
-          this organization&apos;s roles and policies.
-        </Banner>
+        <RefusedRead subject="this operator" />
       </Unavailable>
     );
   }
@@ -276,9 +274,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
         canRevoke={allowed("reissue")}
       />
     ) : keys.status === "forbidden" ? (
-      <Banner tone="info" title="Keys are not listed to you">
-        garam refused to list this operator&apos;s keys to you.
-      </Banner>
+      <RefusedRead subject="this operator's keys" />
     ) : (
       <Banner tone="warn" title={API_UNREACHABLE_TITLE}>
         <ApiUnreachableReason subject="this operator's keys" />
@@ -319,9 +315,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
         garam did not answer for this operator&apos;s delegation.
       </Banner>
     ) : delegation.status === "forbidden" ? (
-      <Banner tone="info" title="The delegation is not shown to you">
-        garam refused to show this operator&apos;s delegation to you.
-      </Banner>
+      <RefusedRead subject="this operator's delegation" />
     ) : (
       <DelegationForm
         org={org}

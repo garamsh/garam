@@ -11,6 +11,7 @@ import {
 } from "@/components/control-notice";
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { DescriptionList } from "@/components/description-list";
+import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -275,9 +276,9 @@ export function OperatorTemplates({
               )}
             </>
           ) : (
-            <p role="alert" className="text-danger">
+            <Refusal>
               {controlFailureCopy(detail, "agent-template:read")}
-            </p>
+            </Refusal>
           )}
         </DialogContent>
       </Dialog>

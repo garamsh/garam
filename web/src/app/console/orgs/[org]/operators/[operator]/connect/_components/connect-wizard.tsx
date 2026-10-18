@@ -3,7 +3,7 @@
 import { ArrowRight, Check, Copy, KeyRound, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import {
   API_UNREACHABLE_TITLE,
@@ -11,20 +11,10 @@ import {
 } from "@/components/api-unreachable";
 import { Banner } from "@/components/banner";
 import { CopyField } from "@/components/copy-field";
+import { Refusal } from "@/components/refusal";
 import { SecretReveal } from "@/components/secret-reveal";
 import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -35,6 +25,8 @@ import type { OperatorKey } from "@/features/orgs";
 import { useCopy } from "@/hooks/use-copy";
 import { useHydrated } from "@/hooks/use-hydrated";
 
+import { ActionDialog } from "../../../../../../_components/action-dialog";
+import { RefusedRead } from "../../../../../../_components/refused-read";
 import { WizardPage } from "../../../../../../_components/templates/wizard-page";
 import { MAX_LIVE_KEYS, liveKeys } from "../../../_components/operator-status";
 import { secretSnippet, type Identity } from "./secret-snippet";
@@ -156,10 +148,14 @@ export function ConnectWizard({
   operatorHref: string;
   operatorsHref: string;
 }) {
-  const [state, formAction, pending] = useActionState(
-    issueOperatorKey,
-    initialState,
-  );
+  const [state, setState] = useState<IssueOperatorKeyState>(initialState);
+  const [pending, startTransition] = useTransition();
+  const formAction = (formData: FormData) =>
+    startTransition(async () => {
+      const next = await issueOperatorKey(state, formData);
+      // State set after an await is its own transition (React 19).
+      startTransition(() => setState(next));
+    });
   const hydrated = useHydrated();
   const [step, setStep] =
     useState<Exclude<ConnectStep, "register">>(initialStep);
@@ -209,9 +205,7 @@ export function ConnectWizard({
         </Banner>
       )}
       {problem === "forbidden" && (
-        <Banner tone="info" title="You cannot set up this operator">
-          garam refused to show this operator or its keys to you.
-        </Banner>
+        <RefusedRead subject="this operator or its keys" />
       )}
 
       {showSteps && step === "issue" && (
@@ -292,15 +286,11 @@ export function ConnectWizard({
             ) : (
               <input type="hidden" name="rotation" value="planned" />
             )}
-            {state.status === "error" && (
-              <p role="alert" className="text-destructive">
-                {state.message}
-              </p>
-            )}
+            {state.status === "error" && <Refusal>{state.message}</Refusal>}
             <div>
               {live.length > 0 && rotation === "immediate" ? (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
+                <ActionDialog
+                  trigger={
                     <Button
                       type="button"
                       variant="destructive"
@@ -308,31 +298,28 @@ export function ConnectWizard({
                     >
                       Replace key now
                     </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <form action={formAction} className="contents">
-                      <input type="hidden" name="org" value={org} />
-                      <input type="hidden" name="operator" value={operator} />
-                      <input type="hidden" name="rotation" value="immediate" />
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          Replace {name}&apos;s key now?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Every current key, and every token signed in with one,
-                          stops working the moment you confirm. The operator is
-                          refused until the new key is placed.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction type="submit" variant="destructive">
-                          Replace key now
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </form>
-                  </AlertDialogContent>
-                </AlertDialog>
+                  }
+                  title={`Replace ${name}'s key now?`}
+                  description={
+                    <p>
+                      Every current key, and every token signed in with one,
+                      stops working the moment you confirm. The operator is
+                      refused until the new key is placed.
+                    </p>
+                  }
+                  action={issueOperatorKey}
+                  initialState={initialState}
+                  fields={{ org, operator, rotation: "immediate" }}
+                  confirmLabel="Replace key now"
+                  pendingLabel="Replacing…"
+                  destructive
+                  done={(answer) => answer.status !== "error"}
+                  // A refusal is said in the dialog; any other answer
+                  // is the wizard's.
+                  onAnswer={(answer) =>
+                    answer.status !== "error" && setState(answer)
+                  }
+                />
               ) : (
                 <Button type="submit" disabled={!hydrated || pending}>
                   <KeyRound />

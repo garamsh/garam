@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { FormField } from "@/components/form-field";
+import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createPolicy, type CreatePolicyState } from "@/features/orgs/actions";
@@ -101,11 +102,7 @@ export function CreatePolicyForm({ org }: { org: string }) {
           A draft grants no access until you activate it.
         </p>
       </div>
-      {formProblem !== null && (
-        <p role="alert" className="text-sm text-destructive">
-          {formProblem}
-        </p>
-      )}
+      {formProblem !== null && <Refusal>{formProblem}</Refusal>}
     </form>
   );
 }

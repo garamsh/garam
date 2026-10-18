@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DelegationForm } from "@/app/console/orgs/[org]/operators/[operator]/_components/delegation-form";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { Delegation } from "@/features/orgs";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -85,6 +86,35 @@ describe("delegation form", () => {
       "Delegation withdrawn",
     );
     expect(withdrawn).toHaveLength(1);
+  });
+
+  it("keeps the withdrawal open with garam's refusal, in human words", async () => {
+    server.use(
+      http.delete(`${API_URL}/orgs/acme/operators/field-one/delegation`, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "denied: operator:delegate" },
+          { status: 403 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderForm();
+
+    await user.click(
+      screen.getByRole("button", { name: "Withdraw delegation" }),
+    );
+    const dialog = screen.getByRole("alertdialog", {
+      name: "Withdraw this delegation?",
+    });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Withdraw delegation" }),
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      REFUSAL_COPY.permissionDenied,
+    );
+    expect(dialog).toBeInTheDocument();
+    expect(screen.queryByText("Delegation withdrawn")).not.toBeInTheDocument();
   });
 
   it("says no delegation is held, and offers granting one", () => {

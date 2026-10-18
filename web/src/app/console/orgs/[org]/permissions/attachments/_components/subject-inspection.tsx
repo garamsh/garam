@@ -12,7 +12,7 @@ import {
 
 import { AttachPolicyForm } from "../../_components/attach-policy-form";
 import { DetachPolicyDialog } from "../../_components/detach-policy-dialog";
-import { Outcome, OutcomeProvider } from "../../_components/outcome";
+import { Outcome, OutcomeProvider } from "../../../../../_components/outcome";
 import {
   POLICY_STATUS_LABEL,
   PolicyStatus,

@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { DocumentPanel } from "@/app/console/orgs/[org]/permissions/[policy]/_components/document-panel";
-import { OutcomeProvider } from "@/app/console/orgs/[org]/permissions/_components/outcome";
+import { OutcomeProvider } from "@/app/console/_components/outcome";
 import { formatPolicyDocument } from "@/lib/policy-document";
 import { enter } from "@/testing/enter";
 import {

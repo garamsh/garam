@@ -268,7 +268,9 @@ describe("consents section", () => {
 
     await renderServerComponent(ConsentsPage(params("acme")));
 
-    expect(screen.getByText("Consents not shown")).toBeInTheDocument();
+    expect(
+      screen.getByText("You can't view this organization's consent relations"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("No consent relations")).not.toBeInTheDocument();
   });
 

@@ -83,7 +83,7 @@ describe("re-issue credential form", () => {
     expect(posted).toEqual([]);
   });
 
-  it("renders the backend's refusal in human words beside the control", async () => {
+  it("keeps the confirmation open with the backend's refusal in human words", async () => {
     server.use(
       http.post(`${API_URL}/orgs/acme/operators/field-one/credential`, () =>
         HttpResponse.json(
@@ -98,15 +98,15 @@ describe("re-issue credential form", () => {
     await user.click(
       screen.getByRole("button", { name: "Re-issue credential" }),
     );
+    const dialog = screen.getByRole("alertdialog");
     await user.click(
-      within(screen.getByRole("alertdialog")).getByRole("button", {
-        name: "Re-issue credential",
-      }),
+      within(dialog).getByRole("button", { name: "Re-issue credential" }),
     );
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       REFUSAL_COPY.permissionDenied,
     );
+    expect(dialog).toBeInTheDocument();
     expect(screen.queryByText(/operator:reissue/)).not.toBeInTheDocument();
   });
 });

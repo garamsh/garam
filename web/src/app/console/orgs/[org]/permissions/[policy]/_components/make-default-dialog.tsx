@@ -7,8 +7,8 @@ import {
   type RollbackPolicyState,
 } from "@/features/orgs/actions";
 
-import { ActionDialog } from "../../_components/action-dialog";
-import type { OutcomeArea } from "../../_components/outcome";
+import { ActionDialog } from "../../../../../_components/action-dialog";
+import type { OutcomeArea } from "../../../../../_components/outcome";
 import { ConditionNotice } from "../../_components/condition-notice";
 import {
   OrgWideConfirmation,

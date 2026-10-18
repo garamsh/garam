@@ -372,16 +372,14 @@ describe("agent page", () => {
       screen.getByRole("heading", { level: 1, name: "Scout" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("This agent is not shown to you"),
+      screen.queryByText("You can't view this agent"),
     ).not.toBeInTheDocument();
     allowed.unmount();
 
     refusing = true;
     await renderAgent();
 
-    expect(
-      screen.getByText("This agent is not shown to you"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("You can't view this agent")).toBeInTheDocument();
     expect(screen.queryByRole("tab")).toBeNull();
   });
 });

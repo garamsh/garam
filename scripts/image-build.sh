@@ -95,22 +95,12 @@ fi
 #
 #   <repository> <context> <dockerfile> <per-run> <build-arg>...
 #
-# A step counts when it runs docker/build-push-action, whatever its id,
-# so an image added to the release is built here without this file
-# moving. The repository is `tags:`' last path segment without its
-# version.
-# `platforms:`, `provenance:` and `sbom:` are not read: they shape what
-# a release publishes, not what a build proves.
-#
-# A build argument a run resolves is not something the file states, so
-# no build outside a run reproduces it, and passing the text as written
-# would bake a literal `${{` where the release records a commit (#1020).
-# Those are listed comma-separated in <per-run>, `-` when there are
-# none, and passed nothing unless this is a development build.
-#
-# The steps seen are counted against the lines written, so a step whose
-# shape this no longer reads fails here instead of leaving a run that
-# built one image looking like the run that built both.
+# Every docker/build-push-action step counts, whatever its id, and its
+# repository is the last path segment of its `tags:` (#857). A build
+# argument holding `${{` is one only a run resolves, so it is listed in
+# <per-run> (`-` for none) and passed nothing outside a development
+# build (#1020). Steps seen are counted against lines written, so a step
+# this no longer parses fails rather than reading as both images built.
 images=$(awk '
 	function emit() {
 		if (build && name != "") {

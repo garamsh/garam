@@ -274,7 +274,53 @@ leaves.
   answers a different question than the caller asked (#886).
 - **The after-merge run is not taken.** A `push: branches: [main]` trigger ran on `ci.yml` until #811. Both triggers read the merge result, so what that one alone covered is a `main` that moved between the pull request's run and the merge.
 - **Nothing mechanical covers that gap; the role that merges does.** The obligation is stated once, in `AGENTS.md` §Roles; this bullet records that the gap is covered and is not that statement. The mechanical replacement is a required status check with *branches must be up to date*, which is a repository setting and so the account owner's.
-- **Mutation testing runs in no workflow, and that is the decision rather than an omission.** `make mutation` rewrites one operator at a time under `internal/` and reports the mutants no test noticed. Four full runs on 2026-09-02 each spent around 35 minutes of CPU on twelve cores and took between 5 minutes 42 seconds and 32 minutes of wall time; the spread is the per-mutant timeout, which the target's own comment accounts for. A runner with four cores has a third of those and slower ones. `internal/` holds 33 of the module's 40 Go packages; the seven outside it are `cmd/garam`, the three generated from `api/openapi.yaml`, `api/machine.yaml` and `proto/`, and `migrations`, `tests/e2e` and `tests/integration`, which hold test files only (`go list ./... | grep -v /internal/`). So triggering on changes under it would exclude a pull request that changes Go outside `internal/` as well as the ones that change no Go at all, and would still fire on almost every pull request that changes Go and roughly double what it costs: of the 120 commits to 3fbcf9367ad6b66d1ae5e553eb5630471c589036, 47 changed a Go, specification or migration file, and 41 of those touch `internal/` while six do not. A schedule spends the same minutes on a report no pull request is waiting for, and attributes a new survivor to no change rather than to the one that raised it. What the run buys is an audit of the suite rather than a gate on one change, which is why a person invokes it (#875).
+- **Mutation testing runs in no workflow, and that is the decision
+  rather than an omission.** `make mutation` rewrites one operator at a
+  time under `internal/` and reports the mutants no test noticed. Four
+  full runs on 2026-09-02 each spent around 35 minutes of CPU on twelve
+  cores and took between 5 minutes 42 seconds and 32 minutes of wall
+  time; the spread is the per-mutant timeout, accounted for below. A
+  runner with four cores has a third of those and slower ones.
+  `internal/` holds 33 of the module's 40 Go packages; the seven outside
+  it are `cmd/garam`, the three generated from `api/openapi.yaml`,
+  `api/machine.yaml` and `proto/`, and `migrations`, `tests/e2e` and
+  `tests/integration`, which hold test files only (`go list ./... | grep
+  -v /internal/`). So triggering on changes under it would exclude a
+  pull request that changes Go outside `internal/` as well as the ones
+  that change no Go at all, and would still fire on almost every pull
+  request that changes Go and roughly double what it costs: of the 120
+  commits to 3fbcf9367ad6b66d1ae5e553eb5630471c589036, 47 changed a Go,
+  specification or migration file, and 41 of those touch `internal/`
+  while six do not. A schedule spends the same minutes on a report no
+  pull request is waiting for, and attributes a new survivor to no
+  change rather than to the one that raised it. What the run buys is an
+  audit of the suite rather than a gate on one change, which is why a
+  person invokes it (#875). `--timeout-coefficient` is a ratio and not a
+  duration: gremlins allows each mutant's `go test` the coverage run's
+  own duration times it, and that duration is whatever Go's test cache
+  made it — two runs behind #875 measured it at 5.6 seconds and at 0.49
+  seconds, so the target's 300 buys half an hour per mutant in the first
+  and two and a half minutes in the second. The smaller is enough for
+  every mutant that is not a genuine hang. A long budget is paid for
+  only by a mutant that hangs, which holds a worker for the whole of it:
+  those two runs spent the same 36 minutes of CPU and took 7 and 32
+  minutes of wall time, and the nine mutants that hang in
+  `internal/delivery/gateway.go` are the whole difference. gremlins'
+  default of 3 buys a second and a half either way, less than compiling
+  one package takes, so every mutant times out and gremlins prints `Test
+  efficacy: 0.00%` and exits 0 having tested nothing — the run
+  `docs/convention/ci.md` §One entry point per task says has to be told
+  apart from the one that did the work. The target tells them apart by
+  the counts in the report gremlins writes rather than in its stream,
+  which says the same on both; the report is `json.Marshal` output, so
+  each key is followed directly by its value, which is what the target's
+  parse reads. gremlins 0.6.0 copies the whole module directory into
+  `TMPDIR` once per worker (`internal/engine/workdir`), and a worker is
+  a core by default: the Go tree is four megabytes and the
+  `web/node_modules` and `web/.next` that `make web-install` and `make
+  web-build` leave behind are another 856, so a run on twelve cores
+  after `make ci` writes ten gigabytes — to RAM wherever `TMPDIR` is a
+  tmpfs.
 
 ## Index
 
@@ -800,3 +846,11 @@ ADRs:
   sections as `##` headings, further sections allowed; ADRs already
   merged keep the form they were written in, and review rather than
   `make ci` checks it, because ADR numbers do not follow merge order
+- [0111](./adr/0111-a-directly-attached-runtime-is-activated-by-a-one-agent-host-authority-on-the-generation-it-reports-and-its-store-lock.md)
+  — a directly attached runtime is activated by an ADR-0082 supervisor
+  in an attach mode that reads the runtime's status itself at a pinned
+  loopback literal and rests on Sherlock's store lock and generation
+  under same-host trust; a new direct agent restarts once under its
+  GRN, the audience Garam signs, after its predecessor exits, and
+  outbox entries under the earlier ID are set aside and left in place;
+  unbuilt

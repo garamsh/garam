@@ -152,9 +152,16 @@ jobs:
           WEB: ${{ steps.ecr.outputs.registry }}/garam/garam-web:${{ steps.version.outputs.version }}
         run: scripts/image-push.sh "server=$SERVER" "web=$WEB"
 
+  # On aurora's kubernetes-mode scale set, which requires a job
+  # container; `images` above needs a Docker daemon the job pod lacks,
+  # so it stays hosted (ADR-0112).
   release:
     needs: images
-    runs-on: ubuntu-24.04
+    runs-on: aurora
+    container:
+      # The pin ci.yml's `ci` job names, moved by the PM under AGENTS.md
+      # §Roles: no bot proposes a bump and no scheduled review is named.
+      image: docker.io/library/buildpack-deps:trixie@sha256:ffbfa3ee92287a5fa41c03118bfe9a75c095838bccbe1173322854b8f2387116
     permissions:
       # The release is the only thing this workflow writes back.
       contents: write

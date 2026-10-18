@@ -14,7 +14,7 @@
 # the list, correctly recording nothing, while the alpine image beside
 # them in the same file is on it.
 #
-# Eight pins meet both tests. Five record the absence at their own site,
+# Nine pins meet both tests. Six record the absence at their own site,
 # so the list is checked against the tree rather than trusted:
 #
 #   - the Makefile's HELM and CNPG_MANIFEST
@@ -23,10 +23,14 @@
 #   - the key-material container's image in
 #     deploy/local/minikube/garam.yaml
 #   - imageName in deploy/local/minikube/postgres.yaml
+#   - the job container image in .github/workflows/ci.yml's `ci` job
+#     and release.yml's `release` job: one image at one digest, so one
+#     pin, counted as the github-actions entry below counts an action
+#     several files use, and recorded at both sites
 #
 # Each says at the pin that no bot proposes a bump and no scheduled
 # review is named, so it is the PM's to move under AGENTS.md §Roles. A
-# sixth such record, or a pin without one, is what this list going stale
+# seventh such record, or a pin without one, is what this list going stale
 # looks like.
 #
 # Three record it here instead: go.mod's `go` directive, which the gomod

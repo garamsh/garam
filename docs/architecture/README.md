@@ -198,15 +198,24 @@ No pipeline stands behind this either: what `make ci` reads a file under `docs/`
 
 What this repository runs against itself. `docs/convention/ci.md` decides how a check is named and secured; this section records where one runs.
 
-The runner class every job is to run on is unbuilt.
-[ADR-0105](./adr/0105-garams-pipeline-runs-on-a-docker-capable-aurora-runner-class.md)
-moves every job to a Docker-capable aurora runner class, isolated from
-the nodes that hold cluster secrets. That class does not exist yet, so
-every job in `ci.yml`, `images.yml` and `release.yml` still names
-`ubuntu-24.04`, whose runs start nothing on this account, and every
-merge still rests on the exception in `AGENTS.md` §Roles. The pull
-request that moves the labels replaces this paragraph with the state it
-leaves.
+- **Two jobs run on aurora, and four start nothing.** `ci.yml`'s `ci`
+  and `release.yml`'s `release` name `runs-on: aurora`, the
+  kubernetes-mode runner scale set `garamsh/aurora` runs for the
+  organisation, in the job container
+  `docker.io/library/buildpack-deps:trixie` pinned by digest. The class
+  requires a job container and gives the job pod no Docker daemon
+  ([ADR-0112](./adr/0112-promotions-run-on-auroras-kubernetes-runner-where-the-jobs-fit-and-the-docker-bound-jobs-stay-hosted.md)).
+  `ci.yml`'s `e2e` and `web-e2e`, `images.yml`'s `images` and
+  `release.yml`'s `images` still name `ubuntu-24.04`, whose runs start
+  nothing on this account. `e2e` waits on #1513 and `web-e2e` on
+  #1514. The two image jobs need a Docker daemon, which aurora's class
+  does not provide and aurora declined to add (garamsh/aurora#642). So
+  a promotion's `ci` is a forge run, the other jobs rest on the
+  exception in `AGENTS.md` §Roles, and a `v*` tag still publishes
+  nothing, because `release` waits on `images`.
+  `scripts/record-runner-image.sh` records what either label resolved
+  to: the image version on a hosted runner, and the runner and node
+  on aurora.
 
 - `.github/workflows/ci.yml` triggers on `pull_request` into `main` and
   on nothing else; `.github/workflows/images.yml` on the same event and
@@ -814,7 +823,7 @@ ADRs:
   this repository but provides no daemon; garam asks for the class
   isolated from the nodes that hold cluster secrets, with `dind` on a
   shared worker as aurora's fallback, and the local gate stands until
-  the class exists. Unbuilt
+  the class exists; superseded by 0112
 - [0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)
   — garam stays the only route a message takes, and every send it
   decides writes one audit event without a body in the transaction of
@@ -854,3 +863,10 @@ ADRs:
   GRN, the audience Garam signs, after its predecessor exits, and
   outbox entries under the earlier ID are set aside and left in place;
   unbuilt
+- [0112](./adr/0112-promotions-run-on-auroras-kubernetes-runner-where-the-jobs-fit-and-the-docker-bound-jobs-stay-hosted.md)
+  — `ci.yml`'s `ci` and `release.yml`'s `release` run on aurora's
+  kubernetes-mode class in a job container pinned by digest, and every
+  other job stays on `ubuntu-24.04`: `e2e` until integration reaches
+  OpenBao without a Docker daemon (#1513), `web-e2e` until a
+  compose-free backend entry point exists (#1514), and both image jobs
+  until a Docker-capable class does, which aurora declined

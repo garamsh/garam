@@ -39,10 +39,25 @@ jobs:
   # checks are one step (docs/convention/ci.md §One entry point per
   # task). `make web-install` is setup rather than a check: it pins the
   # install to the lockfile that pnpm would otherwise resolve itself.
+  #
+  # It runs on aurora's kubernetes-mode scale set, which requires a job
+  # container and gives the job pod no Docker daemon; `make ci` reaches
+  # none (ADR-0112). e2e and web-e2e stay hosted until #1513 and #1514.
   ci:
-    runs-on: ubuntu-24.04
+    runs-on: aurora
+    container:
+      # The image and digest aurora's own ci.yml runs `make ci` in. No
+      # bot proposes a bump and no scheduled review is named, so it is
+      # the PM's to move under AGENTS.md §Roles; release.yml's job
+      # container names the same pin.
+      image: docker.io/library/buildpack-deps:trixie@sha256:ffbfa3ee92287a5fa41c03118bfe9a75c095838bccbe1173322854b8f2387116
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # checkout trusts the workspace only in a temporary global config
+      # it removes when it finishes; in this job container git then
+      # refuses the workspace in every check that reads it (ADR-0105
+      # §What the probe measured).
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - run: scripts/record-runner-image.sh
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:

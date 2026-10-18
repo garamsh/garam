@@ -1,0 +1,6 @@
+# The self-hosted runner labels a workflow here may name, which
+# actionlint otherwise reports as unknown. `aurora` is
+# garamsh/aurora's kubernetes-mode runner scale set (ADR-0112).
+self-hosted-runner:
+  labels:
+    - aurora

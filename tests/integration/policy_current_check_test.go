@@ -125,33 +125,45 @@ func TestCheckCurrent_SeesAWithdrawalNoInvalidationReported(t *testing.T) {
 // and CheckCurrent fails with no decision, answered Unavailable (#1165)
 // both on the connection the cut ended and on the dial after it, which
 // the proxy refuses. The call before the cut is the reachable control.
+// The connection is cut two ways: ended, which the driver reads as an
+// end of stream, and reset, which it reads as a socket error on its
+// next write or read — the form a loaded host met when its read came
+// after the reset arrived (#1546).
 func TestCheckCurrent_RefusesWhenStorageIsUnreachable(t *testing.T) {
-	p := pool(t)
-	orgGRN := newPolicyOrg(t, p)
-	activateStatement(t, authz.NewPostgresStore(p), orgGRN, "allow-read", wire.EffectAllow)
+	cuts := map[string]func(*pgProxy){
+		"ended": (*pgProxy).cut,
+		"reset": (*pgProxy).reset,
+	}
+	for name, cut := range cuts {
+		t.Run(name, func(t *testing.T) {
+			p := pool(t)
+			orgGRN := newPolicyOrg(t, p)
+			activateStatement(t, authz.NewPostgresStore(p), orgGRN, "allow-read", wire.EffectAllow)
 
-	proxy := newPGProxy(t, databaseAddr(t))
-	cache := authz.NewPolicyCache(authz.NewPostgresStore(listenerPool(t, proxy, currentCheckAppName)))
-	client := servedEngine(t, cache)
+			proxy := newPGProxy(t, databaseAddr(t))
+			cache := authz.NewPolicyCache(authz.NewPostgresStore(listenerPool(t, proxy, currentCheckAppName)))
+			client := servedEngine(t, cache)
 
-	checked, err := client.Check(context.Background(), readProject())
-	require.NoError(t, err)
-	require.True(t, checked.GetAllowed(), "the Allow is cached")
-	current, err := client.CheckCurrent(context.Background(), readProjectCurrent())
-	require.NoError(t, err)
-	require.True(t, current.GetAllowed(), "control: reachable storage allows")
+			checked, err := client.Check(context.Background(), readProject())
+			require.NoError(t, err)
+			require.True(t, checked.GetAllowed(), "the Allow is cached")
+			current, err := client.CheckCurrent(context.Background(), readProjectCurrent())
+			require.NoError(t, err)
+			require.True(t, current.GetAllowed(), "control: reachable storage allows")
 
-	proxy.cut()
+			cut(proxy)
 
-	checked, err = client.Check(context.Background(), readProject())
-	require.NoError(t, err)
-	assert.True(t, checked.GetAllowed(), "control: Check answers from the cache")
-	for _, attempt := range []string{"on the connection the cut ended", "on the dial after it"} {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		current, err = client.CheckCurrent(ctx, readProjectCurrent())
-		cancel()
-		require.Error(t, err, "CheckCurrent decides nothing without storage, %s", attempt)
-		assert.Nil(t, current)
-		assert.Equal(t, codes.Unavailable, status.Code(err), "an unreachable store is Unavailable, %s", attempt)
+			checked, err = client.Check(context.Background(), readProject())
+			require.NoError(t, err)
+			assert.True(t, checked.GetAllowed(), "control: Check answers from the cache")
+			for _, attempt := range []string{"on the connection the cut ended", "on the dial after it"} {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				current, err = client.CheckCurrent(ctx, readProjectCurrent())
+				cancel()
+				require.Error(t, err, "CheckCurrent decides nothing without storage, %s", attempt)
+				assert.Nil(t, current)
+				assert.Equal(t, codes.Unavailable, status.Code(err), "an unreachable store is Unavailable, %s", attempt)
+			}
+		})
 	}
 }

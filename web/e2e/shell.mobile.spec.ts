@@ -46,7 +46,9 @@ test.describe("console shell on a phone", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
     const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - window.innerWidth,
+      () =>
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(0);
   });

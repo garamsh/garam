@@ -1,11 +1,16 @@
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
 
-// The overview, Projects and Consents at 390px, in both themes.
+// The overview, Projects, Consents, Teams and People at 390px, in both
+// themes. `engineering` is the seeded team.
 const ROUTES = [
   { name: "the overview", segment: "" },
   { name: "Projects", segment: "/projects" },
   { name: "Consents", segment: "/consents" },
+  { name: "Teams", segment: "/teams" },
+  { name: "a new team", segment: "/teams/new" },
+  { name: "a team's page", segment: "/teams/engineering" },
+  { name: "People", segment: "/people" },
 ];
 
 test.describe("organization area on a phone", () => {
@@ -24,7 +29,9 @@ test.describe("organization area on a phone", () => {
         // Nothing runs off the side of a phone's screen.
         expect(
           await page.evaluate(
-            () => document.documentElement.scrollWidth <= window.innerWidth,
+            () =>
+              document.documentElement.scrollWidth <=
+              document.documentElement.clientWidth,
           ),
         ).toBe(true);
       });

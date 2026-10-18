@@ -44,4 +44,42 @@ test.describe("accessibility", () => {
     await expectHydrated(page);
     expect(await axeViolations(page)).toEqual([]);
   });
+
+  // The organizations list, creating one, and the three pages that say
+  // a page is not there: inside an organization, elsewhere in the
+  // console, and outside it, where no shell is drawn.
+  const ROUTES = [
+    { name: "/console/orgs", path: () => "/console/orgs", shell: true },
+    { name: "/console/orgs/new", path: () => "/console/orgs/new", shell: true },
+    {
+      name: "an organization's not-found page",
+      path: (org: string) => `/console/orgs/${org}/teams/no-such-team`,
+      shell: true,
+    },
+    {
+      name: "the console's not-found page",
+      path: () => "/console/no-such-page",
+      shell: true,
+    },
+    {
+      name: "the not-found page outside the console",
+      path: () => "/no-such-page",
+      shell: false,
+    },
+  ];
+  for (const route of ROUTES) {
+    for (const theme of ["light", "dark"] as const) {
+      test(`${route.name} passes axe in the ${theme} theme`, async ({
+        page,
+        signedIn,
+      }) => {
+        await useTheme(page, theme);
+        await page.goto(route.path(signedIn.orgSlug));
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+        if (route.shell) await expectHydrated(page);
+        expect(await axeViolations(page)).toEqual([]);
+      });
+    }
+  }
 });

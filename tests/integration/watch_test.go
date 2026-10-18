@@ -20,6 +20,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/watch"
 	watchpg "github.com/garamsh/garam/internal/watch/postgres"
 )
@@ -47,7 +48,7 @@ func watchRows(t *testing.T, p *pgxpool.Pool) int {
 func TestWatchSurface_AWatchInOneProcessIsCountedAndFedByAnother(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	key := make([]byte, ca.KeySize)

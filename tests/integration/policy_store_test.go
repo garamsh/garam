@@ -14,7 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -149,7 +149,7 @@ func TestPolicyVersions_AppendOnly(t *testing.T) {
 	assert.Equal(t, "policy_versions is append-only", deleted.Message)
 
 	// Versions do disappear with the policy that owns them.
-	require.NoError(t, org.NewPostgresStore(p).DeleteOrg(ctx, orgGRN))
+	require.NoError(t, orgpg.New(p).DeleteOrg(ctx, orgGRN))
 	var count int
 	require.NoError(t, p.QueryRow(ctx, `SELECT count(*) FROM policy_versions`).Scan(&count))
 	assert.Zero(t, count)

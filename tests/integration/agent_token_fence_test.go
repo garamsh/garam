@@ -12,7 +12,7 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // mintedIn records a token for the fixture's agent, minted by its
@@ -115,7 +115,7 @@ func TestAgentToken_DeletingTheAgentTakesItsTokens(t *testing.T) {
 	_, err := f.agents.ResolveAccessToken(ctx, token.Hash())
 	require.NoError(t, err)
 
-	require.NoError(t, org.NewPostgresStore(f.p).DeleteOrg(ctx, orgRootGRN("acme")))
+	require.NoError(t, orgpg.New(f.p).DeleteOrg(ctx, orgRootGRN("acme")))
 
 	_, err = f.agents.ResolveAccessToken(ctx, token.Hash())
 	assert.ErrorIs(t, err, agent.ErrAccessTokenInvalid)

@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // runIssueCertificate runs the shipped command against the test
@@ -51,7 +52,7 @@ func runIssueCertificate(t *testing.T, keyFile, subjectGRN string) (string, erro
 // authenticates nobody.
 func TestIssueCertificate_MintsAnOperatorsFirstCertificate(t *testing.T) {
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	// The key-encryption key reaches the command the way ADR-0015 has
 	// key material reach a process: a file its owner alone can read.

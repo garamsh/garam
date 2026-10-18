@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/internal/operator"
 	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 	"github.com/garamsh/garam/internal/wire"
@@ -28,7 +29,7 @@ func NewAuthorityService(pool *pgxpool.Pool, engine grpc.ClientConnInterface) op
 	delegations := operatorpg.New(pool)
 	return operator.NewAuthorityService(delegations, delegations, operator.NewPostgresStore(pool),
 		agentPlacements{store: agent.NewPostgresStore(pool)},
-		currentAuthorization{orgs: org.NewPostgresStore(pool), users: userpg.New(pool),
+		currentAuthorization{orgs: orgpg.New(pool), users: userpg.New(pool),
 			engine: authzv1.NewAuthzServiceClient(engine)},
 		operator.Config{})
 }
@@ -73,7 +74,7 @@ func (a currentAuthorization) Authorize(ctx context.Context, actor, orgGRN, obje
 		Statements: []*authzv1.Statement{{
 			Sid:      "member-roles",
 			Effect:   authzv1.Effect_EFFECT_ALLOW,
-			Action:   org.ActionsFor(append([]string{string(m.Role())}, u.Roles...)),
+			Action:   org.ActionsFor(append([]string{string(m.Role)}, u.Roles...)),
 			Resource: []string{orgGRN.String(), "grn:" + orgGRN.Identifier + ":*"},
 		}},
 		SubjectGroups: wire.GRNsToProto(groups),

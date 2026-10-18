@@ -234,9 +234,9 @@ func projectGRN(orgSlug, projectSlug string) grn.GRN {
 
 func projectToAPI(p *org.Project) apigen.Project {
 	return apigen.Project{
-		Grn:    p.GRN().String(),
-		Name:   p.Name(),
-		OrgGrn: p.Organization().String(),
-		Roles:  rolesToAPI(p.Roles()),
+		Grn:    p.GRN.String(),
+		Name:   p.Name,
+		OrgGrn: p.Organization.String(),
+		Roles:  rolesToAPI(p.Roles),
 	}
 }

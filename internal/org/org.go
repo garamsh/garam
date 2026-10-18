@@ -35,11 +35,11 @@ var (
 	ErrMemberOfAnotherOrg    = errorx.New(errorx.KindFailedPrecondition, "member is owned by another org")
 )
 
-// checkMemberOrg refuses a Group or Project member that another org
+// CheckMemberOrg refuses a Group or Project member that another org
 // owns. An org-owned GRN names its org in the organization segment
 // (ADR-0001), so the two segments must agree; a root-owned GRN, such as
 // a user's, exists above every org and is admitted.
-func checkMemberOrg(container, member grn.GRN) error {
+func CheckMemberOrg(container, member grn.GRN) error {
 	if member.Organization != grn.RootOwner && member.Organization != container.Organization {
 		return ErrMemberOfAnotherOrg
 	}
@@ -53,24 +53,23 @@ const (
 	ServiceTypeProject = "project"
 )
 
-// Organization is the top-level tenancy boundary.
+// Organization is the top-level tenancy boundary. Every field is one
+// the store writes and reads back, and the aggregate holds no invariant
+// over any of them, so they are exported and whatever restores a row
+// does it from outside this package (ADR-0069).
 type Organization struct {
-	grn       grn.GRN
-	name      string
-	createdAt time.Time
-	updatedAt time.Time
+	GRN       grn.GRN
+	Name      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
-// NewOrganization constructs an Organization with the given GRN and name.
+// NewOrganization constructs an Organization with the given GRN and
+// name, stamping CreatedAt and UpdatedAt from one instant.
 func NewOrganization(g grn.GRN, name string) *Organization {
 	now := time.Now().UTC()
-	return &Organization{grn: g, name: name, createdAt: now, updatedAt: now}
+	return &Organization{GRN: g, Name: name, CreatedAt: now, UpdatedAt: now}
 }
-
-func (o *Organization) GRN() grn.GRN         { return o.grn }
-func (o *Organization) Name() string         { return o.name }
-func (o *Organization) CreatedAt() time.Time { return o.createdAt }
-func (o *Organization) UpdatedAt() time.Time { return o.updatedAt }
 
 // Contents counts what this domain holds for one Organization that
 // deleting that Organization removes. It is a count and not a listing

@@ -21,6 +21,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // outbox is a message store with what the tests below read it by: the
@@ -305,7 +306,7 @@ func entryTo(recipient grn.GRN, key, createdAt string) string {
 func TestOutbox_TheRouteRefusesWithoutItsContractOrCreationInstantBeforeAnyWrite(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	key := make([]byte, ca.KeySize)
 	_, err := rand.Read(key)
 	require.NoError(t, err)

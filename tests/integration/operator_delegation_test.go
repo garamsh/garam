@@ -16,6 +16,7 @@ import (
 	"github.com/garamsh/garam/internal/operator"
 	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 )
@@ -103,7 +104,7 @@ func newDelegationFixture(t *testing.T) *delegationFixture {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	actor := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "ada")
 	require.NoError(t, userpg.New(p).Create(ctx, user.New(actor, "Ada")))
 	store := operator.NewPostgresStore(p)

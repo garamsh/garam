@@ -25,6 +25,7 @@ import (
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -73,7 +74,7 @@ func archivePolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string) 
 func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	for _, name := range []string{"acme", "globex"} {
 		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN(name), name)))
 	}
@@ -175,7 +176,7 @@ func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T
 func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	key := make([]byte, ca.KeySize)
@@ -286,7 +287,7 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	for _, name := range []string{"acme", "globex"} {
 		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN(name), name)))
 	}
@@ -416,7 +417,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 
@@ -514,7 +515,7 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 
@@ -632,7 +633,7 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	for _, name := range []string{"alpha", "beta"} {
 		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN(name), name)))
 	}
@@ -812,7 +813,7 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	for _, name := range []string{"acme", "globex", "initech"} {
 		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN(name), name)))
 	}
@@ -924,7 +925,7 @@ func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *test
 func TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	key := make([]byte, ca.KeySize)
 	_, err := rand.Read(key)

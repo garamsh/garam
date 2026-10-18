@@ -7,27 +7,23 @@ import (
 )
 
 // Group is a member container that belongs to a single Organization.
+// Every field is one the store writes and reads back, and the aggregate
+// holds no invariant over any of them, so they are exported and
+// whatever restores a row does it from outside this package (ADR-0069).
 type Group struct {
-	grn       grn.GRN
-	name      string
-	orgGRN    grn.GRN
-	roles     []string
-	policies  []string
-	createdAt time.Time
-	updatedAt time.Time
+	GRN          grn.GRN
+	Name         string
+	Organization grn.GRN
+	Roles        []string
+	Policies     []string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // NewGroup constructs a Group tied to the given Organization GRN. The
-// optional roles are the ones the Group grants its members.
+// optional roles are the ones the Group grants its members. CreatedAt
+// and UpdatedAt are stamped from one instant.
 func NewGroup(g grn.GRN, name string, orgGRN grn.GRN, roles ...string) *Group {
 	now := time.Now().UTC()
-	return &Group{grn: g, name: name, orgGRN: orgGRN, roles: roles, createdAt: now, updatedAt: now}
+	return &Group{GRN: g, Name: name, Organization: orgGRN, Roles: roles, CreatedAt: now, UpdatedAt: now}
 }
-
-func (g *Group) GRN() grn.GRN          { return g.grn }
-func (g *Group) Name() string          { return g.name }
-func (g *Group) Organization() grn.GRN { return g.orgGRN }
-func (g *Group) Roles() []string       { return g.roles }
-func (g *Group) Policies() []string    { return g.policies }
-func (g *Group) CreatedAt() time.Time  { return g.createdAt }
-func (g *Group) UpdatedAt() time.Time  { return g.updatedAt }

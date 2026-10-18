@@ -22,6 +22,7 @@ import (
 	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // keyEncryptionKey writes the key every certificate authority is sealed
@@ -92,7 +93,7 @@ func renew(t *testing.T, client *http.Client, url string) (int, []byte) {
 // route that refused every renewal would answer all three the same way.
 func TestOperatorRenewal_ReplacesTheCertificateThePresenterHolds(t *testing.T) {
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
 	keyFile, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)

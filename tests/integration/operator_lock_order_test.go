@@ -15,6 +15,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // indexScanPool is a pool over the test database whose sessions plan
@@ -134,7 +135,7 @@ func TestOperatorLockOrder_AKeyWithdrawalAndAnExchangeSweepingItsTokensBothCompl
 	ctx := context.Background()
 	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	svc := exchangeService(store)
 	subject, credential := registerCredentialed(t, store, "controller")
@@ -186,7 +187,7 @@ func TestOperatorLockOrder_AKeyWithdrawalAndAnExchangeSweepingItsTokensBothCompl
 func TestOperatorLockOrder_ACredentialReissueAndADeletionBothComplete(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	subject, _ := registerCredentialed(t, store, "controller")
 	reissued, err := operator.NewIssuedCredential(subject, scopedGRN("acme", "user", "ada"))
@@ -226,7 +227,7 @@ func TestOperatorLockOrder_ACredentialReissueAndAKeyExchangeSweepingItsTokensBot
 	ctx := context.Background()
 	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	svc := keyService(store)
 	subject, _ := registerCredentialed(t, store, "controller")
@@ -327,7 +328,7 @@ func TestOperatorLockOrder_AnAudiencesDeletionAndAnExchangeSweepingTokensNamingI
 	ctx := context.Background()
 	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	svc := exchangeService(store)
 	subject, credential := registerCredentialed(t, store, "controller")
@@ -379,7 +380,7 @@ func TestOperatorLockOrder_TheDeletionsOfAClientAndOfItsAudienceBothComplete(t *
 	ctx := context.Background()
 	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	subject, _ := registerCredentialed(t, store, "controller")
 	audience, _ := registerCredentialed(t, store, "hosted")
@@ -428,7 +429,7 @@ func TestOperatorLockOrder_TwoExchangesOfOneOperatorTrimmingAndSweepingTheSameTo
 	ctx := context.Background()
 	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	svc := keyService(store)
 	subject, credential := registerCredentialed(t, store, "controller")
@@ -538,7 +539,7 @@ func TestOperatorLockOrder_TwoExchangesOfOneOperatorTrimmingAndSweepingTheSameTo
 func TestOperatorLockOrder_TwoMintsSweepingEachOthersExpiredEnrollmentsBothComplete(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	parkedOn, _ := registerCredentialed(t, store, "carol")
 	first, _ := registerCredentialed(t, store, "alice")
@@ -604,7 +605,7 @@ func TestOperatorLockOrder_AnOrganizationDeletionAndAnExchangeNamingAnAudienceBo
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 			p := pool(t)
-			orgs := org.NewPostgresStore(p)
+			orgs := orgpg.New(p)
 			require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 			store := operator.NewPostgresStore(p)
 			svc := exchangeService(store)
@@ -680,7 +681,7 @@ func TestOperatorLockOrder_AnAudiencesDeletionAndAWriterOfTheClientsTokensBothCo
 			ctx := context.Background()
 			pool(t) // migrates and truncates the database; the store runs on p
 			p := indexScanPool(t)
-			require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+			require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 			store := operator.NewPostgresStore(p)
 			client, credential := registerCredentialed(t, store, "controller")
 			audience, _ := registerCredentialed(t, store, "hosted")
@@ -765,7 +766,7 @@ func TestOperatorLockOrder_AnAudiencesDeletionAndAnExchangeHoldingNoTokenItWaits
 			ctx := context.Background()
 			pool(t) // migrates and truncates the database; the store runs on p
 			p := indexScanPool(t)
-			require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+			require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 			store := operator.NewPostgresStore(p)
 			client, credential := registerCredentialed(t, store, "controller")
 			audience, _ := registerCredentialed(t, store, "hosted")
@@ -825,7 +826,7 @@ func TestOperatorLockOrder_AnAudiencesDeletionAndAnExchangeHoldingNoTokenItWaits
 func TestOperatorLockOrder_AnOrganizationDeletionAndARemintSweepingItsEnrollmentsBothComplete(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	// Registered in GRN order, which is the heap order the cascade takes

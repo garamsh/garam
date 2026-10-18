@@ -41,14 +41,14 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
   ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)). That ADR supersedes ADR-0051's accessor and ends
   ADR-0066's reservation; an aggregate that does hold an invariant over
   its fields is not decided by it.
-- **Three of the ten domains #1083 covers have converted.**
-  `internal/user`, `internal/ca` and `internal/watch` keep their store
-  in `internal/<domain>/postgres/`, and `go list -deps` on each reports
-  no `jackc/pgx`. `user` and `ca` carry exported fields on what their
-  stores persist; `watch`'s `Store` persists no aggregate, so it
-  exported none. `internal/machine` had no driver import to move. The
-  other six — `org`, `agent`, `message`, `authz`, `operator` and
-  `authn` — still import the driver into the domain package and keep
+- **Four of the ten domains #1083 covers have converted.**
+  `internal/user`, `internal/ca`, `internal/watch` and `internal/org`
+  keep their store in `internal/<domain>/postgres/`, and `go list
+  -deps` on each reports no `jackc/pgx`. `user`, `ca` and `org` carry
+  exported fields on what their stores persist; `watch`'s `Store`
+  persists no aggregate, so it exported none. `internal/machine` had no
+  driver import to move. The other five — `agent`, `message`, `authz`,
+  `operator` and `authn` — still import the driver into the domain package and keep
   their accessors until each follows in its own pull request (#1083),
   so the tree reads in two shapes meanwhile and the rule above is what
   both are measured against. `internal/audit`, added after the ten, was

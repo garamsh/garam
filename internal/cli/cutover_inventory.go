@@ -8,7 +8,7 @@ import (
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // newCutoverInventoryCommand constructs `garam cutover-inventory --org
@@ -46,7 +46,7 @@ func cutoverInventory(cmd *cobra.Command, slug string) error {
 
 	// An organization that does not exist holds nothing, and an empty
 	// inventory of it would read as one that holds no agent.
-	if _, err := org.NewPostgresStore(pool).GetOrg(ctx, orgGRN); err != nil {
+	if _, err := orgpg.New(pool).GetOrg(ctx, orgGRN); err != nil {
 		return err
 	}
 	records, summary, err := agentpg.New(pool).Inventory(ctx, orgGRN)

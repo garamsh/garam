@@ -27,7 +27,7 @@ import (
 	"github.com/garamsh/garam/internal/health"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 	"github.com/garamsh/garam/internal/watch"
 	watchpg "github.com/garamsh/garam/internal/watch/postgres"
@@ -113,7 +113,7 @@ func serveAPI(cmd *cobra.Command) error {
 
 	srv := api.NewServer(
 		userpg.New(pool),
-		org.NewPostgresStore(pool),
+		orgpg.New(pool),
 		agent.NewPostgresStore(pool),
 		operator.NewPostgresStore(pool),
 		message.NewPostgresStore(pool),

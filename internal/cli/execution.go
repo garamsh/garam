@@ -19,7 +19,7 @@ import (
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
-	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -38,7 +38,7 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 		lifecycleAuthorization{
 			grants:      operatorpg.New(pool),
 			supervisors: agentpg.New(pool),
-			policy: audienceAuthorization{groups: memberGroups{store: org.NewPostgresStore(pool)},
+			policy: audienceAuthorization{groups: memberGroups{store: orgpg.New(pool)},
 				engine: authzv1.NewAuthzServiceClient(engine)},
 			now: now,
 		},

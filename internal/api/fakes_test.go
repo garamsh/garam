@@ -233,7 +233,7 @@ func memberKey(orgGRN, userGRN grn.GRN) string { return orgGRN.String() + "|" + 
 func (s *fakeOrgStore) CreateOrg(_ context.Context, o *org.Organization) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.orgs[o.GRN().String()] = o
+	s.orgs[o.GRN.String()] = o
 	return nil
 }
 
@@ -254,7 +254,7 @@ func (s *fakeOrgStore) UpdateOrg(_ context.Context, g grn.GRN, p org.Patch) (*or
 	if !ok {
 		return nil, org.ErrOrgNotFound
 	}
-	name := o.Name()
+	name := o.Name
 	if p.Name != nil {
 		name = *p.Name
 	}
@@ -278,8 +278,8 @@ func (s *fakeOrgStore) ListOrgsByMember(_ context.Context, userGRN grn.GRN, _ li
 	defer s.mu.Unlock()
 	out := []*org.Organization{}
 	for _, m := range s.members {
-		if m.User() == userGRN {
-			out = append(out, s.orgs[m.Organization().String()])
+		if m.User == userGRN {
+			out = append(out, s.orgs[m.Organization.String()])
 		}
 	}
 	return out, nil
@@ -288,7 +288,7 @@ func (s *fakeOrgStore) ListOrgsByMember(_ context.Context, userGRN grn.GRN, _ li
 func (s *fakeOrgStore) CreateGroup(_ context.Context, g *org.Group) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.groups[g.GRN().String()] = g
+	s.groups[g.GRN.String()] = g
 	return nil
 }
 
@@ -307,12 +307,12 @@ func (s *fakeOrgStore) ListGroups(_ context.Context, orgGRN grn.GRN, _ listfilte
 	defer s.mu.Unlock()
 	out := []*org.Group{}
 	for _, gr := range s.groups {
-		if gr.Organization() == orgGRN {
+		if gr.Organization == orgGRN {
 			out = append(out, gr)
 		}
 	}
 	slices.SortFunc(out, func(a, b *org.Group) int {
-		return strings.Compare(a.GRN().String(), b.GRN().String())
+		return strings.Compare(a.GRN.String(), b.GRN.String())
 	})
 	return out, nil
 }
@@ -324,15 +324,15 @@ func (s *fakeOrgStore) UpdateGroup(_ context.Context, g grn.GRN, p org.GroupPatc
 	if !ok {
 		return nil, org.ErrGroupNotFound
 	}
-	name := gr.Name()
+	name := gr.Name
 	if p.Name != nil {
 		name = *p.Name
 	}
-	roles := gr.Roles()
+	roles := gr.Roles
 	if p.Roles != nil {
 		roles = p.Roles
 	}
-	updated := org.NewGroup(g, name, gr.Organization(), roles...)
+	updated := org.NewGroup(g, name, gr.Organization, roles...)
 	s.groups[g.String()] = updated
 	return updated, nil
 }
@@ -354,10 +354,10 @@ func (s *fakeOrgStore) ListGroupsByMember(_ context.Context, orgGRN, memberGRN g
 	out := []grn.GRN{}
 	for key, members := range s.groupMembers {
 		gr, ok := s.groups[key]
-		if !ok || gr.Organization() != orgGRN || !slices.Contains(members, memberGRN) {
+		if !ok || gr.Organization != orgGRN || !slices.Contains(members, memberGRN) {
 			continue
 		}
-		out = append(out, gr.GRN())
+		out = append(out, gr.GRN)
 	}
 	slices.SortFunc(out, func(a, b grn.GRN) int { return strings.Compare(a.String(), b.String()) })
 	return out, nil
@@ -398,7 +398,7 @@ func (s *fakeOrgStore) ListGroupMembers(_ context.Context, groupGRN grn.GRN) ([]
 func (s *fakeOrgStore) CreateProject(_ context.Context, p *org.Project) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.projects[p.GRN().String()] = p
+	s.projects[p.GRN.String()] = p
 	return nil
 }
 
@@ -417,12 +417,12 @@ func (s *fakeOrgStore) ListProjects(_ context.Context, orgGRN grn.GRN, _ listfil
 	defer s.mu.Unlock()
 	out := []*org.Project{}
 	for _, p := range s.projects {
-		if p.Organization() == orgGRN {
+		if p.Organization == orgGRN {
 			out = append(out, p)
 		}
 	}
 	slices.SortFunc(out, func(a, b *org.Project) int {
-		return strings.Compare(a.GRN().String(), b.GRN().String())
+		return strings.Compare(a.GRN.String(), b.GRN.String())
 	})
 	return out, nil
 }
@@ -434,15 +434,15 @@ func (s *fakeOrgStore) UpdateProject(_ context.Context, g grn.GRN, patch org.Pro
 	if !ok {
 		return nil, org.ErrProjectNotFound
 	}
-	name := p.Name()
+	name := p.Name
 	if patch.Name != nil {
 		name = *patch.Name
 	}
-	roles := p.Roles()
+	roles := p.Roles
 	if patch.Roles != nil {
 		roles = patch.Roles
 	}
-	updated := org.NewProject(g, name, p.Organization(), roles...)
+	updated := org.NewProject(g, name, p.Organization, roles...)
 	s.projects[g.String()] = updated
 	return updated, nil
 }
@@ -491,7 +491,7 @@ func (s *fakeOrgStore) ListProjectMembers(_ context.Context, projectGRN grn.GRN)
 func (s *fakeOrgStore) AddMember(_ context.Context, m *org.Membership) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	k := memberKey(m.Organization(), m.User())
+	k := memberKey(m.Organization, m.User)
 	if _, ok := s.members[k]; ok {
 		return org.ErrMemberAlreadyExists
 	}
@@ -514,7 +514,7 @@ func (s *fakeOrgStore) ListMembers(_ context.Context, orgGRN grn.GRN) ([]*org.Me
 	defer s.mu.Unlock()
 	out := []*org.Membership{}
 	for _, m := range s.members {
-		if m.Organization() == orgGRN {
+		if m.Organization == orgGRN {
 			out = append(out, m)
 		}
 	}
@@ -524,7 +524,7 @@ func (s *fakeOrgStore) ListMembers(_ context.Context, orgGRN grn.GRN) ([]*org.Me
 func (s *fakeOrgStore) CreateInvitation(_ context.Context, inv *org.Invitation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.invitations[inv.Token()] = inv
+	s.invitations[inv.Token] = inv
 	return nil
 }
 
@@ -545,8 +545,8 @@ func (s *fakeOrgStore) AcceptInvitation(_ context.Context, token string, userGRN
 	if err != nil {
 		return nil, err
 	}
-	m := org.NewMembership(inv.Organization(), userGRN, inv.Role())
-	k := memberKey(m.Organization(), m.User())
+	m := org.NewMembership(inv.Organization, userGRN, inv.Role)
+	k := memberKey(m.Organization, m.User)
 	if _, ok := s.members[k]; ok {
 		return nil, org.ErrMemberAlreadyExists
 	}
@@ -584,7 +584,7 @@ func (s *fakeOrgStore) CompleteInvitationClaim(context.Context, *org.Invitation,
 func (s *fakeOrgStore) ReleaseInvitationClaim(_ context.Context, inv *org.Invitation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.accepted[inv.Token()] = false
+	s.accepted[inv.Token] = false
 	return nil
 }
 
@@ -1457,22 +1457,22 @@ func (s *fakeOrgStore) CountOrgContents(_ context.Context, orgGRN grn.GRN) (org.
 	defer s.mu.Unlock()
 	var c org.Contents
 	for _, gr := range s.groups {
-		if gr.Organization() == orgGRN {
+		if gr.Organization == orgGRN {
 			c.Groups++
 		}
 	}
 	for _, p := range s.projects {
-		if p.Organization() == orgGRN {
+		if p.Organization == orgGRN {
 			c.Projects++
 		}
 	}
 	for _, m := range s.members {
-		if m.Organization() == orgGRN {
+		if m.Organization == orgGRN {
 			c.Members++
 		}
 	}
 	for _, inv := range s.invitations {
-		if inv.Organization() == orgGRN {
+		if inv.Organization == orgGRN {
 			c.Invitations++
 		}
 	}

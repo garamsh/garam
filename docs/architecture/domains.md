@@ -81,14 +81,14 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**Three of the ten have this shape today: `internal/user`,
-`internal/ca` and `internal/watch`.** `internal/machine` persists
-through `internal/machine/postgres` and had no driver import to move.
-The other six — `org`, `agent`, `message`, `authz`, `operator` and
+**Four of the ten have this shape today: `internal/user`,
+`internal/ca`, `internal/watch` and `internal/org`.** `internal/machine`
+persists through `internal/machine/postgres` and had no driver import
+to move. The other five — `agent`, `message`, `authz`, `operator` and
 `authn` — keep a store that imports `jackc/pgx` inside the domain
 package, and each moves in its own pull request following #1083. Until
 then `go list -deps` on a domain package names `jackc/pgx` exactly for
-those six, and the shape above describes three of ten.
+those five, and the shape above describes four of ten.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,
 inside the same package, when one Postgres type carries the methods of
@@ -96,9 +96,11 @@ more than one aggregate (`org`, `agent`, `authz`) or of more than one
 `Store` interface (`operator`, `message`). What splits is a receiver's
 methods and not a package's stores: `internal/authn` implements four
 `Store` interfaces on four Postgres types and keeps them in one
-`postgres.go`. `ls internal/*/postgres_*.go` names the five packages
-that split and no others. Those files stay under the domain because
-their aggregates' fields are still unexported, so whatever rehydrates
+`postgres.go`. `ls internal/*/postgres_*.go` names the four packages
+that split beside their aggregates and no others; `org`'s split moved
+with its store into `internal/org/postgres/`. Those four stay under the
+domain because their aggregates' fields are still unexported, so
+whatever rehydrates
 one shares its package — and that is now a state the nine are passing
 through rather than a position the project holds.
 [ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md) settled the write half on evidence about the surface:
@@ -449,7 +451,7 @@ composition root does.
 
 | Domain | Interface | postgres | memory | other |
 |--------|-----------|----------|--------|-------|
-| org | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
+| org | yes (`store.go`) | yes (`postgres/postgres.go` + `postgres/postgres_<concept>.go`) | not planned | — |
 | user | yes (`store.go`) | yes (`postgres/postgres.go`) | not planned | — |
 | authn.SessionStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.OAuthStateStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |

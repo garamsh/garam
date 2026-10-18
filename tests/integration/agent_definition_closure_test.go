@@ -16,6 +16,7 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // closedMessage is 000035's refusal of a definition write.
@@ -76,7 +77,7 @@ func requireClosed(t *testing.T, err error) {
 func TestAgentDefinition_TheSchemaRefusesEveryNewValue(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	s := agent.NewPostgresStore(p)
 	kept := defineAgent(t, p, s, scopedGRN("acme", agent.ServiceTypeOperator, "one"), agent.Values{"model": "haiku"})
 	other := registerOperator(t, p, scopedGRN("acme", agent.ServiceTypeOperator, "two"))
@@ -116,7 +117,7 @@ func TestAgentDefinition_TheSchemaRefusesEveryNewValue(t *testing.T) {
 		_, err := tx.Exec(ctx, insert)
 		assert.NoError(t, err, "control: the same insert without the guard is accepted")
 	})
-	require.NoError(t, org.NewPostgresStore(p).DeleteOrg(ctx, orgRootGRN("acme")))
+	require.NoError(t, orgpg.New(p).DeleteOrg(ctx, orgRootGRN("acme")))
 	assert.Zero(t, countRows(t, p, `SELECT count(*) FROM agent_definitions`),
 		"control: a definition still goes with its organization")
 }

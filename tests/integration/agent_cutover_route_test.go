@@ -15,6 +15,7 @@ import (
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 	"github.com/garamsh/garam/internal/wire"
@@ -470,7 +471,7 @@ func TestCutoverRoutes_AnotherOrganizationsOperatorReachesNoCutover(t *testing.T
 	globex := orgRootGRN("globex")
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "gabe")
 	require.NoError(t, userpg.New(s.pool).Create(ctx, user.New(owner, "gabe")))
-	require.NoError(t, org.NewPostgresStore(s.pool).AddMember(ctx, org.NewMembership(globex, owner, org.RoleOwner)))
+	require.NoError(t, orgpg.New(s.pool).AddMember(ctx, org.NewMembership(globex, owner, org.RoleOwner)))
 	token, err := authn.NewToken()
 	require.NoError(t, err)
 	require.NoError(t, authn.NewPostgresSessionStore(s.pool).Create(ctx, token, authn.NewSession(owner, time.Hour)))

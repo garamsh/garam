@@ -31,7 +31,7 @@ func TestInvitation_Lifecycle(t *testing.T) {
 	assert.False(t, inv.Accepted())
 	assert.False(t, inv.Expired(time.Now()))
 	assert.True(t, inv.Expired(expires.Add(time.Second)))
-	assert.Equal(t, orgGRN, inv.Organization())
-	assert.Equal(t, org.RoleMember, inv.Role())
-	assert.Equal(t, creator, inv.CreatedBy())
+	assert.Equal(t, orgGRN, inv.Organization)
+	assert.Equal(t, org.RoleMember, inv.Role)
+	assert.Equal(t, creator, inv.CreatedBy)
 }

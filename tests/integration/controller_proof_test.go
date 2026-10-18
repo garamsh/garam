@@ -38,6 +38,7 @@ import (
 	"github.com/garamsh/garam/internal/operator"
 	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -116,7 +117,7 @@ func (b *syncBuffer) String() string {
 func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, policies *authz.PolicyGRPCServer) *proofStack {
 	t.Helper()
 	ctx := context.Background()
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
@@ -435,7 +436,7 @@ func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
 	s := newProofStack(t, engine, p, policies)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	controllerTLS := machineClient(t, installed(t, p, s.issuer, s.controller))
 	placed, _ := s.provision(t, controllerTLS)
 

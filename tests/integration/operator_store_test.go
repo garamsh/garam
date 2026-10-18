@@ -10,6 +10,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // TestOperatorStore_RoundTrip covers what a registration is (ADR-0045):
@@ -23,7 +24,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := operator.NewPostgresStore(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
 

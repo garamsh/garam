@@ -19,6 +19,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // detailsPatch builds a patch the domain accepts, for a test that is
@@ -53,7 +54,7 @@ func rowOf(t *testing.T, p *pgxpool.Pool, query string, g grn.GRN) string {
 func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesOrEnrolsBy(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
@@ -109,7 +110,7 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesOrEnrolsBy(t 
 func TestOperatorUpdateDetails_ReachesOneOrganizationsRecord(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
 	store := operator.NewPostgresStore(p)
@@ -156,7 +157,7 @@ func TestOperatorUpdateDetails_ReachesOneOrganizationsRecord(t *testing.T) {
 func TestOperatorDetails_TheSchemaRefusesWhatTheDomainRefuses(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	g, _ := register(t, operator.NewPostgresStore(p), "one")
 
 	for name, update := range map[string]string{

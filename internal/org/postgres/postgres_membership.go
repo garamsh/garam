@@ -1,4 +1,4 @@
-package org
+package postgres
 
 import (
 	"context"
@@ -6,42 +6,43 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
-	"github.com/garamsh/garam/internal/org/db"
+	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/org/postgres/db"
 	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // AddMember persists a new org Membership.
-func (s *PostgresStore) AddMember(ctx context.Context, m *Membership) error {
+func (s *Store) AddMember(ctx context.Context, m *org.Membership) error {
 	err := s.q.AddOrgMember(ctx, db.AddOrgMemberParams{
-		OrgGrn:    m.orgGRN.String(),
-		UserGrn:   m.userGRN.String(),
-		Role:      string(m.role),
-		CreatedAt: pgxtype.Timestamptz(m.createdAt),
+		OrgGrn:    m.Organization.String(),
+		UserGrn:   m.User.String(),
+		Role:      string(m.Role),
+		CreatedAt: pgxtype.Timestamptz(m.CreatedAt),
 	})
-	return pgxerr.Classify(err, "add member", nil, ErrMemberAlreadyExists)
+	return pgxerr.Classify(err, "add member", nil, org.ErrMemberAlreadyExists)
 }
 
 // GetMember returns the Membership of a user in an org, or
 // ErrMemberNotFound.
-func (s *PostgresStore) GetMember(ctx context.Context, orgGRN, userGRN grn.GRN) (*Membership, error) {
+func (s *Store) GetMember(ctx context.Context, orgGRN, userGRN grn.GRN) (*org.Membership, error) {
 	row, err := s.q.GetOrgMember(ctx, db.GetOrgMemberParams{
 		OrgGrn:  orgGRN.String(),
 		UserGrn: userGRN.String(),
 	})
 	if err != nil {
-		return nil, pgxerr.Classify(err, "get member", ErrMemberNotFound, nil)
+		return nil, pgxerr.Classify(err, "get member", org.ErrMemberNotFound, nil)
 	}
 	return rowToMembership(row)
 }
 
 // ListMembers returns the Memberships of an org ordered by user GRN.
-func (s *PostgresStore) ListMembers(ctx context.Context, orgGRN grn.GRN) ([]*Membership, error) {
+func (s *Store) ListMembers(ctx context.Context, orgGRN grn.GRN) ([]*org.Membership, error) {
 	rows, err := s.q.ListOrgMembers(ctx, orgGRN.String())
 	if err != nil {
 		return nil, pgxerr.Classify(err, "list members", nil, nil)
 	}
-	members := make([]*Membership, 0, len(rows))
+	members := make([]*org.Membership, 0, len(rows))
 	for _, row := range rows {
 		m, err := rowToMembership(row)
 		if err != nil {
@@ -54,17 +55,17 @@ func (s *PostgresStore) ListMembers(ctx context.Context, orgGRN grn.GRN) ([]*Mem
 
 // RemoveMember removes a user's Membership from an org, or returns
 // ErrMemberNotFound.
-func (s *PostgresStore) RemoveMember(ctx context.Context, orgGRN, userGRN grn.GRN) error {
+func (s *Store) RemoveMember(ctx context.Context, orgGRN, userGRN grn.GRN) error {
 	n, err := s.q.RemoveOrgMember(ctx, db.RemoveOrgMemberParams{
 		OrgGrn:  orgGRN.String(),
 		UserGrn: userGRN.String(),
 	})
-	return classifyRows(n, err, "remove member", ErrMemberNotFound)
+	return classifyRows(n, err, "remove member", org.ErrMemberNotFound)
 }
 
 // ListOrgsByMember returns the Organizations a user belongs to,
 // ordered by GRN.
-func (s *PostgresStore) ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f listfilter.Filter) ([]*Organization, error) {
+func (s *Store) ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f listfilter.Filter) ([]*org.Organization, error) {
 	rows, err := s.q.ListOrgsByMember(ctx, db.ListOrgsByMemberParams{
 		UserGrn:   userGRN.String(),
 		RowOffset: int32(f.Offset),
@@ -73,7 +74,7 @@ func (s *PostgresStore) ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f
 	if err != nil {
 		return nil, pgxerr.Classify(err, "list orgs by member", nil, nil)
 	}
-	orgs := make([]*Organization, 0, len(rows))
+	orgs := make([]*org.Organization, 0, len(rows))
 	for _, row := range rows {
 		o, err := rowToOrg(row)
 		if err != nil {
@@ -84,8 +85,8 @@ func (s *PostgresStore) ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f
 	return orgs, nil
 }
 
-func rowToMembership(row db.OrgMember) (*Membership, error) {
-	role, err := ParseRole(row.Role)
+func rowToMembership(row db.OrgMember) (*org.Membership, error) {
+	role, err := org.ParseRole(row.Role)
 	if err != nil {
 		return nil, errorx.Wrap(err, "member row role", errorx.KindInternal)
 	}
@@ -97,10 +98,10 @@ func rowToMembership(row db.OrgMember) (*Membership, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "member row user grn", errorx.KindInternal)
 	}
-	return &Membership{
-		orgGRN:    og,
-		userGRN:   ug,
-		role:      role,
-		createdAt: row.CreatedAt.Time,
+	return &org.Membership{
+		Organization: og,
+		User:         ug,
+		Role:         role,
+		CreatedAt:    row.CreatedAt.Time,
 	}, nil
 }

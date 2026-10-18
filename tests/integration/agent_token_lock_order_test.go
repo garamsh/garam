@@ -14,7 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // agentTokenRow is an agent token a test writes directly for the
@@ -190,7 +190,7 @@ func TestAgentTokenLockOrder_AnOrganizationDeletionAndAMintNamingAnAudienceBothC
 	_, err = parked.Exec(ctx, `SELECT grn FROM operators WHERE grn = $1 FOR UPDATE`, audience.String())
 	require.NoError(t, err)
 	deleted := make(chan error, 1)
-	go func() { deleted <- org.NewPostgresStore(f.p).DeleteOrg(ctx, orgRootGRN("acme")) }()
+	go func() { deleted <- orgpg.New(f.p).DeleteOrg(ctx, orgRootGRN("acme")) }()
 	awaitSettled(t, f.p, 1, returned(deleted))
 	mints := make(chan minted, 1)
 	go func() {

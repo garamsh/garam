@@ -10,11 +10,11 @@ sql:
         sql_package: pgx/v5
   - engine: postgresql
     schema: migrations/000001_init.up.sql
-    queries: internal/org/queries.sql
+    queries: internal/org/postgres/queries.sql
     gen:
       go:
         package: db
-        out: internal/org/db
+        out: internal/org/postgres/db
         sql_package: pgx/v5
   - engine: postgresql
     schema:

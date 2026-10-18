@@ -19,6 +19,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -63,7 +64,7 @@ func newSendStack(t *testing.T) sendStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	for _, name := range []string{"acme", "globex"} {
 		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN(name), name)))
 	}
@@ -239,7 +240,7 @@ func TestSendAudit_DeletingAnOrganizationTakesTheEventsNamingIt(t *testing.T) {
 		"SELECT count(*) FROM audit_send_events WHERE recipient_grn = $1 AND recipient_org IS NULL", nowhere.String()),
 		"an organization garam does not hold is recorded and referenced by nothing")
 
-	require.NoError(t, org.NewPostgresStore(s.p).DeleteOrg(ctx, orgRootGRN("globex")))
+	require.NoError(t, orgpg.New(s.p).DeleteOrg(ctx, orgRootGRN("globex")))
 
 	assert.Equal(t, 0, naming(foreign), "the crossing event outlived its recipient's organization")
 	assert.Equal(t, 1, naming(siblingGRN), "control: an event naming neither deleted party stays")

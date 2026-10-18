@@ -25,7 +25,7 @@ import (
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 )
 
@@ -244,7 +244,7 @@ func (s *executionStack) agentRows(t *testing.T) map[string]int {
 func (s *executionStack) removeMember(t *testing.T, id string) {
 	t.Helper()
 	g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
-	require.NoError(t, org.NewPostgresStore(s.pool).RemoveMember(context.Background(), s.acme, g))
+	require.NoError(t, orgpg.New(s.pool).RemoveMember(context.Background(), s.acme, g))
 }
 
 // failing makes every insert into table fail until the returned func

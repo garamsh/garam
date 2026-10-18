@@ -18,10 +18,9 @@
 # is any other tag, before anything is built. The resulting references
 # are what a person pushes; this script pushes nothing.
 #
-# `--cache gha` has each build read and write its layers in the GitHub
-# Actions cache under a scope of the image's repository, and load the
-# result into the image store, which a builder exporting a cache does
-# not do by default. Only a GitHub Actions run holds that cache (#1519).
+# `--cache gha` reads and writes each image's layers in the GitHub
+# Actions cache, scoped by repository, and loads the result into the
+# image store (#1519).
 set -eu
 
 workflow=.github/workflows/release.yml

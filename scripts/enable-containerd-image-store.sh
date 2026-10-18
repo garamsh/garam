@@ -1,15 +1,9 @@
 #!/bin/sh
-# enable-containerd-image-store switches a GitHub-hosted runner's Docker
-# daemon to the containerd image store and restarts it. The default
-# `docker` driver exports a build cache to the GitHub Actions cache only
-# on that store, and every other driver runs BuildKit from
-# moby/buildkit, which is published on Docker Hub alone: an anonymous
-# pull from the limit #1337 moved the bases away from (#1519).
-#
-# It merges into whatever daemon.json the runner image ships rather than
-# replacing it, and fails unless the restarted daemon reports the store.
-# It edits the host's Docker, so it is for a disposable runner and not a
-# contributor's machine.
+# enable-containerd-image-store switches a disposable runner's Docker
+# to the containerd image store, merged into its daemon.json, and fails
+# unless the restarted daemon reports it. The default `docker` driver
+# exports a GitHub Actions cache only on that store; every other driver
+# runs moby/buildkit from Docker Hub, the limit #1337 left (#1519).
 set -eu
 
 conf=/etc/docker/daemon.json

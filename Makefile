@@ -54,12 +54,9 @@ HELM := go run helm.sh/helm/v4/cmd/helm@v4.2.4
 TEST_DB_NAME ?= garam_test$(shell git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')
 export TEST_DB_NAME
 
-# IMAGE_BUILD_CACHE=gha has every image build here read and write its
-# layers in the GitHub Actions cache: `backend-up` through
-# deploy/local/docker-compose.gha-cache.yml, `image-build` through the
-# script's `--cache`. CI sets it so a run does not redo `go mod
-# download` and the builds an earlier run already did (#1519). Empty,
-# the default, builds as before; a contributor has no such cache.
+# IMAGE_BUILD_CACHE=gha has `backend-up` and `image-build` read and
+# write their layers in the GitHub Actions cache, which only a CI run
+# holds (#1519). Empty, the default, builds as before.
 IMAGE_BUILD_CACHE ?=
 ifneq ($(filter-out gha,$(IMAGE_BUILD_CACHE)),)
 $(error IMAGE_BUILD_CACHE is '$(IMAGE_BUILD_CACHE)', and gha is the one cache it can name)

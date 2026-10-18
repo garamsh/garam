@@ -92,22 +92,16 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: make web-install
-      # The server image's layers come from the GitHub Actions cache,
-      # so a run does not redo the builds an earlier one did (#1519).
-      # The default driver exports one only on the containerd image
-      # store, and the runtime action hands the cache's URL and token
-      # to the build, which a `run:` step is not given.
+      # Reuse the server image's layers from the GitHub Actions cache
+      # (#1519). The runtime action hands the build the cache's URL and
+      # token, which a `run:` step is not given.
       - run: scripts/enable-containerd-image-store.sh
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
-      # Pull the public.ecr.aws bases as an AWS identity rather than
-      # anonymously. ECR Public caps unauthenticated callers at 500GB
-      # of data a month, known by an address a hosted runner shares
-      # with other tenants, and its refusal fails the build at `load
-      # metadata` whatever the layer cache holds (#1519). The role is
-      # the repository variable GARAM_ECR_PULL_ROLE_ARN, and only
-      # ecr-public:GetAuthorizationToken and sts:GetServiceBearerToken
-      # are needed to log in. Unset, both steps are skipped and the
-      # pulls stay anonymous. ECR Public's API is in us-east-1 alone.
+      # Pull the public.ecr.aws bases as the role
+      # GARAM_ECR_PULL_ROLE_ARN names, not under the anonymous data
+      # limit a hosted runner's address shares; the layer cache does
+      # not avoid that pull (#1519). Unset, both steps are skipped.
+      # ECR Public authenticates in us-east-1 only.
       - if: vars.GARAM_ECR_PULL_ROLE_ARN != ''
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:

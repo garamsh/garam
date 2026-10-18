@@ -11,6 +11,10 @@ const served = new URL(BASE_URL);
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
+  // Measured on the 12-core gate host (#1528): from 3 workers up, a
+  // loaded host timed out the 30 s budget, and at 2 none did. On a
+  // 4-core hosted runner 2 is the default.
+  workers: 2,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",

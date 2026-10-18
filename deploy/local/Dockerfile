@@ -8,11 +8,12 @@
 # so two builds of this commit pull the same bytes. Dependabot proposes
 # a newer tag — `.github/dependabot.yml` names what it does not cover —
 # and a move by hand re-resolves with
-# `docker buildx imagetools inspect <ref>`. It is pulled from ECR
-# Public's copy of Docker's official image, the same digest, because
-# Docker Hub refuses anonymous pulls past a per-IP limit that a CI
-# runner shares with whoever held its address before (#1337).
-FROM public.ecr.aws/docker/library/golang:1.27.2-alpine3.24@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS build
+# `docker buildx imagetools inspect <ref>`. It is pulled from Google's
+# mirror of Docker's official image, the same digest: Docker Hub
+# refuses anonymous pulls past a per-IP limit a CI runner shares with
+# whoever held its address before (#1337), and ECR Public caps
+# anonymous data across the addresses hosted runners share (#1532).
+FROM mirror.gcr.io/library/golang:1.27.2-alpine3.24@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS build
 
 WORKDIR /src
 

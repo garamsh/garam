@@ -16,9 +16,10 @@ const nextConfig: NextConfig = {
       "node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/esm/**/*",
     ],
   },
-  // The console's Groups and Members sections became Teams and People
-  // (ADR-0072), and Policies became Permissions (ADR-0073); a bookmark
-  // of an old address lands on the new one.
+  // The console's Groups section became Teams (ADR-0072), Policies
+  // became Permissions (ADR-0073), and People and the agents list became
+  // Members (ADR-0113); a bookmark of an old address lands on the new
+  // one. `members` was People's address before it was Members'.
   async redirects() {
     return [
       {
@@ -26,9 +27,16 @@ const nextConfig: NextConfig = {
         destination: "/console/orgs/:org/teams",
         permanent: false,
       },
+      // An agent keeps its page under `agents/`, so only the list's
+      // address moves.
       {
-        source: "/console/orgs/:org/members",
-        destination: "/console/orgs/:org/people",
+        source: "/console/orgs/:org/people",
+        destination: "/console/orgs/:org/members?kind=person",
+        permanent: false,
+      },
+      {
+        source: "/console/orgs/:org/agents",
+        destination: "/console/orgs/:org/members?kind=agent",
         permanent: false,
       },
       {

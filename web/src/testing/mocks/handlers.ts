@@ -1,6 +1,7 @@
 import { HttpResponse, http, type JsonBodyType } from "msw";
 import { z } from "zod";
 
+import type { PermissionExplanation } from "@/lib/permission-explanation";
 import type { User } from "@/features/auth";
 import type {
   Agent,
@@ -372,13 +373,44 @@ export function answerPermissionChecks(
   );
 }
 
+/**
+ * Answers Acme's permission explanations with `explain(action)`, as
+ * garam does for the one pair the query names.
+ */
+export function answerExplanations(
+  explain: (
+    action: string,
+  ) => Omit<PermissionExplanation, "action" | "resource">,
+) {
+  return http.get(
+    `${API_URL}/orgs/acme/permission-explanation`,
+    ({ request }) => {
+      const action = new URL(request.url).searchParams.get("action") ?? "";
+      return HttpResponse.json({ action, ...explain(action) });
+    },
+  );
+}
+
+/** Alice's owner role allows an action, as garam explains it. */
+export const ownerAllows: Omit<PermissionExplanation, "action" | "resource"> = {
+  decision: "allow",
+  basis: "statements",
+  statements: [{ effect: "Allow", source: "org-role", roles: ["owner"] }],
+};
+
 /** The signed-in happy path: Alice owns Acme, which holds one of each. */
 export const handlers = [
   ...routes.map(({ path, body }) =>
     http.get(`${API_URL}${path}`, () => HttpResponse.json(body)),
   ),
-  // An owner may take every action.
+  // An owner may take every action, by the owner role.
   answerPermissionChecks(() => "allow"),
+  answerExplanations(() => ownerAllows),
+  http.get(`${API_URL}/orgs/acme/permission-holders`, () =>
+    HttpResponse.json({
+      holders: [{ type: "user", grn: alice.grn, nickname: alice.nickname }],
+    }),
+  ),
 ];
 
 /** What the backend answers on a route it guards, without a session. */

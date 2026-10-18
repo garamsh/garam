@@ -41,10 +41,9 @@ describe("console sidebar", () => {
     // Presence: the switcher's name is the sr-only "Switch
     // organization", the org's name and its slug.
     expect(screen.getByRole("button", { name: /Acme/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "People" })).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/people",
-    );
+    expect(
+      screen.getByRole("link", { name: "People and agents" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/members");
     // Presence: the account menu's name is the sr-only "Open account
     // menu", the avatar's initials, the nickname and "Signed in".
     expect(screen.getByRole("button", { name: /Alice/ })).toBeInTheDocument();
@@ -55,7 +54,9 @@ describe("console sidebar", () => {
 
     // The control for the search: the sidebar rendered, so what is
     // absent is the GRN and not the whole tree.
-    expect(screen.getByRole("link", { name: "People" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "People and agents" }),
+    ).toBeInTheDocument();
     expect(container.textContent).not.toContain("grn:");
   });
 
@@ -86,7 +87,9 @@ describe("console sidebar", () => {
 
     await renderSidebar();
 
-    expect(screen.getByRole("link", { name: "People" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "People and agents" }),
+    ).toBeInTheDocument();
     // Presence: the sr-only label opens the trigger's name, and the slug
     // and the reason follow it.
     const switcher = screen.getByRole("button", {

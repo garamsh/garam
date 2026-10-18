@@ -50,12 +50,11 @@ describe("console navigation", () => {
   });
 
   it("marks the section the caller is on", () => {
-    renderNav("/console/orgs/acme/people");
+    renderNav("/console/orgs/acme/members");
 
-    expect(screen.getByRole("link", { name: "People" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(
+      screen.getByRole("link", { name: "People and agents" }),
+    ).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Teams" })).not.toHaveAttribute(
       "aria-current",
     );
@@ -82,8 +81,7 @@ describe("console navigation", () => {
         .map((link) => link.textContent),
     ).toEqual([
       "Home",
-      "People",
-      "Agents",
+      "People and agents",
       "Teams",
       "Projects",
       "Permissions",
@@ -93,7 +91,7 @@ describe("console navigation", () => {
       "Settings",
     ]);
     for (const [group, sections] of Object.entries({
-      Members: ["People", "Agents", "Teams"],
+      Members: ["People and agents", "Teams"],
       Organization: [
         "Permissions",
         "Operators",
@@ -130,7 +128,7 @@ describe("console navigation", () => {
       within(nav)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Home", "People", "Agents", "Projects"]);
+    ).toEqual(["Home", "People and agents", "Projects"]);
     // A group with nothing left to list goes with its label.
     expect(
       screen.queryByRole("list", { name: "Organization" }),
@@ -184,20 +182,20 @@ describe("console navigation", () => {
       "aria-current",
       "page",
     );
-    // Control: the section the view lives in is a different entry, and
-    // is current on its own pages.
-    expect(screen.getByRole("link", { name: "Agents" })).not.toHaveAttribute(
-      "aria-current",
-    );
+    // Control: the entry that holds agents' pages is not current on a
+    // view the sidebar lists in its own right.
+    expect(
+      screen.getByRole("link", { name: "People and agents" }),
+    ).not.toHaveAttribute("aria-current");
   });
 
-  it("marks Agents, not Templates, on one agent's page", () => {
+  it("marks People and agents, not Templates, on one agent's page", () => {
+    // An agent is a member (ADR-0113); its page stays under agents/.
     renderNav("/console/orgs/acme/agents/a1");
 
-    expect(screen.getByRole("link", { name: "Agents" })).toHaveAttribute(
-      "aria-current",
-      "location",
-    );
+    expect(
+      screen.getByRole("link", { name: "People and agents" }),
+    ).toHaveAttribute("aria-current", "location");
     expect(screen.getByRole("link", { name: "Templates" })).not.toHaveAttribute(
       "aria-current",
     );

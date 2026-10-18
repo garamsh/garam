@@ -308,7 +308,9 @@ describe("agent page", () => {
     // The control: answered and unclaimed, no report has landed.
     const allowed = await renderAgent();
     expect(
-      screen.getByText("Last report").nextElementSibling,
+      within(screen.getByRole("tabpanel", { name: "Overview" })).getByText(
+        "Last report",
+      ).nextElementSibling,
     ).toHaveTextContent("None");
     allowed.unmount();
 
@@ -323,7 +325,9 @@ describe("agent page", () => {
     await renderAgent();
 
     expect(
-      screen.getByText("Last report").nextElementSibling,
+      within(screen.getByRole("tabpanel", { name: "Overview" })).getByText(
+        "Last report",
+      ).nextElementSibling,
     ).toHaveTextContent("Not checked");
   });
 
@@ -381,5 +385,93 @@ describe("agent page", () => {
 
     expect(screen.getByText("You can't view this agent")).toBeInTheDocument();
     expect(screen.queryByRole("tab")).toBeNull();
+  });
+
+  describe("header", () => {
+    const UNDEFINED = `${API_URL}/orgs/acme/agent-definitions/1c3d5e7f90a2b4c6`;
+
+    /** The value a fact of the header holds. */
+    function headerFact(term: string) {
+      const dt = screen
+        .getAllByText(term, { selector: "dt" })
+        .find((element) => element.closest('[role="tabpanel"]') === null);
+      return dt?.nextElementSibling as HTMLElement;
+    }
+
+    function heldBy(assignment: object | undefined) {
+      server.use(
+        http.get(UNDEFINED, () =>
+          HttpResponse.json(
+            { kind: "not_found", message: "no" },
+            { status: 404 },
+          ),
+        ),
+        http.get(`${API_URL}/orgs/acme/agents`, () =>
+          HttpResponse.json([{ ...reportedAgent, assignment }]),
+        ),
+      );
+    }
+
+    it("states what holds an agent and at which epoch, and why garam holds no definition", async () => {
+      heldBy({
+        assigneeGrn: "grn:acme:default:operator:field-one",
+        operatorGrn: "grn:acme:default:operator:field-one",
+        epoch: 7,
+        since: "2026-10-01T00:00:00Z",
+      });
+
+      await renderAgent("1c3d5e7f90a2b4c6");
+
+      expect(headerFact("Runs on")).toHaveTextContent(
+        "Field cluster one, operator",
+      );
+      expect(headerFact("Epoch")).toHaveTextContent("7");
+      expect(
+        screen.getByText(
+          "Field cluster one's control service created this agent. garam holds what that operator reports, and no definition.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("says a standalone host enrolled an agent its supervisor holds", async () => {
+      heldBy({
+        assigneeGrn: "grn:acme:default:supervisor:build-07",
+        epoch: 2,
+        since: "2026-10-01T00:00:00Z",
+      });
+
+      await renderAgent("1c3d5e7f90a2b4c6");
+
+      expect(headerFact("Runs on")).toHaveTextContent(
+        "build-07, standalone host",
+      );
+      expect(
+        screen.getByText(
+          "A standalone host, build-07, enrolled this agent. garam holds what it reports, and no definition.",
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it("says what holds it is not checked where reports are refused, never nowhere", async () => {
+      server.use(
+        http.get(`${API_URL}/orgs/acme/agents`, () =>
+          HttpResponse.json(
+            { kind: "permission_denied", message: "no" },
+            { status: 403 },
+          ),
+        ),
+      );
+
+      await renderAgent();
+
+      expect(headerFact("Runs on")).toHaveTextContent("Not checked");
+      expect(headerFact("Last report")).toHaveTextContent("Not checked");
+    });
+
+    it("names who defined it", async () => {
+      await renderAgent();
+
+      expect(headerFact("Defined by")).toHaveTextContent("Alice");
+    });
   });
 });

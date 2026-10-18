@@ -31,7 +31,7 @@ test.describe("console navigation prefetch", () => {
       .poll(() => prefetched, { message: "the pointed-at section is" })
       .toContain(`${base}/teams`);
     expect(prefetched, "a section nobody pointed at is not").not.toContain(
-      `${base}/people`,
+      `${base}/members`,
     );
   });
 });

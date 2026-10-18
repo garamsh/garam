@@ -22,13 +22,17 @@ import {
   lookupOrgMembers,
   slugFromGrn,
 } from "@/features/orgs";
-import { checkPermissions } from "@/lib/permission-check";
 
 import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
 import { RefusedRead } from "../../../../_components/refused-read";
 import { DetailPage } from "../../../../_components/templates/detail-page";
+import {
+  YourAccess,
+  accessDecisions,
+  readAccess,
+} from "../../../../_components/your-access";
 import {
   OperatorReportsProvider,
   ProvidedImages,
@@ -112,6 +116,35 @@ export default async function OperatorPage({ params, searchParams }: Params) {
     params,
     searchParams,
   ]);
+  // Started before the page's own reads, so it runs beside them.
+  const access = readAccess(org, [
+    {
+      key: "readReports",
+      label: "Read what it reports running",
+      check: { action: "operator:read" },
+    },
+    {
+      key: "update",
+      label: "Change its name and description",
+      check: { action: "operator:update" },
+    },
+    {
+      key: "register",
+      label: "Register operators and issue a first key",
+      check: { action: "operator:register" },
+    },
+    {
+      key: "reissue",
+      label: "Re-issue its credential and keys",
+      check: { action: "operator:reissue" },
+    },
+    {
+      key: "delegate",
+      label: "Delegate operations to it",
+      check: { action: "operator:delegate" },
+    },
+    { key: "delete", label: "Delete it", check: { action: "operator:delete" } },
+  ]);
   const [
     organization,
     record,
@@ -121,7 +154,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
     operators,
     members,
     hosted,
-    permissions,
+    readings,
   ] = await Promise.all([
     getOrg(org),
     getOperator(org, operator),
@@ -131,15 +164,9 @@ export default async function OperatorPage({ params, searchParams }: Params) {
     lookupOperators(org),
     lookupOrgMembers(org),
     listHostedOperators(org),
-    checkPermissions(org, {
-      register: { action: "operator:register" },
-      reissue: { action: "operator:reissue" },
-      update: { action: "operator:update" },
-      delegate: { action: "operator:delegate" },
-      delete: { action: "operator:delete" },
-      readReports: { action: "operator:read" },
-    }),
+    access,
   ]);
+  const permissions = accessDecisions(readings);
 
   if (
     organization.status === "unreachable" ||
@@ -438,6 +465,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
             : undefined
         }
       />
+      <YourAccess readings={readings} />
     </>
   );
 }

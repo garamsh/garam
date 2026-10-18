@@ -288,11 +288,13 @@ test.describe("teams", () => {
     await page.goto(`/console/orgs/${signedIn.orgSlug}/groups`);
     await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/teams`);
 
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
-    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/people`);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
+    await expect(page).toHaveURL(
+      `/console/orgs/${signedIn.orgSlug}/members?kind=person`,
+    );
     // Presence: the heading carries the list's count after the title.
     await expect(
-      page.getByRole("heading", { level: 1, name: /^People/ }),
+      page.getByRole("heading", { level: 1, name: /^People and agents/ }),
     ).toBeVisible();
   });
 

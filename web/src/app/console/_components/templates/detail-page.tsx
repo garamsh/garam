@@ -10,28 +10,38 @@ export type DetailTab = {
   content: React.ReactNode;
 };
 
+/** One fact the header states beside the name: "Epoch", "7". */
+export type HeaderFact = { term: string; description: React.ReactNode };
+
 /**
- * A page for one object: its header — name, copyable id in mono, status
- * and actions — then its tabs, with the danger zone closing the last
- * tab. The id is never the title: the name is, and the id is what a
- * visitor copies. An inactive tab is hidden rather than unmounted.
+ * A page for one object: its header — its mark, name, copyable id in
+ * mono, status, the facts that say where it stands, and actions — then
+ * its tabs, with the danger zone closing the last tab. The id is never
+ * the title: the name is, and the id is what a visitor copies. An
+ * inactive tab is hidden rather than unmounted.
  */
 export function DetailPage({
+  mark,
   name,
   idLabel,
   id,
   status,
+  facts,
   actions,
   tabs,
   defaultTab,
   dangerZone,
 }: {
+  /** A member's shape (ADR-0113), drawn before the name. */
+  mark?: React.ReactNode;
   name: string;
   /** What the identifier is called, as its copy control names it. */
   idLabel: string;
   id: string;
   /** A `StatusDot` saying where the object stands. */
   status?: React.ReactNode;
+  /** What the header states of the object, in a row under its id. */
+  facts?: readonly HeaderFact[];
   /** The object's actions menu. */
   actions?: React.ReactNode;
   tabs: readonly DetailTab[];
@@ -45,10 +55,21 @@ export function DetailPage({
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {mark}
             <h1 className="truncate text-xl tracking-tight">{name}</h1>
             {status}
           </div>
           <CopyField label={idLabel} value={id} hideLabel />
+          {facts && facts.length > 0 && (
+            <dl className="flex flex-wrap gap-x-6 gap-y-1.5 pt-1">
+              {facts.map((fact) => (
+                <div key={fact.term} className="flex flex-col">
+                  <dt className="text-xs text-muted-foreground">{fact.term}</dt>
+                  <dd>{fact.description}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
         </div>
         {actions && (
           <div className="flex shrink-0 items-center gap-2">{actions}</div>

@@ -8,6 +8,7 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
 import { ArrowDown, ArrowUp, ChevronsUpDown, Search } from "lucide-react";
@@ -35,6 +36,10 @@ const ARIA_SORT = { asc: "ascending", desc: "descending" } as const;
  * caller was refused is not empty and is the page's to say, so it never
  * reaches here as `[]`.
  *
+ * With `selection`, each row carries a checkbox named by
+ * `selection.name`, and `selection.actions` renders above the table
+ * with the rows chosen, for acting on several at once.
+ *
  * Column definitions carry functions, so they are declared in a client
  * module next to the page that uses them.
  */
@@ -47,6 +52,7 @@ export function DataTable<TData>({
   search,
   pageSize = 25,
   density = "default",
+  selection,
 }: {
   /** What the table lists, as its accessible caption. */
   label: string;
@@ -58,9 +64,15 @@ export function DataTable<TData>({
   search?: { placeholder: string };
   pageSize?: number;
   density?: "default" | "compact";
+  selection?: {
+    /** How a row's checkbox is named: "Select scout". */
+    name: (row: TData) => string;
+    actions: (selected: TData[], clear: () => void) => React.ReactNode;
+  };
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [query, setQuery] = useState("");
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   // TanStack Table hands back one mutable instance whose methods read
   // fresh state, so the React Compiler leaves this component unmemoized
   // — which is what it needs, and nothing below is memoized either.
@@ -69,7 +81,9 @@ export function DataTable<TData>({
     data,
     columns,
     getRowId,
-    state: { sorting, globalFilter: query },
+    state: { sorting, globalFilter: query, rowSelection },
+    enableRowSelection: selection !== undefined,
+    onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onGlobalFilterChange: setQuery,
     getCoreRowModel: getCoreRowModel(),
@@ -86,6 +100,8 @@ export function DataTable<TData>({
   const { pageIndex } = table.getState().pagination;
   const first = pageIndex * pageSize + 1;
   const last = Math.min(first + pageSize - 1, matched);
+  const selected = table.getSelectedRowModel().rows.map((row) => row.original);
+  const span = columns.length + (selection ? 1 : 0);
 
   return (
     <div className="flex flex-col gap-3">
@@ -108,12 +124,42 @@ export function DataTable<TData>({
           />
         </div>
       )}
+      {selection && (
+        <div className="flex min-h-8 flex-wrap items-center gap-2">
+          <span
+            className="text-muted-foreground tabular-nums"
+            aria-live="polite"
+          >
+            {selected.length === 0
+              ? "Select rows to act on several at once."
+              : `${selected.length} selected`}
+          </span>
+          {selection.actions(selected, () => setRowSelection({}))}
+        </div>
+      )}
       <div>
         <Table data-density={density}>
           <caption className="sr-only">{label}</caption>
           <TableHeader>
             {table.getHeaderGroups().map((group) => (
               <TableRow key={group.id} className="hover:bg-transparent">
+                {selection && (
+                  <TableHead className="w-10 px-3">
+                    <input
+                      type="checkbox"
+                      aria-label="Select every row shown"
+                      checked={table.getIsAllPageRowsSelected()}
+                      ref={(input) => {
+                        if (input) {
+                          input.indeterminate =
+                            table.getIsSomePageRowsSelected();
+                        }
+                      }}
+                      onChange={table.getToggleAllPageRowsSelectedHandler()}
+                      className="size-4 align-middle accent-primary"
+                    />
+                  </TableHead>
+                )}
                 {group.headers.map((header) => {
                   const sorted = header.column.getIsSorted();
                   return (
@@ -159,7 +205,7 @@ export function DataTable<TData>({
             {rows.length === 0 ? (
               <TableRow className="hover:bg-transparent">
                 <TableCell
-                  colSpan={columns.length}
+                  colSpan={span}
                   className="h-24 text-center text-muted-foreground"
                 >
                   Nothing matches “{query}”.
@@ -167,7 +213,21 @@ export function DataTable<TData>({
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() ? "selected" : undefined}
+                >
+                  {selection && (
+                    <TableCell className="w-10 px-3">
+                      <input
+                        type="checkbox"
+                        aria-label={selection.name(row.original)}
+                        checked={row.getIsSelected()}
+                        onChange={row.getToggleSelectedHandler()}
+                        className="size-4 align-middle accent-primary"
+                      />
+                    </TableCell>
+                  )}
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="px-3">
                       {flexRender(

@@ -237,6 +237,27 @@ on hosted runners.
   guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names
   two files and not three (#899).
 - **Both images a release publishes are built on a pull request.** `images.yml` builds each from what `release.yml` says it is built from and then checks the web one, which is the image a release used to be able to fail on irreversibly: the server image was pushed before the web image was built, and immutability makes the repair the next version (ADR-0039 §Consequences). `release.yml` builds both and pushes neither until both are built (#945), so what a build failure there now costs is the run. Until #850 neither image was built by any check.
+- **A pull request's image builds take their layers from the GitHub
+  Actions cache and log in to ECR Public when a role is named.**
+  `web-e2e`'s `make backend-up` and `images`' `make web-image-e2e` run
+  with `IMAGE_BUILD_CACHE=gha` (`Makefile`), on the runner's Docker
+  switched to the containerd image store by
+  `scripts/enable-containerd-image-store.sh`, so a run reuses the
+  `go mod download` and `go build` layers an earlier run wrote. The
+  bases still come from `public.ecr.aws` (#1337), and a cache does not
+  remove that pull. Every build reads its base's manifest from the
+  registry at `load metadata`. ECR Public caps unauthenticated callers
+  at 500GB of data a month (its service quotas page), an
+  unauthenticated caller is known by its address, and a hosted runner
+  shares its address with other tenants; the refusal reads
+  `toomanyrequests: Data limit exceeded`. Probe #1521 measured both
+  halves: the
+  registry answered one runner's address 429 and the build failed
+  there, and a build on a warm cache failed at `load metadata` once
+  `public.ecr.aws` was unreachable. Both jobs therefore log in to ECR
+  Public as the role the repository variable `GARAM_ECR_PULL_ROLE_ARN`
+  names. Unset, the login is skipped and the pulls stay anonymous, so
+  a 429 can still fail either job (#1519).
 - **No run here reaches a deployment, so `main` is not what a caller
   meets.** `release.yml` publishes two images on a `vX.Y.Z` tag and no
   other workflow pushes one, so a merge to `main` publishes nothing;

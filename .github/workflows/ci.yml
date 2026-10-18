@@ -72,6 +72,12 @@ jobs:
 
   web-e2e:
     runs-on: ubuntu-24.04
+    permissions:
+      # A job's block replaces the workflow's read-all, so the
+      # checkout's read is restated beside the token the ECR Public
+      # login needs.
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: scripts/record-runner-image.sh
@@ -86,5 +92,26 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: make web-install
+      # Reuse the server image's layers from the GitHub Actions cache
+      # (#1519). The runtime action hands the build the cache's URL and
+      # token, which a `run:` step is not given.
+      - run: scripts/enable-containerd-image-store.sh
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      # Pull the public.ecr.aws bases as the role
+      # GARAM_ECR_PULL_ROLE_ARN names, not under the anonymous data
+      # limit a hosted runner's address shares; the layer cache does
+      # not avoid that pull (#1519). Unset, both steps are skipped.
+      # ECR Public authenticates in us-east-1 only.
+      - if: vars.GARAM_ECR_PULL_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.GARAM_ECR_PULL_ROLE_ARN }}
+          aws-region: us-east-1
+      - if: vars.GARAM_ECR_PULL_ROLE_ARN != ''
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+        with:
+          registry-type: public
       - run: make backend-up
+        env:
+          IMAGE_BUILD_CACHE: gha
       - run: make web-e2e

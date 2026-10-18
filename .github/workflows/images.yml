@@ -47,7 +47,28 @@ jobs:
   # tests/image/web.sh reserves a host port through.
   images:
     runs-on: ubuntu-24.04
+    permissions:
+      # A job's block replaces the workflow's read-all, so the
+      # checkout's read is restated beside the token the ECR Public
+      # login below needs.
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: scripts/record-runner-image.sh
+      # The layer cache ci.yml's web-e2e states, one scope per image.
+      - run: scripts/enable-containerd-image-store.sh
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
+      # The ECR Public login ci.yml's web-e2e states.
+      - if: vars.GARAM_ECR_PULL_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.GARAM_ECR_PULL_ROLE_ARN }}
+          aws-region: us-east-1
+      - if: vars.GARAM_ECR_PULL_ROLE_ARN != ''
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+        with:
+          registry-type: public
       - run: make web-image-e2e
+        env:
+          IMAGE_BUILD_CACHE: gha

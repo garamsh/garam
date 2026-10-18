@@ -1656,8 +1656,8 @@ export interface components {
             outcome: "issued" | "refused";
             /** @description An issued answer that repeated an earlier identical request's. */
             replay: boolean;
-            /** @description A refusal's error kind, such as `failed_precondition`; absent when issued. */
-            reason?: string;
+            /** @description The name of a refusal's error kind, the class of the failure and never its text; absent when issued. */
+            refusalKind?: string;
             /** @description An issued certificate's decimal serial. */
             serial?: string;
             /** Format: date-time */

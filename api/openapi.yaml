@@ -3749,9 +3749,11 @@ components:
         replay:
           type: boolean
           description: An issued answer that repeated an earlier identical request's.
-        reason:
+        refusalKind:
           type: string
-          description: A refusal's error kind, such as `failed_precondition`; absent when issued.
+          description: >-
+            The name of a refusal's error kind, the class of the failure
+            and never its text; absent when issued.
         serial:
           type: string
           description: An issued certificate's decimal serial.

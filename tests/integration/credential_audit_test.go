@@ -111,8 +111,8 @@ func TestCredentialAudit_RecordsASupervisorsCertificatesAndItsAgentsTokens(t *te
 	require.Len(t, events, 2)
 	assert.Equal(t, apigen.EventRenew, events[0].Action, "newest first")
 	assert.Equal(t, apigen.EventRefused, events[0].Outcome)
-	require.NotNil(t, events[0].Reason)
-	assert.Equal(t, "failed_precondition", *events[0].Reason)
+	require.NotNil(t, events[0].RefusalKind)
+	assert.Equal(t, "failed_precondition", *events[0].RefusalKind)
 	assert.Nil(t, events[0].Serial, "a refusal names nothing issued")
 	issued := events[1]
 	assert.Equal(t, apigen.EventSupervisorCertificate, issued.Credential)
@@ -150,8 +150,8 @@ func TestCredentialAudit_RecordsASupervisorsCertificatesAndItsAgentsTokens(t *te
 	require.Len(t, events, 2)
 	assert.Equal(t, apigen.EventAgentToken, events[0].Credential)
 	assert.Equal(t, apigen.EventRefused, events[0].Outcome, "the mint naming an audience")
-	require.NotNil(t, events[0].Reason)
-	assert.Equal(t, "invalid_argument", *events[0].Reason)
+	require.NotNil(t, events[0].RefusalKind)
+	assert.Equal(t, "invalid_argument", *events[0].RefusalKind)
 	assert.Equal(t, apigen.EventIssued, events[1].Outcome)
 	require.NotNil(t, events[1].NotAfter)
 	// Postgres keeps microseconds, so the event is the expiry to that.

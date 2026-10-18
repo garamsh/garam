@@ -126,7 +126,7 @@ func credentialEventToAPI(e audit.RecordedCredential) apigen.CredentialEvent {
 		RecordedAt: e.RecordedAt.UTC(),
 	}
 	if reason, ok := e.Reason(); ok {
-		out.Reason = &reason
+		out.RefusalKind = &reason
 	}
 	if serial := e.Serial(); serial != "" {
 		out.Serial = &serial

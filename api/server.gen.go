@@ -884,13 +884,13 @@ type CredentialEvent struct {
 	Credential CredentialEventCredential `json:"credential"`
 
 	// NotAfter Until when the issued credential is accepted; absent for one that does not expire.
-	NotAfter  *time.Time             `json:"notAfter,omitempty"`
-	NotBefore *time.Time             `json:"notBefore,omitempty"`
-	Outcome   CredentialEventOutcome `json:"outcome"`
+	NotAfter   *time.Time             `json:"notAfter,omitempty"`
+	NotBefore  *time.Time             `json:"notBefore,omitempty"`
+	Outcome    CredentialEventOutcome `json:"outcome"`
+	RecordedAt time.Time              `json:"recordedAt"`
 
-	// Reason A refusal's error kind, such as `failed_precondition`; absent when issued.
-	Reason     *string   `json:"reason,omitempty"`
-	RecordedAt time.Time `json:"recordedAt"`
+	// RefusalKind The name of a refusal's error kind, the class of the failure and never its text; absent when issued.
+	RefusalKind *string `json:"refusalKind,omitempty"`
 
 	// Replay An issued answer that repeated an earlier identical request's.
 	Replay bool `json:"replay"`

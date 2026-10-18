@@ -485,6 +485,24 @@ func (e RuntimeState) Valid() bool {
 	}
 }
 
+// Defines values for StandaloneEnrollmentPlacement.
+const (
+	StandaloneEnrollmentPlacementDirect     StandaloneEnrollmentPlacement = "direct"
+	StandaloneEnrollmentPlacementStandalone StandaloneEnrollmentPlacement = "standalone"
+)
+
+// Valid indicates whether the value is a known member of the StandaloneEnrollmentPlacement enum.
+func (e StandaloneEnrollmentPlacement) Valid() bool {
+	switch e {
+	case StandaloneEnrollmentPlacementDirect:
+		return true
+	case StandaloneEnrollmentPlacementStandalone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Activation defines model for Activation.
 type Activation struct {
 	ActivationId string `json:"activationId"`
@@ -846,7 +864,7 @@ type Error struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
 
-	// Reason Which refusal this is, where the kind alone does not say, set only on a route whose contract lists its reasons (ADR-0086) and absent everywhere else. The `agent-cutover.v1` routes set `digest_mismatch`, `attempt_open`, `attempt_ended`, `not_cut_over_eligible` or `reverse_migration_required`; `activateAgent` sets `cutover_required` and nothing else; the `agent-enrollment.v1` routes set `binding_conflict`, `approval_spent`, `superseded` or `direct_placement_gated`. Branch on it only on those routes; a new reason is a new contract value.
+	// Reason Which refusal this is, where the kind alone does not say, set only on a route whose contract lists its reasons (ADR-0086) and absent everywhere else. The `agent-cutover.v1` routes set `digest_mismatch`, `attempt_open`, `attempt_ended`, `not_cut_over_eligible` or `reverse_migration_required`; `activateAgent` sets `cutover_required` and nothing else; the `agent-enrollment.v1` routes set `binding_conflict`, `approval_spent`, `superseded` or `direct_placement_requires_administrator_approval`. Branch on it only on those routes; a new reason is a new contract value.
 	Reason *string `json:"reason,omitempty"`
 }
 
@@ -1180,6 +1198,12 @@ type StandaloneEnrollment struct {
 	IssuerPem *string            `json:"issuerPem,omitempty"`
 	Lineage   openapi_types.UUID `json:"lineage"`
 
+	// Placement Where the host runs its agent's runtime, as the approval named it: started by the supervisor, or attached to (ADR-0111).
+	Placement StandaloneEnrollmentPlacement `json:"placement"`
+
+	// ReplacesActivationId Under a replacement alone: the agent's most recent activation as the replacement found it, current or ended, read under the execution lock the move held. The new supervisor's first `activateAgent` names it as `replacesActivationId`, which garam requires, and a host whose supervisor has never activated has no other way to learn it. A replay answers the same one. Absent for a new agent and for an agent never activated.
+	ReplacesActivationId *openapi_types.UUID `json:"replacesActivationId,omitempty"`
+
 	// ServerRootPem The garam server root, which the host verifies garam's listener against (ADR-0040).
 	ServerRootPem string `json:"serverRootPem"`
 
@@ -1187,6 +1211,9 @@ type StandaloneEnrollment struct {
 	SupervisorCertificatePem *string `json:"supervisorCertificatePem,omitempty"`
 	SupervisorGrn            string  `json:"supervisorGrn"`
 }
+
+// StandaloneEnrollmentPlacement Where the host runs its agent's runtime, as the approval named it: started by the supervisor, or attached to (ADR-0111).
+type StandaloneEnrollmentPlacement string
 
 // StandaloneEnrollmentRequest defines model for StandaloneEnrollmentRequest.
 type StandaloneEnrollmentRequest struct {

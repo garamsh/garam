@@ -3119,6 +3119,20 @@ components:
         (ADR-0100). One fingerprint without the other is 400.
       required: [requestId, hostName, expiresAt, secretSha256]
       properties:
+        placement:
+          type: string
+          enum: [standalone, direct]
+          default: standalone
+          description: >-
+            Where the host runs its agent's runtime. `standalone` is three
+            containers the host's supervisor starts (ADR-0085). `direct`
+            is a runtime already running on the host, which the
+            supervisor attaches to and starts nothing of (ADR-0111). A
+            direct approval binds no key fingerprint and is spent under
+            `standalone-enrollment.v2` alone; one binding both is 400.
+            This approval is the only way garam admits a direct agent:
+            `agent-enrollment.v1` refuses direct placement to an
+            operator.
         requestId:
           type: string
           pattern: '^[A-Za-z0-9._~-]{1,128}$'
@@ -3163,11 +3177,14 @@ components:
           minimum: 1
     AgentEnrollment:
       type: object
-      required: [id, agentGrn, supervisorGrn, hostName, expiresAt, spent]
+      required: [id, agentGrn, supervisorGrn, hostName, expiresAt, spent, placement]
       properties:
         id:
           type: string
           format: uuid
+        placement:
+          type: string
+          enum: [standalone, direct]
         agentGrn:
           type: string
         supervisorGrn:

@@ -364,7 +364,7 @@ func (q *Queries) GetCutoverSource(ctx context.Context, agentGrn string) (AgentD
 }
 
 const getEnrollment = `-- name: GetEnrollment :one
-SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE org_grn = $1 AND id = $2
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem, placement, replaced_activation_id FROM agent_enrollments WHERE org_grn = $1 AND id = $2
 `
 
 type GetEnrollmentParams struct {
@@ -399,6 +399,8 @@ func (q *Queries) GetEnrollment(ctx context.Context, arg GetEnrollmentParams) (A
 		&i.AgentCertificatePem,
 		&i.IssuerPem,
 		&i.ServerRootPem,
+		&i.Placement,
+		&i.ReplacedActivationID,
 	)
 	return i, err
 }
@@ -468,7 +470,7 @@ func (q *Queries) GetEnrollmentApprovalByRequest(ctx context.Context, arg GetEnr
 }
 
 const getEnrollmentByID = `-- name: GetEnrollmentByID :one
-SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE id = $1
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem, placement, replaced_activation_id FROM agent_enrollments WHERE id = $1
 `
 
 func (q *Queries) GetEnrollmentByID(ctx context.Context, id pgtype.UUID) (AgentEnrollment, error) {
@@ -498,12 +500,14 @@ func (q *Queries) GetEnrollmentByID(ctx context.Context, id pgtype.UUID) (AgentE
 		&i.AgentCertificatePem,
 		&i.IssuerPem,
 		&i.ServerRootPem,
+		&i.Placement,
+		&i.ReplacedActivationID,
 	)
 	return i, err
 }
 
 const getEnrollmentByRequest = `-- name: GetEnrollmentByRequest :one
-SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE org_grn = $1 AND request_id = $2
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem, placement, replaced_activation_id FROM agent_enrollments WHERE org_grn = $1 AND request_id = $2
 `
 
 type GetEnrollmentByRequestParams struct {
@@ -538,12 +542,14 @@ func (q *Queries) GetEnrollmentByRequest(ctx context.Context, arg GetEnrollmentB
 		&i.AgentCertificatePem,
 		&i.IssuerPem,
 		&i.ServerRootPem,
+		&i.Placement,
+		&i.ReplacedActivationID,
 	)
 	return i, err
 }
 
 const getEnrollmentBySecret = `-- name: GetEnrollmentBySecret :one
-SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE secret_sha256 = $1
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem, placement, replaced_activation_id FROM agent_enrollments WHERE secret_sha256 = $1
 `
 
 func (q *Queries) GetEnrollmentBySecret(ctx context.Context, secretSha256 []byte) (AgentEnrollment, error) {
@@ -573,6 +579,8 @@ func (q *Queries) GetEnrollmentBySecret(ctx context.Context, secretSha256 []byte
 		&i.AgentCertificatePem,
 		&i.IssuerPem,
 		&i.ServerRootPem,
+		&i.Placement,
+		&i.ReplacedActivationID,
 	)
 	return i, err
 }
@@ -978,12 +986,13 @@ const insertEnrollment = `-- name: InsertEnrollment :execrows
 INSERT INTO agent_enrollments (
     id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256,
     agent_key_sha256, expected_assignee_grn, expected_epoch, request_id,
-    approved_by, secret_sha256, expires_at, created_at
+    approved_by, secret_sha256, expires_at, created_at, placement
 ) VALUES (
     $1, $2, $3, $4,
     $5, $6, $7,
     $8, $9, $10,
-    $11, $12, $13, $14
+    $11, $12, $13, $14,
+    $15
 )
 ON CONFLICT (org_grn, request_id) DO NOTHING
 `
@@ -1003,6 +1012,7 @@ type InsertEnrollmentParams struct {
 	SecretSha256        []byte
 	ExpiresAt           pgtype.Timestamptz
 	CreatedAt           pgtype.Timestamptz
+	Placement           string
 }
 
 // Standalone approvals and supervisors (ADR-0082).
@@ -1022,6 +1032,7 @@ func (q *Queries) InsertEnrollment(ctx context.Context, arg InsertEnrollmentPara
 		arg.SecretSha256,
 		arg.ExpiresAt,
 		arg.CreatedAt,
+		arg.Placement,
 	)
 	if err != nil {
 		return 0, err
@@ -1543,7 +1554,7 @@ func (q *Queries) LockDefinition(ctx context.Context, agentGrn string) (AgentDef
 }
 
 const lockEnrollment = `-- name: LockEnrollment :one
-SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE id = $1 FOR UPDATE
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem, placement, replaced_activation_id FROM agent_enrollments WHERE id = $1 FOR UPDATE
 `
 
 // LockEnrollment is what withdrawing and spending an approval
@@ -1575,6 +1586,8 @@ func (q *Queries) LockEnrollment(ctx context.Context, id pgtype.UUID) (AgentEnro
 		&i.AgentCertificatePem,
 		&i.IssuerPem,
 		&i.ServerRootPem,
+		&i.Placement,
+		&i.ReplacedActivationID,
 	)
 	return i, err
 }
@@ -1912,8 +1925,9 @@ UPDATE agent_enrollments SET
     supervisor_certificate_pem = $5,
     agent_certificate_pem      = $6,
     issuer_pem                 = $7,
-    server_root_pem            = $8
-WHERE id = $9
+    server_root_pem            = $8,
+    replaced_activation_id     = $9
+WHERE id = $10
 `
 
 type SpendEnrollmentParams struct {
@@ -1925,6 +1939,7 @@ type SpendEnrollmentParams struct {
 	AgentCertificatePem      pgtype.Text
 	IssuerPem                pgtype.Text
 	ServerRootPem            pgtype.Text
+	ReplacedActivationID     pgtype.UUID
 	ID                       pgtype.UUID
 }
 
@@ -1938,6 +1953,7 @@ func (q *Queries) SpendEnrollment(ctx context.Context, arg SpendEnrollmentParams
 		arg.AgentCertificatePem,
 		arg.IssuerPem,
 		arg.ServerRootPem,
+		arg.ReplacedActivationID,
 		arg.ID,
 	)
 	return err

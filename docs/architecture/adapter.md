@@ -142,13 +142,14 @@ modes, the two audiences and a recovery against the real listener, and
 
 ## API access after common enrollment
 
-**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+**Built for the direct connector; consuming `agent-enrollment.v1` is
+unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
 sets the target an adapter of a commonly enrolled agent meets. The
 token mode above is built on the existing v2 contracts, which ADR-0102
-leaves unchanged; consuming `agent-enrollment.v1` and the direct
-connector are not.
+leaves unchanged. The direct connector
 [ADR-0111](./adr/0111-a-directly-attached-runtime-is-activated-by-a-one-agent-host-authority-on-the-generation-it-reports-and-its-store-lock.md)
-decides the direct connector, and it is unbuilt.
+decides is that token-mode adapter, run as a host process with no new
+setting or route.
 
 - Managed and direct connectors hold agent API access scoped to the
   current assignee, epoch and lineage; an Operator's long-lived PEM
@@ -178,15 +179,29 @@ decides the direct connector, and it is unbuilt.
 
 `internal/cli/delivery.go`, §Token mode and
 §Activation and runtime status are authoritative for what the adapter
-runs now. Under ADR-0111 a direct adapter runs as a host process in
-the runtime's network namespace. It dials Sherlock at the same pinned
-loopback literal the supervisor reads, and reaches the attach-mode
-supervisor through `GARAM_ADAPTER_CONTROL_SOCKET`, with no new setting
-or route. It sets aside an outbox entry written under an earlier
-`agent_id`, as it does today, and leaves the file in place
-([agents.md](./agents.md) §Common managed and direct enrollment).
-The acceptance sequence is
-in the existing machine-identity migration plan.
+runs now. A direct adapter runs as a host process, under an account
+of its own, in the runtime's network namespace, which on a host
+running Sherlock directly is the host's own.
+
+- **Its settings name the attached supervisor's files.** The person
+  running the host sets `GARAM_ADAPTER_GATEWAY_URL` to the loopback
+  literal the runtime binds and the supervisor reads, and
+  `GARAM_ADAPTER_OUTBOX_DIR` to the store's `outbox/`. The control
+  settings name what the attach-mode supervisor writes into the
+  agent's directory: `control-root.pem`, `placement-token`,
+  `control-token`, `agent-token`, and the socket
+  `control/control.sock` beside the `https://supervisor` control URL
+  ([agents.md](./agents.md) §Attached to a direct runtime). It reads
+  the root once, which the supervisor keeps the same across intents,
+  and each token file before every call.
+- **It forwards nothing written under an earlier ID.** It sets aside
+  every outbox entry whose `agent_id` is not the agent's GRN before
+  any call to garam, and leaves the file in place
+  (`internal/delivery/forward.go` `outboundOf`). A runtime restarted
+  under its GRN leaves such entries behind, and they stay.
+
+The acceptance sequence is in the existing machine-identity migration
+plan.
 
 ## The delivery loop
 
@@ -559,7 +574,7 @@ acceptance with garam and Sherlock is unverified (#1180). This is
 contract, `agent-execution.v1`, and in the token mode
 `agent-execution.v2` (§Token mode), which garam owns and the lifecycle
 authority serves: the Operator control service when managed, the local
-supervisor when standalone.
+supervisor when standalone or direct.
 
 - **The deployment chooses the mode.** Without control settings the
   adapter is legacy, for an agent never cut over: no activation, no

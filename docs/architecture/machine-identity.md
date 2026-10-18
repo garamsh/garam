@@ -239,8 +239,9 @@ refusals, and §machineBearer for the alias.
   operator shows in no metric; §Authentication evidence is what an
   inventory reads. Neither carries a key, assertion or token.
 - The agent's API token, its execution fence and Sherlock's message
-  issuer verification remain distinct. Common enrollment admits
-  managed placement alone,
+  issuer verification remain distinct. `agent-enrollment.v1` admits
+  managed placement alone, and a standalone approval admits direct
+  placement,
   [agents.md](./agents.md) §Common managed and direct enrollment;
   message verification is [messaging.md](./messaging.md).
 

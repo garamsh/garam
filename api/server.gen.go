@@ -34,6 +34,42 @@ func (e AgentDefinitionCutoverStage) Valid() bool {
 	}
 }
 
+// Defines values for AgentEnrollmentPlacement.
+const (
+	AgentEnrollmentPlacementDirect     AgentEnrollmentPlacement = "direct"
+	AgentEnrollmentPlacementStandalone AgentEnrollmentPlacement = "standalone"
+)
+
+// Valid indicates whether the value is a known member of the AgentEnrollmentPlacement enum.
+func (e AgentEnrollmentPlacement) Valid() bool {
+	switch e {
+	case AgentEnrollmentPlacementDirect:
+		return true
+	case AgentEnrollmentPlacementStandalone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentEnrollmentApprovalPlacement.
+const (
+	AgentEnrollmentApprovalPlacementDirect     AgentEnrollmentApprovalPlacement = "direct"
+	AgentEnrollmentApprovalPlacementStandalone AgentEnrollmentApprovalPlacement = "standalone"
+)
+
+// Valid indicates whether the value is a known member of the AgentEnrollmentApprovalPlacement enum.
+func (e AgentEnrollmentApprovalPlacement) Valid() bool {
+	switch e {
+	case AgentEnrollmentApprovalPlacementDirect:
+		return true
+	case AgentEnrollmentApprovalPlacementStandalone:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentProvisioningState.
 const (
 	AgentProvisioningStateFailed      AgentProvisioningState = "failed"
@@ -434,15 +470,19 @@ type AgentDefinitionPatch struct {
 
 // AgentEnrollment defines model for AgentEnrollment.
 type AgentEnrollment struct {
-	AgentGrn  string             `json:"agentGrn"`
-	ExpiresAt time.Time          `json:"expiresAt"`
-	HostName  string             `json:"hostName"`
-	Id        openapi_types.UUID `json:"id"`
+	AgentGrn  string                   `json:"agentGrn"`
+	ExpiresAt time.Time                `json:"expiresAt"`
+	HostName  string                   `json:"hostName"`
+	Id        openapi_types.UUID       `json:"id"`
+	Placement AgentEnrollmentPlacement `json:"placement"`
 
 	// Spent Whether the host has enrolled with it.
 	Spent         bool   `json:"spent"`
 	SupervisorGrn string `json:"supervisorGrn"`
 }
+
+// AgentEnrollmentPlacement defines model for AgentEnrollment.Placement.
+type AgentEnrollmentPlacement string
 
 // AgentEnrollmentApproval An approval binds the host's two key fingerprints, or neither. With both, the host enrolls under `standalone-enrollment.v1` and is signed a certificate over each key; with neither, it enrolls under `standalone-enrollment.v2` and is answered a supervisor credential. Each contract refuses the other's approval (ADR-0100). One fingerprint without the other is 400.
 type AgentEnrollmentApproval struct {
@@ -454,6 +494,9 @@ type AgentEnrollmentApproval struct {
 
 	// HostName What the organization calls the host; trimmed, 1 to 100 characters.
 	HostName string `json:"hostName"`
+
+	// Placement Where the host runs its agent's runtime. `standalone` is three containers the host's supervisor starts (ADR-0085). `direct` is a runtime already running on the host, which the supervisor attaches to and starts nothing of (ADR-0111). A direct approval binds no key fingerprint and is spent under `standalone-enrollment.v2` alone; one binding both is 400. This approval is the only way garam admits a direct agent: `agent-enrollment.v1` refuses direct placement to an operator.
+	Placement *AgentEnrollmentApprovalPlacement `json:"placement,omitempty"`
 
 	// Replaces The assignment a replacement replaces, exactly as it stands when approved.
 	Replaces *AgentEnrollmentReplacement `json:"replaces,omitempty"`
@@ -467,6 +510,9 @@ type AgentEnrollmentApproval struct {
 	// SupervisorKeySha256 SHA-256 of the supervisor key's SubjectPublicKeyInfo DER, for a host enrolling under `standalone-enrollment.v1`.
 	SupervisorKeySha256 *string `json:"supervisorKeySha256,omitempty"`
 }
+
+// AgentEnrollmentApprovalPlacement Where the host runs its agent's runtime. `standalone` is three containers the host's supervisor starts (ADR-0085). `direct` is a runtime already running on the host, which the supervisor attaches to and starts nothing of (ADR-0111). A direct approval binds no key fingerprint and is spent under `standalone-enrollment.v2` alone; one binding both is 400. This approval is the only way garam admits a direct agent: `agent-enrollment.v1` refuses direct placement to an operator.
+type AgentEnrollmentApprovalPlacement string
 
 // AgentEnrollmentReplacement The assignment a replacement replaces, exactly as it stands when approved.
 type AgentEnrollmentReplacement struct {

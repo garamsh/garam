@@ -161,12 +161,14 @@ type HostKeys struct {
 }
 
 // ApprovalInput is an administrator's approval as received. Every
-// value but the actor, the organization and the expiry is one the host
-// generated before asking; Keys is nil for a host enrolling under
-// standalone-enrollment.v2, and Replaces is nil for a new agent.
+// value but the actor, the organization, the expiry and the placement
+// is one the host generated before asking; Keys is nil for a host
+// enrolling under standalone-enrollment.v2, and Replaces is nil for a
+// new agent. Placement is PlacementStandalone or PlacementDirect.
 type ApprovalInput struct {
 	Actor        grn.GRN
 	Org          grn.GRN
+	Placement    Placement
 	RequestID    RequestID
 	HostName     Name
 	ExpiresAt    time.Time
@@ -180,6 +182,7 @@ type ApprovalInput struct {
 type Enrollment struct {
 	ID           EnrollmentID
 	Org          grn.GRN
+	Placement    Placement
 	Agent        grn.GRN
 	Supervisor   grn.GRN
 	HostName     Name
@@ -207,6 +210,7 @@ type SpentEnrollment struct {
 // both before the approval. Certificates is nil for an enrollment
 // under standalone-enrollment.v2, which answers Credential instead.
 type EnrollmentResult struct {
+	Placement    Placement
 	Agent        grn.GRN
 	Supervisor   grn.GRN
 	Epoch        int
@@ -216,6 +220,10 @@ type EnrollmentResult struct {
 	// that issued it alone: garam keeps its hash.
 	Credential    string
 	ServerRootPEM string
+	// ReplacesActivation is the agent's most recent activation when a
+	// replacement moved it, which the new supervisor's first
+	// activation names; nil for a new agent and one never activated.
+	ReplacesActivation *ActivationID
 }
 
 // EnrollmentCertificates are what a standalone-enrollment.v1 spending

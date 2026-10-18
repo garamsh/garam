@@ -26,7 +26,7 @@ var admissionReasons = []struct {
 	{agent.ErrApprovalBindingConflict, "binding_conflict"},
 	{agent.ErrApprovalSpent, "approval_spent"},
 	{agent.ErrAdmissionSuperseded, "superseded"},
-	{agent.ErrDirectPlacementGated, "direct_placement_gated"},
+	{agent.ErrDirectPlacementRequiresAdministratorApproval, "direct_placement_requires_administrator_approval"},
 }
 
 // PrepareAgentEnrollment records the hosted control service's approval

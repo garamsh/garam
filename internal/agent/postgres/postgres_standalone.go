@@ -23,6 +23,7 @@ func (s *Store) Approve(ctx context.Context, e agent.Enrollment) (*agent.Enrollm
 	params := db.InsertEnrollmentParams{
 		ID:            pgUUID(uuid.UUID(e.ID)),
 		OrgGrn:        e.Org.String(),
+		Placement:     string(e.Placement),
 		AgentGrn:      e.Agent.String(),
 		SupervisorGrn: e.Supervisor.String(),
 		HostName:      string(e.HostName),
@@ -170,6 +171,12 @@ func (s *Store) enroll(ctx context.Context, req agent.EnrollmentRequest) (*agent
 		spending := db.SpendEnrollmentParams{
 			ID: id, ConsumedAt: now, RequestSha256: req.RequestSHA256[:],
 			Epoch: pgtype.Int4{Int32: epoch, Valid: true}, Lineage: lineage,
+		}
+		if row.ExpectedAssigneeGrn.Valid {
+			// The anchor the new supervisor's first activation names,
+			// read under the execution lock the move holds: ending the
+			// activation does not move it.
+			spending.ReplacedActivationID = exec.LatestActivationID
 		}
 		if signs {
 			if err := q.InsertCredential(ctx, db.InsertCredentialParams{
@@ -477,8 +484,12 @@ func enrollmentOf(row db.AgentEnrollment) (*agent.Enrollment, error) {
 	if err != nil {
 		return nil, corrupt(err)
 	}
+	placement, err := agent.ParsePlacement(row.Placement)
+	if err != nil {
+		return nil, corrupt(err)
+	}
 	e := &agent.Enrollment{
-		ID: agent.EnrollmentID(row.ID.Bytes), Org: org, Agent: agentGRN, Supervisor: supervisor,
+		ID: agent.EnrollmentID(row.ID.Bytes), Org: org, Placement: placement, Agent: agentGRN, Supervisor: supervisor,
 		HostName: agent.Name(row.HostName), RequestID: agent.RequestID(row.RequestID),
 		SecretSHA256: [32]byte(row.SecretSha256), ApprovedBy: approver,
 		ExpiresAt: row.ExpiresAt.Time, CreatedAt: row.CreatedAt.Time, Withdrawn: row.WithdrawnAt.Valid,
@@ -515,8 +526,17 @@ func resultOf(row db.AgentEnrollment) (*agent.EnrollmentResult, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "stored enrollment supervisor", errorx.KindInternal)
 	}
+	placement, err := agent.ParsePlacement(row.Placement)
+	if err != nil {
+		return nil, errorx.Wrap(err, "stored enrollment placement", errorx.KindInternal)
+	}
 	out := &agent.EnrollmentResult{
-		Agent: agentGRN, Supervisor: supervisor, Epoch: int(row.Epoch.Int32), Lineage: agent.Lineage(row.Lineage.Bytes),
+		Placement: placement, Agent: agentGRN, Supervisor: supervisor, Epoch: int(row.Epoch.Int32),
+		Lineage: agent.Lineage(row.Lineage.Bytes),
+	}
+	if row.ReplacedActivationID.Valid {
+		replaced := agent.ActivationID(row.ReplacedActivationID.Bytes)
+		out.ReplacesActivation = &replaced
 	}
 	if row.SupervisorCertificatePem.Valid {
 		out.Certificates = &agent.EnrollmentCertificates{

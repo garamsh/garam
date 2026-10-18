@@ -231,7 +231,7 @@ func TestAgentEnrollment_ModelledPlacementsRefuseByName(t *testing.T) {
 
 	got := s.prepare(t, bindingBody("enrol-1", "direct", s.controller, ref, nil))
 	assert.Equal(t, http.StatusConflict, got.status, got.body)
-	assert.Equal(t, "direct_placement_gated", reasonOf(t, got))
+	assert.Equal(t, "direct_placement_requires_administrator_approval", reasonOf(t, got))
 
 	got = s.prepare(t, bindingBody("enrol-1", "managed", s.controller, ref, map[string]string{
 		"agent": s.agent.String(), "expectedAssignee": s.controller.String(), "expectedEpoch": "1",
@@ -244,7 +244,7 @@ func TestAgentEnrollment_ModelledPlacementsRefuseByName(t *testing.T) {
 	approval := s.prepared(t, body)
 	got = s.admit(t, approval, bindingBody("enrol-1", "direct", s.controller, ref, nil))
 	assert.Equal(t, http.StatusConflict, got.status, got.body)
-	assert.Equal(t, "direct_placement_gated", reasonOf(t, got))
+	assert.Equal(t, "direct_placement_requires_administrator_approval", reasonOf(t, got))
 	got = s.admit(t, approval, body)
 	assert.Equal(t, http.StatusCreated, got.status, "control: the managed binding admits: %s", got.body)
 }

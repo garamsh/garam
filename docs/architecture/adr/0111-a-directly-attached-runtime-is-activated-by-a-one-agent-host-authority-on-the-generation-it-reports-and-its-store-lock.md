@@ -437,3 +437,36 @@ directory, written owner-only by the supervisor.
 - A non-Sherlock listener on the loopback port answering a `/status`
   that the supervisor accepted. That would mean C1's trust boundary is
   wrong for direct hosts, and C2 or `/proc/locks` is owed.
+
+## Errata
+
+- 2026-10-18 — §Decision says "Direct placement is admitted under
+  `agent-enrollment.v1`", and §Consequences counts lifting
+  `direct_placement_gated` among the implementation's three things.
+  Both are wrong about which wire carries the admission. At
+  `85da7bb11bc0b8613eab2b6e5a87659f0a40528d`, where this record merged,
+  `agent-enrollment.v1` serves an operator's token alone and requires
+  an operator as its assignee (`operates` and `authorizeCreation` in
+  `internal/agent`). A supervisor registration cannot exist apart from
+  the standalone approval that spends it: `agent_supervisors.enrollment_id`
+  is `NOT NULL` and references `agent_enrollments`, and that spending
+  is what calls `admit` (`migrations/000031`,
+  `internal/agent/postgres/postgres_standalone.go`). The administrator's
+  `agent:enroll` approval naming the host and a supervisor
+  registration, which §Decision describes, is therefore the standalone
+  approval spent under `standalone-enrollment.v2`. It now records
+  `placement: direct` (`migrations/000053`), and `agent-enrollment.v1`
+  refuses direct placement with the permanent reason
+  `direct_placement_requires_administrator_approval` instead of the
+  gate. The decision stands: the assignee is an ADR-0082 supervisor
+  registration for the one agent, admitted through `admit`.
+- 2026-10-18 — §Cases' "Replacement to another authority" row rests on
+  the new authority's first activation succeeding once the runtime
+  reports the new epoch. At `85da7bb11bc0b8613eab2b6e5a87659f0a40528d`
+  it could not, for an agent that had ever been active, under either
+  placement. `activateAgent` requires `replacesActivationId` to equal
+  the agent's most recent activation, and nothing told a supervisor
+  with a fresh record what that was. The spending of a replacement now
+  records that activation under the execution lock and answers it as
+  `replacesActivationId`, and the host seeds its supervisor's record
+  with it. The row's recommendation stands.

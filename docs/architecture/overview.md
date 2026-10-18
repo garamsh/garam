@@ -113,7 +113,10 @@ collaborate on a shared plan.
   holds the rest.
 - An administrator **approving a standalone host** for one agent,
   under `/orgs/{org}/agent-enrollments`, by the hash of the host's
-  bootstrap secret and the fingerprints of its two keys, and revoking
+  bootstrap secret and the fingerprints of its two keys, or of none
+  for a v2 host, and the placement its supervisor runs the agent
+  under, its own three containers or a runtime the host runs
+  directly (ADR-0111), and revoking
   the supervisor that approval registered under
   `/orgs/{org}/agent-supervisors` (ADR-0082). The host spends the
   approval on the machine listener for its supervisor's and its

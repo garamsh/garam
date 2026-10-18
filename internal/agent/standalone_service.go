@@ -55,6 +55,15 @@ func (s *standaloneService) Approve(ctx context.Context, in ApprovalInput) (*Enr
 	if !in.ExpiresAt.After(now) || in.ExpiresAt.After(now.Add(MaxEnrollmentLifetime)) {
 		return nil, false, errorx.New(errorx.KindInvalidArgument, "expiresAt must be in the next 24 hours")
 	}
+	switch {
+	case in.Placement != PlacementStandalone && in.Placement != PlacementDirect:
+		return nil, false, errorx.New(errorx.KindInvalidArgument, "a host's placement is standalone or direct")
+	case in.Placement == PlacementDirect && in.Keys != nil:
+		// The attach mode hands the adapter tokens and copies no
+		// certificate anywhere (ADR-0111).
+		return nil, false, errorx.New(errorx.KindInvalidArgument,
+			"a direct host enrolls under "+CredentialStandaloneContractVersion+" and binds no key")
+	}
 	object := in.Org
 	if r := in.Replaces; r != nil {
 		if err := validateOwnership(r.Agent, in.Org); err != nil {
@@ -81,7 +90,7 @@ func (s *standaloneService) Approve(ctx context.Context, in ApprovalInput) (*Enr
 		return nil, false, err
 	}
 	e := Enrollment{
-		ID: EnrollmentID(uuid.New()), Org: in.Org, Agent: agentGRN, Supervisor: supervisorGRN,
+		ID: EnrollmentID(uuid.New()), Org: in.Org, Placement: in.Placement, Agent: agentGRN, Supervisor: supervisorGRN,
 		HostName: in.HostName, RequestID: in.RequestID, SecretSHA256: in.SecretSHA256,
 		Keys: in.Keys, Replaces: in.Replaces,
 		ApprovedBy: in.Actor, ExpiresAt: in.ExpiresAt.UTC().Truncate(time.Microsecond),
@@ -105,7 +114,7 @@ func (s *standaloneService) Approve(ctx context.Context, in ApprovalInput) (*Enr
 // minted and the approver are not part of it.
 func (e *Enrollment) approves(retry Enrollment) bool {
 	same := e.SecretSHA256 == retry.SecretSHA256 && sameKeys(e.Keys, retry.Keys) &&
-		e.HostName == retry.HostName && e.ExpiresAt.Equal(retry.ExpiresAt)
+		e.HostName == retry.HostName && e.ExpiresAt.Equal(retry.ExpiresAt) && e.Placement == retry.Placement
 	switch {
 	case e.Replaces == nil && retry.Replaces == nil:
 		return same

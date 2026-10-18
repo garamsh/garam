@@ -96,6 +96,8 @@ type AgentEnrollment struct {
 	AgentCertificatePem      pgtype.Text
 	IssuerPem                pgtype.Text
 	ServerRootPem            pgtype.Text
+	Placement                string
+	ReplacedActivationID     pgtype.UUID
 }
 
 type AgentEnrollmentApproval struct {

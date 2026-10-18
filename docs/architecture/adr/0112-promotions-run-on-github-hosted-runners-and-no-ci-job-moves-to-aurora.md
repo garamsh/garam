@@ -61,17 +61,28 @@ ADR-0105's other options were measured there and are not taken:
   run for two jobs and a local run for four. It is not what the owner
   asked for.
 
-**Hosted minutes are refused today.** Promotion #1508, at
-`d447cb60f99a34e61832bccf617e2936b784bbd3`, started runs 39084547388
-(`images.yml`) and 39084547402 (`ci.yml`). All four jobs, `images`,
-`ci`, `e2e` and `web-e2e`, show `steps=0`, no runner and the label
-`ubuntu-24.04`
-(`gh api repos/garamsh/garam/actions/runs/<run>/jobs`). Each job's
-check run carries the annotation "The job was not started because
-recent account payments have failed or your spending limit needs to be
-increased"
-(`gh api repos/garamsh/garam/check-runs/<job>/annotations`). Billing
-is the owner's.
+**Hosted minutes were refused, and that ended on 2026-10-18.**
+
+- **The refusal.** Promotion #1508, at
+  `d447cb60f99a34e61832bccf617e2936b784bbd3`, started runs 39084547388
+  (`images.yml`) and 39084547402 (`ci.yml`) at 2026-10-18T00:55:14Z.
+  In their first attempt all four jobs, `images`, `ci`, `e2e` and
+  `web-e2e`, show `steps=0`, no runner and the label `ubuntu-24.04`
+  (`gh api repos/garamsh/garam/actions/runs/<run>/attempts/1/jobs`).
+  Each job's check run carries the annotation "The job was not started
+  because recent account payments have failed or your spending limit
+  needs to be increased"
+  (`gh api repos/garamsh/garam/check-runs/<job>/annotations`).
+- **What ended it.** The repository went public on 2026-10-18
+  (`gh api repos/garamsh/garam --jq .visibility` answers `public`).
+  Attempt 2 of run 39084547402, at the same head and started at
+  2026-10-18T07:00:37Z, ran each of its three jobs on a GitHub-hosted
+  runner (`gh api repos/garamsh/garam/actions/runs/39084547402/attempts/2/jobs`):
+  `ci` took 13 steps and passed, `e2e` took 8 and `web-e2e` took 12.
+  `e2e` failed in `make db-up integration e2e` and `web-e2e` in
+  `make backend-up`, each on what its own steps ran. Attempt 2 of run
+  39084547388 ran `images` in 6 steps and passed. Those failures are
+  verdicts on the head, not undispatched jobs.
 
 ## Decision
 
@@ -89,46 +100,50 @@ No workflow, `Makefile` or code changes under this decision.
 
 ## The AGENTS.md exception
 
-Until hosted minutes return, a promotion's runs start nothing, and
 `AGENTS.md` §Roles' "A run that was never dispatched is an absent
-check" applies to it. Its state "The run started nothing" is read off
-each run: every job at `steps=0`, and the annotation naming the
-account rather than the diff, as #1508's runs show. The PM merges a
-promotion on the local run that clause describes, and owes its (iv)
-on each one.
+check" admits a merge on a local run in two states. This decision
+leaves one reaching a promotion and the other reaching `dev`.
 
-That state ends on the first promotion run whose jobs start. From that
-run on, the hosted run is the promotion's verdict, and the exception
-no longer reaches base `main`. Restoring the minutes is the owner's,
-and no change in this repository ends the state.
+- **"The run started nothing" no longer applies to a promotion.** It
+  held for #1508's first attempts, every job at `steps=0` with the
+  annotation naming the account. It ended with attempt 2 of run
+  39084547402, whose jobs started. A promotion's hosted run is now its
+  verdict, and a failed job there is a failure on the diff.
+- **"No workflow watches the base" is unchanged.** `ci.yml` and
+  `images.yml` keep `branches: [main]`, so a pull request into `dev`
+  starts nothing and rests on the PM's local run.
 
-"No workflow watches the base" is unchanged for pull requests into
-`dev`.
+Should hosted runs stop starting again, the first state returns. It is
+read off the run, `steps=0` and the annotation, as before, and not
+assumed from this record.
 
 ## Consequences
 
 - The pipeline keeps one shape. Every job runs the entry points it
   runs today, so `docs/convention/ci.md` §Core principle holds without
   a CI-only invocation, and no job container or runner record changes.
-- Until the minutes return, no forge run verifies anything here.
-  Every promotion rests on the PM's local run, and a `v*` tag
-  publishes nothing, because `release.yml`'s jobs start nothing either.
-- When the minutes return, the promotion's runs verify it on their
-  own, with no change in this repository.
+- A promotion is verified on the forge again, with no change in this
+  repository: the workflows already named `ubuntu-24.04`. Its jobs'
+  failures, such as attempt 2's `e2e` and `web-e2e`, are fixed on
+  `dev` under `docs/convention/git.md` §Promotion rather than merged
+  around.
+- A `v*` tag starts `release.yml` on hosted runners, whose jobs can
+  now start as well.
 - garam's gate does not depend on aurora's runners or queue behind
   other repositories on aurora's three slots.
-- Hosted minutes cost the account. That cost is the owner's to accept,
-  and this decision changes no visibility or billing setting.
+- The hosted runs depend on the account's visibility and billing,
+  which are the owner's. This decision changes neither.
 
 ## Signs the decision was wrong
 
-- Hosted minutes stay refused for long enough that every promotion
-  rests on the local exception indefinitely. The forge then verifies
-  nothing, and a self-hosted option is the one left.
+- Hosted runs stop starting again, through a visibility or billing
+  change, for long enough that promotions rest on the local exception
+  indefinitely. The forge then verifies nothing, and a self-hosted
+  option is the one left.
 - A hosted job fails where the same entry point passes locally, on a
   property of the runner image the job cannot control.
-- The owner restores billing and the hosted runs' cost becomes the
-  reason to move jobs off them.
+- What the hosted runs cost the account becomes the reason to move
+  jobs off them.
 
 ## Rejected alternatives
 
@@ -136,6 +151,6 @@ and no change in this repository ends the state.
   declined it (garamsh/aurora#642, not planned).
 - **A. Every job on `aurora`, adapted.** See §Context.
 - **B. Split between `aurora` and hosted runners.** See §Context.
-- **D. The local gate as the standing answer.** It holds today because
-  billing refuses the hosted runs, not by choice. The decision keeps
-  the workflows in place so they take over the moment the runs start.
+- **D. The local gate as the standing answer.** It held for
+  promotions only while billing refused the hosted runs. Once the runs
+  started, it would mean ignoring a forge run that exists.

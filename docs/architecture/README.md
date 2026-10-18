@@ -202,13 +202,14 @@ Every job in `ci.yml`, `images.yml` and `release.yml` runs on
 GitHub-hosted `ubuntu-24.04`, and none runs on aurora's runners
 ([ADR-0112](./adr/0112-promotions-run-on-github-hosted-runners-and-no-ci-job-moves-to-aurora.md)).
 A pull request into `dev` is verified by the PM's local run, and a
-promotion by those workflows. Hosted minutes are refused by the
-account's billing today: each job of promotion #1508's runs
-39084547388 and 39084547402 shows `steps=0` with an annotation naming
-the account's payments. Until a promotion run's jobs start, a
-promotion merges under the exception in `AGENTS.md` §Roles, "A run
-that was never dispatched is an absent check", and a `v*` tag
-publishes nothing.
+promotion by those workflows, whose run is its verdict. The exception
+in `AGENTS.md` §Roles, "A run that was never dispatched is an absent
+check", no longer reaches a promotion. It did while the account's
+billing refused hosted minutes, when each job of promotion #1508's
+runs 39084547388 and 39084547402 showed `steps=0` with an annotation
+naming the account's payments. That ended once the repository went
+public on 2026-10-18: attempt 2 of run 39084547402 started its jobs
+on hosted runners.
 
 - `.github/workflows/ci.yml` triggers on `pull_request` into `main` and
   on nothing else; `.github/workflows/images.yml` on the same event and
@@ -859,7 +860,7 @@ ADRs:
 - [0112](./adr/0112-promotions-run-on-github-hosted-runners-and-no-ci-job-moves-to-aurora.md)
   — a pull request into `dev` is verified by the PM's local run and a
   promotion by the GitHub workflows on hosted `ubuntu-24.04`; no job
-  runs on aurora's runners, now or as a planned target. While the
-  account's billing refuses hosted minutes, a promotion merges under
-  `AGENTS.md` §Roles' never-dispatched exception, until the first
-  promotion run whose jobs start; supersedes 0105
+  runs on aurora's runners, now or as a planned target. The
+  never-dispatched exception in `AGENTS.md` §Roles reached a promotion
+  only while billing refused hosted minutes, which ended with attempt
+  2 of run 39084547402; supersedes 0105

@@ -97,10 +97,30 @@ func pool(t *testing.T) *pgxpool.Pool {
 			require.NoError(t, err)
 		}
 	})
-	p, err := pgxpool.New(context.Background(), url)
+	p := connect(t, url, nil)
+	truncate(t, p)
+	return p
+}
+
+// poolConns is every suite pool's MaxConns. pgxpool's default is
+// max(4, NumCPU), so a test holding more sessions than a small runner
+// has cores waited on its own sessions there and passed elsewhere
+// (#1518). The widest test holds ten at once.
+const poolConns = 16
+
+// connect opens a pool of poolConns connections on url, after tune
+// adjusts its configuration when given, and closes it with the test.
+func connect(t *testing.T, url string, tune func(*pgxpool.Config)) *pgxpool.Pool {
+	t.Helper()
+	cfg, err := pgxpool.ParseConfig(url)
+	require.NoError(t, err)
+	cfg.MaxConns = poolConns
+	if tune != nil {
+		tune(cfg)
+	}
+	p, err := pgxpool.NewWithConfig(context.Background(), cfg)
 	require.NoError(t, err)
 	t.Cleanup(p.Close)
-	truncate(t, p)
 	return p
 }
 

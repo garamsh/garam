@@ -27,14 +27,10 @@ import (
 // rests on.
 func indexScanPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	cfg, err := pgxpool.ParseConfig(os.Getenv("GARAM_TEST_DATABASE_URL"))
-	require.NoError(t, err)
-	cfg.ConnConfig.RuntimeParams["enable_seqscan"] = "off"
-	cfg.ConnConfig.RuntimeParams["enable_bitmapscan"] = "off"
-	p, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	require.NoError(t, err)
-	t.Cleanup(p.Close)
-	return p
+	return connect(t, os.Getenv("GARAM_TEST_DATABASE_URL"), func(cfg *pgxpool.Config) {
+		cfg.ConnConfig.RuntimeParams["enable_seqscan"] = "off"
+		cfg.ConnConfig.RuntimeParams["enable_bitmapscan"] = "off"
+	})
 }
 
 // requirePlanUses fails unless p plans query, a token delete, as a

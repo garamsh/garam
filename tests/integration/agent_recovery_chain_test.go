@@ -63,9 +63,7 @@ func TestMigration000036_KeepsEveryRecoveryAndRefusesOneWithoutItsChain(t *testi
 	require.NoError(t, err)
 	t.Cleanup(func() { _, _ = m.Close() })
 	require.NoError(t, m.Migrate(35))
-	sp, err := pgxpool.New(ctx, databaseURL)
-	require.NoError(t, err)
-	t.Cleanup(sp.Close)
+	sp := connect(t, databaseURL, nil)
 	const (
 		orgGRN   = "grn:root:default:org:rcv"
 		agentGRN = "grn:rcv:default:agent:9f2ac1b40d8e7a35"

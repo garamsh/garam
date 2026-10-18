@@ -10,6 +10,9 @@ name: release
 on:
   push:
     tags: ["v*"]
+  # PROBE #1512: never merged. Starts `release` on the probe pull request.
+  pull_request:
+    branches: [main]
 
 permissions: read-all
 
@@ -23,6 +26,8 @@ permissions: read-all
 
 jobs:
   images:
+    # PROBE #1512: nothing is built or pushed from the probe.
+    if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     permissions:
       # A job's block replaces the workflow's rather than adding to it,
@@ -156,15 +161,14 @@ jobs:
   # container; `images` above needs a Docker daemon the job pod lacks,
   # so it stays hosted (ADR-0112).
   release:
-    needs: images
     runs-on: aurora
     container:
       # The pin ci.yml's `ci` job names, moved by the PM under AGENTS.md
       # §Roles: no bot proposes a bump and no scheduled review is named.
       image: docker.io/library/buildpack-deps:trixie@sha256:ffbfa3ee92287a5fa41c03118bfe9a75c095838bccbe1173322854b8f2387116
     permissions:
-      # The release is the only thing this workflow writes back.
-      contents: write
+      # PROBE #1512: read only, so nothing is written back.
+      contents: read
     steps:
       # Checked out only for scripts/record-runner-image.sh, so the
       # job's write token is kept out of .git/config: nothing here
@@ -174,14 +178,4 @@ jobs:
           persist-credentials: false
       - run: scripts/record-runner-image.sh
 
-      # ADR-0039: the release records each image's digest alongside its
-      # tag, so a consumer that would rather pin a digest reads one here
-      # instead of discovering it.
-      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          body: |
-            ${{ needs.images.outputs.registry }}/garam/garam-server:${{ needs.images.outputs.version }}
-            ${{ needs.images.outputs.server-digest }}
-
-            ${{ needs.images.outputs.registry }}/garam/garam-web:${{ needs.images.outputs.version }}
-            ${{ needs.images.outputs.web-digest }}
+      # PROBE #1512: the publishing step is removed from the probe.

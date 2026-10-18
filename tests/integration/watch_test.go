@@ -21,6 +21,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/watch"
+	watchpg "github.com/garamsh/garam/internal/watch/postgres"
 )
 
 // watchRows is how many rows the watch table holds, lapsed ones
@@ -64,7 +65,7 @@ func TestWatchSurface_AWatchInOneProcessIsCountedAndFedByAnother(t *testing.T) {
 	// The process serving browsers: its own watch service over the same
 	// database, delivering what any process announces to the streams it
 	// holds. Nothing here shares memory with the listener above.
-	browser, err := watch.NewService(watch.NewPostgresStore(p), watch.NewPostgresRelay(p), watch.Config{})
+	browser, err := watch.NewService(watchpg.New(p), watchpg.NewRelay(p), watch.Config{})
 	require.NoError(t, err)
 	receiving, stopReceiving := context.WithCancel(ctx)
 	t.Cleanup(stopReceiving)
@@ -122,7 +123,7 @@ func TestWatchSurface_AWatchInOneProcessIsCountedAndFedByAnother(t *testing.T) {
 func TestWatchStore_ALapsedWatchIsNotCountedAndIsSweptOnTheNextOpen(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	store := watch.NewPostgresStore(p)
+	store := watchpg.New(p)
 	watched := scopedGRN("acme", agent.ServiceType, "0a1b2c3d4e5f6071")
 	other := scopedGRN("acme", agent.ServiceType, "9f8e7d6c5b4a3021")
 
@@ -162,7 +163,7 @@ func TestWatchStore_ALapsedWatchIsNotCountedAndIsSweptOnTheNextOpen(t *testing.T
 func TestWatchStore_ClassifiesAWatchOnSomethingThatIsNotAnAgent(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	store := watch.NewPostgresStore(p)
+	store := watchpg.New(p)
 
 	require.NoError(t, store.Open(ctx, "watch-on-an-agent", scopedGRN("acme", agent.ServiceType, "0a1b2c3d4e5f6071"), time.Minute),
 		"a watch on an agent opens")
@@ -181,7 +182,7 @@ func TestWatchStore_ClassifiesAWatchOnSomethingThatIsNotAnAgent(t *testing.T) {
 // the body.
 func TestWatchRelay_RefusesAnEventLargerThanOneAnnouncementCarries(t *testing.T) {
 	ctx := context.Background()
-	relay := watch.NewPostgresRelay(pool(t))
+	relay := watchpg.NewRelay(pool(t))
 	watched := scopedGRN("acme", agent.ServiceType, "0a1b2c3d4e5f6071")
 
 	ordinary, err := watch.NewEvent("turn.output", strings.Repeat("a", watch.MaxBodyLength))

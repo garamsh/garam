@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/watch"
+	watchpg "github.com/garamsh/garam/internal/watch/postgres"
 )
 
 // watchRelayAppName is what the relay's connections call themselves, so
@@ -50,18 +51,18 @@ func TestPostgresRelay_ReopensItsConnectionAfterADrop(t *testing.T) {
 	watched := scopedGRN("acme", agent.ServiceType, "0a1b2c3d4e5f6071")
 
 	proxy := newPGProxy(t, databaseAddr(t))
-	relay := watch.NewPostgresRelay(listenerPool(t, proxy, watchRelayAppName))
+	relay := watchpg.NewRelay(listenerPool(t, proxy, watchRelayAppName))
 	events := make(chan delivered, 8)
 	go func() {
 		_ = relay.Receive(ctx, func(agent grn.GRN, e watch.Event) {
 			events <- delivered{agent: agent, event: e}
 		})
 	}()
-	requireListenerSessions(t, p, watchRelayAppName, watch.TurnEventChannel, 1)
+	requireListenerSessions(t, p, watchRelayAppName, watchpg.TurnEventChannel, 1)
 
 	// The announcer is the other process's relay, over a connection the
 	// test does not cut.
-	announcer := watch.NewPostgresRelay(p)
+	announcer := watchpg.NewRelay(p)
 	announce := func(body string) {
 		t.Helper()
 		e, err := watch.NewEvent("turn.output", body)
@@ -81,11 +82,11 @@ func TestPostgresRelay_ReopensItsConnectionAfterADrop(t *testing.T) {
 	proxy.cut()
 	// Postgres drops the session with the socket, so the announcement
 	// below is made with nothing listening on the channel at all.
-	requireListenerSessions(t, p, watchRelayAppName, watch.TurnEventChannel, 0)
+	requireListenerSessions(t, p, watchRelayAppName, watchpg.TurnEventChannel, 0)
 
 	announce("during the drop")
 	proxy.mend()
-	requireListenerSessions(t, p, watchRelayAppName, watch.TurnEventChannel, 1)
+	requireListenerSessions(t, p, watchRelayAppName, watchpg.TurnEventChannel, 1)
 
 	announce("after the drop")
 	select {

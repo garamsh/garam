@@ -1,6 +1,6 @@
 # ADR 0114: Every machine credential issuance, renewal and refusal is an audit event, read on the subject's own read
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-19
 
 Drafted for #1560, for which the Garam PM reserved this number on

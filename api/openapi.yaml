@@ -1911,9 +1911,10 @@ paths:
 
         Enrolling is unchanged: the operator generates its key pair in
         its own cluster and presents this token to `enrollOperator`,
-        and garam signs a key it never holds (ADR-0064). Reaching this
-        operation from the console is not built — the token is answered
-        to the caller of this route and to nobody else.
+        and garam signs a key it never holds (ADR-0064). An operator's
+        console page reaches this operation and shows the token once —
+        the token is answered to the caller of this route and to nobody
+        else.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/operator'

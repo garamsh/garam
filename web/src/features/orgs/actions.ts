@@ -48,6 +48,10 @@ export {
 } from "./api/issue-operator-key";
 export { mintOperationAuthority } from "./api/mint-operation-authority";
 export {
+  mintOperatorEnrollment,
+  type MintOperatorEnrollmentState,
+} from "./api/mint-operator-enrollment";
+export {
   publishPolicyVersion,
   type PublishPolicyVersionState,
 } from "./api/publish-policy-version";

@@ -296,6 +296,61 @@ describe("operator page", () => {
     ).not.toBeInTheDocument();
   });
 
+  describe("enrollment token", () => {
+    const LABEL = "Issue a new enrollment token";
+
+    it("is offered for an operator holding no certificate", async () => {
+      server.use(
+        http.get(OPERATOR, () =>
+          HttpResponse.json({
+            ...fieldOne,
+            enrollmentState: "expired",
+            certificateIssuedAt: undefined,
+          }),
+        ),
+      );
+
+      await renderOperator("settings");
+
+      expect(screen.getByRole("button", { name: LABEL })).not.toHaveAttribute(
+        "aria-disabled",
+      );
+    });
+
+    it("stays inactive, saying why, for an operator that has enrolled", async () => {
+      // fieldOne holds a certificate.
+      await renderOperator("settings");
+
+      const button = screen.getByRole("button", { name: LABEL });
+      expect(button).toHaveAttribute("aria-disabled", "true");
+      // Presence: the reason goes on to name the out-of-band recovery.
+      expect(button).toHaveAccessibleDescription(/^It has enrolled/);
+    });
+
+    it("stays inactive, saying why, where the server denies registering", async () => {
+      server.use(
+        http.get(OPERATOR, () =>
+          HttpResponse.json({
+            ...fieldOne,
+            enrollmentState: "expired",
+            certificateIssuedAt: undefined,
+          }),
+        ),
+        answerPermissionChecks((action) =>
+          action === "operator:register" ? "deny" : "allow",
+        ),
+      );
+
+      await renderOperator("settings");
+
+      const button = screen.getByRole("button", { name: LABEL });
+      expect(button).toHaveAttribute("aria-disabled", "true");
+      expect(button).toHaveAccessibleDescription(
+        /^Issuing one needs operator:register/,
+      );
+    });
+  });
+
   it("offers every action when the server cannot decide", async () => {
     server.use(answerPermissionChecks(() => "unknown"));
 

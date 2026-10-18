@@ -123,6 +123,31 @@ describe("people and agents", () => {
     ).not.toHaveTextContent("Cut-over");
   });
 
+  it("marks a definition past frozen as cut over, beside one still cutting over (#1171)", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+        HttpResponse.json([
+          { ...fieldAgent, cutover: { stage: "frozen" } },
+          {
+            ...fieldAgent,
+            agentGrn: "grn:acme:default:agent:7e6d5c4b3a291807",
+            name: "Moved",
+            cutover: { stage: "switched" },
+          },
+        ]),
+      ),
+    );
+
+    await renderMembers();
+
+    expect(
+      screen.getByRole("link", { name: "Moved" }).closest("tr"),
+    ).toHaveTextContent("Managed by the Operator");
+    expect(
+      screen.getByRole("link", { name: "Scout" }).closest("tr"),
+    ).toHaveTextContent("Cut-over in progress");
+  });
+
   it("filters by kind", async () => {
     await renderMembers({ kind: "agent" });
 

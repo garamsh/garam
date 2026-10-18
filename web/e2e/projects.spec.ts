@@ -72,4 +72,58 @@ test.describe("projects", () => {
       expect(await axeViolations(page)).toEqual([]);
     });
   }
+
+  test("opens a project's page, adds a member, renames it and deletes it by its typed name", async ({
+    page,
+    signedIn,
+  }) => {
+    const projects = `/console/orgs/${signedIn.orgSlug}/projects`;
+    await page.goto(projects);
+    await page
+      .getByRole("link", { name: signedIn.projectName, exact: true })
+      .click();
+    await expect(page).toHaveURL(`${projects}/frontend`);
+    await expectHydrated(page);
+    expect(await axeViolations(page)).toEqual([]);
+
+    await page
+      .getByRole("combobox", { name: "Person or agent", exact: true })
+      .click();
+    await page
+      .getByRole("option", {
+        name: `${signedIn.nickname} ${signedIn.userSlug}`,
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("button", { name: "Add to project", exact: true })
+      .click();
+    await expect(
+      page.getByRole("table", { name: `Members of ${signedIn.projectName}` }),
+    ).toContainText(signedIn.nickname);
+
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    const name = page.getByLabel("Project name", { exact: true });
+    await name.fill("Web");
+    await page.getByRole("button", { name: "Save name" }).click();
+    await expect(page.getByRole("status")).toHaveText("Renamed to Web.");
+
+    await page.reload();
+    await expectHydrated(page);
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Delete project", exact: true })
+      .click();
+    const dialog = page.getByRole("alertdialog", { name: "Delete Web?" });
+    const confirm = dialog.getByRole("button", {
+      name: "Delete project",
+      exact: true,
+    });
+    await expect(confirm).toBeDisabled();
+    await dialog.getByLabel(/to confirm/).fill("Web");
+    await confirm.click();
+
+    await expect(page).toHaveURL(projects);
+    await expect(page.getByText("Web", { exact: true })).toHaveCount(0);
+  });
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import { FolderGit2 } from "lucide-react";
+import Link from "next/link";
 
 import { CopyId } from "@/components/copy-id";
 import { DataTable, type ColumnDef } from "@/components/data-table";
@@ -16,11 +17,18 @@ export type ProjectRow = {
   roles: Project["roles"];
 };
 
-const COLUMNS: ColumnDef<ProjectRow, unknown>[] = [
+const columns = (org: string): ColumnDef<ProjectRow, unknown>[] => [
   {
     accessorKey: "name",
     header: "Name",
-    cell: ({ row }) => <span className="font-medium">{row.original.name}</span>,
+    cell: ({ row }) => (
+      <Link
+        href={`/console/orgs/${org}/projects/${row.original.identifier}`}
+        className="font-medium wrap-anywhere underline-offset-4 hover:underline focus-visible:underline"
+      >
+        {row.original.name}
+      </Link>
+    ),
   },
   {
     accessorKey: "identifier",
@@ -54,11 +62,17 @@ const COLUMNS: ColumnDef<ProjectRow, unknown>[] = [
  * The organization's projects by name, each with the identifier an
  * agent's address names it by and the roles it grants its own members.
  */
-export function ProjectTable({ rows }: { rows: ProjectRow[] }) {
+export function ProjectTable({
+  org,
+  rows,
+}: {
+  org: string;
+  rows: ProjectRow[];
+}) {
   return (
     <DataTable
       label="Projects"
-      columns={COLUMNS}
+      columns={columns(org)}
       data={rows}
       getRowId={(row) => row.identifier}
       search={{ placeholder: "Search projects" }}

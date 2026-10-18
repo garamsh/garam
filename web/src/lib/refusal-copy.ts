@@ -36,7 +36,10 @@ export type RefusalOperation =
   | "createPolicy"
   | "addPolicyVersion"
   | "grantOrgConsent"
-  | "mintOperatorEnrollment";
+  | "mintOperatorEnrollment"
+  | "approveAgentEnrollment"
+  | "withdrawAgentEnrollment"
+  | "revokeAgentSupervisor";
 
 /** `status kind`, the stable pair a refusal is matched by. */
 type RefusalKey = `${number} ${string}`;
@@ -69,6 +72,26 @@ const OPERATOR_ALREADY_ENROLLED =
 const OPERATOR_IDENTIFIER_INVALID =
   "That isn't an operator identifier garam accepts. Reload the page and try again from the operator's own page.";
 
+const PREPARED_UNREADABLE =
+  "That isn't what garam standalone prepare prints. Paste its whole output: requestId and secretSha256, and for a keyed host both key fingerprints.";
+
+const DIRECT_WITH_KEYS =
+  "A direct host is approved without key fingerprints. Prepare it for direct placement, or choose standalone.";
+
+const APPROVAL_REQUEST_TAKEN =
+  "garam already holds this request identifier with other values. The host needs a fresh preparation.";
+
+// garam answers an approval withdrawn or expired, and a replacement
+// whose assignment moved, with the same status and kind.
+const APPROVAL_NO_LONGER_APPLIES =
+  "garam refused it: this request's approval was withdrawn or expired, or, for a replacement, the agent has moved since this page read it. Reload to see where the agent stands; a withdrawn or expired request needs a fresh preparation.";
+
+const APPROVAL_SPENT =
+  "A host has already enrolled with this approval. End what it registered by revoking its supervisor.";
+
+const SUPERVISOR_ENDED =
+  "This supervisor is no longer current: it was revoked or replaced. Reload the page to see where it stands.";
+
 const BY_OPERATION: Record<
   RefusalOperation,
   Partial<Record<RefusalKey, string>>
@@ -96,6 +119,12 @@ const BY_OPERATION: Record<
     "400 invalid_argument": OPERATOR_IDENTIFIER_INVALID,
     "409 failed_precondition": OPERATOR_ALREADY_ENROLLED,
   },
+  approveAgentEnrollment: {
+    "409 already_exists": APPROVAL_REQUEST_TAKEN,
+    "409 failed_precondition": APPROVAL_NO_LONGER_APPLIES,
+  },
+  withdrawAgentEnrollment: { "409 already_exists": APPROVAL_SPENT },
+  revokeAgentSupervisor: { "404 not_found": SUPERVISOR_ENDED },
 };
 
 /**
@@ -119,6 +148,12 @@ export const REFUSAL_COPY = {
   consentPartnerNotFound: CONSENT_PARTNER_NOT_FOUND,
   operatorAlreadyEnrolled: OPERATOR_ALREADY_ENROLLED,
   operatorIdentifierInvalid: OPERATOR_IDENTIFIER_INVALID,
+  preparedUnreadable: PREPARED_UNREADABLE,
+  directWithKeys: DIRECT_WITH_KEYS,
+  approvalRequestTaken: APPROVAL_REQUEST_TAKEN,
+  approvalNoLongerApplies: APPROVAL_NO_LONGER_APPLIES,
+  approvalSpent: APPROVAL_SPENT,
+  supervisorEnded: SUPERVISOR_ENDED,
 } as const;
 
 const GENERIC: Partial<Record<RefusalKey, string>> = {

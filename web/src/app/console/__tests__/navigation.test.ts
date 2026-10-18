@@ -101,7 +101,7 @@ describe("parseConsolePath", () => {
     // The section's former address redirects before the shell reads it.
     "/console/orgs/acme/policies",
     // A section without item pages has nothing below it.
-    "/console/orgs/acme/projects/deeper",
+    "/console/orgs/acme/consents/deeper",
     "/console/orgs/acme/teams/eng/deeper",
   ])("does not place %s", (pathname) => {
     expect(parseConsolePath(pathname)).toEqual({ kind: "unknown" });

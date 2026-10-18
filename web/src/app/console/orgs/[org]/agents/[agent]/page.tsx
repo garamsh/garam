@@ -26,6 +26,8 @@ import {
 } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
+import { ApproveHostDialog } from "../../../../_components/approve-host-dialog";
+import { InactiveButton } from "../../../../_components/inactive-button";
 import { CUTOVER_STAGE_LABEL } from "../../../../_components/cutover-marker";
 import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
@@ -92,8 +94,13 @@ export default async function AgentPage({ params }: Params) {
       check: { action: "agent:rename", resource: self },
     },
     {
+      key: "enroll",
+      label: "Replace a standalone host it runs on",
+      check: { action: "agent:enroll", resource: self },
+    },
+    {
       key: "replace",
-      label: "Replace its host",
+      label: "Replace its host through its operator",
       check: { action: "agent:replace", resource: self },
     },
   ]);
@@ -302,18 +309,90 @@ export default async function AgentPage({ params }: Params) {
           </span>
         }
         actions={
-          <Button asChild variant="outline">
-            <Link
-              href={`${orgHref(org, "permissions")}/attachments?subject=${encodeURIComponent(`agent:${agent}`)}`}
-            >
-              Manage policies
-            </Link>
-          </Button>
+          <>
+            <ReplaceHost
+              org={org}
+              agentGrn={agentGrn}
+              agentName={name}
+              holder={holder}
+              assigneeGrn={reported?.assignment?.assigneeGrn}
+              unchecked={state === "unchecked"}
+              denied={accessDecisions(readings).get("enroll") === "denied"}
+            />
+            <Button asChild variant="outline">
+              <Link
+                href={`${orgHref(org, "permissions")}/attachments?subject=${encodeURIComponent(`agent:${agent}`)}`}
+              >
+                Manage policies
+              </Link>
+            </Button>
+          </>
         }
         tabs={tabs}
       />
       <YourAccess readings={readings} />
     </>
+  );
+}
+
+/**
+ * Replacing the host an agent runs on (ADR-0082): for one a standalone
+ * host holds, an approval for a new host naming the assignment the
+ * header read, so garam refuses it if the agent has moved since. One an
+ * operator holds is replaced through its control service (ADR-0107),
+ * which the console does not reach, so the control stays, inactive,
+ * with that reason (ADR-0113), as it does where nothing holds it or the
+ * server denies it.
+ */
+function ReplaceHost({
+  org,
+  agentGrn,
+  agentName,
+  holder,
+  assigneeGrn,
+  unchecked,
+  denied,
+}: {
+  org: string;
+  agentGrn: string;
+  agentName: string;
+  holder: Holder | null;
+  assigneeGrn: string | undefined;
+  unchecked: boolean;
+  denied: boolean;
+}) {
+  const reason = unchecked
+    ? "What holds it was not shown to you, so its host cannot be named."
+    : holder === null
+      ? "Nothing holds it yet, so there is no host to replace."
+      : holder.kind === "operator"
+        ? `${holder.name}'s control service replaces the host of an agent an operator holds (ADR-0107), and the console does not reach that.`
+        : denied
+          ? "Replacing a standalone host needs agent:enroll on this agent, and no policy grants it to you."
+          : null;
+  if (reason !== null || holder === null || assigneeGrn === undefined) {
+    return (
+      <InactiveButton reason={reason ?? "What holds it was not read."}>
+        Replace host
+      </InactiveButton>
+    );
+  }
+  return (
+    <ApproveHostDialog
+      org={org}
+      replaces={{
+        agentGrn,
+        assigneeGrn,
+        epoch: holder.epoch,
+        agentName,
+        hostName: holder.name,
+      }}
+      trigger={
+        <Button type="button" variant="outline">
+          Replace host
+        </Button>
+      }
+    />
   );
 }
 

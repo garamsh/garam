@@ -5,6 +5,8 @@ import type { PermissionExplanation } from "@/lib/permission-explanation";
 import type { User } from "@/features/auth";
 import type {
   Agent,
+  AgentEnrollmentListing,
+  AgentSupervisor,
   AgentDefinition,
   AgentTemplate,
   Group,
@@ -264,6 +266,32 @@ export const acmeDeletionPreview: OrgDeletionPreview = {
   },
 };
 
+/** A standalone approval no host has spent yet (ADR-0082). */
+export const pendingApproval: AgentEnrollmentListing = {
+  id: "0f8c2a5e-9d1b-4c3a-8e7f-6a5b4c3d2e1f",
+  placement: "standalone",
+  state: "pending",
+  agentGrn: "grn:acme:default:agent:5a6b7c8d9e0f1a2b",
+  supervisorGrn: "grn:acme:default:supervisor:build-08",
+  hostName: "build-08",
+  approvedBy: alice.grn,
+  createdAt: "2026-10-18T09:00:00Z",
+  expiresAt: "2026-10-18T10:00:00Z",
+};
+
+/** The supervisor of a standalone host running Scout, at epoch 2. */
+export const buildHost: AgentSupervisor = {
+  grn: "grn:acme:default:supervisor:build-07",
+  agentGrn: "grn:acme:default:agent:9f2ac1b40d8e7a35",
+  enrollmentId: "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d",
+  placement: "standalone",
+  state: "active",
+  hostName: "build-07",
+  epoch: 2,
+  registeredAt: "2026-10-17T08:00:00Z",
+  lastActivatedAt: "2026-10-18T08:30:00Z",
+};
+
 /**
  * Every route the fixtures model: what it answers signed in, and
  * whether the backend guards it. The split is the one
@@ -294,6 +322,12 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
     body: engineeringMembers,
   },
   { path: "/orgs/acme/projects", guarded: true, body: [frontend] },
+  { path: "/orgs/acme/projects/frontend", guarded: true, body: frontend },
+  {
+    path: "/orgs/acme/projects/frontend/members",
+    guarded: true,
+    body: [{ memberGrn: alice.grn }],
+  },
   { path: "/orgs/acme/members", guarded: true, body: [aliceMembership] },
   { path: "/orgs/acme/operators", guarded: true, body: [fieldOne] },
   { path: "/orgs/acme/operators/field-one", guarded: true, body: fieldOne },
@@ -316,6 +350,12 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
     body: researcher,
   },
   { path: "/orgs/acme/consents", guarded: true, body: [globexConsent] },
+  {
+    path: "/orgs/acme/agent-enrollments",
+    guarded: true,
+    body: [pendingApproval],
+  },
+  { path: "/orgs/acme/agent-supervisors", guarded: true, body: [buildHost] },
   {
     path: "/orgs/acme/policies",
     guarded: true,

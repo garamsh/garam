@@ -1,8 +1,9 @@
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
 
-// Home, Projects, Consents, Teams, People and agents and a person's
-// page at 390px, in both themes. `engineering` is the seeded team, and
+// Home, Projects and a project's page, Consents, Teams, People and
+// agents and a person's page, and Hosts at 390px, in both themes.
+// `engineering` and `frontend` are the seeded team and project, and
 // `SELF` stands for the signed-in person's identifier.
 const ROUTES = [
   { name: "Home", segment: "" },
@@ -13,6 +14,8 @@ const ROUTES = [
   { name: "a team's page", segment: "/teams/engineering" },
   { name: "People and agents", segment: "/members" },
   { name: "a person's page", segment: "/members/SELF" },
+  { name: "Hosts", segment: "/hosts" },
+  { name: "a project's page", segment: "/projects/frontend" },
 ];
 
 test.describe("organization area on a phone", () => {

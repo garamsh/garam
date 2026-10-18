@@ -2,6 +2,7 @@ import {
   Bot,
   FolderGit2,
   Handshake,
+  HardDrive,
   House,
   LayoutTemplate,
   Server,
@@ -114,6 +115,7 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     label: "Projects",
     icon: FolderGit2,
     read: "project:read",
+    items: { fallback: "Project" },
   },
   {
     segment: "operators",
@@ -129,6 +131,14 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
       fallback: "Operator",
       pages: [{ segment: "connect", label: "Connect" }],
     },
+  },
+  {
+    // Standalone and direct hosts: their approvals and supervisors
+    // (ADR-0082, ADR-0111).
+    segment: "hosts",
+    label: "Hosts",
+    icon: HardDrive,
+    read: "agent:read",
   },
   {
     segment: "consents",
@@ -174,6 +184,7 @@ export const CONSOLE_NAV: readonly NavGroup[] = [
     entries: [
       { section: "permissions" },
       { section: "operators" },
+      { section: "hosts" },
       { section: "agents", view: "templates" },
       { section: "consents" },
       { section: "settings" },

@@ -61,6 +61,7 @@ export default async function ProjectsPage({ params }: Params) {
         <RefusedRead subject="this organization's projects" />
       ) : (
         <ProjectTable
+          org={org}
           rows={projects.data.map((project) => ({
             name: project.name,
             identifier: slugFromGrn(project.grn),

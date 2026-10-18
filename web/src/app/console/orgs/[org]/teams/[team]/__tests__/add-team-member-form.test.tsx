@@ -3,7 +3,7 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { AddTeamMemberForm } from "@/app/console/orgs/[org]/teams/[team]/_components/add-team-member-form";
+import { AddMemberForm } from "@/app/console/_components/membership/add-member-form";
 import type { Candidate } from "@/features/orgs";
 import { API_URL, alice, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
@@ -39,11 +39,11 @@ async function choose(user: UserEvent, name: string) {
   );
 }
 
-function renderForm(props: Partial<Parameters<typeof AddTeamMemberForm>[0]>) {
+function renderForm(props: Partial<Parameters<typeof AddMemberForm>[0]>) {
   return render(
-    <AddTeamMemberForm
+    <AddMemberForm
       org="acme"
-      team="eng"
+      scope={{ kind: "team", id: "eng", name: "Engineering" }}
       candidates={candidates}
       unlisted={[]}
       {...props}

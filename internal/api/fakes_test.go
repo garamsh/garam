@@ -56,9 +56,9 @@ func newFakeUserStore() *fakeUserStore {
 
 // Create records a user. A second row under one GRN is refused the way
 // the postgres store refuses it — the driver's own error through
-// pgxerr.Classify (internal/user/postgres.go) — because a double this
-// surface reads its own answers from must carry what production
-// carries, text included.
+// pgxerr.Classify (internal/user/postgres/postgres.go) — because a
+// double this surface reads its own answers from must carry what
+// production carries, text included.
 func (s *fakeUserStore) Create(_ context.Context, u *user.User) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -29,6 +29,11 @@ func indexScanPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	cfg, err := pgxpool.ParseConfig(os.Getenv("GARAM_TEST_DATABASE_URL"))
 	require.NoError(t, err)
+	// Two holders, two exchanges and the poll counting their waits hold
+	// a connection at once (#1518). pgxpool's default MaxConns is
+	// max(4, NumCPU), which on a runner with four cores leaves the poll
+	// waiting on the sessions it counts.
+	cfg.MaxConns = 5
 	cfg.ConnConfig.RuntimeParams["enable_seqscan"] = "off"
 	cfg.ConnConfig.RuntimeParams["enable_bitmapscan"] = "off"
 	p, err := pgxpool.NewWithConfig(context.Background(), cfg)

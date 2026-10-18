@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/errorx"
@@ -48,14 +49,16 @@ func (s *Server) CreateProject(w http.ResponseWriter, r *http.Request, orgSlug a
 	writeJSON(w, http.StatusCreated, projectToAPI(p))
 }
 
-// ListProjects lists the org's projects. Requires the member role.
+// ListProjects lists the org's projects, leaving out each project
+// whose own read the caller is denied. Requires the member role.
 func (s *Server) ListProjects(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListProjectsParams) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionProjectRead); err != nil {
+	c, err := s.authorizedCaller(r, orgGRN(orgSlug), orgGRN(orgSlug), u, org.ActionProjectRead)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
@@ -65,6 +68,18 @@ func (s *Server) ListProjects(w http.ResponseWriter, r *http.Request, orgSlug ap
 		return
 	}
 	projects, err := s.orgs.ListProjects(r.Context(), orgGRN(orgSlug), f)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	mine, err := s.orgs.ListProjectsByMember(r.Context(), c.org, u.GRN)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	projects, err = visible(s, r, c, org.ActionProjectRead, projects, func(p *org.Project) BatchObject {
+		return BatchObject{Object: p.GRN, Statements: projectRoleStatements(p, slices.Contains(mine, p.GRN))}
+	})
 	if err != nil {
 		writeError(w, err)
 		return

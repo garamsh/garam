@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"slices"
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/errorx"
@@ -49,14 +50,16 @@ func (s *Server) CreateGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 }
 
 // ListGroups lists the org's groups, or with member=me those the
-// caller belongs to. Requires the member role.
+// caller belongs to, leaving out each group whose own read the caller
+// is denied. Requires the member role.
 func (s *Server) ListGroups(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListGroupsParams) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupRead); err != nil {
+	c, err := s.authorizedCaller(r, orgGRN(orgSlug), orgGRN(orgSlug), u, org.ActionGroupRead)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
@@ -74,6 +77,13 @@ func (s *Server) ListGroups(w http.ResponseWriter, r *http.Request, orgSlug apig
 	default:
 		err = errorx.New(errorx.KindInvalidArgument, "member is me or absent")
 	}
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	groups, err = visible(s, r, c, org.ActionGroupRead, groups, func(gr *org.Group) BatchObject {
+		return BatchObject{Object: gr.GRN, Statements: groupRoleStatements(gr, slices.Contains(c.groups, gr.GRN))}
+	})
 	if err != nil {
 		writeError(w, err)
 		return

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 
@@ -24,21 +25,39 @@ import (
 // tests exercise statement collection instead of a stubbed verdict. The
 // evaluation is reproduced here because the api package never imports
 // the engine (ADR-0003).
+//
+// A batch is decided per object over the shared statements and that
+// object's own; a test that lists nothing never asks one.
 func (f *fixture) enforce() {
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
-			allow := false
-			for _, s := range in.Statements {
-				if !matches(s, in.Action, in.Object.String()) {
-					continue
-				}
-				if s.Effect == wire.EffectDeny {
-					return false, nil
-				}
-				allow = true
-			}
-			return allow, nil
+			return decides(in.Statements, in.Action, in.Object.String()), nil
 		})
+	f.evaluator.EXPECT().EvaluateBatch(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.BatchInput) ([]bool, error) {
+			allowed := make([]bool, len(in.Objects))
+			for i, o := range in.Objects {
+				statements := append(slices.Clip(in.Statements), o.Statements...)
+				allowed[i] = decides(statements, in.Action, o.Object.String())
+			}
+			return allowed, nil
+		}).Maybe()
+}
+
+// decides is the engine's decision over statements: a matching Deny
+// wins, otherwise a matching Allow permits.
+func decides(statements []api.Statement, action, resource string) bool {
+	allow := false
+	for _, s := range statements {
+		if !matches(s, action, resource) {
+			continue
+		}
+		if s.Effect == wire.EffectDeny {
+			return false
+		}
+		allow = true
+	}
+	return allow
 }
 
 // matches reports whether the statement applies to an action on a

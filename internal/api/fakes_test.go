@@ -503,6 +503,21 @@ func (s *fakeOrgStore) ListProjectMembers(_ context.Context, projectGRN grn.GRN)
 	return slices.Clone(s.projectMembers[projectGRN.String()]), nil
 }
 
+func (s *fakeOrgStore) ListProjectsByMember(_ context.Context, orgGRN, memberGRN grn.GRN) ([]grn.GRN, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []grn.GRN{}
+	for key, members := range s.projectMembers {
+		p, ok := s.projects[key]
+		if !ok || p.Organization != orgGRN || !slices.Contains(members, memberGRN) {
+			continue
+		}
+		out = append(out, p.GRN)
+	}
+	slices.SortFunc(out, func(a, b grn.GRN) int { return strings.Compare(a.String(), b.String()) })
+	return out, nil
+}
+
 func (s *fakeOrgStore) AddMember(_ context.Context, m *org.Membership) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

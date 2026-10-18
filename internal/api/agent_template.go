@@ -9,18 +9,25 @@ import (
 	"github.com/garamsh/garam/internal/org"
 )
 
-// ListAgentTemplates lists the org's templates.
+// ListAgentTemplates lists the org's templates, leaving out each
+// template whose own read the caller is denied.
 func (s *Server) ListAgentTemplates(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionAgentTemplateRead); err != nil {
+	c, err := s.authorizedCaller(r, orgGRN(orgSlug), orgGRN(orgSlug), u, org.ActionAgentTemplateRead)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
 	templates, err := s.agents.ListTemplatesByOrg(r.Context(), orgGRN(orgSlug))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	templates, err = visible(s, r, c, org.ActionAgentTemplateRead, templates, func(t *agent.Template) BatchObject { return onItself(t.GRN) })
 	if err != nil {
 		writeError(w, err)
 		return

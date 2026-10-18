@@ -679,6 +679,10 @@ paths:
         own teams in one request rather than one per group. The filter
         names the caller alone: who else belongs to a group is
         `listGroupMembers`', which is authorized per group.
+        Leaves out each group whose own `group:read` the caller is denied. The
+        page is filtered as read: `limit` and `offset` count stored
+        entries, so a page can hold fewer than `limit` with more after
+        it, and only an empty page is the end.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/limit'
@@ -883,6 +887,12 @@ paths:
       operationId: listProjects
       tags: [org]
       summary: List an organization's projects. Requires the `member` role.
+      description: >-
+        Authorized on `project:read` on the organization. Leaves out each
+        project whose own `project:read` the caller is denied. The page is
+        filtered as read: `limit` and `offset` count stored entries, so
+        a page can hold fewer than `limit` with more after it, and only
+        an empty page is the end.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/limit'
@@ -1052,6 +1062,12 @@ paths:
       operationId: listAgents
       tags: [agent]
       summary: List an organization's agents. Requires the `member` role.
+      description: >-
+        Authorized on `agent:read` on the organization. Leaves out each
+        agent whose own `agent:read` the caller is denied. The page is
+        filtered as read: `limit` and `offset` count stored entries, so
+        a page can hold fewer than `limit` with more after it, and only
+        an empty page is the end.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/limit'
@@ -1241,7 +1257,8 @@ paths:
         The organization's templates, ordered by name. Authorized on
         `agent-template:read`. Templates are retired read-only
         (ADR-0088): no operation creates, changes or deletes one, and
-        each is listed as the record of what it said.
+        each is listed as the record of what it said. Leaves out each
+        template whose own `agent-template:read` the caller is denied.
       parameters:
         - $ref: '#/components/parameters/org'
       responses:
@@ -2301,6 +2318,9 @@ paths:
       operationId: listPolicies
       tags: [policy]
       summary: List an organization's policies. Requires the `admin` role.
+      description: >-
+        Authorized on `policy:read` on the organization. Leaves out each
+        policy whose own `policy:read` the caller is denied.
       parameters:
         - $ref: '#/components/parameters/org'
       responses:

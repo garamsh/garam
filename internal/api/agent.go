@@ -12,14 +12,16 @@ import (
 	"github.com/garamsh/garam/internal/org"
 )
 
-// ListAgents lists the org's agents. Requires the member role.
+// ListAgents lists the org's agents, leaving out each agent whose own
+// read the caller is denied. Requires the member role.
 func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListAgentsParams) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionAgentRead); err != nil {
+	c, err := s.authorizedCaller(r, orgGRN(orgSlug), orgGRN(orgSlug), u, org.ActionAgentRead)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
@@ -29,6 +31,11 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apig
 		return
 	}
 	agents, err := s.agents.ListByOrg(r.Context(), orgGRN(orgSlug), f)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	agents, err = visible(s, r, c, org.ActionAgentRead, agents, func(a *agent.Agent) BatchObject { return onItself(a.GRN()) })
 	if err != nil {
 		writeError(w, err)
 		return

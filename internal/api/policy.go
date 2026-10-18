@@ -48,18 +48,25 @@ func (s *Server) CreatePolicy(w http.ResponseWriter, r *http.Request, orgSlug ap
 	writeJSON(w, http.StatusCreated, policyToAPI(p))
 }
 
-// ListPolicies lists the org's policies. Requires the admin role.
+// ListPolicies lists the org's policies, leaving out each policy whose
+// own read the caller is denied. Requires the admin role.
 func (s *Server) ListPolicies(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionPolicyRead); err != nil {
+	c, err := s.authorizedCaller(r, orgGRN(orgSlug), orgGRN(orgSlug), u, org.ActionPolicyRead)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
 	policies, err := s.policies.ListPolicies(r.Context(), orgGRN(orgSlug))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	policies, err = visible(s, r, c, org.ActionPolicyRead, policies, func(p *Policy) BatchObject { return onItself(p.GRN) })
 	if err != nil {
 		writeError(w, err)
 		return

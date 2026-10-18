@@ -116,6 +116,12 @@ DELETE FROM project_members WHERE project_grn = $1 AND member_grn = $2;
 -- name: ListProjectMembers :many
 SELECT member_grn FROM project_members WHERE project_grn = $1 ORDER BY member_grn;
 
+-- name: ListProjectsByMember :many
+SELECT p.grn FROM projects p
+JOIN project_members m ON m.project_grn = p.grn
+WHERE p.org_grn = sqlc.arg('org_grn') AND m.member_grn = sqlc.arg('member_grn')
+ORDER BY p.grn;
+
 -- name: AddOrgMember :exec
 INSERT INTO org_members (org_grn, user_grn, role, created_at)
 VALUES ($1, $2, $3, $4);

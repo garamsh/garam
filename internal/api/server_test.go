@@ -106,11 +106,21 @@ type permission struct {
 
 // permit stubs the Evaluator seam: only the listed subject × action
 // pairs are allowed; every other question is denied.
+// A batch is answered per object the same way; a test that lists
+// nothing never asks one.
 func (f *fixture) permit(perms ...permission) {
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
 			return slices.Contains(perms, permission{in.Subject, in.Action}), nil
 		})
+	f.evaluator.EXPECT().EvaluateBatch(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.BatchInput) ([]bool, error) {
+			allowed := make([]bool, len(in.Objects))
+			for i := range in.Objects {
+				allowed[i] = slices.Contains(perms, permission{in.Subject, in.Action})
+			}
+			return allowed, nil
+		}).Maybe()
 }
 
 // do issues a request and returns the recorder.

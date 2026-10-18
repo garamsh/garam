@@ -731,6 +731,38 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 	return items, nil
 }
 
+const listProjectsByMember = `-- name: ListProjectsByMember :many
+SELECT p.grn FROM projects p
+JOIN project_members m ON m.project_grn = p.grn
+WHERE p.org_grn = $1 AND m.member_grn = $2
+ORDER BY p.grn
+`
+
+type ListProjectsByMemberParams struct {
+	OrgGrn    string
+	MemberGrn string
+}
+
+func (q *Queries) ListProjectsByMember(ctx context.Context, arg ListProjectsByMemberParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listProjectsByMember, arg.OrgGrn, arg.MemberGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var grn string
+		if err := rows.Scan(&grn); err != nil {
+			return nil, err
+		}
+		items = append(items, grn)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const releaseInvitationClaim = `-- name: ReleaseInvitationClaim :execrows
 UPDATE invitations SET accepted_at = NULL
 WHERE token = $1 AND accepted_by IS NULL

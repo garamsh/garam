@@ -111,6 +111,19 @@ func (s *Store) ListProjectMembers(ctx context.Context, projectGRN grn.GRN) ([]g
 	return parseGRNs(rows, "project member row")
 }
 
+// ListProjectsByMember returns the GRNs of the org's Projects the
+// member belongs to.
+func (s *Store) ListProjectsByMember(ctx context.Context, orgGRN, memberGRN grn.GRN) ([]grn.GRN, error) {
+	rows, err := s.q.ListProjectsByMember(ctx, db.ListProjectsByMemberParams{
+		OrgGrn:    orgGRN.String(),
+		MemberGrn: memberGRN.String(),
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "list projects by member", nil, nil)
+	}
+	return parseGRNs(rows, "project row")
+}
+
 func rowToProject(row db.Project) (*org.Project, error) {
 	g, err := grn.Parse(row.Grn)
 	if err != nil {

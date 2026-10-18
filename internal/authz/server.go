@@ -2,6 +2,7 @@ package authz
 
 import (
 	"context"
+	"slices"
 
 	"google.golang.org/grpc/status"
 
@@ -58,6 +59,35 @@ func (s *GRPCServer) CheckCurrent(ctx context.Context, req *authzv1.CheckCurrent
 	return &authzv1.CheckCurrentResponse{Allowed: allowed}, nil
 }
 
+// CheckBatch decides Check's question for each object of the request,
+// reading the persisted statements once: every object is of the
+// subject's organization, so one read answers for all of them. An
+// object outside it refuses the call before anything is read, as
+// Check refuses it.
+func (s *GRPCServer) CheckBatch(ctx context.Context, req *authzv1.CheckBatchRequest) (*authzv1.CheckBatchResponse, error) {
+	inputs, err := parseBatch(req)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	for _, in := range inputs {
+		if err := in.checkScope(); err != nil {
+			return nil, grpcError(err)
+		}
+	}
+	allowed := make([]bool, len(inputs))
+	if len(inputs) == 0 {
+		return &authzv1.CheckBatchResponse{Allowed: allowed}, nil
+	}
+	stored, err := s.policies.Statements(ctx, inputs[0].subjectOrg, inputs[0].subjects)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	for i, in := range inputs {
+		_, allowed[i] = evaluate(ctx, in, stored)
+	}
+	return &authzv1.CheckBatchResponse{Allowed: allowed}, nil
+}
+
 // decide scopes the request, reads the persisted statements through
 // read and evaluates them with the caller's. It returns the grants it
 // evaluated beside the decision, so Explain traces the set Check
@@ -66,10 +96,18 @@ func decide(ctx context.Context, in checkInput, read readStatements) ([]Grant, b
 	if err := in.checkScope(); err != nil {
 		return nil, false, err
 	}
-	grants, err := applicable(ctx, in, read)
+	stored, err := read(ctx, orgGRNOf(in.object), in.subjects)
 	if err != nil {
 		return nil, false, err
 	}
+	grants, allowed := evaluate(ctx, in, stored)
+	return grants, allowed, nil
+}
+
+// evaluate decides in over the persisted statements stored that reach
+// its subject, unioned with the caller's.
+func evaluate(ctx context.Context, in checkInput, stored []Grant) ([]Grant, bool) {
+	grants := applicable(in, stored)
 	statements := make([]Statement, 0, len(grants))
 	for _, g := range grants {
 		statements = append(statements, g.Statement)
@@ -78,7 +116,7 @@ func decide(ctx context.Context, in checkInput, read readStatements) ([]Grant, b
 		Object: grnObject{in.object},
 		Action: in.action,
 	})
-	return grants, d == DecisionAllow, nil
+	return grants, d == DecisionAllow
 }
 
 // Explain evaluates the same input and reports every statement's
@@ -114,21 +152,17 @@ func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (
 // readStatements is one of PolicySource's two reads.
 type readStatements func(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Grant, error)
 
-// applicable unions the persisted policy statements read reports as
-// reaching the subject — org-wide, attached to it, or attached to one
-// of its groups (ADR-0008) — with the role-derived statements the
-// caller supplied (ADR-0007).
-func applicable(ctx context.Context, in checkInput, read readStatements) ([]Grant, error) {
-	stored, err := read(ctx, orgGRNOf(in.object), in.subjects)
-	if err != nil {
-		return nil, err
-	}
+// applicable unions the persisted policy statements stored that reach
+// the subject — org-wide, attached to it, or attached to one of its
+// groups (ADR-0008) — with the role-derived statements the caller
+// supplied (ADR-0007).
+func applicable(in checkInput, stored []Grant) []Grant {
 	grants := make([]Grant, 0, len(stored)+len(in.statements))
 	grants = append(grants, stored...)
 	for _, st := range in.statements {
 		grants = append(grants, Grant{Statement: st})
 	}
-	return grants, nil
+	return grants
 }
 
 // orgGRNOf returns the GRN of the org that owns the object. Orgs are
@@ -176,6 +210,50 @@ func (in checkInput) checkScope() error {
 // parseInput validates the wire request once at the transport
 // boundary; downstream code trusts the parsed values.
 func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, subjectOrg string, stmts []*authzv1.Statement) (checkInput, error) {
+	in, err := parseSubject(subjectGRN, action, subjectGroups, subjectOrg)
+	if err != nil {
+		return checkInput{}, err
+	}
+	if in.object, err = grn.Parse(objectGRN); err != nil {
+		return checkInput{}, errorx.Wrap(err, "object_grn")
+	}
+	if in.statements, err = parseStatements(stmts); err != nil {
+		return checkInput{}, err
+	}
+	return in, nil
+}
+
+// parseBatch validates a CheckBatch request as parseInput validates a
+// Check, answering one input per object: the request's subject, action
+// and statements, with the object's own statements after them.
+func parseBatch(req *authzv1.CheckBatchRequest) ([]checkInput, error) {
+	subject, err := parseSubject(req.GetSubjectGrn(), req.GetAction(), req.GetSubjectGroups(), req.GetSubjectOrg())
+	if err != nil {
+		return nil, err
+	}
+	shared, err := parseStatements(req.GetStatements())
+	if err != nil {
+		return nil, err
+	}
+	inputs := make([]checkInput, 0, len(req.GetObjects()))
+	for _, o := range req.GetObjects() {
+		in := subject
+		if in.object, err = grn.Parse(o.GetObjectGrn()); err != nil {
+			return nil, errorx.Wrap(err, "objects.object_grn")
+		}
+		own, err := parseStatements(o.GetStatements())
+		if err != nil {
+			return nil, err
+		}
+		in.statements = append(slices.Clip(shared), own...)
+		inputs = append(inputs, in)
+	}
+	return inputs, nil
+}
+
+// parseSubject parses what a request says of its subject and action,
+// leaving the object and the statements to the caller.
+func parseSubject(subjectGRN, action string, subjectGroups []string, subjectOrg string) (checkInput, error) {
 	subject, err := grn.Parse(subjectGRN)
 	if err != nil {
 		return checkInput{}, errorx.Wrap(err, "subject_grn")
@@ -189,10 +267,6 @@ func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, su
 		}
 		subjects = append(subjects, g)
 	}
-	object, err := grn.Parse(objectGRN)
-	if err != nil {
-		return checkInput{}, errorx.Wrap(err, "object_grn")
-	}
 	var org grn.GRN
 	if subjectOrg != "" {
 		org, err = grn.Parse(subjectOrg)
@@ -203,14 +277,19 @@ func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, su
 	if action == "" {
 		return checkInput{}, errorx.New(errorx.KindInvalidArgument, "action is required")
 	}
+	return checkInput{action: action, subjects: subjects, subjectOrg: org}, nil
+}
+
+// parseStatements parses the statements a caller sent.
+func parseStatements(stmts []*authzv1.Statement) ([]Statement, error) {
 	statements := make([]Statement, 0, len(stmts))
 	for _, p := range stmts {
 		effect, err := wire.EffectFromProto(p.GetEffect())
 		if err != nil {
-			return checkInput{}, errorx.Wrap(err, "statement "+p.GetSid())
+			return nil, errorx.Wrap(err, "statement "+p.GetSid())
 		}
 		if len(p.GetAction()) == 0 || len(p.GetResource()) == 0 {
-			return checkInput{}, errorx.New(errorx.KindInvalidArgument, "statement "+p.GetSid()+": action and resource patterns are required")
+			return nil, errorx.New(errorx.KindInvalidArgument, "statement "+p.GetSid()+": action and resource patterns are required")
 		}
 		statements = append(statements, Statement{
 			Sid:      p.GetSid(),
@@ -219,7 +298,7 @@ func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, su
 			Resource: p.GetResource(),
 		})
 	}
-	return checkInput{object: object, action: action, subjects: subjects, statements: statements, subjectOrg: org}, nil
+	return statements, nil
 }
 
 // effectToProto renders a stored Effect for an Explain trace. It

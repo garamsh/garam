@@ -282,21 +282,29 @@ func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action
 // org identifier into a resource pattern, where a wildcard would widen
 // the statement past the org it was scoped to.
 func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.User, action string) error {
+	_, err := s.authorizedCaller(r, orgGRN, target, u, action)
+	return err
+}
+
+// authorizedCaller enforces action on target as authorizeOn does and
+// answers the caller it resolved, so a list can ask about each of its
+// objects for the same caller without resolving it again.
+func (s *Server) authorizedCaller(r *http.Request, orgGRN, target grn.GRN, u *user.User, action string) (*caller, error) {
 	if err := target.Validate(); err != nil {
-		return err
+		return nil, err
 	}
 	c, err := s.callerIn(r, orgGRN, u)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	allowed, err := s.allows(r, c, target, action)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !allowed {
-		return errorx.New(errorx.KindPermissionDenied, "insufficient role")
+		return nil, errorx.New(errorx.KindPermissionDenied, "insufficient role")
 	}
-	return nil
+	return c, nil
 }
 
 // caller is what every check of one user inside one org shares: the

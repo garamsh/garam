@@ -327,15 +327,23 @@ other policy write.
 | `PolicyAttachment` | binds a policy to a subject (ADR-0008) | — |
 | `Store` / `PostgresStore` | policy and attachment persistence | `migrations/` |
 | `PolicyCache` | per-org parsed policies and their attachments, and the uncached read `CheckCurrent` uses | `Store` |
-| `GRPCServer` | `Check` / `CheckCurrent` / `Explain` RPCs | `PolicyCache` |
+| `GRPCServer` | `Check` / `CheckBatch` / `CheckCurrent` / `Explain` RPCs | `PolicyCache` |
 | `PolicyGRPCServer` | policy lifecycle RPCs | `Store`, `PolicyCache` |
 
 Role persistence (subject × role × scope) stays roadmap; roles remain
 org data resolved by the api server.
 
 The api server never imports this package; it calls the engine over
-gRPC (`Check` / `Explain` in `proto/garam/authz/v1`) and supplies the
-role-derived statements it collected. The machine listener reaches the
+gRPC (`Check`, `CheckBatch` and `Explain` in `proto/garam/authz/v1`)
+and supplies the role-derived statements it collected. `CheckBatch` is
+`Check` asked of many objects for one subject and one action: the
+statements that hold for every object are sent once, each object
+carries those that reach the subject through it alone, and the
+persisted statements are read once for the call. Each object is
+decided as `Check` would decide it, and one outside the subject's
+organization refuses the call. An org-gated list asks it once per page
+to drop the objects the caller may not read
+([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md)). The machine listener reaches the
 same engine the same way, over a seam of its own, and supplies the
 identity-derived ones. Delegated operation authority on both reaches
 `CheckCurrent` (§Policy persistence) through one adapter,

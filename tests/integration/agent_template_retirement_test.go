@@ -41,9 +41,7 @@ func retiredSchema(t *testing.T, name string) (*pgxpool.Pool, *migrate.Migrate) 
 	require.NoError(t, err)
 	t.Cleanup(func() { _, _ = m.Close() })
 	require.NoError(t, m.Migrate(33))
-	sp, err := pgxpool.New(ctx, databaseURL)
-	require.NoError(t, err)
-	t.Cleanup(sp.Close)
+	sp := connect(t, databaseURL, nil)
 	for _, statement := range []string{
 		`INSERT INTO orgs (grn, name, created_at, updated_at) VALUES ('` + retiredOrg + `', 'ret', now(), now())`,
 		`INSERT INTO agent_templates

@@ -368,16 +368,9 @@ func TestMessageSignature_GaramSignsTheRefusalItWroteAsItsOwn(t *testing.T) {
 func TestMessageSigningKeys_ConcurrentRotationsStoreOneKey(t *testing.T) {
 	ctx := context.Background()
 	const replicas = 8
-	// The lock's holder, every waiting rotation and the poll counting
-	// them hold a connection at once. pgxpool's default MaxConns is
-	// max(4, NumCPU), which on a runner with few cores fits fewer.
-	cfg := pool(t).Config()
-	cfg.MaxConns = replicas + 2
-	p, err := pgxpool.NewWithConfig(ctx, cfg)
-	require.NoError(t, err)
-	t.Cleanup(p.Close)
+	p := pool(t)
 	key := make([]byte, ca.KeySize)
-	_, err = rand.Read(key)
+	_, err := rand.Read(key)
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)

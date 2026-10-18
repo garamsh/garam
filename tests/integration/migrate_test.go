@@ -203,9 +203,7 @@ func TestMigrations_EachAppliesInsideOneTransaction(t *testing.T) {
 	const schema = "migrate_transaction_test"
 	migrations := upMigrations(t)
 	databaseURL := isolatedSchema(t, pool(t), schema)
-	c, err := pgxpool.New(context.Background(), databaseURL)
-	require.NoError(t, err)
-	t.Cleanup(c.Close)
+	c := connect(t, databaseURL, nil)
 
 	for _, m := range migrations {
 		// The rollback is deferred so that a migration Postgres refuses

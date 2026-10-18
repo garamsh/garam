@@ -131,22 +131,18 @@ func databaseAddr(t *testing.T) string {
 // from every other one this suite holds.
 func listenerPool(t *testing.T, proxy *pgProxy, appName string) *pgxpool.Pool {
 	t.Helper()
-	cfg, err := pgxpool.ParseConfig(os.Getenv("GARAM_TEST_DATABASE_URL"))
-	require.NoError(t, err)
 	host, port, err := net.SplitHostPort(proxy.addr())
 	require.NoError(t, err)
 	number, err := strconv.ParseUint(port, 10, 16)
 	require.NoError(t, err)
-	cfg.ConnConfig.Host = host
-	cfg.ConnConfig.Port = uint16(number)
-	// A fallback address would reach the database around the proxy, and
-	// a connection the test cannot cut is no drop at all.
-	cfg.ConnConfig.Fallbacks = nil
-	cfg.ConnConfig.RuntimeParams["application_name"] = appName
-	p, err := pgxpool.NewWithConfig(context.Background(), cfg)
-	require.NoError(t, err)
-	t.Cleanup(p.Close)
-	return p
+	return connect(t, os.Getenv("GARAM_TEST_DATABASE_URL"), func(cfg *pgxpool.Config) {
+		cfg.ConnConfig.Host = host
+		cfg.ConnConfig.Port = uint16(number)
+		// A fallback address would reach the database around the proxy,
+		// and a connection the test cannot cut is no drop at all.
+		cfg.ConnConfig.Fallbacks = nil
+		cfg.ConnConfig.RuntimeParams["application_name"] = appName
+	})
 }
 
 // requireListenerSessions waits until Postgres reports want sessions

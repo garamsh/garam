@@ -672,10 +672,25 @@ paths:
       operationId: listGroups
       tags: [org]
       summary: List an organization's groups. Requires the `member` role.
+      description: >-
+        Authorized on `group:read` on the organization. With `member=me`
+        it answers only the groups the signed-in caller belongs to, in
+        the same order and paged the same way, so a caller learns its
+        own teams in one request rather than one per group. The filter
+        names the caller alone: who else belongs to a group is
+        `listGroupMembers`', which is authorized per group.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/limit'
         - $ref: '#/components/parameters/offset'
+        - name: member
+          in: query
+          description: >-
+            `me` keeps only the groups the signed-in caller belongs to.
+          schema:
+            type: string
+            enum: [me]
+            x-enum-varnames: [GroupMemberMe]
       responses:
         '200':
           description: The organization's groups.

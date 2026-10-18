@@ -512,6 +512,56 @@ func (q *Queries) ListGroupsByMember(ctx context.Context, arg ListGroupsByMember
 	return items, nil
 }
 
+const listMemberGroups = `-- name: ListMemberGroups :many
+SELECT g.grn, g.org_grn, g.name, g.roles, g.policies, g.created_at, g.updated_at FROM groups g
+JOIN group_members m ON m.group_grn = g.grn
+WHERE g.org_grn = $1 AND m.member_grn = $2
+ORDER BY g.grn
+LIMIT $4 OFFSET $3
+`
+
+type ListMemberGroupsParams struct {
+	OrgGrn    string
+	MemberGrn string
+	RowOffset int32
+	RowLimit  pgtype.Int4
+}
+
+// ListMemberGroups pages the org's Groups the member belongs to, in
+// the order ListGroups pages them all.
+func (q *Queries) ListMemberGroups(ctx context.Context, arg ListMemberGroupsParams) ([]Group, error) {
+	rows, err := q.db.Query(ctx, listMemberGroups,
+		arg.OrgGrn,
+		arg.MemberGrn,
+		arg.RowOffset,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Group
+	for rows.Next() {
+		var i Group
+		if err := rows.Scan(
+			&i.Grn,
+			&i.OrgGrn,
+			&i.Name,
+			&i.Roles,
+			&i.Policies,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrgMembers = `-- name: ListOrgMembers :many
 SELECT org_grn, user_grn, role, created_at FROM org_members WHERE org_grn = $1 ORDER BY user_grn
 `

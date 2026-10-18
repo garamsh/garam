@@ -73,6 +73,15 @@ JOIN group_members m ON m.group_grn = g.grn
 WHERE g.org_grn = sqlc.arg('org_grn') AND m.member_grn = sqlc.arg('member_grn')
 ORDER BY g.grn;
 
+-- ListMemberGroups pages the org's Groups the member belongs to, in
+-- the order ListGroups pages them all.
+-- name: ListMemberGroups :many
+SELECT g.* FROM groups g
+JOIN group_members m ON m.group_grn = g.grn
+WHERE g.org_grn = sqlc.arg('org_grn') AND m.member_grn = sqlc.arg('member_grn')
+ORDER BY g.grn
+LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
+
 -- name: CreateProject :exec
 INSERT INTO projects (grn, org_grn, name, roles, policies, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7);

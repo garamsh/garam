@@ -592,6 +592,21 @@ func (e Role) Valid() bool {
 	}
 }
 
+// Defines values for ListGroupsParamsMember.
+const (
+	GroupMemberMe ListGroupsParamsMember = "me"
+)
+
+// Valid indicates whether the value is a known member of the ListGroupsParamsMember enum.
+func (e ListGroupsParamsMember) Valid() bool {
+	switch e {
+	case GroupMemberMe:
+		return true
+	default:
+		return false
+	}
+}
+
 // Agent An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent, and `updatedAt` is when a state report last landed — either party's report moves it.
 type Agent struct {
 	// Assignment What holds an agent, at the epoch that binding is on: an operator, or the supervisor of a standalone host (ADR-0082). Every assignment raises the epoch and fences the assignee it replaced.
@@ -1501,7 +1516,13 @@ type ListGroupsParams struct {
 	// Limit Maximum entries to return; 0 means no limit.
 	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Member `me` keeps only the groups the signed-in caller belongs to.
+	Member *ListGroupsParamsMember `form:"member,omitempty" json:"member,omitempty"`
 }
+
+// ListGroupsParamsMember defines parameters for ListGroups.
+type ListGroupsParamsMember string
 
 // MintOperationAuthorityParams defines parameters for MintOperationAuthority.
 type MintOperationAuthorityParams struct {
@@ -2919,6 +2940,19 @@ func (siw *ServerInterfaceWrapper) ListGroups(w http.ResponseWriter, r *http.Req
 			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
 		} else {
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "member" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "member", r.URL.Query(), &params.Member, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "member"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "member", Err: err})
 		}
 		return
 	}

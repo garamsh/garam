@@ -123,6 +123,29 @@ func (s *Store) ListGroupsByMember(ctx context.Context, orgGRN, memberGRN grn.GR
 	return parseGRNs(rows, "group row")
 }
 
+// ListMemberGroups returns the org's Groups the member belongs to,
+// ordered by GRN.
+func (s *Store) ListMemberGroups(ctx context.Context, orgGRN, memberGRN grn.GRN, f listfilter.Filter) ([]*org.Group, error) {
+	rows, err := s.q.ListMemberGroups(ctx, db.ListMemberGroupsParams{
+		OrgGrn:    orgGRN.String(),
+		MemberGrn: memberGRN.String(),
+		RowOffset: int32(f.Offset),
+		RowLimit:  limit(f.Limit),
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "list member groups", nil, nil)
+	}
+	groups := make([]*org.Group, 0, len(rows))
+	for _, row := range rows {
+		gr, err := rowToGroup(row)
+		if err != nil {
+			return nil, err
+		}
+		groups = append(groups, gr)
+	}
+	return groups, nil
+}
+
 func rowToGroup(row db.Group) (*org.Group, error) {
 	g, err := grn.Parse(row.Grn)
 	if err != nil {

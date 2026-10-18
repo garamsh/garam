@@ -491,6 +491,12 @@ and not in the same place on every surface.
   who may not perform the delete is told nothing about it. No role
   gained an action for this, because the owner already holds `org:*`
   ([authz.md](./authz.md) §Statement collection).
+- **A caller's own teams are one filtered list.** `listGroups` with
+  `member=me` answers only the groups the signed-in caller belongs to,
+  ordered and paged as the unfiltered list is, and authorized on the
+  same `group:read` on the organization. The filter names the caller
+  and nobody else, because who else belongs to a group is
+  `listGroupMembers`', which is decided per group.
 - **A member may ask what it may do, and the answer decides nothing.**
   `checkPermissions` takes up to 50 pairs of an action and a resource
   of the caller's organization, the resource named by its kind and the

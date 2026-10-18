@@ -363,6 +363,21 @@ func (s *fakeOrgStore) ListGroupsByMember(_ context.Context, orgGRN, memberGRN g
 	return out, nil
 }
 
+// ListMemberGroups ignores paging, as ListGroups here does.
+func (s *fakeOrgStore) ListMemberGroups(ctx context.Context, orgGRN, memberGRN grn.GRN, _ listfilter.Filter) ([]*org.Group, error) {
+	grns, err := s.ListGroupsByMember(ctx, orgGRN, memberGRN)
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]*org.Group, 0, len(grns))
+	for _, g := range grns {
+		out = append(out, s.groups[g.String()])
+	}
+	return out, nil
+}
+
 func (s *fakeOrgStore) AddGroupMember(_ context.Context, groupGRN, memberGRN grn.GRN) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

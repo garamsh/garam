@@ -2,6 +2,7 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,6 +17,13 @@ import (
 // terminal sees.
 func runRoot(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+	return runRootContext(context.Background(), t, args...)
+}
+
+// runRootContext is runRoot under ctx, which a serve command runs until
+// it is done.
+func runRootContext(ctx context.Context, t *testing.T, args ...string) (string, error) {
+	t.Helper()
 	var out bytes.Buffer
 	root := cli.NewRootCommand()
 	root.SetOut(&out)
@@ -23,7 +31,7 @@ func runRoot(t *testing.T, args ...string) (string, error) {
 	root.SetArgs(args)
 	// Execute first: a return statement evaluates its operands left to
 	// right, so reading the buffer beside the call reads it empty.
-	err := root.Execute()
+	err := root.ExecuteContext(ctx)
 	return out.String(), err
 }
 

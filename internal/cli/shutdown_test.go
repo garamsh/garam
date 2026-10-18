@@ -33,6 +33,7 @@ const testShutdownGrace = 250 * time.Millisecond
 // something, and it holds the whole buffer empty rather than one field
 // absent, so a line written under any other message fails it too.
 func TestServeHTTP_RecordsATerminationThatDroppedWorkInFlight(t *testing.T) {
+	// Internal: no serve command holds a request past its grace.
 	tests := []struct {
 		name  string
 		holds bool
@@ -128,6 +129,7 @@ func (e blockedEngine) Check(ctx context.Context, _ *authzv1.CheckRequest) (*aut
 // The line differs in one field: GracefulStop reports no cause, so
 // there is none to carry.
 func TestServeGRPC_RecordsATerminationThatDroppedWorkInFlight(t *testing.T) {
+	// Internal: no serve command holds a call past its grace.
 	tests := []struct {
 		name  string
 		holds bool

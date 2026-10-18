@@ -3,11 +3,12 @@
 > Status: proposed
 > Date: 2026-10-19
 
-Drafted for #1560. The number was not reserved when this was written:
-it was the next free one on `dev` at
-`a3b0d8e88d16e99daff0406dbd64ca4e3ad5ad61`, and no open pull request
-or issue named it. The PM confirms or reassigns it. garam is read at
-that revision; a claim below that names no revision holds for it.
+Drafted for #1560, for which the Garam PM reserved this number on
+2026-10-19. The PM decided the read gate the same day: a subject's
+events are read under that subject's existing read, and no `audit:read`
+action is added. garam is read at
+`a3b0d8e88d16e99daff0406dbd64ca4e3ad5ad61`; a claim below that names
+no revision holds for it.
 
 ## Context
 
@@ -66,7 +67,8 @@ record.
   browser-facing listener pages one subject's events, newest first,
   authorized on `operator:read` on the organization for an operator,
   `agent:read` on the agent for an agent, and `agent:read` on the
-  organization for a supervisor. No action is added.
+  organization for a supervisor. No action is added: there is no
+  `audit:read`. The PM decided this gate for #1560.
 
 ## Consequences
 

@@ -51,9 +51,6 @@ type StandaloneStore interface {
 	// unknown to the organization, or already ended, is
 	// ErrSupervisorNotFound.
 	Revoke(ctx context.Context, org, g grn.GRN) error
-	// GetRenewal answers the renewal recorded for the certificate
-	// whose serial is predecessor, or nil.
-	GetRenewal(ctx context.Context, supervisor grn.GRN, predecessor string) (*RecordedRenewal, error)
 	// Renew records req.Signed as the successor of the presented
 	// certificate under the registration's row lock, and answers it
 	// with created true. Where an identical renewal of the same
@@ -63,14 +60,4 @@ type StandaloneStore interface {
 	// ErrRenewalConflict, and an ended registration with
 	// ErrSupervisorNotFound.
 	Renew(ctx context.Context, req SupervisorRenewal) (*SupervisorCertificate, bool, error)
-}
-
-// RecordedRenewal is a renewal as stored: the request it answered,
-// what it answered, and whether that successor is still the
-// registration's current certificate.
-type RecordedRenewal struct {
-	RequestID     RequestID
-	RequestSHA256 [32]byte
-	Successor     string
-	Current       bool
 }

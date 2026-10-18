@@ -24,6 +24,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/grn"
 )
 
@@ -539,6 +540,73 @@ func TestStandalone_ASupervisorRenewalReplaysForItsPredecessor(t *testing.T) {
 	require.Equal(t, http.StatusCreated, second.status, second.body)
 	stale := s.renewal(t, e.supervisorTLS, "renew-1", csr)
 	assert.Equal(t, http.StatusConflict, stale.status, "two renewals back is not replayed: %s", stale.body)
+}
+
+// heldRegistration holds the first registration read until release
+// closes, after it has closed reading.
+type heldRegistration struct {
+	agent.StandaloneStore
+	once    sync.Once
+	reading chan struct{}
+	release chan struct{}
+}
+
+func (h *heldRegistration) GetSupervisor(ctx context.Context, g grn.GRN) (*agent.Supervisor, error) {
+	first := false
+	h.once.Do(func() { first = true })
+	if first {
+		close(h.reading)
+		<-h.release
+	}
+	return h.StandaloneStore.GetSupervisor(ctx, g)
+}
+
+// TestSupervisorRenewal_ARenewalReadingTheRegistrationAfterItsTwinCommittedReplaysIt
+// covers two identical renewals racing where one reads the
+// registration only after the other has moved it to its successor:
+// the late one answers that successor again rather than refusing the
+// certificate it presented (#1509).
+func TestSupervisorRenewal_ARenewalReadingTheRegistrationAfterItsTwinCommittedReplaysIt(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newExecutionStack(t, p, engine)
+	_, e := s.standaloneOf(t)
+	ctx := context.Background()
+	store := agentpg.New(p)
+	registered, err := store.GetSupervisor(ctx, e.supervisor)
+	require.NoError(t, err)
+	require.NotNil(t, registered.Certificate, "a v1 supervisor holds a certificate to renew")
+	presented := *registered.Certificate
+
+	held := &heldRegistration{StandaloneStore: store, reading: make(chan struct{}), release: make(chan struct{})}
+	late := func() time.Time { return presented.NotAfter.Add(-time.Minute) }
+	signer := &countingSigner{}
+	racing := agent.NewSupervisorService(held, store, nil, signer, nil, late)
+	request := []byte("csr-" + strconv.FormatInt(time.Now().UnixNano(), 10))
+
+	type answer struct {
+		issued  *agent.SupervisorCertificate
+		created bool
+		err     error
+	}
+	second := make(chan answer, 1)
+	go func() {
+		issued, created, err := racing.RenewSupervisor(ctx, e.supervisor, presented, "renew-1", request)
+		second <- answer{issued, created, err}
+	}()
+	<-held.reading
+	first, created, err := racing.RenewSupervisor(ctx, e.supervisor, presented, "renew-1", request)
+	require.NoError(t, err)
+	assert.True(t, created, "the first renewal installs the successor")
+	close(held.release)
+	got := <-second
+
+	require.NoError(t, got.err, "the identical renewal is answered again, not refused")
+	assert.False(t, got.created)
+	assert.Equal(t, first.CertificatePEM, got.issued.CertificatePEM, "both answer one certificate")
+	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM agent_supervisor_renewals WHERE supervisor_grn = $1`, e.supervisor.String()))
+	_, _, err = racing.RenewSupervisor(ctx, e.supervisor, presented, "renew-1", []byte("csr-another"))
+	assert.ErrorIs(t, err, agent.ErrRenewalConflict, "another request under the same identifier is still refused")
 }
 
 // spending is spend for a goroutine, which cannot fail the test.

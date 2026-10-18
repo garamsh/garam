@@ -369,20 +369,6 @@ func (s *Store) Revoke(ctx context.Context, org, g grn.GRN) error {
 	})
 }
 
-func (s *Store) GetRenewal(ctx context.Context, supervisor grn.GRN, predecessor string) (*agent.RecordedRenewal, error) {
-	row, err := s.q.GetSupervisorRenewal(ctx, db.GetSupervisorRenewalParams{SupervisorGrn: supervisor.String(), PredecessorSerial: predecessor})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, storageError(err, "read renewal", nil, nil)
-	}
-	return &agent.RecordedRenewal{
-		RequestID: agent.RequestID(row.RequestID), RequestSHA256: [32]byte(row.RequestSha256),
-		Successor: row.Serial, Current: row.Current,
-	}, nil
-}
-
 func (s *Store) Renew(ctx context.Context, req agent.SupervisorRenewal) (*agent.SupervisorCertificate, bool, error) {
 	var (
 		out     *agent.SupervisorCertificate

@@ -2,22 +2,11 @@
 
 import { KeyRound, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { useActionState } from "react";
+import { useState } from "react";
 
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   revokeOperatorKey,
@@ -26,6 +15,7 @@ import {
 import type { OperatorKey } from "@/features/orgs";
 import { useHydrated } from "@/hooks/use-hydrated";
 
+import { ActionDialog } from "../../../../../_components/action-dialog";
 import { EmptyState } from "../../../../../_components/empty-state";
 import { CopyableCode } from "../../_components/copyable-code";
 import {
@@ -61,12 +51,9 @@ function RevokeKey({
   operator: string;
   kid: string;
 }) {
-  const [state, formAction, pending] = useActionState(
-    revokeOperatorKey,
-    initialState,
-  );
   const hydrated = useHydrated();
-  if (state.status === "revoked") {
+  const [revoked, setRevoked] = useState(false);
+  if (revoked) {
     return (
       <span role="status" className="text-muted-foreground">
         Revoked
@@ -74,40 +61,30 @@ function RevokeKey({
     );
   }
   return (
-    <div className="flex items-center justify-end gap-2">
-      {state.status === "error" && (
-        <span role="alert" className="text-destructive">
-          {state.message}
-        </span>
-      )}
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button variant="ghost" size="sm" disabled={!hydrated || pending}>
+    <div className="flex justify-end">
+      <ActionDialog
+        trigger={
+          <Button variant="ghost" size="sm" disabled={!hydrated}>
             Revoke
           </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <form action={formAction} className="contents">
-            <input type="hidden" name="org" value={org} />
-            <input type="hidden" name="operator" value={operator} />
-            <input type="hidden" name="kid" value={kid} />
-            <AlertDialogHeader>
-              <AlertDialogTitle>Revoke this key?</AlertDialogTitle>
-              <AlertDialogDescription>
-                It stops verifying, and every token exchanged under it stops
-                working, the moment you confirm. An operator still signing with
-                it is refused. Its record stays, listed as revoked.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction type="submit" variant="destructive">
-                Revoke key
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </form>
-        </AlertDialogContent>
-      </AlertDialog>
+        }
+        title="Revoke this key?"
+        description={
+          <p>
+            It stops verifying, and every token exchanged under it stops
+            working, the moment you confirm. An operator still signing with it
+            is refused. Its record stays, listed as revoked.
+          </p>
+        }
+        action={revokeOperatorKey}
+        initialState={initialState}
+        fields={{ org, operator, kid }}
+        confirmLabel="Revoke key"
+        pendingLabel="Revoking…"
+        destructive
+        done={(state) => state.status === "revoked"}
+        onAnswer={(state) => setRevoked(state.status === "revoked")}
+      />
     </div>
   );
 }

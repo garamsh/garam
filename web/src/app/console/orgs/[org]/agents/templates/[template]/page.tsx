@@ -9,6 +9,7 @@ import { getAgentTemplate, getOrg } from "@/features/orgs";
 import { ApiUnreachable } from "../../../../../_components/api-unreachable";
 import { ItemCrumb } from "../../../../../_components/item-crumb";
 import { PageHeader } from "../../../../../_components/page-header";
+import { RefusedRead } from "../../../../../_components/refused-read";
 import { DetailPage } from "../../../../../_components/templates/detail-page";
 import { DesiredValues } from "../../_components/agent-facts";
 
@@ -47,10 +48,7 @@ export default async function AgentTemplatePage({ params }: Params) {
     return (
       <>
         {fallback}
-        <Banner tone="warn" title="This template is not shown to you">
-          garam refused to show this template to you. An owner or admin of the
-          organization can grant it.
-        </Banner>
+        <RefusedRead subject="this template" />
       </>
     );
   }

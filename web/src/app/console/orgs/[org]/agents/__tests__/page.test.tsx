@@ -305,7 +305,7 @@ describe("agents section", () => {
     await renderPage();
 
     expect(
-      screen.getByText("Reported agents are not listed to you"),
+      screen.getByText("You can't view this organization's reported agents"),
     ).toBeInTheDocument();
     const scout = within(rowOf("Scout"));
     expect(scout.getAllByText("Not checked")).toHaveLength(2);
@@ -325,7 +325,9 @@ describe("agents section", () => {
       within(screen.getByRole("heading", { level: 1 })).getByText("2"),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Agent definitions are not listed to you"),
+      screen.queryByText(
+        "You can't view this organization's agent definitions",
+      ),
     ).not.toBeInTheDocument();
     allowed.unmount();
 
@@ -334,7 +336,7 @@ describe("agents section", () => {
     await renderPage();
 
     expect(
-      screen.getByText("Agent definitions are not listed to you"),
+      screen.getByText("You can't view this organization's agent definitions"),
     ).toBeInTheDocument();
     // The reported agent is still listed: the refusal narrows the page.
     // Its definition may be in the list that was refused, so it is not

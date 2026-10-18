@@ -1,25 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useId, useState } from "react";
 
 import { Banner } from "@/components/banner";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import type { OrgDeletionPreview } from "@/features/orgs";
 import { deleteOrg, type DeleteOrgState } from "@/features/orgs/actions";
 import { useHydrated } from "@/hooks/use-hydrated";
+
+import { ActionDialog } from "../../../../_components/action-dialog";
 
 const initialState: DeleteOrgState = { status: "idle" };
 
@@ -56,115 +45,73 @@ export type DeletionPreviewRead =
 /**
  * Deletes the organization, which nothing undoes. It is slow on
  * purpose: the dialog lists what garam counted the deletion takes
- * (ADR-0065), and the person types the organization's name. A refusal
- * and the typed name go when the dialog closes.
+ * (ADR-0065), and the person types the organization's name.
  */
-export function DeleteOrgDialog(props: Props) {
+export function DeleteOrgDialog({
+  org,
+  name,
+  read,
+}: {
+  org: string;
+  name: string;
+  read: DeletionPreviewRead;
+}) {
   const hydrated = useHydrated();
+  const router = useRouter();
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
+    <ActionDialog
+      trigger={
         <Button variant="destructive" disabled={!hydrated}>
           Delete organization
         </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent className="data-[size=default]:sm:max-w-md">
-        <DeleteForm {...props} />
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
-
-type Props = { org: string; name: string; read: DeletionPreviewRead };
-
-/**
- * The dialog's form, mounted only while the dialog is open. Opening it
- * reads the preview again, so a page left open does not confirm the
- * deletion against what the organization held when it loaded.
- */
-function DeleteForm({ org, name, read }: Props) {
-  const [state, formAction, pending] = useActionState(deleteOrg, initialState);
-  const [typed, setTyped] = useState("");
-  const confirmId = useId();
-  const router = useRouter();
-  useEffect(() => {
-    router.refresh();
-  }, [router]);
-
-  return (
-    <form action={formAction} className="contents">
-      <input type="hidden" name="org" value={org} />
-      <AlertDialogHeader>
-        <AlertDialogTitle>Delete {name}?</AlertDialogTitle>
-        <AlertDialogDescription>
+      }
+      title={`Delete ${name}?`}
+      description={
+        <p>
           This deletes the organization and everything it holds. It can&apos;t
           be undone.
-        </AlertDialogDescription>
-      </AlertDialogHeader>
-      {read.status === "ok" ? (
-        <>
-          <DeletionList counts={read.preview.counts} />
-          {read.preview.certificateAuthority && (
-            <Banner tone="danger" title="Its certificate authority goes too">
-              Nothing restores it, and every certificate it signed, an
-              operator&apos;s included, stops verifying for good.
-            </Banner>
-          )}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={confirmId}>
-              {/* One span, so the label's gap does not split the
-                  sentence around the name; the name keeps its spaces as
-                  stored, so what is shown is what is typed. */}
-              <span>
-                Type{" "}
-                <span className="font-semibold whitespace-pre-wrap">
-                  {name}
-                </span>{" "}
-                to confirm
-              </span>
-            </Label>
-            <Input
-              id={confirmId}
-              value={typed}
-              onChange={(event) => setTyped(event.target.value)}
-              autoComplete="off"
-              spellCheck={false}
-            />
-          </div>
-        </>
-      ) : (
-        <Banner tone="info" title="What this deletes is not known">
-          {read.status === "forbidden"
-            ? "garam answers what a deletion takes only to whoever may delete the organization, and it did not answer you."
-            : "garam can't be reached right now, so it can't say what this deletes. Try again in a moment."}
-        </Banner>
-      )}
-      {state.status === "error" && (
-        <p role="alert" className="text-destructive">
-          {state.message}
         </p>
-      )}
-      <AlertDialogFooter>
-        <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-        <Button
-          type="submit"
-          variant="destructive"
-          disabled={!sameName(typed, name) || pending}
-        >
-          {pending ? "Deleting…" : "Delete organization"}
-        </Button>
-      </AlertDialogFooter>
-    </form>
+      }
+      action={deleteOrg}
+      initialState={initialState}
+      fields={{ org }}
+      confirmLabel="Delete organization"
+      pendingLabel="Deleting…"
+      destructive
+      typed={{ phrase: name }}
+      blocked={read.status !== "ok"}
+      done={(state) => state.status !== "error"}
+      // Opening reads the preview again, so a page left open does not
+      // confirm the deletion against what it held when it loaded.
+      onOpen={() => router.refresh()}
+    >
+      {() => <DeletionPreview read={read} />}
+    </ActionDialog>
   );
 }
 
-/**
- * Whether what was typed is the name, exactly, once both are in one
- * Unicode form: Hangul stored decomposed (NFD) is typed composed, and
- * would otherwise never match.
- */
-function sameName(typed: string, name: string): boolean {
-  return typed.normalize("NFC") === name.normalize("NFC");
+/** What garam counted the deletion takes, or why it did not say. */
+function DeletionPreview({ read }: { read: DeletionPreviewRead }) {
+  if (read.status !== "ok") {
+    return (
+      <Banner tone="info" title="What this deletes is not known">
+        {read.status === "forbidden"
+          ? "garam answers what a deletion takes only to whoever may delete the organization, and it did not answer you."
+          : "garam can't be reached right now, so it can't say what this deletes. Try again in a moment."}
+      </Banner>
+    );
+  }
+  return (
+    <>
+      <DeletionList counts={read.preview.counts} />
+      {read.preview.certificateAuthority && (
+        <Banner tone="danger" title="Its certificate authority goes too">
+          Nothing restores it, and every certificate it signed, an
+          operator&apos;s included, stops verifying for good.
+        </Banner>
+      )}
+    </>
+  );
 }
 
 /** The kinds the organization holds, by count; a zero is left out. */

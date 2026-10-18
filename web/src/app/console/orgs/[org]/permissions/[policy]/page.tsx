@@ -21,9 +21,9 @@ import { formatPolicyDocument, hasCondition } from "@/lib/policy-document";
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { ItemCrumb } from "../../../../_components/item-crumb";
 import { PageHeader } from "../../../../_components/page-header";
+import { RefusedRead } from "../../../../_components/refused-read";
 import { DetailPage } from "../../../../_components/templates/detail-page";
 import { AttachPolicyForm } from "../_components/attach-policy-form";
-import { PoliciesRefused } from "../_components/policies-refused";
 import { PolicyStatus } from "../_components/policy-status";
 import {
   KIND_PLURAL,
@@ -38,7 +38,7 @@ import {
   type AttachedSubject,
   type Catalogs,
 } from "../_components/subjects";
-import { Outcome, OutcomeProvider } from "../_components/outcome";
+import { Outcome, OutcomeProvider } from "../../../../_components/outcome";
 import { ActivatePolicyDialog } from "./_components/activate-policy-dialog";
 import { ArchivePolicyDialog } from "./_components/archive-policy-dialog";
 import {
@@ -156,7 +156,7 @@ export default async function PolicyPage({ params }: Params) {
   if (policies.status === "forbidden") {
     return (
       <Unshown>
-        <PoliciesRefused />
+        <RefusedRead subject="this organization's policies" />
       </Unshown>
     );
   }
@@ -271,9 +271,7 @@ export default async function PolicyPage({ params }: Params) {
             label: stored === null ? "Versions" : `Versions (${stored.length})`,
             content:
               stored === null ? (
-                <Banner tone="info" title="Versions not shown">
-                  garam refused to list this policy&apos;s versions to you.
-                </Banner>
+                <RefusedRead subject="this policy's versions" />
               ) : (
                 <>
                   <Outcome area="versions" />
@@ -315,10 +313,9 @@ export default async function PolicyPage({ params }: Params) {
               <>
                 <Outcome area="attachments" />
                 {attachments.status === "forbidden" ? (
-                  <Banner tone="warn" title="Attachments not shown">
-                    garam refused to list this policy&apos;s attachments to you,
-                    so it may apply to everyone in this organization.
-                  </Banner>
+                  <RefusedRead subject="this policy's attachments">
+                    It may apply to everyone in this organization.
+                  </RefusedRead>
                 ) : (
                   <AttachmentTable
                     org={org}

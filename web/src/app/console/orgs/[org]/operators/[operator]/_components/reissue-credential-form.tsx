@@ -1,25 +1,16 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 
 import { SecretReveal } from "@/components/secret-reveal";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   reissueOperatorCredential,
   type ReissueOperatorCredentialState,
 } from "@/features/orgs/actions";
 import { useHydrated } from "@/hooks/use-hydrated";
+
+import { ActionDialog } from "../../../../../_components/action-dialog";
 
 const initialState: ReissueOperatorCredentialState = { status: "idle" };
 
@@ -37,52 +28,39 @@ export function ReissueCredentialForm({
   operator: string;
   name: string;
 }) {
-  const [state, formAction, pending] = useActionState(
-    reissueOperatorCredential,
-    initialState,
-  );
   const hydrated = useHydrated();
+  const [issued, setIssued] = useState<string | null>(null);
   // Which issued credential the person has kept, so the reveal closes
   // for that answer and opens again for the next.
   const [kept, setKept] = useState<string | null>(null);
-  const issued = state.status === "issued" ? state.credential : null;
 
   return (
     <div className="flex flex-col items-start gap-3">
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button variant="outline" disabled={!hydrated || pending}>
+      <ActionDialog
+        trigger={
+          <Button variant="outline" disabled={!hydrated}>
             Re-issue credential
           </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <form action={formAction} className="contents">
-            <input type="hidden" name="org" value={org} />
-            <input type="hidden" name="operator" value={operator} />
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                Re-issue {name}&apos;s credential?
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                The current credential, and every token exchanged for it, stop
-                working the moment you confirm. An operator still on it is
-                refused until the new one is placed in its cluster.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction type="submit" variant="destructive">
-                Re-issue credential
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </form>
-        </AlertDialogContent>
-      </AlertDialog>
-      {state.status === "error" && (
-        <p role="alert" className="text-destructive">
-          {state.message}
-        </p>
-      )}
+        }
+        title={`Re-issue ${name}'s credential?`}
+        description={
+          <p>
+            The current credential, and every token exchanged for it, stop
+            working the moment you confirm. An operator still on it is refused
+            until the new one is placed in its cluster.
+          </p>
+        }
+        action={reissueOperatorCredential}
+        initialState={initialState}
+        fields={{ org, operator }}
+        confirmLabel="Re-issue credential"
+        pendingLabel="Re-issuing…"
+        destructive
+        done={(state) => state.status === "issued"}
+        onAnswer={(state) => {
+          if (state.status === "issued") setIssued(state.credential);
+        }}
+      />
       <SecretReveal
         open={issued !== null && kept !== issued}
         title="Save the new credential"

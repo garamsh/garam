@@ -6,17 +6,6 @@ import { useActionState, useState } from "react";
 import { DescriptionList } from "@/components/description-list";
 import { FormField } from "@/components/form-field";
 import { Time } from "@/components/time";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -27,6 +16,8 @@ import {
 import type { DelegatedOperation, Delegation } from "@/features/orgs";
 import { DELEGATED_OPERATION_LABEL } from "@/lib/delegated-operations";
 import { useHydrated } from "@/hooks/use-hydrated";
+
+import { ActionDialog } from "../../../../../_components/action-dialog";
 
 const initialState: DelegationState = { status: "idle" };
 
@@ -76,10 +67,6 @@ export function DelegationForm({
 }) {
   const [granted, grantAction, granting] = useActionState(
     grantDelegation,
-    initialState,
-  );
-  const [withdrawn, withdrawAction, withdrawing] = useActionState(
-    withdrawDelegation,
     initialState,
   );
   const hydrated = useHydrated();
@@ -242,54 +229,29 @@ export function DelegationForm({
             </div>
           </form>
           {delegation !== null && (
-            <div className="flex flex-wrap items-center gap-2 border-t pt-4">
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" disabled={!hydrated || withdrawing}>
+            <div className="border-t pt-4">
+              <ActionDialog
+                trigger={
+                  <Button variant="outline" disabled={!hydrated}>
                     Withdraw delegation
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <form action={withdrawAction} className="contents">
-                    <input type="hidden" name="org" value={org} />
-                    <input type="hidden" name="operator" value={operator} />
-                    <input
-                      type="hidden"
-                      name="grantId"
-                      value={delegation.grantId}
-                    />
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        Withdraw this delegation?
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        The grant ends when you confirm, and the console hands
-                        this operator no further operations under it.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction type="submit" variant="destructive">
-                        Withdraw delegation
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </form>
-                </AlertDialogContent>
-              </AlertDialog>
-              {withdrawn.status === "error" && (
-                <p role="alert" className="text-destructive">
-                  {withdrawn.message}
-                </p>
-              )}
-              {withdrawn.status === "withdrawn" && (
-                <span
-                  role="status"
-                  className="flex items-center gap-1 text-muted-foreground"
-                >
-                  <Check aria-hidden className="size-4 text-ok" />
-                  Delegation withdrawn
-                </span>
-              )}
+                }
+                title="Withdraw this delegation?"
+                description={
+                  <p>
+                    The grant ends when you confirm, and the console hands this
+                    operator no further operations under it.
+                  </p>
+                }
+                action={withdrawDelegation}
+                initialState={initialState}
+                fields={{ org, operator, grantId: delegation.grantId }}
+                confirmLabel="Withdraw delegation"
+                pendingLabel="Withdrawing…"
+                destructive
+                done={(state) => state.status === "withdrawn"}
+                outcome={() => "Delegation withdrawn"}
+              />
             </div>
           )}
         </>

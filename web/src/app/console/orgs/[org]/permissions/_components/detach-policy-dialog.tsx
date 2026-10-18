@@ -6,7 +6,7 @@ import { Banner } from "@/components/banner";
 import { Button } from "@/components/ui/button";
 import { detachPolicy, type DetachPolicyState } from "@/features/orgs/actions";
 
-import { ActionDialog } from "./action-dialog";
+import { ActionDialog } from "../../../../_components/action-dialog";
 
 const initialState: DetachPolicyState = { status: "idle" };
 

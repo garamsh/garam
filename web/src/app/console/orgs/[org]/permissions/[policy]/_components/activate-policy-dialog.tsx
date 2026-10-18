@@ -6,7 +6,7 @@ import {
   type ActivatePolicyState,
 } from "@/features/orgs/actions";
 
-import { ActionDialog } from "../../_components/action-dialog";
+import { ActionDialog } from "../../../../../_components/action-dialog";
 import { ConditionNotice } from "../../_components/condition-notice";
 import {
   OrgWideConfirmation,

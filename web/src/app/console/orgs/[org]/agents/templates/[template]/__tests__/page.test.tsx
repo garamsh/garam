@@ -85,7 +85,7 @@ describe("agent template page", () => {
       screen.getByRole("heading", { level: 1, name: "Researcher" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("This template is not shown to you"),
+      screen.queryByText("You can't view this template"),
     ).not.toBeInTheDocument();
     allowed.unmount();
 
@@ -95,7 +95,7 @@ describe("agent template page", () => {
     });
 
     expect(
-      screen.getByText("This template is not shown to you"),
+      screen.getByText("You can't view this template"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("tab")).toBeNull();
   });

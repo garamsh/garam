@@ -179,7 +179,7 @@ describe("operators list", () => {
     await renderPage();
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      "Operators are not listed to you",
+      "You can't view this organization's operators",
     );
     expect(
       screen.queryByText("No operators registered"),

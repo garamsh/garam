@@ -818,7 +818,8 @@ ADRs:
   feedback, on shadcn/ui over Radix; it asks the server through a
   permission-check API what a caller may do and hides or disables what
   is denied, while the server still enforces every write. The
-  permission check is built; the rest is unbuilt
+  permission check is built; the rest is unbuilt; its navigation, page
+  model and hiding of a denied action are superseded in part by 0113
 - [0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md)
   — a deployment may hold its message signing keys in an OpenBao or
   Vault Transit key that signs each hand-out inside the claim's
@@ -879,3 +880,12 @@ ADRs:
   never-dispatched exception in `AGENTS.md` §Roles reached a promotion
   only while billing refused hosted minutes, which ended with attempt
   2 of run 39084547402; supersedes 0105
+- [0113](./adr/0113-the-console-is-roster-one-policy-shaped-ui-where-people-and-agents-are-members.md)
+  — the console is Roster: one UI for everyone, shaped by the caller's
+  policies; it opens on a Home computed for the person signed in,
+  lists people and agents as one organization's members told apart by
+  shape, puts a Your access panel on every object page, and keeps a
+  denied action visible as an inactive control with its reason;
+  ADR-0103's visual system stays; unbuilt, and the API for explaining
+  access and the source of Home's feed and the timeline are open;
+  supersedes 0103 in part

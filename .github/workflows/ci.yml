@@ -117,6 +117,9 @@ jobs:
         uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
         with:
           registry-type: public
+      # PROBE #1519: the subject a pull_request run presents, for the
+      # pull role's trust policy.
+      - run: scripts/oidc-subject.sh
       - run: make backend-up
         env:
           IMAGE_BUILD_CACHE: gha

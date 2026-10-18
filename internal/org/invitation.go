@@ -11,16 +11,19 @@ import (
 
 // Invitation is a one-time bearer token that admits a user into an
 // Organization with a fixed Role. Orgs grow by invitation and
-// acceptance, not open signup.
+// acceptance, not open signup. Every field is one the store writes and
+// reads back, and the aggregate holds no invariant over any of them, so
+// they are exported and whatever restores a row does it from outside
+// this package (ADR-0069).
 type Invitation struct {
-	token      string
-	orgGRN     grn.GRN
-	role       Role
-	createdBy  grn.GRN
-	createdAt  time.Time
-	expiresAt  time.Time
-	acceptedBy grn.GRN
-	acceptedAt time.Time
+	Token        string
+	Organization grn.GRN
+	Role         Role
+	CreatedBy    grn.GRN
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
+	AcceptedBy   grn.GRN
+	AcceptedAt   time.Time
 }
 
 // NewInvitationToken returns a random invitation token. The token is a
@@ -34,29 +37,20 @@ func NewInvitationToken() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
-// NewInvitation constructs a pending Invitation.
+// NewInvitation constructs a pending Invitation, stamping CreatedAt.
 func NewInvitation(token string, orgGRN grn.GRN, role Role, createdBy grn.GRN, expiresAt time.Time) *Invitation {
 	return &Invitation{
-		token:     token,
-		orgGRN:    orgGRN,
-		role:      role,
-		createdBy: createdBy,
-		createdAt: time.Now().UTC(),
-		expiresAt: expiresAt.UTC(),
+		Token:        token,
+		Organization: orgGRN,
+		Role:         role,
+		CreatedBy:    createdBy,
+		CreatedAt:    time.Now().UTC(),
+		ExpiresAt:    expiresAt.UTC(),
 	}
 }
 
-func (i *Invitation) Token() string         { return i.token }
-func (i *Invitation) Organization() grn.GRN { return i.orgGRN }
-func (i *Invitation) Role() Role            { return i.role }
-func (i *Invitation) CreatedBy() grn.GRN    { return i.createdBy }
-func (i *Invitation) CreatedAt() time.Time  { return i.createdAt }
-func (i *Invitation) ExpiresAt() time.Time  { return i.expiresAt }
-func (i *Invitation) AcceptedBy() grn.GRN   { return i.acceptedBy }
-func (i *Invitation) AcceptedAt() time.Time { return i.acceptedAt }
-
 // Accepted reports whether the invitation has been used.
-func (i *Invitation) Accepted() bool { return !i.acceptedAt.IsZero() }
+func (i *Invitation) Accepted() bool { return !i.AcceptedAt.IsZero() }
 
 // Expired reports whether the invitation is past its expiry at now.
-func (i *Invitation) Expired(now time.Time) bool { return !now.Before(i.expiresAt) }
+func (i *Invitation) Expired(now time.Time) bool { return !now.Before(i.ExpiresAt) }

@@ -20,6 +20,7 @@ import (
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 )
@@ -36,7 +37,7 @@ func TestGetInvitation_ReadsEachStateFromPostgres(t *testing.T) {
 	ctx := context.Background()
 
 	users := userpg.New(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
 	acme := grn.Org("acme")
@@ -124,7 +125,7 @@ type invitationStack struct {
 	pool    *pgxpool.Pool
 	handler http.Handler
 	users   *userpg.Store
-	orgs    *org.PostgresStore
+	orgs    *orgpg.Store
 	owner   grn.GRN
 }
 
@@ -132,7 +133,7 @@ func newInvitationStack(t *testing.T) *invitationStack {
 	t.Helper()
 	p := pool(t)
 	users := userpg.New(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
 	require.NoError(t, users.Create(context.Background(), user.New(owner, "Owner")))
 	srv := api.NewServer(users, orgs, nil, nil, nil, nil,

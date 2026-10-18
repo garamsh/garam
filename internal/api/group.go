@@ -232,10 +232,10 @@ func groupGRN(orgSlug, groupSlug string) grn.GRN {
 
 func groupToAPI(g *org.Group) apigen.Group {
 	return apigen.Group{
-		Grn:    g.GRN().String(),
-		Name:   g.Name(),
-		OrgGrn: g.Organization().String(),
-		Roles:  rolesToAPI(g.Roles()),
+		Grn:    g.GRN.String(),
+		Name:   g.Name,
+		OrgGrn: g.Organization.String(),
+		Roles:  rolesToAPI(g.Roles),
 	}
 }
 

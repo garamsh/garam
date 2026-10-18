@@ -15,6 +15,7 @@ import (
 	"github.com/garamsh/garam/internal/ca"
 	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // statusOf reads how far a message has got, as its sender.
@@ -59,7 +60,7 @@ func fieldsOf(t *testing.T, body []byte) []string {
 func TestMessageStatus_ASenderReadsItsOwnMessageThroughEveryStateItReaches(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	key := make([]byte, ca.KeySize)

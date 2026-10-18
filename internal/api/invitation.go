@@ -58,10 +58,10 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, orgSlu
 		return
 	}
 	writeJSON(w, http.StatusCreated, apigen.Invitation{
-		Token:     inv.Token(),
-		OrgGrn:    inv.Organization().String(),
-		Role:      apigen.Role(inv.Role()),
-		ExpiresAt: inv.ExpiresAt(),
+		Token:     inv.Token,
+		OrgGrn:    inv.Organization.String(),
+		Role:      apigen.Role(inv.Role),
+		ExpiresAt: inv.ExpiresAt,
 	})
 }
 
@@ -79,7 +79,7 @@ func (s *Server) GetInvitation(w http.ResponseWriter, r *http.Request, token str
 		writeError(w, err)
 		return
 	}
-	o, err := s.orgs.GetOrg(r.Context(), inv.Organization())
+	o, err := s.orgs.GetOrg(r.Context(), inv.Organization)
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		writeError(w, org.ErrInvitationNotFound)
 		return
@@ -96,11 +96,11 @@ func (s *Server) GetInvitation(w http.ResponseWriter, r *http.Request, token str
 		state = apigen.InvitationPreviewStateExpired
 	}
 	writeJSON(w, http.StatusOK, apigen.InvitationPreview{
-		Org:       inv.Organization().Identifier,
-		OrgName:   o.Name(),
-		Role:      apigen.Role(inv.Role()),
+		Org:       inv.Organization.Identifier,
+		OrgName:   o.Name,
+		Role:      apigen.Role(inv.Role),
 		State:     state,
-		ExpiresAt: inv.ExpiresAt(),
+		ExpiresAt: inv.ExpiresAt,
 	})
 }
 

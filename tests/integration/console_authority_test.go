@@ -16,6 +16,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -263,7 +264,7 @@ func TestConsoleAuthority_RechecksBeforeTheOperatorAnswers(t *testing.T) {
 	status, _ := s.introspect(t, s.controlTLS, byOwner)
 	assert.Equal(t, http.StatusNotFound, status, "another audience learns nothing")
 
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.RemoveMember(ctx, s.acme, s.memberGRN))
 	status, _ = s.introspect(t, s.hostedTLS, byMember)
 	assert.Equal(t, http.StatusForbidden, status, "the member was removed")

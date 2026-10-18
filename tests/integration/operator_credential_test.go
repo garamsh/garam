@@ -17,6 +17,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // credentialFor draws the credential a registration of o issues
@@ -60,7 +61,7 @@ func exchangeService(s *operator.PostgresStore) operator.Service {
 func TestOperatorCredential_ReissueVoidsTheTokensOfThePreviousOne(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	svc := exchangeService(store)
 	subject, previous := registerCredentialed(t, store, "one")
@@ -98,7 +99,7 @@ func TestOperatorCredential_ReissueVoidsTheTokensOfThePreviousOne(t *testing.T) 
 func TestOperatorCredential_ReissueIssuesAFirstOrRefusesAnUnknownOperator(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	subject, _ := registerCredentialed(t, store, "one")
 	_, err := p.Exec(ctx, `DELETE FROM operator_credentials WHERE operator_grn = $1`, subject.String())
@@ -125,7 +126,7 @@ func TestOperatorCredential_ReissueIssuesAFirstOrRefusesAnUnknownOperator(t *tes
 func TestOperatorCredential_DeleteTakesTheCredentialAndItsTokens(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	svc := exchangeService(store)
 	deleted, deletedCredential := registerCredentialed(t, store, "one")
@@ -154,7 +155,7 @@ func TestOperatorCredential_DeleteTakesTheCredentialAndItsTokens(t *testing.T) {
 func TestOperatorToken_ExpiredAndSweptAndAudienceKept(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	svc := exchangeService(store)
 	subject, credential := registerCredentialed(t, store, "controller")
@@ -250,7 +251,7 @@ func identifiesWith(t *testing.T, client *http.Client, url, token string) int {
 func TestOperatorToken_RefusedOnTheNextRequestOverAnOpenConnection(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
@@ -309,7 +310,7 @@ func requestWith(t *testing.T, client *http.Client, method, url, token string) (
 func TestOperatorToken_ReachesTheOperatorRoutesAloneOnTheShippedListener(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
@@ -337,7 +338,7 @@ func TestOperatorToken_ReachesTheOperatorRoutesAloneOnTheShippedListener(t *test
 func TestOperatorToken_ACredentialHoldsItsNewestFiveTokens(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	svc := exchangeService(store)
 	subject, credential := registerCredentialed(t, store, "one")

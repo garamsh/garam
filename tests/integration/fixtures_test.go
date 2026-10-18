@@ -49,6 +49,7 @@ import (
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -240,7 +241,7 @@ func statementDoc(sid string, effect wire.Effect, action, resource string) authz
 func newPolicyOrg(t *testing.T, p *pgxpool.Pool) grn.GRN {
 	t.Helper()
 	orgGRN := grnOf("org", "acme")
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(context.Background(), org.NewOrganization(orgGRN, "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(context.Background(), org.NewOrganization(orgGRN, "acme")))
 	return orgGRN
 }
 

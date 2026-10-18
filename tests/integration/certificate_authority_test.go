@@ -15,6 +15,7 @@ import (
 	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // TestCertificateAuthority_RoundTrip issues against real Postgres: an
@@ -24,7 +25,7 @@ import (
 func TestCertificateAuthority_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	acme := orgRootGRN("acme")
 	other := orgRootGRN("other")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
@@ -121,7 +122,7 @@ func TestCertificateAuthority_SurrendersItsTimestamps(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	acme := orgRootGRN("acme")
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 
 	key := make([]byte, ca.KeySize)
 	_, err := rand.Read(key)

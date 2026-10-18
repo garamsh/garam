@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // TestConsentStore_RoundTrip drives the consent relation through the
@@ -25,7 +26,7 @@ func TestConsentStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := message.NewPostgresStore(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	acme, globex, initech := orgRootGRN("acme"), orgRootGRN("globex"), orgRootGRN("initech")
 	for _, o := range []struct {
 		g    grn.GRN
@@ -111,7 +112,7 @@ func TestConsentStore_RoundTrip(t *testing.T) {
 func TestConsent_StaysARealPair(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
@@ -171,7 +172,7 @@ func TestConsentStore_ClassifiesAGrantTowardAnOrgThatIsNotThere(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	truncate(t, p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(globex, "globex")))

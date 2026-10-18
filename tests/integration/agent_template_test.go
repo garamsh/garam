@@ -17,6 +17,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // retiredMessage is what 000034's guard raises for any write to a
@@ -70,7 +71,7 @@ func requireRetired(t *testing.T, err error) {
 func TestAgentTemplate_ARetiredTemplateIsReadAsKept(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
 	s := agent.NewPostgresStore(p)
@@ -114,7 +115,7 @@ func TestAgentTemplate_ARetiredTemplateIsReadAsKept(t *testing.T) {
 func TestAgentTemplate_TheSchemaRefusesEveryWrite(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	kept := keepTemplate(t, p, "acme", "Researcher", agent.Values{"workspace": "papers"})
 
 	for name, write := range map[string]struct {
@@ -156,7 +157,7 @@ func TestAgentTemplate_TheSchemaRefusesEveryWrite(t *testing.T) {
 func TestAgentTemplate_ADefinitionKeepsWhatItCopied(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	s := agent.NewPostgresStore(p)
 	kept := keepTemplate(t, p, "acme", "Researcher", agent.Values{"workspace": "papers", "notes": "weekly"})
 	stored, err := s.GetTemplate(ctx, kept)
@@ -188,7 +189,7 @@ func TestAgentTemplate_ADefinitionKeepsWhatItCopied(t *testing.T) {
 func TestAgentDefinition_RenameMovesOnlyTheName(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	s := agent.NewPostgresStore(p)
 	d := defineAgent(t, p, s, scopedGRN("acme", agent.ServiceTypeOperator, "one"), agent.Values{"workspace": "papers"})
 	claim, err := s.Claim(ctx, d.Agent(), d.Operator())
@@ -221,7 +222,7 @@ func TestAgentDefinition_RenameMovesOnlyTheName(t *testing.T) {
 func TestAgentDefinition_TheSchemaRefusesWhatTheDomainRefuses(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	s := agent.NewPostgresStore(p)
 	d := defineAgent(t, p, s, scopedGRN("acme", agent.ServiceTypeOperator, "one"), nil)
 
@@ -322,7 +323,7 @@ func TestMigration26_NamesEveryExistingDefinitionByItsIdentifier(t *testing.T) {
 func TestAgentDefinition_ATeamHoldsAnAgentBeforeAnyOperatorClaimsIt(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	s := agent.NewPostgresStore(p)
 	d := defineAgent(t, p, s, scopedGRN("acme", agent.ServiceTypeOperator, "one"), nil)

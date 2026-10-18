@@ -18,6 +18,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 )
@@ -172,7 +173,7 @@ func TestRegisterPassword_ADuplicateCarriesNoneOfPostgresText(t *testing.T) {
 	ctx := context.Background()
 
 	users := userpg.New(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
 	acme := grn.Org("acme")
@@ -231,7 +232,7 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 	ctx := context.Background()
 
 	users := userpg.New(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
 	acme := grn.Org("acme")

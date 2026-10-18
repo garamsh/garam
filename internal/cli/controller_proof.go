@@ -12,7 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
-	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -23,7 +23,7 @@ import (
 // hosted operator's current policy decided by CheckCurrent.
 func newProofService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, now func() time.Time) operator.ProofService {
 	return operator.NewProofService(operatorpg.New(pool), agentPlacements{store: agent.NewPostgresStore(pool)},
-		audienceAuthorization{groups: memberGroups{store: org.NewPostgresStore(pool)},
+		audienceAuthorization{groups: memberGroups{store: orgpg.New(pool)},
 			engine: authzv1.NewAuthzServiceClient(engine)},
 		operator.Config{Now: now})
 }

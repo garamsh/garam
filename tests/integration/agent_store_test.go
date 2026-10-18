@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // TestAgentStore_RoundTrip drives an agent through the shape ADR-0012
@@ -25,7 +26,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	p := pool(t)
 	s := agent.NewPostgresStore(p)
 	orgGRN := grnOf("org", "acme")
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
@@ -122,7 +123,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 
 	// An agent belongs to its org and disappears with it, assignment
 	// included.
-	require.NoError(t, org.NewPostgresStore(p).DeleteOrg(ctx, orgGRN))
+	require.NoError(t, orgpg.New(p).DeleteOrg(ctx, orgGRN))
 	_, err = s.Get(ctx, g)
 	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
 	var assignments int
@@ -139,7 +140,7 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := agent.NewPostgresStore(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
@@ -226,7 +227,7 @@ func TestAgent_GRNNamesAnAgentOfItsOrg(t *testing.T) {
 	p := pool(t)
 	s := agent.NewPostgresStore(p)
 	orgGRN := grnOf("org", "acme")
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
@@ -267,7 +268,7 @@ func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 	p := pool(t)
 	s := agent.NewPostgresStore(p)
 	orgGRN := grnOf("org", "acme")
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
@@ -318,7 +319,7 @@ func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := agent.NewPostgresStore(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 	otherOrgGRN := grn.New(grn.RootOwner, grn.DefaultProject, "org", "globex")
@@ -385,7 +386,7 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	orgGRN := grnOf("org", "acme")
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
 	registered := registerOperator(t, p, grnOf(agent.ServiceTypeOperator, "one"))
@@ -395,7 +396,7 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 	// boundary with this org's operator would break the ownership rule
 	// and the same-org rule together, and dropping either would leave
 	// the other still refusing the row.
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx,
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx,
 		org.NewOrganization(orgRootGRN("globex"), "globex")))
 	globexOperator := registerOperator(t, p, scopedGRN("globex", agent.ServiceTypeOperator, "one"))
 

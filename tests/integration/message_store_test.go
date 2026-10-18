@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // TestMessageStore_RoundTrip drives the queue ADR-0013 rests on: a
@@ -317,7 +318,7 @@ func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
 	require.NoError(t, err)
 	// The claim is an agent's write, so the agent exists: the execution
 	// fence admits it in its legacy mode (ADR-0080).
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	bot, ada := seedAgent(t, agent.NewPostgresStore(p), orgRootGRN("acme")), grnOf("user", "ada")
 	legacy := legacyFence(bot)
 	fence := message.Fence{Agent: bot, Serial: legacy.Credential.Serial,

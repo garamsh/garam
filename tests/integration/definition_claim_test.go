@@ -18,6 +18,7 @@ import (
 	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // defineAgent keeps a definition of an agent operator is to run, as
@@ -57,7 +58,7 @@ func definitionsOf(t *testing.T, client *http.Client, url string) []machinegen.D
 func TestDefinitionSurface_AnOperatorReadsClaimsAndRunsWhatNamesIt(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
 
@@ -150,7 +151,7 @@ func TestAgentStore_ConcurrentClaimsSerializeToOneWinner(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := agent.NewPostgresStore(p)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	operator := scopedGRN("acme", agent.ServiceTypeOperator, "one")
 	d := defineAgent(t, p, s, operator, agent.Values{})
@@ -205,7 +206,7 @@ func TestAgentStore_ConcurrentClaimsSerializeToOneWinner(t *testing.T) {
 func TestDefinitionSurface_AClaimReportsTheAgentsCurrentAssignment(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)

@@ -29,6 +29,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // signedClaims is what a verifier reads out of a message signature,
@@ -171,7 +172,7 @@ func newSigningStackHolding(t *testing.T, signing message.Custodian) signingStac
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	key := make([]byte, ca.KeySize)
 	_, err := rand.Read(key)
 	require.NoError(t, err)
@@ -305,7 +306,7 @@ func TestMessageSignature_AVerifierRefusesATamperedContentByte(t *testing.T) {
 func TestMessageSignature_GaramSignsTheRefusalItWroteAsItsOwn(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	for _, name := range []string{"acme", "globex"} {
 		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN(name), name)))
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // The cutover stages against the real stores (ADR-0086). The authority
@@ -24,7 +25,7 @@ func newCutover(t *testing.T, values agent.Values) fence {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	agents := agent.NewPostgresStore(p)
 	controller := scopedGRN("acme", agent.ServiceTypeOperator, "controller")
 	d := defineAgent(t, p, agents, controller, values)

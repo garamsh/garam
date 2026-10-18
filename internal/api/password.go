@@ -105,7 +105,7 @@ func (s *Server) registerClaimed(r *http.Request, inv *org.Invitation, g grn.GRN
 		s.releaseClaim(r, inv, g)
 		return nil, nil, err
 	}
-	m := org.NewMembership(inv.Organization(), g, inv.Role())
+	m := org.NewMembership(inv.Organization, g, inv.Role)
 	err = s.credentials.Create(ctx, g, verifier)
 	if err == nil {
 		err = s.orgs.AddMember(ctx, m)
@@ -138,7 +138,7 @@ func (s *Server) releaseClaim(r *http.Request, inv *org.Invitation, g grn.GRN) {
 	ctx := context.WithoutCancel(r.Context())
 	err := s.orgs.ReleaseInvitationClaim(ctx, inv)
 	attrs := []any{
-		slog.String("org", inv.Organization().String()),
+		slog.String("org", inv.Organization.String()),
 		slog.String("user_id", g.String()),
 	}
 	if err != nil {

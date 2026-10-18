@@ -15,6 +15,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // enrol spends the operator's token against the machine listener and
@@ -65,7 +66,7 @@ func identifies(t *testing.T, url string, pair tls.Certificate) int {
 func TestOperatorDelete_StopsTheCertificateItAuthenticatesWith(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
@@ -121,7 +122,7 @@ func TestOperatorDelete_StopsTheCertificateItAuthenticatesWith(t *testing.T) {
 func TestOperatorDelete_RefusesAnOperatorADefinitionNames(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
 	agents := agent.NewPostgresStore(p)
 

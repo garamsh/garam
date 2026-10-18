@@ -243,7 +243,7 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug 
 	}
 	out := make([]apigen.Member, 0, len(members))
 	for _, m := range members {
-		out = append(out, memberToAPI(m, nicknames[m.User().String()]))
+		out = append(out, memberToAPI(m, nicknames[m.User.String()]))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -255,7 +255,7 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug 
 func (s *Server) nicknamesOf(ctx context.Context, members []*org.Membership) (map[string]*string, error) {
 	grns := make([]grn.GRN, 0, len(members))
 	for _, m := range members {
-		grns = append(grns, m.User())
+		grns = append(grns, m.User)
 	}
 	users, err := s.users.ListByGRNs(ctx, grns)
 	if err != nil {
@@ -353,9 +353,9 @@ func orgGRN(slug string) grn.GRN {
 
 func orgToAPI(o *org.Organization) apigen.Organization {
 	return apigen.Organization{
-		Grn:       o.GRN().String(),
-		Name:      o.Name(),
-		CreatedAt: o.CreatedAt(),
+		Grn:       o.GRN.String(),
+		Name:      o.Name,
+		CreatedAt: o.CreatedAt,
 	}
 }
 
@@ -363,9 +363,9 @@ func orgToAPI(o *org.Organization) apigen.Organization {
 // user row could not be resolved.
 func memberToAPI(m *org.Membership, nickname *string) apigen.Member {
 	return apigen.Member{
-		UserGrn:  m.User().String(),
+		UserGrn:  m.User.String(),
 		Nickname: nickname,
-		Role:     apigen.Role(m.Role()),
-		Since:    m.CreatedAt(),
+		Role:     apigen.Role(m.Role),
+		Since:    m.CreatedAt,
 	}
 }

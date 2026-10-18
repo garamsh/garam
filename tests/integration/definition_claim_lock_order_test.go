@@ -9,6 +9,7 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // TestDefinitionClaimLockOrder_AnOrganizationDeletionAndAClaimBothComplete
@@ -24,7 +25,7 @@ import (
 func TestDefinitionClaimLockOrder_AnOrganizationDeletionAndAClaimBothComplete(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	s := agent.NewPostgresStore(p)
 	operatorGRN := scopedGRN("acme", agent.ServiceTypeOperator, "controller")
 	d := defineAgent(t, p, s, operatorGRN, agent.Values{"model": "haiku"})
@@ -40,7 +41,7 @@ func TestDefinitionClaimLockOrder_AnOrganizationDeletionAndAClaimBothComplete(t 
 	_, err = parked.Exec(ctx, `SELECT grn FROM operators WHERE grn = $1 FOR KEY SHARE`, operatorGRN.String())
 	require.NoError(t, err)
 	deleted := make(chan error, 1)
-	go func() { deleted <- org.NewPostgresStore(p).DeleteOrg(ctx, orgRootGRN("acme")) }()
+	go func() { deleted <- orgpg.New(p).DeleteOrg(ctx, orgRootGRN("acme")) }()
 	awaitSettled(t, p, 1, returned(deleted))
 	type claim struct {
 		assignment *agent.Assignment

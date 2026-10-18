@@ -20,6 +20,7 @@ import (
 	machinepg "github.com/garamsh/garam/internal/machine/postgres"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // evidenceRow is one machine_authentication_evidence row as a test
@@ -48,7 +49,7 @@ func evidenceOf(t *testing.T, p *pgxpool.Pool, caller grn.GRN, path machine.Path
 func createOrgs(t *testing.T, p *pgxpool.Pool, names ...string) {
 	t.Helper()
 	for _, name := range names {
-		require.NoError(t, org.NewPostgresStore(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN(name), name)))
+		require.NoError(t, orgpg.New(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN(name), name)))
 	}
 }
 
@@ -121,7 +122,7 @@ func TestMachineEvidence_GoesWithTheTenantAndOutlivesTheCaller(t *testing.T) {
 	_, ok := evidenceOf(t, p, deleted, machine.PathCertificate)
 	assert.True(t, ok, "a deleted caller keeps its evidence while its organization remains")
 
-	require.NoError(t, org.NewPostgresStore(p).DeleteOrg(ctx, orgRootGRN("acme")))
+	require.NoError(t, orgpg.New(p).DeleteOrg(ctx, orgRootGRN("acme")))
 	_, ok = evidenceOf(t, p, deleted, machine.PathCertificate)
 	assert.False(t, ok, "the organization's deletion takes its evidence")
 	_, ok = evidenceOf(t, p, other, machine.PathCertificate)

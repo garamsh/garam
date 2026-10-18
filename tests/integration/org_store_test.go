@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 )
@@ -20,17 +21,17 @@ import (
 func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 	orgGRN := grnOf("org", "acme")
 
 	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 	got, err := s.GetOrg(ctx, orgGRN)
 	require.NoError(t, err)
-	assert.Equal(t, "acme", got.Name())
+	assert.Equal(t, "acme", got.Name)
 
 	renamed, err := s.UpdateOrg(ctx, orgGRN, org.Patch{Name: ptr("acme2")})
 	require.NoError(t, err)
-	assert.Equal(t, "acme2", renamed.Name())
+	assert.Equal(t, "acme2", renamed.Name)
 
 	groupGRN := grnOf("group", "eng")
 	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(groupGRN, "eng", orgGRN, string(org.RoleMember))))
@@ -41,13 +42,13 @@ func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	// the actions the scoped check reads.
 	gotGroup, err := s.GetGroup(ctx, groupGRN)
 	require.NoError(t, err)
-	assert.Equal(t, []string{string(org.RoleMember)}, gotGroup.Roles())
-	assert.Contains(t, org.ActionsFor(gotGroup.Roles()), org.ActionGroupRead)
+	assert.Equal(t, []string{string(org.RoleMember)}, gotGroup.Roles)
+	assert.Contains(t, org.ActionsFor(gotGroup.Roles), org.ActionGroupRead)
 
 	gotProject, err := s.GetProject(ctx, projectGRN)
 	require.NoError(t, err)
-	assert.Equal(t, []string{string(org.RoleMember)}, gotProject.Roles())
-	assert.Contains(t, org.ActionsFor(gotProject.Roles()), org.ActionProjectRead)
+	assert.Equal(t, []string{string(org.RoleMember)}, gotProject.Roles)
+	assert.Contains(t, org.ActionsFor(gotProject.Roles), org.ActionProjectRead)
 
 	userGRN := grnOf("user", "ada")
 	require.NoError(t, userpg.New(p).Create(ctx, user.New(userGRN, "ada")))
@@ -61,31 +62,31 @@ func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	groups, err := s.ListGroups(ctx, orgGRN, listfilter.Filter{})
 	require.NoError(t, err)
 	assert.Len(t, groups, 1)
-	assert.Equal(t, orgGRN, groups[0].Organization())
-	assert.Equal(t, []string{string(org.RoleMember)}, groups[0].Roles())
+	assert.Equal(t, orgGRN, groups[0].Organization)
+	assert.Equal(t, []string{string(org.RoleMember)}, groups[0].Roles)
 
 	// A patch without roles keeps the stored ones (the coalesce
 	// branch); one carrying roles replaces the whole set, and an empty
 	// slice clears it rather than reading as "unchanged".
 	patchedGroup, err := s.UpdateGroup(ctx, groupGRN, org.GroupPatch{Name: ptr("eng2")})
 	require.NoError(t, err)
-	assert.Equal(t, "eng2", patchedGroup.Name())
-	assert.Equal(t, []string{string(org.RoleMember)}, patchedGroup.Roles())
+	assert.Equal(t, "eng2", patchedGroup.Name)
+	assert.Equal(t, []string{string(org.RoleMember)}, patchedGroup.Roles)
 
 	patchedGroup, err = s.UpdateGroup(ctx, groupGRN, org.GroupPatch{Roles: []string{string(org.RoleAdmin)}})
 	require.NoError(t, err)
-	assert.Equal(t, []string{string(org.RoleAdmin)}, patchedGroup.Roles())
-	assert.Contains(t, org.ActionsFor(patchedGroup.Roles()), org.ActionOrgUpdate)
+	assert.Equal(t, []string{string(org.RoleAdmin)}, patchedGroup.Roles)
+	assert.Contains(t, org.ActionsFor(patchedGroup.Roles), org.ActionOrgUpdate)
 
 	patchedProject, err := s.UpdateProject(ctx, projectGRN, org.ProjectPatch{Name: ptr("web2")})
 	require.NoError(t, err)
-	assert.Equal(t, "web2", patchedProject.Name())
-	assert.Equal(t, []string{string(org.RoleMember)}, patchedProject.Roles())
+	assert.Equal(t, "web2", patchedProject.Name)
+	assert.Equal(t, []string{string(org.RoleMember)}, patchedProject.Roles)
 
 	patchedProject, err = s.UpdateProject(ctx, projectGRN, org.ProjectPatch{Roles: []string{}})
 	require.NoError(t, err)
-	assert.Empty(t, patchedProject.Roles())
-	assert.Empty(t, org.ActionsFor(patchedProject.Roles()))
+	assert.Empty(t, patchedProject.Roles)
+	assert.Empty(t, org.ActionsFor(patchedProject.Roles))
 
 	// Deleting the org cascades to groups and projects.
 	require.NoError(t, s.DeleteOrg(ctx, orgGRN))
@@ -104,7 +105,7 @@ func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 func TestOrgStore_GroupAndProjectSurrenderTheirPolicies(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 
@@ -114,27 +115,27 @@ func TestOrgStore_GroupAndProjectSurrenderTheirPolicies(t *testing.T) {
 	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(groupGRN, "eng", orgGRN)))
 	freshGroup, err := s.GetGroup(ctx, groupGRN)
 	require.NoError(t, err)
-	assert.Empty(t, freshGroup.Policies(),
+	assert.Empty(t, freshGroup.Policies,
 		"a group stored with none reads back none, so the assertion below reads the patch")
 
 	_, err = s.UpdateGroup(ctx, groupGRN, org.GroupPatch{Policies: attached})
 	require.NoError(t, err)
 	storedGroup, err := s.GetGroup(ctx, groupGRN)
 	require.NoError(t, err)
-	assert.Equal(t, attached, storedGroup.Policies())
+	assert.Equal(t, attached, storedGroup.Policies)
 
 	projectGRN := grnOf("project", "web")
 	require.NoError(t, s.CreateProject(ctx, org.NewProject(projectGRN, "web", orgGRN)))
 	freshProject, err := s.GetProject(ctx, projectGRN)
 	require.NoError(t, err)
-	assert.Empty(t, freshProject.Policies(),
+	assert.Empty(t, freshProject.Policies,
 		"a project stored with none reads back none, so the assertion below reads the patch")
 
 	_, err = s.UpdateProject(ctx, projectGRN, org.ProjectPatch{Policies: attached})
 	require.NoError(t, err)
 	storedProject, err := s.GetProject(ctx, projectGRN)
 	require.NoError(t, err)
-	assert.Equal(t, attached, storedProject.Policies())
+	assert.Equal(t, attached, storedProject.Policies)
 }
 
 // TestOrgStore_OrgGroupAndProjectSurrenderTheirTimestamps holds the
@@ -143,7 +144,7 @@ func TestOrgStore_GroupAndProjectSurrenderTheirPolicies(t *testing.T) {
 // read back by the same store.
 func TestOrgStore_OrgGroupAndProjectSurrenderTheirTimestamps(t *testing.T) {
 	ctx := context.Background()
-	s := org.NewPostgresStore(pool(t))
+	s := orgpg.New(pool(t))
 
 	orgGRN := grnOf("org", "acme")
 	groupGRN := grnOf("group", "eng")
@@ -157,36 +158,36 @@ func TestOrgStore_OrgGroupAndProjectSurrenderTheirTimestamps(t *testing.T) {
 
 	storedOrg, err := s.GetOrg(ctx, orgGRN)
 	require.NoError(t, err)
-	assertInserted(t, stamps{created: storedOrg.CreatedAt(), updated: storedOrg.UpdatedAt()}, before, after)
+	assertInserted(t, stamps{created: storedOrg.CreatedAt, updated: storedOrg.UpdatedAt}, before, after)
 	updatedOrg, err := s.UpdateOrg(ctx, orgGRN, org.Patch{Name: ptr("acme2")})
 	require.NoError(t, err)
 	assertUpdated(t,
-		stamps{created: storedOrg.CreatedAt(), updated: storedOrg.UpdatedAt()},
-		stamps{created: updatedOrg.CreatedAt(), updated: updatedOrg.UpdatedAt()})
+		stamps{created: storedOrg.CreatedAt, updated: storedOrg.UpdatedAt},
+		stamps{created: updatedOrg.CreatedAt, updated: updatedOrg.UpdatedAt})
 
 	storedGroup, err := s.GetGroup(ctx, groupGRN)
 	require.NoError(t, err)
-	assertInserted(t, stamps{created: storedGroup.CreatedAt(), updated: storedGroup.UpdatedAt()}, before, after)
+	assertInserted(t, stamps{created: storedGroup.CreatedAt, updated: storedGroup.UpdatedAt}, before, after)
 	updatedGroup, err := s.UpdateGroup(ctx, groupGRN, org.GroupPatch{Name: ptr("eng2")})
 	require.NoError(t, err)
 	assertUpdated(t,
-		stamps{created: storedGroup.CreatedAt(), updated: storedGroup.UpdatedAt()},
-		stamps{created: updatedGroup.CreatedAt(), updated: updatedGroup.UpdatedAt()})
+		stamps{created: storedGroup.CreatedAt, updated: storedGroup.UpdatedAt},
+		stamps{created: updatedGroup.CreatedAt, updated: updatedGroup.UpdatedAt})
 
 	storedProject, err := s.GetProject(ctx, projectGRN)
 	require.NoError(t, err)
-	assertInserted(t, stamps{created: storedProject.CreatedAt(), updated: storedProject.UpdatedAt()}, before, after)
+	assertInserted(t, stamps{created: storedProject.CreatedAt, updated: storedProject.UpdatedAt}, before, after)
 	updatedProject, err := s.UpdateProject(ctx, projectGRN, org.ProjectPatch{Name: ptr("web2")})
 	require.NoError(t, err)
 	assertUpdated(t,
-		stamps{created: storedProject.CreatedAt(), updated: storedProject.UpdatedAt()},
-		stamps{created: updatedProject.CreatedAt(), updated: updatedProject.UpdatedAt()})
+		stamps{created: storedProject.CreatedAt, updated: storedProject.UpdatedAt},
+		stamps{created: updatedProject.CreatedAt, updated: updatedProject.UpdatedAt})
 }
 
 func TestOrgStore_Membership(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	userGRN := grnOf("user", "ada")
 
@@ -199,7 +200,7 @@ func TestOrgStore_Membership(t *testing.T) {
 
 	got, err := s.GetMember(ctx, orgGRN, userGRN)
 	require.NoError(t, err)
-	assert.Equal(t, org.RoleOwner, got.Role())
+	assert.Equal(t, org.RoleOwner, got.Role)
 
 	_, err = s.GetMember(ctx, orgGRN, grnOf("user", "nobody"))
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
@@ -211,7 +212,7 @@ func TestOrgStore_Membership(t *testing.T) {
 	orgs, err := s.ListOrgsByMember(ctx, userGRN, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, orgs, 1)
-	assert.Equal(t, orgGRN, orgs[0].GRN())
+	assert.Equal(t, orgGRN, orgs[0].GRN)
 
 	require.NoError(t, s.RemoveMember(ctx, orgGRN, userGRN))
 	members, err = s.ListMembers(ctx, orgGRN)
@@ -226,7 +227,7 @@ func TestOrgStore_Membership(t *testing.T) {
 func TestOrgStore_InvitationLifecycle(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	owner := grnOf("user", "ada")
 	invitee := grnOf("user", "bob")
@@ -244,24 +245,24 @@ func TestOrgStore_InvitationLifecycle(t *testing.T) {
 	got, err := s.GetInvitation(ctx, "tok-1")
 	require.NoError(t, err)
 	assert.False(t, got.Accepted())
-	assert.Equal(t, org.RoleAdmin, got.Role())
-	assert.True(t, expires.Equal(got.ExpiresAt()))
+	assert.Equal(t, org.RoleAdmin, got.Role)
+	assert.True(t, expires.Equal(got.ExpiresAt))
 
 	_, err = s.GetInvitation(ctx, "nope")
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 
 	m, err := s.AcceptInvitation(ctx, "tok-1", invitee)
 	require.NoError(t, err)
-	assert.Equal(t, orgGRN, m.Organization())
-	assert.Equal(t, invitee, m.User())
-	assert.Equal(t, org.RoleAdmin, m.Role())
+	assert.Equal(t, orgGRN, m.Organization)
+	assert.Equal(t, invitee, m.User)
+	assert.Equal(t, org.RoleAdmin, m.Role)
 	held, err := s.GetMember(ctx, orgGRN, invitee)
 	require.NoError(t, err)
-	assert.Equal(t, org.RoleAdmin, held.Role())
+	assert.Equal(t, org.RoleAdmin, held.Role)
 	accepted, err := s.GetInvitation(ctx, "tok-1")
 	require.NoError(t, err)
 	assert.True(t, accepted.Accepted())
-	assert.Equal(t, invitee, accepted.AcceptedBy())
+	assert.Equal(t, invitee, accepted.AcceptedBy)
 
 	_, err = s.AcceptInvitation(ctx, "tok-1", invitee)
 	assert.ErrorIs(t, err, org.ErrInvitationAccepted)
@@ -278,7 +279,7 @@ func TestOrgStore_InvitationLifecycle(t *testing.T) {
 func TestOrgStore_AcceptInvitationSpendsNothingItCannotJoin(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	owner := grnOf("user", "ada")
 	member := grnOf("user", "bob")
@@ -310,7 +311,7 @@ func TestOrgStore_AcceptInvitationSpendsNothingItCannotJoin(t *testing.T) {
 	require.NoError(t, err)
 	joined, err := s.GetMember(ctx, orgGRN, newcomer)
 	require.NoError(t, err)
-	assert.Equal(t, org.RoleAdmin, joined.Role())
+	assert.Equal(t, org.RoleAdmin, joined.Role)
 }
 
 // TestOrgStore_InvitationClaimIsReleasedOrCompletedOnlyByItsHolder
@@ -323,7 +324,7 @@ func TestOrgStore_AcceptInvitationSpendsNothingItCannotJoin(t *testing.T) {
 func TestOrgStore_InvitationClaimIsReleasedOrCompletedOnlyByItsHolder(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	owner := grnOf("user", "ada")
 	invitee := grnOf("user", "bob")
@@ -336,11 +337,11 @@ func TestOrgStore_InvitationClaimIsReleasedOrCompletedOnlyByItsHolder(t *testing
 
 	first, err := s.ClaimInvitation(ctx, "tok-1")
 	require.NoError(t, err)
-	assert.Equal(t, orgGRN, first.Organization())
+	assert.Equal(t, orgGRN, first.Organization)
 	claimed, err := s.GetInvitation(ctx, "tok-1")
 	require.NoError(t, err)
 	assert.True(t, claimed.Accepted(), "a claimed invitation reads as spent")
-	assert.True(t, claimed.AcceptedBy().IsZero(), "with nobody named yet")
+	assert.True(t, claimed.AcceptedBy.IsZero(), "with nobody named yet")
 
 	_, err = s.ClaimInvitation(ctx, "tok-1")
 	require.ErrorIs(t, err, org.ErrInvitationAccepted)
@@ -352,7 +353,7 @@ func TestOrgStore_InvitationClaimIsReleasedOrCompletedOnlyByItsHolder(t *testing
 
 	second, err := s.ClaimInvitation(ctx, "tok-1")
 	require.NoError(t, err)
-	require.False(t, second.AcceptedAt().Equal(first.AcceptedAt()),
+	require.False(t, second.AcceptedAt.Equal(first.AcceptedAt),
 		"the two claims carry different marks")
 	assert.Error(t, s.ReleaseInvitationClaim(ctx, first), "a stale mark releases nothing")
 	assert.Error(t, s.CompleteInvitationClaim(ctx, first, invitee), "nor completes anything")
@@ -365,7 +366,7 @@ func TestOrgStore_InvitationClaimIsReleasedOrCompletedOnlyByItsHolder(t *testing
 	assert.Error(t, s.ReleaseInvitationClaim(ctx, second), "an accepted invitation is not released")
 	accepted, err := s.GetInvitation(ctx, "tok-1")
 	require.NoError(t, err)
-	assert.Equal(t, invitee, accepted.AcceptedBy())
+	assert.Equal(t, invitee, accepted.AcceptedBy)
 
 	// A claim whose registration died, past its expiry, survives the
 	// sweep the next create runs; the expired pending one beside it is
@@ -403,7 +404,7 @@ func TestOrgStore_InvitationClaimIsReleasedOrCompletedOnlyByItsHolder(t *testing
 func TestOrgStore_AClaimThatLosesARaceIsRefusedAsSpent(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	owner := grnOf("user", "ada")
 	require.NoError(t, userpg.New(p).Create(ctx, user.New(owner, "ada")))
@@ -475,7 +476,7 @@ func TestOrgStore_AClaimThatLosesARaceIsRefusedAsSpent(t *testing.T) {
 func TestOrgStore_CreateInvitationPrunesExpiredPending(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	owner := grnOf("user", "ada")
 	invitee := grnOf("user", "bob")
@@ -529,7 +530,7 @@ func TestOrgStore_CreateInvitationPrunesExpiredPending(t *testing.T) {
 // decide the result instead of the fixture's size.
 func TestOrgStore_ListOrgsPagesEveryOrg(t *testing.T) {
 	ctx := context.Background()
-	s := org.NewPostgresStore(pool(t))
+	s := orgpg.New(pool(t))
 	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
 
 	acmeOrg := org.NewOrganization(acme, "acme")
@@ -540,13 +541,13 @@ func TestOrgStore_ListOrgsPagesEveryOrg(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []grn.GRN{acme, globex}, grnsOf(all), "every org, ordered by GRN")
 	require.Len(t, all, 2)
-	assert.Equal(t, "acme", all[0].Name())
-	assert.Equal(t, "globex", all[1].Name())
+	assert.Equal(t, "acme", all[0].Name)
+	assert.Equal(t, "globex", all[1].Name)
 
 	// The stamp CreateOrg wrote, to the microsecond a timestamptz keeps.
 	// A row read back zeroed, or stamped by a clock read at read time,
 	// fails here.
-	assert.WithinDuration(t, acmeOrg.CreatedAt(), all[0].CreatedAt(), time.Microsecond)
+	assert.WithinDuration(t, acmeOrg.CreatedAt, all[0].CreatedAt, time.Microsecond)
 
 	page, err := s.ListOrgs(ctx, listfilter.Filter{Limit: 1})
 	require.NoError(t, err)
@@ -564,7 +565,7 @@ func TestOrgStore_ListOrgsPagesEveryOrg(t *testing.T) {
 func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 
 	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
 	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
@@ -659,7 +660,7 @@ func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
 func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 
 	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
 	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
@@ -695,9 +696,9 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 		assert.Equal(t, []grn.GRN{webGlobex}, grnsOf(other))
 
 		require.Len(t, list, 2)
-		assert.Equal(t, "web", list[1].Name())
-		assert.Equal(t, acme, list[1].Organization())
-		assert.Equal(t, []string{string(org.RoleMember)}, list[1].Roles())
+		assert.Equal(t, "web", list[1].Name)
+		assert.Equal(t, acme, list[1].Organization)
+		assert.Equal(t, []string{string(org.RoleMember)}, list[1].Roles)
 
 		page, err := s.ListProjects(ctx, acme, listfilter.Filter{Limit: 1})
 		require.NoError(t, err)
@@ -769,11 +770,19 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 
 // grnsOf names what a list returned, so a scoped list is compared whole
 // instead of by a length guard and an index — the guard aborts before
-// the claim it guards, and a list is one claim.
-func grnsOf[T interface{ GRN() grn.GRN }](items []T) []grn.GRN {
+// the claim it guards, and a list is one claim. A constraint cannot
+// name a field, so the aggregates are listed and told apart here.
+func grnsOf[T *org.Organization | *org.Group | *org.Project](items []T) []grn.GRN {
 	out := make([]grn.GRN, 0, len(items))
 	for _, item := range items {
-		out = append(out, item.GRN())
+		switch v := any(item).(type) {
+		case *org.Organization:
+			out = append(out, v.GRN)
+		case *org.Group:
+			out = append(out, v.GRN)
+		case *org.Project:
+			out = append(out, v.GRN)
+		}
 	}
 	return out
 }
@@ -785,7 +794,7 @@ func grnsOf[T interface{ GRN() grn.GRN }](items []T) []grn.GRN {
 func TestOrgStore_MembersStayInsideTheirOrg(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := org.NewPostgresStore(p)
+	s := orgpg.New(p)
 
 	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
 	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(acme, "acme")))

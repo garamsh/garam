@@ -28,6 +28,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 	"github.com/garamsh/garam/internal/wire"
@@ -57,7 +58,7 @@ type authorityStack struct {
 func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *authorityStack {
 	t.Helper()
 	ctx := context.Background()
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
@@ -201,7 +202,7 @@ func TestDelegatedAuthority_EndToEnd(t *testing.T) {
 
 	// Membership is read when introspection asks: the member who left
 	// is refused, and the owner's authority is the control.
-	require.NoError(t, org.NewPostgresStore(s.pool).RemoveMember(context.Background(), s.acme, s.memberGRN))
+	require.NoError(t, orgpg.New(s.pool).RemoveMember(context.Background(), s.acme, s.memberGRN))
 	status, _ = s.introspect(t, s.hostedTLS, minted.Authority)
 	assert.Equal(t, http.StatusForbidden, status, "the actor left the organization")
 	status, got = s.introspect(t, s.hostedTLS, configure.Authority)
@@ -285,7 +286,7 @@ func TestDelegatedAuthority_RechecksRolesAndGroups(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	s.grant(t, "g-1", nil, "agent:create", "agent:configure")
 	agentGRN := s.provisionAgent(t)

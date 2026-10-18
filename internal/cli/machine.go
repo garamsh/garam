@@ -30,6 +30,7 @@ import (
 	"github.com/garamsh/garam/internal/message/transit"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/watch"
 	watchpg "github.com/garamsh/garam/internal/watch/postgres"
 )
@@ -292,7 +293,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	authority := NewAuthorityService(pool, cfg.Engine)
 	handler := machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, consents, watches,
-			memberGroups{store: org.NewPostgresStore(pool)}, machineapi.NewGRPCEvaluator(cfg.Engine),
+			memberGroups{store: orgpg.New(pool)}, machineapi.NewGRPCEvaluator(cfg.Engine),
 			authority, identities, newProofService(pool, cfg.Engine, cfg.Now),
 			newExecutionService(pool, cfg.Engine, authority, identities, issuer, cfg.ServerRoot, cfg.Now),
 			newSupervisorService(pool, cfg.Engine, issuer, cfg.ServerRoot, cfg.Now),

@@ -21,6 +21,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 	"github.com/garamsh/garam/internal/wire"
@@ -42,7 +43,7 @@ func newCheckStack(t *testing.T) *checkStack {
 	ctx := context.Background()
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))

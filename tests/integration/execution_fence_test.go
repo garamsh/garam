@@ -40,6 +40,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
@@ -119,7 +120,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 func newLegacyStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInterface) *executionStack {
 	t.Helper()
 	ctx := context.Background()
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))

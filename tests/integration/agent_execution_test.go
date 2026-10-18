@@ -17,6 +17,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // fence is one agent assigned to a controller, with the execution
@@ -43,7 +44,7 @@ func newFence(t *testing.T) fence {
 func newLegacyFence(t *testing.T) fence {
 	t.Helper()
 	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgpg.New(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
 	agents := agent.NewPostgresStore(p)
 	g := seedAgent(t, agents, orgRootGRN("acme"))
 	controller := scopedGRN("acme", agent.ServiceTypeOperator, "controller")

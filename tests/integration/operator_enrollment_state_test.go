@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // register records an operator of acme and answers the token beside it,
@@ -77,7 +78,7 @@ func TestOperatorEnrollmentState_TellsACertificateFromATokenFromNeither(t *testi
 	ctx := context.Background()
 	p := pool(t)
 	s := operator.NewPostgresStore(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	// Enrolled: the token was spent and a certificate recorded, which
@@ -148,7 +149,7 @@ func TestOperatorEnrollmentState_ACertificateOutranksATokenBesideIt(t *testing.T
 	ctx := context.Background()
 	p := pool(t)
 	s := operator.NewPostgresStore(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	// The certificate is minted out of band, before anything registers
@@ -189,7 +190,7 @@ func TestOperatorCertificateIssuedAt_MovesWithEachRenewal(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := operator.NewPostgresStore(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	g, _ := register(t, s, "renewing")
@@ -239,7 +240,7 @@ func TestOperatorRemint_ReplacesALiveTokenAndRefusesAnEnrolledOperator(t *testin
 	ctx := context.Background()
 	p := pool(t)
 	s := operator.NewPostgresStore(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	// No certificate, no token: the registration's token was spent on an
@@ -335,7 +336,7 @@ func TestOperatorRemint_SweepsEveryOtherOperatorsExpiredToken(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := operator.NewPostgresStore(p)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	// Every registration is made before any token is aged, because

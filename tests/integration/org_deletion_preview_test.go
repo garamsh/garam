@@ -18,6 +18,7 @@ import (
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 )
@@ -33,7 +34,7 @@ import (
 func TestOrgDeletionPreview_CountsRowsNotAPage(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	orgGRN := orgRootGRN("preview-paging")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgGRN, "preview-paging")))
 	t.Cleanup(func() { _ = orgs.DeleteOrg(ctx, orgGRN) })
@@ -69,7 +70,7 @@ func TestOrgDeletionPreview_CountsRowsNotAPage(t *testing.T) {
 func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	agents := agent.NewPostgresStore(p)
 	operators := operator.NewPostgresStore(p)
 	consents := message.NewPostgresStore(p)
@@ -169,7 +170,7 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 func TestOrgDeletionPreview_ConsentGoesForBothSides(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	consents := message.NewPostgresStore(p)
 
 	deleted := orgRootGRN("preview-consent-deleted")
@@ -210,7 +211,7 @@ func TestOrgDeletionPreview_ConsentGoesForBothSides(t *testing.T) {
 func TestOrgDeletionPreview_CertificateAuthorityGoesAndDoesNotReturn(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	orgs := org.NewPostgresStore(p)
+	orgs := orgpg.New(p)
 	authorities := capg.New(p)
 
 	withCA := orgRootGRN("preview-ca-holder")

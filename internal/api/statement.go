@@ -16,9 +16,9 @@ import (
 // roles, and the roles the target group or project grants its members.
 func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Membership, target grn.GRN, u *user.User) ([]Statement, error) {
 	statements := []Statement{{
-		Sid:      "org-role-" + string(m.Role()),
+		Sid:      "org-role-" + string(m.Role),
 		Effect:   wire.EffectAllow,
-		Action:   m.Role().Actions(),
+		Action:   m.Role.Actions(),
 		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
 	}}
 	statements = append(statements, userStatements(orgGRN, u)...)
@@ -71,7 +71,7 @@ func (s *Server) groupStatements(r *http.Request, groupGRN, subject grn.GRN) ([]
 	if !slices.Contains(members, subject) {
 		return nil, nil
 	}
-	actions := org.ActionsFor(g.Roles())
+	actions := org.ActionsFor(g.Roles)
 	if len(actions) == 0 {
 		return nil, nil
 	}
@@ -102,7 +102,7 @@ func (s *Server) projectStatements(r *http.Request, projectGRN, subject grn.GRN)
 	if !slices.Contains(members, subject) {
 		return nil, nil
 	}
-	actions := org.ActionsFor(p.Roles())
+	actions := org.ActionsFor(p.Roles)
 	if len(actions) == 0 {
 		return nil, nil
 	}

@@ -6,7 +6,7 @@ export function PageHeader({
   children,
 }: {
   title: string;
-  description: string;
+  description: React.ReactNode;
   /** How many entries a list page holds, shown beside its title. */
   count?: number;
   children?: React.ReactNode;

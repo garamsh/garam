@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  CONSOLE_NAV_GROUPS,
+  CONSOLE_NAV,
   CONSOLE_SECTIONS,
   consoleCrumbs,
   parseConsolePath,
@@ -19,12 +19,12 @@ describe("parseConsolePath", () => {
     expect(parseConsolePath("/console/orgs/new")).toEqual({ kind: "new-org" });
   });
 
-  it("reads an organization's overview", () => {
+  it("reads an organization's Home", () => {
     const location = parseConsolePath("/console/orgs/acme");
 
     expect(location.kind).toBe("org");
     expect(location).toMatchObject({ org: "acme" });
-    expect(location.kind === "org" && location.section.label).toBe("Overview");
+    expect(location.kind === "org" && location.section.label).toBe("Home");
   });
 
   it.each([
@@ -253,7 +253,7 @@ describe("consoleCrumbs", () => {
     expect(crumbs.map((crumb) => crumb.label)).toEqual([
       "Organizations",
       "other",
-      "Overview",
+      "Home",
     ]);
   });
 
@@ -276,23 +276,30 @@ describe("consoleCrumbs", () => {
   });
 });
 
-describe("CONSOLE_NAV_GROUPS", () => {
-  it("lists every section but the overview exactly once", () => {
-    const listed = CONSOLE_NAV_GROUPS.flatMap((group) =>
+describe("CONSOLE_NAV", () => {
+  it("lists every section exactly once", () => {
+    const listed = CONSOLE_NAV.flatMap((group) =>
       group.entries
         .filter((entry) => entry.view === undefined)
         .map((entry) => entry.section),
     );
 
     expect([...listed].sort()).toEqual(
-      CONSOLE_SECTIONS.map((section) => section.segment)
-        .filter((segment) => segment !== "")
-        .sort(),
+      CONSOLE_SECTIONS.map((section) => section.segment).sort(),
     );
   });
 
+  it("gates every entry but Home on a read", () => {
+    const ungated = CONSOLE_NAV.flatMap((group) => group.entries)
+      .map(resolveNavEntry)
+      .filter((entry) => entry !== undefined && entry.read === undefined)
+      .map((entry) => entry?.label);
+
+    expect(ungated).toEqual(["Home"]);
+  });
+
   it("resolves every entry to a section or a listed view", () => {
-    for (const group of CONSOLE_NAV_GROUPS) {
+    for (const group of CONSOLE_NAV) {
       for (const entry of group.entries) {
         expect(resolveNavEntry(entry)).toBeDefined();
       }

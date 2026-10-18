@@ -75,6 +75,11 @@ export function DeleteOrgDialog({
       action={deleteOrg}
       initialState={initialState}
       fields={{ org }}
+      command={{
+        label: "Delete organization",
+        consequence:
+          "Deletes the organization and everything it holds, for good.",
+      }}
       confirmLabel="Delete organization"
       pendingLabel="Deleting…"
       destructive

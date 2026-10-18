@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { useReportOutcome, type OutcomeArea } from "./outcome";
+import { usePageAction } from "./page-actions";
 import { TypedConfirm } from "./typed-confirm";
 
 /** What every Server Action a dialog sends answers with. */
@@ -51,7 +52,8 @@ type FormProps<S extends ActionState> = {
  * which sends the write from its own form and stays open until garam
  * answers. A write that lands closes it; a refusal stays in it, and goes
  * when it closes. Where the caller says what the write did, `outcome`
- * puts it beside the control that opened the dialog.
+ * puts it beside the control that opened the dialog. With `command`,
+ * the palette lists the act among the page's and opens this dialog.
  */
 export function ActionDialog<S extends ActionState>({
   trigger,
@@ -59,6 +61,7 @@ export function ActionDialog<S extends ActionState>({
   area,
   onAnswer,
   onOpen,
+  command,
   ...form
 }: FormProps<S> & {
   /** The control opening the dialog; a `Button`. */
@@ -74,8 +77,15 @@ export function ActionDialog<S extends ActionState>({
   onAnswer?: (state: S) => void;
   /** Each time the dialog opens, for a caller that reads again then. */
   onOpen?: () => void;
+  /** How the palette lists the act: its name and what follows from it. */
+  command?: { label: string; consequence: string };
 }) {
   const [open, setOpen] = useState(false);
+  const openDialog = (next: boolean) => {
+    setOpen(next);
+    if (next) onOpen?.();
+  };
+  usePageAction(command, () => openDialog(true));
   const [said, setSaid] = useState<string | null>(null);
   const report = useReportOutcome();
   const answered = (next: S) => {
@@ -92,13 +102,7 @@ export function ActionDialog<S extends ActionState>({
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <AlertDialog
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (next) onOpen?.();
-        }}
-      >
+      <AlertDialog open={open} onOpenChange={openDialog}>
         <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
         <AlertDialogContent className="sm:max-w-lg">
           <ConfirmForm {...form} onAnswer={answered} />

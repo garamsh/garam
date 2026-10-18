@@ -10,6 +10,7 @@ export {
   UNNAMED_AGENT,
   agentChoiceLabel,
   directoryAgents,
+  isFailing,
   lookUpAgent,
   refusedAgentLists,
   type AgentDirectory,
@@ -60,6 +61,7 @@ export {
   lookupAgentDefinitions,
   lookupAgents,
   lookupGroups,
+  lookupMyGroups,
   lookupOperators,
   lookupOrgConsents,
   lookupOrgMembers,
@@ -91,6 +93,15 @@ export {
   type PolicyVersion,
 } from "./api/policies";
 export { parseGrn, slugFromGrn } from "@/lib/grn";
+export {
+  memberLabel,
+  memberName,
+  resolveTeamMembers,
+  teamCandidates,
+  type Candidate,
+  type MemberKind,
+  type TeamMember,
+} from "./team-member";
 export {
   KIND_LABEL,
   kindFromGrn,

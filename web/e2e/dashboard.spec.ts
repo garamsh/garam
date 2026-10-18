@@ -41,10 +41,7 @@ test.describe("signed in", () => {
     ).toBeVisible();
   });
 
-  test("opens an organization and counts what it holds", async ({
-    page,
-    signedIn,
-  }) => {
+  test("opens an organization on its Home", async ({ page, signedIn }) => {
     await page.goto("/console/orgs");
     await page.getByRole("link", { name: signedIn.orgName }).click();
 
@@ -52,17 +49,14 @@ test.describe("signed in", () => {
     await expect(
       page.getByRole("heading", { name: signedIn.orgName, exact: true }),
     ).toBeVisible();
-    // Substring on purpose: the breadcrumb is a trail, and the org is
-    // one item in it.
+    // Substring on purpose: the breadcrumb is a trail, and the org and
+    // Home are two items in it.
+    const breadcrumb = page.getByRole("navigation", { name: "breadcrumb" });
+    await expect(breadcrumb).toContainText(signedIn.orgName);
+    await expect(breadcrumb).toContainText("Home");
     await expect(
-      page.getByRole("navigation", { name: "breadcrumb" }),
-    ).toContainText(signedIn.orgName);
-    // Substring on purpose: the card's accessible name is the label plus
-    // the count, and a trailing count must not break the navigation
-    // assertion — the count itself is what the assertion fixes.
-    await expect(
-      page.getByRole("main").getByRole("link", { name: "Teams" }),
-    ).toContainText("1");
+      page.getByRole("region", { name: /^Your teams/ }),
+    ).toBeVisible();
   });
 
   test("moves between the organization's sections from the sidebar", async ({

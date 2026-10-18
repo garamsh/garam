@@ -8,6 +8,7 @@ import {
   UNNAMED_AGENT,
   directoryAgents,
   getOrg,
+  isFailing,
   lookupAgentDefinitions,
   lookupAgents,
   lookupOperators,
@@ -19,11 +20,7 @@ import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
 import { RefusedRead } from "../../../_components/refused-read";
 import { ListPage } from "../../../_components/templates/list-page";
-import {
-  isFailing,
-  reportedDots,
-  requestedDot,
-} from "./_components/agent-status";
+import { reportedDots, requestedDot } from "./_components/agent-status";
 import { AgentTable, type AgentRow } from "./_components/agent-table";
 
 /** Head metadata for the agents route; Next.js reads it by name. */

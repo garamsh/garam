@@ -111,7 +111,7 @@ describe("route breadcrumb", () => {
       "aria-current",
       "page",
     );
-    expect(trail).not.toHaveTextContent("Overview");
+    expect(trail).not.toHaveTextContent("Home");
     expect(trail).not.toHaveTextContent("initech");
   });
 
@@ -122,10 +122,7 @@ describe("route breadcrumb", () => {
     render(<RouteBreadcrumb orgs={null} />);
 
     expect(screen.getByRole("link", { name: "initech" })).toBeInTheDocument();
-    expect(screen.getByText("Overview")).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(screen.getByText("Home")).toHaveAttribute("aria-current", "page");
   });
 
   it("says Not found, under its section, for an entry that is not there", () => {

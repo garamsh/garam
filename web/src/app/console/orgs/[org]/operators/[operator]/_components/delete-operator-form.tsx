@@ -58,6 +58,11 @@ export function DeleteOperatorForm({
       action={deleteOperator}
       initialState={initialState}
       fields={{ org, operator }}
+      command={{
+        label: "Delete operator",
+        consequence:
+          "garam refuses its keys and credential; work in its cluster does not stop.",
+      }}
       confirmLabel="Delete operator"
       pendingLabel="Deleting…"
       destructive

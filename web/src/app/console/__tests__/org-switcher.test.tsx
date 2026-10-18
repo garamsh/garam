@@ -2,10 +2,8 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  ReportOrgRole,
-  type OrgRole,
-} from "@/app/console/_components/org-role";
+import type { OrgRole } from "@/app/console/_components/org-role";
+import { ReportOrgShell } from "@/app/console/_components/org-shell";
 import { OrgSwitcher } from "@/app/console/_components/org-switcher";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -28,7 +26,7 @@ function renderSwitcher(
   return render(
     <TooltipProvider>
       <SidebarProvider>
-        {reported && <ReportOrgRole {...reported} />}
+        {reported && <ReportOrgShell {...reported} hidden={[]} objects={[]} />}
         <OrgSwitcher orgs={list} />
       </SidebarProvider>
     </TooltipProvider>,

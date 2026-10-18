@@ -41,6 +41,11 @@ export function DeleteTeamDialog({
       action={deleteGroup}
       initialState={initialState}
       fields={{ org, group: team }}
+      command={{
+        label: "Delete team",
+        consequence:
+          "Removes the team and its memberships, for good; its members stay.",
+      }}
       confirmLabel="Delete team"
       pendingLabel="Deleting…"
       destructive

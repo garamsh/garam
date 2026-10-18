@@ -64,6 +64,10 @@ export function ActivatePolicyDialog({
       action={activatePolicy}
       initialState={initialState}
       fields={{ org, policy }}
+      command={{
+        label: "Activate policy",
+        consequence: `Version ${version} takes part in every check it reaches.`,
+      }}
       confirmLabel={(state) =>
         everyone(state) ? "Activate for everyone" : "Activate policy"
       }

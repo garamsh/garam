@@ -18,7 +18,7 @@ import {
   type AddGroupMemberState,
 } from "@/features/orgs/actions";
 
-import type { Candidate } from "./team-member";
+import type { Candidate } from "@/features/orgs";
 
 const initialState: AddGroupMemberState = { status: "idle" };
 

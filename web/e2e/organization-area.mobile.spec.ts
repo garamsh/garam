@@ -1,10 +1,10 @@
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
 
-// The overview, Projects, Consents, Teams and People at 390px, in both
+// Home, Projects, Consents, Teams and People at 390px, in both
 // themes. `engineering` is the seeded team.
 const ROUTES = [
-  { name: "the overview", segment: "" },
+  { name: "Home", segment: "" },
   { name: "Projects", segment: "/projects" },
   { name: "Consents", segment: "/consents" },
   { name: "Teams", segment: "/teams" },

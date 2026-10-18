@@ -43,10 +43,12 @@ function useChordLabel(): string {
 
 /**
  * Jumps anywhere in the console from the keyboard: ⌘K or Ctrl+K from
- * anywhere, and `/` from anywhere text is not being typed. Neither
- * opens it over an alert dialog, which holds the visitor until they
- * answer it — a secret shown once among them. It lists the sections of
- * the organization on screen, the caller's organizations, and the
+ * anywhere, and `/` from anywhere text is not being typed. `.` from
+ * there opens it on the page's own actions alone. None opens it over
+ * an alert dialog, which holds the visitor until they answer it — a
+ * secret shown once among them. It finds the organization's people,
+ * agents, teams, policies and projects by name, and lists its
+ * sections, the page's actions, the caller's organizations and the
  * theme. `orgs` is null when the list was not answered.
  */
 export function CommandPalette({
@@ -56,6 +58,7 @@ export function CommandPalette({
 }) {
   const [open, setOpen] = useState(false);
   const [requested, setRequested] = useState(false);
+  const [actionsOnly, setActionsOnly] = useState(false);
   const location = parseConsolePath(usePathname());
   const chordLabel = useChordLabel();
   const hydrated = useHydrated();
@@ -64,16 +67,18 @@ export function CommandPalette({
     function onKeyDown(event: KeyboardEvent) {
       const chord =
         event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey);
-      const slash =
-        event.key === "/" &&
+      const bare =
         !event.metaKey &&
         !event.ctrlKey &&
         !event.altKey &&
         !typing(event.target);
-      if (!chord && !slash) return;
+      const slash = event.key === "/" && bare;
+      const dot = event.key === "." && bare;
+      if (!chord && !slash && !dot) return;
       if (document.querySelector('[role="alertdialog"]')) return;
       event.preventDefault();
       setRequested(true);
+      setActionsOnly(dot);
       setOpen((wasOpen) => (chord ? !wasOpen : true));
     }
     window.addEventListener("keydown", onKeyDown);
@@ -97,6 +102,7 @@ export function CommandPalette({
         onFocus={() => void loadDialog()}
         onClick={() => {
           setRequested(true);
+          setActionsOnly(false);
           setOpen(true);
         }}
         aria-keyshortcuts="Meta+K Control+K /"
@@ -110,6 +116,7 @@ export function CommandPalette({
         <CommandPaletteDialog
           open={open}
           onOpenChange={setOpen}
+          actionsOnly={actionsOnly}
           org={org}
           orgs={orgs}
         />

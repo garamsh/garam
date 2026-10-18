@@ -75,11 +75,3 @@ export function requestedDot(
     label: CUTOVER_STAGE_LABEL[definition.cutover.stage],
   };
 }
-
-/** Whether what was reported needs someone's attention. */
-export function isFailing(agent: Agent | undefined): boolean {
-  return (
-    agent?.provisioningState === "failed" ||
-    agent?.runtimeState === "disconnected"
-  );
-}

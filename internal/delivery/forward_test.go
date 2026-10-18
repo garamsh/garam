@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -257,16 +258,17 @@ func TestRun_ForwardsAfterARestartAReplyWhoseAcknowledgementWasLost(t *testing.T
 
 // TestRun_ReadsAgainAnEntryTheSystemCouldNotOpen is a reply the
 // adapter could not open for a reason that is not the entry's — here a
-// mode that refuses the reader, standing in for a descriptor limit or
-// an I/O error. It is not set aside: once it can be read it is
-// forwarded. A planted link beside it is the control: it is set aside
-// and never offered.
+// write lease another descriptor holds on it, which refuses the
+// adapter's non-blocking open with EWOULDBLOCK whatever its user, root
+// included, where a mode refusing the reader does not refuse root. It
+// is not set aside: once it can be read it is forwarded. A planted link
+// beside it is the control: it is set aside and never offered.
 func TestRun_ReadsAgainAnEntryTheSystemCouldNotOpen(t *testing.T) {
 	queue := newGaramQueue(t, time.Second)
 	dir := t.TempDir()
 	writeEntry(t, dir, entryFor("entry-1", "reply"))
 	path := filepath.Join(dir, "entry-1.json")
-	require.NoError(t, os.Chmod(path, 0o000))
+	release := leased(t, path)
 	writeEntry(t, dir, entryFor("entry-target", "reply"))
 	require.NoError(t, os.Rename(filepath.Join(dir, "entry-target.json"), filepath.Join(dir, ".target")))
 	require.NoError(t, os.Symlink(".target", filepath.Join(dir, "entry-link.json")))
@@ -274,10 +276,32 @@ func TestRun_ReadsAgainAnEntryTheSystemCouldNotOpen(t *testing.T) {
 
 	quietFor()
 	require.Empty(t, queue.submissions(), "an entry that cannot be opened is not offered")
-	require.NoError(t, os.Chmod(path, 0o600))
+	release()
 	eventually(t, gone(path), "once it can be read it is forwarded")
 	assert.Zero(t, count(queue.submissions(), "entry-link"), "the control: a planted link is never offered")
 	assert.FileExists(t, filepath.Join(dir, "entry-link.json"))
+}
+
+// leased takes a write lease on path through a descriptor of its own,
+// reads it back, and answers the release. Until then an open by any
+// other descriptor breaks the lease, which a non-blocking open meets as
+// EWOULDBLOCK, and the lease is not dropped before the kernel's lease
+// break time, 45 seconds by default.
+func leased(t *testing.T, path string) func() {
+	t.Helper()
+	f, err := os.Open(path)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = f.Close() })
+	fd := f.Fd()
+	_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, fd, syscall.F_SETLEASE, syscall.F_WRLCK)
+	require.Zero(t, errno, "the write lease is taken")
+	held, _, errno := syscall.Syscall(syscall.SYS_FCNTL, fd, syscall.F_GETLEASE, 0)
+	require.Zero(t, errno)
+	require.Equal(t, uintptr(syscall.F_WRLCK), held, "the setup: a write lease is held on the entry")
+	return func() {
+		_, _, errno := syscall.Syscall(syscall.SYS_FCNTL, fd, syscall.F_SETLEASE, syscall.F_UNLCK)
+		require.Zero(t, errno, "the write lease is released")
+	}
 }
 
 // TestRun_ForwardsPastMoreEntriesSetAsideThanOnePassTakes is the bound

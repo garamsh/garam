@@ -86,5 +86,14 @@ jobs:
           cache: pnpm
           cache-dependency-path: web/pnpm-lock.yaml
       - run: make web-install
+      # The server image's layers come from the GitHub Actions cache,
+      # so a run does not redo the builds an earlier one did (#1519).
+      # The default driver exports one only on the containerd image
+      # store, and the runtime action hands the cache's URL and token
+      # to the build, which a `run:` step is not given.
+      - run: scripts/enable-containerd-image-store.sh
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       - run: make backend-up
+        env:
+          IMAGE_BUILD_CACHE: gha
       - run: make web-e2e

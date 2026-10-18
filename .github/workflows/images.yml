@@ -50,4 +50,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: scripts/record-runner-image.sh
+      # The layer cache ci.yml's web-e2e states, one scope per image.
+      - run: scripts/enable-containerd-image-store.sh
+      - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       - run: make web-image-e2e
+        env:
+          IMAGE_BUILD_CACHE: gha

@@ -64,6 +64,12 @@ on `ubuntu-24.04` unchanged. Each one waits on something named in
 added and no `services:` is declared, because neither moved job needs
 one.
 
+The job container runs as root, by aurora's decision, and garam's
+`make ci` is made to pass as root rather than the container made to
+run as a contributor's user. One test assumed a reader that a file's
+mode refuses, which root is not. It now refuses the read in a way
+root also meets (§What the run measured).
+
 ## Which job runs where
 
 | Job | Runs on | Waiting on |
@@ -110,6 +116,13 @@ measured by run 39051854702. Each moved job meets them:
   finishes inside 8Gi is what §What the run measured reads.
 - **The 60Gi work claim** each runner holds on Longhorn. Checkout,
   module and pnpm caches and `make ci`'s output are written there.
+- **Root.** The hook template gives the job container no
+  `securityContext` "by decision (issue #348): the container runs as
+  its image's default user, root for Debian-based images", because
+  every repository on the scale set shares the template
+  (`templates/hook-template.yaml`). `buildpack-deps:trixie` declares
+  no other user, so the job runs as uid 0, where a contributor runs
+  `make ci` as an unprivileged user.
 - **No Docker daemon.** `make ci` reaches none: `make test`'s image
   scripts put a recording `docker` on `PATH`
   (`scripts/image-build-test.sh`, `scripts/image-test-ecr-test.sh`).
@@ -178,7 +191,40 @@ convention needs no change for this decision.
 
 ## What the run measured
 
-<!-- filled from the probe run -->
+Probe pull request #1516 (`chore/probe-aurora-1512` into `main`,
+closed unmerged) ran the jobs this decision moves.
+
+- **`release`** passed on aurora at
+  `6ead1cd0cbf15087b0e0a640e772cbfd74f59f13` (run 39088377064) and
+  `f5e3edcf83a17d1500ad7ca55396427f2e823ef2` (run 39088643237). The
+  probe dropped `needs: images`, the publishing step and the write
+  permission, so what it shows is the job container, checkout and the
+  runner record on aurora, and not a release.
+- **`ci`** ran 16 steps at
+  `f5e3edcf83a17d1500ad7ca55396427f2e823ef2` (run 39088643260, under
+  `make -k ci` so every target ran) and failed in `make test` alone.
+  Every other target of `make ci` passed, `web-test`'s 133 test files
+  among them. The `[MSW] Error: intercepted a request without a
+  matching request handler` lines in that log fail no test.
+- **The one failure was root.**
+  `TestRun_ReadsAgainAnEntryTheSystemCouldNotOpen`
+  (`internal/delivery/forward_test.go`) made an outbox entry
+  unreadable with mode `0o000` and asserted that the forwarder could
+  not open it. Root's `CAP_DAC_OVERRIDE` opened it anyway, so the
+  entry was offered at once. The same failure reproduces off aurora
+  as uid 0 in a user namespace (`unshare -r`), and the test passes
+  there as an unprivileged user.
+- **The test now holds a write lease on the entry instead**
+  (`fcntl` `F_SETLEASE`, `F_WRLCK`). The forwarder opens an entry
+  with `O_NONBLOCK`, so an open that would break another descriptor's
+  lease fails with `EWOULDBLOCK` for any user, root included. That is
+  the forwarder's own open path meeting a failure that is the
+  system's and not the entry's, which a mode was only standing in
+  for. The test reads the lease back before it relies on it. It
+  passes as an unprivileged user and as uid 0 in a user namespace.
+  With the forwarder's retry replaced by setting the entry aside, it
+  fails at "once it can be read it is forwarded".
+- <!-- final run -->
 
 ## Consequences
 
@@ -226,6 +272,16 @@ convention needs no change for this decision.
   into the workflow, which `ci.md` §Core principle forbids. #1513
   changes how the suite reaches OpenBao, after which the same names
   run in both places.
+- **Running the job container as a contributor's user.** A job that
+  runs as a contributor does would keep a mode-based test meaningful.
+  The user is the hook template's, which aurora left without a
+  `securityContext` by decision for every repository on the scale
+  set, and the pinned image declares no other user. garam does not
+  ask aurora to change that. Whether the kubernetes hook honours a
+  `container.options` `--user` was not measured.
+- **Skipping the test as root.** A skip under uid 0 leaves the job
+  that runs as root blind to the path the test exists for: an entry
+  the system could not open is read again rather than set aside.
 - **D. Stay on the local gate.** It leaves `make ci` running nowhere
   but on a contributor's machine, when a runner that can take it
   exists.

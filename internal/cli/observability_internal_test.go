@@ -739,11 +739,11 @@ func TestLogServed_CarriesTheCauseAMachineAnswerWithheld(t *testing.T) {
 // than one assembled here.
 type enginePolicies struct{ err error }
 
-func (p enginePolicies) Statements(context.Context, grn.GRN, []grn.GRN) ([]authz.Statement, error) {
+func (p enginePolicies) Statements(context.Context, grn.GRN, []grn.GRN) ([]authz.Grant, error) {
 	return nil, p.err
 }
 
-func (p enginePolicies) CurrentStatements(context.Context, grn.GRN, []grn.GRN) ([]authz.Statement, error) {
+func (p enginePolicies) CurrentStatements(context.Context, grn.GRN, []grn.GRN) ([]authz.Grant, error) {
 	return nil, p.err
 }
 

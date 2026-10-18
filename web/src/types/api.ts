@@ -234,6 +234,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/permission-explanation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Explain why the signed-in caller may or may not take one action. Requires membership.
+         * @description Explains the pair `checkPermissions` would answer for the same caller, action and resource, from the same inputs: the same role statements, groups and attached policies, asked of the policy engine's `Explain`, which decides as its `Check` does. The `decision` is the one `checkPermissions` answers for the pair.
+         *
+         *     Where the engine decides (`basis` is `statements`), `statements` holds the statements that decided: every matching `Deny` when the answer is `deny` because one matched, every matching `Allow` when it is `allow`, and none when it is `deny` because nothing allows it. Each names the path through which it reaches the caller: their org role, the roles stored on them, a group's or project's roles, or a policy that applies org-wide, is attached to them, or is attached to a group they belong to. A policy reaching by two paths is named once for each.
+         *
+         *     A policy statement is named only where the caller holds `policy:read` on that policy, the check `getPolicy` makes. Every other one is answered once, as `unreadable-policy`, with its effect and nothing else: no policy, statement or path.
+         *
+         *     The actions `checkPermissions` puts to more than the engine's `Check` — a delegation grant, the organization's current policy, or the check delegation writes run — are explained no further than its answer: `basis` is `operation`, `statements` is empty, and the operation decides. An action garam does not define is answered `deny` with `basis` `undefined-action`.
+         *
+         *     The pair is the query's `action`, `resourceType` and `resourceId`, refused with 400 as `checkPermissions` refuses one, and where only one of the last two is given. A caller who is not a member of the organization is refused with 403.
+         */
+        get: operations["explainPermission"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/permission-holders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the members and agents the engine allows one action. Requires `org:member-list`.
+         * @description Answers which principals of the organization the policy engine allows `action` on the resource, each asked as enforcement asks it: a member with their org role, the roles stored on them, the roles of the target group or project they belong to, their groups and the policies reaching them; an agent, which holds no role, with its groups and the policies reaching it.
+         *
+         *     It requires `org:member-list` on the organization, the check `listOrgMembers` makes, since the answer names members. Agents are asked only where the caller also holds `agent:read` on the organization, the check `listAgents` makes; otherwise none is listed.
+         *
+         *     The candidates are the organization's members in ascending GRN order followed by its agents in ascending GRN order. A page asks `limit` of them from `offset`, at most fifty, and answers those the engine allows, so a page may hold fewer holders than it asked candidates, none at all among them. `nextOffset` is where the next page starts, and absent on the last.
+         *
+         *     Only actions the engine's `Check` alone decides are answered. One `checkPermissions` puts to more than that is refused with 400, since the engine is not what decides who holds it. An action garam does not define is held by no one. The resource is named and refused as `explainPermission` names and refuses it.
+         */
+        get: operations["listPermissionHolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/members": {
         parameters: {
             query?: never;
@@ -1193,11 +1247,12 @@ export interface components {
         };
         /** @description A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. */
         PermissionResource: {
-            /** @enum {string} */
-            type: "group" | "project" | "agent" | "agent-template" | "policy";
+            type: components["schemas"]["PermissionResourceType"];
             /** @example eng */
             id: string;
         };
+        /** @enum {string} */
+        PermissionResourceType: "group" | "project" | "agent" | "agent-template" | "policy";
         PermissionCheckAnswer: {
             results: components["schemas"]["PermissionCheckResult"][];
         };
@@ -1211,6 +1266,51 @@ export interface components {
          * @enum {string}
          */
         PermissionDecision: "allow" | "deny" | "unknown";
+        PermissionExplanation: {
+            action: string;
+            resource?: components["schemas"]["PermissionResource"];
+            decision: components["schemas"]["PermissionDecision"];
+            basis: components["schemas"]["PermissionBasis"];
+            /** @description The statements that decided, where `basis` is `statements`; empty otherwise, and where nothing allows the action. */
+            statements: components["schemas"]["ExplainedStatement"][];
+        };
+        /**
+         * @description `statements` is a decision the policy engine reached, explained by `statements`. `operation` is an action the operation decides past the engine's `Check`, explained no further than the decision. `undefined-action` is a name garam does not define.
+         * @enum {string}
+         */
+        PermissionBasis: "statements" | "operation" | "undefined-action";
+        /** @description One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the four role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone. */
+        ExplainedStatement: {
+            /** @enum {string} */
+            effect: "Allow" | "Deny";
+            /** @enum {string} */
+            source: "org-role" | "direct-role" | "group-role" | "project-role" | "policy" | "unreadable-policy";
+            sid?: string;
+            roles?: string[];
+            /** @description The group's slug. */
+            group?: string;
+            /** @description The project's slug. */
+            project?: string;
+            /** @description The policy's identifier, as `getPolicy` addresses it. */
+            policy?: string;
+            /**
+             * @description How the policy reaches the caller: it applies to the whole `organization`, is attached to the `caller`, or is attached to the `group` named beside it.
+             * @enum {string}
+             */
+            attachment?: "organization" | "caller" | "group";
+        };
+        PermissionHolders: {
+            holders: components["schemas"]["PermissionHolder"][];
+            /** @description The offset of the next page; absent on the last. */
+            nextOffset?: number;
+        };
+        PermissionHolder: {
+            /** @enum {string} */
+            type: "user" | "agent";
+            grn: string;
+            /** @description A user's nickname, where its row could be read. */
+            nickname?: string;
+        };
         /**
          * @description How many of each kind the deletion removes. Every one of these can be created again; what cannot is on `OrgDeletionPreview` itself.
          *
@@ -1756,6 +1856,12 @@ export interface components {
         operator: string;
         /** @description Subject GRN a policy is attached to. */
         subject: string;
+        /** @description The action asked about. */
+        permissionAction: string;
+        /** @description The kind of resource asked about. Without it and `resourceId`, the organization itself. */
+        permissionResourceType: components["schemas"]["PermissionResourceType"];
+        /** @description The last segment of the resource's identifier, given with `resourceType`. */
+        permissionResourceId: string;
         /** @description Maximum entries to return; 0 means no limit. */
         limit: number;
         offset: number;
@@ -2146,6 +2252,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermissionCheckAnswer"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    explainPermission: {
+        parameters: {
+            query: {
+                /** @description The action asked about. */
+                action: components["parameters"]["permissionAction"];
+                /** @description The kind of resource asked about. Without it and `resourceId`, the organization itself. */
+                resourceType?: components["parameters"]["permissionResourceType"];
+                /** @description The last segment of the resource's identifier, given with `resourceType`. */
+                resourceId?: components["parameters"]["permissionResourceId"];
+            };
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The decision and what decided it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionExplanation"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    listPermissionHolders: {
+        parameters: {
+            query: {
+                /** @description The action asked about. */
+                action: components["parameters"]["permissionAction"];
+                /** @description The kind of resource asked about. Without it and `resourceId`, the organization itself. */
+                resourceType?: components["parameters"]["permissionResourceType"];
+                /** @description The last segment of the resource's identifier, given with `resourceType`. */
+                resourceId?: components["parameters"]["permissionResourceId"];
+                /** @description How many candidates to ask, from 1 to 50. */
+                limit?: number;
+                offset?: components["parameters"]["offset"];
+            };
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The holders among the candidates this page asked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionHolders"];
                 };
             };
             400: components["responses"]["Error"];

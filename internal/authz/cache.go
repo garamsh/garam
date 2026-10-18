@@ -27,24 +27,27 @@ const (
 	policyReconnectMax = 30 * time.Second
 )
 
-// loadedPolicy is one active policy's parsed statements and the
+// loadedPolicy is one active policy's GRN, parsed statements and the
 // subjects it is attached to. An empty subject set applies org-wide.
 type loadedPolicy struct {
+	grn        grn.GRN
 	statements []Statement
 	subjects   map[grn.GRN]bool
 }
 
-// appliesTo reports whether the policy applies to any of subjects.
-func (p loadedPolicy) appliesTo(subjects []grn.GRN) bool {
+// reach reports whether the policy applies to any of subjects, and
+// which of them it is attached to: none for an org-wide policy.
+func (p loadedPolicy) reach(subjects []grn.GRN) ([]grn.GRN, bool) {
 	if len(p.subjects) == 0 {
-		return true
+		return nil, true
 	}
+	var attached []grn.GRN
 	for _, s := range subjects {
 		if p.subjects[s] {
-			return true
+			attached = append(attached, s)
 		}
 	}
-	return false
+	return attached, len(attached) > 0
 }
 
 // PolicyCache is the per-org parsed policy cache (ADR-0002). Entries
@@ -74,7 +77,7 @@ func NewPolicyCache(store Store) *PolicyCache {
 
 // Statements returns the statements the org's active policies grant
 // subjects, loading and parsing the org once per cache generation.
-func (c *PolicyCache) Statements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Statement, error) {
+func (c *PolicyCache) Statements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Grant, error) {
 	policies, err := c.policies(ctx, orgGRN)
 	if err != nil {
 		return nil, err
@@ -85,7 +88,7 @@ func (c *PolicyCache) Statements(ctx context.Context, orgGRN grn.GRN, subjects [
 // CurrentStatements returns what Statements returns, read from the
 // store on every call. It neither reads nor fills the cache, so an
 // invalidation that has not arrived cannot reach its answer.
-func (c *PolicyCache) CurrentStatements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Statement, error) {
+func (c *PolicyCache) CurrentStatements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Grant, error) {
 	policies, err := c.load(ctx, orgGRN)
 	if err != nil {
 		return nil, err
@@ -94,15 +97,19 @@ func (c *PolicyCache) CurrentStatements(ctx context.Context, orgGRN grn.GRN, sub
 }
 
 // statementsFor returns the statements of the policies that apply to
-// any of subjects.
-func statementsFor(policies []loadedPolicy, subjects []grn.GRN) []Statement {
-	var statements []Statement
+// any of subjects, each with its policy and the subjects it reached.
+func statementsFor(policies []loadedPolicy, subjects []grn.GRN) []Grant {
+	var grants []Grant
 	for _, p := range policies {
-		if p.appliesTo(subjects) {
-			statements = append(statements, p.statements...)
+		attached, ok := p.reach(subjects)
+		if !ok {
+			continue
+		}
+		for _, st := range p.statements {
+			grants = append(grants, Grant{Statement: st, Policy: p.grn, AttachedTo: attached})
 		}
 	}
-	return statements
+	return grants
 }
 
 // policies returns the org's cached entry, filling it on a miss.
@@ -144,7 +151,7 @@ func (c *PolicyCache) load(ctx context.Context, orgGRN grn.GRN) ([]loadedPolicy,
 		for _, s := range a.Subjects {
 			subjects[s] = true
 		}
-		policies = append(policies, loadedPolicy{statements: a.Document.Statement, subjects: subjects})
+		policies = append(policies, loadedPolicy{grn: a.GRN, statements: a.Document.Statement, subjects: subjects})
 	}
 	return policies, nil
 }

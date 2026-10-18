@@ -25,6 +25,7 @@ func attachmentRow() db.PolicyAttachment {
 // activePolicyRow is a stored active-policy row that parses.
 func activePolicyRow() db.ActivePoliciesRow {
 	return db.ActivePoliciesRow{
+		Grn:         "grn:acme:default:policy:9f2ac1b40d8e7a35",
 		Document:    policyVersionRow().Document,
 		SubjectGrns: []string{"grn:acme:default:group:eng"},
 	}
@@ -59,8 +60,10 @@ func TestRowToActivePolicy_CorruptFieldIsInternal(t *testing.T) {
 	ok, err := rowToActivePolicy(activePolicyRow())
 	require.NoError(t, err, "the row that parses is the control")
 	require.Len(t, ok.Subjects, 1)
+	require.Equal(t, "9f2ac1b40d8e7a35", ok.GRN.Identifier)
 
 	corruptions := map[string]func(*db.ActivePoliciesRow){
+		"policy grn":  func(row *db.ActivePoliciesRow) { row.Grn = corrupt },
 		"document":    func(row *db.ActivePoliciesRow) { row.Document = []byte(`{"Statement":[]}`) },
 		"subject grn": func(row *db.ActivePoliciesRow) { row.SubjectGrns = []string{corrupt} },
 	}

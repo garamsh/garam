@@ -332,18 +332,30 @@ func (s *Server) callerIn(r *http.Request, orgGRN grn.GRN, u *user.User) (*calle
 // allows asks the engine whether c may take action on target, a
 // validated resource of c's org.
 func (s *Server) allows(r *http.Request, c *caller, target grn.GRN, action string) (bool, error) {
-	statements, err := s.scopedStatements(r, c.org, c.member, target, c.user)
+	in, err := s.question(r, c, target, action)
 	if err != nil {
 		return false, err
 	}
-	return s.evaluator.Evaluate(r.Context(), EvalInput{
+	return s.evaluator.Evaluate(r.Context(), in)
+}
+
+// question is what enforcement asks the engine about c taking action
+// on target: the statements c's roles grant there, c's groups and c's
+// org. allows and explainPermission both ask it, so an explanation is
+// of the decision enforcement reaches.
+func (s *Server) question(r *http.Request, c *caller, target grn.GRN, action string) (EvalInput, error) {
+	statements, err := s.scopedStatements(r, c.org, c.member, target, c.user)
+	if err != nil {
+		return EvalInput{}, err
+	}
+	return EvalInput{
 		Subject:       c.user.GRN,
 		Object:        target,
 		Action:        action,
 		SubjectGroups: c.groups,
 		Statements:    statements,
 		SubjectOrg:    c.org,
-	})
+	}, nil
 }
 
 // orgGRN builds the GRN for an org identifier from an API path.

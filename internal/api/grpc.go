@@ -5,6 +5,8 @@ import (
 
 	"google.golang.org/grpc"
 
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -43,6 +45,59 @@ func (e *GRPCEvaluator) Evaluate(ctx context.Context, in EvalInput) (bool, error
 		return false, wire.ErrorOf(err)
 	}
 	return resp.GetAllowed(), nil
+}
+
+// Explain sends the question to the engine as an Explain RPC and
+// parses each trace once, here, where it crosses into this process.
+func (e *GRPCEvaluator) Explain(ctx context.Context, in EvalInput) (Explanation, error) {
+	statements, err := statementsToProto(in.Statements)
+	if err != nil {
+		return Explanation{}, err
+	}
+	resp, err := e.client.Explain(ctx, &authzv1.ExplainRequest{
+		SubjectGrn:    in.Subject.String(),
+		ObjectGrn:     in.Object.String(),
+		Action:        in.Action,
+		Statements:    statements,
+		SubjectGroups: wire.GRNsToProto(in.SubjectGroups),
+		SubjectOrg:    in.SubjectOrg.String(),
+	})
+	if err != nil {
+		return Explanation{}, wire.ErrorOf(err)
+	}
+	traces := make([]Trace, 0, len(resp.GetTraces()))
+	for _, t := range resp.GetTraces() {
+		trace, err := traceFromProto(t)
+		if err != nil {
+			return Explanation{}, err
+		}
+		traces = append(traces, trace)
+	}
+	return Explanation{Allowed: resp.GetAllowed(), Traces: traces}, nil
+}
+
+// traceFromProto parses one trace the engine answered. A trace that
+// does not parse is the engine's fault, not the caller's.
+func traceFromProto(t *authzv1.StatementTrace) (Trace, error) {
+	effect, err := wire.EffectFromProto(t.GetEffect())
+	if err != nil {
+		return Trace{}, errorx.Wrap(err, "explain trace "+t.GetSid(), errorx.KindInternal)
+	}
+	var policy grn.GRN
+	if raw := t.GetPolicyGrn(); raw != "" {
+		if policy, err = grn.Parse(raw); err != nil {
+			return Trace{}, errorx.Wrap(err, "explain trace policy grn", errorx.KindInternal)
+		}
+	}
+	attached := make([]grn.GRN, 0, len(t.GetAttachedTo()))
+	for _, raw := range t.GetAttachedTo() {
+		g, err := grn.Parse(raw)
+		if err != nil {
+			return Trace{}, errorx.Wrap(err, "explain trace attachment grn", errorx.KindInternal)
+		}
+		attached = append(attached, g)
+	}
+	return Trace{Sid: t.GetSid(), Matched: t.GetMatched(), Effect: effect, Policy: policy, AttachedTo: attached}, nil
 }
 
 func statementsToProto(in []Statement) ([]*authzv1.Statement, error) {

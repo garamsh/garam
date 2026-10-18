@@ -594,7 +594,11 @@ paths:
         - $ref: '#/components/parameters/permissionResourceId'
         - name: limit
           in: query
-          description: How many candidates to ask, from 1 to 50.
+          description: >-
+            How many candidates to ask, from 1 to 50; 50 when absent.
+            Unlike the `limit` other lists share, 0 is refused rather
+            than read as no limit, because each candidate costs the
+            engine a check.
           schema:
             type: integer
             minimum: 1
@@ -1262,6 +1266,47 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
   /orgs/{org}/agent-enrollments:
+    get:
+      operationId: listAgentEnrollments
+      tags: [agent]
+      summary: List the organization's standalone approvals. Requires `agent:read`.
+      description: >-
+        Lists every approval the organization holds, oldest first:
+        pending, spent, withdrawn and expired, for standalone and direct
+        placement alike (ADR-0082, ADR-0111). `state` is where each
+        stands when this answers; an unspent approval past `expiresAt`
+        is `expired` and never revived.
+
+
+        An entry names what the approval binds and what spending it
+        made, and nothing a host spends or proves with: no bootstrap
+        secret or its hash, no key fingerprint, no request digest, no
+        certificate and no credential.
+
+
+        Authorization is `agent:read` on the organization, decided from
+        current membership, roles, groups and persisted policies, as the
+        writes beside it are decided; an explicit Deny wins. Paged by
+        `limit` and `offset` like every other list.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: The organization's approvals.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentEnrollmentListing'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
     post:
       operationId: approveAgentEnrollment
       tags: [agent]
@@ -1350,6 +1395,41 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
         '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/agent-supervisors:
+    get:
+      operationId: listAgentSupervisors
+      tags: [agent]
+      summary: List the organization's standalone supervisors. Requires `agent:read`.
+      description: >-
+        Lists every supervisor registration the organization holds,
+        oldest first: `active` while current, `revoked` once ended by
+        `revokeAgentSupervisor` or by a replacement taking its agent
+        (ADR-0082). Each names its host, its agent, the epoch its
+        enrollment assigned and when its agent last activated at that
+        epoch, absent where it never did.
+
+
+        No certificate, serial, credential or token is answered.
+        Authorization and paging are `listAgentEnrollments`'.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: The organization's supervisors.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentSupervisor'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
   /orgs/{org}/agent-supervisors/{supervisor}:
     delete:
@@ -3438,6 +3518,89 @@ components:
         spent:
           type: boolean
           description: Whether the host has enrolled with it.
+    AgentEnrollmentListing:
+      type: object
+      description: >-
+        An approval as listed. `replaces` is present for a replacement;
+        `spentAt` and `epoch` once a host enrolled; `withdrawnAt` once
+        withdrawn.
+      required: [id, placement, state, agentGrn, supervisorGrn, hostName, approvedBy, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        placement:
+          type: string
+          enum: [standalone, direct]
+          x-enum-varnames: [ListingPlacementStandalone, ListingPlacementDirect]
+        state:
+          type: string
+          enum: [pending, spent, withdrawn, expired]
+          x-enum-varnames: [EnrollmentPending, EnrollmentSpent, EnrollmentWithdrawn, EnrollmentExpired]
+        agentGrn:
+          type: string
+        supervisorGrn:
+          type: string
+        hostName:
+          type: string
+        replaces:
+          $ref: '#/components/schemas/AgentEnrollmentReplacement'
+        approvedBy:
+          type: string
+          description: The GRN of the user who approved it.
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        spentAt:
+          type: string
+          format: date-time
+        withdrawnAt:
+          type: string
+          format: date-time
+        epoch:
+          type: integer
+          minimum: 1
+          description: The assignment epoch spending it gave the agent.
+    AgentSupervisor:
+      type: object
+      required: [grn, agentGrn, enrollmentId, placement, state, hostName, epoch, registeredAt]
+      properties:
+        grn:
+          type: string
+        agentGrn:
+          type: string
+        enrollmentId:
+          type: string
+          format: uuid
+        placement:
+          type: string
+          enum: [standalone, direct]
+          x-enum-varnames: [SupervisorPlacementStandalone, SupervisorPlacementDirect]
+        state:
+          type: string
+          enum: [active, revoked]
+          x-enum-varnames: [SupervisorActive, SupervisorRevoked]
+        hostName:
+          type: string
+        epoch:
+          type: integer
+          minimum: 1
+        registeredAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+          description: When the registration ended; absent while active.
+        lastActivatedAt:
+          type: string
+          format: date-time
+          description: >-
+            The latest activation of the agent at this supervisor's
+            epoch; absent where it never activated.
     AgentAssignment:
       type: object
       description: >-

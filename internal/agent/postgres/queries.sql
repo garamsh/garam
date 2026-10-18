@@ -431,3 +431,29 @@ WHERE id = $1;
 -- name: GetAdmittedReplacementByReference :one
 SELECT * FROM agent_enrollment_approvals
 WHERE operation_ref = $1 AND replaced_agent_grn IS NOT NULL AND admitted_at IS NOT NULL;
+
+-- ListEnrollments pages an organization's approvals oldest first,
+-- selecting no secret hash, key fingerprint, request digest or
+-- certificate: what an administrator reads of them in a list.
+-- name: ListEnrollments :many
+SELECT id, placement, agent_grn, supervisor_grn, host_name, expected_assignee_grn, expected_epoch,
+       approved_by, expires_at, created_at, withdrawn_at, consumed_at, epoch
+FROM agent_enrollments
+WHERE org_grn = sqlc.arg('org_grn')
+ORDER BY created_at, id
+LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
+
+-- ListSupervisors pages an organization's supervisor registrations,
+-- current and ended, oldest first, with the epoch their enrollment
+-- assigned and the latest activation of their agent at that epoch.
+-- It selects no serial or credential.
+-- name: ListSupervisors :many
+SELECT s.grn, s.agent_grn, s.enrollment_id, s.host_name, s.registered_at, s.ended_at,
+       e.placement, e.epoch,
+       (SELECT max(a.created_at) FROM agent_activations a
+        WHERE a.agent_grn = s.agent_grn AND a.epoch = e.epoch)::timestamptz AS last_activated_at
+FROM agent_supervisors s
+JOIN agent_enrollments e ON e.id = s.enrollment_id
+WHERE e.org_grn = sqlc.arg('org_grn')
+ORDER BY s.registered_at, s.grn
+LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');

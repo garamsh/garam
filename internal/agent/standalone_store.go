@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 )
 
 // StandaloneStore persists administrators' approvals of standalone
@@ -21,6 +22,9 @@ type StandaloneStore interface {
 	// GetEnrollment answers the organization's approval id, or
 	// ErrEnrollmentNotFound.
 	GetEnrollment(ctx context.Context, org grn.GRN, id EnrollmentID) (*Enrollment, error)
+	// ListEnrollments pages the organization's approvals in every
+	// state, oldest first.
+	ListEnrollments(ctx context.Context, org grn.GRN, f listfilter.Filter) ([]EnrollmentSummary, error)
 	// GetEnrollmentBySecret answers the approval holding secretSHA256,
 	// or ErrBootstrapRefused.
 	GetEnrollmentBySecret(ctx context.Context, secretSHA256 [32]byte) (*Enrollment, error)
@@ -45,6 +49,9 @@ type StandaloneStore interface {
 	// GetSupervisor answers the current registration of g, or
 	// ErrSupervisorNotFound for one never registered or ended.
 	GetSupervisor(ctx context.Context, g grn.GRN) (*Supervisor, error)
+	// ListSupervisors pages the organization's supervisor
+	// registrations, current and ended, oldest first.
+	ListSupervisors(ctx context.Context, org grn.GRN, f listfilter.Filter) ([]SupervisorSummary, error)
 	// Revoke ends the current registration of the organization's
 	// supervisor g, the agent's current activation and every unspent
 	// approval for that agent, under the execution lock. A supervisor

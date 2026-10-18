@@ -38,6 +38,7 @@ type explainStack struct {
 	eng                      grn.GRN
 	agent                    grn.GRN
 	policies                 *authz.PolicyGRPCServer
+	orgs                     *orgpg.Store
 	ada, bob, carol          *http.Cookie
 	adaGRN, bobGRN, carolGRN grn.GRN
 }
@@ -61,7 +62,7 @@ func newExplainStack(t *testing.T) *explainStack {
 		require.NoError(t, authn.NewPostgresSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
-	s := &explainStack{acme: acme, policies: policies}
+	s := &explainStack{acme: acme, policies: policies, orgs: orgs}
 	s.ada, s.adaGRN = session("ada", org.RoleOwner)
 	s.bob, s.bobGRN = session("bob", org.RoleMember)
 	s.carol, s.carolGRN = session("carol", org.RoleMember)

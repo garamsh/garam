@@ -312,7 +312,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List an organization's groups. Requires the `member` role. */
+        /**
+         * List an organization's groups. Requires the `member` role.
+         * @description Authorized on `group:read` on the organization. With `member=me` it answers only the groups the signed-in caller belongs to, in the same order and paged the same way, so a caller learns its own teams in one request rather than one per group. The filter names the caller alone: who else belongs to a group is `listGroupMembers`', which is authorized per group.
+         */
         get: operations["listGroups"];
         put?: never;
         /** Create a group in an organization. Requires the `admin` role. */
@@ -2439,6 +2442,8 @@ export interface operations {
                 /** @description Maximum entries to return; 0 means no limit. */
                 limit?: components["parameters"]["limit"];
                 offset?: components["parameters"]["offset"];
+                /** @description `me` keeps only the groups the signed-in caller belongs to. */
+                member?: "me";
             };
             header?: never;
             path: {

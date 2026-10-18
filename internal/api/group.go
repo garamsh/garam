@@ -48,7 +48,8 @@ func (s *Server) CreateGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 	writeJSON(w, http.StatusCreated, groupToAPI(gr))
 }
 
-// ListGroups lists the org's groups. Requires the member role.
+// ListGroups lists the org's groups, or with member=me those the
+// caller belongs to. Requires the member role.
 func (s *Server) ListGroups(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListGroupsParams) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -64,7 +65,15 @@ func (s *Server) ListGroups(w http.ResponseWriter, r *http.Request, orgSlug apig
 		writeError(w, err)
 		return
 	}
-	groups, err := s.orgs.ListGroups(r.Context(), orgGRN(orgSlug), f)
+	var groups []*org.Group
+	switch {
+	case params.Member == nil:
+		groups, err = s.orgs.ListGroups(r.Context(), orgGRN(orgSlug), f)
+	case *params.Member == apigen.GroupMemberMe:
+		groups, err = s.orgs.ListMemberGroups(r.Context(), orgGRN(orgSlug), u.GRN, f)
+	default:
+		err = errorx.New(errorx.KindInvalidArgument, "member is me or absent")
+	}
 	if err != nil {
 		writeError(w, err)
 		return

@@ -188,9 +188,7 @@ describe("attachments page", () => {
     await renderAttachments("person:alice");
 
     expect(
-      screen.getByText(
-        "This organization's people are not listed to you, so this one cannot be shown.",
-      ),
+      screen.getByText("You can't view this organization's people"),
     ).toBeInTheDocument();
     expect(
       screen.queryByText(

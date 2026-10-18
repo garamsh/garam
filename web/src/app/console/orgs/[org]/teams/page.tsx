@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Banner } from "@/components/banner";
 import { Button } from "@/components/ui/button";
 import { getOrg, lookupGroups, slugFromGrn } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { NEW_ITEM, orgHref } from "../../../_components/navigation";
+import { RefusedRead } from "../../../_components/refused-read";
 import { ListPage } from "../../../_components/templates/list-page";
 import { TeamTable } from "./_components/team-table";
 
@@ -54,10 +54,7 @@ export default async function TeamsPage({ params }: Params) {
   if (teams.status === "forbidden") {
     return (
       <ListPage title={TITLE} description={DESCRIPTION} primaryAction={create}>
-        <Banner tone="warn" title="You cannot list this organization's teams">
-          garam refused to show you the teams. Access to them is granted by this
-          organization&apos;s roles and policies.
-        </Banner>
+        <RefusedRead subject="this organization's teams" />
       </ListPage>
     );
   }

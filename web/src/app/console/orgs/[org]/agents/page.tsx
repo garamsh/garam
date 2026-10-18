@@ -17,6 +17,7 @@ import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
+import { RefusedRead } from "../../../_components/refused-read";
 import { ListPage } from "../../../_components/templates/list-page";
 import {
   isFailing,
@@ -162,14 +163,14 @@ export default async function AgentsPage({ params }: Params) {
         </Banner>
       )}
       {definitions.status === "forbidden" && (
-        <Banner tone="info" title="Agent definitions are not listed to you">
-          Agents awaiting an operator are not shown.
-        </Banner>
+        <RefusedRead subject="this organization's agent definitions">
+          The list leaves out agents awaiting an operator.
+        </RefusedRead>
       )}
       {agents.status === "forbidden" && (
-        <Banner tone="info" title="Reported agents are not listed to you">
-          No reported state is shown.
-        </Banner>
+        <RefusedRead subject="this organization's reported agents">
+          The list shows no reported state.
+        </RefusedRead>
       )}
       <AgentTable
         org={org}

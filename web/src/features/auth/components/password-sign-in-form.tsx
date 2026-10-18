@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { FormField } from "@/components/form-field";
+import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RETURN_PARAM } from "@/lib/return-path";
@@ -68,11 +69,7 @@ export function PasswordSignInForm({
           />
         )}
       </FormField>
-      {state.status === "error" && (
-        <p role="alert" className="text-destructive">
-          {state.message}
-        </p>
-      )}
+      {state.status === "error" && <Refusal>{state.message}</Refusal>}
       <Button type="submit" disabled={pending}>
         {pending ? "Signing in…" : "Sign in"}
       </Button>

@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 
-import { Banner } from "@/components/banner";
 import { getOrg, lookupProjects, slugFromGrn } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
+import { RefusedRead } from "../../../_components/refused-read";
 import { ListPage } from "../../../_components/templates/list-page";
 import { CreateProjectDialog } from "./_components/create-project-dialog";
 import { ProjectTable } from "./_components/project-table";
@@ -58,10 +58,7 @@ export default async function ProjectsPage({ params }: Params) {
       primaryAction={create}
     >
       {projects.status === "forbidden" ? (
-        <Banner tone="info" title="Projects not shown">
-          The server did not let you read this organization&apos;s projects. An
-          owner or admin of the organization can grant it.
-        </Banner>
+        <RefusedRead subject="this organization's projects" />
       ) : (
         <ProjectTable
           rows={projects.data.map((project) => ({

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Banner } from "@/components/banner";
 import { ControlNotice, NO_FIX } from "@/components/control-notice";
 import { FormField } from "@/components/form-field";
+import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -235,11 +236,7 @@ export function CreateFromTemplate({
         <Button type="submit" disabled={pending}>
           {pending ? "Creating…" : "Create from template"}
         </Button>
-        {outcome.status === "refused" && (
-          <p role="alert" className="text-danger">
-            {outcome.message}
-          </p>
-        )}
+        {outcome.status === "refused" && <Refusal>{outcome.message}</Refusal>}
       </div>
     </form>
   );

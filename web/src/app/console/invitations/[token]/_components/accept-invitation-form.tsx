@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 
+import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
 import {
   acceptInvitation,
@@ -27,11 +28,7 @@ export function AcceptInvitationForm({
   return (
     <form action={formAction} className="flex flex-col items-start gap-3">
       <input type="hidden" name="token" value={token} />
-      {state.status === "error" && (
-        <p role="alert" className="text-sm text-destructive">
-          {state.message}
-        </p>
-      )}
+      {state.status === "error" && <Refusal>{state.message}</Refusal>}
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" disabled={pending}>
           {pending ? "Joining…" : `Join ${orgName}`}

@@ -114,7 +114,9 @@ test.describe("consents", () => {
     await page.goto(consents);
 
     await expect(
-      page.getByText("Consents not shown", { exact: true }),
+      page.getByText("You can't view this organization's consent relations", {
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "New consent", exact: true }),

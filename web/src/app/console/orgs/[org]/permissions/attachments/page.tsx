@@ -23,9 +23,9 @@ import {
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { orgHref } from "../../../../_components/navigation";
+import { RefusedRead } from "../../../../_components/refused-read";
 import { ListPage } from "../../../../_components/templates/list-page";
 import { PermissionsViews } from "../_components/permissions-views";
-import { PoliciesRefused } from "../_components/policies-refused";
 import {
   KIND_PLURAL,
   inspectSubject,
@@ -117,7 +117,8 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
   ) {
     return page(<ApiUnreachable subject="this organization's attachments" />);
   }
-  if (policies.status === "forbidden") return page(<PoliciesRefused />);
+  if (policies.status === "forbidden")
+    return page(<RefusedRead subject="this organization's policies" />);
 
   const catalogs: Catalogs = { teams, people, agents, definitions };
   const partlyListed = partlyListedAgents(catalogs);
@@ -244,10 +245,11 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
           No team, person or agent of this organization matches this address.
         </Banner>
       ) : lookup.status === "refused" ? (
-        <Banner tone="info" title="Not shown">
-          This organization&apos;s {KIND_PLURAL[lookup.kind]} are not listed to
-          you, so this one cannot be shown.
-        </Banner>
+        <RefusedRead
+          subject={`this organization's ${KIND_PLURAL[lookup.kind]}`}
+        >
+          The one this address names is among them.
+        </RefusedRead>
       ) : (
         <ScopeTable rows={rows} />
       )}

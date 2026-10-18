@@ -7,10 +7,8 @@ import { z } from "zod";
 import { ActivatePolicyDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/activate-policy-dialog";
 import { ArchivePolicyDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/archive-policy-dialog";
 import { MakeDefaultDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/make-default-dialog";
-import {
-  Outcome,
-  OutcomeProvider,
-} from "@/app/console/orgs/[org]/permissions/_components/outcome";
+import { Outcome, OutcomeProvider } from "@/app/console/_components/outcome";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 import { API_URL, baselineRead, denyDeletes } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -276,5 +274,41 @@ describe("archive policy dialog", () => {
     expect(
       await screen.findByText("Archived. It can be activated again."),
     ).toBeInTheDocument();
+  });
+
+  it("keeps a refusal in the dialog until it closes, and opens again without it", async () => {
+    server.use(
+      http.post(`${DENY}/archive`, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "denied: policy:archive" },
+          { status: 403 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    render(
+      <ArchivePolicyDialog
+        org="acme"
+        policy="d1e2f3a4b5c6d7e8"
+        policyName="Deny project deletion"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Archive policy" }));
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "Archive policy",
+      }),
+    );
+    // The control: the refusal is said, in the dialog that asked.
+    expect(
+      await within(screen.getByRole("alertdialog")).findByRole("alert"),
+    ).toHaveTextContent(REFUSAL_COPY.permissionDenied);
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Archive policy" }));
+
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

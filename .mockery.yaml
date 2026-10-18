@@ -9,6 +9,9 @@ filename: "{{.InterfaceName | snakecase}}.go"
 pkgname: "mocks"
 structname: "Mock{{.InterfaceName}}"
 packages:
+  github.com/garamsh/garam/internal/agent:
+    interfaces:
+      StandaloneService: {}
   github.com/garamsh/garam/internal/api:
     interfaces:
       Evaluator: {}

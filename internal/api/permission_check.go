@@ -42,9 +42,10 @@ const (
 	// on current policy past the engine's cache, which this operation
 	// asks too.
 	decidedByDelegation
-	// decidedByCurrent is the org's current policy read past the
-	// engine's cache (CheckCurrent), which this operation does not read.
-	decidedByCurrent
+	// decidedByEnroll is the check every approval, withdrawal and
+	// revoke of a standalone host runs, on current policy past the
+	// engine's cache, which this operation asks too.
+	decidedByEnroll
 )
 
 // actionRule is how enforcement checks one action: the kinds of
@@ -100,7 +101,7 @@ var actionRules = map[string]actionRule{
 	org.ActionAgentRead:            {on: []apigen.PermissionResourceType{onOrg, kindAgent}},
 	org.ActionAgentWatch:           {on: []apigen.PermissionResourceType{kindAgent}},
 	org.ActionAgentRename:          {on: []apigen.PermissionResourceType{kindAgent}},
-	org.ActionAgentEnroll:          {on: []apigen.PermissionResourceType{onOrg, kindAgent}, decidedBy: decidedByCurrent},
+	org.ActionAgentEnroll:          {on: []apigen.PermissionResourceType{onOrg, kindAgent}, decidedBy: decidedByEnroll},
 	org.ActionAgentCreate:          {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},
 	org.ActionAgentConfigure:       {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentRecover:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
@@ -117,9 +118,8 @@ var actionRules = map[string]actionRule{
 // same statements, groups and engine `Check` authorizeOn uses. It
 // answers allow or deny and never why. An action a delegation grant
 // also decides is denied where its mint's check denies and unknown
-// where only the grant is left. operator:delegate is answered by the
-// check its writes run, and agent:enroll, which current policy decides,
-// is unknown. Requires membership.
+// where only the grant is left. operator:delegate and agent:enroll are
+// each answered by the check their writes run. Requires membership.
 func (s *Server) CheckPermissions(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -171,8 +171,8 @@ func (s *Server) decide(r *http.Request, c *caller, target grn.GRN, action strin
 		return s.decideAsMint(r, c, target, action)
 	case decidedByDelegation:
 		return s.decideAsDelegation(r, c)
-	case decidedByCurrent:
-		return apigen.DecisionUnknown, nil
+	case decidedByEnroll:
+		return s.decideAsEnroll(r, c, target)
 	case decidedByCheck:
 	}
 	allowed, err := s.allows(r, c, target, action)
@@ -209,6 +209,21 @@ func (s *Server) decideAsMint(r *http.Request, c *caller, target grn.GRN, action
 // check is all of their authority, so it answers allow or deny.
 func (s *Server) decideAsDelegation(r *http.Request, c *caller) (apigen.PermissionDecision, error) {
 	err := s.authority.AuthorizeDelegation(r.Context(), c.user.GRN, c.org)
+	switch {
+	case err == nil:
+		return apigen.DecisionAllow, nil
+	case errorx.IsKind(err, errorx.KindPermissionDenied):
+		return apigen.DecisionDeny, nil
+	}
+	return "", err
+}
+
+// decideAsEnroll answers agent:enroll with the check every approval,
+// withdrawal and revoke of a standalone host runs, for the same actor
+// and object. That check is all of their authority, so it answers
+// allow or deny.
+func (s *Server) decideAsEnroll(r *http.Request, c *caller, target grn.GRN) (apigen.PermissionDecision, error) {
+	err := s.standalone.AuthorizeEnroll(r.Context(), c.user.GRN, c.org, target)
 	switch {
 	case err == nil:
 		return apigen.DecisionAllow, nil

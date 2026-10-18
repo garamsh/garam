@@ -74,7 +74,8 @@ func newExplainStack(t *testing.T) *explainStack {
 
 	srv := api.NewServer(users, orgs, agents, nil, message.NewPostgresStore(p), nil,
 		authn.NewPostgresSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil, api.Config{SessionTTL: time.Hour})
+		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), cli.NewStandaloneService(p, engine),
+		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	s.url = browser.URL
@@ -228,11 +229,11 @@ func TestExplainPermission_HidesAPolicyTheCallerCannotRead(t *testing.T) {
 
 // TestExplainPermission_LeavesOperationDecidedActionsToTheOperation
 // explains to the owner the actions checkPermissions puts to more than
-// the engine's Check — one a delegation grant decides, one current
-// policy decides, and operator:delegate — and one garam does not
-// define. Each carries checkPermissions' decision and no statement.
-// operator:register, which Check alone decides, is the control: it is
-// explained by statements.
+// the engine's Check — one a delegation grant decides, agent:enroll
+// and operator:delegate, each decided by the check its writes run — and
+// one garam does not define. Each carries checkPermissions' decision
+// and no statement. operator:register, which Check alone decides, is
+// the control: it is explained by statements.
 func TestExplainPermission_LeavesOperationDecidedActionsToTheOperation(t *testing.T) {
 	s := newExplainStack(t)
 

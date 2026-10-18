@@ -191,18 +191,16 @@ func TestCheckPermissions_AsksAtMostFifty(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, status)
 }
 
-// TestCheckPermissions_LeavesGrantAndCurrentActionsUnknown asks the
-// owner, whose role allows each of them, about an action a delegation
-// grant decides and one that current policy decides: each is unknown,
-// because what enforcement asks for them is more than this operation
-// reads — the grant, or current policy.
-// operator:register, which Check alone decides, is the control.
-func TestCheckPermissions_LeavesGrantAndCurrentActionsUnknown(t *testing.T) {
+// TestCheckPermissions_LeavesGrantActionsUnknown asks the owner, whose
+// role allows it, about an action a delegation grant decides: it is
+// unknown, because enforcement also reads the grant, which this
+// operation does not. operator:register, which Check alone decides, is
+// the control.
+func TestCheckPermissions_LeavesGrantActionsUnknown(t *testing.T) {
 	s := newCheckStack(t)
 
-	assert.Equal(t, []apigen.PermissionDecision{
-		apigen.DecisionUnknown, apigen.DecisionUnknown, apigen.DecisionAllow,
-	}, s.check(t, s.owner, org.ActionAgentCreate, org.ActionAgentEnroll, org.ActionOperatorRegister))
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionUnknown, apigen.DecisionAllow},
+		s.check(t, s.owner, org.ActionAgentCreate, org.ActionOperatorRegister))
 }
 
 // TestCheckPermissions_AnswersDelegationAsItsWritesDecide holds the

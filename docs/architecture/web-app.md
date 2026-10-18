@@ -521,9 +521,9 @@ The boundary is as much of the responsibility as the contents.
   - **The console asks the server whether the caller may take an
     action.** It asks through a permission-check API that answers
     from the check enforcement runs: authz `Check`, or `CheckCurrent`
-    for an action a mint or a delegation write decides. It answers
-    unknown where a mint's check allows and the grant is left to
-    decide, and where it asks neither
+    for an action a mint, a delegation write or a standalone host
+    approval decides. It answers unknown only where a mint's check
+    allows and the grant is left to decide
     ([api-surface.md](./api-surface.md) §What decides the rest). It
     hides or disables what the answer denies. The server still
     enforces every write, so a refusal that is reached still renders.

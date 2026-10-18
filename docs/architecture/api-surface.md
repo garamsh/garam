@@ -557,10 +557,16 @@ and not in the same place on every surface.
     the one function they all call
     (`internal/operator/authority_service.go`, `AuthorizeDelegation`),
     and that check is all of their authority.
-  - **unknown** for `agent:enroll`, whose enforcement reads current
-    policy past the engine's cache and which this operation does not
-    put to that read. A cached deny could hide a control the operation
-    would allow.
+  - **allow or deny** for `agent:enroll`. It is put to the check every
+    approval, withdrawal and revoke of a standalone host runs, on
+    current policy past the engine's cache, through the one function
+    they all call (`internal/agent/standalone_service.go`,
+    `AuthorizeEnroll`), and that check is all of their authority. A new
+    host is asked on the organization, and an approval, withdrawal or
+    revoke that acts on an agent on that agent.
+
+  So `unknown` is answered exactly where a delegation grant is left to
+  decide, and nowhere else.
   - **deny** for an action garam does not define, because a role's
     wildcard such as `org:*` would otherwise allow a name no operation
     checks.

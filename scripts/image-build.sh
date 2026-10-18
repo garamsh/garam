@@ -17,6 +17,11 @@
 # hex digits of HEAD (ADR-0071). A bare release version is refused, as
 # is any other tag, before anything is built. The resulting references
 # are what a person pushes; this script pushes nothing.
+#
+# `--cache gha` has each build read and write its layers in the GitHub
+# Actions cache under a scope of the image's repository, and load the
+# result into the image store, which a builder exporting a cache does
+# not do by default. Only a GitHub Actions run holds that cache (#1519).
 set -eu
 
 workflow=.github/workflows/release.yml
@@ -26,10 +31,11 @@ registry=
 devnamespace=garam-dev
 devtag=
 dev=false
+cache=
 
 usage() {
 	echo "image-build: $1" >&2
-	echo 'usage: scripts/image-build.sh [--names] [--registry <host> [--tag <tag>]]' >&2
+	echo 'usage: scripts/image-build.sh [--names] [--registry <host> [--tag <tag>]] [--cache gha]' >&2
 	exit 2
 }
 
@@ -44,6 +50,11 @@ while [ $# -gt 0 ]; do
 	--tag)
 		[ $# -gt 1 ] || usage '--tag takes a tag'
 		devtag=$2 dev=true
+		shift
+		;;
+	--cache)
+		[ $# -gt 1 ] && [ "$2" = gha ] || usage '--cache takes gha, the one cache it can name'
+		cache=$2
 		shift
 		;;
 	*) usage "unknown argument $1" ;;
@@ -214,7 +225,12 @@ while read -r name context file perrun args; do
 		IMAGE_VERSION) set -- "$@" --build-arg "IMAGE_VERSION=$tag" ;;
 		esac
 	done
-	echo "image-build: $image from $file, context $context${args:+, $args}"
+	if [ -n "$cache" ]; then
+		set -- "$@" --load \
+			--cache-from "type=$cache,scope=$name" \
+			--cache-to "type=$cache,mode=max,scope=$name"
+	fi
+	echo "image-build: $image from $file, context $context${args:+, $args}${cache:+, cache $cache scope $name}"
 	docker build -t "$image" -f "$file" "$@" "$context"
 	echo "image-build: built $image $(docker image inspect -f '{{.Id}}' "$image")"
 done <<EOF

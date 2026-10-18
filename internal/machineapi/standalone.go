@@ -75,7 +75,7 @@ func (s *Server) EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, p
 	out := machinegen.StandaloneEnrollment{
 		Grn: result.Agent.String(), SupervisorGrn: result.Supervisor.String(),
 		Epoch: strconv.Itoa(result.Epoch), Lineage: openapi_types.UUID(result.Lineage),
-		ServerRootPem: result.ServerRootPEM,
+		ServerRootPem: result.ServerRootPEM, Placement: machinegen.StandaloneEnrollmentPlacement(result.Placement),
 	}
 	if c := result.Certificates; c != nil {
 		out.SupervisorCertificatePem, out.AgentCertificatePem = &c.SupervisorCertificatePEM, &c.AgentCertificatePEM
@@ -83,6 +83,10 @@ func (s *Server) EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, p
 	}
 	if result.Credential != "" {
 		out.Credential = &result.Credential
+	}
+	if replaced := result.ReplacesActivation; replaced != nil {
+		id := openapi_types.UUID(*replaced)
+		out.ReplacesActivationId = &id
 	}
 	writeJSON(w, createdOrReplayed(created), out)
 }

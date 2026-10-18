@@ -2273,6 +2273,15 @@ paths:
         spent under v1 alone and one binding none under v2 alone;
         spending either under the other value is 400 and spends nothing
         (ADR-0100).
+
+
+        The answer names the `placement` the administrator approved.
+        `standalone` is a host whose supervisor starts the runtime, its
+        workspace and the adapter as three containers (ADR-0085).
+        `direct` is a host whose supervisor attaches to a runtime
+        already running there and starts nothing (ADR-0111); its
+        approval binds no key, so it is spent under v2 alone. garam
+        places, registers and fences both alike.
       security: []
       parameters:
         - $ref: '#/components/parameters/standaloneContractVersion'
@@ -2426,8 +2435,14 @@ paths:
 
 
         `placement: direct` is 409 with reason `direct_placement_gated`
-        whatever else the body says, until #1355 decides how a directly
-        running runtime's writer is proven.
+        whatever else the body says. The name is the one this contract
+        shipped with, and the refusal is permanent: `agent-enrollment.v1`
+        never admits direct placement. A direct agent's authority is an
+        administrator's `agent:enroll` approval and a supervisor
+        registered for that one agent, never an operator (ADR-0111). The
+        browser surface's `approveAgentEnrollment` with
+        `placement: direct` is that approval, and the host spends it
+        with `enrollStandaloneAgent` under `standalone-enrollment.v2`.
       parameters:
         - $ref: '#/components/parameters/agentEnrollmentContractVersion'
       requestBody:
@@ -3860,7 +3875,7 @@ components:
         verifies garam by: under `standalone-enrollment.v1` both
         certificates and the authority that signed them, carrying no
         private key; under v2 the supervisor's credential (ADR-0100).
-      required: [grn, supervisorGrn, epoch, lineage, serverRootPem]
+      required: [grn, supervisorGrn, epoch, lineage, serverRootPem, placement]
       properties:
         grn:
           type: string
@@ -3894,6 +3909,25 @@ components:
         serverRootPem:
           type: string
           description: The garam server root, which the host verifies garam's listener against (ADR-0040).
+        placement:
+          type: string
+          enum: [standalone, direct]
+          description: >-
+            Where the host runs its agent's runtime, as the approval
+            named it: started by the supervisor, or attached to
+            (ADR-0111).
+        replacesActivationId:
+          type: string
+          format: uuid
+          description: >-
+            Under a replacement alone: the agent's most recent
+            activation as the replacement found it, current or ended,
+            read under the execution lock the move held. The new
+            supervisor's first `activateAgent` names it as
+            `replacesActivationId`, which garam requires, and a host
+            whose supervisor has never activated has no other way to
+            learn it. A replay answers the same one. Absent for a new
+            agent and for an agent never activated.
     SupervisorRenewalRequest:
       type: object
       required: [requestId, certificateRequestPem]

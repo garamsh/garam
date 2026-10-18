@@ -330,3 +330,23 @@ func TestRun_NeverOffersAnEntryItCannotDateOrIsNotItsToSend(t *testing.T) {
 		assert.Zero(t, count(queue.submissions(), id), "%s is never offered", id)
 	}
 }
+
+// TestRun_SetsAsideEntriesWrittenUnderARuntimesEarlierIDAndLeavesThem
+// is a direct runtime restarted under its GRN (ADR-0111): the entries
+// it wrote under the ID it ran with before, which is no GRN, are set
+// aside before any call to garam and stay in the outbox. The entry it
+// writes under the GRN is the control, and is forwarded.
+func TestRun_SetsAsideEntriesWrittenUnderARuntimesEarlierIDAndLeavesThem(t *testing.T) {
+	queue := newGaramQueue(t, time.Second)
+	dir := t.TempDir()
+	earlier := entryFor("entry-earlier", "reply written before the restart")
+	earlier["agent_id"] = "sherlock-laptop"
+	writeEntry(t, dir, earlier)
+	writeEntry(t, dir, entryFor("entry-attached", "reply written under the GRN"))
+	forwarding(t, queue, dir)
+
+	eventually(t, gone(filepath.Join(dir, "entry-attached.json")), "the control: the GRN's entry is forwarded")
+	quietFor()
+	assert.FileExists(t, filepath.Join(dir, "entry-earlier.json"), "the earlier ID's entry is left in place")
+	assert.Zero(t, count(queue.submissions(), "entry-earlier"), "the earlier ID's entry is never offered")
+}

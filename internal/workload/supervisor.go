@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
+	"path/filepath"
 	"regexp"
 	"sync"
 	"time"
@@ -76,6 +77,16 @@ type Config struct {
 	// running adapter's agent token with the one held; zero is every
 	// thirty seconds.
 	TokenCheckInterval time.Duration
+	// Attach is a runtime the host runs itself, which the supervisor
+	// attaches to instead of starting one (ADR-0111); nil is the
+	// three containers it starts.
+	Attach *Attachment
+	// Replaces is the agent's most recent activation as a replacement's
+	// enrollment answered it, and empty otherwise. It seeds the
+	// record's last activation where the record holds none, which is a
+	// supervisor that never activated, so its first activation names
+	// what garam requires it to.
+	Replaces string
 	// Tokens is the agent's garam token in the token mode, where the
 	// host enrolled under standalone-enrollment.v2 and holds a
 	// supervisor credential (ADR-0100); nil is the certificate mode,
@@ -108,10 +119,13 @@ type Supervisor struct {
 	activating sync.Mutex
 }
 
-// NewSupervisor constructs a supervisor over an engine and garam.
+// NewSupervisor constructs a supervisor over garam and either an
+// engine, which starts the runtime, or cfg.Attach, which names a
+// runtime the host runs itself.
 func NewSupervisor(engine Engine, garam Activator, cfg Config) (*Supervisor, error) {
-	if engine == nil || garam == nil {
-		return nil, errorx.New(errorx.KindInvalidArgument, "workload: an engine and garam are required")
+	if garam == nil || (engine == nil) == (cfg.Attach == nil) {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"workload: garam is required, and either an engine or an attachment, not both")
 	}
 	if cfg.Dir == "" || cfg.Prefix == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "workload: a directory and a name prefix are required")
@@ -122,6 +136,19 @@ func NewSupervisor(engine Engine, garam Activator, cfg Config) (*Supervisor, err
 	}
 	if d.Epoch == "" || d.Revision == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "workload: an epoch and a non-empty revision are required")
+	}
+	if a := cfg.Attach; a != nil {
+		switch {
+		case cfg.Tokens == nil:
+			return nil, errorx.New(errorx.KindInvalidArgument, "workload: an attached runtime's adapter is handed tokens")
+		case a.Status == nil || a.AdapterDir == "":
+			return nil, errorx.New(errorx.KindInvalidArgument,
+				"workload: an attachment names the runtime's status and the adapter's directory")
+		case d.MoveMemoryTo != "" || cfg.MessageIssuer != "":
+			return nil, errorx.New(errorx.KindInvalidArgument,
+				"workload: an attaching supervisor moves no memory and renders no runtime configuration")
+		}
+		return &Supervisor{garam: garam, cfg: cfg}, nil
 	}
 	for _, image := range []string{d.Images.Runtime, d.Images.Workspace, d.Images.Adapter} {
 		if !immutableImage.MatchString(image) {
@@ -176,6 +203,14 @@ func (s *Supervisor) run(ctx context.Context) error {
 		return err
 	}
 	s.st = st
+	if s.st.LastActivation == "" && s.cfg.Replaces != "" {
+		if err := s.locked(func() { s.st.LastActivation = s.cfg.Replaces }); err != nil {
+			return err
+		}
+	}
+	if s.cfg.Attach != nil {
+		return s.runAttached(ctx)
+	}
 	if err := s.storage(ctx); err != nil {
 		return err
 	}
@@ -231,14 +266,19 @@ func (s *Supervisor) newIntent() (*intent, error) {
 	in := &intent{
 		ID: id, Nonce: randomHex(16), Phase: phaseStarting,
 		Epoch: d.Epoch, Revision: d.Revision, Images: d.Images,
-		RequireStore:   s.st.Memory.Served,
+		Attached:       s.cfg.Attach != nil,
 		PlacementToken: base64.RawURLEncoding.EncodeToString(token),
 	}
 	if s.cfg.Tokens != nil {
 		in.ControlToken = controlTokenPrefix + randomHex(32)
 	}
-	for _, r := range roles {
-		in.container(r).Name = s.cfg.Prefix + string(r) + "-" + id
+	// An attached runtime is no container of this host's and runs on
+	// no volume it recorded.
+	if !in.Attached {
+		in.RequireStore = s.st.Memory.Served
+		for _, r := range roles {
+			in.container(r).Name = s.cfg.Prefix + string(r) + "-" + id
+		}
 	}
 	if err := s.locked(func() {
 		s.st.Intent = in
@@ -260,7 +300,7 @@ func (s *Supervisor) supervise(ctx context.Context, in *intent) error {
 	if err != nil {
 		return err
 	}
-	ctl, err := s.serveControl(genDir, serving, in)
+	ctl, err := s.serveControl(filepath.Join(genDir, socketDir), serving, in)
 	if err != nil {
 		return err
 	}
@@ -285,7 +325,13 @@ func (s *Supervisor) supervise(ctx context.Context, in *intent) error {
 func (s *Supervisor) watch(ctx context.Context, ctl *controlServer, in *intent) error {
 	waitCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	go s.refresh(waitCtx, in.Adapter.ID)
+	// The copy replaces the file in the container, which is not a
+	// rename: the adapter reads a file part way written as undecided
+	// and reads it again (ADR-0085, ADR-0100).
+	go s.refresh(waitCtx, func(token string) error {
+		file := own("garam/"+agentTokenFile, []byte(token), 0o600)
+		return s.engine.CopyFiles(waitCtx, in.Adapter.ID, "/etc", []File{file})
+	})
 	exited := make(chan error, len(roles))
 	for _, r := range roles {
 		go func(id string) { exited <- s.engine.WaitExited(waitCtx, id) }(in.container(r).ID)

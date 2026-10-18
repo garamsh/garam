@@ -19,6 +19,10 @@ func (s *Supervisor) recover(ctx context.Context, replace bool) (*intent, error)
 	if in == nil || in.Phase == phaseEnded {
 		return nil, nil
 	}
+	if in.Attached {
+		// Nothing of an attached runtime is this host's to drain.
+		return nil, s.locked(func() { in.Phase = phaseEnded })
+	}
 	if in.Phase == phaseStarting {
 		over, err := s.over(ctx, in)
 		if err != nil {

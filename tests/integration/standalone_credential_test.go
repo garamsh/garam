@@ -353,3 +353,76 @@ func TestStandaloneCredential_AReplacementEndsTheRetryWindow(t *testing.T) {
 	status, _ = s.supervisorExchange(t, current.credential, `{}`)
 	assert.Equal(t, http.StatusUnauthorized, status, "and its credential exchanges nothing")
 }
+
+// TestStandaloneCredential_AReplacementAnswersTheActivationItsFirstActivationNames
+// holds a replacement onto a new host whose supervisor has never
+// activated. The spending answers the agent's most recent activation,
+// read under the execution lock the move held, and its replay answers
+// the same one. The new supervisor's first activation naming it is
+// activated, where one naming none is refused as superseded, which is
+// all a fresh supervisor could name before.
+func TestStandaloneCredential_AReplacementAnswersTheActivationItsFirstActivationNames(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	s.client, _ = tokenClient(t)
+	h := newStandaloneHost(t)
+	status, body := s.approve(t, s.owner, "acme", h.credentialApproval(t))
+	require.Equal(t, http.StatusCreated, status, body)
+	first := credentialOf(t, s.spendV2(t, h.secret, h.credentialEnrollment()))
+	activated := s.supervisorActivates(t, first, tokenActivationBody("first", generation(1), nil, nil, ""))
+	require.Equal(t, http.StatusCreated, activated.status, activated.body)
+	ended := activationOf(t, activated).ActivationId
+
+	next := newStandaloneHost(t)
+	var approval map[string]any
+	require.NoError(t, json.Unmarshal([]byte(next.credentialApproval(t)), &approval))
+	approval["replaces"] = map[string]any{"agentGrn": first.agent.String(), "assigneeGrn": first.supervisor.String(), "epoch": 1}
+	raw, err := json.Marshal(approval)
+	require.NoError(t, err)
+	status, body = s.approve(t, s.owner, "acme", string(raw))
+	require.Equal(t, http.StatusCreated, status, body)
+	spent := s.spendV2(t, next.secret, next.credentialEnrollment())
+	replaced := credentialOf(t, spent)
+	var answer machinegen.StandaloneEnrollment
+	require.NoError(t, json.Unmarshal([]byte(spent.body), &answer))
+	require.NotNil(t, answer.ReplacesActivationId, "a replacement answers the activation it found")
+	assert.Equal(t, ended, answer.ReplacesActivationId.String())
+	replay := s.spendV2(t, next.secret, next.credentialEnrollment())
+	require.NoError(t, json.Unmarshal([]byte(replay.body), &answer))
+	require.NotNil(t, answer.ReplacesActivationId)
+	assert.Equal(t, ended, answer.ReplacesActivationId.String(), "a replay answers the same one")
+	replaced = credentialOf(t, replay)
+
+	activation := func(requestID string, replaces *string) string {
+		raw, err := json.Marshal(map[string]any{
+			"requestId": requestID, "epoch": "2", "generation": string(generation(2)),
+			"replacesActivationId": replaces, "operationRef": nil,
+		})
+		require.NoError(t, err)
+		return string(raw)
+	}
+	got := s.supervisorActivates(t, replaced, activation("unanchored", nil))
+	assert.Equal(t, http.StatusConflict, got.status, "a first activation naming nothing: %s", got.body)
+	got = s.supervisorActivates(t, replaced, activation("anchored", &ended))
+	assert.Equal(t, http.StatusCreated, got.status, "the control: naming the activation answered: %s", got.body)
+}
+
+// supervisorActivates has c's supervisor activate its agent, forwarding
+// an agent token it mints for garam in body's token member.
+func (s *tokenStack) supervisorActivates(t *testing.T, c credentialed, body string) reply {
+	t.Helper()
+	status, token := s.supervisorExchange(t, c.credential, `{}`)
+	require.Equal(t, http.StatusCreated, status)
+	minted := s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens", operator.TokenContractVersion, token, "", `{}`)
+	require.Equal(t, http.StatusCreated, minted.status, minted.body)
+	var own machinegen.AgentToken
+	require.NoError(t, json.Unmarshal([]byte(minted.body), &own))
+	var fields map[string]any
+	require.NoError(t, json.Unmarshal([]byte(body), &fields))
+	fields["token"] = own.Token
+	raw, err := json.Marshal(fields)
+	require.NoError(t, err)
+	return s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/activations", agent.TokenExecutionContractVersion, token, "",
+		string(raw))
+}

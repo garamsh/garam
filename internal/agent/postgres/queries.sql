@@ -172,12 +172,13 @@ INSERT INTO agent_initial_certificates (
 INSERT INTO agent_enrollments (
     id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256,
     agent_key_sha256, expected_assignee_grn, expected_epoch, request_id,
-    approved_by, secret_sha256, expires_at, created_at
+    approved_by, secret_sha256, expires_at, created_at, placement
 ) VALUES (
     sqlc.arg('id'), sqlc.arg('org_grn'), sqlc.arg('agent_grn'), sqlc.arg('supervisor_grn'),
     sqlc.arg('host_name'), sqlc.arg('supervisor_key_sha256'), sqlc.arg('agent_key_sha256'),
     sqlc.narg('expected_assignee_grn'), sqlc.narg('expected_epoch'), sqlc.arg('request_id'),
-    sqlc.arg('approved_by'), sqlc.arg('secret_sha256'), sqlc.arg('expires_at'), sqlc.arg('created_at')
+    sqlc.arg('approved_by'), sqlc.arg('secret_sha256'), sqlc.arg('expires_at'), sqlc.arg('created_at'),
+    sqlc.arg('placement')
 )
 ON CONFLICT (org_grn, request_id) DO NOTHING;
 
@@ -215,7 +216,8 @@ UPDATE agent_enrollments SET
     supervisor_certificate_pem = sqlc.arg('supervisor_certificate_pem'),
     agent_certificate_pem      = sqlc.arg('agent_certificate_pem'),
     issuer_pem                 = sqlc.arg('issuer_pem'),
-    server_root_pem            = sqlc.arg('server_root_pem')
+    server_root_pem            = sqlc.arg('server_root_pem'),
+    replaced_activation_id     = sqlc.narg('replaced_activation_id')
 WHERE id = sqlc.arg('id');
 
 -- ReassignSupervisor moves a supervisor-held agent to its replacement

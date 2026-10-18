@@ -20,18 +20,22 @@ type Placement string
 const (
 	// PlacementManaged is a runtime the Operator provisions.
 	PlacementManaged Placement = "managed"
+	// PlacementStandalone is a runtime a standalone host's supervisor
+	// starts as its three containers (ADR-0085).
+	PlacementStandalone Placement = "standalone"
 	// PlacementDirect is a runtime running independently of the
-	// Operator. It is refused until #1355 decides its writer proof.
+	// Operator, which a standalone host's supervisor attaches to and
+	// starts nothing of (ADR-0111).
 	PlacementDirect Placement = "direct"
 )
 
 // ParsePlacement reads a placement off the wire.
 func ParsePlacement(s string) (Placement, error) {
 	switch p := Placement(s); p {
-	case PlacementManaged, PlacementDirect:
+	case PlacementManaged, PlacementStandalone, PlacementDirect:
 		return p, nil
 	}
-	return "", errorx.New(errorx.KindInvalidArgument, "placement is managed or direct")
+	return "", errorx.New(errorx.KindInvalidArgument, "placement is managed, standalone or direct")
 }
 
 // Common enrollment sentinels (ADR-0102). Each refusal the contract
@@ -41,10 +45,15 @@ var (
 	// contract version, or another.
 	ErrUnsupportedAdmissionContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: this route serves "+AdmissionContractVersion)
-	// ErrDirectPlacementGated refuses direct placement until #1355
-	// decides how a directly running runtime's writer is proven.
-	ErrDirectPlacementGated = errorx.New(errorx.KindFailedPrecondition,
-		"direct placement is refused until its writer proof is decided (#1355)")
+	// ErrDirectPlacementRequiresAdministratorApproval refuses direct
+	// placement under this contract, permanently: a direct agent's
+	// authority is an administrator's agent:enroll approval and a
+	// supervisor registered for that one agent, never an operator
+	// (ADR-0111). The wire keeps the reason v1 shipped it under,
+	// direct_placement_gated.
+	ErrDirectPlacementRequiresAdministratorApproval = errorx.New(errorx.KindFailedPrecondition,
+		"direct placement is admitted by an administrator's approval of a standalone host, not under "+
+			AdmissionContractVersion)
 	// ErrApprovalBindingConflict refuses a binding other than the one
 	// an approval under the same request identifier holds, and a
 	// reference minted for another assignee or request identifier, or
@@ -91,13 +100,16 @@ type EnrollmentBinding struct {
 	Replaces     *Replacement
 }
 
-// admissible refuses what the contract models and does not admit yet,
-// before any authority is read.
+// admissible refuses what the contract does not admit, before any
+// authority is read: it admits managed placement alone.
 func (b EnrollmentBinding) admissible() error {
-	if b.Placement == PlacementDirect {
-		return ErrDirectPlacementGated
+	switch b.Placement {
+	case PlacementManaged:
+		return nil
+	case PlacementDirect:
+		return ErrDirectPlacementRequiresAdministratorApproval
 	}
-	return nil
+	return errorx.New(errorx.KindInvalidArgument, "placement is managed or direct")
 }
 
 // EnrollmentApproval is an approval as stored: the binding the

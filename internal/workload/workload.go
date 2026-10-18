@@ -6,6 +6,9 @@
 // nonce. It serves the adapter's activation and runtime-status contract
 // (ADR-0084) on a socket only that generation's adapter mounts, and
 // forwards an activation to garam only for the generation it owns.
+// Attached to a runtime the host runs itself, it starts nothing and
+// forwards only the generation that runtime reports serving
+// (ADR-0111).
 //
 // The engine is reached through Engine; garam through Activator. Every
 // decision is taken from a durable record the supervisor alone writes,
@@ -13,6 +16,8 @@
 package workload
 
 import (
+	"time"
+
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 )
@@ -46,6 +51,11 @@ var (
 	// error carries the reason.
 	ErrMoveRefused = errorx.New(errorx.KindFailedPrecondition,
 		"workload: the memory's move was refused and the agent is stopped on its old volume")
+	// ErrStartedHere is an attaching supervisor finding a generation
+	// it started as containers not yet drained: attaching would leave
+	// that runtime running beside the attached one.
+	ErrStartedHere = errorx.New(errorx.KindFailedPrecondition,
+		"workload: the record holds a generation this host started; drain it under the standalone placement first")
 	// ErrMovePending is a run asked for something other than the move
 	// the record holds unsettled.
 	ErrMovePending = errorx.New(errorx.KindFailedPrecondition, "workload: a move of the memory is not settled")
@@ -109,6 +119,20 @@ type Desired struct {
 	// MoveMemoryTo is a volume the memory moves to, created by the
 	// move, before the next generation starts on it; empty is no move.
 	MoveMemoryTo string
+}
+
+// Attachment is a runtime the host runs itself, which the supervisor
+// attaches to and starts, signals and drains nothing of (ADR-0111).
+type Attachment struct {
+	// Status reads the runtime's status route at the loopback literal
+	// the runtime binds.
+	Status StatusReader
+	// AdapterDir is the directory the host's adapter reads its files
+	// from and finds the control socket in.
+	AdapterDir string
+	// StatusInterval is how often the forwarded generation is read
+	// again; zero is every five seconds.
+	StatusInterval time.Duration
 }
 
 // AdapterFiles is what the adapter presents and verifies by, copied

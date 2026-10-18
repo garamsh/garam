@@ -161,6 +161,7 @@ sql:
       - migrations/000049_agent_enrollment_approvals.up.sql
       - migrations/000028_operator_delegations.up.sql
       - migrations/000051_agent_replace.up.sql
+      - migrations/000053_agent_enrollment_placement.up.sql
     queries: internal/agent/postgres/queries.sql
     gen:
       go:

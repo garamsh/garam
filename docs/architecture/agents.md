@@ -152,11 +152,16 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## Common managed and direct enrollment
 
-**Built for managed placement; direct placement is unbuilt.**
+**Built for both placements, over two wires.**
 [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
 sets one admission contract, `agent-enrollment.v1`, in place of
-separate managed/standalone identity models. §Separated execution and
-§Standalone hosts describe the older cohorts, which stay served.
+separate managed/standalone identity models. That wire admits managed
+placement. Direct placement is admitted by an administrator's
+standalone approval that names it, spent under
+`standalone-enrollment.v2`
+([ADR-0111](./adr/0111-a-directly-attached-runtime-is-activated-by-a-one-agent-host-authority-on-the-generation-it-reports-and-its-store-lock.md),
+whose Errata record that the wire is this one). §Separated execution
+and §Standalone hosts describe the older cohorts, which stay served.
 
 - **What is built.** The hosted control service prepares an approval
   under a member's `agent:create` reference, then admits the agent it
@@ -164,8 +169,11 @@ separate managed/standalone identity models. §Separated execution and
   §admitAgentEnrollment are authoritative for the wire and the
   refusal reasons. Credential delivery is `mintAgentToken` and
   activation `activateAgent`, unchanged. `AdmissionService`
-  (`internal/agent/admission_service.go`) holds both stages for both
-  placements; direct placement is refused by name.
+  (`internal/agent/admission_service.go`) holds both stages. It admits
+  managed placement alone, and refuses direct placement with the
+  reason `direct_placement_gated`, permanently: a direct agent's
+  authority is an administrator and a one-agent supervisor, never an
+  operator.
 - **A managed replacement rests on `agent:replace`.** An owner's or
   administrator's reference names the agent, the assignment it is on
   and the controller it moves to, and the hosted service's grant
@@ -215,32 +223,38 @@ separate managed/standalone identity models. §Separated execution and
   enters the runtime or workspace. Admission grants no Sherlock
   command/channel permission ([messaging.md](./messaging.md)).
 
-**Direct attachment's writer proof is decided and unbuilt.**
-[ADR-0111](./adr/0111-a-directly-attached-runtime-is-activated-by-a-one-agent-host-authority-on-the-generation-it-reports-and-its-store-lock.md)
-selects it. Until the implementation lands, `direct_placement_gated`
-still refuses direct placement, and nothing below runs.
+**Direct attachment is built; its joint acceptance with a real
+Sherlock is not.** The tests stand in a runtime that keeps Sherlock's
+lock and drain order (`tests/integration/direct_attachment_test.go`).
 
-- **The authority is an ADR-0082 supervisor in an attach mode.** It is
-  registered for the one agent and admitted under
-  `agent-enrollment.v1` through `admit`. It starts and signals nothing,
-  and it holds no Docker socket. Its activation forward is the
-  standalone one with the container check replaced: the supervisor
-  reads `/agents/<GRN>/status` itself at a pinned loopback literal,
-  `127.0.0.1:<port>` or `[::1]:<port>`. It forwards only a generation
-  that reports `serving` under the GRN with the request's epoch and
-  revision, and that it has never claimed before.
+- **The authority is an ADR-0082 supervisor in an attach mode.** An
+  administrator approves a host with `placement: direct`, which binds
+  no key. The host spends it under `standalone-enrollment.v2`, whose
+  spending registers the supervisor for the one agent and calls
+  `admit`, as a standalone host's does. Garam places, registers and
+  fences both placements alike; the placement tells the host which
+  runner to start (§The host's runner).
+- **The supervisor reads the runtime's status itself.** Its activation
+  forward is the standalone one with the container check replaced: it
+  reads `/agents/<GRN>/status` at a pinned loopback literal,
+  `127.0.0.1:<port>` or `[::1]:<port>`, and forwards only a generation
+  reporting `serving` under the GRN, at the request's epoch and
+  revision, that it has never claimed before.
 - **The writer evidence is the runtime's own.** Sherlock's store lock is
   taken before its generation is minted, so a fresh generation
   `serving` holds the store. Same-host trust is the stated assumption,
   and the status read carries no credential on loopback.
 - **A new direct agent restarts once under its GRN.** Garam signs the
   audience as the GRN, and admission allocates it, so no running
-  runtime can already carry it. The new process starts only after the
-  old one exits. Outbox entries written under the earlier ID are set
-  aside and left in place.
+  runtime can already carry it. Whoever restarts the runtime starts the
+  new process only after the old one exits, and retries a start the
+  store's lock refuses. The adapter sets aside every outbox entry
+  written under the earlier ID and leaves it in place.
 - **The placement is one host, one local filesystem and loopback.** A
   `tls:` placement, shared volumes and multi-node placement are
-  outside it.
+  outside it. A direct agent's assurance is one host's process
+  isolation and the lock's advisory scope, less than a managed or
+  standalone agent's.
 
 Legacy v1/v2 approval bindings and supervisor credential retry behavior
 remain unchanged until explicitly migrated; an `agent-enrollment.v1`
@@ -569,6 +583,22 @@ unverified (#1180, #1169).
   approval for the agent under the execution lock. An expired
   supervisor or agent credential is recovered the same way; nothing
   recovers it without an administrator.
+- **A replacement answers the activation its successor names.** The
+  new supervisor's first activation must name the agent's most recent
+  activation, and a host whose supervisor never activated has no
+  record of it. The spending records it as the execution lock found it
+  (`migrations/000053`) and answers it as `replacesActivationId`, a
+  replay the same one. `garam standalone run` seeds the supervisor's
+  record with it where the record holds none, and never overwrites one
+  it holds.
+- **The approval names the placement.** `standalone`, the default, is
+  the three containers §The host's runner starts; `direct` is a runtime
+  the host already runs, which the supervisor attaches to
+  (§Common managed and direct enrollment). A direct approval binds no
+  key, so it is spent under v2 alone, and the schema refuses one
+  binding keys (`migrations/000053`). The spending answers the
+  placement and the host's enrollment record keeps it; a record an
+  earlier release wrote names none and is a standalone host's.
 - **The supervisor's renewal replays for its predecessor.** It renews
   over a new key in the last third of its validity; the certificate a
   renewal replaced may replay that renewal's public answer for the
@@ -776,6 +806,42 @@ supervisor that stops leaves the workload running.
   old volume with the reason stated, keeps the refused volume and
   never uses it again; the old volume is never written or removed. A
   move not yet settled refuses every run that does not ask for it.
+
+### Attached to a direct runtime
+
+`garam standalone run` on a host enrolled under the direct placement
+runs the supervisor's attach mode (ADR-0111, `internal/workload`
+`attach.go`). It holds no engine, and it starts, signals and drains
+nothing; restarting the runtime is the host's.
+
+- **The runtime is named by a loopback literal.** `--runtime-address`
+  is `127.0.0.1:<port>` or `[::1]:<port>`, never a name: `localhost`
+  resolves to either family, and two runtimes could each hold one. The
+  standalone placement's engine, image and model flags are refused
+  here, and `--runtime-address` is refused there.
+- **It reads the status as the adapter reads it.** The supervisor
+  reads the runtime's status through the adapter's own reader,
+  `delivery.HTTPGateway.Status`, so both hold the runtime to one parse.
+  A status naming another agent or contract version, or no
+  generation, is `placement_not_current`. An answer it cannot read is
+  `undecided`, and so is a runtime still under its own ID, which
+  answers the GRN's path 404 until it restarts under the GRN.
+- **The adapter's files are written into the agent's directory.** The
+  control's root, the placement token, the control token and the agent
+  token go there owner-only, and the control socket is
+  `control/control.sock` there. A host process reads its root once, so
+  one root, kept in the supervisor's `attach/` directory, outlasts
+  every intent. The agent token is rewritten whenever the supervisor
+  holds a newer one, by rename. The run holds its lock on that
+  directory as well as on its own.
+- **An intent lasts as long as the runtime's generation.** The
+  supervisor reads the status every five seconds once it has forwarded
+  a generation. A status it cannot read decides nothing; another
+  generation ends the intent, and the run returns for the host's init
+  to start again, which opens the next intent with new tokens. Its
+  first activation names the one before, so garam fences the old
+  generation. A record holding a generation this host started as
+  containers and never drained is refused.
 
 What is still not settled is ADR-0085 §What this does not decide, but
 for the storage handover ADR-0089 answers: the joint acceptance with

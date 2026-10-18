@@ -81,7 +81,7 @@ func TestControlServer_CloseLeavesNoListenerBehindForTheNextGeneration(t *testin
 	s := &Supervisor{}
 	path := filepath.Join(genDir, socketDir, socketName)
 
-	first, err := s.serveControl(genDir, serving, &intent{})
+	first, err := s.serveControl(filepath.Join(genDir, socketDir), serving, &intent{})
 	require.NoError(t, err)
 	// The precondition: the serving goroutine has not tracked the
 	// listener yet, so closing the server alone leaves the socket.
@@ -97,7 +97,7 @@ func TestControlServer_CloseLeavesNoListenerBehindForTheNextGeneration(t *testin
 		require.Fail(t, "close returned while the serving goroutine had not")
 	}
 
-	next, err := s.serveControl(genDir, serving, &intent{})
+	next, err := s.serveControl(filepath.Join(genDir, socketDir), serving, &intent{})
 	require.NoError(t, err)
 	t.Cleanup(next.close)
 	for range 100 {

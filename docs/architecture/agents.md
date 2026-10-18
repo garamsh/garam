@@ -599,6 +599,17 @@ unverified (#1180, #1169).
   binding keys (`migrations/000053`). The spending answers the
   placement and the host's enrollment record keeps it; a record an
   earlier release wrote names none and is a standalone host's.
+- **An organization lists what it approved and registered.**
+  `listAgentEnrollments` answers every approval, pending, spent,
+  withdrawn or expired, and `listAgentSupervisors` every registration,
+  active or revoked, with its host, agent, epoch and the latest
+  activation of its agent at that epoch. Both are paged like any list
+  and decided on `agent:read` from current state, as the writes beside
+  them are. The store reads them into summary types
+  (`internal/agent/standalone.go`, `EnrollmentSummary` and
+  `SupervisorSummary`) with no field for a secret's hash, a key
+  fingerprint, a request digest, a serial, a certificate or a
+  credential, so no listing can answer one.
 - **The supervisor's renewal replays for its predecessor.** It renews
   over a new key in the last third of its validity; the certificate a
   renewal replaced may replay that renewal's public answer for the

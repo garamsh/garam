@@ -1531,6 +1531,138 @@ func (q *Queries) IsManagedCreation(ctx context.Context, agentGrn string) (bool,
 	return exists, err
 }
 
+const listEnrollments = `-- name: ListEnrollments :many
+SELECT id, placement, agent_grn, supervisor_grn, host_name, expected_assignee_grn, expected_epoch,
+       approved_by, expires_at, created_at, withdrawn_at, consumed_at, epoch
+FROM agent_enrollments
+WHERE org_grn = $1
+ORDER BY created_at, id
+LIMIT $3 OFFSET $2
+`
+
+type ListEnrollmentsParams struct {
+	OrgGrn    string
+	RowOffset int32
+	RowLimit  pgtype.Int4
+}
+
+type ListEnrollmentsRow struct {
+	ID                  pgtype.UUID
+	Placement           string
+	AgentGrn            string
+	SupervisorGrn       string
+	HostName            string
+	ExpectedAssigneeGrn pgtype.Text
+	ExpectedEpoch       pgtype.Int4
+	ApprovedBy          string
+	ExpiresAt           pgtype.Timestamptz
+	CreatedAt           pgtype.Timestamptz
+	WithdrawnAt         pgtype.Timestamptz
+	ConsumedAt          pgtype.Timestamptz
+	Epoch               pgtype.Int4
+}
+
+// ListEnrollments pages an organization's approvals oldest first,
+// selecting no secret hash, key fingerprint, request digest or
+// certificate: what an administrator reads of them in a list.
+func (q *Queries) ListEnrollments(ctx context.Context, arg ListEnrollmentsParams) ([]ListEnrollmentsRow, error) {
+	rows, err := q.db.Query(ctx, listEnrollments, arg.OrgGrn, arg.RowOffset, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListEnrollmentsRow
+	for rows.Next() {
+		var i ListEnrollmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Placement,
+			&i.AgentGrn,
+			&i.SupervisorGrn,
+			&i.HostName,
+			&i.ExpectedAssigneeGrn,
+			&i.ExpectedEpoch,
+			&i.ApprovedBy,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.WithdrawnAt,
+			&i.ConsumedAt,
+			&i.Epoch,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSupervisors = `-- name: ListSupervisors :many
+SELECT s.grn, s.agent_grn, s.enrollment_id, s.host_name, s.registered_at, s.ended_at,
+       e.placement, e.epoch,
+       (SELECT max(a.created_at) FROM agent_activations a
+        WHERE a.agent_grn = s.agent_grn AND a.epoch = e.epoch)::timestamptz AS last_activated_at
+FROM agent_supervisors s
+JOIN agent_enrollments e ON e.id = s.enrollment_id
+WHERE e.org_grn = $1
+ORDER BY s.registered_at, s.grn
+LIMIT $3 OFFSET $2
+`
+
+type ListSupervisorsParams struct {
+	OrgGrn    string
+	RowOffset int32
+	RowLimit  pgtype.Int4
+}
+
+type ListSupervisorsRow struct {
+	Grn             string
+	AgentGrn        string
+	EnrollmentID    pgtype.UUID
+	HostName        string
+	RegisteredAt    pgtype.Timestamptz
+	EndedAt         pgtype.Timestamptz
+	Placement       string
+	Epoch           pgtype.Int4
+	LastActivatedAt pgtype.Timestamptz
+}
+
+// ListSupervisors pages an organization's supervisor registrations,
+// current and ended, oldest first, with the epoch their enrollment
+// assigned and the latest activation of their agent at that epoch.
+// It selects no serial or credential.
+func (q *Queries) ListSupervisors(ctx context.Context, arg ListSupervisorsParams) ([]ListSupervisorsRow, error) {
+	rows, err := q.db.Query(ctx, listSupervisors, arg.OrgGrn, arg.RowOffset, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSupervisorsRow
+	for rows.Next() {
+		var i ListSupervisorsRow
+		if err := rows.Scan(
+			&i.Grn,
+			&i.AgentGrn,
+			&i.EnrollmentID,
+			&i.HostName,
+			&i.RegisteredAt,
+			&i.EndedAt,
+			&i.Placement,
+			&i.Epoch,
+			&i.LastActivatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockDefinition = `-- name: LockDefinition :one
 
 SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE

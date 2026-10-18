@@ -10,12 +10,17 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 )
 
 // actionEnroll is the action approving, withdrawing and revoking a
 // standalone host needs. internal/org owns it; this package does not
 // import that one, so the string is repeated.
 const actionEnroll = "agent:enroll"
+
+// actionRead is the action listing an organization's approvals and
+// supervisors needs, repeated for the same reason.
+const actionRead = "agent:read"
 
 // StandaloneService is how an administrator stands a standalone host
 // up for one agent and takes it down again (ADR-0082). Every act
@@ -32,6 +37,11 @@ type StandaloneService interface {
 	// Revoke ends a supervisor's registration and its agent's current
 	// activation.
 	Revoke(ctx context.Context, actor, org, supervisor grn.GRN) error
+	// ListEnrollments pages the organization's approvals.
+	ListEnrollments(ctx context.Context, actor, org grn.GRN, f listfilter.Filter) ([]EnrollmentSummary, error)
+	// ListSupervisors pages the organization's supervisor
+	// registrations.
+	ListSupervisors(ctx context.Context, actor, org grn.GRN, f listfilter.Filter) ([]SupervisorSummary, error)
 }
 
 type standaloneService struct {
@@ -149,6 +159,20 @@ func (s *standaloneService) Revoke(ctx context.Context, actor, org, supervisor g
 	return s.store.Revoke(ctx, org, supervisor)
 }
 
+func (s *standaloneService) ListEnrollments(ctx context.Context, actor, org grn.GRN, f listfilter.Filter) ([]EnrollmentSummary, error) {
+	if err := authorizeCurrent(ctx, s.authorizer, actor, org, org, actionRead); err != nil {
+		return nil, err
+	}
+	return s.store.ListEnrollments(ctx, org, f)
+}
+
+func (s *standaloneService) ListSupervisors(ctx context.Context, actor, org grn.GRN, f listfilter.Filter) ([]SupervisorSummary, error) {
+	if err := authorizeCurrent(ctx, s.authorizer, actor, org, org, actionRead); err != nil {
+		return nil, err
+	}
+	return s.store.ListSupervisors(ctx, org, f)
+}
+
 // sameKeys reports whether two approvals bind the same keys, or both
 // bind none.
 func sameKeys(a, b *HostKeys) bool {
@@ -167,12 +191,17 @@ func (e *Enrollment) object() grn.GRN {
 	return e.Org
 }
 
-// authorizeEnroll asks authorizer for agent:enroll and refuses on
-// anything but an allow. A failure to decide is unavailable whatever
-// its kind, so an engine that cannot answer from current state never
-// reads as a defect of the request.
+// authorizeEnroll asks authorizer for agent:enroll.
 func authorizeEnroll(ctx context.Context, authorizer MemberAuthorizer, actor, org, object grn.GRN) error {
-	err := authorizer.Authorize(ctx, actor, org, object, actionEnroll)
+	return authorizeCurrent(ctx, authorizer, actor, org, object, actionEnroll)
+}
+
+// authorizeCurrent asks authorizer for action and refuses on anything
+// but an allow. A failure to decide is unavailable whatever its kind,
+// so an engine that cannot answer from current state never reads as a
+// defect of the request.
+func authorizeCurrent(ctx context.Context, authorizer MemberAuthorizer, actor, org, object grn.GRN, action string) error {
+	err := authorizer.Authorize(ctx, actor, org, object, action)
 	if err == nil || errorx.IsKind(err, errorx.KindPermissionDenied) {
 		return err
 	}

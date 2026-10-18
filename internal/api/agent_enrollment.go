@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"time"
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 )
 
 // ApproveAgentEnrollment records an administrator's approval of what a
@@ -143,4 +145,96 @@ func (s *Server) RevokeAgentSupervisor(w http.ResponseWriter, r *http.Request, o
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListAgentEnrollments pages the organization's standalone approvals
+// in every state. Authorization is the service's agent:read, decided
+// from current state as the writes beside it are. No secret, hash,
+// fingerprint or certificate reaches the answer: the summary the store
+// reads carries none.
+func (s *Server) ListAgentEnrollments(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListAgentEnrollmentsParams) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	f, err := listfilter.Parse(params.Limit, params.Offset)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	enrollments, err := s.standalone.ListEnrollments(r.Context(), u.GRN, orgGRN(orgSlug), f)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	now := time.Now()
+	out := make([]apigen.AgentEnrollmentListing, 0, len(enrollments))
+	for _, e := range enrollments {
+		out = append(out, enrollmentListingToAPI(e, now))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func enrollmentListingToAPI(e agent.EnrollmentSummary, now time.Time) apigen.AgentEnrollmentListing {
+	out := apigen.AgentEnrollmentListing{
+		Id: openapi_types.UUID(e.ID), Placement: apigen.AgentEnrollmentListingPlacement(e.Placement),
+		State: apigen.AgentEnrollmentListingState(e.State(now)), AgentGrn: e.Agent.String(),
+		SupervisorGrn: e.Supervisor.String(), HostName: string(e.HostName), ApprovedBy: e.ApprovedBy.String(),
+		CreatedAt: e.CreatedAt.UTC(), ExpiresAt: e.ExpiresAt.UTC(),
+		SpentAt: utcOf(e.SpentAt), WithdrawnAt: utcOf(e.WithdrawnAt),
+	}
+	if e.SpentAt != nil {
+		epoch := e.Epoch
+		out.Epoch = &epoch
+	}
+	if r := e.Replaces; r != nil {
+		out.Replaces = &apigen.AgentEnrollmentReplacement{AgentGrn: r.Agent.String(), AssigneeGrn: r.Assignee.String(), Epoch: r.Epoch}
+	}
+	return out
+}
+
+// ListAgentSupervisors pages the organization's supervisor
+// registrations, active and revoked. Authorization is
+// ListAgentEnrollments'; no serial, certificate or credential reaches
+// the answer.
+func (s *Server) ListAgentSupervisors(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListAgentSupervisorsParams) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	f, err := listfilter.Parse(params.Limit, params.Offset)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	supervisors, err := s.standalone.ListSupervisors(r.Context(), u.GRN, orgGRN(orgSlug), f)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	out := make([]apigen.AgentSupervisor, 0, len(supervisors))
+	for _, sv := range supervisors {
+		state := apigen.SupervisorActive
+		if sv.EndedAt != nil {
+			state = apigen.SupervisorRevoked
+		}
+		out = append(out, apigen.AgentSupervisor{
+			Grn: sv.GRN.String(), AgentGrn: sv.Agent.String(), EnrollmentId: openapi_types.UUID(sv.Enrollment),
+			Placement: apigen.AgentSupervisorPlacement(sv.Placement), State: state, HostName: string(sv.HostName),
+			Epoch: sv.Epoch, RegisteredAt: sv.RegisteredAt.UTC(), EndedAt: utcOf(sv.EndedAt),
+			LastActivatedAt: utcOf(sv.LastActivatedAt),
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// utcOf renders an optional time in UTC.
+func utcOf(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	v := t.UTC()
+	return &v
 }

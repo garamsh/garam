@@ -606,7 +606,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List the organization's standalone approvals. Requires `agent:read`.
+         * @description Lists every approval the organization holds, oldest first: pending, spent, withdrawn and expired, for standalone and direct placement alike (ADR-0082, ADR-0111). `state` is where each stands when this answers; an unspent approval past `expiresAt` is `expired` and never revived.
+         *
+         *     An entry names what the approval binds and what spending it made, and nothing a host spends or proves with: no bootstrap secret or its hash, no key fingerprint, no request digest, no certificate and no credential.
+         *
+         *     Authorization is `agent:read` on the organization, decided from current membership, roles, groups and persisted policies, as the writes beside it are decided; an explicit Deny wins. Paged by `limit` and `offset` like every other list.
+         */
+        get: operations["listAgentEnrollments"];
         put?: never;
         /**
          * Approve a standalone host's enrollment. Requires current `agent:enroll`.
@@ -636,6 +644,28 @@ export interface paths {
          * @description Withdraws an approval no host has spent. Spending it afterwards is refused as an unknown bootstrap would be, and a withdrawal and a spending of one approval never both take effect. A withdrawn one answers 204 again; a spent one is refused with 409, because what it registered is ended by `revokeAgentSupervisor`.
          */
         delete: operations["withdrawAgentEnrollment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/agent-supervisors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the organization's standalone supervisors. Requires `agent:read`.
+         * @description Lists every supervisor registration the organization holds, oldest first: `active` while current, `revoked` once ended by `revokeAgentSupervisor` or by a replacement taking its agent (ADR-0082). Each names its host, its agent, the epoch its enrollment assigned and when its agent last activated at that epoch, absent where it never did.
+         *
+         *     No certificate, serial, credential or token is answered. Authorization and paging are `listAgentEnrollments`'.
+         */
+        get: operations["listAgentSupervisors"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1509,6 +1539,55 @@ export interface components {
             /** @description Whether the host has enrolled with it. */
             spent: boolean;
         };
+        /** @description An approval as listed. `replaces` is present for a replacement; `spentAt` and `epoch` once a host enrolled; `withdrawnAt` once withdrawn. */
+        AgentEnrollmentListing: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            placement: "standalone" | "direct";
+            /** @enum {string} */
+            state: "pending" | "spent" | "withdrawn" | "expired";
+            agentGrn: string;
+            supervisorGrn: string;
+            hostName: string;
+            replaces?: components["schemas"]["AgentEnrollmentReplacement"];
+            /** @description The GRN of the user who approved it. */
+            approvedBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            spentAt?: string;
+            /** Format: date-time */
+            withdrawnAt?: string;
+            /** @description The assignment epoch spending it gave the agent. */
+            epoch?: number;
+        };
+        AgentSupervisor: {
+            grn: string;
+            agentGrn: string;
+            /** Format: uuid */
+            enrollmentId: string;
+            /** @enum {string} */
+            placement: "standalone" | "direct";
+            /** @enum {string} */
+            state: "active" | "revoked";
+            hostName: string;
+            epoch: number;
+            /** Format: date-time */
+            registeredAt: string;
+            /**
+             * Format: date-time
+             * @description When the registration ended; absent while active.
+             */
+            endedAt?: string;
+            /**
+             * Format: date-time
+             * @description The latest activation of the agent at this supervisor's epoch; absent where it never activated.
+             */
+            lastActivatedAt?: string;
+        };
         /** @description What holds an agent, at the epoch that binding is on: an operator, or the supervisor of a standalone host (ADR-0082). Every assignment raises the epoch and fences the assignee it replaced. */
         AgentAssignment: {
             /** @example grn:acme:default:operator:field-one */
@@ -2301,7 +2380,7 @@ export interface operations {
                 resourceType?: components["parameters"]["permissionResourceType"];
                 /** @description The last segment of the resource's identifier, given with `resourceType`. */
                 resourceId?: components["parameters"]["permissionResourceId"];
-                /** @description How many candidates to ask, from 1 to 50. */
+                /** @description How many candidates to ask, from 1 to 50; 50 when absent. Unlike the `limit` other lists share, 0 is refused rather than read as no limit, because each candidate costs the engine a check. */
                 limit?: number;
                 offset?: components["parameters"]["offset"];
             };
@@ -3058,6 +3137,36 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    listAgentEnrollments: {
+        parameters: {
+            query?: {
+                /** @description Maximum entries to return; 0 means no limit. */
+                limit?: components["parameters"]["limit"];
+                offset?: components["parameters"]["offset"];
+            };
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organization's approvals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentEnrollmentListing"][];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
     approveAgentEnrollment: {
         parameters: {
             query?: never;
@@ -3124,6 +3233,36 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    listAgentSupervisors: {
+        parameters: {
+            query?: {
+                /** @description Maximum entries to return; 0 means no limit. */
+                limit?: components["parameters"]["limit"];
+                offset?: components["parameters"]["offset"];
+            };
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organization's supervisors. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSupervisor"][];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
         };
     };
     revokeAgentSupervisor: {

@@ -335,7 +335,10 @@ answer that cannot be decided from current state is the listener's
 (ADR-0082). `approveAgentEnrollment`, `withdrawAgentEnrollment` and
 `revokeAgentSupervisor` on the browser-facing listener are each
 decided on `agent:enroll` from current state and carry no contract
-version, as an operator's registration does not; on the machine
+version, as an operator's registration does not, and
+`listAgentEnrollments` and `listAgentSupervisors` beside them are
+decided on `agent:read` the same way and answer no secret, hash, key
+fingerprint, certificate or credential; on the machine
 listener `enrollStandaloneAgent` and `renewSupervisorCertificate`
 require and answer `Garam-Contract-Version: standalone-enrollment.v1`,
 and `enrollStandaloneAgent` answers `standalone-enrollment.v2` as well,
@@ -560,7 +563,9 @@ and not in the same place on every surface.
   holds `agent:read`. A page asks at most fifty candidates — members,
   then agents, each in GRN order — and answers those the engine allows
   with the offset of the next page, so one request costs the engine
-  what one `checkPermissions` request does. An action decided past
+  what one `checkPermissions` request does. Its `limit` is therefore
+  its own and not the one other lists share: 1 to 50, 50 when absent,
+  and 0 refused rather than read as no limit. An action decided past
   `Check` is refused with 400, since the engine is not what decides who
   holds it.
 

@@ -70,6 +70,48 @@ func (e AgentEnrollmentApprovalPlacement) Valid() bool {
 	}
 }
 
+// Defines values for AgentEnrollmentListingPlacement.
+const (
+	ListingPlacementDirect     AgentEnrollmentListingPlacement = "direct"
+	ListingPlacementStandalone AgentEnrollmentListingPlacement = "standalone"
+)
+
+// Valid indicates whether the value is a known member of the AgentEnrollmentListingPlacement enum.
+func (e AgentEnrollmentListingPlacement) Valid() bool {
+	switch e {
+	case ListingPlacementDirect:
+		return true
+	case ListingPlacementStandalone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentEnrollmentListingState.
+const (
+	EnrollmentExpired   AgentEnrollmentListingState = "expired"
+	EnrollmentPending   AgentEnrollmentListingState = "pending"
+	EnrollmentSpent     AgentEnrollmentListingState = "spent"
+	EnrollmentWithdrawn AgentEnrollmentListingState = "withdrawn"
+)
+
+// Valid indicates whether the value is a known member of the AgentEnrollmentListingState enum.
+func (e AgentEnrollmentListingState) Valid() bool {
+	switch e {
+	case EnrollmentExpired:
+		return true
+	case EnrollmentPending:
+		return true
+	case EnrollmentSpent:
+		return true
+	case EnrollmentWithdrawn:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentProvisioningState.
 const (
 	AgentProvisioningStateFailed      AgentProvisioningState = "failed"
@@ -109,6 +151,42 @@ func (e AgentRuntimeState) Valid() bool {
 	case Disconnected:
 		return true
 	case Unknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentSupervisorPlacement.
+const (
+	SupervisorPlacementDirect     AgentSupervisorPlacement = "direct"
+	SupervisorPlacementStandalone AgentSupervisorPlacement = "standalone"
+)
+
+// Valid indicates whether the value is a known member of the AgentSupervisorPlacement enum.
+func (e AgentSupervisorPlacement) Valid() bool {
+	switch e {
+	case SupervisorPlacementDirect:
+		return true
+	case SupervisorPlacementStandalone:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentSupervisorState.
+const (
+	SupervisorActive  AgentSupervisorState = "active"
+	SupervisorRevoked AgentSupervisorState = "revoked"
+)
+
+// Valid indicates whether the value is a known member of the AgentSupervisorState enum.
+func (e AgentSupervisorState) Valid() bool {
+	switch e {
+	case SupervisorActive:
+		return true
+	case SupervisorRevoked:
 		return true
 	default:
 		return false
@@ -622,6 +700,35 @@ type AgentEnrollmentApproval struct {
 // AgentEnrollmentApprovalPlacement Where the host runs its agent's runtime. `standalone` is three containers the host's supervisor starts (ADR-0085). `direct` is a runtime already running on the host, which the supervisor attaches to and starts nothing of (ADR-0111). A direct approval binds no key fingerprint and is spent under `standalone-enrollment.v2` alone; one binding both is 400. This approval is the only way garam admits a direct agent: `agent-enrollment.v1` refuses direct placement to an operator.
 type AgentEnrollmentApprovalPlacement string
 
+// AgentEnrollmentListing An approval as listed. `replaces` is present for a replacement; `spentAt` and `epoch` once a host enrolled; `withdrawnAt` once withdrawn.
+type AgentEnrollmentListing struct {
+	AgentGrn string `json:"agentGrn"`
+
+	// ApprovedBy The GRN of the user who approved it.
+	ApprovedBy string    `json:"approvedBy"`
+	CreatedAt  time.Time `json:"createdAt"`
+
+	// Epoch The assignment epoch spending it gave the agent.
+	Epoch     *int                            `json:"epoch,omitempty"`
+	ExpiresAt time.Time                       `json:"expiresAt"`
+	HostName  string                          `json:"hostName"`
+	Id        openapi_types.UUID              `json:"id"`
+	Placement AgentEnrollmentListingPlacement `json:"placement"`
+
+	// Replaces The assignment a replacement replaces, exactly as it stands when approved.
+	Replaces      *AgentEnrollmentReplacement `json:"replaces,omitempty"`
+	SpentAt       *time.Time                  `json:"spentAt,omitempty"`
+	State         AgentEnrollmentListingState `json:"state"`
+	SupervisorGrn string                      `json:"supervisorGrn"`
+	WithdrawnAt   *time.Time                  `json:"withdrawnAt,omitempty"`
+}
+
+// AgentEnrollmentListingPlacement defines model for AgentEnrollmentListing.Placement.
+type AgentEnrollmentListingPlacement string
+
+// AgentEnrollmentListingState defines model for AgentEnrollmentListing.State.
+type AgentEnrollmentListingState string
+
 // AgentEnrollmentReplacement The assignment a replacement replaces, exactly as it stands when approved.
 type AgentEnrollmentReplacement struct {
 	AgentGrn string `json:"agentGrn"`
@@ -639,6 +746,30 @@ type AgentProvisioningState string
 
 // AgentRuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created. `connected` and `disconnected` are what the agent last reported about whether it is running: garam records the report and checks nothing behind it, so each names what the agent last said rather than what is true now.
 type AgentRuntimeState string
+
+// AgentSupervisor defines model for AgentSupervisor.
+type AgentSupervisor struct {
+	AgentGrn string `json:"agentGrn"`
+
+	// EndedAt When the registration ended; absent while active.
+	EndedAt      *time.Time         `json:"endedAt,omitempty"`
+	EnrollmentId openapi_types.UUID `json:"enrollmentId"`
+	Epoch        int                `json:"epoch"`
+	Grn          string             `json:"grn"`
+	HostName     string             `json:"hostName"`
+
+	// LastActivatedAt The latest activation of the agent at this supervisor's epoch; absent where it never activated.
+	LastActivatedAt *time.Time               `json:"lastActivatedAt,omitempty"`
+	Placement       AgentSupervisorPlacement `json:"placement"`
+	RegisteredAt    time.Time                `json:"registeredAt"`
+	State           AgentSupervisorState     `json:"state"`
+}
+
+// AgentSupervisorPlacement defines model for AgentSupervisor.Placement.
+type AgentSupervisorPlacement string
+
+// AgentSupervisorState defines model for AgentSupervisor.State.
+type AgentSupervisorState string
 
 // AgentTemplate A starting point an organization kept for defining agents (ADR-0075), retired read-only (ADR-0088). It names no operator and no agent, and no definition records which template it copied. Agents are created from the Operator control service's templates; this is the record of what one said.
 type AgentTemplate struct {
@@ -1344,6 +1475,20 @@ type ListOrgsParams struct {
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListAgentEnrollmentsParams defines parameters for ListAgentEnrollments.
+type ListAgentEnrollmentsParams struct {
+	// Limit Maximum entries to return; 0 means no limit.
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListAgentSupervisorsParams defines parameters for ListAgentSupervisors.
+type ListAgentSupervisorsParams struct {
+	// Limit Maximum entries to return; 0 means no limit.
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListAgentsParams defines parameters for ListAgents.
 type ListAgentsParams struct {
 	// Limit Maximum entries to return; 0 means no limit.
@@ -1417,7 +1562,7 @@ type ListPermissionHoldersParams struct {
 	// ResourceId The last segment of the resource's identifier, given with `resourceType`.
 	ResourceId *PermissionResourceId `form:"resourceId,omitempty" json:"resourceId,omitempty"`
 
-	// Limit How many candidates to ask, from 1 to 50.
+	// Limit How many candidates to ask, from 1 to 50; 50 when absent. Unlike the `limit` other lists share, 0 is refused rather than read as no limit, because each candidate costs the engine a check.
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
@@ -1563,12 +1708,18 @@ type ServerInterface interface {
 	// RenameAgentDefinition Rename a defined agent. Requires the `member` role.
 	// (PATCH /orgs/{org}/agent-definitions/{agent})
 	RenameAgentDefinition(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
+	// ListAgentEnrollments List the organization's standalone approvals. Requires `agent:read`.
+	// (GET /orgs/{org}/agent-enrollments)
+	ListAgentEnrollments(w http.ResponseWriter, r *http.Request, org Org, params ListAgentEnrollmentsParams)
 	// ApproveAgentEnrollment Approve a standalone host's enrollment. Requires current `agent:enroll`.
 	// (POST /orgs/{org}/agent-enrollments)
 	ApproveAgentEnrollment(w http.ResponseWriter, r *http.Request, org Org)
 	// WithdrawAgentEnrollment Withdraw an unspent standalone approval. Requires current `agent:enroll`.
 	// (DELETE /orgs/{org}/agent-enrollments/{enrollment})
 	WithdrawAgentEnrollment(w http.ResponseWriter, r *http.Request, org Org, enrollmentID openapi_types.UUID)
+	// ListAgentSupervisors List the organization's standalone supervisors. Requires `agent:read`.
+	// (GET /orgs/{org}/agent-supervisors)
+	ListAgentSupervisors(w http.ResponseWriter, r *http.Request, org Org, params ListAgentSupervisorsParams)
 	// RevokeAgentSupervisor Revoke a standalone host's supervisor. Requires current `agent:enroll`.
 	// (DELETE /orgs/{org}/agent-supervisors/{supervisor})
 	RevokeAgentSupervisor(w http.ResponseWriter, r *http.Request, org Org, supervisorSlug string)
@@ -2214,6 +2365,61 @@ func (siw *ServerInterfaceWrapper) RenameAgentDefinition(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ListAgentEnrollments operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentEnrollments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAgentEnrollmentsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentEnrollments(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ApproveAgentEnrollment operation middleware
 func (siw *ServerInterfaceWrapper) ApproveAgentEnrollment(w http.ResponseWriter, r *http.Request) {
 
@@ -2266,6 +2472,61 @@ func (siw *ServerInterfaceWrapper) WithdrawAgentEnrollment(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.WithdrawAgentEnrollment(w, r, org, enrollmentID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgentSupervisors operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentSupervisors(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListAgentSupervisorsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentSupervisors(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4671,8 +4932,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agent-definitions/{agent}", wrapper.RenameAgentDefinition)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-templates", wrapper.ListAgentTemplates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-templates/{template}", wrapper.GetAgentTemplate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-enrollments", wrapper.ListAgentEnrollments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-enrollments", wrapper.ApproveAgentEnrollment)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-enrollments/{enrollment}", wrapper.WithdrawAgentEnrollment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-supervisors", wrapper.ListAgentSupervisors)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-supervisors/{supervisor}", wrapper.RevokeAgentSupervisor)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)

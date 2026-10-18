@@ -295,3 +295,69 @@ type SupervisorCertificate struct {
 	ServerRootPEM  string
 	NotAfter       time.Time
 }
+
+// EnrollmentState is where an approval stands in a listing.
+type EnrollmentState string
+
+const (
+	// EnrollmentPending is unspent, unwithdrawn and before its expiry.
+	EnrollmentPending EnrollmentState = "pending"
+	// EnrollmentSpent is one a host enrolled with.
+	EnrollmentSpent EnrollmentState = "spent"
+	// EnrollmentWithdrawn is one an administrator withdrew unspent.
+	EnrollmentWithdrawn EnrollmentState = "withdrawn"
+	// EnrollmentExpired is unspent and past its expiry: never revived.
+	EnrollmentExpired EnrollmentState = "expired"
+)
+
+// EnrollmentSummary is an approval as an organization lists it. It has
+// no field for the bootstrap secret's hash, the host's key
+// fingerprints, the request digest or a certificate, so a listing
+// cannot carry them. SpentAt and Epoch are set together, once a host
+// enrolled; WithdrawnAt is set for a withdrawn one; Replaces is nil
+// for a new agent.
+type EnrollmentSummary struct {
+	ID          EnrollmentID
+	Placement   Placement
+	Agent       grn.GRN
+	Supervisor  grn.GRN
+	HostName    Name
+	Replaces    *Replacement
+	ApprovedBy  grn.GRN
+	ExpiresAt   time.Time
+	CreatedAt   time.Time
+	WithdrawnAt *time.Time
+	SpentAt     *time.Time
+	Epoch       int
+}
+
+// State answers where the approval stands at now.
+func (e EnrollmentSummary) State(now time.Time) EnrollmentState {
+	switch {
+	case e.SpentAt != nil:
+		return EnrollmentSpent
+	case e.WithdrawnAt != nil:
+		return EnrollmentWithdrawn
+	case !now.Before(e.ExpiresAt):
+		return EnrollmentExpired
+	}
+	return EnrollmentPending
+}
+
+// SupervisorSummary is a supervisor registration as an organization
+// lists it, current or ended. It has no field for a certificate serial
+// or a credential. Epoch is the assignment epoch its enrollment gave
+// it; LastActivatedAt is the latest activation of its agent at that
+// epoch, nil where it never activated, and EndedAt is nil while the
+// registration is current.
+type SupervisorSummary struct {
+	GRN             grn.GRN
+	Agent           grn.GRN
+	Enrollment      EnrollmentID
+	Placement       Placement
+	HostName        Name
+	Epoch           int
+	RegisteredAt    time.Time
+	EndedAt         *time.Time
+	LastActivatedAt *time.Time
+}

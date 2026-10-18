@@ -678,8 +678,11 @@ type Agent struct {
 	// Assignment What holds an agent, at the epoch that binding is on: an operator, or the supervisor of a standalone host (ADR-0082). Every assignment raises the epoch and fences the assignee it replaced.
 	Assignment *AgentAssignment `json:"assignment,omitempty"`
 	CreatedAt  time.Time        `json:"createdAt"`
-	Grn        string           `json:"grn"`
-	OrgGrn     string           `json:"orgGrn"`
+
+	// Generation The runtime generation garam last activated for the agent: the most recent activation's, whether it still admits the agent's writes or has since ended — deactivated, superseded, recovered or reassigned. Absent for an agent never activated, which includes every legacy agent that has not cut over (ADR-0078).
+	Generation *string `json:"generation,omitempty"`
+	Grn        string  `json:"grn"`
+	OrgGrn     string  `json:"orgGrn"`
 
 	// ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is an agent an operator observed cannot start, which is a stricter observation than an absent ready replica: an operator with only a replica count reports `provisioned`, so a state other than `failed` is not evidence the pod can start. What an operator may report, and when, is `api/machine.yaml`'s — the specification the reporting party holds, not this one.
 	ProvisioningState AgentProvisioningState `json:"provisioningState"`

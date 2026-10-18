@@ -3742,6 +3742,16 @@ components:
           $ref: '#/components/schemas/AgentRuntimeState'
         assignment:
           $ref: '#/components/schemas/AgentAssignment'
+        generation:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+          description: >-
+            The runtime generation garam last activated for the agent:
+            the most recent activation's, whether it still admits the
+            agent's writes or has since ended — deactivated, superseded,
+            recovered or reassigned. Absent for an agent never
+            activated, which includes every legacy agent that has not
+            cut over (ADR-0078).
         createdAt:
           type: string
           format: date-time

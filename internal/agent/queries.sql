@@ -250,3 +250,20 @@ FROM agent_tokens
 WHERE token_hash = sqlc.arg('token_hash')
   AND (audience_grn = sqlc.arg('caller_grn')
        OR (audience_grn IS NULL AND assignee_grn = sqlc.arg('caller_grn')));
+
+-- GetLatestGeneration answers the generation of the agent's most
+-- recent activation, current or ended; no row for an agent never
+-- activated.
+-- name: GetLatestGeneration :one
+SELECT a.generation FROM agent_executions e
+JOIN agent_activations a ON a.id = e.latest_activation_id
+WHERE e.agent_grn = $1;
+
+-- ListLatestGenerationsByOrg answers GetLatestGeneration for each of
+-- the organization's agents that was ever activated.
+-- name: ListLatestGenerationsByOrg :many
+SELECT e.agent_grn, a.generation FROM agent_executions e
+JOIN agent_activations a ON a.id = e.latest_activation_id
+JOIN agents g ON g.grn = e.agent_grn
+WHERE g.org_grn = $1
+ORDER BY e.agent_grn;

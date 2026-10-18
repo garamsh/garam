@@ -1650,6 +1650,8 @@ export interface components {
             provisioningState: components["schemas"]["AgentProvisioningState"];
             runtimeState: components["schemas"]["AgentRuntimeState"];
             assignment?: components["schemas"]["AgentAssignment"];
+            /** @description The runtime generation garam last activated for the agent: the most recent activation's, whether it still admits the agent's writes or has since ended — deactivated, superseded, recovered or reassigned. Absent for an agent never activated, which includes every legacy agent that has not cut over (ADR-0078). */
+            generation?: string;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */

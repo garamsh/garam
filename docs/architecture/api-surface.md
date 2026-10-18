@@ -271,6 +271,11 @@ its name and description**, on `operator:read` and `operator:update`
 The identifier is the path's and not a field, so the update moves no
 certificate, token or definition.
 
+**`getAgent` and `listAgents` answer the generation garam last
+activated for each agent**, on `agent:read`, beside the assignment that
+holds it; [agents.md](./agents.md) §Separated execution states what the
+field does and does not say.
+
 **`getAgentDefinition` and `renameAgentDefinition` read one definition
 and change what the organization calls its agent**, on `agent:read`
 and `agent:rename`. No operation writes a definition: `defineAgent`

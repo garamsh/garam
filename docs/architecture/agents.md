@@ -471,6 +471,14 @@ in #1157.
   reference, and an activation carrying no reference is refused until
   one has succeeded; the creation reference starts that first
   generation and no later one.
+- **The browser API answers the generation last activated.**
+  `getAgent` and `listAgents` answer `generation`: the most recent
+  activation's, read from the execution row's latest activation, whether
+  it still admits the agent's writes or has since ended. It is absent
+  for an agent never activated, which includes every legacy agent that
+  has not cut over. It says what garam last activated, not what is
+  running: whether that generation is current is the machine listener's
+  introspection to answer.
 - **Applied configuration is the runtime's report**, at its GRN, epoch,
   generation and desired revision, kept apart from what the Operator
   rendered or provisioned. The Operator control service holds it; garam

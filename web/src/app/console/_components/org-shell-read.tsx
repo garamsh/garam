@@ -125,8 +125,7 @@ export async function OrgShellRead({ org }: { org: Promise<string> }) {
       kind: "project" as const,
       name: project.name,
       identifier: slugFromGrn(project.grn),
-      // A project has no page of its own yet.
-      segment: "projects",
+      segment: `projects/${slugFromGrn(project.grn)}`,
     })),
   ];
 

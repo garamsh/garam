@@ -34,6 +34,12 @@ export {
   unusableInvitation,
 } from "./components/invitation-summary";
 export {
+  lookupAgentEnrollments,
+  lookupAgentSupervisors,
+  type AgentEnrollmentListing,
+  type AgentSupervisor,
+} from "./api/agent-hosts";
+export {
   getOperatorDelegation,
   hostedFor,
   listHostedOperators,
@@ -50,6 +56,7 @@ export {
   getOperator,
   getOrg,
   getOrgDeletionPreview,
+  getProject,
   listAgentDefinitions,
   listAgents,
   listGroupMembers,
@@ -57,6 +64,7 @@ export {
   listOperators,
   listOrgMembers,
   listOrgs,
+  listProjectMembers,
   listProjects,
   lookupAgentDefinitions,
   lookupAgents,

@@ -7,11 +7,12 @@ import { DataTable, type ColumnDef } from "@/components/data-table";
 import { StatusDot } from "@/components/status-dot";
 import type { Lookup } from "@/features/orgs";
 
-import { EmptyState } from "../../../../../_components/empty-state";
-import { RemoveTeamMemberDialog } from "./remove-team-member-dialog";
+import { EmptyState } from "../empty-state";
+import { RemoveMemberDialog } from "./remove-member-dialog";
+import { SCOPE_KIND, type MembershipScope } from "./scope";
 
 /** One membership as its row shows it, every phrase already chosen. */
-export type TeamMemberRow = {
+export type MemberRow = {
   grn: string;
   identifier: string;
   /** Person, Agent or Unknown. */
@@ -29,11 +30,10 @@ export type TeamMemberRow = {
 
 function columns(
   org: string,
-  team: string,
-  teamName: string,
+  scope: MembershipScope,
   removable: boolean,
-): ColumnDef<TeamMemberRow, unknown>[] {
-  const shown: ColumnDef<TeamMemberRow, unknown>[] = [
+): ColumnDef<MemberRow, unknown>[] {
+  const shown: ColumnDef<MemberRow, unknown>[] = [
     {
       id: "member",
       header: "Member",
@@ -88,10 +88,9 @@ function columns(
       enableGlobalFilter: false,
       cell: ({ row: { original: member } }) => (
         <div className="flex justify-end">
-          <RemoveTeamMemberDialog
+          <RemoveMemberDialog
             org={org}
-            team={team}
-            teamName={teamName}
+            scope={scope}
             member={member.grn}
             label={member.sentence}
           />
@@ -103,8 +102,9 @@ function columns(
 }
 
 /**
- * A team's members by name, type and whether the organization still
- * holds them, each removable from this team where the server allows it.
+ * A team's or a project's members by name, type and whether the
+ * organization still holds them, each removable from it where the
+ * server allows it.
  *
  * A member without a name says so rather than lifting its identifier
  * into the name's place, and one the organization no longer holds is
@@ -112,23 +112,21 @@ function columns(
  * the organization knows. One whose list the caller may not read is
  * marked unchecked, never missing.
  */
-export function TeamMemberTable({
+export function MemberTable({
   org,
-  team,
-  teamName,
+  scope,
   removable,
   members,
 }: {
   org: string;
-  team: string;
-  teamName: string;
+  scope: MembershipScope;
   removable: boolean;
-  members: readonly TeamMemberRow[];
+  members: readonly MemberRow[];
 }) {
   return (
     <DataTable
-      label={`Members of ${teamName}`}
-      columns={columns(org, team, teamName, removable)}
+      label={`Members of ${scope.name}`}
+      columns={columns(org, scope, removable)}
       data={[...members]}
       getRowId={(member) => member.grn}
       search={{ placeholder: "Search members" }}
@@ -136,7 +134,7 @@ export function TeamMemberTable({
         <EmptyState
           icon={UsersRound}
           title="No members"
-          description="This team has no members."
+          description={`This ${SCOPE_KIND[scope.kind].noun} has no members.`}
         />
       }
     />

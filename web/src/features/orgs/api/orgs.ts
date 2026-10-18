@@ -382,6 +382,30 @@ export function lookupAgents(org: string): Promise<RefusableRead<Agent[]>> {
 }
 
 /** The projects an organization owns. */
+export function getProject(
+  org: string,
+  project: string,
+): Promise<RefusableRead<Project>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/projects/${orgPath(project)}`,
+      ProjectParser,
+    ),
+  );
+}
+
+export function listProjectMembers(
+  org: string,
+  project: string,
+): Promise<RefusableRead<GroupMember[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/projects/${orgPath(project)}/members`,
+      z.array(GroupMemberParser),
+    ),
+  );
+}
+
 export function listProjects(org: string): Promise<OrgRead<Project[]>> {
   return orgRead(
     garamFetchAuthenticated(

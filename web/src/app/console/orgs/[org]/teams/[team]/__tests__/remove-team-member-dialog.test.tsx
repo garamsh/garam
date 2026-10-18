@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { RemoveTeamMemberDialog } from "@/app/console/orgs/[org]/teams/[team]/_components/remove-team-member-dialog";
+import { RemoveMemberDialog } from "@/app/console/_components/membership/remove-member-dialog";
 import { API_URL, alice } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
@@ -14,10 +14,9 @@ const MEMBER = `${API_URL}/orgs/acme/groups/eng/members/:member`;
 
 function renderDialog() {
   return render(
-    <RemoveTeamMemberDialog
+    <RemoveMemberDialog
       org="acme"
-      team="eng"
-      teamName="Engineering"
+      scope={{ kind: "team", id: "eng", name: "Engineering" }}
       member={alice.grn}
       label="Alice"
     />,

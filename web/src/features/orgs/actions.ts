@@ -19,6 +19,14 @@ export {
   addPolicyVersion,
   type AddPolicyVersionState,
 } from "./api/add-policy-version";
+export {
+  addProjectMember,
+  type AddProjectMemberState,
+} from "./api/add-project-member";
+export {
+  approveAgentEnrollment,
+  type ApproveAgentEnrollmentState,
+} from "./api/approve-agent-enrollment";
 export { archivePolicy, type ArchivePolicyState } from "./api/archive-policy";
 export { attachPolicy, type AttachPolicyState } from "./api/attach-policy";
 export {
@@ -46,6 +54,7 @@ export {
   deleteOperator,
   type DeleteOperatorState,
 } from "./api/delete-operator";
+export { deleteProject, type DeleteProjectState } from "./api/delete-project";
 export {
   grantOrgConsent,
   type GrantOrgConsentState,
@@ -75,6 +84,14 @@ export {
   removeGroupMember,
   type RemoveGroupMemberState,
 } from "./api/remove-group-member";
+export {
+  removeProjectMember,
+  type RemoveProjectMemberState,
+} from "./api/remove-project-member";
+export {
+  revokeAgentSupervisor,
+  type RevokeAgentSupervisorState,
+} from "./api/revoke-agent-supervisor";
 export { renameAgent, type RenameAgentState } from "./api/rename-agent";
 export {
   revokeOperatorKey,
@@ -89,7 +106,12 @@ export {
   updateOperator,
   type UpdateOperatorState,
 } from "./api/update-operator";
+export { updateProject, type UpdateProjectState } from "./api/update-project";
 export { updateOrg, type UpdateOrgState } from "./api/update-org";
+export {
+  withdrawAgentEnrollment,
+  type WithdrawAgentEnrollmentState,
+} from "./api/withdraw-agent-enrollment";
 export {
   withdrawOrgConsent,
   type WithdrawOrgConsentState,

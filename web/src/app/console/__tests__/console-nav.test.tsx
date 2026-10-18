@@ -86,6 +86,7 @@ describe("console navigation", () => {
       "Projects",
       "Permissions",
       "Operators",
+      "Hosts",
       "Templates",
       "Consents",
       "Settings",
@@ -95,6 +96,7 @@ describe("console navigation", () => {
       Organization: [
         "Permissions",
         "Operators",
+        "Hosts",
         "Templates",
         "Consents",
         "Settings",
@@ -115,6 +117,7 @@ describe("console navigation", () => {
         "teams",
         "agents/templates",
         "operators",
+        "hosts",
         "permissions",
         "consents",
         "settings",
@@ -135,7 +138,7 @@ describe("console navigation", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByText(
-        /^Teams, Permissions, Operators, Templates, Consents and Settings are not shown: no policy lets you read them\./,
+        /^Teams, Permissions, Operators, Hosts, Templates, Consents and Settings are not shown: no policy lets you read them\./,
       ),
     ).toBeInTheDocument();
   });

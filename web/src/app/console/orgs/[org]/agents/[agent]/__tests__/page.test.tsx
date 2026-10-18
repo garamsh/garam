@@ -474,4 +474,84 @@ describe("agent page", () => {
       expect(headerFact("Defined by")).toHaveTextContent("Alice");
     });
   });
+
+  describe("Replace host", () => {
+    function heldBy(assignment: object) {
+      server.use(
+        http.get(`${API_URL}/orgs/acme/agents`, () =>
+          HttpResponse.json([
+            { ...reportedAgent, grn: fieldAgent.agentGrn, assignment },
+          ]),
+        ),
+      );
+    }
+
+    it("approves a new standalone host from exactly the assignment the header read", async () => {
+      heldBy({
+        assigneeGrn: "grn:acme:default:supervisor:build-07",
+        epoch: 2,
+        since: "2026-10-01T00:00:00Z",
+      });
+      const sent: unknown[] = [];
+      server.use(
+        http.post(
+          `${API_URL}/orgs/acme/agent-enrollments`,
+          async ({ request }) => {
+            sent.push(await request.json());
+            return HttpResponse.json({}, { status: 201 });
+          },
+        ),
+      );
+      const user = userEvent.setup();
+      await renderAgent();
+
+      await user.click(screen.getByRole("button", { name: "Replace host" }));
+      const dialog = screen.getByRole("alertdialog", {
+        name: "Replace Scout's host?",
+      });
+      expect(dialog).toHaveTextContent(/from build-07 at epoch 2/);
+      await user.click(
+        within(dialog).getByRole("textbox", {
+          name: "What garam standalone prepare printed",
+        }),
+      );
+      await user.paste(
+        JSON.stringify({ requestId: "r-1", secretSha256: "b".repeat(64) }),
+      );
+      await user.type(
+        within(dialog).getByRole("textbox", { name: "Host name" }),
+        "build-09",
+      );
+      await user.click(
+        within(dialog).getByRole("button", { name: "Approve replacement" }),
+      );
+
+      await vi.waitFor(() =>
+        expect(sent).toEqual([
+          expect.objectContaining({
+            replaces: {
+              agentGrn: fieldAgent.agentGrn,
+              assigneeGrn: "grn:acme:default:supervisor:build-07",
+              epoch: 2,
+            },
+          }),
+        ]),
+      );
+    });
+
+    it("stays inactive for an agent an operator holds, since its control service replaces it", async () => {
+      heldBy({
+        assigneeGrn: "grn:acme:default:operator:field-one",
+        operatorGrn: "grn:acme:default:operator:field-one",
+        epoch: 3,
+        since: "2026-10-01T00:00:00Z",
+      });
+
+      await renderAgent();
+
+      const replace = screen.getByRole("button", { name: "Replace host" });
+      expect(replace).toHaveAttribute("aria-disabled", "true");
+      expect(replace).toHaveAccessibleDescription(/ADR-0107/);
+    });
+  });
 });

@@ -28,10 +28,10 @@ import {
   accessDecisions,
   readAccess,
 } from "../../../../_components/your-access";
-import { AddTeamMemberForm } from "./_components/add-team-member-form";
+import { AddMemberForm } from "../../../../_components/membership/add-member-form";
 import { DeleteTeamDialog } from "./_components/delete-team-dialog";
 import { RenameTeamForm } from "./_components/rename-team-form";
-import { TeamMemberTable } from "./_components/team-member-table";
+import { MemberTable } from "../../../../_components/membership/member-table";
 
 /** Head metadata for a team's route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Team — garam" };
@@ -138,10 +138,9 @@ export default async function TeamPage({ params }: Params) {
         <h2 id="members-title" className="text-base">
           Members
         </h2>
-        <TeamMemberTable
+        <MemberTable
           org={org}
-          team={team}
-          teamName={name}
+          scope={{ kind: "team", id: team, name }}
           removable={may.get("remove") !== "denied"}
           members={resolved.map((member) => ({
             grn: member.grn,
@@ -156,9 +155,9 @@ export default async function TeamPage({ params }: Params) {
         />
       </section>
       {may.get("add") !== "denied" && (
-        <AddTeamMemberForm
+        <AddMemberForm
           org={org}
-          team={team}
+          scope={{ kind: "team", id: team, name }}
           candidates={teamCandidates(members.data, people, directory)}
           unlisted={unlisted}
           partlyListed={agentsUnlisted ? [] : refusedAgents}

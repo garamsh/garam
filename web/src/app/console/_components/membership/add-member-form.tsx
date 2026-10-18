@@ -13,12 +13,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  addGroupMember,
-  type AddGroupMemberState,
-} from "@/features/orgs/actions";
+import type { AddGroupMemberState } from "@/features/orgs/actions";
 
 import type { Candidate } from "@/features/orgs";
+
+import { SCOPE_KIND, type MembershipScope } from "./scope";
 
 const initialState: AddGroupMemberState = { status: "idle" };
 
@@ -29,9 +28,10 @@ type Pick = { grn: string; at: AddGroupMemberState };
 type Sent = { name: string; at: AddGroupMemberState };
 
 /**
- * Adds a person or an agent of this organization to the team, chosen by
- * name under its type. Only people and agents the team does not already
- * hold are offered, so a member cannot be chosen twice.
+ * Adds a person or an agent of this organization to a team or a
+ * project, chosen by name under its type. Only people and agents it
+ * does not already hold are offered, so a member cannot be chosen
+ * twice.
  *
  * The choice is sent from a hidden input in the form, so the form posts
  * before hydration as after it. React resets the form after its action,
@@ -39,15 +39,15 @@ type Sent = { name: string; at: AddGroupMemberState };
  * choice and is ignored: a refused choice stays chosen. An addition
  * clears the choice and says whom it added beside the button.
  */
-export function AddTeamMemberForm({
+export function AddMemberForm({
   org,
-  team,
+  scope,
   candidates,
   unlisted,
   partlyListed = [],
 }: {
   org: string;
-  team: string;
+  scope: MembershipScope;
   candidates: Candidate[];
   /** The kinds whose list garam refused the caller, as plural nouns. */
   unlisted: string[];
@@ -57,10 +57,8 @@ export function AddTeamMemberForm({
    */
   partlyListed?: string[];
 }) {
-  const [state, formAction, pending] = useActionState(
-    addGroupMember,
-    initialState,
-  );
+  const kind = SCOPE_KIND[scope.kind];
+  const [state, formAction, pending] = useActionState(kind.add, initialState);
   const [chosen, setChosen] = useState<Pick | null>(null);
   const [sent, setSent] = useState<Sent | null>(null);
   // A choice holds while it is still offered and no addition has
@@ -115,8 +113,8 @@ export function AddTeamMemberForm({
           ))}
           <p>
             {notes.length > 0
-              ? "No one you can list is outside this team."
-              : "Every person and agent of this organization is already in this team."}
+              ? `No one you can list is outside this ${kind.noun}.`
+              : `Every person and agent of this organization is already in this ${kind.noun}.`}
           </p>
         </div>
       ) : (
@@ -129,7 +127,7 @@ export function AddTeamMemberForm({
           className="flex flex-col gap-3 sm:flex-row sm:items-start"
         >
           <input type="hidden" name="org" value={org} />
-          <input type="hidden" name="group" value={team} />
+          <input type="hidden" name={kind.field} value={scope.id} />
           <input type="hidden" name="member" value={choice} />
           <FormField
             label="Person or agent"
@@ -176,7 +174,7 @@ export function AddTeamMemberForm({
           </FormField>
           <div className="flex items-center gap-3 sm:pt-6">
             <Button type="submit" disabled={pending}>
-              {pending ? "Adding…" : "Add to team"}
+              {pending ? "Adding…" : `Add to ${kind.noun}`}
             </Button>
             <span role="status" className="text-muted-foreground">
               {added !== null ? `Added ${added}.` : ""}

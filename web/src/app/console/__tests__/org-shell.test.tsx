@@ -205,7 +205,7 @@ describe("what the palette finds", () => {
       "agent: Unnamed agent at agents/1c3d5e7f90a2b4c6",
       "team: Engineering at teams/eng",
       "policy: Deny project deletion at permissions/d1e2f3a4b5c6d7e8",
-      "project: Frontend at projects",
+      "project: Frontend at projects/frontend",
     ]) {
       expect(within(objects).getByText(text)).toBeInTheDocument();
     }

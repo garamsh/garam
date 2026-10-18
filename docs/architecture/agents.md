@@ -580,7 +580,9 @@ unverified (#1180, #1169).
   and activation and moves the agent to a new lineage under the same
   GRN; an older approval of the replaced assignment then refuses.
   Revocation ends the registration, the activation and every unspent
-  approval for the agent under the execution lock.
+  approval for the agent under the execution lock. An expired
+  supervisor or agent credential is recovered the same way; nothing
+  recovers it without an administrator.
 - **A replacement answers the activation its successor names.** The
   new supervisor's first activation must name the agent's most recent
   activation, and a host whose supervisor never activated has no
@@ -596,9 +598,7 @@ unverified (#1180, #1169).
   key, so it is spent under v2 alone, and the schema refuses one
   binding keys (`migrations/000053`). The spending answers the
   placement and the host's enrollment record keeps it; a record an
-  earlier release wrote names none and is a standalone host's. An expired
-  supervisor or agent credential is recovered the same way; nothing
-  recovers it without an administrator.
+  earlier release wrote names none and is a standalone host's.
 - **The supervisor's renewal replays for its predecessor.** It renews
   over a new key in the last third of its validity; the certificate a
   renewal replaced may replay that renewal's public answer for the

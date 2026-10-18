@@ -448,8 +448,9 @@ directory, written owner-only by the supervisor.
   `agent-enrollment.v1` serves an operator's token alone and requires
   an operator as its assignee (`operates` and `authorizeCreation` in
   `internal/agent`). A supervisor registration cannot exist apart from
-  the standalone approval that spends it: `agent_supervisors.enrollment_id`
-  is `NOT NULL` and references `agent_enrollments`, and that spending
+  the standalone approval that spends it:
+  `agent_supervisors.enrollment_id` is `NOT NULL` and references
+  `agent_enrollments`, and that spending
   is what calls `admit` (`migrations/000031`,
   `internal/agent/postgres/postgres_standalone.go`). The administrator's
   `agent:enroll` approval naming the host and a supervisor

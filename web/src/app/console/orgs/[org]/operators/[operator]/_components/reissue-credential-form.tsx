@@ -53,6 +53,11 @@ export function ReissueCredentialForm({
         action={reissueOperatorCredential}
         initialState={initialState}
         fields={{ org, operator }}
+        command={{
+          label: "Re-issue credential",
+          consequence:
+            "The current credential and its tokens stop authenticating.",
+        }}
         confirmLabel="Re-issue credential"
         pendingLabel="Re-issuing…"
         destructive

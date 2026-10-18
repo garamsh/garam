@@ -2,7 +2,7 @@ import {
   Bot,
   FolderGit2,
   Handshake,
-  LayoutDashboard,
+  House,
   LayoutTemplate,
   Server,
   Settings,
@@ -17,10 +17,16 @@ export type ConsoleOrg = { slug: string; name: string };
 
 /** One entry of the org-scoped navigation. */
 export type ConsoleSection = {
-  /** Path segment below the organization; empty for the overview. */
+  /** Path segment below the organization; empty for Home. */
   segment: string;
   label: string;
   icon: LucideIcon;
+  /**
+   * The action reading what the section lists. The sidebar leaves the
+   * section out where the server denies it; Home has none and is
+   * always listed.
+   */
+  read?: string;
   /**
    * Present on a section whose entries each have a page of their own
    * below it: what the breadcrumb calls the create page, and what it
@@ -48,6 +54,8 @@ export type ConsoleView = {
   label: string;
   /** Present on a view the sidebar lists as an entry of its own. */
   icon?: LucideIcon;
+  /** As a section's, for a view the sidebar lists. */
+  read?: string;
   items?: { create?: string; fallback: string };
 };
 
@@ -59,18 +67,25 @@ export const NEW_ITEM = "new";
 
 /** The org-scoped sections, in sidebar and breadcrumb order. */
 export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
-  { segment: "", label: "Overview", icon: LayoutDashboard },
+  { segment: "", label: "Home", icon: House },
   {
     segment: "teams",
     label: "Teams",
     icon: UsersRound,
+    read: "group:read",
     items: { create: "New team", fallback: "Team" },
   },
-  { segment: "people", label: "People", icon: UserRound },
+  {
+    segment: "people",
+    label: "People",
+    icon: UserRound,
+    read: "org:member-list",
+  },
   {
     segment: "agents",
     label: "Agents",
     icon: Bot,
+    read: "agent:read",
     items: { create: "New agent", fallback: "Agent" },
     // Templates live inside Agents rather than as a section (ADR-0075).
     // garam's are retired read-only, so the view creates none
@@ -80,15 +95,22 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
         segment: "templates",
         label: "Templates",
         icon: LayoutTemplate,
+        read: "agent-template:read",
         items: { fallback: "Template" },
       },
     ],
   },
-  { segment: "projects", label: "Projects", icon: FolderGit2 },
+  {
+    segment: "projects",
+    label: "Projects",
+    icon: FolderGit2,
+    read: "project:read",
+  },
   {
     segment: "operators",
     label: "Operators",
     icon: Server,
+    read: "operator:read",
     // An operator's identifier is typed, and `new` is one: registering
     // stays on the list page rather than taking that segment
     // (ADR-0074). `connect` is the operator's setup and `keys` is
@@ -99,15 +121,21 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
       pages: [{ segment: "connect", label: "Connect" }],
     },
   },
-  { segment: "consents", label: "Consents", icon: Handshake },
+  {
+    segment: "consents",
+    label: "Consents",
+    icon: Handshake,
+    read: "consent:read",
+  },
   {
     segment: "permissions",
     label: "Permissions",
     icon: ShieldCheck,
+    read: "policy:read",
     items: { create: "New policy", fallback: "Policy" },
     views: [{ segment: "attachments", label: "Attachments" }],
   },
-  { segment: "settings", label: "Settings", icon: Settings },
+  { segment: "settings", label: "Settings", icon: Settings, read: "org:read" },
 ];
 
 /**
@@ -116,38 +144,43 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
  */
 export type NavEntry = { section: string; view?: string };
 
-/** A labelled group of sidebar entries. */
-export type NavGroup = { label: string; entries: readonly NavEntry[] };
+/** A group of sidebar entries; one without a label stands alone. */
+export type NavGroup = { label?: string; entries: readonly NavEntry[] };
 
 /**
- * The sidebar's grouping of the sections, below the overview. Every
- * section but the overview appears in exactly one group. A link is
- * listed only for a route that exists: a group gains an entry with the
- * route that serves it.
+ * Roster's sidebar (ADR-0113): Home, the organization's members, its
+ * projects, and what configures it. Every section appears in exactly
+ * one group. A link is listed only for a route that exists: a group
+ * gains an entry with the route that serves it.
  */
-export const CONSOLE_NAV_GROUPS: readonly NavGroup[] = [
+export const CONSOLE_NAV: readonly NavGroup[] = [
+  { entries: [{ section: "" }] },
   {
-    label: "Workloads",
-    entries: [{ section: "agents" }, { section: "agents", view: "templates" }],
-  },
-  {
-    label: "Access",
+    label: "Members",
     entries: [
-      { section: "teams" },
       { section: "people" },
-      { section: "permissions" },
+      { section: "agents" },
+      { section: "teams" },
     ],
   },
-  { label: "Infrastructure", entries: [{ section: "operators" }] },
+  { entries: [{ section: "projects" }] },
   {
     label: "Organization",
     entries: [
-      { section: "projects" },
+      { section: "permissions" },
+      { section: "operators" },
+      { section: "agents", view: "templates" },
       { section: "consents" },
       { section: "settings" },
     ],
   },
 ];
+
+/** Every sidebar entry, in sidebar order. */
+export const CONSOLE_NAV_ENTRIES: readonly ResolvedNavEntry[] =
+  CONSOLE_NAV.flatMap((group) => group.entries)
+    .map(resolveNavEntry)
+    .filter((entry) => entry !== undefined);
 
 /** A sidebar entry with what it shows and where it leads. */
 export type ResolvedNavEntry = {
@@ -155,6 +188,7 @@ export type ResolvedNavEntry = {
   label: string;
   icon: LucideIcon;
   segment: string;
+  read?: string;
   section: ConsoleSection;
   view?: ConsoleView;
 };
@@ -171,6 +205,7 @@ export function resolveNavEntry(entry: NavEntry): ResolvedNavEntry | undefined {
       label: section.label,
       icon: section.icon,
       segment: section.segment,
+      read: section.read,
       section,
     };
   }
@@ -181,6 +216,7 @@ export function resolveNavEntry(entry: NavEntry): ResolvedNavEntry | undefined {
     label: view.label,
     icon: view.icon,
     segment: `${section.segment}/${view.segment}`,
+    read: view.read,
     section,
     view,
   };
@@ -232,7 +268,7 @@ export type ConsoleLocation =
 /** A breadcrumb entry; the last one is the current page and has no href. */
 export type Crumb = { label: string; href?: string };
 
-/** The URL of a section inside an organization; "" is the overview. */
+/** The URL of a section inside an organization; "" is Home. */
 export function orgHref(org: string, segment: string): string {
   return segment ? `/console/orgs/${org}/${segment}` : `/console/orgs/${org}`;
 }

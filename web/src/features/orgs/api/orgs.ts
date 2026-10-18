@@ -327,6 +327,19 @@ export function lookupGroups(org: string): Promise<RefusableRead<Group[]>> {
   );
 }
 
+/**
+ * The groups the signed-in caller belongs to, in one request
+ * (`member=me`), with a refusal as a state of its own.
+ */
+export function lookupMyGroups(org: string): Promise<RefusableRead<Group[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/groups?member=me`,
+      z.array(GroupParser),
+    ),
+  );
+}
+
 /** The members of one group of an organization. */
 export function listGroupMembers(
   org: string,

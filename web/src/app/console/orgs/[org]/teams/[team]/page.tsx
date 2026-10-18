@@ -10,7 +10,11 @@ import {
   lookupAgentDefinitions,
   lookupAgents,
   lookupOrgMembers,
+  memberLabel,
+  memberName,
   refusedAgentLists,
+  resolveTeamMembers,
+  teamCandidates,
 } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
@@ -24,12 +28,6 @@ import { AddTeamMemberForm } from "./_components/add-team-member-form";
 import { DeleteTeamDialog } from "./_components/delete-team-dialog";
 import { RenameTeamForm } from "./_components/rename-team-form";
 import { TeamMemberTable } from "./_components/team-member-table";
-import {
-  memberLabel,
-  memberName,
-  resolveTeamMembers,
-  teamCandidates,
-} from "./_components/team-member";
 
 /** Head metadata for a team's route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Team — garam" };

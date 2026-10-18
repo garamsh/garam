@@ -246,6 +246,11 @@ export function DelegationForm({
                 action={withdrawDelegation}
                 initialState={initialState}
                 fields={{ org, operator, grantId: delegation.grantId }}
+                command={{
+                  label: "Withdraw delegation",
+                  consequence:
+                    "The grant ends, and the console hands this operator no more operations.",
+                }}
                 confirmLabel="Withdraw delegation"
                 pendingLabel="Withdrawing…"
                 destructive

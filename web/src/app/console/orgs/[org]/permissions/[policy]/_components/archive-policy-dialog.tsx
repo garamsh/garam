@@ -40,6 +40,11 @@ export function ArchivePolicyDialog({
       action={archivePolicy}
       initialState={initialState}
       fields={{ org, policy }}
+      command={{
+        label: "Archive policy",
+        consequence:
+          "It stops taking part in checks; versions and attachments are kept.",
+      }}
       confirmLabel="Archive policy"
       pendingLabel="Archiving…"
       destructive

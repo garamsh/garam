@@ -4,7 +4,7 @@ import {
   memberLabel,
   memberName,
   type TeamMember,
-} from "@/app/console/orgs/[org]/teams/[team]/_components/team-member";
+} from "@/features/orgs/team-member";
 
 const ID = "1c3d5e7f90a2b4c6";
 

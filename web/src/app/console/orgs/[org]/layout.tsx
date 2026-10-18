@@ -1,11 +1,12 @@
 import { Suspense } from "react";
 
-import { OrgRoleRead } from "../../_components/org-role-read";
+import { OrgShellRead } from "../../_components/org-shell-read";
 
 /**
- * Everything inside one organization. Its only work is reading the
- * caller's role there for the sidebar, behind `<Suspense>` so that no
- * page below waits on it and every `loading.tsx` still streams
+ * Everything inside one organization. Its only work is reading what
+ * the shell shows of it — the caller's role, the sections they may
+ * read, what the palette finds — behind `<Suspense>` so that no page
+ * below waits on it and every `loading.tsx` still streams
  * (stack-nextjs.md §Server Components — pages and layouts).
  */
 export default function OrgLayout({
@@ -18,7 +19,7 @@ export default function OrgLayout({
   return (
     <>
       <Suspense fallback={null}>
-        <OrgRoleRead org={params.then((resolved) => resolved.org)} />
+        <OrgShellRead org={params.then((resolved) => resolved.org)} />
       </Suspense>
       {children}
     </>

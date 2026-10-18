@@ -108,3 +108,11 @@ export function refusedAgentLists(directory: AgentDirectory): string[] {
     ...(directory.agents.status === "forbidden" ? ["reported agents"] : []),
   ];
 }
+
+/** Whether what was reported needs someone's attention. */
+export function isFailing(agent: Agent | undefined): boolean {
+  return (
+    agent?.provisioningState === "failed" ||
+    agent?.runtimeState === "disconnected"
+  );
+}

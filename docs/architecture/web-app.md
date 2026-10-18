@@ -121,11 +121,23 @@ carried by a collapsible sidebar shell over every `/console/*` route
 ([ADR-0011](./adr/0011-console-shell.md)). Its org-scoped sections are
 declared in one place, `web/src/app/console/_components/navigation.ts`,
 which is what the sidebar, the breadcrumb, the command palette and the
-active marking all read. Below the overview the sidebar groups the
-sections as Workloads, Access, Infrastructure and Organization, and
-the same file's `CONSOLE_NAV_GROUPS` is where each one is placed, with
-a link only for a route that exists; adding one is an entry there, a
-place in a group and a route folder. A section whose
+active marking all read. The sidebar is Roster's
+([ADR-0113](./adr/0113-the-console-is-roster-one-policy-shaped-ui-where-people-and-agents-are-members.md)):
+Home, then Members (People, Agents and Teams), Projects, and
+Organization (Permissions, Operators, Templates, Consents and
+Settings). The same file's `CONSOLE_NAV` is where each one is placed,
+with a link only for a route that exists, and names the action each
+section's list is read under; adding one is an entry there, a place
+in a group and a route folder. Activity is not listed: garam records
+nothing it would show (§Not established).
+
+A section is left out of the sidebar and the palette where the server
+denies the caller its read. The organization's layout asks once for
+every section, in one permission check
+(`web/src/app/console/_components/org-shell-read.tsx`), and the
+sidebar says once which sections it left out, explaining why in place
+when asked. Until the answer arrives, or where it never does, every
+section is listed. A section whose
 entries each have a page of their own declares it there too, and Teams,
 Agents, Operators and Permissions do: `/console/orgs/{org}/teams/{team}`
 is a team's page and `…/teams/new` creates one, `…/agents/{agent}` is
@@ -165,19 +177,25 @@ against the built app, 19 prefetch renders per page view, against 3.5
 once the shell prefetches on intent (#1209). The cost is a link
 followed with no intent shown first, which waits for its render after
 the click: one server render and one round trip. Links in a page's own
-content, such as the overview's section cards, keep the default.
+content, such as Home's lede, keep the default.
 
 The rest of the shell, and where each part is decided:
 
 - **The organization switcher** names the caller's role in the
   organization on screen. That organization's layout reads it from its
   members list behind `<Suspense>`
-  (`web/src/app/console/_components/org-role-read.tsx`), so no page
+  (`web/src/app/console/_components/org-shell-read.tsx`), so no page
   waits on it, and a refused or unanswered read shows no role.
 - **The top bar** carries the breadcrumb and a command palette, opened
-  by ⌘K, Ctrl+K or `/`, that reaches the organization's sections, the
-  caller's organizations and the theme
-  (`web/src/app/console/_components/command-palette.tsx`). On a phone
+  by ⌘K, Ctrl+K or `/`
+  (`web/src/app/console/_components/command-palette.tsx`). It finds
+  the organization's people, agents, teams, policies and projects by
+  name once something is typed, read from their lists by the
+  organization's layout, and reaches the sections the caller may read,
+  the page's actions, the caller's organizations and the theme. `.`
+  opens it on the page's actions alone, each with its consequence in
+  one line: a confirmation dialog given a `command` lists itself while
+  its page is mounted, and choosing it opens that dialog. On a phone
   the breadcrumb keeps the organization's name beside the page's.
 - **The theme** is system, light or dark, chosen in the user menu or
   the palette and kept in the browser alone. `web/src/lib/theme.ts`
@@ -194,7 +212,7 @@ API behind it rather than of the console:
 
 | Section | What the console does with it |
 |---|---|
-| Overview | **On the design system.** Leads with the failing states inside the sections it summarises, each linked to its section, or says nothing is failing; then counts what each section holds, Consents and Permissions included, and says on a section's card where the caller was refused its read rather than counting it |
+| Home | **On Roster.** The organization as the person signed in meets it (ADR-0113): a sentence generated from what follows, its names linked; Needs you, which says nothing waits on them while garam has no work items; their teams, which `listGroups` answers in one request with `member=me`, with the people and agents in each read per team; and the agents and operators they can read that are failing. A part whose read was refused or not answered is said and never shown as empty, and the sentence leaves it out |
 | Teams | **On the design system.** The organization's groups, presented as teams ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)): lists them, creates one, and on a team's page reads its members, adds and removes people and agents, renames it and deletes it. A member is shown by the name and type the organization's people and agents give it, and one neither holds stays listed and removable, marked as not found; where the caller is refused the people or agents list, those members are marked not checked and the team stays readable. An agent is offered and shown by its definition's name with its identifier, including one no operator has claimed yet, and a refused definitions list is said rather than offered as none ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)) |
 | People | **On the design system.** Reads the organization's members, and issues the invitation a person joins by ([ADR-0006](./adr/0006-invitation-tokens.md)) |
 | Agents | **On the design system.** Lists every agent the organization defined by name, whether or not an operator has claimed it, and every reported agent no definition names, each with the two states its operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)) or, before any report, as awaiting an operator. A new agent is created on its own page from a template the control service published, and no form there sends garam a definition or a value; no garam template is offered as a start ([ADR-0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)). An agent's page shows what was requested apart from what was reported and renames it; a definition whose cutover is frozen or switched is marked, there and wherever definitions are listed, as cut-over in progress or managed by the Operator, and its page says its values are archival and read-only in garam, offering the rename alone ([ADR-0086](./adr/0086-a-legacy-agent-cuts-over-through-stages-garam-records-under-its-execution-lock.md)); an agent with no definition, as a control service creates, has a page with the report alone. The hosted operator's control service is reached for its published templates and profiles, publishing a template version, creating an agent from one, and an agent's pending, rendered and runtime-reported execution (§How it reaches a control service); the Templates view shows its templates first, and below them garam's own as archived records, each with a page showing what it said and offering no edit, deletion or start ([ADR-0088](./adr/0088-garams-agent-templates-are-retired-read-only-and-not-imported.md)) |
@@ -392,24 +410,26 @@ design system are marked in the table above; until an area is,
 holds the full decision and the reason for each part. This section is
 what a page owes once it is built on the system.
 
-**Roster is decided and unbuilt.**
+**Roster is built in part.**
 [ADR-0113](./adr/0113-the-console-is-roster-one-policy-shaped-ui-where-people-and-agents-are-members.md)
 replaces ADR-0103's grouped sidebar, its set of pages and its hiding
-of a denied action. Under Roster:
-- the console opens on a Home computed for the person signed in;
-- people and agents are listed together as members, told apart by
-  shape;
-- every object page carries a Your access panel;
-- a denied action stays visible as an inactive control with its
+of a denied action. Built: the sidebar, Home in place of the overview,
+and the palette that finds objects and the page's actions (§What it
+serves). Unbuilt:
+- people and agents listed together as members, told apart by shape;
+- a Your access panel on every object page;
+- a denied action kept visible as an inactive control with its
   reason.
 
-No route is built on it yet. Until one is, the shell, the sections
-and the role-aware rules below and under §What it does not decide are
-the console as it runs. The design page that drew Roster is reference
-material, not a specification, and none of its mockups is kept in
-this repository: https://claude.ai/artifact/6fgTkEzZgDxq8UBoHe9nsa
-(v2, §Roster and §Recommendation, read 2026-10-18). The visual system
-below stays as it is under Roster.
+Until those are, the sections and the role-aware rules below and under
+§What it does not decide are the console as it runs. A member's mark
+already takes its kind's shape wherever one is drawn
+(`web/src/components/member-mark.tsx`). The design page that drew
+Roster is reference material, not a specification, and none of its
+mockups is kept in this repository:
+https://claude.ai/artifact/6fgTkEzZgDxq8UBoHe9nsa (v2, §Roster and
+§Recommendation, read 2026-10-18). The visual system below stays as
+it is under Roster.
 
 - **Principles.** Content over chrome, one accent, mono and copyable
   identifiers that are never a title, friction only for secrets and
@@ -429,15 +449,14 @@ below stays as it is under Roster.
 - **Shell.** It is ADR-0011's shell, extended:
   - a collapsible sidebar holding the org switcher with the caller's
     role;
-  - Overview above four groups: Workloads, Access, Infrastructure and
-    Organization;
+  - Roster's navigation (§What it serves);
   - the user and the theme control at the bottom;
   - a top bar holding the breadcrumb and the command palette, which
     keeps the organization's name on mobile.
 
-  Templates is a sidebar entry under Workloads, while its address and
-  breadcrumb stay as ADR-0075 has them. Standalone hosts is a section
-  no route serves yet.
+  Templates is a sidebar entry under Organization, while its address
+  and breadcrumb stay as ADR-0075 has them. Standalone hosts is a
+  section no route serves yet.
 - **Templates.** Every console page is a List, a Detail, a Settings
   page or a Wizard, as ADR-0103 §Page templates lays each out. A
   Detail page keeps every tab mounted and hides the inactive ones, so

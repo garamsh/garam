@@ -1,16 +1,18 @@
+import { slugFromGrn } from "@/lib/grn";
+
 import {
   UNNAMED_AGENT,
   directoryAgents,
-  kindFromGrn,
   lookUpAgent,
-  slugFromGrn,
   type AgentDirectory,
+} from "./agent-directory";
+import type { GroupMember, Member } from "./api/orgs";
+import {
+  kindFromGrn,
   type Catalog,
-  type GroupMember,
   type Lookup,
-  type Member,
   type SubjectKind,
-} from "@/features/orgs";
+} from "./subject";
 
 /**
  * What a team member is, read from its GRN's service type. A team

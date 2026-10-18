@@ -2,7 +2,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { ActionDialog } from "@/app/console/_components/action-dialog";
 import { CommandPalette } from "@/app/console/_components/command-palette";
+import { ReportOrgShell } from "@/app/console/_components/org-shell";
+import { Button } from "@/components/ui/button";
 import { stubLocalStorage } from "@/testing/storage";
 
 const route = vi.hoisted(() => ({
@@ -222,5 +225,133 @@ describe("command palette", () => {
     await user.click(screen.getByRole("option", { name: "Use dark theme" }));
 
     expect(document.documentElement).toHaveClass("dark");
+  });
+
+  it("finds the organization's people, agents and teams by name once something is typed", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <ReportOrgShell
+          org="acme"
+          role={null}
+          hidden={[]}
+          objects={[
+            {
+              kind: "agent",
+              name: "Scout",
+              identifier: "9f2ac1b40d8e7a35",
+              segment: "agents/9f2ac1b40d8e7a35",
+            },
+            {
+              kind: "team",
+              name: "Engineering",
+              identifier: "eng",
+              segment: "teams/eng",
+            },
+          ]}
+        />
+        <CommandPalette orgs={orgs} />
+      </>,
+    );
+
+    await openPalette(user);
+    // Found, not browsed: nothing typed lists no object.
+    expect(
+      screen.queryByRole("option", { name: /Scout/ }),
+    ).not.toBeInTheDocument();
+
+    await user.type(screen.getByRole("combobox"), "sco");
+    // Presence: the option's name is the object's and its identifier.
+    expect(screen.getByRole("option", { name: /Scout/ })).toBeVisible();
+    expect(
+      screen.queryByRole("option", { name: /Engineering/ }),
+    ).not.toBeInTheDocument();
+    await user.keyboard("{Enter}");
+
+    expect(route.push).toHaveBeenCalledWith(
+      "/console/orgs/acme/agents/9f2ac1b40d8e7a35",
+    );
+  });
+
+  it("offers no section the server denies the caller", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <ReportOrgShell
+          org="acme"
+          role={null}
+          hidden={["permissions"]}
+          objects={[]}
+        />
+        <CommandPalette orgs={orgs} />
+      </>,
+    );
+
+    await openPalette(user);
+
+    expect(
+      screen.queryByRole("option", { name: "Permissions" }),
+    ).not.toBeInTheDocument();
+    // Control: a section the server allows is still offered.
+    expect(screen.getByRole("option", { name: "Teams" })).toBeInTheDocument();
+  });
+
+  it("opens on . with the page's actions alone, each with its consequence", async () => {
+    const user = userEvent.setup();
+    const action = vi.fn(async () => ({ status: "idle" }));
+    render(
+      <>
+        <input aria-label="Team name" />
+        <ActionDialog
+          trigger={<Button type="button">Delete team</Button>}
+          title="Delete Engineering?"
+          description={<p>This removes the team.</p>}
+          action={action}
+          initialState={{ status: "idle" }}
+          fields={{}}
+          confirmLabel="Delete team"
+          pendingLabel="Deleting…"
+          done={() => false}
+          command={{
+            label: "Delete team",
+            consequence: "Removes the team and its memberships.",
+          }}
+        />
+        <CommandPalette orgs={orgs} />
+      </>,
+    );
+
+    await user.click(screen.getByRole("textbox", { name: "Team name" }));
+    await user.keyboard(".");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    // Control: the same key away from a field opens it.
+    await user.click(document.body);
+    await user.keyboard(".");
+    const palette = await screen.findByRole("dialog", {
+      name: "Actions on this page",
+    });
+    expect(palette).toHaveTextContent("Removes the team and its memberships.");
+    expect(
+      screen.queryByRole("option", { name: "Use dark theme" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("option", { name: /^Delete team/ }));
+
+    expect(
+      await screen.findByRole("alertdialog", { name: "Delete Engineering?" }),
+    ).toBeInTheDocument();
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it("says when the page offers no actions", async () => {
+    const user = userEvent.setup();
+    renderPalette();
+
+    await user.keyboard(".");
+
+    expect(
+      await screen.findByText("This page offers no actions here."),
+    ).toBeInTheDocument();
   });
 });

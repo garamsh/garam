@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 
 import {
   SidebarGroup,
@@ -14,7 +14,7 @@ import {
 
 import { IntentLink } from "./intent-link";
 import {
-  CONSOLE_NAV_GROUPS,
+  CONSOLE_NAV,
   isUnknownOrg,
   navEntryCurrent,
   orgHref,
@@ -22,8 +22,9 @@ import {
   resolveNavEntry,
   type ConsoleLocation,
   type ConsoleOrg,
-  type NavEntry,
+  type ResolvedNavEntry,
 } from "./navigation";
+import { useOrgShell } from "./org-shell";
 
 function NavItems({
   entries,
@@ -31,16 +32,14 @@ function NavItems({
   location,
   label,
 }: {
-  entries: readonly NavEntry[];
+  entries: readonly ResolvedNavEntry[];
   org: string;
   location: ConsoleLocation;
-  label: string;
+  label?: string;
 }) {
   return (
     <SidebarMenu aria-label={label}>
-      {entries.map((entry) => {
-        const resolved = resolveNavEntry(entry);
-        if (!resolved) return null;
+      {entries.map((resolved) => {
         const current = navEntryCurrent(resolved, location);
         return (
           <SidebarMenuItem key={resolved.key}>
@@ -64,45 +63,104 @@ function NavItems({
   );
 }
 
+/** "A", "A and B", "A, B and C". */
+function listed(labels: readonly string[]): string {
+  return labels.length < 2
+    ? labels.join("")
+    : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+}
+
 /**
- * The sections of the selected organization: the overview, then the
- * groups `CONSOLE_NAV_GROUPS` declares. Nothing is offered for an
- * organization the caller's list does not hold, since every link would
- * lead to the same not-found page; `orgs` is null when the list was not
- * answered, and the sections stay.
+ * Says once which sections were left out and, on request, why. The
+ * collapsed rail has no room for a sentence, so it carries none.
+ */
+function HiddenNote({ labels }: { labels: readonly string[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="px-4 pt-4 text-[length:var(--text-caption)] text-muted-foreground group-data-[collapsible=icon]:hidden">
+      <p>
+        {listed(labels)} {labels.length === 1 ? "is" : "are"} not shown: no
+        policy lets you read them.{" "}
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="rounded-sm text-foreground underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          Why
+        </button>
+      </p>
+      {open && (
+        <p className="pt-1.5">
+          The sidebar lists a section where this organization&apos;s roles and
+          policies let you read what it holds. Whoever manages those policies
+          can grant you a read.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The sections of the selected organization, in the groups
+ * `CONSOLE_NAV` declares (ADR-0113). A section whose read the server
+ * denies the caller is left out, and the sidebar says so once; until
+ * the answer arrives, or where it never does, every section stays.
+ * Nothing is offered for an organization the caller's list does not
+ * hold, since every link would lead to the same not-found page; `orgs`
+ * is null when the list was not answered, and the sections stay.
  */
 export function ConsoleNav({ orgs }: { orgs: readonly ConsoleOrg[] | null }) {
   const location = parseConsolePath(usePathname());
+  const hidden = new Set(useOrgShell()?.hidden);
   if (location.kind !== "org" || isUnknownOrg(location, orgs)) return null;
+
+  const groups = CONSOLE_NAV.map((group) => {
+    const resolved = group.entries
+      .map(resolveNavEntry)
+      .filter((entry) => entry !== undefined);
+    return {
+      label: group.label,
+      key: resolved[0]?.key ?? "",
+      entries: resolved.filter((entry) => !hidden.has(entry.key)),
+      left: resolved.filter((entry) => hidden.has(entry.key)),
+    };
+  });
+  const left = groups.flatMap((group) => group.left.map((e) => e.label));
 
   return (
     <nav aria-label="Organization sections">
-      <SidebarGroup className="pb-0">
-        <NavItems
-          entries={[{ section: "" }]}
-          org={location.org}
-          location={location}
-          label="Overview"
-        />
-      </SidebarGroup>
-      {CONSOLE_NAV_GROUPS.map((group) => (
-        <Fragment key={group.label}>
-          {/* The collapsed rail hides the labels, so a rule marks where
-              one group ends. */}
-          <SidebarSeparator className="mx-3 hidden group-data-[collapsible=icon]:block data-horizontal:w-auto" />
-          <SidebarGroup className="pt-3 pb-0 group-data-[collapsible=icon]:pt-2">
-            <SidebarGroupLabel className="h-7 text-[length:var(--text-caption)] font-medium text-muted-foreground group-data-[collapsible=icon]:-mt-7">
-              {group.label}
-            </SidebarGroupLabel>
-            <NavItems
-              entries={group.entries}
-              org={location.org}
-              location={location}
-              label={group.label}
-            />
-          </SidebarGroup>
-        </Fragment>
-      ))}
+      {groups
+        .filter((group) => group.entries.length > 0)
+        .map((group, index) => (
+          <Fragment key={group.key}>
+            {/* The collapsed rail hides the labels, so a rule marks
+                where one group ends. */}
+            {index > 0 && (
+              <SidebarSeparator className="mx-3 hidden group-data-[collapsible=icon]:block data-horizontal:w-auto" />
+            )}
+            <SidebarGroup
+              className={
+                group.label
+                  ? "pt-3 pb-0 group-data-[collapsible=icon]:pt-2"
+                  : "pb-0"
+              }
+            >
+              {group.label && (
+                <SidebarGroupLabel className="h-7 text-[length:var(--text-caption)] font-medium text-muted-foreground group-data-[collapsible=icon]:-mt-7">
+                  {group.label}
+                </SidebarGroupLabel>
+              )}
+              <NavItems
+                entries={group.entries}
+                org={location.org}
+                location={location}
+                label={group.label}
+              />
+            </SidebarGroup>
+          </Fragment>
+        ))}
+      {left.length > 0 && <HiddenNote labels={left} />}
     </nav>
   );
 }

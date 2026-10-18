@@ -43,7 +43,7 @@ test.describe("console shell", () => {
     await expect(
       breadcrumb.getByText("Not found", { exact: true }),
     ).toBeVisible();
-    await expect(breadcrumb).not.toContainText("Overview");
+    await expect(breadcrumb).not.toContainText("Home");
     await expect(
       page.getByRole("navigation", { name: "Organization sections" }),
     ).toHaveCount(0);

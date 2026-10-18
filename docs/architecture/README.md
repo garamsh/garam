@@ -198,15 +198,17 @@ No pipeline stands behind this either: what `make ci` reads a file under `docs/`
 
 What this repository runs against itself. `docs/convention/ci.md` decides how a check is named and secured; this section records where one runs.
 
-The runner class every job is to run on is unbuilt.
-[ADR-0105](./adr/0105-garams-pipeline-runs-on-a-docker-capable-aurora-runner-class.md)
-moves every job to a Docker-capable aurora runner class, isolated from
-the nodes that hold cluster secrets. That class does not exist yet, so
-every job in `ci.yml`, `images.yml` and `release.yml` still names
-`ubuntu-24.04`, whose runs start nothing on this account, and every
-merge still rests on the exception in `AGENTS.md` §Roles. The pull
-request that moves the labels replaces this paragraph with the state it
-leaves.
+Every job in `ci.yml`, `images.yml` and `release.yml` runs on
+GitHub-hosted `ubuntu-24.04`, and none runs on aurora's runners
+([ADR-0112](./adr/0112-promotions-run-on-github-hosted-runners-and-no-ci-job-moves-to-aurora.md)).
+A pull request into `dev` is verified by the PM's local run, and a
+promotion by those workflows. Hosted minutes are refused by the
+account's billing today: each job of promotion #1508's runs
+39084547388 and 39084547402 shows `steps=0` with an annotation naming
+the account's payments. Until a promotion run's jobs start, a
+promotion merges under the exception in `AGENTS.md` §Roles, "A run
+that was never dispatched is an absent check", and a `v*` tag
+publishes nothing.
 
 - `.github/workflows/ci.yml` triggers on `pull_request` into `main` and
   on nothing else; `.github/workflows/images.yml` on the same event and
@@ -814,7 +816,7 @@ ADRs:
   this repository but provides no daemon; garam asks for the class
   isolated from the nodes that hold cluster secrets, with `dind` on a
   shared worker as aurora's fallback, and the local gate stands until
-  the class exists. Unbuilt
+  the class exists; superseded by 0112
 - [0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)
   — garam stays the only route a message takes, and every send it
   decides writes one audit event without a body in the transaction of
@@ -854,3 +856,10 @@ ADRs:
   GRN, the audience Garam signs, after its predecessor exits, and
   outbox entries under the earlier ID are set aside and left in place;
   unbuilt
+- [0112](./adr/0112-promotions-run-on-github-hosted-runners-and-no-ci-job-moves-to-aurora.md)
+  — a pull request into `dev` is verified by the PM's local run and a
+  promotion by the GitHub workflows on hosted `ubuntu-24.04`; no job
+  runs on aurora's runners, now or as a planned target. While the
+  account's billing refuses hosted minutes, a promotion merges under
+  `AGENTS.md` §Roles' never-dispatched exception, until the first
+  promotion run whose jobs start; supersedes 0105

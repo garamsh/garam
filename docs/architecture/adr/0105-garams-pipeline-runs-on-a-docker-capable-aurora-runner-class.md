@@ -1,6 +1,6 @@
 # ADR 0105: garam's pipeline runs on a Docker-capable aurora runner class
 
-> Status: accepted
+> Status: superseded by ADR-0112
 > Date: 2026-10-17
 
 Accepted by the Garam PM on 2026-10-18 under the owner's delegation,

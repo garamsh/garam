@@ -81,8 +81,8 @@ test.describe("organization mutations", () => {
       inviteePage.getByRole("button", { name: /join/i }),
     ).toHaveCount(0);
 
-    // The People section now lists both members.
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
+    // People and agents now lists both members.
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
     // Substring on purpose: a row's accessible name is all of its
     // cells, and the assertion asks which role one of them shows.
     await expect(
@@ -306,10 +306,10 @@ test.describe("organization mutations", () => {
 
 /**
  * Creates a member invitation as the organization's owner and answers
- * with the link the People section shows to send.
+ * with the link People and agents shows to send.
  */
 async function createInvitationLink(page: Page, orgSlug: string) {
-  await page.goto(`/console/orgs/${orgSlug}/people`);
+  await page.goto(`/console/orgs/${orgSlug}/members`);
   await expectHydrated(page);
   await page.getByRole("button", { name: "Invite people" }).click();
   const dialog = page.getByRole("dialog", { name: "Invite a person" });

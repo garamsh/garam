@@ -22,7 +22,12 @@ const routes: {
   href: (area: Awaited<ReturnType<typeof seedArea>>) => string;
   heading: string;
 }[] = [
-  { name: "the agent list", href: (a) => a.agents, heading: "Agents" },
+  {
+    name: "the agent list",
+    // Agents are listed among the members (ADR-0113).
+    href: (a) => a.agents.replace(/agents$/, "members?kind=agent"),
+    heading: "People and agents",
+  },
   {
     name: "an agent",
     href: (a) => `${a.agents}/${a.defined}`,

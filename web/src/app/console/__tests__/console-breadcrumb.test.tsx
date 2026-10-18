@@ -8,7 +8,7 @@ import { renderServerComponent } from "@/testing/render";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/console/orgs/acme/people",
+  usePathname: () => "/console/orgs/acme/members",
 }));
 
 describe("console breadcrumb", () => {
@@ -24,6 +24,6 @@ describe("console breadcrumb", () => {
     await renderServerComponent(ConsoleBreadcrumb());
 
     expect(screen.getByRole("link", { name: "acme" })).toBeInTheDocument();
-    expect(screen.getByText("People")).toBeInTheDocument();
+    expect(screen.getByText("People and agents")).toBeInTheDocument();
   });
 });

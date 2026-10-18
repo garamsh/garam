@@ -98,8 +98,7 @@ export async function OrgShellRead({ org }: { org: Promise<string> }) {
       kind: "person" as const,
       name: member.nickname ?? "No name on record",
       identifier: slugFromGrn(member.userGrn),
-      // A person has no page of their own yet.
-      segment: "people",
+      segment: `members/${slugFromGrn(member.userGrn)}`,
     })),
     ...directoryAgents({
       agents: catalog(agents),

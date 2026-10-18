@@ -62,10 +62,18 @@ export function ActionDialog<S extends ActionState>({
   onAnswer,
   onOpen,
   command,
+  open: openProp,
+  onOpenChange,
   ...form
 }: FormProps<S> & {
-  /** The control opening the dialog; a `Button`. */
-  trigger: React.ReactElement;
+  /**
+   * The control opening the dialog; a `Button`. Left out where the
+   * caller opens it through `open`, from a menu or a bulk bar.
+   */
+  trigger?: React.ReactElement;
+  /** Whether the dialog is open, for a caller that opens it itself. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   /** What a landed write reports; null where it reports nothing. */
   outcome?: (state: S) => string | null;
   /**
@@ -80,7 +88,9 @@ export function ActionDialog<S extends ActionState>({
   /** How the palette lists the act: its name and what follows from it. */
   command?: { label: string; consequence: string };
 }) {
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = openProp ?? ownOpen;
+  const setOpen = onOpenChange ?? setOwnOpen;
   const openDialog = (next: boolean) => {
     setOpen(next);
     if (next) onOpen?.();
@@ -103,7 +113,7 @@ export function ActionDialog<S extends ActionState>({
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <AlertDialog open={open} onOpenChange={openDialog}>
-        <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
+        {trigger && <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>}
         <AlertDialogContent className="sm:max-w-lg">
           <ConfirmForm {...form} onAnswer={answered} />
         </AlertDialogContent>

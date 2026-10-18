@@ -525,10 +525,11 @@ describe("team page", () => {
     const group = { type: "group", id: "eng" };
     expect(asked).toEqual([
       {
+        // In the order Your access lists them, which shares the check.
         checks: [
+          { action: "group:update", resource: group },
           { action: "group:member-add", resource: group },
           { action: "group:member-remove", resource: group },
-          { action: "group:update", resource: group },
           { action: "group:delete", resource: group },
         ],
       },

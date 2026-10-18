@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Banner } from "@/components/banner";
 import { ControlNotice, NO_FIX } from "@/components/control-notice";
 import { DescriptionList } from "@/components/description-list";
+import { MemberMark } from "@/components/member-mark";
 import { StageTrack } from "@/components/stage-track";
 import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
@@ -17,12 +18,12 @@ import {
   listHostedOperators,
   lookupAgents,
   lookupOperators,
+  lookupOrgMembers,
   slugFromGrn,
   type Agent,
   type AgentDefinition,
   type Reported as ReportedState,
 } from "@/features/orgs";
-import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { CUTOVER_STAGE_LABEL } from "../../../../_components/cutover-marker";
@@ -36,7 +37,17 @@ import {
   type DetailTab,
 } from "../../../../_components/templates/detail-page";
 import { DesiredValues, OperatorName } from "../_components/agent-facts";
-import { reportedDots, type AgentDot } from "../_components/agent-status";
+import {
+  holderOf,
+  reportedDots,
+  type AgentDot,
+  type Holder,
+} from "../../../../_components/agent-status";
+import {
+  YourAccess,
+  accessDecisions,
+  readAccess,
+} from "../../../../_components/your-access";
 import { ExecutionPanel } from "../_components/execution-panel";
 import { RenameAgentForm } from "./_components/rename-agent-form";
 
@@ -67,20 +78,42 @@ const CUTOVER_STAGES = [
  */
 export default async function AgentPage({ params }: Params) {
   const { org, agent } = await params;
-  const [organization, definition, agents, operators, hosted, permissions] =
-    await Promise.all([
-      getOrg(org),
-      getAgentDefinition(org, agent),
-      lookupAgents(org),
-      lookupOperators(org),
-      listHostedOperators(org),
-      checkPermissions(org, {
-        rename: {
-          action: "agent:rename",
-          resource: { type: "agent", id: agent },
-        },
-      }),
-    ]);
+  const self = { type: "agent", id: agent } as const;
+  // Started before the page's own reads, so it runs beside them.
+  const access = readAccess(org, [
+    {
+      key: "watch",
+      label: "Watch it live",
+      check: { action: "agent:watch", resource: self },
+    },
+    {
+      key: "rename",
+      label: "Rename it",
+      check: { action: "agent:rename", resource: self },
+    },
+    {
+      key: "replace",
+      label: "Replace its host",
+      check: { action: "agent:replace", resource: self },
+    },
+  ]);
+  const [
+    organization,
+    definition,
+    agents,
+    operators,
+    members,
+    hosted,
+    readings,
+  ] = await Promise.all([
+    getOrg(org),
+    getAgentDefinition(org, agent),
+    lookupAgents(org),
+    lookupOperators(org),
+    lookupOrgMembers(org),
+    listHostedOperators(org),
+    access,
+  ]);
 
   const fallback = (
     <PageHeader title="Agent" description="An agent of this organization." />
@@ -128,6 +161,23 @@ export default async function AgentPage({ params }: Params) {
         ? "reported"
         : "awaiting";
   const dots = reportedDots(state, reported);
+  const holder = holderOf(
+    reported,
+    new Map(
+      (operators.status === "ok" ? operators.data : []).map((operator) => [
+        operator.grn,
+        operator.name,
+      ]),
+    ),
+  );
+  const definedBy =
+    definition.data === null
+      ? null
+      : members.status === "ok"
+        ? (members.data.find(
+            (member) => member.userGrn === definition.data?.definedBy,
+          )?.nickname ?? "A person no longer in this organization")
+        : "A person whose name is not shown to you";
 
   const tabs: DetailTab[] = [
     {
@@ -138,8 +188,7 @@ export default async function AgentPage({ params }: Params) {
           <Reported state={state} dots={dots} agent={reported} />
           {definition.data === null ? (
             <Banner tone="info" title="No definition in garam">
-              A control service created this agent. garam holds what its
-              operator reports, and no definition.
+              {noDefinitionCause(holder)}
             </Banner>
           ) : (
             <Requested
@@ -188,7 +237,10 @@ export default async function AgentPage({ params }: Params) {
       ),
     },
   ];
-  if (definition.data !== null && permissions.get("rename") !== "denied") {
+  if (
+    definition.data !== null &&
+    accessDecisions(readings).get("rename") !== "denied"
+  ) {
     tabs.push({
       value: "settings",
       label: "Settings",
@@ -212,9 +264,37 @@ export default async function AgentPage({ params }: Params) {
     <>
       <ItemCrumb label={name} />
       <DetailPage
+        mark={<MemberMark kind="agent" name={name} className="size-7" />}
         name={name}
         idLabel="Agent identifier"
         id={agent}
+        facts={[
+          {
+            term: "Runs on",
+            description:
+              state === "unchecked"
+                ? "Not checked"
+                : holder === null
+                  ? "Nowhere yet"
+                  : `${holder.name}, ${holder.kind === "operator" ? "operator" : "standalone host"}`,
+          },
+          ...(holder === null
+            ? []
+            : [{ term: "Epoch", description: String(holder.epoch) }]),
+          {
+            term: "Last report",
+            description: reported ? (
+              <Time value={reported.updatedAt} />
+            ) : state === "unchecked" ? (
+              "Not checked"
+            ) : (
+              "Never"
+            ),
+          },
+          ...(definedBy === null
+            ? []
+            : [{ term: "Defined by", description: definedBy }]),
+        ]}
         status={
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <StatusDot {...dots.provisioning} />
@@ -232,8 +312,23 @@ export default async function AgentPage({ params }: Params) {
         }
         tabs={tabs}
       />
+      <YourAccess readings={readings} />
     </>
   );
+}
+
+/**
+ * Why garam holds no definition for an agent it holds a report of,
+ * said by what holds it: an operator's control service created it, or
+ * a standalone host enrolled it (ADR-0082).
+ */
+function noDefinitionCause(holder: Holder | null): string {
+  if (holder === null) {
+    return "garam holds a report of this agent, and no definition and no holder.";
+  }
+  return holder.kind === "operator"
+    ? `${holder.name}'s control service created this agent. garam holds what that operator reports, and no definition.`
+    : `A standalone host, ${holder.name}, enrolled this agent. garam holds what it reports, and no definition.`;
 }
 
 /**

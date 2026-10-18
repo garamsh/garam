@@ -18,7 +18,7 @@ function newPassword(): string {
  * the token its link carries — what a person registering is holding.
  */
 async function invitationToken(page: Page, orgSlug: string): Promise<string> {
-  await page.goto(`/console/orgs/${orgSlug}/people`);
+  await page.goto(`/console/orgs/${orgSlug}/members`);
   await expectHydrated(page);
   await page.getByRole("button", { name: "Invite people" }).click();
   const dialog = page.getByRole("dialog", { name: "Invite a person" });

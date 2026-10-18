@@ -29,7 +29,7 @@ describe("parseConsolePath", () => {
 
   it.each([
     "teams",
-    "people",
+    "members",
     "agents",
     "projects",
     "operators",
@@ -101,7 +101,7 @@ describe("parseConsolePath", () => {
     // The section's former address redirects before the shell reads it.
     "/console/orgs/acme/policies",
     // A section without item pages has nothing below it.
-    "/console/orgs/acme/people/deeper",
+    "/console/orgs/acme/projects/deeper",
     "/console/orgs/acme/teams/eng/deeper",
   ])("does not place %s", (pathname) => {
     expect(parseConsolePath(pathname)).toEqual({ kind: "unknown" });
@@ -111,14 +111,14 @@ describe("parseConsolePath", () => {
 describe("consoleCrumbs", () => {
   it("names the organization and the section", () => {
     const crumbs = consoleCrumbs(
-      parseConsolePath("/console/orgs/acme/people"),
+      parseConsolePath("/console/orgs/acme/members"),
       orgs,
     );
 
     expect(crumbs).toEqual([
       { label: "Organizations", href: "/console/orgs" },
       { label: "Acme", href: "/console/orgs/acme" },
-      { label: "People" },
+      { label: "People and agents" },
     ]);
   });
 
@@ -277,16 +277,17 @@ describe("consoleCrumbs", () => {
 });
 
 describe("CONSOLE_NAV", () => {
-  it("lists every section exactly once", () => {
+  it("lists every section once, Agents through its Templates view", () => {
+    // An agent's pages sit under Agents, but the list of agents is
+    // Members' (ADR-0113), so Agents is listed by its view alone.
     const listed = CONSOLE_NAV.flatMap((group) =>
-      group.entries
-        .filter((entry) => entry.view === undefined)
-        .map((entry) => entry.section),
+      group.entries.map((entry) => entry.section),
     );
 
-    expect([...listed].sort()).toEqual(
+    expect([...new Set(listed)].sort()).toEqual(
       CONSOLE_SECTIONS.map((section) => section.segment).sort(),
     );
+    expect(listed.filter((segment) => segment === "agents")).toHaveLength(1);
   });
 
   it("gates every entry but Home on a read", () => {

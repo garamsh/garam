@@ -16,7 +16,6 @@ import {
   resolveTeamMembers,
   teamCandidates,
 } from "@/features/orgs";
-import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { ItemCrumb } from "../../../../_components/item-crumb";
@@ -24,6 +23,11 @@ import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
 import { RefusedRead } from "../../../../_components/refused-read";
 import { DetailPage } from "../../../../_components/templates/detail-page";
+import {
+  YourAccess,
+  accessDecisions,
+  readAccess,
+} from "../../../../_components/your-access";
 import { AddTeamMemberForm } from "./_components/add-team-member-form";
 import { DeleteTeamDialog } from "./_components/delete-team-dialog";
 import { RenameTeamForm } from "./_components/rename-team-form";
@@ -54,7 +58,30 @@ const FALLBACK_DESCRIPTION = "A team of this organization.";
 export default async function TeamPage({ params }: Params) {
   const { org, team } = await params;
   const group = { type: "group", id: team } as const;
-  const [organization, read, members, people, agents, definitions, may] =
+  // Started before the page's own reads, so it runs beside them.
+  const access = readAccess(org, [
+    {
+      key: "rename",
+      label: "Rename it",
+      check: { action: "group:update", resource: group },
+    },
+    {
+      key: "add",
+      label: "Add members",
+      check: { action: "group:member-add", resource: group },
+    },
+    {
+      key: "remove",
+      label: "Remove members",
+      check: { action: "group:member-remove", resource: group },
+    },
+    {
+      key: "delete",
+      label: "Delete it",
+      check: { action: "group:delete", resource: group },
+    },
+  ]);
+  const [organization, read, members, people, agents, definitions, readings] =
     await Promise.all([
       getOrg(org),
       getGroup(org, team),
@@ -62,13 +89,9 @@ export default async function TeamPage({ params }: Params) {
       lookupOrgMembers(org),
       lookupAgents(org),
       lookupAgentDefinitions(org),
-      checkPermissions(org, {
-        add: { action: "group:member-add", resource: group },
-        remove: { action: "group:member-remove", resource: group },
-        rename: { action: "group:update", resource: group },
-        delete: { action: "group:delete", resource: group },
-      }),
+      access,
     ]);
+  const may = accessDecisions(readings);
 
   if (
     organization.status === "unreachable" ||
@@ -205,6 +228,7 @@ export default async function TeamPage({ params }: Params) {
             : undefined
         }
       />
+      <YourAccess readings={readings} />
     </>
   );
 }

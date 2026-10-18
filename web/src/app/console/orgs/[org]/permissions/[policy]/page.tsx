@@ -15,7 +15,6 @@ import {
   slugFromGrn,
   type Policy,
 } from "@/features/orgs";
-import { checkPermissions } from "@/lib/permission-check";
 import { formatPolicyDocument, hasCondition } from "@/lib/policy-document";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
@@ -23,6 +22,11 @@ import { ItemCrumb } from "../../../../_components/item-crumb";
 import { PageHeader } from "../../../../_components/page-header";
 import { RefusedRead } from "../../../../_components/refused-read";
 import { DetailPage } from "../../../../_components/templates/detail-page";
+import {
+  YourAccess,
+  accessDecisions,
+  readAccess,
+} from "../../../../_components/your-access";
 import { AttachPolicyForm } from "../_components/attach-policy-form";
 import { PolicyStatus } from "../_components/policy-status";
 import {
@@ -111,6 +115,33 @@ function Unshown({ children }: { children: React.ReactNode }) {
 export default async function PolicyPage({ params }: Params) {
   const { org, policy: slug } = await params;
   const resource = { type: "policy", id: slug } as const;
+  // Started before the page's own reads, so it runs beside them.
+  const access = readAccess(org, [
+    {
+      key: "update",
+      label: "Edit and publish it",
+      check: {
+        action: "policy:update",
+        resource,
+      },
+    },
+    {
+      key: "attach",
+      label: "Attach it",
+      check: {
+        action: "policy:attach",
+        resource,
+      },
+    },
+    {
+      key: "detach",
+      label: "Detach it",
+      check: {
+        action: "policy:detach",
+        resource,
+      },
+    },
+  ]);
   const [
     organization,
     policies,
@@ -120,7 +151,7 @@ export default async function PolicyPage({ params }: Params) {
     people,
     agents,
     definitions,
-    permissions,
+    readings,
   ] = await Promise.all([
     getOrg(org),
     listPolicies(org),
@@ -130,12 +161,9 @@ export default async function PolicyPage({ params }: Params) {
     lookupOrgMembers(org),
     lookupAgents(org),
     lookupAgentDefinitions(org),
-    checkPermissions(org, {
-      update: { action: "policy:update", resource },
-      attach: { action: "policy:attach", resource },
-      detach: { action: "policy:detach", resource },
-    }),
+    access,
   ]);
+  const permissions = accessDecisions(readings);
 
   if (
     organization.status === "unreachable" ||
@@ -398,6 +426,7 @@ export default async function PolicyPage({ params }: Params) {
             : undefined
         }
       />
+      <YourAccess readings={readings} />
     </OutcomeProvider>
   );
 }

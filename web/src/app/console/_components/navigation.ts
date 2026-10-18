@@ -28,6 +28,11 @@ export type ConsoleSection = {
    */
   read?: string;
   /**
+   * Sections no sidebar entry lists whose pages sit inside this one,
+   * so the sidebar marks this entry as the location on them.
+   */
+  holds?: readonly string[];
+  /**
    * Present on a section whose entries each have a page of their own
    * below it: what the breadcrumb calls the create page, and what it
    * calls an entry's page before that page has named the entry. A
@@ -76,10 +81,14 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     items: { create: "New team", fallback: "Team" },
   },
   {
-    segment: "people",
-    label: "People",
+    // People and agents in one list (ADR-0113). A person's page sits
+    // here; an agent's stays under Agents.
+    segment: "members",
+    label: "People and agents",
     icon: UserRound,
     read: "org:member-list",
+    items: { fallback: "Person" },
+    holds: ["agents"],
   },
   {
     segment: "agents",
@@ -157,11 +166,7 @@ export const CONSOLE_NAV: readonly NavGroup[] = [
   { entries: [{ section: "" }] },
   {
     label: "Members",
-    entries: [
-      { section: "people" },
-      { section: "agents" },
-      { section: "teams" },
-    ],
+    entries: [{ section: "members" }, { section: "teams" }],
   },
   { entries: [{ section: "projects" }] },
   {
@@ -231,9 +236,17 @@ export function navEntryCurrent(
   entry: ResolvedNavEntry,
   location: ConsoleLocation,
 ): "page" | "location" | undefined {
-  if (location.kind !== "org" || location.section !== entry.section) {
-    return undefined;
+  if (location.kind !== "org") return undefined;
+  if (
+    entry.view === undefined &&
+    entry.section.holds?.includes(location.section.segment)
+  ) {
+    const listed = location.section.views?.some(
+      (view) => view.icon !== undefined && view.segment === location.item,
+    );
+    return listed ? undefined : "location";
   }
+  if (location.section !== entry.section) return undefined;
   const listedView = entry.section.views?.find(
     (view) => view.icon !== undefined && view.segment === location.item,
   );

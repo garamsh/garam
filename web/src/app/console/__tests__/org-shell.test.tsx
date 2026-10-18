@@ -200,7 +200,7 @@ describe("what the palette finds", () => {
 
     const objects = screen.getByRole("list", { name: "Objects" });
     for (const text of [
-      "person: Alice at people",
+      "person: Alice at members/alice",
       "agent: Scout at agents/9f2ac1b40d8e7a35",
       "agent: Unnamed agent at agents/1c3d5e7f90a2b4c6",
       "team: Engineering at teams/eng",
@@ -224,7 +224,7 @@ describe("what the palette finds", () => {
     expect(within(objects).queryByText(/^team:/)).not.toBeInTheDocument();
     // Control: the refusal took the teams and nothing else.
     expect(
-      within(objects).getByText("person: Alice at people"),
+      within(objects).getByText("person: Alice at members/alice"),
     ).toBeInTheDocument();
   });
 });

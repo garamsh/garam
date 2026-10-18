@@ -96,7 +96,7 @@ test.describe("named agents", () => {
     await expect(
       row.getByRole("link", { name: "Ranger", exact: true }),
     ).toBeVisible();
-    await expect(row.getByText("Awaiting operator")).toBeVisible();
+    await expect(row.getByText("Not placed")).toBeVisible();
   });
 
   test("a team and a policy take a defined agent by name before any claim", async ({
@@ -145,27 +145,23 @@ test.describe("named agents", () => {
 });
 
 test.describe("agents", () => {
-  test("shows a failing reported agent first, with the states its two parties reported", async ({
+  test("lists a failing reported agent first among the agents, in one state", async ({
     page,
     signedIn,
   }) => {
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents`);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/members?kind=agent`);
 
     // The seeded agent reported a failed provisioning and a lost
-    // connection, so it is listed first and said to be failing.
+    // connection, so it leads and reads as failing, with both reports
+    // named under that state.
     const first = page.getByRole("row").nth(1);
     await expect(
       first.getByText(signedIn.agentIdentifier, { exact: true }),
     ).toBeVisible();
+    await expect(first.getByText("Failing", { exact: true })).toBeVisible();
     await expect(
-      first.getByText("Provisioning failed", { exact: true }),
+      first.getByText("Provisioning failed; disconnected", { exact: true }),
     ).toBeVisible();
-    await expect(
-      first.getByText("Disconnected", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("alert").filter({ hasText: "agent is failing" }),
-    ).toContainText("1 agent is failing");
   });
 });
 
@@ -279,7 +275,12 @@ test.describe("agents and templates accessibility", () => {
     heading: string;
     tab?: string;
   }[] = [
-    { name: "the agent list", href: (a) => a.agents, heading: "Agents" },
+    {
+      name: "the agent list",
+      // Agents are listed among the members (ADR-0113).
+      href: (a) => a.agents.replace(/agents$/, "members?kind=agent"),
+      heading: "People and agents",
+    },
     {
       name: "an agent",
       href: (a) => `${a.agents}/${a.defined}`,

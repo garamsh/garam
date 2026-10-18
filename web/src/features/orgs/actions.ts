@@ -12,11 +12,19 @@ export {
   type AddGroupMemberState,
 } from "./api/add-group-member";
 export {
+  addMembersToTeam,
+  type AddMembersToTeamState,
+} from "./api/add-members-to-team";
+export {
   addPolicyVersion,
   type AddPolicyVersionState,
 } from "./api/add-policy-version";
 export { archivePolicy, type ArchivePolicyState } from "./api/archive-policy";
 export { attachPolicy, type AttachPolicyState } from "./api/attach-policy";
+export {
+  attachPolicyToMembers,
+  type AttachPolicyToMembersState,
+} from "./api/attach-policy-to-members";
 export {
   saveControlEndpoint,
   type ControlEndpointState,

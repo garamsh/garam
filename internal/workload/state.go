@@ -88,6 +88,10 @@ type intent struct {
 	// RequireStore is whether the runtime starts with --require-store:
 	// set from the memory volume's Served when the intent is written.
 	RequireStore bool `json:"requireStore"`
+	// Attached is an intent for a runtime the host runs itself, which
+	// the supervisor attached to and created no container of
+	// (ADR-0111).
+	Attached bool `json:"attached,omitempty"`
 	// PlacementToken is what the adapter presents on activation.
 	PlacementToken string `json:"placementToken"`
 	// ControlToken is what the generation's adapter presents to this

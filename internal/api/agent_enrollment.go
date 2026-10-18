@@ -42,6 +42,7 @@ func (s *Server) ApproveAgentEnrollment(w http.ResponseWriter, r *http.Request, 
 	writeJSON(w, status, apigen.AgentEnrollment{
 		Id: openapi_types.UUID(e.ID), AgentGrn: e.Agent.String(), SupervisorGrn: e.Supervisor.String(),
 		HostName: string(e.HostName), ExpiresAt: e.ExpiresAt.UTC(), Spent: e.Spent != nil,
+		Placement: apigen.AgentEnrollmentPlacement(e.Placement),
 	})
 }
 
@@ -63,9 +64,15 @@ func approvalInput(actor, org grn.GRN, body apigen.AgentEnrollmentApproval) (age
 	if err != nil {
 		return agent.ApprovalInput{}, err
 	}
+	placement := agent.PlacementStandalone
+	if body.Placement != nil {
+		if placement, err = agent.ParsePlacement(string(*body.Placement)); err != nil {
+			return agent.ApprovalInput{}, err
+		}
+	}
 	in := agent.ApprovalInput{
-		Actor: actor, Org: org, RequestID: requestID, HostName: hostName, ExpiresAt: body.ExpiresAt,
-		SecretSHA256: [32]byte(secret), Keys: keys,
+		Actor: actor, Org: org, Placement: placement, RequestID: requestID, HostName: hostName,
+		ExpiresAt: body.ExpiresAt, SecretSHA256: [32]byte(secret), Keys: keys,
 	}
 	if r := body.Replaces; r != nil {
 		agentGRN, err := grn.Parse(r.AgentGrn)

@@ -77,15 +77,15 @@ func (c *controlServer) close() {
 	<-c.served
 }
 
-// serveControl serves the two routes on the generation's socket, which
-// lives in a directory only that generation's adapter mounts. The
+// serveControl serves the two routes on the generation's socket, in
+// dir: a directory only that generation's adapter mounts, or an
+// attached runtime's adapter reads its files from. The
 // adapter verifies this listener by the generation's own root. In the
 // certificate mode it presents the agent's certificate, which must
 // chain to the agent's issuer; in the token mode the listener asks for
 // no certificate, and the generation's control token authenticates
 // each request (ADR-0100).
-func (s *Supervisor) serveControl(genDir string, serving *tls.Certificate, in *intent) (*controlServer, error) {
-	dir := filepath.Join(genDir, socketDir)
+func (s *Supervisor) serveControl(dir string, serving *tls.Certificate, in *intent) (*controlServer, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, errorx.Wrap(err, "workload: socket directory", errorx.KindUnavailable)
 	}
@@ -265,7 +265,7 @@ func (s *Supervisor) activate(w http.ResponseWriter, r *http.Request, in *intent
 
 	s.activating.Lock()
 	defer s.activating.Unlock()
-	if err := s.provenance(r.Context(), in); err != nil {
+	if err := s.provenance(r.Context(), in, body.Generation); err != nil {
 		if errorx.IsKind(err, errorx.KindUnavailable) {
 			refuse(w, http.StatusServiceUnavailable, "undecided", "the runtime could not be read")
 			return
@@ -343,13 +343,18 @@ func (s *Supervisor) placementOf(r *http.Request) (string, bool) {
 
 // provenance refuses a runtime that is not the container this intent
 // started, still running from the same start with no restart since.
-func (s *Supervisor) provenance(ctx context.Context, in *intent) error {
+// An attached runtime is held instead to reporting generation itself
+// (attached).
+func (s *Supervisor) provenance(ctx context.Context, in *intent, generation string) error {
 	s.mu.Lock()
 	rec := in.Runtime
 	live := in.live()
 	s.mu.Unlock()
 	if !live {
 		return errorx.New(errorx.KindFailedPrecondition, "workload: the generation is not running")
+	}
+	if s.cfg.Attach != nil {
+		return s.attached(ctx, in, generation)
 	}
 	if rec.ID == "" || rec.StartedAt.IsZero() {
 		return errorx.New(errorx.KindUnavailable, "workload: the runtime's start is not recorded yet")
@@ -467,8 +472,9 @@ func (s *Supervisor) report(w http.ResponseWriter, r *http.Request, in *intent) 
 		return
 	}
 	// The first serving report on this volume is what says its store
-	// exists: from here on every start of it requires the store.
-	if body.State == "serving" && !s.st.Memory.Served {
+	// exists: from here on every start of it requires the store. An
+	// attached runtime's store is on no volume this host recorded.
+	if body.State == "serving" && s.st.Memory != nil && !s.st.Memory.Served {
 		s.st.Memory.Served = true
 		if err := s.save(); err != nil {
 			undecided(err)(w)

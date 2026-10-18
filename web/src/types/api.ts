@@ -1366,6 +1366,12 @@ export interface components {
         AgentRuntimeState: "unknown" | "connected" | "disconnected";
         /** @description An approval binds the host's two key fingerprints, or neither. With both, the host enrolls under `standalone-enrollment.v1` and is signed a certificate over each key; with neither, it enrolls under `standalone-enrollment.v2` and is answered a supervisor credential. Each contract refuses the other's approval (ADR-0100). One fingerprint without the other is 400. */
         AgentEnrollmentApproval: {
+            /**
+             * @description Where the host runs its agent's runtime. `standalone` is three containers the host's supervisor starts (ADR-0085). `direct` is a runtime already running on the host, which the supervisor attaches to and starts nothing of (ADR-0111). A direct approval binds no key fingerprint and is spent under `standalone-enrollment.v2` alone; one binding both is 400. This approval is the only way garam admits a direct agent: `agent-enrollment.v1` refuses direct placement to an operator.
+             * @default standalone
+             * @enum {string}
+             */
+            placement: "standalone" | "direct";
             /** @description The host's own identifier for this request. */
             requestId: string;
             /** @description What the organization calls the host; trimmed, 1 to 100 characters. */
@@ -1393,6 +1399,8 @@ export interface components {
         AgentEnrollment: {
             /** Format: uuid */
             id: string;
+            /** @enum {string} */
+            placement: "standalone" | "direct";
             agentGrn: string;
             supervisorGrn: string;
             hostName: string;

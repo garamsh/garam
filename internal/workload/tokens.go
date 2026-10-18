@@ -36,14 +36,12 @@ func (s *Supervisor) agentToken(ctx context.Context, r Role) (string, error) {
 	return token, nil
 }
 
-// refresh copies the agent token into the running adapter whenever the
-// one the supervisor holds is not the one it handed, until ctx ends.
-// The copy replaces the file in the container, which is not a rename:
-// the adapter reads a file part way written as undecided and reads it
-// again (ADR-0085, ADR-0100). A failure is retried on the next look,
-// and refusing to refresh never stops the generation; garam refusing
-// the token the adapter holds is what does.
-func (s *Supervisor) refresh(ctx context.Context, adapterID string) {
+// refresh hands the running adapter the agent token, through hand,
+// whenever the one the supervisor holds is not the one it handed, until
+// ctx ends. A failure is retried on the next look, and refusing to
+// refresh never stops the generation; garam refusing the token the
+// adapter holds is what does.
+func (s *Supervisor) refresh(ctx context.Context, hand func(token string) error) {
 	if s.cfg.Tokens == nil {
 		return
 	}
@@ -70,8 +68,7 @@ func (s *Supervisor) refresh(ctx context.Context, adapterID string) {
 		if token == handed {
 			continue
 		}
-		file := own("garam/"+agentTokenFile, []byte(token), 0o600)
-		if err := s.engine.CopyFiles(ctx, adapterID, "/etc", []File{file}); err != nil {
+		if err := hand(token); err != nil {
 			slog.Warn("agent token not handed to the adapter", slog.String("error", err.Error()))
 			continue
 		}

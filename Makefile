@@ -411,17 +411,27 @@ web-install:
 # when its ignore patterns left it a fraction of it, so what it covered
 # is read out of its own JSON report: one entry per file it linted. A
 # report naming no file fails the target below rather than reporting a
-# count nobody checked.
-WEB_LINT_FILES = $(shell { $(PNPM) exec eslint --format json | $(PNPM) exec node -e 'for(const r of JSON.parse(require("fs").readFileSync(0,"utf8")))console.log(r.filePath)'; } 2>/dev/null)
+# count nobody checked. One pass writes the report, and the same report
+# is printed through eslint's own stylish formatter, so the count and
+# the lint result come from one run whose exit status the target keeps
+# (#1528).
+WEB_LINT_REPORT = const [file, status] = process.argv.slice(1); \
+	const text = require("fs").readFileSync(file, "utf8"); \
+	if (!text) { console.error("web-lint: eslint exited " + status + " and wrote no report"); process.exit(1); } \
+	const results = JSON.parse(text); \
+	console.log("web-lint: " + results.length + " files (eslint)"); \
+	if (!results.length) { console.error("web-lint: nothing to lint — the eslint report named no file"); process.exit(1); } \
+	new (require("eslint").ESLint)().loadFormatter("stylish").then((f) => process.stdout.write(f.format(results)));
 
 # tsc reads its inputs from tsconfig.json rather than from eslint's
 # ignore patterns, so the TS18003 it raises on its own empty input says
 # nothing about what eslint read. The count above is the eslint half
 # reporting for itself.
 web-lint:
-	@echo 'web-lint: $(words $(WEB_LINT_FILES)) files (eslint)'
-	@test -n '$(WEB_LINT_FILES)' || { echo 'web-lint: nothing to lint — the eslint report named no file; $(PNPM) lint reports why'; exit 1; }
-	$(PNPM) lint
+	@report=$$(mktemp) && trap 'rm -f "$$report"' EXIT; \
+		status=0; $(PNPM) exec eslint --format json --output-file "$$report" || status=$$?; \
+		$(PNPM) exec node -e '$(WEB_LINT_REPORT)' "$$report" "$$status" || exit 1; \
+		exit "$$status"
 	$(PNPM) typecheck
 
 # prettier reports no count and exits 0 when its ignore files leave it

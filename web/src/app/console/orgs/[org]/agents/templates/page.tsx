@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { LayoutTemplate } from "lucide-react";
 
-import { Banner } from "@/components/banner";
 import { ControlNotice, NO_FIX } from "@/components/control-notice";
 import {
   getOrg,
@@ -15,6 +14,8 @@ import { checkPermissions } from "@/lib/permission-check";
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { EmptyState } from "../../../../_components/empty-state";
 import { orgHref } from "../../../../_components/navigation";
+import { RefusedRead } from "../../../../_components/refused-read";
+import { Section } from "../../../../_components/section";
 import { ListPage } from "../../../../_components/templates/list-page";
 import { OperatorTemplates } from "../_components/operator-templates";
 import { TemplateTable } from "./_components/template-table";
@@ -54,7 +55,7 @@ export default async function AgentTemplatesPage({ params }: Params) {
       description="Starting points for new agents. An agent copies a template once, when it is created."
     >
       {organization.status === "ok" && (
-        <Section id="control-templates" title="Control service templates">
+        <Section region title="Control service templates">
           {hosted.status === "ok" ? (
             <OperatorTemplates
               org={org}
@@ -72,7 +73,7 @@ export default async function AgentTemplatesPage({ params }: Params) {
         </Section>
       )}
       <Section
-        id="archived-templates"
+        region
         title="Archived garam templates"
         count={templates.status === "ok" ? templates.data.length : undefined}
       >
@@ -84,9 +85,7 @@ export default async function AgentTemplatesPage({ params }: Params) {
         templates.status === "unreachable" ? (
           <ApiUnreachable subject="this organization's archived templates" />
         ) : templates.status === "forbidden" ? (
-          <Banner tone="info" title="Archived templates are not listed to you">
-            garam refused to show this organization&apos;s templates to you.
-          </Banner>
+          <RefusedRead subject="this organization's archived templates" />
         ) : (
           <TemplateTable
             org={org}
@@ -108,32 +107,5 @@ export default async function AgentTemplatesPage({ params }: Params) {
         )}
       </Section>
     </ListPage>
-  );
-}
-
-/** One of the page's two lists, under its heading and count. */
-function Section({
-  id,
-  title,
-  count,
-  children,
-}: {
-  id: string;
-  title: string;
-  count?: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <section aria-labelledby={id} className="flex flex-col gap-3">
-      <h2 id={id} className="flex items-baseline gap-2 text-base">
-        {title}
-        {count !== undefined && (
-          <span className="text-sm font-normal text-muted-foreground tabular-nums">
-            {count}
-          </span>
-        )}
-      </h2>
-      {children}
-    </section>
   );
 }

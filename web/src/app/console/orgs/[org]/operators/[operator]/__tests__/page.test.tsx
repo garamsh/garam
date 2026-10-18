@@ -179,7 +179,9 @@ describe("operator page", () => {
 
     await renderOperator("keys");
 
-    expect(screen.getByText("Keys are not listed to you")).toBeInTheDocument();
+    expect(
+      screen.getByText("You can't view this operator's keys"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("No keys issued")).not.toBeInTheDocument();
   });
 
@@ -378,7 +380,7 @@ describe("operator page", () => {
     await renderOperator();
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      "You cannot view this operator",
+      "You can't view this operator",
     );
   });
 

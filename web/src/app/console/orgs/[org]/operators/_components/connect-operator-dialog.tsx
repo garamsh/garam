@@ -6,6 +6,7 @@ import { useActionState, useState } from "react";
 
 import { Banner } from "@/components/banner";
 import { FormField } from "@/components/form-field";
+import { Refusal } from "@/components/refusal";
 import { SecretReveal } from "@/components/secret-reveal";
 import { Button } from "@/components/ui/button";
 import {
@@ -188,11 +189,7 @@ function RegisterStep({
           />
         )}
       </FormField>
-      {state.status === "error" && (
-        <p role="alert" className="text-destructive">
-          {state.message}
-        </p>
-      )}
+      {state.status === "error" && <Refusal>{state.message}</Refusal>}
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

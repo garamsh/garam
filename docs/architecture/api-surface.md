@@ -528,6 +528,41 @@ and not in the same place on every surface.
   A defined action paired with a resource kind none of its operations
   address is refused with 400 naming the pair, and one pair the engine
   cannot decide fails the whole request rather than answering the rest.
+- **A member may ask why, from the inputs enforcement uses.**
+  `explainPermission` takes one pair, named as `checkPermissions`
+  names one, and answers the decision `checkPermissions` answers it.
+  Where the engine's `Check` alone decides, the same statements, groups
+  and organization are put to the engine's `Explain`, which decides
+  over the set `Check` decides over
+  ([authz.md](./authz.md) §Explain), and the answer carries the
+  statements that decided: each matching Deny for a deny, each matching
+  Allow for an allow, none where nothing allows. Each is named by its
+  path to the caller — their org role, their own roles, a group's or
+  project's roles, or a policy applying org-wide, attached to them or
+  attached to a group they belong to.
+  - **A policy the caller cannot read is not described.** A policy
+    statement is named only where the caller holds `policy:read` on
+    that policy, the check `getPolicy` makes; every other one is
+    answered once as an unreadable policy with its effect alone, which
+    the decision already gives.
+  - **An action decided past `Check` is explained no further than its
+    decision**: the mint-decided actions, `operator:delegate` and
+    `agent:enroll` answer `checkPermissions`' decision with no
+    statement, since their operation is what decides. An action garam
+    does not define is answered deny as such.
+- **Who holds an action is a list read on `org:member-list`.**
+  `listPermissionHolders` puts one pair to the engine's `Check` for
+  each member and agent of the organization, each asked as enforcement
+  asks it: a member with its role-derived statements and groups, an
+  agent, which holds no role, with its groups alone. It is authorized
+  on `org:member-list`, the action `listOrgMembers` is, because the
+  answer names members; agents are asked only where the caller also
+  holds `agent:read`. A page asks at most fifty candidates — members,
+  then agents, each in GRN order — and answers those the engine allows
+  with the offset of the next page, so one request costs the engine
+  what one `checkPermissions` request does. An action decided past
+  `Check` is refused with 400, since the engine is not what decides who
+  holds it.
 
 One of ADR-0036's decisions is a commitment rather than a rule deciding
 anything today: **no surface serves a secret's value**, garam's

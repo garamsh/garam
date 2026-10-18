@@ -123,7 +123,7 @@ describe("connect operator page", () => {
     await renderPage();
 
     expect(
-      screen.getByText("You cannot set up this operator"),
+      screen.getByText("You can't view this operator or its keys"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Issue key" })).toBeNull();
   });

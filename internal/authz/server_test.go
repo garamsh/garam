@@ -26,20 +26,29 @@ import (
 // staticPolicies is a PolicySource over a fixed per-org statement set,
 // standing in for the cache the engine reads in production. Statements
 // keyed by a subject GRN stand for a policy attached to that subject.
+// Every statement is answered as held by one policy, staticPolicy.
 type staticPolicies map[grn.GRN][]authz.Statement
 
-func (p staticPolicies) Statements(_ context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Statement, error) {
-	var statements []authz.Statement
-	statements = append(statements, p[orgGRN]...)
-	for _, s := range subjects {
-		statements = append(statements, p[s]...)
+// staticPolicy is the policy staticPolicies answers as holding every
+// statement it serves.
+var staticPolicy = grn.New("acme", grn.DefaultProject, "policy", "static")
+
+func (p staticPolicies) Statements(_ context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Grant, error) {
+	var grants []authz.Grant
+	for _, st := range p[orgGRN] {
+		grants = append(grants, authz.Grant{Statement: st, Policy: staticPolicy})
 	}
-	return statements, nil
+	for _, s := range subjects {
+		for _, st := range p[s] {
+			grants = append(grants, authz.Grant{Statement: st, Policy: staticPolicy, AttachedTo: []grn.GRN{s}})
+		}
+	}
+	return grants, nil
 }
 
 // CurrentStatements answers as Statements does: storage and cache
 // agree, so CheckCurrent and Check are asked the same question.
-func (p staticPolicies) CurrentStatements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Statement, error) {
+func (p staticPolicies) CurrentStatements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Grant, error) {
 	return p.Statements(ctx, orgGRN, subjects)
 }
 
@@ -52,11 +61,11 @@ type staleCache struct {
 	currentErr error
 }
 
-func (p staleCache) Statements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Statement, error) {
+func (p staleCache) Statements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Grant, error) {
 	return p.cached.Statements(ctx, orgGRN, subjects)
 }
 
-func (p staleCache) CurrentStatements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Statement, error) {
+func (p staleCache) CurrentStatements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Grant, error) {
 	if p.currentErr != nil {
 		return nil, p.currentErr
 	}
@@ -405,6 +414,53 @@ func TestGRPCServer_ExplainTracesPersistedStatements(t *testing.T) {
 	require.Len(t, resp.GetTraces(), 2)
 	assert.Equal(t, "persisted-deny", resp.GetTraces()[0].GetSid())
 	assert.True(t, resp.GetTraces()[0].GetMatched())
+}
+
+// TestGRPCServer_ExplainNamesThePolicyAndThePathItReached holds what
+// a trace says about where a statement came from, over the real cache
+// and an in-memory store: an org-wide policy names itself and no
+// subject, one attached to the subject names the subject, one attached
+// to a group names the group, and the caller's own statement names no
+// policy. A policy attached to a group the request does not carry is
+// the control: it reaches no trace, so what admits the others is their
+// attachment rather than a cache that answers every policy.
+func TestGRPCServer_ExplainNamesThePolicyAndThePathItReached(t *testing.T) {
+	acme := orgGRN("acme")
+	alice, eng, ops := subjectGRN("alice"), groupGRN("eng"), groupGRN("ops")
+	store := newFakeStore()
+	orgWide := store.seed(t, acme, wire.PolicyStatusActive, policyDocument("org-wide", wire.EffectAllow))
+	direct := store.seed(t, acme, wire.PolicyStatusActive, policyDocument("direct", wire.EffectAllow), alice)
+	team := store.seed(t, acme, wire.PolicyStatusActive, policyDocument("team", wire.EffectDeny), eng)
+	store.seed(t, acme, wire.PolicyStatusActive, policyDocument("other-team", wire.EffectAllow), ops)
+	client := newAuthzClient(t, authz.NewPolicyCache(store))
+
+	resp, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
+		SubjectGrn:    alice.String(),
+		ObjectGrn:     acme.String(),
+		Action:        "org:read",
+		Statements:    []*authzv1.Statement{allowStatement("org-role-member", []string{"org:read"}, []string{acme.String()})},
+		SubjectGroups: []string{eng.String()},
+		SubjectOrg:    acme.String(),
+	})
+	require.NoError(t, err)
+
+	traces := map[string]*authzv1.StatementTrace{}
+	for _, tr := range resp.GetTraces() {
+		traces[tr.GetSid()] = tr
+	}
+	require.Len(t, traces, 4, "the other team's policy reaches no trace")
+	require.Contains(t, traces, "org-wide")
+	require.Contains(t, traces, "direct")
+	require.Contains(t, traces, "team")
+	require.Contains(t, traces, "org-role-member")
+	assert.Equal(t, orgWide.String(), traces["org-wide"].GetPolicyGrn())
+	assert.Empty(t, traces["org-wide"].GetAttachedTo(), "an org-wide policy reaches through no attachment")
+	assert.Equal(t, direct.String(), traces["direct"].GetPolicyGrn())
+	assert.Equal(t, []string{alice.String()}, traces["direct"].GetAttachedTo())
+	assert.Equal(t, team.String(), traces["team"].GetPolicyGrn())
+	assert.Equal(t, []string{eng.String()}, traces["team"].GetAttachedTo())
+	assert.Empty(t, traces["org-role-member"].GetPolicyGrn(), "the caller's statement is held by no policy")
+	assert.Empty(t, traces["org-role-member"].GetAttachedTo())
 }
 
 // TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset pins the

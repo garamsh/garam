@@ -13,6 +13,7 @@ import {
   ApiUnreachableReason,
 } from "@/components/api-unreachable";
 import { orgHref } from "../../../_components/navigation";
+import { RefusedRead } from "../../../_components/refused-read";
 import { ListPage } from "../../../_components/templates/list-page";
 import { ConnectOperatorDialog } from "./_components/connect-operator-dialog";
 import { OperatorTable } from "./_components/operator-table";
@@ -74,11 +75,7 @@ export default async function OperatorsPage({ params, searchParams }: Params) {
           <ApiUnreachableReason subject="this organization's operators" />
         </Banner>
       ) : operators.status === "forbidden" ? (
-        <Banner tone="info" title="Operators are not listed to you">
-          garam refused to list this organization&apos;s operators to you.
-          Access to them is granted by the organization&apos;s roles and
-          policies.
-        </Banner>
+        <RefusedRead subject="this organization's operators" />
       ) : (
         <OperatorTable
           operatorsHref={operatorsHref}

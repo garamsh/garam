@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import type { DelegatedOperator } from "@/features/orgs";
 import { FormField } from "@/components/form-field";
+import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -213,11 +214,7 @@ export function PublishTemplateForm({
         <Button type="submit" disabled={!hydrated || pending}>
           {pending ? "Publishing…" : "Publish version"}
         </Button>
-        {refusal !== null && (
-          <p role="alert" className="text-danger">
-            {refusal}
-          </p>
-        )}
+        {refusal !== null && <Refusal>{refusal}</Refusal>}
       </div>
     </form>
   );

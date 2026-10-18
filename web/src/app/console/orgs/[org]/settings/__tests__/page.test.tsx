@@ -18,6 +18,7 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   },
+  useRouter: () => ({ refresh: () => {} }),
 }));
 
 function params(org: string) {

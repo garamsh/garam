@@ -133,7 +133,9 @@ describe("agent templates view", () => {
       screen.getByRole("link", { name: "Researcher" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Archived templates are not listed to you"),
+      screen.queryByText(
+        "You can't view this organization's archived templates",
+      ),
     ).not.toBeInTheDocument();
     allowed.unmount();
 
@@ -141,7 +143,7 @@ describe("agent templates view", () => {
     await renderPage();
 
     expect(
-      screen.getByText("Archived templates are not listed to you"),
+      screen.getByText("You can't view this organization's archived templates"),
     ).toBeInTheDocument();
     expect(screen.queryByText("No archived templates")).not.toBeInTheDocument();
   });

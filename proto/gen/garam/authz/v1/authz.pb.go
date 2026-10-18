@@ -554,10 +554,18 @@ func (x *ExplainResponse) GetTraces() []*StatementTrace {
 
 // StatementTrace records one statement's contribution to a check.
 type StatementTrace struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sid           string                 `protobuf:"bytes,1,opt,name=sid,proto3" json:"sid,omitempty"`
-	Matched       bool                   `protobuf:"varint,2,opt,name=matched,proto3" json:"matched,omitempty"`
-	Effect        Effect                 `protobuf:"varint,3,opt,name=effect,proto3,enum=garam.authz.v1.Effect" json:"effect,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Sid     string                 `protobuf:"bytes,1,opt,name=sid,proto3" json:"sid,omitempty"`
+	Matched bool                   `protobuf:"varint,2,opt,name=matched,proto3" json:"matched,omitempty"`
+	Effect  Effect                 `protobuf:"varint,3,opt,name=effect,proto3,enum=garam.authz.v1.Effect" json:"effect,omitempty"`
+	// policy_grn is the persisted policy holding the statement, and empty
+	// for a statement the caller sent.
+	PolicyGrn string `protobuf:"bytes,4,opt,name=policy_grn,json=policyGrn,proto3" json:"policy_grn,omitempty"`
+	// attached_to names the subjects of the request — subject_grn or one
+	// of subject_groups — that the policy is attached to. It is empty for
+	// a policy that applies org-wide and for a statement the caller sent
+	// (ADR-0008).
+	AttachedTo    []string `protobuf:"bytes,5,rep,name=attached_to,json=attachedTo,proto3" json:"attached_to,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -613,6 +621,20 @@ func (x *StatementTrace) GetEffect() Effect {
 	return Effect_EFFECT_UNSPECIFIED
 }
 
+func (x *StatementTrace) GetPolicyGrn() string {
+	if x != nil {
+		return x.PolicyGrn
+	}
+	return ""
+}
+
+func (x *StatementTrace) GetAttachedTo() []string {
+	if x != nil {
+		return x.AttachedTo
+	}
+	return nil
+}
+
 var File_garam_authz_v1_authz_proto protoreflect.FileDescriptor
 
 const file_garam_authz_v1_authz_proto_rawDesc = "" +
@@ -665,11 +687,15 @@ const file_garam_authz_v1_authz_proto_rawDesc = "" +
 	"subjectOrg\"c\n" +
 	"\x0fExplainResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x126\n" +
-	"\x06traces\x18\x02 \x03(\v2\x1e.garam.authz.v1.StatementTraceR\x06traces\"l\n" +
+	"\x06traces\x18\x02 \x03(\v2\x1e.garam.authz.v1.StatementTraceR\x06traces\"\xac\x01\n" +
 	"\x0eStatementTrace\x12\x10\n" +
 	"\x03sid\x18\x01 \x01(\tR\x03sid\x12\x18\n" +
 	"\amatched\x18\x02 \x01(\bR\amatched\x12.\n" +
-	"\x06effect\x18\x03 \x01(\x0e2\x16.garam.authz.v1.EffectR\x06effect*C\n" +
+	"\x06effect\x18\x03 \x01(\x0e2\x16.garam.authz.v1.EffectR\x06effect\x12\x1d\n" +
+	"\n" +
+	"policy_grn\x18\x04 \x01(\tR\tpolicyGrn\x12\x1f\n" +
+	"\vattached_to\x18\x05 \x03(\tR\n" +
+	"attachedTo*C\n" +
 	"\x06Effect\x12\x16\n" +
 	"\x12EFFECT_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fEFFECT_ALLOW\x10\x01\x12\x0f\n" +

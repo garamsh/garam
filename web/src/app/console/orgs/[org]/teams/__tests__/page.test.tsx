@@ -97,7 +97,7 @@ describe("teams section", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent(
       // Presence: the notice goes on to say where access comes from.
-      /^You cannot list this organization's teams/,
+      /^You can't view this organization's teams/,
     );
     expect(
       screen.queryByText("This organization has no teams."),
@@ -185,7 +185,7 @@ describe("teams section", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent(
       // Presence: the notice goes on to say where access comes from.
-      /^You cannot list this organization's teams/,
+      /^You can't view this organization's teams/,
     );
     expect(
       screen.queryByRole("link", { name: "Create team" }),

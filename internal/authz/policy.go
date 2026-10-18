@@ -109,9 +109,10 @@ func (a *PolicyAttachment) Subject() grn.GRN     { return a.subjectGRN }
 func (a *PolicyAttachment) CreatedAt() time.Time { return a.createdAt }
 
 // ActivePolicy is one active policy's contribution to evaluation: the
-// document it evaluates and the subjects it is attached to. No
-// attachment means the policy applies org-wide (ADR-0008).
+// policy, the document it evaluates and the subjects it is attached
+// to. No attachment means the policy applies org-wide (ADR-0008).
 type ActivePolicy struct {
+	GRN      grn.GRN
 	Document PolicyDocument
 	Subjects []grn.GRN
 }

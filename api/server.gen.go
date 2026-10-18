@@ -160,6 +160,75 @@ func (e DelegatedOperation) Valid() bool {
 	}
 }
 
+// Defines values for ExplainedStatementAttachment.
+const (
+	AttachmentCaller       ExplainedStatementAttachment = "caller"
+	AttachmentGroup        ExplainedStatementAttachment = "group"
+	AttachmentOrganization ExplainedStatementAttachment = "organization"
+)
+
+// Valid indicates whether the value is a known member of the ExplainedStatementAttachment enum.
+func (e ExplainedStatementAttachment) Valid() bool {
+	switch e {
+	case AttachmentCaller:
+		return true
+	case AttachmentGroup:
+		return true
+	case AttachmentOrganization:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExplainedStatementEffect.
+const (
+	StatementEffectAllow ExplainedStatementEffect = "Allow"
+	StatementEffectDeny  ExplainedStatementEffect = "Deny"
+)
+
+// Valid indicates whether the value is a known member of the ExplainedStatementEffect enum.
+func (e ExplainedStatementEffect) Valid() bool {
+	switch e {
+	case StatementEffectAllow:
+		return true
+	case StatementEffectDeny:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExplainedStatementSource.
+const (
+	SourceDirectRole       ExplainedStatementSource = "direct-role"
+	SourceGroupRole        ExplainedStatementSource = "group-role"
+	SourceOrgRole          ExplainedStatementSource = "org-role"
+	SourcePolicy           ExplainedStatementSource = "policy"
+	SourceProjectRole      ExplainedStatementSource = "project-role"
+	SourceUnreadablePolicy ExplainedStatementSource = "unreadable-policy"
+)
+
+// Valid indicates whether the value is a known member of the ExplainedStatementSource enum.
+func (e ExplainedStatementSource) Valid() bool {
+	switch e {
+	case SourceDirectRole:
+		return true
+	case SourceGroupRole:
+		return true
+	case SourceOrgRole:
+		return true
+	case SourcePolicy:
+		return true
+	case SourceProjectRole:
+		return true
+	case SourceUnreadablePolicy:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationCreateRole.
 const (
 	InvitationCreateRoleAdmin  InvitationCreateRole = "admin"
@@ -316,6 +385,27 @@ func (e OperatorKeyState) Valid() bool {
 	}
 }
 
+// Defines values for PermissionBasis.
+const (
+	BasisOperation       PermissionBasis = "operation"
+	BasisStatements      PermissionBasis = "statements"
+	BasisUndefinedAction PermissionBasis = "undefined-action"
+)
+
+// Valid indicates whether the value is a known member of the PermissionBasis enum.
+func (e PermissionBasis) Valid() bool {
+	switch e {
+	case BasisOperation:
+		return true
+	case BasisStatements:
+		return true
+	case BasisUndefinedAction:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PermissionDecision.
 const (
 	DecisionAllow   PermissionDecision = "allow"
@@ -331,6 +421,24 @@ func (e PermissionDecision) Valid() bool {
 	case DecisionDeny:
 		return true
 	case DecisionUnknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PermissionHolderType.
+const (
+	HolderAgent PermissionHolderType = "agent"
+	HolderUser  PermissionHolderType = "user"
+)
+
+// Valid indicates whether the value is a known member of the PermissionHolderType enum.
+func (e PermissionHolderType) Valid() bool {
+	switch e {
+	case HolderAgent:
+		return true
+	case HolderUser:
 		return true
 	default:
 		return false
@@ -604,6 +712,34 @@ type Error struct {
 	// Reason A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Operator keys: `key_issuance_unconfigured`, on the 409 that refuses issuing one where this garam has no token endpoint configured. Policy documents, each with `path`: `policy_document_malformed`, `policy_document_trailing_data`, `policy_document_wrong_type`, `policy_document_unknown_key`, `policy_document_version_missing`, `policy_document_statement_empty`, `policy_document_effect_invalid`, `policy_document_action_missing`, `policy_document_resource_missing`.
 	Reason *string `json:"reason,omitempty"`
 }
+
+// ExplainedStatement One statement that decided and the path through which it reaches the caller. `source` says which fields are present: `roles` for the four role sources, `group` for `group-role`, `project` for `project-role`, and `sid`, `policy` and `attachment` for `policy` — with `group` where `attachment` is `group`. `unreadable-policy` carries `effect` alone.
+type ExplainedStatement struct {
+	// Attachment How the policy reaches the caller: it applies to the whole `organization`, is attached to the `caller`, or is attached to the `group` named beside it.
+	Attachment *ExplainedStatementAttachment `json:"attachment,omitempty"`
+	Effect     ExplainedStatementEffect      `json:"effect"`
+
+	// Group The group's slug.
+	Group *string `json:"group,omitempty"`
+
+	// Policy The policy's identifier, as `getPolicy` addresses it.
+	Policy *string `json:"policy,omitempty"`
+
+	// Project The project's slug.
+	Project *string                  `json:"project,omitempty"`
+	Roles   *[]string                `json:"roles,omitempty"`
+	Sid     *string                  `json:"sid,omitempty"`
+	Source  ExplainedStatementSource `json:"source"`
+}
+
+// ExplainedStatementAttachment How the policy reaches the caller: it applies to the whole `organization`, is attached to the `caller`, or is attached to the `group` named beside it.
+type ExplainedStatementAttachment string
+
+// ExplainedStatementEffect defines model for ExplainedStatement.Effect.
+type ExplainedStatementEffect string
+
+// ExplainedStatementSource defines model for ExplainedStatement.Source.
+type ExplainedStatementSource string
 
 // Group defines model for Group.
 type Group struct {
@@ -944,6 +1080,9 @@ type PasswordRegistration struct {
 	Username string `json:"username"`
 }
 
+// PermissionBasis `statements` is a decision the policy engine reached, explained by `statements`. `operation` is an action the operation decides past the engine's `Check`, explained no further than the decision. `undefined-action` is a name garam does not define.
+type PermissionBasis string
+
 // PermissionCheck defines model for PermissionCheck.
 type PermissionCheck struct {
 	Action string `json:"action"`
@@ -976,13 +1115,50 @@ type PermissionCheckResult struct {
 // PermissionDecision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide: a minted action whose caller check allows, leaving the delegation grant this operation does not read to decide, or an action whose enforcement this operation does not ask at all. Render the control and let the operation answer.
 type PermissionDecision string
 
+// PermissionExplanation defines model for PermissionExplanation.
+type PermissionExplanation struct {
+	Action string `json:"action"`
+
+	// Basis `statements` is a decision the policy engine reached, explained by `statements`. `operation` is an action the operation decides past the engine's `Check`, explained no further than the decision. `undefined-action` is a name garam does not define.
+	Basis PermissionBasis `json:"basis"`
+
+	// Decision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide: a minted action whose caller check allows, leaving the delegation grant this operation does not read to decide, or an action whose enforcement this operation does not ask at all. Render the control and let the operation answer.
+	Decision PermissionDecision `json:"decision"`
+
+	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it.
+	Resource *PermissionResource `json:"resource,omitempty"`
+
+	// Statements The statements that decided, where `basis` is `statements`; empty otherwise, and where nothing allows the action.
+	Statements []ExplainedStatement `json:"statements"`
+}
+
+// PermissionHolder defines model for PermissionHolder.
+type PermissionHolder struct {
+	Grn string `json:"grn"`
+
+	// Nickname A user's nickname, where its row could be read.
+	Nickname *string              `json:"nickname,omitempty"`
+	Type     PermissionHolderType `json:"type"`
+}
+
+// PermissionHolderType defines model for PermissionHolder.Type.
+type PermissionHolderType string
+
+// PermissionHolders defines model for PermissionHolders.
+type PermissionHolders struct {
+	Holders []PermissionHolder `json:"holders"`
+
+	// NextOffset The offset of the next page; absent on the last.
+	NextOffset *int `json:"nextOffset,omitempty"`
+}
+
 // PermissionResource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it.
 type PermissionResource struct {
 	Id   string                 `json:"id"`
 	Type PermissionResourceType `json:"type"`
 }
 
-// PermissionResourceType defines model for PermissionResource.Type.
+// PermissionResourceType defines model for PermissionResourceType.
 type PermissionResourceType string
 
 // Policy defines model for Policy.
@@ -1131,6 +1307,12 @@ type Org = string
 // OtherSlug defines model for other.
 type OtherSlug = string
 
+// PermissionAction defines model for permissionAction.
+type PermissionAction = string
+
+// PermissionResourceId defines model for permissionResourceId.
+type PermissionResourceId = string
+
 // PolicySlug defines model for policy.
 type PolicySlug = string
 
@@ -1210,6 +1392,34 @@ type GetOperatorDelegationParams struct {
 type WriteOperatorDelegationParams struct {
 	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
 	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
+}
+
+// ExplainPermissionParams defines parameters for ExplainPermission.
+type ExplainPermissionParams struct {
+	// Action The action asked about.
+	Action PermissionAction `form:"action" json:"action"`
+
+	// ResourceType The kind of resource asked about. Without it and `resourceId`, the organization itself.
+	ResourceType *PermissionResourceType `form:"resourceType,omitempty" json:"resourceType,omitempty"`
+
+	// ResourceId The last segment of the resource's identifier, given with `resourceType`.
+	ResourceId *PermissionResourceId `form:"resourceId,omitempty" json:"resourceId,omitempty"`
+}
+
+// ListPermissionHoldersParams defines parameters for ListPermissionHolders.
+type ListPermissionHoldersParams struct {
+	// Action The action asked about.
+	Action PermissionAction `form:"action" json:"action"`
+
+	// ResourceType The kind of resource asked about. Without it and `resourceId`, the organization itself.
+	ResourceType *PermissionResourceType `form:"resourceType,omitempty" json:"resourceType,omitempty"`
+
+	// ResourceId The last segment of the resource's identifier, given with `resourceType`.
+	ResourceId *PermissionResourceId `form:"resourceId,omitempty" json:"resourceId,omitempty"`
+
+	// Limit How many candidates to ask, from 1 to 50.
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
 // ListProjectsParams defines parameters for ListProjects.
@@ -1470,6 +1680,12 @@ type ServerInterface interface {
 	// CheckPermissions Ask whether the signed-in caller may take each of a list of actions. Requires membership.
 	// (POST /orgs/{org}/permission-checks)
 	CheckPermissions(w http.ResponseWriter, r *http.Request, org Org)
+	// ExplainPermission Explain why the signed-in caller may or may not take one action. Requires membership.
+	// (GET /orgs/{org}/permission-explanation)
+	ExplainPermission(w http.ResponseWriter, r *http.Request, org Org, params ExplainPermissionParams)
+	// ListPermissionHolders List the members and agents the engine allows one action. Requires `org:member-list`.
+	// (GET /orgs/{org}/permission-holders)
+	ListPermissionHolders(w http.ResponseWriter, r *http.Request, org Org, params ListPermissionHoldersParams)
 	// ListPolicies List an organization's policies. Requires the `admin` role.
 	// (GET /orgs/{org}/policies)
 	ListPolicies(w http.ResponseWriter, r *http.Request, org Org)
@@ -3490,6 +3706,168 @@ func (siw *ServerInterfaceWrapper) CheckPermissions(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ExplainPermission operation middleware
+func (siw *ServerInterfaceWrapper) ExplainPermission(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExplainPermissionParams
+
+	// ------------- Required query parameter "action" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resourceType" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourceType", r.URL.Query(), &params.ResourceType, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceType"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceType", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resourceId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourceId", r.URL.Query(), &params.ResourceId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExplainPermission(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListPermissionHolders operation middleware
+func (siw *ServerInterfaceWrapper) ListPermissionHolders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListPermissionHoldersParams
+
+	// ------------- Required query parameter "action" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "action", r.URL.Query(), &params.Action, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "action"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "action", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resourceType" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourceType", r.URL.Query(), &params.ResourceType, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceType"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceType", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "resourceId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "resourceId", r.URL.Query(), &params.ResourceId, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "resourceId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "resourceId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPermissionHolders(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPolicies operation middleware
 func (siw *ServerInterfaceWrapper) ListPolicies(w http.ResponseWriter, r *http.Request) {
 
@@ -4266,6 +4644,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}", wrapper.UpdateOrg)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/deletion-preview", wrapper.GetOrgDeletionPreview)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/permission-checks", wrapper.CheckPermissions)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/permission-explanation", wrapper.ExplainPermission)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/permission-holders", wrapper.ListPermissionHolders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/members", wrapper.ListOrgMembers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/groups", wrapper.CreateGroup)

@@ -46,9 +46,11 @@ var (
 	ErrUnsupportedAdmissionContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: this route serves "+AdmissionContractVersion)
 	// ErrDirectPlacementRequiresAdministratorApproval refuses direct
-	// placement under this contract: a direct agent's authority is an
-	// administrator's agent:enroll approval and a supervisor registered
-	// for that one agent, never an operator (ADR-0111).
+	// placement under this contract, permanently: a direct agent's
+	// authority is an administrator's agent:enroll approval and a
+	// supervisor registered for that one agent, never an operator
+	// (ADR-0111). The wire keeps the reason v1 shipped it under,
+	// direct_placement_gated.
 	ErrDirectPlacementRequiresAdministratorApproval = errorx.New(errorx.KindFailedPrecondition,
 		"direct placement is admitted by an administrator's approval of a standalone host, not under "+
 			AdmissionContractVersion)

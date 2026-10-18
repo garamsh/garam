@@ -457,9 +457,9 @@ directory, written owner-only by the supervisor.
   registration, which §Decision describes, is therefore the standalone
   approval spent under `standalone-enrollment.v2`. It now records
   `placement: direct` (`migrations/000053`), and `agent-enrollment.v1`
-  refuses direct placement with the permanent reason
-  `direct_placement_requires_administrator_approval` instead of the
-  gate. The decision stands: the assignee is an ADR-0082 supervisor
+  refuses direct placement for good, under the reason it shipped with,
+  `direct_placement_gated`, which no longer means "not yet". The
+  decision stands: the assignee is an ADR-0082 supervisor
   registration for the one agent, admitted through `admit`.
 - 2026-10-18 — §Cases' "Replacement to another authority" row rests on
   the new authority's first activation succeeding once the runtime

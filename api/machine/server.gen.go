@@ -864,7 +864,7 @@ type Error struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
 
-	// Reason Which refusal this is, where the kind alone does not say, set only on a route whose contract lists its reasons (ADR-0086) and absent everywhere else. The `agent-cutover.v1` routes set `digest_mismatch`, `attempt_open`, `attempt_ended`, `not_cut_over_eligible` or `reverse_migration_required`; `activateAgent` sets `cutover_required` and nothing else; the `agent-enrollment.v1` routes set `binding_conflict`, `approval_spent`, `superseded` or `direct_placement_requires_administrator_approval`. Branch on it only on those routes; a new reason is a new contract value.
+	// Reason Which refusal this is, where the kind alone does not say, set only on a route whose contract lists its reasons (ADR-0086) and absent everywhere else. The `agent-cutover.v1` routes set `digest_mismatch`, `attempt_open`, `attempt_ended`, `not_cut_over_eligible` or `reverse_migration_required`; `activateAgent` sets `cutover_required` and nothing else; the `agent-enrollment.v1` routes set `binding_conflict`, `approval_spent`, `superseded` or `direct_placement_gated`. Branch on it only on those routes; a new reason is a new contract value.
 	Reason *string `json:"reason,omitempty"`
 }
 

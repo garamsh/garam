@@ -83,10 +83,11 @@ is admitted by a standalone approval that names it, not by
   `admitAgentEnrollment`, served to a token alone, whose managed and
   direct cases differ by placement; it allocates no workload and
   activates nothing, and only managed placement admits. Its refusals
-  name a `reason`, and direct placement's is
-  `direct_placement_requires_administrator_approval`, since
-  `approveAgentEnrollment` with `placement: direct` is what admits it. The managed/standalone v1/v2 paths keep their
-  approval bindings, retry behavior and refusal semantics.
+  name a `reason`. Direct placement's is `direct_placement_gated`, and
+  it is permanent, since `approveAgentEnrollment` with
+  `placement: direct` is what admits a direct agent. The
+  managed/standalone v1/v2 paths keep their approval bindings, retry
+  behavior and refusal semantics.
 
 [agents.md](./agents.md) §Common managed and direct enrollment owns
 admission; [operators.md](./operators.md) §Issued PEM identity owns

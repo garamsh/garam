@@ -171,9 +171,9 @@ and §Standalone hosts describe the older cohorts, which stay served.
   activation `activateAgent`, unchanged. `AdmissionService`
   (`internal/agent/admission_service.go`) holds both stages. It admits
   managed placement alone, and refuses direct placement with the
-  reason `direct_placement_requires_administrator_approval`: a direct
-  agent's authority is an administrator and a one-agent supervisor,
-  never an operator.
+  reason `direct_placement_gated`, permanently: a direct agent's
+  authority is an administrator and a one-agent supervisor, never an
+  operator.
 - **A managed replacement rests on `agent:replace`.** An owner's or
   administrator's reference names the agent, the assignment it is on
   and the controller it moves to, and the hosted service's grant

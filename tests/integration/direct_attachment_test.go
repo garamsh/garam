@@ -503,7 +503,7 @@ func TestDirectAttachment_AdmissionIsTheAdministratorsAndNeverAnOperators(t *tes
 	ref := s.creationRef(t, s.member, "enrol-1")
 	got := s.prepare(t, bindingBody("enrol-1", "direct", s.controller, ref, nil))
 	assert.Equal(t, http.StatusConflict, got.status, got.body)
-	assert.Equal(t, "direct_placement_requires_administrator_approval", reasonOf(t, got))
+	assert.Equal(t, "direct_placement_gated", reasonOf(t, got))
 
 	h := newStandaloneHost(t)
 	keyed := map[string]any{}

@@ -159,22 +159,15 @@ func (s *supervisorService) RenewSupervisor(ctx context.Context, caller grn.GRN,
 		return nil, false, errorx.New(errorx.KindInvalidArgument, "certificate request exceeds its bound")
 	}
 	req := SupervisorRenewal{Supervisor: caller, Presented: presented, RequestID: requestID, RequestSHA256: sha256.Sum256(requestPEM)}
-	// A certificate that already renewed is answered from the record
-	// before anything is signed again.
-	recorded, err := s.store.GetRenewal(ctx, caller, presented.Serial)
+	// Only the certificate garam last issued is signed a successor.
+	// Any other is the store's to answer again or refuse under the
+	// lock, because an identical renewal may have moved the
+	// registration since this read (#1509).
+	registered, err := s.store.GetSupervisor(ctx, caller)
 	if err != nil {
 		return nil, false, err
 	}
-	if recorded == nil {
-		// Only the certificate garam last issued renews; any other is
-		// refused before anything is signed.
-		registered, err := s.store.GetSupervisor(ctx, caller)
-		if err != nil {
-			return nil, false, err
-		}
-		if registered.Certificate == nil || registered.Certificate.Serial != presented.Serial {
-			return nil, false, ErrRenewalConflict
-		}
+	if registered.Certificate != nil && registered.Certificate.Serial == presented.Serial {
 		lifetime := presented.NotAfter.Sub(presented.NotBefore)
 		if presented.NotAfter.Sub(s.now()) > lifetime/3 {
 			return nil, false, ErrRenewalTooEarly

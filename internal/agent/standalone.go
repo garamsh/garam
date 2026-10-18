@@ -278,8 +278,8 @@ type Supervisor struct {
 }
 
 // SupervisorRenewal is a renewal the service admitted, as the store
-// applies it. Signed is nil when only a recorded renewal is to be
-// answered again.
+// applies it. Signed is nil when the presented certificate was not the
+// current one, which the store only answers again or refuses.
 type SupervisorRenewal struct {
 	Supervisor    grn.GRN
 	Presented     Credential

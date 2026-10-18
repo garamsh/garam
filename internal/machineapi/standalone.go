@@ -12,6 +12,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/internal/audit"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/machine"
 )
@@ -69,9 +70,12 @@ func (s *Server) EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, p
 		Secret: secret, RequestID: requestID, Body: raw, Requests: requests,
 	})
 	if err != nil {
+		// A refused enrollment names no subject garam can attribute it
+		// to: the bootstrap secret is what names one (ADR-0114).
 		writeCertificateRequestError(w, r, err)
 		return
 	}
+	s.auditEnrollment(r, result, created)
 	out := machinegen.StandaloneEnrollment{
 		Grn: result.Agent.String(), SupervisorGrn: result.Supervisor.String(),
 		Epoch: strconv.Itoa(result.Epoch), Lineage: openapi_types.UUID(result.Lineage),
@@ -89,6 +93,20 @@ func (s *Server) EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, p
 		out.ReplacesActivationId = &id
 	}
 	writeJSON(w, createdOrReplayed(created), out)
+}
+
+// auditEnrollment records what a standalone enrollment issued its
+// supervisor: certificates under standalone-enrollment.v1, where a
+// replay answers the ones an earlier spending signed, or a credential
+// under v2, which every answer issues afresh (ADR-0100).
+func (s *Server) auditEnrollment(r *http.Request, result *agent.EnrollmentResult, created bool) {
+	if c := result.Certificates; c != nil {
+		s.issuedCertificate(r, result.Supervisor, audit.CredentialSupervisorCertificate, audit.ActionIssue,
+			c.SupervisorCertificatePEM, !created)
+		return
+	}
+	s.auditCredential(r, audit.CredentialIssued(result.Supervisor, audit.CredentialSupervisorCredential,
+		audit.ActionIssue, "", audit.Validity{}, false))
 }
 
 // certificateRequestsOf parses the certificate requests an enrollment
@@ -137,9 +155,12 @@ func (s *Server) RenewSupervisorCertificate(w http.ResponseWriter, r *http.Reque
 	presented := agent.Credential{Serial: identity.Serial(), NotBefore: identity.NotBefore(), NotAfter: identity.NotAfter()}
 	issued, created, err := s.supervisors.RenewSupervisor(r.Context(), identity.GRN(), presented, requestID, []byte(body.CertificateRequestPem))
 	if err != nil {
+		s.refusedCredential(r, identity.GRN(), audit.CredentialSupervisorCertificate, audit.ActionRenew, err)
 		writeCertificateRequestError(w, r, err)
 		return
 	}
+	s.issuedCertificate(r, identity.GRN(), audit.CredentialSupervisorCertificate, audit.ActionRenew,
+		issued.CertificatePEM, !created)
 	writeJSON(w, createdOrReplayed(created), machinegen.InitialCertificate{
 		CertificatePem: issued.CertificatePEM, IssuerPem: issued.IssuerPEM,
 		ServerRootPem: issued.ServerRootPEM, NotAfter: issued.NotAfter.UTC(),

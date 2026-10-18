@@ -889,3 +889,10 @@ ADRs:
   ADR-0103's visual system stays; unbuilt, and the API for explaining
   access and the source of Home's feed and the timeline are open;
   supersedes 0103 in part
+- [0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)
+  — every issuance, renewal and refusal of an operator's or a
+  supervisor's certificate or credential, an operator enrollment token
+  or an agent token is an audit event with no secret material,
+  recorded by the route that answered after the outcome and read per
+  subject on that subject's own read; agent certificates and token
+  exchanges are not recorded yet

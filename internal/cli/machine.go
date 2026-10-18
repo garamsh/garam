@@ -17,6 +17,7 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
+	auditpg "github.com/garamsh/garam/internal/audit/postgres"
 	"github.com/garamsh/garam/internal/ca"
 	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
@@ -297,7 +298,8 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			authority, identities, newProofService(pool, cfg.Engine, cfg.Now),
 			newExecutionService(pool, cfg.Engine, authority, identities, issuer, cfg.ServerRoot, cfg.Now),
 			newSupervisorService(pool, cfg.Engine, issuer, cfg.ServerRoot, cfg.Now),
-			newAdmissionService(pool, authority, cfg.Now), keyring),
+			newAdmissionService(pool, authority, cfg.Now), keyring).
+			WithCredentialAudit(auditpg.NewCredentialStore(pool)),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineTokens, machineapi.ConfineSupervisors, machineapi.RecoverPanics,
 				obs.logMachineRequests, countMachineRequests(requests), countTokenExchanges(exchanges), recordIssuances(evidence)},

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/audit"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 )
@@ -54,9 +55,15 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 	}
 	registered, err := s.operators.Register(r.Context(), o, enrollment, credential)
 	if err != nil {
+		// A registration issues both, so its refusal refuses both.
+		s.refusedCredential(r, o.GRN(), audit.CredentialOperatorEnrollmentToken, err)
+		s.refusedCredential(r, o.GRN(), audit.CredentialOperatorCredential, err)
 		writeError(w, err)
 		return
 	}
+	s.issuedEnrollment(r, enrollment)
+	s.auditCredential(r, audit.CredentialIssued(o.GRN(), audit.CredentialOperatorCredential, audit.ActionIssue, "",
+		audit.Validity{NotBefore: credential.IssuedAt()}, false))
 	writeJSON(w, http.StatusCreated, apigen.RegisteredOperator{
 		Operator: operatorToAPI(registered),
 		Enrollment: apigen.OperatorEnrollment{
@@ -95,10 +102,20 @@ func (s *Server) ReissueOperatorCredential(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := s.operators.ReissueCredential(r.Context(), credential); err != nil {
+		s.refusedCredential(r, g, audit.CredentialOperatorCredential, err)
 		writeError(w, err)
 		return
 	}
+	s.auditCredential(r, audit.CredentialIssued(g, audit.CredentialOperatorCredential, audit.ActionIssue, "",
+		audit.Validity{NotBefore: credential.IssuedAt()}, false))
 	writeJSON(w, http.StatusCreated, credentialToAPI(credential))
+}
+
+// issuedEnrollment records the enrollment token e minted: when it was
+// minted and until when it is spendable, and never the token.
+func (s *Server) issuedEnrollment(r *http.Request, e *operator.Enrollment) {
+	s.auditCredential(r, audit.CredentialIssued(e.Operator(), audit.CredentialOperatorEnrollmentToken, audit.ActionIssue, "",
+		audit.Validity{NotBefore: e.MintedAt(), NotAfter: e.ExpiresAt()}, false))
 }
 
 func credentialToAPI(c *operator.IssuedCredential) apigen.OperatorCredential {
@@ -138,9 +155,11 @@ func (s *Server) MintOperatorEnrollment(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	if err := s.operators.Remint(r.Context(), enrollment); err != nil {
+		s.refusedCredential(r, g, audit.CredentialOperatorEnrollmentToken, err)
 		writeError(w, err)
 		return
 	}
+	s.issuedEnrollment(r, enrollment)
 	writeJSON(w, http.StatusCreated, apigen.OperatorEnrollment{
 		Token:     enrollment.Token(),
 		ExpiresAt: enrollment.ExpiresAt(),

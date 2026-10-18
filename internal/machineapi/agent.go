@@ -6,6 +6,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/internal/audit"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
@@ -170,9 +171,12 @@ func (s *Server) MintAgentToken(w http.ResponseWriter, r *http.Request, agentGRN
 	}
 	token, err := s.agents.MintAccessToken(r.Context(), caller, subject, audience)
 	if err != nil {
+		s.refusedCredential(r, subject, audit.CredentialAgentToken, audit.ActionIssue, err)
 		writeError(w, err)
 		return
 	}
+	s.auditCredential(r, audit.CredentialIssued(token.Agent, audit.CredentialAgentToken, audit.ActionIssue, "",
+		audit.Validity{NotBefore: token.IssuedAt, NotAfter: token.ExpiresAt}, false))
 	machine.ReportIssuance(r, machine.Issuance{Subject: token.Agent, Audience: token.Audience != nil, Until: token.ExpiresAt})
 	answer := machinegen.AgentToken{Token: token.Value, Grn: token.Agent.String(), Epoch: token.Epoch,
 		ExpiresAt: token.ExpiresAt, ServerRootPem: string(token.ServerRootPEM)}

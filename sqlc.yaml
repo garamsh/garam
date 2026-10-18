@@ -117,6 +117,7 @@ sql:
     schema:
       - migrations/000001_init.up.sql
       - migrations/000050_audit_send_events.up.sql
+      - migrations/000054_audit_credential_events.up.sql
     queries: internal/audit/postgres/queries.sql
     gen:
       go:

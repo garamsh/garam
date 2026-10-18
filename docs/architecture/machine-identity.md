@@ -341,6 +341,38 @@ covers what records that.
   in and for what an idle caller looks like: a registered row with
   every path empty.
 
+## Credential events
+
+**Built** ([ADR-0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)).
+Every issuance, renewal and refusal of an operator certificate,
+operator credential, operator enrollment token, supervisor certificate,
+supervisor credential or agent token is one row of
+`audit_credential_events` (`migrations/000054`), held by the audit
+domain ([audit.md](./audit.md)). Unlike the evidence above, it is a
+record and not a sampling: one row per answer, none coalesced.
+
+- **What a row says.** The subject, the credential, `issue` or `renew`,
+  issued or refused, whether an issued answer replayed an earlier
+  identical one, a refusal's error kind, and for a certificate the
+  serial and validity read off the certificate answered; for a token
+  or enrollment token, when it was minted and until when it is
+  accepted. No column holds a key, token, credential or certificate.
+- **Where it is written.** `EnrollOperator`, `RenewIdentityCertificate`,
+  `EnrollStandaloneAgent`, `RenewSupervisorCertificate` and
+  `MintAgentToken` on this listener, and `registerOperator`,
+  `mintOperatorEnrollment` and `reissueOperatorCredential` on the
+  browser-facing one, after the outcome and before the answer, through
+  the `CredentialAudit` port each declares (`WithCredentialAudit`). A
+  write that fails is logged with the event's fields and the answer
+  stands.
+- **What it does not record.** A refusal no subject is attributable
+  to — an enrollment whose token or bootstrap secret did not resolve —
+  and a refusal of the member asking. Agent certificates and token
+  exchanges are not recorded yet.
+- **The read is `listCredentialEvents`** on the browser-facing
+  listener, one subject at a time, newest first, on that subject's own
+  read ([api-surface.md](./api-surface.md) §What decides the rest).
+
 ## Generation and lineage
 
 **garam's half is built, and so is the adapter's.** A fenced adapter

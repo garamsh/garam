@@ -8,6 +8,21 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type AuditCredentialEvent struct {
+	ID         int64
+	SubjectGrn string
+	OrgGrn     string
+	Credential string
+	Action     string
+	Outcome    string
+	Replay     bool
+	Reason     pgtype.Text
+	Serial     pgtype.Text
+	NotBefore  pgtype.Timestamptz
+	NotAfter   pgtype.Timestamptz
+	RecordedAt pgtype.Timestamptz
+}
+
 type AuditSendEvent struct {
 	ID               int64
 	SenderGrn        string

@@ -196,8 +196,11 @@ The rest of the shell, and where each part is decided:
   by ⌘K, Ctrl+K or `/`
   (`web/src/app/console/_components/command-palette.tsx`). It finds
   the organization's people, agents, teams, policies and projects by
-  name once something is typed, read from their lists by the
-  organization's layout, and reaches the sections the caller may read,
+  name once something is typed and typing rests, through a Server
+  Action that reads their lists then and answers five of each kind
+  with a link to the list for the rest
+  (`web/src/features/orgs/api/search-org-objects.ts`); no page load
+  reads them for it. It also reaches the sections the caller may read,
   the page's actions, the caller's organizations and the theme. `.`
   opens it on the page's actions alone, each with its consequence in
   one line: a confirmation dialog given a `command` lists itself while

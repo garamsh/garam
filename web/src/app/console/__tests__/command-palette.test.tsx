@@ -1,11 +1,14 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ActionDialog } from "@/app/console/_components/action-dialog";
 import { CommandPalette } from "@/app/console/_components/command-palette";
 import { ReportOrgShell } from "@/app/console/_components/org-shell";
 import { Button } from "@/components/ui/button";
+import { API_URL, aliceMembership } from "@/testing/mocks/handlers";
+import { server } from "@/testing/setup";
 import { stubLocalStorage } from "@/testing/storage";
 
 const route = vi.hoisted(() => ({
@@ -168,7 +171,11 @@ describe("command palette", () => {
     expect(
       screen.queryByRole("option", { name: "Templates" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByText("Nothing matches that.")).toBeInTheDocument();
+    // The organization's objects are searched too, so the answer waits
+    // on that search.
+    expect(
+      await screen.findByText("Nothing matches that."),
+    ).toBeInTheDocument();
   });
 
   it("says which keys open, move and close", async () => {
@@ -227,42 +234,27 @@ describe("command palette", () => {
     expect(document.documentElement).toHaveClass("dark");
   });
 
-  it("finds the organization's people, agents and teams by name once something is typed", async () => {
+  it("searches the organization's objects by name once something is typed, and reads none before", async () => {
+    const asked: string[] = [];
+    server.events.on("request:start", ({ request }) => {
+      asked.push(new URL(request.url).pathname);
+    });
     const user = userEvent.setup();
-    render(
-      <>
-        <ReportOrgShell
-          org="acme"
-          role={null}
-          hidden={[]}
-          objects={[
-            {
-              kind: "agent",
-              name: "Scout",
-              identifier: "9f2ac1b40d8e7a35",
-              segment: "agents/9f2ac1b40d8e7a35",
-            },
-            {
-              kind: "team",
-              name: "Engineering",
-              identifier: "eng",
-              segment: "teams/eng",
-            },
-          ]}
-        />
-        <CommandPalette orgs={orgs} />
-      </>,
-    );
+    renderPalette();
 
     await openPalette(user);
-    // Found, not browsed: nothing typed lists no object.
+    // Past the 200 ms the palette lets typing rest before it asks, so
+    // a search it ran without anything typed would have been sent.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+    // Found, not browsed: nothing typed reads and lists no object.
+    expect(asked).toEqual([]);
     expect(
       screen.queryByRole("option", { name: /Scout/ }),
     ).not.toBeInTheDocument();
 
     await user.type(screen.getByRole("combobox"), "sco");
     // Presence: the option's name is the object's and its identifier.
-    expect(screen.getByRole("option", { name: /Scout/ })).toBeVisible();
+    expect(await screen.findByRole("option", { name: /Scout/ })).toBeVisible();
     expect(
       screen.queryByRole("option", { name: /Engineering/ }),
     ).not.toBeInTheDocument();
@@ -273,16 +265,38 @@ describe("command palette", () => {
     );
   });
 
+  it("answers a few of each kind and links the list for the rest", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/members`, () =>
+        HttpResponse.json(
+          Array.from({ length: 7 }, (_, index) => ({
+            ...aliceMembership,
+            userGrn: `grn:root:default:user:sam-${index}`,
+            nickname: `Sam ${index}`,
+          })),
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPalette();
+
+    await openPalette(user);
+    await user.type(screen.getByRole("combobox"), "sam");
+
+    await screen.findByRole("option", { name: /^Sam 0/ });
+    expect(screen.getAllByRole("option", { name: /^Sam \d/ })).toHaveLength(5);
+    await user.click(screen.getByRole("option", { name: "2 more in people…" }));
+
+    expect(route.push).toHaveBeenCalledWith(
+      "/console/orgs/acme/members?kind=person",
+    );
+  });
+
   it("offers no section the server denies the caller", async () => {
     const user = userEvent.setup();
     render(
       <>
-        <ReportOrgShell
-          org="acme"
-          role={null}
-          hidden={["permissions"]}
-          objects={[]}
-        />
+        <ReportOrgShell org="acme" role={null} hidden={["permissions"]} />
         <CommandPalette orgs={orgs} />
       </>,
     );

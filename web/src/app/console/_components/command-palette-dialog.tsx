@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   Command,
@@ -24,35 +24,99 @@ import {
 } from "@/components/ui/command";
 import { Kbd } from "@/components/ui/kbd";
 import { MemberMark } from "@/components/member-mark";
+import {
+  searchOrgObjects,
+  type FoundKind,
+  type FoundObject,
+  type ObjectSearch,
+} from "@/features/orgs/actions";
 import { useTheme } from "@/hooks/use-theme";
 
 import { CONSOLE_NAV_ENTRIES, orgHref, type ConsoleOrg } from "./navigation";
-import { useOrgShell, type PaletteObject } from "./org-shell";
+import { useOrgShell } from "./org-shell";
 import { usePageActions } from "./page-actions";
 
-/** The palette's groups of objects, in the order they are listed. */
-const OBJECT_GROUPS: readonly {
-  kind: PaletteObject["kind"];
-  heading: string;
-}[] = [
-  { kind: "person", heading: "People" },
-  { kind: "agent", heading: "Agents" },
-  { kind: "team", heading: "Teams" },
-  { kind: "policy", heading: "Policies" },
-  { kind: "project", heading: "Projects" },
-];
+/**
+ * How each kind found is listed: its heading, where one opens, and the
+ * list page that holds the rest.
+ */
+const OBJECT_KIND: Record<
+  FoundKind,
+  { heading: string; open: (id: string) => string; list: string }
+> = {
+  person: {
+    heading: "People",
+    open: (id) => `members/${id}`,
+    list: "members?kind=person",
+  },
+  agent: {
+    heading: "Agents",
+    open: (id) => `agents/${id}`,
+    list: "members?kind=agent",
+  },
+  team: { heading: "Teams", open: (id) => `teams/${id}`, list: "teams" },
+  policy: {
+    heading: "Policies",
+    open: (id) => `permissions/${id}`,
+    list: "permissions",
+  },
+  project: {
+    heading: "Projects",
+    open: (id) => `projects/${id}`,
+    list: "projects",
+  },
+};
 
-/** An object's mark: a member's shape, or its section's icon. */
-function ObjectMark({ object }: { object: PaletteObject }) {
-  switch (object.kind) {
+/** How long typing rests before the palette asks garam. */
+const SEARCH_DELAY_MS = 200;
+
+/**
+ * Searches the organization's objects once something is typed and
+ * typing rests, and answers only for what is typed now: an answer to
+ * an earlier query is never shown under a later one.
+ */
+function useObjectSearch(org: string | null, query: string) {
+  const term = query.trim();
+  const [answer, setAnswer] = useState<{
+    term: string;
+    search: ObjectSearch;
+  } | null>(null);
+  useEffect(() => {
+    if (org === null || term === "") return;
+    let live = true;
+    const timer = setTimeout(() => {
+      searchOrgObjects(org, term).then(
+        (search) => live && setAnswer({ term, search }),
+        () => live && setAnswer({ term, search: { status: "unanswered" } }),
+      );
+    }, SEARCH_DELAY_MS);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [org, term]);
+  const search = answer?.term === term ? answer.search : null;
+  return {
+    searching: org !== null && term !== "" && search === null,
+    search,
+  };
+}
+
+/** A found object's mark: a member's shape, or its section's icon. */
+function ObjectMark({
+  kind,
+  object,
+}: {
+  kind: FoundKind;
+  object: FoundObject;
+}) {
+  switch (kind) {
     case "policy":
       return <ShieldCheck />;
     case "project":
       return <FolderGit2 />;
     default:
-      return (
-        <MemberMark kind={object.kind} name={object.name} className="size-5" />
-      );
+      return <MemberMark kind={kind} name={object.name} className="size-5" />;
   }
 }
 
@@ -116,8 +180,11 @@ export function CommandPaletteDialog({
     ? CONSOLE_NAV_ENTRIES.filter((entry) => !hidden.has(entry.key))
     : [];
   // Objects are found, not browsed: an organization lists too many to
-  // scroll, so they are offered once something is typed.
-  const objects = org && search.trim() ? (shell?.objects ?? []) : [];
+  // scroll, so they are searched for once something is typed.
+  const { searching, search: found } = useObjectSearch(
+    actionsOnly ? null : org,
+    search,
+  );
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -161,7 +228,9 @@ export function CommandPaletteDialog({
               <CommandEmpty>
                 {actionsOnly && actions.length === 0
                   ? "This page offers no actions here."
-                  : "Nothing matches that."}
+                  : searching
+                    ? "Searching…"
+                    : "Nothing matches that."}
               </CommandEmpty>
               {actions.length > 0 && (
                 <CommandGroup heading="Actions on this page">
@@ -184,37 +253,67 @@ export function CommandPaletteDialog({
                   ))}
                 </CommandGroup>
               )}
-              {!actionsOnly &&
-                org &&
-                OBJECT_GROUPS.map(({ kind, heading }) => {
-                  const found = objects.filter(
-                    (object) => object.kind === kind,
-                  );
-                  return (
-                    found.length > 0 && (
-                      <CommandGroup key={kind} heading={heading}>
-                        {found.map((object) => (
+              {org &&
+                found?.status === "ok" &&
+                found.found.map(
+                  ({ kind, objects, more }) =>
+                    objects.length > 0 && (
+                      <CommandGroup
+                        key={kind}
+                        heading={OBJECT_KIND[kind].heading}
+                      >
+                        {objects.map((object) => (
                           <CommandItem
                             key={`${kind} ${object.identifier}`}
                             value={`${kind} ${object.identifier}`}
                             keywords={[object.name, object.identifier]}
                             onSelect={() =>
                               run(() =>
-                                router.push(orgHref(org, object.segment)),
+                                router.push(
+                                  orgHref(
+                                    org,
+                                    OBJECT_KIND[kind].open(object.identifier),
+                                  ),
+                                ),
                               )
                             }
                           >
-                            <ObjectMark object={object} />
+                            <ObjectMark kind={kind} object={object} />
                             <span className="truncate">{object.name}</span>
                             <span className="ml-auto font-mono text-xs text-muted-foreground">
                               {object.identifier}
                             </span>
                           </CommandItem>
                         ))}
+                        {more > 0 && (
+                          <CommandItem
+                            value={`more ${kind}`}
+                            // Matched by what was typed, which found them.
+                            keywords={[search.trim()]}
+                            onSelect={() =>
+                              run(() =>
+                                router.push(
+                                  orgHref(org, OBJECT_KIND[kind].list),
+                                ),
+                              )
+                            }
+                            className="text-muted-foreground"
+                          >
+                            {more} more in{" "}
+                            {OBJECT_KIND[kind].heading.toLowerCase()}…
+                          </CommandItem>
+                        )}
                       </CommandGroup>
-                    )
-                  );
-                })}
+                    ),
+                )}
+              {found?.status === "unanswered" && (
+                <p
+                  role="status"
+                  className="px-2 py-1.5 text-sm text-muted-foreground"
+                >
+                  garam didn&apos;t answer the search.
+                </p>
+              )}
               {!actionsOnly && sections.length > 0 && org && (
                 <CommandGroup heading="Go to">
                   {sections.map((entry) => (

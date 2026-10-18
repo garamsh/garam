@@ -1,4 +1,4 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -37,18 +37,7 @@ function RoleProbe() {
 
 function ShellProbe() {
   const shell = useOrgShell();
-  return (
-    <>
-      <p>Hidden: {shell?.hidden.join(", ") || "none"}</p>
-      <ul aria-label="Objects">
-        {shell?.objects.map((object) => (
-          <li key={`${object.kind} ${object.identifier}`}>
-            {object.kind}: {object.name} at {object.segment}
-          </li>
-        ))}
-      </ul>
-    </>
-  );
+  return <p>Hidden: {shell?.hidden.join(", ") || "none"}</p>;
 }
 
 async function renderRead(pathname = "/console/orgs/acme") {
@@ -194,37 +183,19 @@ describe("the sections the shell leaves out", () => {
   });
 });
 
-describe("what the palette finds", () => {
-  it("is the people, agents, teams, policies and projects the caller can list", async () => {
-    await renderRead();
-
-    const objects = screen.getByRole("list", { name: "Objects" });
-    for (const text of [
-      "person: Alice at members/alice",
-      "agent: Scout at agents/9f2ac1b40d8e7a35",
-      "agent: Unnamed agent at agents/1c3d5e7f90a2b4c6",
-      "team: Engineering at teams/eng",
-      "policy: Deny project deletion at permissions/d1e2f3a4b5c6d7e8",
-      "project: Frontend at projects/frontend",
-    ]) {
-      expect(within(objects).getByText(text)).toBeInTheDocument();
-    }
-  });
-
-  it("leaves out a list the server refuses and keeps the rest", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/groups`, () =>
-        HttpResponse.json({ message: "forbidden" }, { status: 403 }),
-      ),
-    );
+describe("what the shell reads", () => {
+  it("is the role and one permission check, and no object list", async () => {
+    const asked: string[] = [];
+    server.events.on("request:start", ({ request }) => {
+      asked.push(`${request.method} ${new URL(request.url).pathname}`);
+    });
 
     await renderRead();
 
-    const objects = screen.getByRole("list", { name: "Objects" });
-    expect(within(objects).queryByText(/^team:/)).not.toBeInTheDocument();
-    // Control: the refusal took the teams and nothing else.
-    expect(
-      within(objects).getByText("person: Alice at members/alice"),
-    ).toBeInTheDocument();
+    expect([...asked].sort()).toEqual([
+      "GET /me",
+      "GET /orgs/acme/members",
+      "POST /orgs/acme/permission-checks",
+    ]);
   });
 });

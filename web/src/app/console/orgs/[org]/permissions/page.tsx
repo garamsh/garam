@@ -10,7 +10,7 @@ import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { NEW_ITEM, orgHref } from "../../../_components/navigation";
 import { ListPage } from "../../../_components/templates/list-page";
 import { PermissionsViews } from "./_components/permissions-views";
-import { PoliciesRefused } from "./_components/policies-refused";
+import { RefusedRead } from "../../../_components/refused-read";
 import { PolicyTable } from "./_components/policy-table";
 
 /** Head metadata for the permissions route; Next.js reads it by name. */
@@ -56,7 +56,7 @@ export default async function PermissionsPage({ params }: Params) {
       policies.status === "unreachable" ? (
         <ApiUnreachable subject="this organization's policies" />
       ) : listed === null ? (
-        <PoliciesRefused />
+        <RefusedRead subject="this organization's policies" />
       ) : (
         <PolicyTable
           rows={listed.map((policy) => {

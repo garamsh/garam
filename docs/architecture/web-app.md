@@ -448,7 +448,12 @@ below stays as it is under Roster.
   for a secret shown once, a destructive action, lifecycle stages, the
   policy editor, the operator onboarding wizard and feedback. Success
   shows inline and an error attaches to its field, with no error
-  toasts.
+  toasts. Every write confirmed in a dialog goes through
+  `web/src/app/console/_components/action-dialog.tsx`, which stays
+  open until garam answers, keeps a refusal until it closes and, for
+  an act nothing undoes, asks for a typed name. A read garam refused is
+  said by `web/src/app/console/_components/refused-read.tsx`, in one
+  wording.
 - **Component base.** shadcn/ui stays on Radix. Base UI is declined
   for now, for the reasons ADR-0103 §Component base gives.
 

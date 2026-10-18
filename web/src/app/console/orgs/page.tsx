@@ -8,10 +8,13 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { ApiUnreachable } from "../_components/api-unreachable";
 import { listConsoleOrgs } from "../_components/console-orgs";
 import { EmptyState } from "../_components/empty-state";
-import { PageHeader } from "../_components/page-header";
+import { ListPage } from "../_components/templates/list-page";
 
 /** Head metadata for the organizations route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Organizations — garam" };
+
+const TITLE = "Organizations";
+const DESCRIPTION = "The organizations you belong to.";
 
 /** The console's first screen: every organization the caller belongs to. */
 export default async function OrgsPage() {
@@ -19,27 +22,22 @@ export default async function OrgsPage() {
 
   if (orgs.status === "unreachable") {
     return (
-      <>
-        <PageHeader
-          title="Organizations"
-          description="The organizations you belong to."
-        />
+      <ListPage title={TITLE} description={DESCRIPTION}>
         <ApiUnreachable subject="your organizations" />
-      </>
+      </ListPage>
     );
   }
 
   return (
-    <>
-      <PageHeader
-        title="Organizations"
-        description="The organizations you belong to."
-      >
+    <ListPage
+      title={TITLE}
+      description={DESCRIPTION}
+      primaryAction={
         <Button asChild>
           <Link href="/console/orgs/new">New organization</Link>
         </Button>
-      </PageHeader>
-
+      }
+    >
       {orgs.orgs.length === 0 ? (
         <EmptyState
           icon={Building2}
@@ -62,6 +60,6 @@ export default async function OrgsPage() {
           ))}
         </ul>
       )}
-    </>
+    </ListPage>
   );
 }

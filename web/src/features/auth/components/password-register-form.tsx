@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { FormField } from "@/components/form-field";
+import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -112,9 +113,7 @@ export function PasswordRegisterForm({
       </FormField>
       {error !== null &&
         (error.field === undefined || !shown.includes(error.field)) && (
-          <p role="alert" className="text-destructive">
-            {error.message}
-          </p>
+          <Refusal>{error.message}</Refusal>
         )}
       <Button type="submit" disabled={pending}>
         {pending ? "Creating…" : "Create account"}

@@ -347,7 +347,7 @@ describe("team page", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent(
       // Presence: the notice goes on to say where access comes from.
-      /^You cannot view this team/,
+      /^You can't view this team/,
     );
     expect(screen.queryByText("Engineering")).not.toBeInTheDocument();
   });

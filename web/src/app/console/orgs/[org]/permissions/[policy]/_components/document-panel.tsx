@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 
 import { JsonDiff } from "@/components/json-diff";
+import { Refusal } from "@/components/refusal";
 import { StatusDot } from "@/components/status-dot";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,13 +20,13 @@ import {
   type DocumentProblem,
 } from "@/lib/policy-document";
 
-import { ActionDialog } from "../../_components/action-dialog";
+import { ActionDialog } from "../../../../../_components/action-dialog";
 import { ConditionNotice } from "../../_components/condition-notice";
 import {
   OrgWideConfirmation,
   ScopeConfirmationNotice,
 } from "../../_components/org-wide-confirmation";
-import { Outcome, useReportOutcome } from "../../_components/outcome";
+import { Outcome, useReportOutcome } from "../../../../../_components/outcome";
 import { PolicyEditor } from "../../_components/policy-editor";
 import { MakeDefaultDialog } from "./make-default-dialog";
 
@@ -268,9 +269,7 @@ export function DocumentPanel({
                 `Saved as v${saved.version}. v${defaultVersion} is still the default.`}
             </span>
             {saved.status === "error" && saved.field === undefined && (
-              <p role="alert" className="text-sm text-destructive">
-                {saved.message}
-              </p>
+              <Refusal>{saved.message}</Refusal>
             )}
           </form>
 

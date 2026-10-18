@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { KeysPanel } from "@/app/console/orgs/[org]/operators/[operator]/_components/keys-panel";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { OperatorKey } from "@/features/orgs";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 import { API_URL, fieldOneKey } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -115,6 +116,33 @@ describe("operator keys", () => {
     expect(revokedPaths).toEqual([
       `/orgs/acme/operators/field-one/keys/${fieldOneKey.kid}`,
     ]);
+  });
+
+  it("keeps the confirmation open with garam's refusal, in human words", async () => {
+    server.use(
+      http.delete(`${API_URL}/orgs/acme/operators/field-one/keys/:kid`, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "denied: operator:reissue" },
+          { status: 403 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPanel([fieldOneKey]);
+
+    await user.click(screen.getByRole("button", { name: "Revoke" }));
+    const dialog = screen.getByRole("alertdialog", {
+      name: "Revoke this key?",
+    });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Revoke key" }),
+    );
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      REFUSAL_COPY.permissionDenied,
+    );
+    expect(dialog).toBeInTheDocument();
+    expect(screen.queryByText(/operator:reissue/)).not.toBeInTheDocument();
   });
 
   it("sends nothing when revoking is cancelled", async () => {

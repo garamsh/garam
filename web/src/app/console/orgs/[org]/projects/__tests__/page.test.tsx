@@ -101,7 +101,9 @@ describe("projects section", () => {
 
     await renderServerComponent(ProjectsPage(params("acme")));
 
-    expect(screen.getByText("Projects not shown")).toBeInTheDocument();
+    expect(
+      screen.getByText("You can't view this organization's projects"),
+    ).toBeInTheDocument();
     expect(
       screen.queryByText("This organization has no projects."),
     ).not.toBeInTheDocument();

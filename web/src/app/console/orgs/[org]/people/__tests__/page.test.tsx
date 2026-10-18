@@ -176,7 +176,7 @@ describe("people section", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent(
       // Presence: the notice goes on to say where access comes from.
-      /^You cannot list this organization's people/,
+      /^You can't view this organization's people/,
     );
     expect(
       screen.queryByText("No one belongs to this organization."),
@@ -224,7 +224,7 @@ describe("people section", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent(
       // Presence: the notice goes on to say where access comes from.
-      /^You cannot list this organization's people/,
+      /^You can't view this organization's people/,
     );
     expect(
       screen.queryByRole("button", { name: "Invite people" }),

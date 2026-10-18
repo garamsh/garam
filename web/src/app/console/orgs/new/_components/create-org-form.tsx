@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 
+import { Refusal } from "@/components/refusal";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,11 +20,7 @@ export function CreateOrgForm() {
         <Label htmlFor="name">Name</Label>
         <Input id="name" name="name" required autoFocus />
       </div>
-      {state.status === "error" && (
-        <p role="alert" className="text-sm text-destructive">
-          {state.message}
-        </p>
-      )}
+      {state.status === "error" && <Refusal>{state.message}</Refusal>}
       <div>
         <Button type="submit" disabled={pending}>
           {pending ? "Creating…" : "Create organization"}

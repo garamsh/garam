@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Banner } from "@/components/banner";
 import { Button } from "@/components/ui/button";
 import {
   KIND_LABEL,
@@ -19,6 +18,7 @@ import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
+import { RefusedRead } from "../../../../_components/refused-read";
 import { DetailPage } from "../../../../_components/templates/detail-page";
 import { AddTeamMemberForm } from "./_components/add-team-member-form";
 import { DeleteTeamDialog } from "./_components/delete-team-dialog";
@@ -91,10 +91,7 @@ export default async function TeamPage({ params }: Params) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader title={FALLBACK_TITLE} description={FALLBACK_DESCRIPTION} />
-        <Banner tone="warn" title="You cannot view this team">
-          garam refused to show this team to you. Access to it is granted by
-          this organization&apos;s roles and policies.
-        </Banner>
+        <RefusedRead subject="this team" />
       </div>
     );
   }

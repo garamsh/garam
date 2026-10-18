@@ -14,8 +14,8 @@ import (
 const recordSighting = `-- name: RecordSighting :exec
 INSERT INTO machine_authentication_evidence (caller_grn, path, org_grn, first_at, last_at, issued_until)
 SELECT $1::text, $2::text, grn,
-       clock_timestamp(), clock_timestamp(), $3::timestamptz
-FROM orgs
+       clock.at, clock.at, $3::timestamptz
+FROM orgs, (SELECT clock_timestamp() AS at) AS clock
 WHERE grn = $4::text
 ON CONFLICT (caller_grn, path) DO UPDATE SET
     last_at         = EXCLUDED.last_at,
@@ -37,7 +37,8 @@ type RecordSightingParams struct {
 // organization is read rather than trusted, so a sighting for one that
 // is gone writes nothing. An issuance that arrives while the token the
 // row last recorded is still accepted is a refresh. The database's
-// clock stamps it.
+// clock stamps it, read once: clock_timestamp() advances between calls
+// inside one statement, and a sighting is one instant.
 func (q *Queries) RecordSighting(ctx context.Context, arg RecordSightingParams) error {
 	_, err := q.db.Exec(ctx, recordSighting,
 		arg.CallerGrn,

@@ -35,6 +35,16 @@ All of it lives in the `garam-local` namespace. Manifests are
 in this directory; they are separate files because the bring-up applies
 them in that order.
 
+The operator comes from `CNPG_MANIFEST` in the `Makefile`, pinned to
+the commit that carries the manifest: a release asset can be replaced
+under its tag and a commit cannot. v1.30.0 is the first release patched
+for all four advisories github.com/cloudnative-pg/cloudnative-pg
+publishes. GHSA-7qwx-x8ff-3px9 is what puts that floor at 1.30.0 rather
+than 1.29.2, and the GitHub Advisory Database does not carry it, so the
+four are re-checked at the project's own advisories. The database's
+Postgres major is not this pin's to move: `postgres.yaml` names its own
+image rather than taking the default this operator version carries.
+
 ## Up and down
 
 ```sh

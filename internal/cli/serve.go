@@ -30,6 +30,7 @@ import (
 	"github.com/garamsh/garam/internal/org"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 	"github.com/garamsh/garam/internal/watch"
+	watchpg "github.com/garamsh/garam/internal/watch/postgres"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -98,7 +99,7 @@ func serveAPI(cmd *cobra.Command) error {
 	// receiving runs where the streams are and nowhere else. Losing it
 	// leaves the live view dark and every durable path untouched
 	// (ADR-0022).
-	watches, err := watch.NewService(watch.NewPostgresStore(pool), watch.NewPostgresRelay(pool), watch.Config{})
+	watches, err := watch.NewService(watchpg.New(pool), watchpg.NewRelay(pool), watch.Config{})
 	if err != nil {
 		return err
 	}

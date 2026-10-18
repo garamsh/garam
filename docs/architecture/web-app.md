@@ -392,6 +392,25 @@ design system are marked in the table above; until an area is,
 holds the full decision and the reason for each part. This section is
 what a page owes once it is built on the system.
 
+**Roster is decided and unbuilt.**
+[ADR-0113](./adr/0113-the-console-is-roster-one-policy-shaped-ui-where-people-and-agents-are-members.md)
+replaces ADR-0103's grouped sidebar, its set of pages and its hiding
+of a denied action. Under Roster:
+- the console opens on a Home computed for the person signed in;
+- people and agents are listed together as members, told apart by
+  shape;
+- every object page carries a Your access panel;
+- a denied action stays visible as an inactive control with its
+  reason.
+
+No route is built on it yet. Until one is, the shell, the sections
+and the role-aware rules below and under §What it does not decide are
+the console as it runs. The design page that drew Roster is reference
+material, not a specification, and none of its mockups is kept in
+this repository: https://claude.ai/artifact/6fgTkEzZgDxq8UBoHe9nsa
+(v2, §Roster and §Recommendation, read 2026-10-18). The visual system
+below stays as it is under Roster.
+
 - **Principles.** Content over chrome, one accent, mono and copyable
   identifiers that are never a title, friction only for secrets and
   destruction, keyboard first, Korean and English equally first-class,
@@ -539,6 +558,16 @@ files (ADR-0009, `docs/convention/stack-nextjs.md`
 - **What the application promises a visitor across versions.** Nothing
   records it, and [api-surface.md](./api-surface.md) §Not decided
   records the same absence for the API it calls.
+- **Who answers for an agent.** ADR-0113 leaves open whether an agent
+  carries an accountable person, as Entra Agent ID's sponsor does.
+  garam holds no such field. Until the owner decides, an agent's page
+  is to show who defined it, from its definition's `definedBy`.
+- **Where Home's feed and the shared timeline are read from.** Audit
+  records message sends alone, with no read route
+  ([audit.md](./audit.md)). Watching an agent keeps nothing
+  ([ADR-0022](./adr/0022-watching-an-agent.md)). Nothing records a
+  membership, definition or policy change for a reader, so ADR-0113's
+  timeline has no source yet.
 
 ## Decisions this rests on
 
@@ -585,6 +614,11 @@ These decide the application itself:
   caller may do rather than rendering what it will refuse; the
   foundation and the permission check are built, and the areas on the
   design system are marked under §What it serves
+- [ADR-0113](./adr/0113-the-console-is-roster-one-policy-shaped-ui-where-people-and-agents-are-members.md)
+  — the console is Roster, one UI shaped by the caller's policies,
+  with a Home, people and agents as members, and a Your access panel
+  on every object page; it replaces ADR-0103's navigation, its set of
+  pages and its hiding of a denied action, and is unbuilt
 
 The rest bear on it without being about it:
 

@@ -1,6 +1,7 @@
 # ADR 0103: The console has one design system, and asks the server what a caller may do
 
-> Status: accepted
+> Status: superseded in part by ADR-0113 (navigation, page model, and
+> hiding a denied action)
 > Date: 2026-10-14
 
 The console design system for epic

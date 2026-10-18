@@ -101,6 +101,12 @@ export {
   rollbackPolicy,
   type RollbackPolicyState,
 } from "./api/rollback-policy";
+export {
+  searchOrgObjects,
+  type FoundKind,
+  type FoundObject,
+  type ObjectSearch,
+} from "./api/search-org-objects";
 export { updateGroup, type UpdateGroupState } from "./api/update-group";
 export {
   updateOperator,

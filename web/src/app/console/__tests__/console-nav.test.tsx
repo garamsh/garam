@@ -22,9 +22,7 @@ function renderNav(
   return render(
     <TooltipProvider>
       <SidebarProvider>
-        {hidden && (
-          <ReportOrgShell org="acme" role={null} hidden={hidden} objects={[]} />
-        )}
+        {hidden && <ReportOrgShell org="acme" role={null} hidden={hidden} />}
         <ConsoleNav orgs={orgs} />
       </SidebarProvider>
     </TooltipProvider>,

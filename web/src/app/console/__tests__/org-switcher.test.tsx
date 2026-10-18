@@ -26,7 +26,7 @@ function renderSwitcher(
   return render(
     <TooltipProvider>
       <SidebarProvider>
-        {reported && <ReportOrgShell {...reported} hidden={[]} objects={[]} />}
+        {reported && <ReportOrgShell {...reported} hidden={[]} />}
         <OrgSwitcher orgs={list} />
       </SidebarProvider>
     </TooltipProvider>,

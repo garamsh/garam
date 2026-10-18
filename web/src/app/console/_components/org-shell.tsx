@@ -6,27 +6,16 @@ import { useEffect, useSyncExternalStore } from "react";
 import { parseConsolePath } from "./navigation";
 import type { OrgRole } from "./org-role";
 
-/** A thing in the organization the command palette finds by name. */
-export type PaletteObject = {
-  kind: "person" | "agent" | "team" | "policy" | "project";
-  name: string;
-  identifier: string;
-  /** Path segment below the organization the object opens at. */
-  segment: string;
-};
-
 /**
  * What the organization's layout read for the shell above it: the
- * caller's role, the sidebar entries the server denies it, and what
- * the palette can find. A part whose read failed is empty: no role, no
- * entry left out, nothing to find.
+ * caller's role and the sidebar entries the server denies it. A part
+ * whose read failed is empty: no role, no entry left out.
  */
 export type OrgShell = {
   org: string;
   role: OrgRole | null;
   /** Keys of the sidebar entries whose read the server denied. */
   hidden: readonly string[];
-  objects: readonly PaletteObject[];
 };
 
 // The organization's layout reads these; the sidebar and the palette
@@ -61,7 +50,7 @@ export function ReportOrgShell(shell: OrgShell) {
     return () => report(null);
     // The props arrive as one serialized object per render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shell.org, shell.role, shell.hidden, shell.objects]);
+  }, [shell.org, shell.role, shell.hidden]);
   return null;
 }
 

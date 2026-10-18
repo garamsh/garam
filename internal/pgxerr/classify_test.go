@@ -3,9 +3,11 @@ package pgxerr_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -191,10 +193,41 @@ func refusedDial(t *testing.T, ctx context.Context) error {
 	return err
 }
 
-// TestClassify_ALostConnectionIsUnavailable holds #1165's mapping to
-// the two forms the driver gives an unreachable database, as a cut
-// connection produced them against real Postgres: a ConnectError, and
-// io.ErrUnexpectedEOF on a connection that was open. The controls are
+// resetSocket answers the error a write meets on a connection its peer
+// reset: the peer closes with no linger, which sends a reset rather
+// than an end of stream, and the write after it is refused by the
+// socket. That is the *net.OpError the driver wraps as "write failed"
+// or "failed to receive message" (#1546).
+func resetSocket(t *testing.T) error {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer func() { _ = ln.Close() }()
+	client, err := net.Dial("tcp", ln.Addr().String())
+	require.NoError(t, err)
+	defer func() { _ = client.Close() }()
+	peer, err := ln.Accept()
+	require.NoError(t, err)
+	tcp, ok := peer.(*net.TCPConn)
+	require.True(t, ok, "a TCP listener accepts a *net.TCPConn")
+	require.NoError(t, tcp.SetLinger(0))
+	require.NoError(t, tcp.Close())
+	for range 100 {
+		if _, err = client.Write([]byte("Q")); err != nil {
+			break
+		}
+		time.Sleep(time.Millisecond)
+	}
+	var opErr *net.OpError
+	require.ErrorAs(t, err, &opErr, "a write to a reset peer fails on the socket")
+	return fmt.Errorf("write failed: %w", err)
+}
+
+// TestClassify_ALostConnectionIsUnavailable holds #1165's and #1546's
+// mapping to the forms the driver gives an unreachable database, as a
+// cut connection produced them against real Postgres: a ConnectError,
+// io.ErrUnexpectedEOF on a connection that was open, and a socket error
+// on one its peer reset. The controls are
 // what must not read as an outage: the caller's own cancellation, in
 // either form, and an error the driver did not raise.
 func TestClassify_ALostConnectionIsUnavailable(t *testing.T) {
@@ -208,6 +241,7 @@ func TestClassify_ALostConnectionIsUnavailable(t *testing.T) {
 	}{
 		"a dial nothing accepts":            {refusedDial(t, context.Background()), errorx.KindUnavailable},
 		"an open connection ending":         {io.ErrUnexpectedEOF, errorx.KindUnavailable},
+		"an open connection reset":          {resetSocket(t), errorx.KindUnavailable},
 		"the caller cancelling a dial":      {cancelledDial, errorx.KindUnknown},
 		"the caller cancelling an exchange": {context.Canceled, errorx.KindUnknown},
 		"the caller's deadline passing":     {context.DeadlineExceeded, errorx.KindUnknown},

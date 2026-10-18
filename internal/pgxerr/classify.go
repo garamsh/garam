@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -96,16 +97,20 @@ func Classify(err error, op string, notFound, conflict error) error {
 }
 
 // connectionLost reports whether err is the database becoming
-// unreachable, in the two forms the driver gives it (#1165): a
-// *pgconn.ConnectError, where no connection could be made, and
-// io.ErrUnexpectedEOF, where an established one ended mid-exchange. A
-// chain carrying the caller's context error is the caller ending the
-// call, not an outage, and Classify reaches here only for a chain with
-// no SQLSTATE: a server that answered with one was reachable.
+// unreachable, in the forms the driver gives it: a
+// *pgconn.ConnectError, where no connection could be made (#1165);
+// io.ErrUnexpectedEOF, where an established one ended mid-exchange
+// (#1165); and a *net.OpError, where the socket under an established
+// one failed — a peer's reset answers a write or a read with
+// ECONNRESET rather than an EOF (#1546). A chain carrying the caller's
+// context error is the caller ending the call, not an outage, and
+// Classify reaches here only for a chain with no SQLSTATE: a server
+// that answered with one was reachable.
 func connectionLost(err error) bool {
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
 	var connectErr *pgconn.ConnectError
-	return errors.As(err, &connectErr) || errors.Is(err, io.ErrUnexpectedEOF)
+	var socketErr *net.OpError
+	return errors.As(err, &connectErr) || errors.Is(err, io.ErrUnexpectedEOF) || errors.As(err, &socketErr)
 }

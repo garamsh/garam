@@ -87,6 +87,20 @@ func (p *pgProxy) forward(target string) {
 	}
 }
 
+// reset cuts as cut does, with each connection reset rather than
+// ended: no linger, so its peer reads ECONNRESET where a cut leaves it
+// an end of stream (#1546).
+func (p *pgProxy) reset() {
+	p.mu.Lock()
+	for _, c := range p.open {
+		if tcp, ok := c.(*net.TCPConn); ok {
+			_ = tcp.SetLinger(0)
+		}
+	}
+	p.mu.Unlock()
+	p.cut()
+}
+
 // cut closes every connection through the proxy and refuses the ones
 // that follow, until mend.
 func (p *pgProxy) cut() {

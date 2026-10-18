@@ -9,11 +9,39 @@ import (
 
 // Statement is one IAM-style rule handed to the authz engine for
 // evaluation. Action and Resource entries are wildcard patterns.
+// Origin is how the statement reaches the subject; it stays on this
+// side of the seam and is what an explanation names a role by.
 type Statement struct {
 	Sid      string
 	Effect   wire.Effect
 	Action   []string
 	Resource []string
+	Origin   Origin
+}
+
+// OriginKind is which role a collected statement comes from
+// (authz.md §Role-derived statements).
+type OriginKind int
+
+const (
+	// OriginOrgRole is the subject's org membership role.
+	OriginOrgRole OriginKind = iota
+	// OriginDirectRole is the roles stored on the subject itself.
+	OriginDirectRole
+	// OriginGroupRole is the roles of a group the subject belongs to.
+	OriginGroupRole
+	// OriginProjectRole is the roles of a project the subject belongs
+	// to.
+	OriginProjectRole
+)
+
+// Origin is how a role-derived statement reaches its subject: the kind
+// of role, the role names it grants, and the group or project holding
+// them — the zero GRN for an org or direct role.
+type Origin struct {
+	Kind  OriginKind
+	Roles []string
+	Via   grn.GRN
 }
 
 // EvalInput is one authorization question: may Subject perform Action
@@ -33,9 +61,30 @@ type EvalInput struct {
 	SubjectOrg    grn.GRN
 }
 
+// Trace is one statement's part in an explained decision. Policy is
+// the persisted policy holding it, and the zero GRN for a statement
+// the caller collected. AttachedTo names the subjects of the question —
+// the subject or one of its groups — the policy is attached to, and is
+// empty for an org-wide policy and a collected statement (ADR-0008).
+type Trace struct {
+	Sid        string
+	Matched    bool
+	Effect     wire.Effect
+	Policy     grn.GRN
+	AttachedTo []grn.GRN
+}
+
+// Explanation is the engine's decision and every statement it read.
+type Explanation struct {
+	Allowed bool
+	Traces  []Trace
+}
+
 // Evaluator is the authorization seam between the api server and the
 // authz engine (ADR-0003). The gRPC client implements it; the api
-// package never imports the engine.
+// package never imports the engine. Explain is asked the question
+// Evaluate is, and decides it the same way.
 type Evaluator interface {
 	Evaluate(ctx context.Context, in EvalInput) (bool, error)
+	Explain(ctx context.Context, in EvalInput) (Explanation, error)
 }

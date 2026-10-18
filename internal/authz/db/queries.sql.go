@@ -12,7 +12,8 @@ import (
 )
 
 const activePolicies = `-- name: ActivePolicies :many
-SELECT v.document,
+SELECT p.grn,
+       v.document,
        coalesce(array_agg(a.subject_grn) FILTER (WHERE a.subject_grn IS NOT NULL), '{}')::text[] AS subject_grns
 FROM policies p
 JOIN policy_versions v ON v.policy_grn = p.grn AND v.version = p.default_version
@@ -23,13 +24,14 @@ ORDER BY p.grn
 `
 
 type ActivePoliciesRow struct {
+	Grn         string
 	Document    []byte
 	SubjectGrns []string
 }
 
 // ActivePolicies returns what each active policy of the org currently
-// evaluates: its default version's document, and the subjects it is
-// attached to. An empty subject list means the policy applies org-wide
+// evaluates: its GRN, its default version's document, and the subjects
+// it is attached to. An empty subject list means the policy applies org-wide
 // (ADR-0008).
 func (q *Queries) ActivePolicies(ctx context.Context, orgGrn string) ([]ActivePoliciesRow, error) {
 	rows, err := q.db.Query(ctx, activePolicies, orgGrn)
@@ -40,7 +42,7 @@ func (q *Queries) ActivePolicies(ctx context.Context, orgGrn string) ([]ActivePo
 	var items []ActivePoliciesRow
 	for rows.Next() {
 		var i ActivePoliciesRow
-		if err := rows.Scan(&i.Document, &i.SubjectGrns); err != nil {
+		if err := rows.Scan(&i.Grn, &i.Document, &i.SubjectGrns); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

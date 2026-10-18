@@ -59,61 +59,76 @@ func (s *GRPCServer) CheckCurrent(ctx context.Context, req *authzv1.CheckCurrent
 }
 
 // decide scopes the request, reads the persisted statements through
-// read and evaluates them with the caller's. It returns the statements
-// it evaluated beside the decision, so Explain traces the set Check
+// read and evaluates them with the caller's. It returns the grants it
+// evaluated beside the decision, so Explain traces the set Check
 // decided over and takes its answer from the same evaluator.
-func decide(ctx context.Context, in checkInput, read readStatements) ([]Statement, bool, error) {
+func decide(ctx context.Context, in checkInput, read readStatements) ([]Grant, bool, error) {
 	if err := in.checkScope(); err != nil {
 		return nil, false, err
 	}
-	statements, err := applicable(ctx, in, read)
+	grants, err := applicable(ctx, in, read)
 	if err != nil {
 		return nil, false, err
+	}
+	statements := make([]Statement, 0, len(grants))
+	for _, g := range grants {
+		statements = append(statements, g.Statement)
 	}
 	d := NewStatementEvaluator(statements).Evaluate(ctx, Context{
 		Object: grnObject{in.object},
 		Action: in.action,
 	})
-	return statements, d == DecisionAllow, nil
+	return grants, d == DecisionAllow, nil
 }
 
 // Explain evaluates the same input and reports every statement's
 // contribution, so a denied request is reproducible after the fact.
+// A persisted statement's trace names its policy and the subjects of
+// the request that policy is attached to; a caller's statement names
+// neither.
 func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (*authzv1.ExplainResponse, error) {
 	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetSubjectGroups(), req.GetSubjectOrg(), req.GetStatements())
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	statements, allowed, err := decide(ctx, in, s.policies.Statements)
+	grants, allowed, err := decide(ctx, in, s.policies.Statements)
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	traces := make([]*authzv1.StatementTrace, 0, len(statements))
-	for _, st := range statements {
-		traces = append(traces, &authzv1.StatementTrace{
-			Sid:     st.Sid,
-			Matched: st.Matches(in.action, in.object.String()),
-			Effect:  effectToProto(st.Effect),
-		})
+	traces := make([]*authzv1.StatementTrace, 0, len(grants))
+	for _, g := range grants {
+		trace := &authzv1.StatementTrace{
+			Sid:        g.Sid,
+			Matched:    g.Matches(in.action, in.object.String()),
+			Effect:     effectToProto(g.Effect),
+			AttachedTo: wire.GRNsToProto(g.AttachedTo),
+		}
+		if !g.Policy.IsZero() {
+			trace.PolicyGrn = g.Policy.String()
+		}
+		traces = append(traces, trace)
 	}
 	return &authzv1.ExplainResponse{Allowed: allowed, Traces: traces}, nil
 }
 
 // readStatements is one of PolicySource's two reads.
-type readStatements func(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Statement, error)
+type readStatements func(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Grant, error)
 
 // applicable unions the persisted policy statements read reports as
 // reaching the subject — org-wide, attached to it, or attached to one
 // of its groups (ADR-0008) — with the role-derived statements the
 // caller supplied (ADR-0007).
-func applicable(ctx context.Context, in checkInput, read readStatements) ([]Statement, error) {
+func applicable(ctx context.Context, in checkInput, read readStatements) ([]Grant, error) {
 	stored, err := read(ctx, orgGRNOf(in.object), in.subjects)
 	if err != nil {
 		return nil, err
 	}
-	statements := make([]Statement, 0, len(stored)+len(in.statements))
-	statements = append(statements, stored...)
-	return append(statements, in.statements...), nil
+	grants := make([]Grant, 0, len(stored)+len(in.statements))
+	grants = append(grants, stored...)
+	for _, st := range in.statements {
+		grants = append(grants, Grant{Statement: st})
+	}
+	return grants, nil
 }
 
 // orgGRNOf returns the GRN of the org that owns the object. Orgs are

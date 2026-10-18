@@ -312,7 +312,7 @@ func TestPolicyCache_ConcurrentMissesConvergeOnOneSnapshot(t *testing.T) {
 
 	cache := authz.NewPolicyCache(store)
 	const callers = 8
-	got := make([][]authz.Statement, callers)
+	got := make([][]authz.Grant, callers)
 	var wg sync.WaitGroup
 	for i := range callers {
 		wg.Add(1)

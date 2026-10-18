@@ -107,6 +107,10 @@ func (s *PostgresStore) ActivePolicies(ctx context.Context, orgGRN grn.GRN) ([]A
 }
 
 func rowToActivePolicy(row db.ActivePoliciesRow) (ActivePolicy, error) {
+	policyGRN, err := grn.Parse(row.Grn)
+	if err != nil {
+		return ActivePolicy{}, errorx.Wrap(err, "policy grn", errorx.KindInternal)
+	}
 	doc, err := ParsePolicyDocument(row.Document)
 	if err != nil {
 		return ActivePolicy{}, errorx.Wrap(err, "stored document", errorx.KindInternal)
@@ -119,7 +123,7 @@ func rowToActivePolicy(row db.ActivePoliciesRow) (ActivePolicy, error) {
 		}
 		subjects = append(subjects, g)
 	}
-	return ActivePolicy{Document: doc, Subjects: subjects}, nil
+	return ActivePolicy{GRN: policyGRN, Document: doc, Subjects: subjects}, nil
 }
 
 func rowToAttachment(row db.PolicyAttachment) (*PolicyAttachment, error) {

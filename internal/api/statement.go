@@ -20,6 +20,7 @@ func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Member
 		Effect:   wire.EffectAllow,
 		Action:   m.Role.Actions(),
 		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
+		Origin:   Origin{Kind: OriginOrgRole, Roles: []string{string(m.Role)}},
 	}}
 	statements = append(statements, userStatements(orgGRN, u)...)
 	var derived []Statement
@@ -49,6 +50,7 @@ func userStatements(orgGRN grn.GRN, u *user.User) []Statement {
 		Effect:   wire.EffectAllow,
 		Action:   actions,
 		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
+		Origin:   Origin{Kind: OriginDirectRole, Roles: u.Roles},
 	}}
 }
 
@@ -80,6 +82,7 @@ func (s *Server) groupStatements(r *http.Request, groupGRN, subject grn.GRN) ([]
 		Effect:   wire.EffectAllow,
 		Action:   actions,
 		Resource: []string{groupGRN.String()},
+		Origin:   Origin{Kind: OriginGroupRole, Roles: g.Roles, Via: groupGRN},
 	}}, nil
 }
 
@@ -111,6 +114,7 @@ func (s *Server) projectStatements(r *http.Request, projectGRN, subject grn.GRN)
 		Effect:   wire.EffectAllow,
 		Action:   actions,
 		Resource: []string{projectGRN.String()},
+		Origin:   Origin{Kind: OriginProjectRole, Roles: p.Roles, Via: projectGRN},
 	}}, nil
 }
 

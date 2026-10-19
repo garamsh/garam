@@ -132,19 +132,35 @@ private_key_jwt exchange
 once `GARAM_MACHINE_TOKEN_URL` is set. The chart renders it from
 `machine.tokenUrl` on both `serve api` and `serve machine`, and renders
 it on neither while that value is empty, its default
-(`deploy/charts/garam/README.md` §Values a deployment must supply); no
-deployment has adopted the workflow below.
+(`deploy/charts/garam/README.md` §Values a deployment must supply).
+`garamsh/aurora` adopted the workflow below for its deployment:
+aurora#663, merged 2026-10-18T18:14:09Z as
+0a14d255f158291c132cbfed63437580d85de5dd, sets
+`GARAM_MACHINE_TOKEN_URL` on both processes to the machine Service's
+in-cluster name. Its operator authenticates by key: aurora#664's
+post-merge comment of 2026-10-19
+(https://github.com/garamsh/aurora/pull/664#issuecomment-6257270142)
+records version 0.2.0 running with its key and no exchange failure,
+and the agent ready at 00:44:37Z.
 
-- Set `machine.tokenUrl` to the absolute https URL of the machine
-  listener's `/oauth/token` as a caller outside the cluster names it,
-  with no user information, query or fragment — the render refuses any
-  other shape, as the binary does at startup — and keep it for the
-  deployment's life: every assertion names it as its audience byte for
-  byte, and changing it refuses every Operator until each is given the
-  new value. Unset, `serve api` issues no key, refusing with 409 and
-  the reason `key_issuance_unconfigured`, and `serve machine` answers
-  the exchange 503. It is not `machine.issuer`
-  (`GARAM_MACHINE_ISSUER`), the message issuer.
+- Set `machine.tokenUrl` to the one absolute https URL of the machine
+  listener's `/oauth/token` that every operator and control service
+  reaches it by, directly or by TCP passthrough, so the TLS each meets
+  is the listener's own. The URL carries no user information, query or
+  fragment; the render refuses any other shape, as the binary does at
+  startup. Keep it for the deployment's life. Every assertion names it
+  as its audience byte for byte, so changing it refuses every Operator
+  until each is re-keyed with the new value. Unset, `serve api` issues
+  no key, refusing with 409 and the reason
+  `key_issuance_unconfigured`, and `serve machine` answers the
+  exchange 503. It is not `machine.issuer` (`GARAM_MACHINE_ISSUER`),
+  the message issuer.
+  - Which name that is follows from where the callers run. A
+    deployment whose operators and control services all run in its
+    cluster may use the machine Service's cluster name. One that
+    expects a caller outside the cluster needs a name reachable from
+    there, such as a TLS-passthrough route, and every caller then uses
+    that name, the in-cluster ones included.
 
 - Place each controller/control-service private key in its own
   owner-only file via the deployment's secret mechanism, never in

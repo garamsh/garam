@@ -1,8 +1,13 @@
-import { screen, within } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
+import {
+  MemberList,
+  type MemberFilters,
+  type MemberRow,
+} from "@/app/console/orgs/[org]/members/_components/member-list";
 import MembersPage from "@/app/console/orgs/[org]/members/page";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
@@ -38,6 +43,37 @@ vi.stubGlobal(
     disconnect() {}
   },
 );
+
+/** The two members the list test acts on, as the page decides them. */
+const ALICE_ROW: MemberRow = {
+  kind: "person",
+  grn: "grn:root:default:user:alice",
+  identifier: "alice",
+  name: "Alice",
+  href: "/console/orgs/acme/members/alice",
+  status: { tone: "neutral", label: "Owner" },
+  marker: null,
+  detail: null,
+  runsOn: null,
+  lastSeen: null,
+};
+const SCOUT_ROW: MemberRow = {
+  ...ALICE_ROW,
+  kind: "agent",
+  grn: fieldAgent.agentGrn,
+  identifier: "9f2ac1b40d8e7a35",
+  name: "Scout",
+  href: "/console/orgs/acme/agents/9f2ac1b40d8e7a35",
+  status: { tone: "neutral", label: "Not placed" },
+};
+const FILTERS: MemberFilters = {
+  kind: "all",
+  team: "",
+  runs: "",
+  counts: { all: 2, person: 1, agent: 1 },
+  teams: [],
+  runsOn: [],
+};
 
 function renderMembers(query: Record<string, string> = {}) {
   return renderServerComponent(
@@ -234,7 +270,21 @@ describe("people and agents", () => {
       ),
     );
     const user = userEvent.setup();
-    await renderMembers();
+    // The list alone: what the page reads to build it is the other
+    // tests' to assert, and rendering the whole page here was most of
+    // this test's time on a loaded host (#1551).
+    render(
+      <TooltipProvider>
+        <MemberList
+          org="acme"
+          rows={[ALICE_ROW, SCOUT_ROW]}
+          filters={FILTERS}
+          teamChoices={[{ value: "eng", label: "Engineering" }]}
+          policyChoices={[]}
+          empty={null}
+        />
+      </TooltipProvider>,
+    );
 
     await user.click(screen.getByRole("checkbox", { name: "Select Alice" }));
     await user.click(screen.getByRole("checkbox", { name: "Select Scout" }));

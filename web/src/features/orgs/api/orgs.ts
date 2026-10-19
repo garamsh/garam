@@ -217,7 +217,6 @@ const OrgDeletionPreviewParser = parserFor<OrgDeletionPreview>()(
       policies: CountParser,
       agents: CountParser,
       agentDefinitions: CountParser,
-      agentTemplates: CountParser,
       operators: CountParser,
       consents: CountParser,
     }),

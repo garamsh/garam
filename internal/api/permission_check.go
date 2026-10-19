@@ -20,11 +20,10 @@ const maxPermissionChecks = 50
 const onOrg apigen.PermissionResourceType = ""
 
 const (
-	kindGroup    = apigen.PermissionResourceTypeGroup
-	kindProject  = apigen.PermissionResourceTypeProject
-	kindAgent    = apigen.PermissionResourceTypeAgent
-	kindTemplate = apigen.PermissionResourceTypeAgentTemplate
-	kindPolicy   = apigen.PermissionResourceTypePolicy
+	kindGroup   = apigen.PermissionResourceTypeGroup
+	kindProject = apigen.PermissionResourceTypeProject
+	kindAgent   = apigen.PermissionResourceTypeAgent
+	kindPolicy  = apigen.PermissionResourceTypePolicy
 )
 
 // decidedBy is what enforcement reads to decide an action.
@@ -109,7 +108,7 @@ var actionRules = map[string]actionRule{
 	org.ActionAgentCutover:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentReplace:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentExecutionRead:   {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
-	org.ActionAgentTemplateRead:    {on: []apigen.PermissionResourceType{onOrg, kindTemplate}},
+	org.ActionAgentTemplateRead:    {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionAgentTemplatePublish: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},
 	org.ActionExecutionProfileRead: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},
 }
@@ -259,8 +258,6 @@ func permissionTarget(orgSlug string, check apigen.PermissionCheck) (grn.GRN, er
 		g = projectGRN(orgSlug, id)
 	case kindAgent:
 		g = agentGRN(orgSlug, id)
-	case kindTemplate:
-		g = templateGRN(orgSlug, id)
 	case kindPolicy:
 		g = policyGRN(orgSlug, id)
 	default:

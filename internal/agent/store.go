@@ -9,8 +9,7 @@ import (
 
 // Store persists Agents and the operator each one is assigned to, and
 // reads the definitions an organization wrote of the agents it should
-// have, which garam no longer accepts (ADR-0090), and the templates it
-// kept before they were retired read-only. A
+// have, which garam no longer accepts (ADR-0090). A
 // state report carries the epoch it was produced at and is accepted
 // only at the assignment's current epoch (ADR-0012).
 //
@@ -58,8 +57,8 @@ type Store interface {
 	// RenameDefinition changes what the organization calls the agent
 	// and nothing else, or answers ErrDefinitionNotFound (ADR-0075).
 	RenameDefinition(ctx context.Context, agentGRN grn.GRN, name Name) (*Definition, error)
-	// CountByOrg counts the organization's agents, definitions and
-	// templates, which deleting the organization removes with it. An
+	// CountByOrg counts the organization's agents and definitions,
+	// which deleting the organization removes with it. An
 	// organization that does not exist holds none, so the zero
 	// OrgCounts is its answer rather than an error.
 	CountByOrg(ctx context.Context, orgGRN grn.GRN) (OrgCounts, error)
@@ -76,11 +75,4 @@ type Store interface {
 	// ErrDefinitionNotFound when no definition names the agent for this
 	// operator and ErrDefinitionClaimed when one already claimed it.
 	Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error)
-	// GetTemplate returns the template, or ErrTemplateNotFound.
-	// Templates are retired read-only, so reading is all a store does
-	// with one (ADR-0088).
-	GetTemplate(ctx context.Context, g grn.GRN) (*Template, error)
-	// ListTemplatesByOrg returns the organization's templates, ordered
-	// by name and then by GRN.
-	ListTemplatesByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Template, error)
 }

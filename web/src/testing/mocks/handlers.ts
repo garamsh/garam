@@ -219,7 +219,6 @@ export const acmeDeletionPreview: OrgDeletionPreview = {
     policies: 2,
     agents: 1,
     agentDefinitions: 1,
-    agentTemplates: 1,
     operators: 1,
     consents: 1,
   },

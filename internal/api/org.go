@@ -211,7 +211,6 @@ func (s *Server) GetOrgDeletionPreview(w http.ResponseWriter, r *http.Request, o
 			Policies:         len(policies),
 			Agents:           agents.Agents,
 			AgentDefinitions: agents.Definitions,
-			AgentTemplates:   agents.Templates,
 			Operators:        operators,
 			Consents:         consents,
 		},

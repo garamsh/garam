@@ -158,14 +158,7 @@ SELECT * FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE;
 -- agent and is not counted apart from it.
 SELECT
     (SELECT count(*) FROM agents            a WHERE a.org_grn = $1) AS agent_count,
-    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count,
-    (SELECT count(*) FROM agent_templates   t WHERE t.org_grn = $1) AS template_count;
-
--- name: GetAgentTemplate :one
-SELECT * FROM agent_templates WHERE grn = $1;
-
--- name: ListAgentTemplatesByOrg :many
-SELECT * FROM agent_templates WHERE org_grn = $1 ORDER BY name, grn;
+    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count;
 
 -- AdmitExecution runs the agent execution fence (ADR-0080) as the
 -- first statement of a protected write's transaction; the row it locks

@@ -371,8 +371,7 @@ func TestCheckPermissions_EveryActionPairsWithSomething(t *testing.T) {
 	resources := []*apigen.PermissionResource{nil}
 	for _, kind := range []apigen.PermissionResourceType{
 		apigen.PermissionResourceTypeGroup, apigen.PermissionResourceTypeProject,
-		apigen.PermissionResourceTypeAgent, apigen.PermissionResourceTypeAgentTemplate,
-		apigen.PermissionResourceTypePolicy,
+		apigen.PermissionResourceTypeAgent, apigen.PermissionResourceTypePolicy,
 	} {
 		resources = append(resources, &apigen.PermissionResource{Type: kind, Id: "x"})
 	}

@@ -148,10 +148,9 @@ const (
 	// it.
 	ActionAgentReplace = "agent:replace"
 
-	// ActionAgentTemplateRead is reading the org's retired agent
-	// templates (ADR-0075, ADR-0088) and the templates the delegated
-	// Operator has published (#1170). No action writes a garam template:
-	// they are retired read-only.
+	// ActionAgentTemplateRead is reading the templates the delegated
+	// Operator has published (#1170). garam keeps no template of its own
+	// (ADR-0117).
 	ActionAgentTemplateRead = "agent-template:read"
 	// ActionAgentTemplatePublish is publishing the next immutable
 	// version of a template the delegated Operator holds (#1170). It

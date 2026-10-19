@@ -131,7 +131,6 @@ type Certificate struct {
 type OrgCounts struct {
 	Agents      int
 	Definitions int
-	Templates   int
 }
 
 // Agent is an autonomous actor owned by an organization. Which operator

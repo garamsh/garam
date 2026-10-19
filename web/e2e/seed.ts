@@ -306,49 +306,6 @@ export async function seedHostedOperator(
   return hosted;
 }
 
-/** A template the seeded organization kept before the retirement. */
-export type ArchivedTemplate = { identifier: string; name: string };
-
-/**
- * Writes a template of the seeded organization as one kept before
- * garam's templates were retired read-only (ADR-0088). Migration 000034
- * refuses every write to the table, so the row is written with the
- * session's ordinary triggers off, which the suite's superuser may do;
- * nothing in garam writes one any more.
- */
-export async function seedArchivedTemplate(
-  seed: Seed,
-  name: string,
-  values: Record<string, string>,
-): Promise<ArchivedTemplate> {
-  const identifier = randomBytes(8).toString("hex");
-  const client = new Client({ connectionString: DATABASE_URL });
-  await client.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SET LOCAL session_replication_role = replica");
-    await client.query(
-      `INSERT INTO agent_templates
-         (grn, org_grn, name, description, agent_values, created_by, created_at, updated_at)
-       VALUES ($1, $2, $3, 'Reads papers', $4, $5, now(), now())`,
-      [
-        `grn:${seed.orgSlug}:default:agent-template:${identifier}`,
-        `grn:root:default:org:${seed.orgSlug}`,
-        name,
-        values,
-        seed.userGrn,
-      ],
-    );
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    await client.end();
-  }
-  return { identifier, name };
-}
-
 /** One operation authority garam recorded, read by its token. */
 export type RecordedAuthority = {
   operation: string;

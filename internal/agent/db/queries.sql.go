@@ -83,14 +83,12 @@ func (q *Queries) AssignAgent(ctx context.Context, arg AssignAgentParams) (Agent
 const countAgentsByOrg = `-- name: CountAgentsByOrg :one
 SELECT
     (SELECT count(*) FROM agents            a WHERE a.org_grn = $1) AS agent_count,
-    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count,
-    (SELECT count(*) FROM agent_templates   t WHERE t.org_grn = $1) AS template_count
+    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count
 `
 
 type CountAgentsByOrgRow struct {
 	AgentCount      int64
 	DefinitionCount int64
-	TemplateCount   int64
 }
 
 // The agents and the definitions the organization holds, which
@@ -100,7 +98,7 @@ type CountAgentsByOrgRow struct {
 func (q *Queries) CountAgentsByOrg(ctx context.Context, orgGrn string) (CountAgentsByOrgRow, error) {
 	row := q.db.QueryRow(ctx, countAgentsByOrg, orgGrn)
 	var i CountAgentsByOrgRow
-	err := row.Scan(&i.AgentCount, &i.DefinitionCount, &i.TemplateCount)
+	err := row.Scan(&i.AgentCount, &i.DefinitionCount)
 	return i, err
 }
 
@@ -239,26 +237,6 @@ func (q *Queries) GetAgentDefinition(ctx context.Context, agentGrn string) (GetA
 		&i.CreatedAt,
 		&i.Name,
 		&i.CutoverStage,
-	)
-	return i, err
-}
-
-const getAgentTemplate = `-- name: GetAgentTemplate :one
-SELECT grn, org_grn, name, description, agent_values, created_by, created_at, updated_at FROM agent_templates WHERE grn = $1
-`
-
-func (q *Queries) GetAgentTemplate(ctx context.Context, grn string) (AgentTemplate, error) {
-	row := q.db.QueryRow(ctx, getAgentTemplate, grn)
-	var i AgentTemplate
-	err := row.Scan(
-		&i.Grn,
-		&i.OrgGrn,
-		&i.Name,
-		&i.Description,
-		&i.AgentValues,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -485,39 +463,6 @@ func (q *Queries) ListAgentDefinitionsByOrg(ctx context.Context, orgGrn string) 
 			&i.CreatedAt,
 			&i.Name,
 			&i.CutoverStage,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listAgentTemplatesByOrg = `-- name: ListAgentTemplatesByOrg :many
-SELECT grn, org_grn, name, description, agent_values, created_by, created_at, updated_at FROM agent_templates WHERE org_grn = $1 ORDER BY name, grn
-`
-
-func (q *Queries) ListAgentTemplatesByOrg(ctx context.Context, orgGrn string) ([]AgentTemplate, error) {
-	rows, err := q.db.Query(ctx, listAgentTemplatesByOrg, orgGrn)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []AgentTemplate
-	for rows.Next() {
-		var i AgentTemplate
-		if err := rows.Scan(
-			&i.Grn,
-			&i.OrgGrn,
-			&i.Name,
-			&i.Description,
-			&i.AgentValues,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -23,7 +23,7 @@ export type ExplainedStatement = components["schemas"]["ExplainedStatement"];
 export type PermissionHolder = components["schemas"]["PermissionHolder"];
 
 const ResourceParser = z.object({
-  type: z.enum(["group", "project", "agent", "agent-template", "policy"]),
+  type: z.enum(["group", "project", "agent", "policy"]),
   id: z.string(),
 });
 

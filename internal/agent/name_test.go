@@ -36,19 +36,3 @@ func TestParseName_RefusesWhatTheRowCannotHold(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, agent.Name(strings.Repeat("가", 100)), n, "trimmed")
 }
-
-func TestParseDescription_MayBeEmptyAndIsBounded(t *testing.T) {
-	d, err := agent.ParseDescription("  ")
-	require.NoError(t, err)
-	assert.Equal(t, agent.Description(""), d)
-
-	d, err = agent.ParseDescription(strings.Repeat("d", 1000))
-	require.NoError(t, err)
-	assert.Len(t, string(d), 1000)
-
-	for _, in := range []string{strings.Repeat("d", 1001), "a\x00b"} {
-		d, err = agent.ParseDescription(in)
-		assert.Empty(t, d)
-		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "got %v", err)
-	}
-}

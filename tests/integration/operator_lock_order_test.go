@@ -643,3 +643,11 @@ func TestOperatorLockOrder_AnAudiencesDeletionAndAnExchangeHoldingNoTokenItWaits
 		})
 	}
 }
+
+// backendPID answers the pid of the backend tx runs on.
+func backendPID(t *testing.T, tx pgx.Tx) int {
+	t.Helper()
+	var pid int
+	require.NoError(t, tx.QueryRow(context.Background(), `SELECT pg_backend_pid()`).Scan(&pid))
+	return pid
+}

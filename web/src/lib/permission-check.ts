@@ -44,7 +44,7 @@ const PERMISSION: Record<
 > = { allow: "allowed", deny: "denied", unknown: "unknown" };
 
 const PermissionResourceParser = z.object({
-  type: z.enum(["group", "project", "agent", "agent-template", "policy"]),
+  type: z.enum(["group", "project", "agent", "policy"]),
   id: z.string(),
 });
 

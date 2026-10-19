@@ -142,17 +142,6 @@ type AgentSupervisorRenewal struct {
 	CreatedAt         pgtype.Timestamptz
 }
 
-type AgentTemplate struct {
-	Grn         string
-	OrgGrn      string
-	Name        string
-	Description string
-	AgentValues []byte
-	CreatedBy   string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-}
-
 type AgentToken struct {
 	TokenHash   string
 	Serial      string

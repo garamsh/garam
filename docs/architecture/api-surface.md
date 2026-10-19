@@ -4,12 +4,10 @@ What garam serves to a caller outside it: which listeners exist, what admits a c
 
 Pending removals
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
-each of these goes in its own pull request of #1593, and what this
-document says of it holds until that pull request lands. The third
-removes `listAgentTemplates` and `getAgentTemplate`, and the fourth
-`AgentAssignment.operatorGrn`. The fifth removes the cut-over
-operations, the legacy definition operations and legacy execution
-mode, after #1594 moves aurora's agent off them.
+the fifth pull request of #1593 removes the cut-over operations, the
+legacy definition operations and legacy execution mode, after #1594
+moves aurora's agent off them, and what this document says of them
+holds until it lands.
 
 ## Contents
 - What it is
@@ -271,13 +269,9 @@ and `agent:rename`. No operation writes a definition: `defineAgent`
 is removed, and the schema refuses a new definition, a changed value
 or a direct delete from any release
 ([ADR-0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)).
-**The agent-template operations**
-list and read an organization's templates on `agent-template:read`,
-authorized against the template where the path names one
-([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)).
-No operation writes one: templates are retired read-only, and the
-schema refuses a write from any release
-([ADR-0088](./adr/0088-garams-agent-templates-are-retired-read-only-and-not-imported.md)).
+**No operation serves a template of garam's own**: they are gone
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)). `agent-template:read` authorizes reading the templates the
+control service publishes, on the organization.
 
 **`deleteOperator` is on the same listener and is the one operation
 here that stops a machine identity.** It removes the organization's
@@ -495,11 +489,11 @@ and not in the same place on every surface.
   No event carries a key, token, credential or certificate
   ([machine-identity.md](./machine-identity.md) §Credential events).
 - **A list answers only the objects its caller may read.**
-  `listGroups`, `listProjects`, `listAgents`, `listAgentTemplates` and
-  `listPolicies` are authorized on their read action on the
-  organization, and then drop each object whose own read the caller is
-  denied: the read `getGroup`, `getProject`, `getAgent`,
-  `getAgentTemplate` and `listPolicyVersions` each make on the object.
+  `listGroups`, `listProjects`, `listAgents` and `listPolicies` are
+  authorized on their read action on the organization, and then drop
+  each object whose own read the caller is denied: the read
+  `getGroup`, `getProject`, `getAgent` and `listPolicyVersions` each
+  make on the object.
   A Deny on one object therefore hides it from the list as it refuses
   its read. Every object of a page is asked in one `CheckBatch` call
   to the engine

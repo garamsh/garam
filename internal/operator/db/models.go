@@ -8,50 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Group struct {
-	Grn       string
-	OrgGrn    string
-	Name      string
-	Roles     []string
-	Policies  []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type GroupMember struct {
-	GroupGrn  string
-	MemberGrn string
-}
-
-type Invitation struct {
-	Token      string
-	OrgGrn     string
-	Role       string
-	CreatedBy  string
-	CreatedAt  pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
-	AcceptedBy pgtype.Text
-	AcceptedAt pgtype.Timestamptz
-}
-
-type OperationAuthority struct {
-	Ref             string
-	OrgGrn          string
-	AudienceGrn     string
-	RequestID       string
-	DelegationID    string
-	ActorGrn        string
-	Operation       string
-	TargetGrn       string
-	AssigneeGrn     pgtype.Text
-	AssignmentEpoch pgtype.Text
-	BodySha256      string
-	TokenHash       string
-	TokenExpiresAt  pgtype.Timestamptz
-	CreatedAt       pgtype.Timestamptz
-	RequestTarget   pgtype.Text
-}
-
 type Operator struct {
 	Grn             string
 	OrgGrn          string
@@ -60,36 +16,6 @@ type Operator struct {
 	Name            string
 	Description     string
 	ControlEndpoint pgtype.Text
-}
-
-type OperatorAssertion struct {
-	OperatorGrn string
-	Jti         string
-	ExpiresAt   pgtype.Timestamptz
-}
-
-type OperatorCertificate struct {
-	OperatorGrn string
-	Serial      string
-	IssuedAt    pgtype.Timestamptz
-}
-
-type OperatorDelegation struct {
-	ID          string
-	OrgGrn      string
-	OperatorGrn string
-	RequestID   string
-	Replaces    pgtype.Text
-	Operations  []string
-	ExpiresAt   pgtype.Timestamptz
-	GrantedBy   string
-	GrantedAt   pgtype.Timestamptz
-	EndedAt     pgtype.Timestamptz
-}
-
-type OperatorDelegationController struct {
-	DelegationID  string
-	ControllerGrn string
 }
 
 type OperatorKey struct {
@@ -103,58 +29,4 @@ type OperatorKey struct {
 	RetiresAt       pgtype.Timestamptz
 	RevokedAt       pgtype.Timestamptz
 	LastExchangedAt pgtype.Timestamptz
-}
-
-type OperatorToken struct {
-	TokenHash   string
-	OperatorGrn string
-	AudienceGrn pgtype.Text
-	IssuedAt    pgtype.Timestamptz
-	ExpiresAt   pgtype.Timestamptz
-	KeyID       int64
-}
-
-type Org struct {
-	Grn       string
-	Name      string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type OrgMember struct {
-	OrgGrn    string
-	UserGrn   string
-	Role      string
-	CreatedAt pgtype.Timestamptz
-}
-
-type Project struct {
-	Grn       string
-	OrgGrn    string
-	Name      string
-	Roles     []string
-	Policies  []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type ProjectMember struct {
-	ProjectGrn string
-	MemberGrn  string
-}
-
-type Session struct {
-	TokenHash string
-	UserGrn   string
-	CreatedAt pgtype.Timestamptz
-	ExpiresAt pgtype.Timestamptz
-}
-
-type User struct {
-	Grn       string
-	Nickname  string
-	Roles     []string
-	Policies  []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
 }

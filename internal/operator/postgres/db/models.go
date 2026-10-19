@@ -8,50 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type AgentEnrollmentApproval struct {
-	ID                  pgtype.UUID
-	OrgGrn              string
-	RequestID           string
-	Placement           string
-	AudienceGrn         string
-	AssigneeGrn         string
-	OperationRef        string
-	CreatedAt           pgtype.Timestamptz
-	AgentGrn            pgtype.Text
-	AdmittedAt          pgtype.Timestamptz
-	ReplacedAgentGrn    pgtype.Text
-	ExpectedAssigneeGrn pgtype.Text
-	ExpectedEpoch       pgtype.Int4
-	AdmittedEpoch       pgtype.Int4
-	AdmittedLineage     pgtype.UUID
-}
-
-type Group struct {
-	Grn       string
-	OrgGrn    string
-	Name      string
-	Roles     []string
-	Policies  []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type GroupMember struct {
-	GroupGrn  string
-	MemberGrn string
-}
-
-type Invitation struct {
-	Token      string
-	OrgGrn     string
-	Role       string
-	CreatedBy  string
-	CreatedAt  pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
-	AcceptedBy pgtype.Text
-	AcceptedAt pgtype.Timestamptz
-}
-
 type OperationAuthority struct {
 	Ref             string
 	OrgGrn          string
@@ -71,14 +27,6 @@ type OperationAuthority struct {
 	DestinationGrn  pgtype.Text
 }
 
-type Operator struct {
-	Grn             string
-	OrgGrn          string
-	RegisteredBy    string
-	CreatedAt       pgtype.Timestamptz
-	ControlEndpoint pgtype.Text
-}
-
 type OperatorDelegation struct {
 	ID          string
 	OrgGrn      string
@@ -90,54 +38,4 @@ type OperatorDelegation struct {
 	GrantedBy   string
 	GrantedAt   pgtype.Timestamptz
 	EndedAt     pgtype.Timestamptz
-}
-
-type OperatorDelegationController struct {
-	DelegationID  string
-	ControllerGrn string
-}
-
-type Org struct {
-	Grn       string
-	Name      string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type OrgMember struct {
-	OrgGrn    string
-	UserGrn   string
-	Role      string
-	CreatedAt pgtype.Timestamptz
-}
-
-type Project struct {
-	Grn       string
-	OrgGrn    string
-	Name      string
-	Roles     []string
-	Policies  []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type ProjectMember struct {
-	ProjectGrn string
-	MemberGrn  string
-}
-
-type Session struct {
-	TokenHash string
-	UserGrn   string
-	CreatedAt pgtype.Timestamptz
-	ExpiresAt pgtype.Timestamptz
-}
-
-type User struct {
-	Grn       string
-	Nickname  string
-	Roles     []string
-	Policies  []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
 }

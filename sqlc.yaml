@@ -1,176 +1,119 @@
 version: "2"
 sql:
   - engine: postgresql
-    schema: migrations/000001_init.up.sql
+    schema: migrations
     queries: internal/user/postgres/queries.sql
     gen:
       go:
         package: db
         out: internal/user/postgres/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema: migrations/000001_init.up.sql
+    schema: migrations
     queries: internal/org/postgres/queries.sql
     gen:
       go:
         package: db
         out: internal/org/postgres/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000001_init.up.sql
-      - migrations/000012_oauth_states.up.sql
-      - migrations/000016_password_credentials.up.sql
-      - migrations/000045_oauth_state_return_path.up.sql
+    schema: migrations
     queries: internal/authn/queries.sql
     gen:
       go:
         package: db
         out: internal/authn/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000001_init.up.sql
-      - migrations/000002_policies.up.sql
-      - migrations/000003_policy_attachments.up.sql
+    schema: migrations
     queries: internal/authz/queries.sql
     gen:
       go:
         package: db
         out: internal/authz/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000001_init.up.sql
-      - migrations/000004_agents.up.sql
-      - migrations/000010_agent_definitions.up.sql
-      - migrations/000026_agent_templates.up.sql
-      - migrations/000029_agent_execution_fence.up.sql
-      - migrations/000031_agent_standalone_supervisors.up.sql
-      - migrations/000033_agent_cutovers.up.sql
-      - migrations/000039_agent_tokens.up.sql
-      - migrations/000034_agent_templates_retired.up.sql
-      - migrations/000057_agent_templates_removed.up.sql
+    schema: migrations
     queries: internal/agent/queries.sql
     gen:
       go:
         package: db
         out: internal/agent/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000001_init.up.sql
-      - migrations/000017_operators.up.sql
-      - migrations/000019_operator_certificates.up.sql
-      - migrations/000023_operator_enrollment_tokens.up.sql
-      - migrations/000025_operator_details.up.sql
-      - migrations/000028_operator_delegations.up.sql
-      - migrations/000032_operator_control_endpoints.up.sql
-      - migrations/000038_operator_credentials.up.sql
-      - migrations/000043_operator_keys.up.sql
-      - migrations/000056_operator_enrolls_by_key_alone.up.sql
+    schema: migrations
     queries: internal/operator/queries.sql
     gen:
       go:
         package: db
         out: internal/operator/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000001_init.up.sql
-      - migrations/000017_operators.up.sql
-      - migrations/000028_operator_delegations.up.sql
-      - migrations/000032_operator_control_endpoints.up.sql
-      - migrations/000049_agent_enrollment_approvals.up.sql
-      - migrations/000051_agent_replace.up.sql
+    schema: migrations
     queries: internal/operator/postgres/queries.sql
     gen:
       go:
         package: db
         out: internal/operator/postgres/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000001_init.up.sql
-      - migrations/000005_certificate_authorities.up.sql
+    schema: migrations
     queries: internal/ca/postgres/queries.sql
     gen:
       go:
         package: db
         out: internal/ca/postgres/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000001_init.up.sql
-      - migrations/000008_messages.up.sql
-      - migrations/000009_message_delivery.up.sql
-      - migrations/000014_message_retention.up.sql
-      - migrations/000015_cross_org_consent.up.sql
-      - migrations/000004_agents.up.sql
-      - migrations/000029_agent_execution_fence.up.sql
-      - migrations/000037_message_signing.up.sql
-      - migrations/000048_message_signing_custody.up.sql
+    schema: migrations
     queries: internal/message/queries.sql
     gen:
       go:
         package: db
         out: internal/message/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000001_init.up.sql
-      - migrations/000050_audit_send_events.up.sql
-      - migrations/000054_audit_credential_events.up.sql
+    schema: migrations
     queries: internal/audit/postgres/queries.sql
     gen:
       go:
         package: db
         out: internal/audit/postgres/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000001_init.up.sql
-      - migrations/000052_machine_authentication_evidence.up.sql
+    schema: migrations
     queries: internal/machine/postgres/queries.sql
     gen:
       go:
         package: db
         out: internal/machine/postgres/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000011_agent_watches.up.sql
-      - migrations/000001_init.up.sql
-      - migrations/000004_agents.up.sql
-      - migrations/000029_agent_execution_fence.up.sql
+    schema: migrations
     queries: internal/watch/postgres/queries.sql
     gen:
       go:
         package: db
         out: internal/watch/postgres/db
         sql_package: pgx/v5
+        omit_unused_structs: true
   - engine: postgresql
-    schema:
-      - migrations/000001_init.up.sql
-      - migrations/000004_agents.up.sql
-      - migrations/000029_agent_execution_fence.up.sql
-      - migrations/000030_agent_managed_enrollment.up.sql
-      - migrations/000031_agent_standalone_supervisors.up.sql
-      - migrations/000010_agent_definitions.up.sql
-      - migrations/000026_agent_templates.up.sql
-      - migrations/000033_agent_cutovers.up.sql
-      - migrations/000036_agent_recovery_chain.up.sql
-      - migrations/000040_agent_recovery_unsigned.up.sql
-      - migrations/000042_supervisor_credentials.up.sql
-      - migrations/000049_agent_enrollment_approvals.up.sql
-      - migrations/000028_operator_delegations.up.sql
-      - migrations/000051_agent_replace.up.sql
-      - migrations/000053_agent_enrollment_placement.up.sql
-      - migrations/000034_agent_templates_retired.up.sql
-      - migrations/000057_agent_templates_removed.up.sql
+    schema: migrations
     queries: internal/agent/postgres/queries.sql
     gen:
       go:
         package: db
         out: internal/agent/postgres/db
         sql_package: pgx/v5
+        omit_unused_structs: true

@@ -36,3 +36,22 @@ func TestParseName_RefusesWhatTheRowCannotHold(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, agent.Name(strings.Repeat("가", 100)), n, "trimmed")
 }
+
+// TestParseName_RefusesInTheOrderAndWordsAnOperatorsNameIs pins the one
+// shape both name bounds share (#1152): text a column cannot hold is
+// refused before the length, so a 101-character name holding NUL is
+// refused for its NUL. The same name without the NUL is refused for its
+// length, which is the control that the length check still runs.
+func TestParseName_RefusesInTheOrderAndWordsAnOperatorsNameIs(t *testing.T) {
+	long := strings.Repeat("가", agent.NameMaxLength)
+	for in, want := range map[string]string{
+		long + "\x00": "an agent's name must be UTF-8 text without NUL characters",
+		long + "가":    "an agent's name is at most 100 characters",
+		"   ":         "an agent's name must not be empty",
+		"field \xff":  "an agent's name must be UTF-8 text without NUL characters",
+	} {
+		_, err := agent.ParseName(in)
+		require.Error(t, err)
+		assert.Equal(t, want, err.Error(), "%q", in)
+	}
+}

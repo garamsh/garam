@@ -69,8 +69,8 @@ func NewDetailsPatch(name, description *string) (DetailsPatch, error) {
 	if name != nil {
 		n := strings.TrimSpace(*name)
 		switch {
-		case !storable(n):
-			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's name must be text without NUL characters")
+		case !isStorableText(n):
+			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's name must be UTF-8 text without NUL characters")
 		case n == "":
 			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's name must not be empty")
 		case utf8.RuneCountInString(n) > NameMaxLength:
@@ -81,8 +81,8 @@ func NewDetailsPatch(name, description *string) (DetailsPatch, error) {
 	if description != nil {
 		d := strings.TrimSpace(*description)
 		switch {
-		case !storable(d):
-			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's description must be text without NUL characters")
+		case !isStorableText(d):
+			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's description must be UTF-8 text without NUL characters")
 		case utf8.RuneCountInString(d) > DescriptionMaxLength:
 			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's description is at most 1000 characters")
 		}
@@ -91,8 +91,10 @@ func NewDetailsPatch(name, description *string) (DetailsPatch, error) {
 	return p, nil
 }
 
-// storable reports whether s is text a PostgreSQL text column holds.
-func storable(s string) bool {
+// isStorableText reports whether a Postgres text column accepts s: it
+// takes valid utf-8 and refuses a nul byte. agent.ParseName checks a
+// name the same way, in the same order.
+func isStorableText(s string) bool {
 	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 

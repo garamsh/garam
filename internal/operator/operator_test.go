@@ -143,3 +143,22 @@ func TestNewDetailsPatch_TrimsAndKeepsWhatItWasNotGiven(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+// TestNewDetailsPatch_RefusesInTheOrderAndWordsAnAgentsNameIs pins the
+// one shape both name bounds share (#1152): text a column cannot hold
+// is refused before the length, so a 101-character name holding NUL is
+// refused for its NUL. The same name without the NUL is refused for its
+// length, which is the control that the length check still runs.
+func TestNewDetailsPatch_RefusesInTheOrderAndWordsAnAgentsNameIs(t *testing.T) {
+	long := strings.Repeat("가", operator.NameMaxLength)
+	for in, want := range map[string]string{
+		long + "\x00": "an operator's name must be UTF-8 text without NUL characters",
+		long + "가":    "an operator's name is at most 100 characters",
+		"   ":         "an operator's name must not be empty",
+		"field \xff":  "an operator's name must be UTF-8 text without NUL characters",
+	} {
+		_, err := operator.NewDetailsPatch(ptr(in), nil)
+		require.Error(t, err)
+		assert.Equal(t, want, err.Error(), "%q", in)
+	}
+}

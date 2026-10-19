@@ -74,7 +74,7 @@ export function StructuredDocument({
     return (
       <Banner
         tone="info"
-        title="This document's Statement is not a list"
+        title="Statement is not a list"
         action={
           <Button
             type="button"
@@ -86,8 +86,7 @@ export function StructuredDocument({
           </Button>
         }
       >
-        Statement holds one statement per entry of a list. Fix it in JSON to
-        edit statements here.
+        Fix it in JSON.
       </Banner>
     );
   }
@@ -157,11 +156,7 @@ export function StructuredDocument({
                 )}
               </div>
               {fields === null ? (
-                <p className="text-muted-foreground">
-                  Only the JSON view edits this statement: it is not an object,
-                  or its Action or Resource is not a list of strings, which
-                  garam refuses.
-                </p>
+                <p className="text-muted-foreground">JSON only.</p>
               ) : (
                 <StatementControls
                   name={name}
@@ -177,9 +172,7 @@ export function StructuredDocument({
         })}
       </ol>
       {statements.length === 0 && (
-        <p className="text-muted-foreground">
-          No statements yet. A policy needs at least one.
-        </p>
+        <p className="text-muted-foreground">No statements yet.</p>
       )}
       {!readOnly && (
         <div>
@@ -303,7 +296,7 @@ function StatementControls({
       />
       {fields.conditioned && (
         <p className="text-sm text-muted-foreground">
-          Has a Condition, kept as written. Edit it in JSON.
+          Has a Condition (JSON only).
         </p>
       )}
     </div>

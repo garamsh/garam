@@ -13,7 +13,6 @@ import {
   lookupGroups,
   lookupOrgMembers,
   slugFromGrn,
-  type Policy,
 } from "@/features/orgs";
 import { formatPolicyDocument, hasCondition } from "@/lib/policy-document";
 
@@ -57,18 +56,6 @@ export const metadata: Metadata = { title: "Policy — garam" };
 
 type Params = { params: Promise<{ org: string; policy: string }> };
 
-/** What the policy's state means for checks, in one sentence. */
-function statusSentence(policy: Policy): string {
-  switch (policy.status) {
-    case "draft":
-      return "Draft: grants no access until it is activated.";
-    case "active":
-      return `Active: version ${policy.defaultVersion} takes part in every check it reaches.`;
-    case "archived":
-      return "Archived: grants nothing. Its versions and attachments are kept.";
-  }
-}
-
 /** An attachment's subject as its row shows it. */
 function attachmentRow(subject: AttachedSubject): AttachmentRow {
   return {
@@ -79,11 +66,11 @@ function attachmentRow(subject: AttachedSubject): AttachmentRow {
     sentenceLabel: subjectLabel(subject),
     note:
       subject.lookup === "missing"
-        ? { tone: "danger", text: "Not found in this organization" }
+        ? { tone: "danger", text: "Not found" }
         : subject.lookup === "refused" && subject.kind !== "unknown"
           ? {
               tone: "muted",
-              text: `Not checked: this organization's ${KIND_PLURAL[subject.kind]} are not listed to you`,
+              text: "Not checked",
             }
           : null,
   };
@@ -93,7 +80,7 @@ function attachmentRow(subject: AttachedSubject): AttachmentRow {
 function Unshown({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Policy" description="A policy of this organization." />
+      <PageHeader title="Policy" />
       {children}
     </div>
   );
@@ -119,7 +106,7 @@ export default async function PolicyPage({ params }: Params) {
   const access = readAccess(org, [
     {
       key: "update",
-      label: "Edit and publish it",
+      label: "Edit it",
       check: {
         action: "policy:update",
         resource,
@@ -220,23 +207,12 @@ export default async function PolicyPage({ params }: Params) {
   );
   const refused = refusedKinds(catalogs);
 
+  // The header shows the status; the banner says whom it reaches.
   const overview = (
     <Banner
       tone={active && reach.kind !== "attached" ? "warn" : "info"}
-      title={statusSentence(policy)}
-    >
-      <p>
-        {active
-          ? sentence
-          : `Not evaluated while ${policy.status}. Once active: ${sentence}`}
-      </p>
-      {active && reach.kind === "org-wide" && (
-        <p>
-          Attaching narrows it: it then applies only to what it is attached to,
-          not to everyone.
-        </p>
-      )}
-    </Banner>
+      title={active ? sentence : `Once active: ${sentence}`}
+    />
   );
 
   return (
@@ -244,7 +220,7 @@ export default async function PolicyPage({ params }: Params) {
       <ItemCrumb label={policy.name} />
       <DetailPage
         name={policy.name}
-        idLabel="Policy identifier"
+        idLabel="Identifier"
         id={slug}
         status={<PolicyStatus status={policy.status} />}
         actions={
@@ -342,7 +318,7 @@ export default async function PolicyPage({ params }: Params) {
                 <Outcome area="attachments" />
                 {attachments.status === "forbidden" ? (
                   <RefusedRead subject="this policy's attachments">
-                    It may apply to everyone in this organization.
+                    It may apply to everyone.
                   </RefusedRead>
                 ) : (
                   <AttachmentTable
@@ -357,15 +333,15 @@ export default async function PolicyPage({ params }: Params) {
                     canDetach={canDetach}
                     empty={
                       active
-                        ? "It applies to everyone in this organization."
-                        : "Activated like this, it would apply to everyone in this organization."
+                        ? "Applies to everyone."
+                        : "Would apply to everyone once active."
                     }
                   />
                 )}
                 {partlyListed.length > 0 && (
                   <p className="text-muted-foreground">
-                    This organization&apos;s {partlyListed.join(" and ")} are
-                    not listed to you, so some agents may be missing here.
+                    Some agents may be missing: {partlyListed.join(" and ")} not
+                    listed to you.
                   </p>
                 )}
                 {canAttach && (
@@ -378,10 +354,9 @@ export default async function PolicyPage({ params }: Params) {
                     </h2>
                     {refused.length > 0 && (
                       <p className="text-muted-foreground">
-                        This organization&apos;s{" "}
-                        {refused.map((kind) => KIND_PLURAL[kind]).join(" and ")}{" "}
-                        are not listed to you, so none of them can be chosen
-                        here.
+                        Not listed to you:{" "}
+                        {refused.map((kind) => KIND_PLURAL[kind]).join(" and ")}
+                        .
                       </p>
                     )}
                     <AttachPolicyForm
@@ -392,14 +367,14 @@ export default async function PolicyPage({ params }: Params) {
                         label: policy.name,
                       }}
                       choose={{
-                        label: "Team, person or agent",
-                        placeholder: "Choose what to attach to",
+                        label: "Attach to",
+                        placeholder: "Choose",
                         groups: subjectChoices(
                           candidates,
                           (subject) => subject.grn,
                         ),
                       }}
-                      empty="Every team, person and agent you can list is already attached."
+                      empty="Nothing left to attach."
                     />
                   </section>
                 )}
@@ -412,8 +387,6 @@ export default async function PolicyPage({ params }: Params) {
             ? [
                 {
                   title: "Archive this policy",
-                  description:
-                    "It stops taking part in checks. Its versions and attachments are kept, and it can be activated again.",
                   control: (
                     <ArchivePolicyDialog
                       org={org}

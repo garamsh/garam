@@ -120,13 +120,7 @@ export function ScopeTable({ rows }: { rows: ScopeRow[] }) {
       data={rows}
       getRowId={(row) => row.identifier}
       search={{ placeholder: "Search policies or subjects" }}
-      empty={
-        <EmptyState
-          icon={ShieldCheck}
-          title="No policies"
-          description="This organization has no policies to attach."
-        />
-      }
+      empty={<EmptyState icon={ShieldCheck} title="No policies" />}
     />
   );
 }

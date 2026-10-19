@@ -2,11 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { Banner } from "@/components/banner";
 import { ControlNotice, NO_FIX } from "@/components/control-notice";
 import { DescriptionList } from "@/components/description-list";
 import { MemberMark } from "@/components/member-mark";
-import { StageTrack } from "@/components/stage-track";
 import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
@@ -20,7 +18,6 @@ import {
   lookupOperators,
   lookupOrgMembers,
   slugFromGrn,
-  type Agent,
   type AgentDefinition,
   type Reported as ReportedState,
 } from "@/features/orgs";
@@ -28,7 +25,6 @@ import {
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { ApproveHostDialog } from "../../../../_components/approve-host-dialog";
 import { InactiveButton } from "../../../../_components/inactive-button";
-import { CUTOVER_STAGE_LABEL } from "../../../../_components/cutover-marker";
 import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
@@ -42,7 +38,6 @@ import { DesiredValues, OperatorName } from "../_components/agent-facts";
 import {
   holderOf,
   reportedDots,
-  type AgentDot,
   type Holder,
 } from "../../../../_components/agent-status";
 import {
@@ -58,18 +53,12 @@ export const metadata: Metadata = { title: "Agent — garam" };
 
 type Params = { params: Promise<{ org: string; agent: string }> };
 
-/** A cutover's stages in the order an agent passes them (ADR-0086). */
-const CUTOVER_STAGES = [
-  { id: "legacy", label: "Defined in garam" },
-  { id: "frozen", label: CUTOVER_STAGE_LABEL.frozen },
-  { id: "switched", label: CUTOVER_STAGE_LABEL.switched },
-] as const;
-
 /**
- * One agent: what the organization asked for where garam holds a
- * definition, what operators have reported (ADR-0075), and the
- * execution its hosted operator's control service holds (#1170), each
- * under a tab of its own, with the rename under Settings. An agent a
+ * One agent: its two reported states and what holds it in the header,
+ * with the generation garam last activated where the read answers one
+ * (#1576), what the organization defined where garam holds a
+ * definition (ADR-0075), and the execution its hosted operator's
+ * control service holds (#1170), with the rename under Settings. An agent a
  * control service created has no definition in garam, so its page
  * carries the report and the execution alone; an identifier neither
  * names answers 404. The organization is read for itself, so one the
@@ -84,24 +73,14 @@ export default async function AgentPage({ params }: Params) {
   // Started before the page's own reads, so it runs beside them.
   const access = readAccess(org, [
     {
-      key: "watch",
-      label: "Watch it live",
-      check: { action: "agent:watch", resource: self },
-    },
-    {
       key: "rename",
       label: "Rename it",
       check: { action: "agent:rename", resource: self },
     },
     {
       key: "enroll",
-      label: "Replace a standalone host it runs on",
+      label: "Replace its standalone host",
       check: { action: "agent:enroll", resource: self },
-    },
-    {
-      key: "replace",
-      label: "Replace its host through its operator",
-      check: { action: "agent:replace", resource: self },
     },
   ]);
   const [
@@ -122,9 +101,7 @@ export default async function AgentPage({ params }: Params) {
     access,
   ]);
 
-  const fallback = (
-    <PageHeader title="Agent" description="An agent of this organization." />
-  );
+  const fallback = <PageHeader title="Agent" />;
   if (
     organization.status === "unreachable" ||
     definition.status === "unreachable" ||
@@ -192,11 +169,8 @@ export default async function AgentPage({ params }: Params) {
       label: "Overview",
       content: (
         <>
-          <Reported state={state} dots={dots} agent={reported} />
           {definition.data === null ? (
-            <Banner tone="info" title="No definition in garam">
-              {noDefinitionCause(holder)}
-            </Banner>
+            <p className="text-muted-foreground">{noDefinitionCause(holder)}</p>
           ) : (
             <Requested
               org={org}
@@ -218,11 +192,7 @@ export default async function AgentPage({ params }: Params) {
       value: "execution",
       label: "Execution",
       content: (
-        <Section
-          className="rounded-xl border bg-card p-4"
-          title="Execution"
-          description="What the hosted operator's control service holds for this agent."
-        >
+        <Section className="rounded-xl border bg-card p-4" title="Execution">
           {hosted.status === "ok" ? (
             <ExecutionPanel
               org={org}
@@ -252,11 +222,7 @@ export default async function AgentPage({ params }: Params) {
       value: "settings",
       label: "Settings",
       content: (
-        <Section
-          className="rounded-xl border bg-card p-4"
-          title="Name"
-          description="The organization's word for this agent. Its identifier, operator and values stay as they are."
-        >
+        <Section className="rounded-xl border bg-card p-4" title="Name">
           <RenameAgentForm
             org={org}
             agent={agent}
@@ -273,7 +239,7 @@ export default async function AgentPage({ params }: Params) {
       <DetailPage
         mark={<MemberMark kind="agent" name={name} className="size-7" />}
         name={name}
-        idLabel="Agent identifier"
+        idLabel="Identifier"
         id={agent}
         facts={[
           {
@@ -283,11 +249,13 @@ export default async function AgentPage({ params }: Params) {
                 ? "Not checked"
                 : holder === null
                   ? "Nowhere yet"
-                  : `${holder.name}, ${holder.kind === "operator" ? "operator" : "standalone host"}`,
+                  : holder.kind === "operator"
+                    ? holder.name
+                    : `${holder.name} (standalone)`,
           },
-          ...(holder === null
+          ...(reported?.generation === undefined
             ? []
-            : [{ term: "Epoch", description: String(holder.epoch) }]),
+            : [{ term: "Generation", description: reported.generation }]),
           {
             term: "Last report",
             description: reported ? (
@@ -362,17 +330,17 @@ function ReplaceHost({
   denied: boolean;
 }) {
   const reason = unchecked
-    ? "What holds it was not shown to you, so its host cannot be named."
+    ? "What runs it is not shown to you."
     : holder === null
-      ? "Nothing holds it yet, so there is no host to replace."
+      ? "Nothing runs it yet."
       : holder.kind === "operator"
-        ? `${holder.name}'s control service replaces the host of an agent an operator holds (ADR-0107), and the console does not reach that.`
+        ? `${holder.name}'s control service replaces this host.`
         : denied
-          ? "Replacing a standalone host needs agent:enroll on this agent, and no policy grants it to you."
+          ? "No policy lets you replace this agent's host."
           : null;
   if (reason !== null || holder === null || assigneeGrn === undefined) {
     return (
-      <InactiveButton reason={reason ?? "What holds it was not read."}>
+      <InactiveButton reason={reason ?? "Not checked."}>
         Replace host
       </InactiveButton>
     );
@@ -402,66 +370,13 @@ function ReplaceHost({
  * a standalone host enrolled it (ADR-0082).
  */
 function noDefinitionCause(holder: Holder | null): string {
-  if (holder === null) {
-    return "garam holds a report of this agent, and no definition and no holder.";
-  }
+  if (holder === null) return "No definition in garam.";
   return holder.kind === "operator"
-    ? `${holder.name}'s control service created this agent. garam holds what that operator reports, and no definition.`
-    : `A standalone host, ${holder.name}, enrolled this agent. garam holds what it reports, and no definition.`;
+    ? `Created by ${holder.name}'s control service.`
+    : `Enrolled by the standalone host ${holder.name}.`;
 }
 
-/**
- * What operators and the agent itself reported, apart from what the
- * organization asked for (ADR-0053). `Last report` is when one last
- * landed — nothing expires one.
- */
-function Reported({
-  state,
-  dots,
-  agent,
-}: {
-  state: ReportedState;
-  dots: { provisioning: AgentDot; runtime: AgentDot };
-  agent: Agent | undefined;
-}) {
-  return (
-    <Section
-      className="rounded-xl border bg-card p-4"
-      title="Reported"
-      description="What the operator and the agent itself last reported."
-    >
-      <DescriptionList
-        items={[
-          {
-            term: "Provisioning",
-            description: <StatusDot {...dots.provisioning} />,
-          },
-          { term: "Runtime", description: <StatusDot {...dots.runtime} /> },
-          {
-            term: "Last report",
-            description:
-              // A refused list says nothing about whether a report
-              // landed, so it is not checked rather than none.
-              state === "unchecked" ? (
-                <span className="text-muted-foreground">Not checked</span>
-              ) : agent === undefined ? (
-                <span className="text-muted-foreground">None</span>
-              ) : (
-                <Time value={agent.updatedAt} />
-              ),
-          },
-        ]}
-      />
-    </Section>
-  );
-}
-
-/**
- * What the organization asked for. A definition whose agent is cutting
- * over or cut over to the Operator keeps its values as an archive no
- * one edits, and only its name still changes (ADR-0086); where its
- * cutover stands is shown as a track with no control on it.
- */
+/** What the organization defined for the agent (ADR-0075). */
 function Requested({
   org,
   definition,
@@ -471,13 +386,9 @@ function Requested({
   definition: AgentDefinition;
   operatorName: string | undefined;
 }) {
-  const { operatorGrn, values, createdAt, cutover } = definition;
+  const { operatorGrn, values, createdAt } = definition;
   return (
-    <Section
-      className="rounded-xl border bg-card p-4"
-      title="Requested"
-      description="What this organization defined for the agent."
-    >
+    <Section className="rounded-xl border bg-card p-4" title="Definition">
       <DescriptionList
         items={[
           {
@@ -493,29 +404,7 @@ function Requested({
           { term: "Defined", description: <Time value={createdAt} /> },
         ]}
       />
-      {cutover !== null && (
-        <>
-          <StageTrack
-            label="Cut-over"
-            stages={CUTOVER_STAGES}
-            current={cutover.stage}
-          />
-          <Banner
-            tone="info"
-            title="These settings are archival and read-only in garam"
-          >
-            {CUTOVER_STAGE_LABEL[cutover.stage]}. Only the name still changes
-            here.
-          </Banner>
-        </>
-      )}
-      <h3 className="font-medium">Values</h3>
       <DesiredValues values={values} />
-      {cutover === null && (
-        <p className="text-muted-foreground">
-          Saved values; application is not reported.
-        </p>
-      )}
     </Section>
   );
 }

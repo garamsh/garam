@@ -17,7 +17,7 @@ export function WizardPage({
   children,
 }: {
   title: string;
-  description: string;
+  description?: string;
   steps: readonly Step[];
   current: string;
   completed?: readonly string[];

@@ -157,15 +157,12 @@ export function DocumentPanel({
           </h2>
           <p className="text-muted-foreground">
             {defaultText === null
-              ? "The default version could not be read, so the editor starts empty."
-              : `Opened on v${defaultVersion}, the default.`}
+              ? "Default version not read."
+              : `v${defaultVersion}, the default.`}
           </p>
         </div>
-        {canUpdate && (
-          <StatusDot
-            tone={changed ? "info" : "neutral"}
-            label={changed ? "Edited, not published" : "No changes"}
-          />
+        {canUpdate && changed && (
+          <StatusDot tone="info" label="Edited, not published" />
         )}
       </div>
 
@@ -174,11 +171,7 @@ export function DocumentPanel({
         onChange={setDocument}
         problem={problem}
         readOnly={!canUpdate}
-        hint={
-          canUpdate
-            ? "Publishing saves this as a new version and makes it the default. Earlier versions are kept, and any of them can be made the default again."
-            : "Your access lets you read this policy, not change it."
-        }
+        hint={canUpdate ? undefined : "Read-only for you."}
       />
 
       {canUpdate && (
@@ -193,8 +186,8 @@ export function DocumentPanel({
             description={
               <p>
                 {active
-                  ? `It becomes the default and applies at once. ${reach}`
-                  : "It becomes the default. Nothing is evaluated until the policy is activated."}
+                  ? `It applies at once. ${reach}`
+                  : "Nothing applies until activated."}
               </p>
             }
             action={publishPolicyVersion}
@@ -258,7 +251,7 @@ export function DocumentPanel({
               variant="outline"
               disabled={!sendable || saving}
             >
-              {saving ? "Saving…" : "Save without publishing"}
+              {saving ? "Saving…" : "Save draft"}
             </Button>
             <span
               role="status"
@@ -266,7 +259,7 @@ export function DocumentPanel({
             >
               {saved.status === "saved" &&
                 saved !== retired &&
-                `Saved as v${saved.version}. v${defaultVersion} is still the default.`}
+                `Saved as v${saved.version}, not the default.`}
             </span>
             {saved.status === "error" && saved.field === undefined && (
               <Refusal>{saved.message}</Refusal>
@@ -297,7 +290,7 @@ export function DocumentPanel({
           className="flex flex-wrap items-center gap-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3"
         >
           <p className="min-w-0 flex-1">
-            Saved as v{unpublished.version}, but it is not the default:{" "}
+            Saved as v{unpublished.version}, not the default:{" "}
             {unpublished.message}
           </p>
           <MakeDefaultDialog

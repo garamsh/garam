@@ -106,11 +106,10 @@ test.describe("permissions", () => {
     expect(joined.status()).toBe(204);
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions`);
-    await expect(
-      page.getByText("This organization has no policies.", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("No policies", { exact: true })).toBeVisible();
     await page
       .getByRole("link", { name: "Create policy", exact: true })
+      .first()
       .click();
     await expect(heading(page, "New policy")).toBeVisible();
 
@@ -172,15 +171,11 @@ test.describe("permissions", () => {
     await expect(editor.getByRole("alert")).toBeHidden();
     await create.click();
     await expect(heading(page, "Deny project renames")).toBeVisible();
-    await expect(
-      page.getByText("Draft: grants no access until it is activated.", {
-        exact: true,
-      }),
-    ).toBeVisible();
+    await expect(page.getByText("Draft", { exact: true })).toBeVisible();
 
     await page.getByRole("tab", { name: /^Attachments/ }).click();
     await clickUntil(
-      page.getByRole("combobox", { name: "Team, person or agent" }),
+      page.getByRole("combobox", { name: "Attach to" }),
       page.getByRole("option", { name: `${signedIn.groupName} · Team` }),
     );
     await page
@@ -201,7 +196,7 @@ test.describe("permissions", () => {
       dialog,
     );
     await expect(dialog).toContainText(
-      `Version 1 takes part in every check it reaches. Applies to ${signedIn.groupName} (Team).`,
+      `Applies to ${signedIn.groupName} (Team).`,
     );
     await expect(dialog.getByRole("checkbox")).toHaveCount(0);
 
@@ -220,11 +215,9 @@ test.describe("permissions", () => {
     await expect(dialog).toBeHidden();
     // The state is said on the Document tab, above the editor.
     await page.getByRole("tab", { name: "Document", exact: true }).click();
+    await expect(page.getByText("Active", { exact: true })).toBeVisible();
     await expect(
-      page.getByText(
-        "Active: version 1 takes part in every check it reaches.",
-        { exact: true },
-      ),
+      page.getByText("v1, the default.", { exact: true }),
     ).toBeVisible();
     expect((await rename("Frontend active")).status()).toBe(403);
 
@@ -289,11 +282,7 @@ test.describe("permissions", () => {
       }),
     );
 
-    // The section's former address lands on Permissions.
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/policies`);
-    await expect(page).toHaveURL(
-      `/console/orgs/${signedIn.orgSlug}/permissions`,
-    );
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions`);
     await page
       .getByRole("link", { name: "Baseline read", exact: true })
       .click();
@@ -307,31 +296,25 @@ test.describe("permissions", () => {
       dialog,
     );
     await expect(dialog).toContainText(
-      "Version 1 takes part in every check it reaches. No attachments: applies to everyone in this organization.",
+      "Applies to everyone: it has no attachments.",
     );
     const activate = dialog.getByRole("button", {
       name: "Activate for everyone",
       exact: true,
     });
     const confirm = dialog.getByRole("checkbox", {
-      name: "Apply it to everyone in this organization",
+      name: "Apply it to everyone",
       exact: true,
     });
     // Unconfirmed, the browser does not send the form.
     await activate.click();
     await expect(dialog).toBeVisible();
-    await expect(
-      page.getByText("Draft: grants no access until it is activated.", {
-        exact: true,
-      }),
-    ).toBeAttached();
+    await expect(page.getByText("Draft", { exact: true })).toBeAttached();
     await confirm.check();
     await activate.click();
+    await expect(page.getByText("Active", { exact: true })).toBeVisible();
     await expect(
-      page.getByText(
-        "Active: version 1 takes part in every check it reaches.",
-        { exact: true },
-      ),
+      page.getByText("v1, the default.", { exact: true }),
     ).toBeVisible();
 
     await page.goto(
@@ -397,11 +380,9 @@ test.describe("permissions", () => {
     await confirm.click();
 
     const refusal = dialog.getByRole("alert");
+    await expect(refusal).toContainText("This is its last attachment");
     await expect(refusal).toContainText(
-      "Not detached: this is its last attachment",
-    );
-    await expect(refusal).toContainText(
-      "Attach it to another team, person or agent first, or archive the policy.",
+      "Without it, it applies to everyone. Attach it elsewhere first.",
     );
 
     await page.reload();
@@ -446,7 +427,7 @@ test.describe("permissions", () => {
       name: "Publish v2 of Deny project deletion?",
     });
     await expect(dialog).toContainText(
-      `It becomes the default and applies at once. Applies to ${signedIn.groupName} (Team).`,
+      `It applies at once. Applies to ${signedIn.groupName} (Team).`,
     );
     await expect(dialog.getByRole("figure")).toContainText(
       'Added: "project:update"',
@@ -457,11 +438,9 @@ test.describe("permissions", () => {
     await expect(
       page.getByText("Published v2.", { exact: true }),
     ).toBeVisible();
+    await expect(page.getByText("Active", { exact: true })).toBeVisible();
     await expect(
-      page.getByText(
-        "Active: version 2 takes part in every check it reaches.",
-        { exact: true },
-      ),
+      page.getByText("v2, the default.", { exact: true }),
     ).toBeVisible();
 
     // v2 -> v1, from the versions list.
@@ -476,20 +455,18 @@ test.describe("permissions", () => {
       rollBack,
     );
     await expect(rollBack).toContainText(
-      `The policy evaluates v1 instead of v2. This applies at once. Applies to ${signedIn.groupName} (Team).`,
+      `Applies to ${signedIn.groupName} (Team).`,
     );
     await rollBack
       .getByRole("button", { name: "Roll back to v1", exact: true })
       .click();
     await expect(
-      page.getByRole("row", { name: /^v1/ }).getByText("Default · in use"),
+      page.getByRole("row", { name: /^v1/ }).getByText("In use"),
     ).toBeVisible();
     await page.getByRole("tab", { name: "Document", exact: true }).click();
+    await expect(page.getByText("Active", { exact: true })).toBeVisible();
     await expect(
-      page.getByText(
-        "Active: version 1 takes part in every check it reaches.",
-        { exact: true },
-      ),
+      page.getByText("v1, the default.", { exact: true }),
     ).toBeVisible();
   });
 
@@ -503,7 +480,7 @@ test.describe("permissions", () => {
     // The control: the owner is offered the create action on the page.
     await page.goto(permissions);
     await expect(
-      page.getByRole("link", { name: "Create policy", exact: true }),
+      page.getByRole("link", { name: "Create policy", exact: true }).first(),
     ).toBeVisible();
 
     const member = await seedMember(signedIn);
@@ -528,9 +505,7 @@ test.describe("permissions", () => {
       page.getByRole("link", { name: "Create policy", exact: true }),
     ).toBeHidden();
     // A refused list is not an empty one.
-    await expect(
-      page.getByText("This organization has no policies.", { exact: true }),
-    ).toBeHidden();
+    await expect(page.getByText("No policies", { exact: true })).toBeHidden();
   });
 });
 

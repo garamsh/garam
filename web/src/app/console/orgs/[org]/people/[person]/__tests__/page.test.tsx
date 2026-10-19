@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import PersonPage from "@/app/console/orgs/[org]/members/[person]/page";
+import PersonPage from "@/app/console/orgs/[org]/people/[person]/page";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
 import { API_URL } from "@/testing/mocks/handlers";
@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   },
-  usePathname: () => "/console/orgs/acme/members/alice",
+  usePathname: () => "/console/orgs/acme/people/alice",
 }));
 
 function renderPerson(person = "alice") {

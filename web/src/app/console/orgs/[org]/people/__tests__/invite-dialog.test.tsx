@@ -3,7 +3,7 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { InviteDialog } from "@/app/console/orgs/[org]/members/_components/invite-dialog";
+import { InviteDialog } from "@/app/console/orgs/[org]/people/_components/invite-dialog";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
@@ -69,9 +69,9 @@ describe("invite dialog", () => {
         "http://localhost:3000/console/invitations/secret-token",
       ),
     ).toBeInTheDocument();
-    // Presence: the description goes on to say the link is shown once.
+    // Presence: the dialog's own note on keeping it follows.
     expect(reveal).toHaveAccessibleDescription(
-      /^It admits one person as Admin and works once\./,
+      /^Admits one person as Admin, once\./,
     );
     // Shown once: nothing dismisses it before it is kept.
     expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();

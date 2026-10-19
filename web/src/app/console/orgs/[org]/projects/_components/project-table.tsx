@@ -65,9 +65,12 @@ const columns = (org: string): ColumnDef<ProjectRow, unknown>[] => [
 export function ProjectTable({
   org,
   rows,
+  emptyAction,
 }: {
   org: string;
   rows: ProjectRow[];
+  /** The page's create action, offered by the empty state. */
+  emptyAction?: React.ReactNode;
 }) {
   return (
     <DataTable
@@ -80,7 +83,7 @@ export function ProjectTable({
         <EmptyState
           icon={FolderGit2}
           title="No projects"
-          description="This organization has no projects."
+          action={emptyAction}
         />
       }
     />

@@ -55,7 +55,6 @@ function recordIssuances() {
 function wizard(
   initialStep: Exclude<ConnectStep, "register">,
   keys: OperatorKey[] = [],
-  rotate = false,
   {
     problem = null,
     canReplace = true,
@@ -74,7 +73,6 @@ function wizard(
         keys={keys}
         problem={problem}
         initialStep={initialStep}
-        rotate={rotate}
         canReplace={canReplace}
         operatorHref="/console/orgs/acme/operators/field-one"
         operatorsHref="/console/orgs/acme/operators"
@@ -135,11 +133,9 @@ describe("connect wizard", () => {
     expect(snippet).toHaveTextContent(`token-url='${TOKEN_URL}'`);
     expect(snippet).toHaveTextContent("private-key.pem=./field-one.pem");
     expect(snippet).not.toHaveTextContent("BEGIN PRIVATE KEY");
-    expect(
-      screen.getByRole("group", {
-        name: "Client ID (for the Operator's Secret)",
-      }),
-    ).toHaveTextContent(CLIENT_ID);
+    expect(screen.getByRole("group", { name: "Client ID" })).toHaveTextContent(
+      CLIENT_ID,
+    );
   });
 
   it("says this garam issues no keys when it refuses with key_issuance_unconfigured", async () => {
@@ -222,7 +218,7 @@ describe("connect wizard", () => {
   it("rotates beside a live key by default, and replaces it only once confirmed", async () => {
     const posted = recordIssuances();
     const user = userEvent.setup();
-    render(wizard("issue", [fieldOneKey], true));
+    render(wizard("issue", [fieldOneKey]));
 
     expect(screen.getByRole("radio", { name: /Rotate/ })).toBeChecked();
     await user.click(screen.getByRole("radio", { name: /Replace now/ }));
@@ -250,7 +246,7 @@ describe("connect wizard", () => {
       ),
     );
     const user = userEvent.setup();
-    render(wizard("issue", [fieldOneKey], true));
+    render(wizard("issue", [fieldOneKey]));
 
     await user.click(screen.getByRole("radio", { name: /Replace now/ }));
     await user.click(screen.getByRole("button", { name: "Replace key now" }));
@@ -274,7 +270,7 @@ describe("connect wizard", () => {
 
     expect(currentStep()).toHaveTextContent("Place the key");
     expect(
-      screen.getByText("The private key was shown when it was issued"),
+      screen.getByText("The private key was shown once"),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Issue a replacement" }),
@@ -287,13 +283,14 @@ describe("connect wizard", () => {
   });
 
   it("offers no replacement link to a caller garam denies re-issuing", () => {
-    render(wizard("place", [neverUsed], false, { canReplace: false }));
+    render(wizard("place", [neverUsed], { canReplace: false }));
 
     expect(
       screen.queryByRole("link", { name: "Issue a replacement" }),
     ).not.toBeInTheDocument();
+    // The control: the notice itself still stands.
     expect(
-      screen.getByText(/ask someone who\s+can re-issue/),
+      screen.getByText("The private key was shown once"),
     ).toBeInTheDocument();
   });
 
@@ -336,7 +333,7 @@ describe("connect wizard", () => {
 
   it("offers only replacing once two keys are live, and says why", () => {
     const second: OperatorKey = { ...fieldOneKey, kid: "second-kid" };
-    render(wizard("issue", [fieldOneKey, second], true));
+    render(wizard("issue", [fieldOneKey, second]));
 
     const rotate = screen.getByRole("radio", { name: /Rotate/ });
     expect(rotate).toBeDisabled();
@@ -349,7 +346,7 @@ describe("connect wizard", () => {
   });
 
   it("offers rotating while one key is live", () => {
-    render(wizard("issue", [fieldOneKey], true));
+    render(wizard("issue", [fieldOneKey]));
 
     expect(screen.getByRole("radio", { name: /Rotate/ })).toBeEnabled();
   });
@@ -361,7 +358,7 @@ describe("connect wizard", () => {
     await user.click(screen.getByRole("button", { name: "Issue key" }));
     await screen.findByRole("alertdialog", { name: "Save the private key" });
 
-    rerender(wizard("issue", [], false, { problem: "unreachable" }));
+    rerender(wizard("issue", [], { problem: "unreachable" }));
 
     expect(screen.getByText("Cannot reach the API")).toBeInTheDocument();
     expect(

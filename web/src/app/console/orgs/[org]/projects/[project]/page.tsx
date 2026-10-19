@@ -201,7 +201,6 @@ export default async function ProjectPage({ params }: Params) {
             ? [
                 {
                   title: "Delete project",
-                  description: `Removes the project and its ${memberships}. The people and agents in it stay in this organization.`,
                   control: (
                     <DeleteProjectDialog
                       org={org}

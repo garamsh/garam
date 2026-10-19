@@ -88,7 +88,6 @@ describe("DetailPage", () => {
         dangerZone={[
           {
             title: "Delete operator",
-            description: "Work already running in its cluster does not stop.",
             control: <button type="button">Delete operator</button>,
           },
         ]}
@@ -105,9 +104,6 @@ describe("DetailPage", () => {
 
     const panel = screen.getByRole("tabpanel", { name: "Settings" });
     const zone = within(panel).getByRole("region", { name: "Danger zone" });
-    expect(zone).toHaveTextContent(
-      "Work already running in its cluster does not stop.",
-    );
     expect(
       within(zone).getByRole("button", { name: "Delete operator" }),
     ).toBeInTheDocument();

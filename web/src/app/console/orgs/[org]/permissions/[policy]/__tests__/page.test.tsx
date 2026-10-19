@@ -62,18 +62,15 @@ describe("policy page", () => {
       screen.getByRole("heading", { level: 1, name: "Deny project deletion" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
-    expect(
-      screen.getByRole("group", { name: "Policy identifier" }),
-    ).toHaveTextContent("d1e2f3a4b5c6d7e8");
+    expect(screen.getByRole("group", { name: "Identifier" })).toHaveTextContent(
+      "d1e2f3a4b5c6d7e8",
+    );
+    // The status is the header's; the document says whom it reaches.
     const document = panelOf(/^Document/);
-    expect(
-      document.getByText(
-        "Active: version 1 takes part in every check it reaches.",
-      ),
-    ).toBeInTheDocument();
     expect(
       document.getByText("Applies to Engineering (Team)."),
     ).toBeInTheDocument();
+    expect(document.queryByText(/^Active/)).not.toBeInTheDocument();
     // The editor opens on the default version, v1, and nothing to
     // publish.
     expect(
@@ -90,7 +87,7 @@ describe("policy page", () => {
     // Presence: a tab's name carries its count.
     const versions = await openTab(/^Versions/);
     const current = versions.getByRole("row", { name: /^v1/ });
-    expect(within(current).getByText("Default · in use")).toBeInTheDocument();
+    expect(within(current).getByText("In use")).toBeInTheDocument();
     const newer = versions.getByRole("row", { name: /^v2/ });
     expect(
       within(newer).getByRole("button", { name: "Make v2 default" }),
@@ -120,13 +117,10 @@ describe("policy page", () => {
 
     await renderPolicy();
 
-    const document = panelOf(/^Document/);
+    expect(screen.getByText("Draft")).toBeInTheDocument();
     expect(
-      document.getByText("Draft: grants no access until it is activated."),
-    ).toBeInTheDocument();
-    expect(
-      document.getByText(
-        "Not evaluated while draft. Once active: No attachments: applies to everyone in this organization.",
+      panelOf(/^Document/).getByText(
+        "Once active: Applies to everyone: it has no attachments.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -134,19 +128,15 @@ describe("policy page", () => {
     ).toBeInTheDocument();
   });
 
-  it("warns that attaching narrows an active policy that reaches everyone", async () => {
+  it("warns that an active policy with no attachment reaches everyone", async () => {
     server.use(http.get(POLICIES, () => HttpResponse.json([baselineRead])));
 
     await renderPolicy("0a1b2c3d4e5f6071");
 
-    const document = panelOf(/^Document/);
-    expect(
-      document.getByText(
-        "No attachments: applies to everyone in this organization.",
-      ),
-    ).toBeInTheDocument();
-    // Presence: the warning is a sentence that goes on to say how.
-    expect(document.getByText(/^Attaching narrows it/)).toBeInTheDocument();
+    const warning = panelOf(/^Document/)
+      .getByText("Applies to everyone: it has no attachments.")
+      .closest("[data-tone]");
+    expect(warning).toHaveAttribute("data-tone", "warn");
   });
 
   it("does not call refused attachments no attachments", async () => {
@@ -154,7 +144,7 @@ describe("policy page", () => {
     server.use(http.get(`${DENY}/attachments`, () => HttpResponse.json([])));
     const listed = await renderPolicy();
     expect(
-      (await openTab(/^Attachments/)).getByText("No attachments"),
+      (await openTab(/^Attachments/)).getByText("Applies to everyone."),
     ).toBeInTheDocument();
     listed.unmount();
 
@@ -165,10 +155,9 @@ describe("policy page", () => {
     );
 
     await renderPolicy();
-    // Presence: the reach is a sentence that goes on to say why.
     expect(
       panelOf(/^Document/).getByText(
-        /may apply to everyone in this organization\.$/,
+        "May apply to everyone: its attachments are not listed to you.",
       ),
     ).toBeInTheDocument();
     const attachments = await openTab(/^Attachments/);
@@ -176,7 +165,9 @@ describe("policy page", () => {
     expect(
       attachments.getByText("You can't view this policy's attachments"),
     ).toBeInTheDocument();
-    expect(attachments.queryByText("No attachments")).not.toBeInTheDocument();
+    expect(
+      attachments.queryByText("Applies to everyone."),
+    ).not.toBeInTheDocument();
   });
 
   it("withdraws only the writes the server denies, and keeps the document readable", async () => {
@@ -193,11 +184,7 @@ describe("policy page", () => {
     expect(
       document.queryByRole("button", { name: /^Publish/ }),
     ).not.toBeInTheDocument();
-    expect(
-      document.getByText(
-        "Your access lets you read this policy, not change it.",
-      ),
-    ).toBeInTheDocument();
+    expect(document.getByText("Read-only for you.")).toBeInTheDocument();
     expect(
       document.getByRole("textbox", { name: "Statement 1 action 1" }),
     ).toHaveAttribute("readonly");
@@ -216,7 +203,7 @@ describe("policy page", () => {
     ).not.toBeInTheDocument();
     // The control: attaching, allowed, is still offered.
     expect(
-      attachments.getByRole("combobox", { name: "Team, person or agent" }),
+      attachments.getByRole("combobox", { name: "Attach to" }),
     ).toBeInTheDocument();
   });
 
@@ -280,12 +267,9 @@ describe("policy page", () => {
     expect(
       screen.queryByRole("button", { name: "Activate" }),
     ).not.toBeInTheDocument();
-    // The page still reads: the draft's state is said.
-    expect(
-      panelOf(/^Document/).getByText(
-        "Draft: grants no access until it is activated.",
-      ),
-    ).toBeInTheDocument();
+    // The page still reads: the draft's state and reach are said.
+    expect(screen.getByText("Draft")).toBeInTheDocument();
+    expect(panelOf(/^Document/).getByText(/^Once active:/)).toBeInTheDocument();
   });
 
   it("says an activation landed beside the header once its button is gone", async () => {
@@ -313,8 +297,6 @@ describe("policy page", () => {
       within(dialog).getByRole("button", { name: "Activate policy" }),
     );
 
-    expect(
-      await within(header).findByText("Activated: v1 takes part in checks."),
-    ).toBeInTheDocument();
+    expect(await within(header).findByText("Activated v1")).toBeInTheDocument();
   });
 });

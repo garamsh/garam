@@ -15,8 +15,7 @@ export function RefusedRead({
 }) {
   return (
     <Banner tone="info" title={`You can't view ${subject}`}>
-      Access is granted by this organization&apos;s roles and policies.
-      {children && <> {children}</>}
+      {children}
     </Banner>
   );
 }

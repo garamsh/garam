@@ -161,12 +161,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await seedHostedOperator(signedIn, null, []);
     const hosted = `/console/orgs/${signedIn.orgSlug}/operators/hosted`;
     await page.goto(`${hosted}?tab=control`);
-    await expect(
-      page.getByText(
-        "No endpoint is registered, so the console reaches no control service for this operator.",
-        { exact: true },
-      ),
-    ).toBeVisible();
+    await expect(page.getByText("No endpoint.", { exact: true })).toBeVisible();
 
     const endpoint = page.getByRole("textbox", {
       name: "Endpoint",
@@ -298,15 +293,13 @@ test.describe("control service, as contract tests against the agreed Operator wi
       },
     );
 
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     const published = page.getByRole("table", { name: "Published templates" });
     await expect(
       published.getByRole("row", { name: /web agent/ }),
     ).toContainText("small version 1");
     await expect(
-      page.getByText(
-        /small version 1\. Profiles are published by the deployment/,
-      ),
+      page.getByText(/^Published: small version 1\.$/),
     ).toBeVisible();
     await page
       .getByRole("button", { name: "View web agent", exact: true })
@@ -413,7 +406,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
       },
     );
 
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     await expect(
       page.getByText("No template is published.", { exact: true }),
     ).toBeVisible();
@@ -541,11 +534,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await page
       .getByRole("button", { name: "Create from template", exact: true })
       .click();
-    await expect(
-      page.getByText(
-        /at revision 1\. It keeps the template version it copied\./,
-      ),
-    ).toBeVisible();
+    await expect(page.getByText(/^Created at revision 1\.$/)).toBeVisible();
 
     const create = received.find((r) => r.method === "POST")!;
     const controller = `grn:${signedIn.orgSlug}:default:operator:${signedIn.operatorIdentifier}`;
@@ -570,9 +559,9 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(
       page.getByText("Revision 1 (pending)", { exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByRole("group", { name: "Agent identifier" }),
-    ).toContainText(signedIn.agentIdentifier);
+    await expect(page.getByRole("group", { name: "Identifier" })).toContainText(
+      signedIn.agentIdentifier,
+    );
     await page
       .getByRole("link", { name: "Open the agent", exact: true })
       .click();
@@ -619,14 +608,12 @@ test.describe("control service, as contract tests against the agreed Operator wi
       { exact: true },
     );
 
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
+    // The wizard and the Templates below it each say so.
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     await expect(unavailable.first()).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Publish version" }),
     ).toBeHidden();
-
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
-    await expect(unavailable).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Create from template" }),
     ).toBeHidden();
@@ -647,15 +634,15 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(
       page.getByRole("link", { name: signedIn.groupName, exact: true }),
     ).toBeVisible();
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
     await expect(
       // Presence: the heading carries the list's count after the title.
-      page.getByRole("heading", { level: 1, name: /^People and agents/ }),
+      page.getByRole("heading", { level: 1, name: /^People/ }),
     ).toBeVisible();
     await expect(page.getByText(signedIn.nickname).first()).toBeVisible();
   });
 
-  test("a member denied operator:read keeps the agent and template views, with the control service panels saying why", async ({
+  test("a member denied operator:read keeps the agent views, with the control service panels saying why", async ({
     page,
     context,
     signedIn,
@@ -722,12 +709,6 @@ test.describe("control service, as contract tests against the agreed Operator wi
       page.getByText("Provisioning failed", { exact: true }).first(),
     ).toBeVisible();
 
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
-    await expect(
-      page.getByText("No archived templates", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText(refused, { exact: true })).toBeVisible();
-
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     await expect(
       page.getByRole("heading", {
@@ -739,7 +720,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(page.getByText(refused, { exact: true })).toBeVisible();
   });
 
-  test("a delegation read garam answers with 500 leaves the agent and template views, with the panels saying why", async ({
+  test("a delegation read garam answers with 500 leaves the agent views, with the panels saying why", async ({
     page,
     signedIn,
     baseURL,
@@ -757,9 +738,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
       page.getByRole("heading", { level: 1, name: "Hosted control" }),
     ).toBeVisible();
     await expect(
-      page.getByText("garam did not answer for this operator's delegation.", {
-        exact: true,
-      }),
+      page.getByText("Delegation not read", { exact: true }),
     ).toBeVisible();
 
     await page.goto(
@@ -776,12 +755,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await page.getByRole("tab", { name: "Execution", exact: true }).click();
     await expect(page.getByText(failed, { exact: true })).toBeVisible();
 
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
-    await expect(
-      page.getByText("No archived templates", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText(failed, { exact: true })).toBeVisible();
-
+    // The wizard and the Templates below it each say so.
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     await expect(
       page.getByRole("heading", {
@@ -790,7 +764,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page.getByText(failed, { exact: true })).toBeVisible();
+    await expect(page.getByText(failed, { exact: true }).first()).toBeVisible();
   });
 
   test("with no registered endpoint the console reaches no control service and says so", async ({
@@ -803,10 +777,10 @@ test.describe("control service, as contract tests against the agreed Operator wi
         requests.push(request.url());
       }
     });
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     await expect(
       page.getByText(
-        "No control service is registered for this organization. An administrator registers one on an operator's page.",
+        "No control service is registered. Register one on an operator's page.",
         { exact: true },
       ),
     ).toBeVisible();

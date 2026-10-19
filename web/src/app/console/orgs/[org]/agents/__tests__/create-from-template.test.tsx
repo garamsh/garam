@@ -100,7 +100,7 @@ describe("create from template", () => {
     );
   });
 
-  it("is no dead end when nothing is published: it links to Templates", async () => {
+  it("is no dead end when nothing is published: it points to Templates below", async () => {
     server.use(publishedTemplates([]));
     renderStep();
 
@@ -108,8 +108,8 @@ describe("create from template", () => {
       await screen.findByText("No template is published yet"),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Open templates" }),
-    ).toHaveAttribute("href", "/console/orgs/acme/agents/templates");
+      screen.getByText("Publish one under Templates below."),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Create from template" }),
     ).toBeNull();
@@ -243,9 +243,7 @@ describe("create from template", () => {
     );
 
     expect(
-      await screen.findByText(
-        "Hosted's delegation names no controller, so there is no operator to place an agent on.",
-      ),
+      await screen.findByText("Hosted's delegation names no controller."),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open the operator" }),

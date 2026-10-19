@@ -32,7 +32,7 @@ import {
 } from "@/features/orgs/actions";
 import { useTheme } from "@/hooks/use-theme";
 
-import { CONSOLE_NAV_ENTRIES, orgHref, type ConsoleOrg } from "./navigation";
+import { CONSOLE_SECTIONS, orgHref, type ConsoleOrg } from "./navigation";
 import { useOrgShell } from "./org-shell";
 import { usePageActions } from "./page-actions";
 
@@ -46,13 +46,13 @@ const OBJECT_KIND: Record<
 > = {
   person: {
     heading: "People",
-    open: (id) => `members/${id}`,
-    list: "members?kind=person",
+    open: (id) => `people/${id}`,
+    list: "people",
   },
   agent: {
     heading: "Agents",
     open: (id) => `agents/${id}`,
-    list: "members?kind=agent",
+    list: "agents",
   },
   team: { heading: "Teams", open: (id) => `teams/${id}`, list: "teams" },
   policy: {
@@ -177,7 +177,7 @@ export function CommandPaletteDialog({
 
   const hidden = new Set(shell?.hidden);
   const sections = org
-    ? CONSOLE_NAV_ENTRIES.filter((entry) => !hidden.has(entry.key))
+    ? CONSOLE_SECTIONS.filter((entry) => !hidden.has(entry.segment))
     : [];
   // Objects are found, not browsed: an organization lists too many to
   // scroll, so they are searched for once something is typed.
@@ -318,8 +318,8 @@ export function CommandPaletteDialog({
                 <CommandGroup heading="Go to">
                   {sections.map((entry) => (
                     <CommandItem
-                      key={entry.key}
-                      value={`section ${entry.key}`}
+                      key={entry.segment}
+                      value={`section ${entry.segment}`}
                       keywords={[entry.label]}
                       onSelect={() =>
                         run(() => router.push(orgHref(org, entry.segment)))

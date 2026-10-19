@@ -4,7 +4,7 @@ import { PageHeader } from "../page-header";
 export type SettingsSection = {
   id: string;
   title: string;
-  description: string;
+  description?: string;
   /** The section's form, ending in its own Save. */
   content: React.ReactNode;
 };
@@ -21,7 +21,7 @@ export function SettingsPage({
   after,
 }: {
   title: string;
-  description: string;
+  description?: string;
   sections: readonly SettingsSection[];
   /** What closes the page below the sections, such as a `DangerZone`. */
   after?: React.ReactNode;
@@ -56,7 +56,9 @@ export function SettingsPage({
                 <h2 id={`${section.id}-title`} className="text-base">
                   {section.title}
                 </h2>
-                <p className="text-muted-foreground">{section.description}</p>
+                {section.description && (
+                  <p className="text-muted-foreground">{section.description}</p>
+                )}
               </div>
               <div className="p-4">{section.content}</div>
             </section>

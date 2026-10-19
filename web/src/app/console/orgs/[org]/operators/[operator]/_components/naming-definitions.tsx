@@ -7,8 +7,6 @@ import {
   type Catalog,
 } from "@/features/orgs";
 
-import { CutoverBadge } from "../../../../../_components/cutover-marker";
-
 /**
  * The agent definitions naming this operator, which is what refuses its
  * deletion (ADR-0045). A definition says which operator is to run its
@@ -34,13 +32,9 @@ export function NamingDefinitions({
         Agents it runs
       </h2>
       {definitions.status === "forbidden" ? (
-        <p className="text-muted-foreground">
-          Not checked: agent definitions are not listed to you.
-        </p>
+        <p className="text-muted-foreground">Not checked.</p>
       ) : definitions.data.length === 0 ? (
-        <p className="text-muted-foreground">
-          No agent definition names this operator.
-        </p>
+        <p className="text-muted-foreground">None.</p>
       ) : (
         <ul className="flex flex-col divide-y rounded-xl border">
           {definitions.data.map((definition) => (
@@ -54,7 +48,6 @@ export function NamingDefinitions({
               >
                 {definition.name}
               </Link>
-              <CutoverBadge cutover={definition.cutover} />
               <span className="ml-auto text-muted-foreground">
                 Defined <Time value={definition.createdAt} />
               </span>

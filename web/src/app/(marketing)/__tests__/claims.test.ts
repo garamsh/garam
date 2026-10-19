@@ -177,9 +177,7 @@ const CLAIMS: Claim[] = [
     pinned: [],
     facts: [
       "teams",
-      // People and agents are one list (ADR-0113); an agent keeps its
-      // own pages under agents/.
-      "members",
+      "people",
       "agents",
       "projects",
       "operators",

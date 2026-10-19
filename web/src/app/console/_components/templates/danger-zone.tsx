@@ -1,17 +1,15 @@
 /** One irreversible action the danger zone offers. */
 export type DangerAction = {
   title: string;
-  /** What the action destroys or stops, in a sentence. */
-  description: string;
   /** The control: a button opening an AlertDialog that names the act. */
   control: React.ReactNode;
 };
 
 /**
  * The card closing a detail page's settings with what cannot be undone.
- * Each action says what it costs beside its control, and the control
- * confirms in a dialog labelled with the act ("Delete operator"), never
- * a bare "OK".
+ * Each control confirms in a dialog that says what the act costs
+ * (ADR-0116), labelled with the act ("Delete operator"), never a bare
+ * "OK".
  */
 export function DangerZone({ actions }: { actions: readonly DangerAction[] }) {
   return (
@@ -31,12 +29,7 @@ export function DangerZone({ actions }: { actions: readonly DangerAction[] }) {
             key={action.title}
             className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 last:border-b-0"
           >
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="font-medium">{action.title}</span>
-              <span className="text-muted-foreground">
-                {action.description}
-              </span>
-            </div>
+            <span className="font-medium">{action.title}</span>
             <div className="shrink-0">{action.control}</div>
           </li>
         ))}

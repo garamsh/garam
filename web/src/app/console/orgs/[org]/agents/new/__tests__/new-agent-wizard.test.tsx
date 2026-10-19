@@ -120,9 +120,9 @@ describe("new agent wizard", () => {
 
     expect(currentStep()).toHaveTextContent("Created");
     expect(currentStep()).not.toHaveTextContent("Verify");
-    expect(
-      screen.getByRole("group", { name: "Agent identifier" }),
-    ).toHaveTextContent("0123456789abcdef");
+    expect(screen.getByRole("group", { name: "Identifier" })).toHaveTextContent(
+      "0123456789abcdef",
+    );
     expect(read).toEqual([]);
   });
 });

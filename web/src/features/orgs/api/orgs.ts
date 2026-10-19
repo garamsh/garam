@@ -169,11 +169,11 @@ export const AgentParser = parserFor<Agent>()(
     assignment: z
       .object({
         assigneeGrn: GrnParser,
-        operatorGrn: GrnParser.optional(),
         epoch: z.number(),
         since: z.string(),
       })
       .optional(),
+    generation: z.string().optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
   }),

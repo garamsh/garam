@@ -165,7 +165,7 @@ describe("the sections the shell leaves out", () => {
     await renderRead();
 
     expect(
-      screen.getByText("Hidden: permissions, consents"),
+      screen.getByText("Hidden: consents, permissions"),
     ).toBeInTheDocument();
     expect(requests).toBe(1);
   });

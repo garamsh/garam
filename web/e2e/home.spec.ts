@@ -57,10 +57,9 @@ test.describe("Home", () => {
 
     const nav = page.getByRole("navigation", { name: "Organization sections" });
     await expect(
-      nav.getByText(
-        "Permissions and Consents are not shown: no policy lets you read them.",
-        { exact: false },
-      ),
+      nav.getByText("Permissions hidden: no policy lets you read it.", {
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(
       nav.getByRole("link", { name: "Permissions", exact: true }),
@@ -68,11 +67,6 @@ test.describe("Home", () => {
     // The control: what the member role reads is still listed.
     await expect(
       nav.getByRole("link", { name: "Teams", exact: true }),
-    ).toBeVisible();
-
-    await nav.getByRole("button", { name: "Why" }).click();
-    await expect(
-      nav.getByText(/roles and policies let you read what it holds/),
     ).toBeVisible();
   });
 
@@ -84,7 +78,7 @@ test.describe("Home", () => {
     await expect(
       nav.getByRole("link", { name: "Permissions", exact: true }),
     ).toBeVisible();
-    await expect(nav.getByRole("button", { name: "Why" })).toHaveCount(0);
+    await expect(nav.getByText(/hidden: no policy/)).toHaveCount(0);
   });
 
   for (const theme of ["light", "dark"] as const) {
@@ -112,8 +106,7 @@ test.describe("Home", () => {
       const nav = page.getByRole("navigation", {
         name: "Organization sections",
       });
-      await expect(nav.getByRole("button", { name: "Why" })).toBeVisible();
-      await nav.getByRole("button", { name: "Why" }).click();
+      await expect(nav.getByText(/hidden: no policy/)).toBeVisible();
 
       await expectHydrated(page);
       expect(await axeViolations(page)).toEqual([]);

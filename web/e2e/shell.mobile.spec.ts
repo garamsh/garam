@@ -36,11 +36,9 @@ test.describe("console shell on a phone", () => {
     ).toBeEnabled();
     await page.getByRole("button", { name: "Toggle Sidebar" }).first().tap();
     await expect(nav).toBeVisible();
-    await nav
-      .getByRole("link", { name: "People and agents", exact: true })
-      .tap();
+    await nav.getByRole("link", { name: "People", exact: true }).tap();
 
-    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/members`);
+    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/people`);
   });
 
   test("scrolls no wider than the screen", async ({ page, signedIn }) => {

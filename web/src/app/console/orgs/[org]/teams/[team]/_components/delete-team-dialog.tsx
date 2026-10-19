@@ -32,12 +32,7 @@ export function DeleteTeamDialog({
         </Button>
       }
       title={`Delete ${teamName}?`}
-      description={
-        <p>
-          This removes the team and its {memberships}. The people and agents in
-          it stay in this organization. garam cannot bring the team back.
-        </p>
-      }
+      description={<p>Removes its {memberships}. Its members stay.</p>}
       action={deleteGroup}
       initialState={initialState}
       fields={{ org, group: team }}

@@ -56,14 +56,11 @@ describe("teams section", () => {
 
     await renderServerComponent(TeamsPage(params("acme")));
 
-    expect(
-      screen.getByText("This organization has no teams."),
-    ).toBeInTheDocument();
-    // The empty state names the absence and no next step; the next
-    // step is the create action the header carries.
-    expect(
-      screen.getByRole("link", { name: "Create team" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("No teams")).toBeInTheDocument();
+    // One line and the page's action, the header's repeated (ADR-0116).
+    expect(screen.getAllByRole("link", { name: "Create team" })).toHaveLength(
+      2,
+    );
   });
 
   it.each([403, 404])(
@@ -99,9 +96,7 @@ describe("teams section", () => {
       // Presence: the notice goes on to say where access comes from.
       /^You can't view this organization's teams/,
     );
-    expect(
-      screen.queryByText("This organization has no teams."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No teams")).not.toBeInTheDocument();
     // No count is guessed for a list that was not read.
     expect(
       screen.getByRole("heading", { level: 1, name: "Teams" }),
@@ -135,9 +130,7 @@ describe("teams section", () => {
     expect(
       screen.getByRole("heading", { name: "Cannot reach the API" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("This organization has no teams."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No teams")).not.toBeInTheDocument();
   });
 
   it("says the API is unreachable when a dependency garam needs is down", async () => {

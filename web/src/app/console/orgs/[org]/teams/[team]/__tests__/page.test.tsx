@@ -325,7 +325,7 @@ describe("team page", () => {
 
     await renderTeam();
 
-    expect(screen.getByText("This team has no members.")).toBeInTheDocument();
+    expect(screen.getByText("No members")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
@@ -393,9 +393,7 @@ describe("team page", () => {
     expect(
       screen.getByRole("heading", { name: "Cannot reach the API" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("This team has no members."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No members")).not.toBeInTheDocument();
   });
 
   it("sends a rejected session to the login page", async () => {

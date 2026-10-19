@@ -69,13 +69,7 @@ function RevokeKey({
           </Button>
         }
         title="Revoke this key?"
-        description={
-          <p>
-            It stops verifying, and every token exchanged under it stops
-            working, the moment you confirm. An operator still signing with it
-            is refused. Its record stays, listed as revoked.
-          </p>
-        }
+        description={<p>It and every token exchanged under it stop working.</p>}
         action={revokeOperatorKey}
         initialState={initialState}
         fields={{ org, operator, kid }}
@@ -169,13 +163,9 @@ export function KeysPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <p className="max-w-xl text-muted-foreground">
-          The operator signs in to garam with its key. garam keeps only the
-          public half, so a lost key is replaced, never shown again.
-        </p>
+      <div className="flex justify-end">
         {canIssue && (
-          <Button asChild variant={live.length === 0 ? "default" : "outline"}>
+          <Button asChild variant="outline">
             <Link href={live.length === 0 ? setupHref : `${setupHref}?rotate`}>
               {live.length === 0 ? <KeyRound /> : <RefreshCw />}
               {live.length === 0
@@ -192,13 +182,7 @@ export function KeysPanel({
         columns={columns}
         data={keys}
         getRowId={(key) => key.kid}
-        empty={
-          <EmptyState
-            icon={KeyRound}
-            title="No keys issued"
-            description="This operator has never been issued a key."
-          />
-        }
+        empty={<EmptyState icon={KeyRound} title="No keys issued" />}
       />
     </div>
   );

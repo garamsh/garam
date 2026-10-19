@@ -116,12 +116,10 @@ function OpenSecretReveal({
           )}
         </div>
         {downloaded === false && (
-          <Refusal>Could not download the {noun}. Copy it instead.</Refusal>
+          <Refusal>Download failed. Copy it instead.</Refusal>
         )}
         {outcome === "failed" && (
-          <Refusal>
-            Could not copy the {noun}. Select it above and copy it yourself.
-          </Refusal>
+          <Refusal>Copy failed. Select it and copy it yourself.</Refusal>
         )}
         <div className="flex items-start gap-2">
           <input
@@ -132,7 +130,7 @@ function OpenSecretReveal({
             className="mt-0.5 size-4 accent-primary"
           />
           <label htmlFor={acknowledgeId}>
-            I have stored the {noun} somewhere safe. It will not be shown again.
+            I have stored the {noun}. It won&apos;t be shown again.
           </label>
         </div>
         <AlertDialogFooter>

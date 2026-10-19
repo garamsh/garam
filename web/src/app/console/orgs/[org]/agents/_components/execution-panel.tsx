@@ -54,7 +54,7 @@ export function ExecutionPanel({
   if (execution === null || execution.status === "loading") {
     return (
       <p role="status" className="text-muted-foreground">
-        Reading the agent&apos;s execution…
+        Loading…
       </p>
     );
   }

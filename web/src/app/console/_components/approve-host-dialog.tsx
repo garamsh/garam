@@ -74,16 +74,10 @@ export function ApproveHostDialog({
       description={
         replaces ? (
           <p>
-            A new host takes {replaces.agentName} over from {replaces.hostName}{" "}
-            at epoch {replaces.epoch}, once it enrolls. {replaces.hostName} is
-            fenced then, and the agent keeps its identity and memory.
+            {replaces.hostName} stops running {replaces.agentName} once the new
+            host enrolls.
           </p>
-        ) : (
-          <p>
-            The host enrolls itself with this approval and runs one new agent.
-            Nothing it needs is shown here: it already holds it.
-          </p>
-        )
+        ) : undefined
       }
       action={approveAgentEnrollment}
       initialState={initialState}

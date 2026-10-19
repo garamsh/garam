@@ -88,7 +88,7 @@ describe("document panel", () => {
       name: "Publish v3 of Deny project deletion?",
     });
     expect(dialog).toHaveAccessibleDescription(
-      "It becomes the default and applies at once. Applies to Engineering (Team).",
+      "It applies at once. Applies to Engineering (Team).",
     );
     const diff = within(dialog).getByRole("figure");
     expect(diff).toHaveTextContent('Removed: "project:delete"');
@@ -179,12 +179,10 @@ describe("document panel", () => {
     renderPanel();
 
     await editAction(user, "project:update");
-    await user.click(
-      screen.getByRole("button", { name: "Save without publishing" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Save draft" }));
 
     expect(
-      await screen.findByText("Saved as v3. v1 is still the default."),
+      await screen.findByText("Saved as v3, not the default."),
     ).toBeInTheDocument();
   });
 
@@ -202,25 +200,23 @@ describe("document panel", () => {
     const { rerender } = renderPanel();
     await editAction(user, "project:update");
     const save = screen.getByRole("button", {
-      name: "Save without publishing",
+      name: "Save draft",
     });
     await user.click(save);
     expect(
-      await screen.findByText("Saved as v3. v1 is still the default."),
+      await screen.findByText("Saved as v3, not the default."),
     ).toBeInTheDocument();
 
     // v3 is made the default on Versions; the page renders the panel
     // again with it.
     rerender(panel(3, 4));
 
-    expect(
-      screen.queryByText(/is still the default\.$/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/, not the default\.$/)).not.toBeInTheDocument();
     // The control: a save made under the new default says so.
     await editAction(user, "project:read");
     await user.click(save);
     expect(
-      await screen.findByText("Saved as v4. v3 is still the default."),
+      await screen.findByText("Saved as v4, not the default."),
     ).toBeInTheDocument();
   });
 
@@ -256,9 +252,7 @@ describe("document panel", () => {
 
     // Presence: the sentence goes on to quote why the default did not
     // move.
-    const halfDone = await screen.findByText(
-      /^Saved as v3, but it is not the default:/,
-    );
+    const halfDone = await screen.findByText(/^Saved as v3, not the default:/);
     expect(halfDone).toHaveTextContent(/You don't have permission/);
     // Publishing the same text again would append a duplicate v4.
     expect(screen.getByRole("button", { name: "Publish v3" })).toBeDisabled();
@@ -288,7 +282,7 @@ describe("document panel", () => {
     await user.keyboard("{Control>}a{/Control}{Backspace}");
     await user.paste(JSON.stringify(denyDeletesVersions[0].document));
 
-    expect(screen.getByText("No changes")).toBeInTheDocument();
+    expect(screen.queryByText("Edited, not published")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Publish v3" })).toBeDisabled();
 
     // The control: the same paste with one Action changed is a change,

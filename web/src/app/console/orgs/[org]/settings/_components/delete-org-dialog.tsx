@@ -66,12 +66,6 @@ export function DeleteOrgDialog({
         </Button>
       }
       title={`Delete ${name}?`}
-      description={
-        <p>
-          This deletes the organization and everything it holds. It can&apos;t
-          be undone.
-        </p>
-      }
       action={deleteOrg}
       initialState={initialState}
       fields={{ org }}

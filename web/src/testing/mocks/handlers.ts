@@ -8,7 +8,6 @@ import type {
   AgentEnrollmentListing,
   AgentSupervisor,
   AgentDefinition,
-  AgentTemplate,
   Group,
   GroupMember,
   InvitationPreview,
@@ -132,22 +131,6 @@ export const fieldAgent: AgentDefinition = {
   definedBy: alice.grn,
   createdAt: "2026-01-02T03:04:05Z",
   cutover: null,
-};
-
-/**
- * The single template Acme kept before garam's templates were retired
- * read-only (ADR-0088). Nothing links it to `fieldAgent`: a definition
- * copied a template's values once (ADR-0075).
- */
-export const researcher: AgentTemplate = {
-  grn: "grn:acme:default:agent-template:7c1e2a9b3d4f5a60",
-  orgGrn: acme.grn,
-  name: "Researcher",
-  description: "Reads papers",
-  values: { workspace: "papers", notes: "weekly" },
-  createdBy: alice.grn,
-  createdAt: "2026-01-02T03:04:05Z",
-  updatedAt: "2026-01-02T03:04:05Z",
 };
 
 /**
@@ -342,12 +325,6 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
     path: "/orgs/acme/agent-definitions/9f2ac1b40d8e7a35",
     guarded: true,
     body: fieldAgent,
-  },
-  { path: "/orgs/acme/agent-templates", guarded: true, body: [researcher] },
-  {
-    path: "/orgs/acme/agent-templates/7c1e2a9b3d4f5a60",
-    guarded: true,
-    body: researcher,
   },
   { path: "/orgs/acme/consents", guarded: true, body: [globexConsent] },
   {

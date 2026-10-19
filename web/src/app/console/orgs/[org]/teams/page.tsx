@@ -17,8 +17,6 @@ export const metadata: Metadata = { title: "Teams — garam" };
 type Params = { params: Promise<{ org: string }> };
 
 const TITLE = "Teams";
-const DESCRIPTION = "People and agents of this organization, working together.";
-
 /**
  * The organization's teams, each opening a page of its own. A team is
  * how the console presents a group (ADR-0072): the API, its GRN and its
@@ -46,28 +44,24 @@ export default async function TeamsPage({ params }: Params) {
 
   if (organization.status === "unreachable" || teams.status === "unreachable") {
     return (
-      <ListPage title={TITLE} description={DESCRIPTION}>
+      <ListPage title={TITLE}>
         <ApiUnreachable subject="this organization's teams" />
       </ListPage>
     );
   }
   if (teams.status === "forbidden") {
     return (
-      <ListPage title={TITLE} description={DESCRIPTION} primaryAction={create}>
+      <ListPage title={TITLE} primaryAction={create}>
         <RefusedRead subject="this organization's teams" />
       </ListPage>
     );
   }
 
   return (
-    <ListPage
-      title={TITLE}
-      description={DESCRIPTION}
-      count={teams.data.length}
-      primaryAction={create}
-    >
+    <ListPage title={TITLE} count={teams.data.length} primaryAction={create}>
       <TeamTable
         org={org}
+        emptyAction={create}
         teams={teams.data.map((team) => ({
           name: team.name,
           identifier: slugFromGrn(team.grn),

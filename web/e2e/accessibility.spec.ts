@@ -35,11 +35,11 @@ test.describe("accessibility", () => {
     expect(await axeViolations(page, ['[role="dialog"]'])).toEqual([]);
   });
 
-  test("People and agents passes axe", async ({ page, signedIn }) => {
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
+  test("People passes axe", async ({ page, signedIn }) => {
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
     await expect(
       // Presence: the heading carries the list's count after the title.
-      page.getByRole("heading", { level: 1, name: /^People and agents/ }),
+      page.getByRole("heading", { level: 1, name: /^People/ }),
     ).toBeVisible();
 
     await expectHydrated(page);

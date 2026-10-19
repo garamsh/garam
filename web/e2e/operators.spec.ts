@@ -498,9 +498,14 @@ test.describe("operators", () => {
     ).toBeHidden();
 
     await page.goto(`${operators}/${signedIn.operatorIdentifier}?tab=settings`);
+    // Settings holds only what the member may do: the enrollment token,
+    // inactive, and no form to rename or re-issue.
     await expect(
-      page.getByText("You can view this operator but not change it."),
+      page.getByRole("heading", { name: "Enrollment token", exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Name", exact: true }),
+    ).toBeHidden();
     await expect(
       page.getByRole("region", { name: "Danger zone" }),
     ).toBeHidden();

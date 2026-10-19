@@ -69,9 +69,12 @@ function columns(org: string): ColumnDef<TeamRow, unknown>[] {
 export function TeamTable({
   org,
   teams,
+  emptyAction,
 }: {
   org: string;
   teams: readonly TeamRow[];
+  /** The page's create action, offered by the empty state. */
+  emptyAction?: React.ReactNode;
 }) {
   return (
     <DataTable
@@ -81,11 +84,7 @@ export function TeamTable({
       getRowId={(team) => team.identifier}
       search={{ placeholder: "Search teams" }}
       empty={
-        <EmptyState
-          icon={UsersRound}
-          title="No teams"
-          description="This organization has no teams."
-        />
+        <EmptyState icon={UsersRound} title="No teams" action={emptyAction} />
       }
     />
   );

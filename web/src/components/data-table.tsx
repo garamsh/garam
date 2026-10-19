@@ -130,9 +130,7 @@ export function DataTable<TData>({
             className="text-muted-foreground tabular-nums"
             aria-live="polite"
           >
-            {selected.length === 0
-              ? "Select rows to act on several at once."
-              : `${selected.length} selected`}
+            {selected.length > 0 && `${selected.length} selected`}
           </span>
           {selection.actions(selected, () => setRowSelection({}))}
         </div>

@@ -55,9 +55,7 @@ describe("projects section", () => {
 
     await renderServerComponent(ProjectsPage(params("acme")));
 
-    expect(
-      screen.getByText("This organization has no projects."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("No projects")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     // The count sits in the heading beside the title, with no space in
     // its text, so the whole text is matched with the gap optional.
@@ -104,9 +102,7 @@ describe("projects section", () => {
     expect(
       screen.getByText("You can't view this organization's projects"),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("This organization has no projects."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No projects")).not.toBeInTheDocument();
     // No count is guessed for a list nobody read.
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
       /^Projects$/,
@@ -132,9 +128,7 @@ describe("projects section", () => {
     expect(
       screen.getByRole("heading", { name: "Cannot reach the API" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("This organization has no projects."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No projects")).not.toBeInTheDocument();
   });
 
   it("sends a rejected session to the login page, not to the notice", async () => {

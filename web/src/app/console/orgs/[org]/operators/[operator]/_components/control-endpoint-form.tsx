@@ -46,16 +46,13 @@ export function ControlEndpointForm({
       <input type="hidden" name="org" value={org} />
       <input type="hidden" name="operator" value={operator} />
       {current === null ? (
-        <p className="text-muted-foreground">
-          No endpoint is registered, so the console reaches no control service
-          for this operator.
-        </p>
+        <p className="text-muted-foreground">No endpoint.</p>
       ) : (
         <CopyField label="Current endpoint" value={current} />
       )}
       <FormField
         label="Endpoint"
-        hint="An https address. The console sends this operator's operations here and nowhere else."
+        hint="An https address."
         error={state.status === "error" ? state.message : undefined}
       >
         {(control) => (

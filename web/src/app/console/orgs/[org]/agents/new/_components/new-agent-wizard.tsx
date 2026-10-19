@@ -28,19 +28,11 @@ import { ExecutionPanel } from "../../_components/execution-panel";
  */
 function steps(verifies: boolean) {
   return [
-    {
-      id: "service",
-      title: "Control service",
-      description: "Where the agent is created",
-    },
-    { id: "template", title: "Template", description: "What it starts from" },
+    { id: "service", title: "Control service" },
+    { id: "template", title: "Template" },
     verifies
-      ? {
-          id: "last",
-          title: "Verify",
-          description: "The control service holds it",
-        }
-      : { id: "last", title: "Created", description: "The agent it created" },
+      ? { id: "last", title: "Verify" }
+      : { id: "last", title: "Created" },
   ];
 }
 
@@ -87,7 +79,6 @@ export function NewAgentWizard({
   return (
     <WizardPage
       title="New agent"
-      description="Create an agent from a template the control service published."
       steps={wizardSteps}
       current={current}
       completed={completed}
@@ -96,11 +87,6 @@ export function NewAgentWizard({
         <h2 className="text-base">{step?.title}</h2>
         {start.status === "blocked" ? (
           <>
-            <p className="text-muted-foreground">
-              garam no longer defines agents itself: a new agent is created by a
-              hosted operator&apos;s control service, from a template it
-              published.
-            </p>
             <ControlNotice
               operatorsHref={orgHref(org, "operators")}
               {...start.block}
@@ -148,16 +134,13 @@ function Created({
   const identifier = parseGrn(created.agent)?.identifier ?? null;
   return (
     <>
-      <p role="status">
-        Created at revision {created.revision}. It keeps the template version it
-        copied.
-      </p>
+      <p role="status">Created at revision {created.revision}.</p>
       {readBack !== null && (
         <ExecutionPanel org={org} agentGrn={created.agent} hosted={readBack} />
       )}
       {identifier !== null && (
         <>
-          <CopyField label="Agent identifier" value={identifier} />
+          <CopyField label="Identifier" value={identifier} />
           <div>
             <Button asChild>
               <Link href={`/console/orgs/${org}/agents/${identifier}`}>

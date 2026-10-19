@@ -99,9 +99,6 @@ describe("organization settings", () => {
     const general = screen.getByRole("region", { name: "General" });
     expect(within(general).queryByRole("button", { name: "Save" })).toBeNull();
     expect(within(general).getByText("Acme")).toBeInTheDocument();
-    expect(
-      within(general).getByText(/does not let you rename this organization/),
-    ).toBeInTheDocument();
     // The control: the delete, which the server allowed, is still
     // offered.
     expect(

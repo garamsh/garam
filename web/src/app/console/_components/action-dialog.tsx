@@ -25,7 +25,8 @@ type ActionState = { status: string; message?: string };
 
 type FormProps<S extends ActionState> = {
   title: string;
-  description: React.ReactNode;
+  /** What the act costs; the palette's consequence where left out. */
+  description?: React.ReactNode;
   /** What the form carries beyond its fields: a diff, a confirmation. */
   children?: (state: S) => React.ReactNode;
   action: (state: S, formData: FormData) => Promise<S>;
@@ -115,7 +116,13 @@ export function ActionDialog<S extends ActionState>({
       <AlertDialog open={open} onOpenChange={openDialog}>
         {trigger && <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>}
         <AlertDialogContent className="sm:max-w-lg">
-          <ConfirmForm {...form} onAnswer={answered} />
+          <ConfirmForm
+            {...form}
+            description={
+              form.description ?? (command && <p>{command.consequence}</p>)
+            }
+            onAnswer={answered}
+          />
         </AlertDialogContent>
       </AlertDialog>
       {said !== null && (

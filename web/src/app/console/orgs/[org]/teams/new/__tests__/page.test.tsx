@@ -43,8 +43,7 @@ describe("new team page", () => {
     await renderServerComponent(NewTeamPage(params("acme")));
 
     expect(screen.getByRole("status")).toHaveTextContent(
-      // Presence: the notice goes on to say where the grant comes from.
-      /^You cannot create teams here/,
+      "No policy lets you create teams",
     );
     expect(screen.queryByLabelText("Team name")).not.toBeInTheDocument();
   });

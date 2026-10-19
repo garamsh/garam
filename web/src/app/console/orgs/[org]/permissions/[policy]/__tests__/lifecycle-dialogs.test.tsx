@@ -16,7 +16,7 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 const BASELINE = `${API_URL}/orgs/acme/policies/0a1b2c3d4e5f6071`;
 const DENY = `${API_URL}/orgs/acme/policies/d1e2f3a4b5c6d7e8`;
-const EVERYONE = "No attachments: applies to everyone in this organization.";
+const EVERYONE = "Applies to everyone: it has no attachments.";
 const V1 = '{\n  "Effect": "Deny"\n}';
 const V2 = '{\n  "Effect": "Allow"\n}';
 
@@ -47,11 +47,9 @@ describe("activate policy dialog", () => {
       name: "Activate Baseline read?",
     });
 
-    expect(dialog).toHaveAccessibleDescription(
-      `Version 1 takes part in every check it reaches. ${EVERYONE}`,
-    );
+    expect(dialog).toHaveAccessibleDescription(EVERYONE);
     const confirm = within(dialog).getByRole("checkbox", {
-      name: "Apply it to everyone in this organization",
+      name: "Apply it to everyone",
     });
     expect(confirm).toBeRequired();
     await user.click(confirm);
@@ -123,7 +121,7 @@ describe("make default dialog", () => {
       name: "Roll back to v1?",
     });
     expect(dialog).toHaveAccessibleDescription(
-      "The policy evaluates v1 instead of v2. This applies at once. Applies to Engineering (Team).",
+      "Applies to Engineering (Team).",
     );
     // The diff says what the rollback removes and adds, in words.
     const diff = within(dialog).getByRole("figure");
@@ -181,7 +179,9 @@ describe("make default dialog", () => {
     );
     await user.click(screen.getByRole("button", { name: "Make v2 default" }));
     expect(
-      screen.queryByText("Conditions are not evaluated"),
+      screen.queryByText(
+        "Conditions are ignored: the statement applies as if it had none",
+      ),
     ).not.toBeInTheDocument();
     plain.unmount();
 
@@ -197,7 +197,9 @@ describe("make default dialog", () => {
     await user.click(screen.getByRole("button", { name: "Make v2 default" }));
 
     expect(
-      await screen.findByText("Conditions are not evaluated"),
+      await screen.findByText(
+        "Conditions are ignored: the statement applies as if it had none",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -217,7 +219,7 @@ describe("make default dialog", () => {
     await user.click(screen.getByRole("button", { name: "Make v2 default" }));
     expect(
       await screen.findByRole("checkbox", {
-        name: "Apply it to everyone in this organization",
+        name: "Apply it to everyone",
       }),
     ).toBeRequired();
     active.unmount();
@@ -239,7 +241,7 @@ describe("make default dialog", () => {
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
     expect(dialog).toHaveAccessibleDescription(
-      "The policy evaluates v2 instead of v1. Nothing changes until the policy is activated.",
+      "Nothing applies until activated.",
     );
   });
 });

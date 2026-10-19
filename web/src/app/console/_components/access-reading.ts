@@ -82,7 +82,7 @@ function line(statement: ExplainedStatement): GrantLine {
       return {
         scope: "unread",
         effect,
-        text: "A policy you can't read, by a path garam doesn't show you",
+        text: "A policy you can't read",
       };
   }
 }

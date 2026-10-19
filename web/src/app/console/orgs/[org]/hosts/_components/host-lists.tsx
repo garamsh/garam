@@ -261,13 +261,7 @@ export function HostLists({
             columns={supervisorColumns(org, denied)}
             data={supervisors}
             getRowId={(row) => row.identifier}
-            empty={
-              <EmptyState
-                icon={HardDrive}
-                title="No supervisors"
-                description="No host has enrolled in this organization."
-              />
-            }
+            empty={<EmptyState icon={HardDrive} title="No supervisors" />}
           />
         </section>
       )}
@@ -281,13 +275,7 @@ export function HostLists({
             columns={approvalColumns(org, denied)}
             data={approvals}
             getRowId={(row) => row.id}
-            empty={
-              <EmptyState
-                icon={HardDrive}
-                title="No approvals"
-                description="No host has been approved in this organization."
-              />
-            }
+            empty={<EmptyState icon={HardDrive} title="No approvals" />}
           />
         </section>
       )}

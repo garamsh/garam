@@ -65,7 +65,7 @@ describe("Your access", () => {
     expect(rename).toHaveTextContent("Policy platform-admins, attached to you");
   });
 
-  it("keeps a denied action listed with its reason and who can take it", async () => {
+  it("names a denied action once in its summary, and behind Details only the permission it lacks and who holds it", async () => {
     server.use(
       answerPermissionChecks(() => "deny"),
       answerExplanations(() => ({
@@ -89,12 +89,15 @@ describe("Your access", () => {
 
     const panel = await renderPanel(ACTIONS.slice(0, 1));
 
+    expect(panel).toHaveTextContent("You can't rename it.");
     const rename = row(panel, "Rename it");
     expect(rename).toHaveTextContent("Not allowed");
-    expect(rename).toHaveTextContent("No role or policy grants it to you.");
-    expect(rename).toHaveTextContent(/Who can:.*Minji.*person/);
+    expect(rename).toHaveTextContent("Missing agent:rename");
+    // The reason sits beside the inactive control, not here (ADR-0116).
+    expect(rename).not.toHaveTextContent(/grants it to you/);
+    expect(rename).toHaveTextContent(/Who can:.*Minji/);
     // The first page of candidates is all that is asked.
-    expect(rename).toHaveTextContent("and others past the first fifty asked");
+    expect(rename).toHaveTextContent("and more");
   });
 
   it("says who holds it is not shown where garam refuses the caller that list", async () => {
@@ -115,25 +118,24 @@ describe("Your access", () => {
 
     const panel = await renderPanel(ACTIONS.slice(0, 1));
 
-    expect(row(panel, "Rename it")).toHaveTextContent(
-      "Who holds it isn't shown to you.",
-    );
+    expect(row(panel, "Rename it")).toHaveTextContent("Holders not shown.");
   });
 
-  it("says a policy the caller cannot read only as such", async () => {
+  it("names a granting policy the caller cannot read only as such", async () => {
     server.use(
-      answerPermissionChecks(() => "deny"),
+      answerPermissionChecks(() => "allow"),
       answerExplanations(() => ({
-        decision: "deny",
+        decision: "allow",
         basis: "statements",
-        statements: [{ effect: "Deny", source: "unreadable-policy" }],
+        statements: [{ effect: "Allow", source: "unreadable-policy" }],
       })),
     );
 
     const panel = await renderPanel(ACTIONS.slice(0, 1));
 
+    expect(panel).toHaveTextContent("You can do everything.");
     expect(row(panel, "Rename it")).toHaveTextContent(
-      "Denied by A policy you can't read, by a path garam doesn't show you",
+      "A policy you can't read",
     );
   });
 
@@ -164,8 +166,11 @@ describe("Your access", () => {
 
     const replace = row(panel, "Replace its host");
     expect(replace).toHaveTextContent("Decided when you act");
-    expect(replace).toHaveTextContent(/The operation decides this/);
     expect(holdersAsked).toBe(0);
+    // The control: the allowed action beside it still names its grant.
+    expect(row(panel, "Rename it")).toHaveTextContent(
+      "Your organization role owner",
+    );
   });
 
   it("keeps the check's answer where garam does not explain it", async () => {
@@ -180,9 +185,7 @@ describe("Your access", () => {
 
     const rename = row(panel, "Rename it");
     expect(rename).toHaveTextContent("Allowed");
-    expect(rename).toHaveTextContent(
-      "Why was not answered: garam didn't explain it.",
-    );
+    expect(panel).toHaveTextContent("You can do everything.");
   });
 
   it("checks every action in one request", async () => {

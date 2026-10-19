@@ -124,7 +124,6 @@ export function ConnectWizard({
   keys,
   problem,
   initialStep,
-  rotate,
   canReplace,
   operatorHref,
   operatorsHref,
@@ -141,8 +140,6 @@ export function ConnectWizard({
   /** Why the operator or its keys were not read, if they were not. */
   problem: "unreachable" | "forbidden" | null;
   initialStep: Exclude<ConnectStep, "register">;
-  /** A live key is being replaced rather than a first one issued. */
-  rotate: boolean;
   /** garam lets the caller issue a replacement (`operator:reissue`). */
   canReplace: boolean;
   operatorHref: string;
@@ -194,7 +191,6 @@ export function ConnectWizard({
   return (
     <WizardPage
       title={`Connect ${name}`}
-      description="Each identity of an Operator — its manager and its control service — is connected on its own."
       steps={STEPS}
       current={verified ? "verify" : step}
       completed={completed}
@@ -210,25 +206,16 @@ export function ConnectWizard({
 
       {showSteps && step === "issue" && (
         <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <h2 className="text-base">Issue a key</h2>
-            <p className="text-muted-foreground">
-              garam generates the key and shows its private half once. It keeps
-              only the public half, so save the key when it appears.
-            </p>
-          </div>
+          <h2 className="text-base">Issue a key</h2>
           {state.status === "unconfigured" && (
             <Banner tone="info" title="This garam doesn't issue operator keys">
-              A key needs the machine token URL,{" "}
-              <code>GARAM_MACHINE_TOKEN_URL</code>, and it isn&apos;t set.
-              Whoever runs garam sets it; until then no operator can be given a
-              key.
+              <code>GARAM_MACHINE_TOKEN_URL</code> is not set. Ask whoever runs
+              garam.
             </Banner>
           )}
           {state.status === "unavailable" && (
             <Banner tone="warn" title="garam couldn't issue a key">
-              garam can&apos;t be reached right now. Try again in a moment; if
-              it keeps happening, ask whoever runs garam.
+              Try again shortly.
             </Banner>
           )}
           <form action={formAction} className="flex flex-col gap-5">
@@ -253,14 +240,12 @@ export function ConnectWizard({
                   <span className="flex flex-col gap-0.5">
                     <span className="font-medium">Rotate</span>
                     <span className="text-muted-foreground">
-                      Add the new key beside the current one, which keeps
-                      working for 24 hours and then retires by itself.
+                      The current key keeps working for 24 hours.
                     </span>
                     {atLimit && (
                       <span id="rotation-limit" className="text-foreground">
-                        Two keys are already live, which is as many as an
-                        operator holds. Withdraw one on the Keys tab first, or
-                        replace them now.
+                        Two keys are already live. Revoke one first, or replace
+                        them now.
                       </span>
                     )}
                   </span>
@@ -277,8 +262,7 @@ export function ConnectWizard({
                   <span className="flex flex-col gap-0.5">
                     <span className="font-medium">Replace now</span>
                     <span className="text-muted-foreground">
-                      For a key that was lost or exposed. Every current key, and
-                      every token signed in with one, stops working at once.
+                      Every current key stops working at once.
                     </span>
                   </span>
                 </label>
@@ -301,11 +285,7 @@ export function ConnectWizard({
                   }
                   title={`Replace ${name}'s key now?`}
                   description={
-                    <p>
-                      Every current key, and every token signed in with one,
-                      stops working the moment you confirm. The operator is
-                      refused until the new key is placed.
-                    </p>
+                    <p>Every current key and its tokens stop working.</p>
                   }
                   action={issueOperatorKey}
                   initialState={initialState}
@@ -332,11 +312,6 @@ export function ConnectWizard({
               )}
             </div>
           </form>
-          {rotate && live.length === 0 && (
-            <p className="text-muted-foreground">
-              This operator holds no live key, so the new one is its only key.
-            </p>
-          )}
         </div>
       )}
 
@@ -353,21 +328,14 @@ export function ConnectWizard({
 
       {showSteps && step === "verify" && (
         <div className="flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <h2 className="text-base">Verify</h2>
-            <p className="text-muted-foreground">
-              The operator signs in to garam with the new key on its next
-              exchange. This page checks every few seconds while it is open.
-            </p>
-          </div>
+          <h2 className="text-base">Verify</h2>
           {verifiedAt !== undefined ? (
             <Banner tone="ok" title={`${name} is connected`}>
-              It signed in with its key <Time value={verifiedAt} />.
+              Signed in <Time value={verifiedAt} />.
             </Banner>
           ) : withdrawn ? (
             <Banner tone="warn" title="This key was revoked">
-              It was revoked before it signed in, so it never will. Issue {name}{" "}
-              a new key to connect it.
+              Issue a new key to connect it.
             </Banner>
           ) : (
             <div role="status" className="flex items-center gap-2">
@@ -407,7 +375,7 @@ export function ConnectWizard({
         <SecretReveal
           open={kept !== issued.kid}
           title="Save the private key"
-          description="garam keeps only the public half. Download it or copy it now; it cannot be shown again."
+          description="It is shown only now."
           secret={issued.privateKeyPem}
           noun="private key"
           filename={`${operator}.pem`}
@@ -447,21 +415,17 @@ function PlaceStep({
   const notes: Record<Identity, React.ReactNode> = {
     manager: (
       <>
-        This is the Secret the manager mounts read-only at{" "}
-        <code className="font-mono text-xs">/etc/garam/credential</code>. It
-        also holds <code className="font-mono text-xs">server-root.pem</code>,
-        garam&apos;s server root, which the manager verifies garam against. A
-        replaced Secret reaches the running Pod without a restart.
+        Mounted read-only at{" "}
+        <code className="font-mono text-xs">/etc/garam/credential</code>.
       </>
     ),
     control: (
       <>
-        The control service ships no manifest of its own yet, so the
-        Secret&apos;s name and namespace are yours. Mount it read-only and point{" "}
+        Mount it read-only and point{" "}
         <code className="font-mono text-xs">--operator-private-key-file</code>,{" "}
         <code className="font-mono text-xs">--operator-client-id-file</code> and{" "}
         <code className="font-mono text-xs">--operator-token-url-file</code> at
-        its three files.
+        its files.
       </>
     ),
   };
@@ -471,40 +435,24 @@ function PlaceStep({
       <div className="flex flex-col gap-1.5">
         <h2 className="text-base">Place the key</h2>
         <p className="text-muted-foreground">
-          Put the key in the Secret of the identity you are connecting. The
-          private key goes in only as the file you saved — never on a command
-          line, in an environment variable or in source control.
+          Only as the saved file: never on a command line, in an environment
+          variable or in source control.
         </p>
       </div>
       {resumed && (
-        <Banner
-          tone="info"
-          title="The private key was shown when it was issued"
-        >
-          {replaceHref !== undefined ? (
-            <>
-              It cannot be shown again. If it was not saved, issue a
-              replacement.{" "}
-              <Link
-                href={replaceHref}
-                className="font-medium underline underline-offset-4"
-              >
-                Issue a replacement
-              </Link>
-            </>
-          ) : (
-            <>
-              It cannot be shown again. If it was not saved, ask someone who can
-              re-issue this operator&apos;s keys for a replacement.
-            </>
+        <Banner tone="info" title="The private key was shown once">
+          {replaceHref !== undefined && (
+            <Link
+              href={replaceHref}
+              className="font-medium underline underline-offset-4"
+            >
+              Issue a replacement
+            </Link>
           )}
         </Banner>
       )}
       <div className="grid gap-4 sm:grid-cols-2">
-        <CopyField
-          label="Client ID (for the Operator's Secret)"
-          value={clientId}
-        />
+        <CopyField label="Client ID" value={clientId} />
         {tokenUrl ? (
           <CopyField label="Token URL" value={tokenUrl} />
         ) : (
@@ -538,10 +486,6 @@ function PlaceStep({
                 tokenUrl: shownTokenUrl,
               })}
             />
-            <p className="text-muted-foreground">
-              Replace any value in angle brackets with your own, and each file
-              path with where you saved that file.
-            </p>
           </TabsContent>
         ))}
       </Tabs>

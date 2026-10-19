@@ -111,9 +111,8 @@ describe("delete operator form", () => {
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
 
-    // Presence: the sentence goes on to name what agents keep.
     expect(screen.getByRole("alertdialog")).toHaveTextContent(
-      /Work already running in its cluster does not stop/,
+      "garam refuses its keys and credential; work in its cluster does not stop.",
     );
   });
 

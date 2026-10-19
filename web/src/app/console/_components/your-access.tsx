@@ -53,18 +53,15 @@ export function accessDecisions(readings: readonly Reading[]): {
 
 /** Who else holds a denied action, in a sentence's worth of names. */
 function HoldersLine({ holders }: { holders: Holders }) {
-  if (holders === null) {
-    return <p>Who holds it was not checked: garam didn&apos;t answer.</p>;
-  }
-  if (holders.status === "forbidden") {
-    return <p>Who holds it isn&apos;t shown to you.</p>;
+  if (holders === null || holders.status === "forbidden") {
+    return <p>Holders not shown.</p>;
   }
   if (holders.holders.length === 0) {
     return (
       <p>
         {holders.more
-          ? "No one among the first fifty members and agents holds it."
-          : "No member or agent holds it."}
+          ? "No one in the first fifty holds it."
+          : "No one holds it."}
       </p>
     );
   }
@@ -87,55 +84,42 @@ function HoldersLine({ holders }: { holders: Holders }) {
               <span className={holder.type === "agent" ? "font-mono" : ""}>
                 {name}
               </span>
-              <span className="text-muted-foreground">
-                {holder.type === "user" ? "person" : "agent"}
-              </span>
             </li>
           );
         })}
-        {holders.more && (
-          <li className="text-muted-foreground">
-            and others past the first fifty asked
-          </li>
-        )}
+        {holders.more && <li className="text-muted-foreground">and more</li>}
       </ul>
     </div>
   );
 }
 
-/** What decided one action, read from the organization down. */
-function Why({ reading }: { reading: Reading }) {
+/**
+ * The grant behind an allowed action, read from the organization down.
+ * A denied one names the permission it lacks; its reason is said once,
+ * beside the inactive control, and not repeated here (ADR-0116).
+ */
+function Grant({ reading }: { reading: Reading }) {
+  if (reading.permission === "denied") {
+    return (
+      <p>
+        Missing{" "}
+        <code className="font-mono text-xs">{reading.action.check.action}</code>
+      </p>
+    );
+  }
   const { explanation } = reading;
-  if (explanation === null) {
-    return <p>Why was not answered: garam didn&apos;t explain it.</p>;
-  }
-  switch (explanation.basis) {
-    case "operation":
-      return (
-        <p>
-          The operation decides this when you take it, past the policy engine,
-          so it is offered and checked then.
-        </p>
-      );
-    case "undefined-action":
-      return <p>garam doesn&apos;t define this action, so no one holds it.</p>;
-    case "statements": {
-      const lines = grantLines(explanation.statements);
-      if (lines.length === 0) {
-        return <p>No role or policy grants it to you.</p>;
-      }
-      return (
-        <ol className="flex flex-col gap-1">
-          {lines.map((line, index) => (
-            <li key={index}>
-              {line.effect === "Deny" ? "Denied by " : ""}
-              {line.text}
-            </li>
-          ))}
-        </ol>
-      );
-    }
-  }
+  if (explanation?.basis !== "statements") return null;
+  const lines = grantLines(explanation.statements);
+  return (
+    <ol className="flex flex-col gap-1">
+      {lines.map((line, index) => (
+        <li key={index}>
+          {line.effect === "Deny" ? "Denied by " : ""}
+          {line.text}
+        </li>
+      ))}
+    </ol>
+  );
 }
 
 const STATUS = {
@@ -180,46 +164,58 @@ export async function readAccess(
   );
 }
 
+/** "A", "A and B", "A, B and C". */
+function listed(labels: readonly string[]): string {
+  return labels.length < 2
+    ? labels.join("")
+    : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+}
+
 /**
- * Your access (ADR-0113): what the caller may do on this object, and
- * the grant behind each, asked of garam's policy engine rather than
- * inferred from a role. A denied action stays listed with its reason
- * and who holds it. An explanation that failed leaves the check's
- * answer standing, and a policy the caller cannot read is said as one,
- * with nothing else about it.
+ * Your access (ADR-0113): one line saying what the caller may not do
+ * on this object, and behind an expander (ADR-0116) the grant behind
+ * each action, asked of garam's policy engine rather than inferred from
+ * a role, with who holds a denied one. An explanation that failed
+ * leaves the check's answer standing.
  */
 export function YourAccess({ readings }: { readings: readonly Reading[] }) {
+  const denied = readings
+    .filter((reading) => reading.permission === "denied")
+    .map((reading) => reading.action.label.toLowerCase());
   return (
-    <Section
-      title="Your access"
-      description="What you may do here and the grant behind each, asked of garam's policy engine, not inferred from your role."
-      region
-    >
-      <ul className="flex flex-col divide-y rounded-xl border">
-        {readings.map((reading) => {
-          const status = STATUS[reading.permission];
-          return (
+    <Section title="Your access" region>
+      <p className="text-muted-foreground">
+        {denied.length === 0
+          ? "You can do everything."
+          : `You can't ${listed(denied)}.`}
+      </p>
+      <details className="group rounded-xl border">
+        <summary className="cursor-pointer rounded-xl px-4 py-2.5 font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+          Details
+        </summary>
+        <ul className="flex flex-col divide-y border-t">
+          {readings.map((reading) => (
             <li
               key={reading.action.label}
               className="flex flex-col gap-2 px-4 py-3"
             >
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <span className="font-medium">{reading.action.label}</span>
-                <span className="font-mono text-xs text-muted-foreground">
-                  {reading.action.check.action}
-                </span>
-                <StatusDot {...status} className="sm:ml-auto" />
+                <StatusDot
+                  {...STATUS[reading.permission]}
+                  className="sm:ml-auto"
+                />
               </div>
               <div className="flex flex-col gap-2 text-muted-foreground">
-                <Why reading={reading} />
+                <Grant reading={reading} />
                 {reading.holders !== undefined && (
                   <HoldersLine holders={reading.holders} />
                 )}
               </div>
             </li>
-          );
-        })}
-      </ul>
+          ))}
+        </ul>
+      </details>
     </Section>
   );
 }

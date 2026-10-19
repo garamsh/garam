@@ -62,7 +62,7 @@ export function controlReach<H extends ReachableOperator>(
   // each operator's page are pages the caller can open.
   if (hosted === null) {
     return blocked(
-      "No control service is registered for this organization. An administrator registers one on an operator's page.",
+      "No control service is registered. Register one on an operator's page.",
       { at: "operators" },
     );
   }
@@ -70,10 +70,7 @@ export function controlReach<H extends ReachableOperator>(
   if (hosted.problem !== null) return blocked(hosted.problem, fix);
   const { delegation } = hosted;
   if (delegation === null) {
-    return blocked(
-      `${hosted.name} holds no delegation, so its control service is not reachable from here.`,
-      fix,
-    );
+    return blocked(`${hosted.name} holds no delegation.`, fix);
   }
   const missing = operations.find(
     (operation) => !delegation.operations.some((op) => op === operation),

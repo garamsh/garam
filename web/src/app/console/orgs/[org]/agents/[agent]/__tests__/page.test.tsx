@@ -53,22 +53,24 @@ async function openTab(name: string) {
 }
 
 describe("agent page", () => {
-  it("names the agent, keeps what was requested apart from what was reported, and awaits an operator", async () => {
+  it("names the agent, states its reports once in the header, and shows its definition", async () => {
     const { container } = await renderAgent();
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Scout" }),
     ).toBeInTheDocument();
     // The identifier is offered to copy, in mono, and is not the title.
+    expect(screen.getByRole("group", { name: "Identifier" })).toHaveTextContent(
+      "9f2ac1b40d8e7a35",
+    );
+    // The reports are the header's alone (ADR-0116): no second section
+    // repeats them.
+    expect(screen.getAllByText("Awaiting operator")).toHaveLength(1);
     expect(
-      screen.getByRole("group", { name: "Agent identifier" }),
-    ).toHaveTextContent("9f2ac1b40d8e7a35");
+      screen.queryByRole("heading", { name: "Reported" }),
+    ).not.toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Reported" }),
-    ).toBeInTheDocument();
-    expect(screen.getAllByText("Awaiting operator").length).toBeGreaterThan(0);
-    expect(
-      screen.getByRole("heading", { name: "Requested" }),
+      screen.getByRole("heading", { name: "Definition" }),
     ).toBeInTheDocument();
     expect(screen.getByText("haiku")).toBeInTheDocument();
     expect(
@@ -106,10 +108,10 @@ describe("agent page", () => {
     expect(
       screen.queryByRole("heading", { name: "1c3d5e7f90a2b4c6" }),
     ).toBeNull();
-    expect(
-      screen.getByRole("group", { name: "Agent identifier" }),
-    ).toHaveTextContent("1c3d5e7f90a2b4c6");
-    expect(screen.getByText("No definition in garam")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Identifier" })).toHaveTextContent(
+      "1c3d5e7f90a2b4c6",
+    );
+    expect(screen.getByText("No definition in garam.")).toBeInTheDocument();
     // Nothing of it is garam's to rename.
     expect(screen.queryByRole("tab", { name: "Settings" })).toBeNull();
   });
@@ -123,9 +125,9 @@ describe("agent page", () => {
 
     await renderAgent();
 
-    // In the header and under Reported, each its own dot and label.
-    expect(screen.getAllByText("Provisioning failed")).toHaveLength(2);
-    expect(screen.getAllByText("Disconnected")).toHaveLength(2);
+    // In the header, each its own dot and label, said once.
+    expect(screen.getAllByText("Provisioning failed")).toHaveLength(1);
+    expect(screen.getAllByText("Disconnected")).toHaveLength(1);
     expect(screen.queryByText("Awaiting operator")).not.toBeInTheDocument();
   });
 
@@ -242,54 +244,23 @@ describe("agent page", () => {
     ).toBeInTheDocument();
   });
 
-  it.each([
-    ["switched", "Managed by the Operator"],
-    ["frozen", "Cut-over in progress"],
-  ] as const)(
-    "tracks a %s definition's cutover read-only, says its values are archival, and keeps the rename",
-    async (stage, state) => {
-      server.use(
-        http.get(ONE, () =>
-          HttpResponse.json({ ...fieldAgent, cutover: { stage } }),
-        ),
-      );
+  it("shows no cut-over marker, even for a definition with one open (#1592)", async () => {
+    server.use(
+      http.get(ONE, () =>
+        HttpResponse.json({ ...fieldAgent, cutover: { stage: "switched" } }),
+      ),
+    );
 
-      await renderAgent();
-
-      const track = screen.getByRole("list", { name: "Cut-over" });
-      expect(
-        within(track)
-          .getAllByRole("listitem")
-          .find((item) => item.getAttribute("aria-current") === "step"),
-      ).toHaveTextContent(state);
-      // The track reports; it offers no transition.
-      expect(within(track).queryByRole("button")).toBeNull();
-      expect(
-        screen.getByText("These settings are archival and read-only in garam"),
-      ).toBeInTheDocument();
-      // The archived values are still shown, as they were frozen, and
-      // the sentence a legacy definition carries is gone.
-      expect(screen.getByText("haiku")).toBeInTheDocument();
-      expect(
-        screen.queryByText("Saved values; application is not reported."),
-      ).not.toBeInTheDocument();
-      // Renaming still reaches garam (ADR-0086).
-      await openTab("Settings");
-      expect(screen.getByLabelText("Name")).toHaveValue("Scout");
-    },
-  );
-
-  it("says nothing of a cutover for a definition with none open", async () => {
-    // A rolled-back attempt is read as none, so this is its state too.
     await renderAgent();
 
+    // The control: the definition itself rendered, values and all.
     expect(
-      screen.getByText("Saved values; application is not reported."),
+      screen.getByRole("heading", { name: "Definition" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("list", { name: "Cut-over" })).toBeNull();
-    // Presence, not identity: no sentence on the page mentions an
-    // archive.
-    expect(screen.queryByText(/archival/)).not.toBeInTheDocument();
+    expect(screen.getByText("haiku")).toBeInTheDocument();
+    expect(screen.queryByText(/Managed by the Operator/)).toBeNull();
+    expect(screen.queryByText(/Cut-over/)).toBeNull();
+    expect(screen.queryByText(/archival/)).toBeNull();
   });
 
   it("says a missing control service under Execution and links to where it is fixed", async () => {
@@ -302,33 +273,6 @@ describe("agent page", () => {
     expect(
       screen.getByRole("link", { name: "Open operators" }),
     ).toHaveAttribute("href", "/console/orgs/acme/operators");
-  });
-
-  it("says when a report last landed is not checked where reports are refused, never none", async () => {
-    // The control: answered and unclaimed, no report has landed.
-    const allowed = await renderAgent();
-    expect(
-      within(screen.getByRole("tabpanel", { name: "Overview" })).getByText(
-        "Last report",
-      ).nextElementSibling,
-    ).toHaveTextContent("None");
-    allowed.unmount();
-
-    server.use(
-      http.get(`${API_URL}/orgs/acme/agents`, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "no" },
-          { status: 403 },
-        ),
-      ),
-    );
-    await renderAgent();
-
-    expect(
-      within(screen.getByRole("tabpanel", { name: "Overview" })).getByText(
-        "Last report",
-      ).nextElementSibling,
-    ).toHaveTextContent("Not checked");
   });
 
   it("links to no page the caller was refused: an unlisted operators list gets the reason alone", async () => {
@@ -412,25 +356,49 @@ describe("agent page", () => {
       );
     }
 
-    it("states what holds an agent and at which epoch, and why garam holds no definition", async () => {
+    it("states what holds an agent, read from its assignee, and why garam holds no definition", async () => {
       heldBy({
         assigneeGrn: "grn:acme:default:operator:field-one",
-        operatorGrn: "grn:acme:default:operator:field-one",
         epoch: 7,
         since: "2026-10-01T00:00:00Z",
       });
 
       await renderAgent("1c3d5e7f90a2b4c6");
 
-      expect(headerFact("Runs on")).toHaveTextContent(
-        "Field cluster one, operator",
-      );
-      expect(headerFact("Epoch")).toHaveTextContent("7");
+      expect(headerFact("Runs on")).toHaveTextContent("Field cluster one");
       expect(
-        screen.getByText(
-          "Field cluster one's control service created this agent. garam holds what that operator reports, and no definition.",
-        ),
+        screen.getByText("Created by Field cluster one's control service."),
       ).toBeInTheDocument();
+    });
+
+    it("shows the generation garam last activated where the read answers one (#1576)", async () => {
+      server.use(
+        http.get(`${API_URL}/orgs/acme/agents`, () =>
+          HttpResponse.json([
+            { ...reportedAgent, grn: fieldAgent.agentGrn, generation: "4" },
+          ]),
+        ),
+      );
+
+      await renderAgent();
+
+      expect(headerFact("Generation")).toHaveTextContent("4");
+    });
+
+    it("omits the generation where the read answers none", async () => {
+      // The control for the case above.
+      server.use(
+        http.get(`${API_URL}/orgs/acme/agents`, () =>
+          HttpResponse.json([{ ...reportedAgent, grn: fieldAgent.agentGrn }]),
+        ),
+      );
+
+      await renderAgent();
+
+      expect(headerFact("Last report")).toBeDefined();
+      expect(
+        screen.queryByText("Generation", { selector: "dt" }),
+      ).not.toBeInTheDocument();
     });
 
     it("says a standalone host enrolled an agent its supervisor holds", async () => {
@@ -442,13 +410,9 @@ describe("agent page", () => {
 
       await renderAgent("1c3d5e7f90a2b4c6");
 
-      expect(headerFact("Runs on")).toHaveTextContent(
-        "build-07, standalone host",
-      );
+      expect(headerFact("Runs on")).toHaveTextContent("build-07 (standalone)");
       expect(
-        screen.getByText(
-          "A standalone host, build-07, enrolled this agent. garam holds what it reports, and no definition.",
-        ),
+        screen.getByText("Enrolled by the standalone host build-07."),
       ).toBeInTheDocument();
     });
 
@@ -509,7 +473,7 @@ describe("agent page", () => {
       const dialog = screen.getByRole("alertdialog", {
         name: "Replace Scout's host?",
       });
-      expect(dialog).toHaveTextContent(/from build-07 at epoch 2/);
+      expect(dialog).toHaveTextContent(/build-07 stops running Scout/);
       await user.click(
         within(dialog).getByRole("textbox", {
           name: "What garam standalone prepare printed",
@@ -542,7 +506,6 @@ describe("agent page", () => {
     it("stays inactive for an agent an operator holds, since its control service replaces it", async () => {
       heldBy({
         assigneeGrn: "grn:acme:default:operator:field-one",
-        operatorGrn: "grn:acme:default:operator:field-one",
         epoch: 3,
         since: "2026-10-01T00:00:00Z",
       });
@@ -551,7 +514,9 @@ describe("agent page", () => {
 
       const replace = screen.getByRole("button", { name: "Replace host" });
       expect(replace).toHaveAttribute("aria-disabled", "true");
-      expect(replace).toHaveAccessibleDescription(/ADR-0107/);
+      expect(replace).toHaveAccessibleDescription(
+        "Field cluster one's control service replaces this host.",
+      );
     });
   });
 });

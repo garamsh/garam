@@ -5,7 +5,6 @@ import { ShieldCheck } from "lucide-react";
 
 import { CopyId } from "@/components/copy-id";
 import { DataTable, type ColumnDef } from "@/components/data-table";
-import { Time } from "@/components/time";
 import type { Policy } from "@/features/orgs";
 
 import { EmptyState } from "../../../../_components/empty-state";
@@ -52,20 +51,20 @@ const COLUMNS: ColumnDef<PolicyRow, unknown>[] = [
       </span>
     ),
   },
-  {
-    id: "updated",
-    header: "Updated",
-    accessorFn: (row) => row.policy.updatedAt,
-    enableGlobalFilter: false,
-    cell: ({ row }) => <Time value={row.original.policy.updatedAt} />,
-  },
 ];
 
 /**
  * The organization's policies by name, each opening its own page, with
  * where each stands and the version it evaluates while active.
  */
-export function PolicyTable({ rows }: { rows: PolicyRow[] }) {
+export function PolicyTable({
+  rows,
+  emptyAction,
+}: {
+  rows: PolicyRow[];
+  /** The page's create action, offered by the empty state. */
+  emptyAction?: React.ReactNode;
+}) {
   return (
     <DataTable
       label="Policies"
@@ -77,7 +76,7 @@ export function PolicyTable({ rows }: { rows: PolicyRow[] }) {
         <EmptyState
           icon={ShieldCheck}
           title="No policies"
-          description="This organization has no policies."
+          action={emptyAction}
         />
       }
     />

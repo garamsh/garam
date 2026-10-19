@@ -100,7 +100,7 @@ export function PolicyEditor({
           ) : (
             <Banner
               tone="info"
-              title="The JSON has a syntax error"
+              title="Invalid JSON"
               action={
                 <Button
                   type="button"
@@ -112,7 +112,7 @@ export function PolicyEditor({
                 </Button>
               }
             >
-              Fix it in the JSON view to edit statements here.
+              Fix it in JSON.
             </Banner>
           )}
         </TabsContent>

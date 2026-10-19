@@ -461,7 +461,7 @@ test.describe("permissions", () => {
       .getByRole("button", { name: "Roll back to v1", exact: true })
       .click();
     await expect(
-      page.getByRole("row", { name: /^v1/ }).getByText("Default · in use"),
+      page.getByRole("row", { name: /^v1/ }).getByText("In use"),
     ).toBeVisible();
     await page.getByRole("tab", { name: "Document", exact: true }).click();
     await expect(page.getByText("Active", { exact: true })).toBeVisible();

@@ -35,9 +35,9 @@ test.describe("Home", () => {
       .getByRole("main")
       .getByText(/^Nothing is waiting on you\./);
     await expect(lede).toHaveText(
-      "Nothing is waiting on you. You are in no team here. Unnamed agent needs a look.",
+      `Nothing is waiting on you. You are in no team here. ${signedIn.agentIdentifier} needs a look.`,
     );
-    await lede.getByRole("link", { name: "Unnamed agent" }).click();
+    await lede.getByRole("link", { name: signedIn.agentIdentifier }).click();
 
     await expect(page).toHaveURL(
       `/console/orgs/${signedIn.orgSlug}/agents/${signedIn.agentIdentifier}`,

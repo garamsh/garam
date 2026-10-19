@@ -6,7 +6,7 @@ import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Card } from "@/components/ui/card";
 import { getSession } from "@/features/auth";
 import {
-  UNNAMED_AGENT,
+  agentDisplayName,
   getOrg,
   isFailing,
   listGroupMembers,
@@ -151,7 +151,10 @@ export default async function HomePage({ params }: Params) {
   const attention: Attention[] = (agents.status === "ok" ? agents.data : [])
     .filter((agent) => isFailing(agent))
     .map((agent) => ({
-      name: UNNAMED_AGENT,
+      name: agentDisplayName({
+        name: agent.name ?? null,
+        identifier: slugFromGrn(agent.grn),
+      }),
       href: href(`agents/${slugFromGrn(agent.grn)}`),
       states: agentStates(agent),
     }));

@@ -92,7 +92,7 @@ test.describe("teams", () => {
     signedIn,
   }) => {
     const person = `${signedIn.nickname} ${signedIn.userSlug}`;
-    const agent = `Unnamed agent ${signedIn.agentIdentifier}`;
+    const agent = `${signedIn.agentIdentifier} ${signedIn.agentIdentifier}`;
 
     // A second team, created through the console, holding the agent.
     await page.goto(`/console/orgs/${signedIn.orgSlug}/teams`);
@@ -165,8 +165,9 @@ test.describe("teams", () => {
       "Agent",
     );
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents`);
+    // With no name, the agent's link is its identifier (ADR-0119).
     await expect(
-      page.getByText(signedIn.agentIdentifier, { exact: true }),
+      page.getByRole("link", { name: signedIn.agentIdentifier, exact: true }),
     ).toBeVisible();
   });
 

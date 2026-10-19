@@ -50,7 +50,11 @@ type Store interface {
 	// organization that does not exist holds none, so the zero
 	// OrgCounts is its answer rather than an error.
 	CountByOrg(ctx context.Context, orgGRN grn.GRN) (OrgCounts, error)
+	// Rename sets what the organization calls the agent, or clears it
+	// where name is nil, and nothing else (ADR-0119). It answers
+	// ErrAgentNotFound for an agent garam does not hold.
+	Rename(ctx context.Context, g grn.GRN, name *Name) (*Agent, error)
 	// SearchByOrg answers the organization's agents whose identifier
-	// holds n, case aside, ordered by GRN.
-	SearchByOrg(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]grn.GRN, error)
+	// or name holds n, case aside, ordered by GRN.
+	SearchByOrg(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*Agent, error)
 }

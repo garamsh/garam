@@ -100,15 +100,15 @@ describe("team page", () => {
     const user = userEvent.setup();
     await renderTeam();
 
-    // An agent is offered with its identifier beside what stands in
-    // its name's place, since garam holds no name for one (ADR-0118).
+    // An agent the organization calls nothing is offered by its
+    // identifier, which the choice also shows beside it (ADR-0119).
     expect(await offered(user)).toEqual([
       "Bob bob",
-      `Unnamed agent ${slugFromGrn(reportedAgent.grn)}`,
+      `${slugFromGrn(reportedAgent.grn)} ${slugFromGrn(reportedAgent.grn)}`,
     ]);
   });
 
-  it("tells two unnamed agents apart by their rows and removes the one chosen", async () => {
+  it("tells two agents apart by their rows and removes the one chosen", async () => {
     const first = reportedAgent.grn;
     const second = "grn:acme:default:agent:0a1b2c3d4e5f6071";
     const removed: string[] = [];
@@ -126,12 +126,14 @@ describe("team page", () => {
 
     await renderTeam();
 
-    // Neither has a name; each row carries its own identifier.
+    // Neither has a name, so each row is its own identifier.
     // Presence: a row's accessible name is all of its cells.
-    const rows = screen.getAllByRole("row", { name: /Unnamed agent/ });
+    const rows = screen.getAllByRole("row", {
+      name: /1c3d5e7f90a2b4c6|0a1b2c3d4e5f6071/,
+    });
     expect(rows).toHaveLength(2);
-    expect(within(rows[0]).getByText("1c3d5e7f90a2b4c6")).toBeInTheDocument();
-    expect(within(rows[1]).getByText("0a1b2c3d4e5f6071")).toBeInTheDocument();
+    expect(rows[0]).toHaveTextContent("1c3d5e7f90a2b4c6");
+    expect(rows[1]).toHaveTextContent("0a1b2c3d4e5f6071");
 
     // The sentences never name the identifier: the row the control
     // stands in is what tells the two apart, so the second agent is the
@@ -529,7 +531,7 @@ describe("team page", () => {
     await user.click(screen.getByRole("combobox", { name: "Person or agent" }));
     // Presence: an option's name goes on to carry the identifier.
     await user.click(
-      await screen.findByRole("option", { name: /^Unnamed agent / }),
+      await screen.findByRole("option", { name: /^1c3d5e7f90a2b4c6 / }),
     );
     await user.click(screen.getByRole("tab", { name: "Settings" }));
     const name = screen.getByLabelText("Team name");
@@ -540,7 +542,7 @@ describe("team page", () => {
     // Presence: the trigger shows the option's name and identifier.
     expect(
       screen.getByRole("combobox", { name: "Person or agent" }),
-    ).toHaveTextContent(/^Unnamed agent/);
+    ).toHaveTextContent(/^1c3d5e7f90a2b4c6/);
     await user.click(screen.getByRole("tab", { name: "Settings" }));
     expect(screen.getByLabelText("Team name")).toHaveValue("Platform");
   });

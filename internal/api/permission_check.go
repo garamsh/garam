@@ -100,6 +100,7 @@ var actionRules = map[string]actionRule{
 
 	org.ActionAgentRead:            {on: []apigen.PermissionResourceType{onOrg, kindAgent}},
 	org.ActionAgentWatch:           {on: []apigen.PermissionResourceType{kindAgent}},
+	org.ActionAgentRename:          {on: []apigen.PermissionResourceType{kindAgent}},
 	org.ActionAgentEnroll:          {on: []apigen.PermissionResourceType{onOrg, kindAgent}, decidedBy: decidedByEnroll},
 	org.ActionAgentCreate:          {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},
 	org.ActionAgentConfigure:       {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},

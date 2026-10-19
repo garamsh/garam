@@ -940,6 +940,11 @@ ADRs:
   `serverRootPem` and the sealed authority rows; supersedes parts of
   0015, 0026, 0033, 0045, 0070, 0075, 0102 and 0117, and 0016, 0032
   and 0046 in what they decided of certificates
+- [0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)
+  — a managed agent carries a display name on its own record, set at
+  creation on both machine routes as part of what a retry repeats, and
+  renamed under a restored `agent:rename` on the agent's own GRN;
+  supersedes 0118 in part, on an agent's name
 - [0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)
   — a person signs the CLI in by the device grant (RFC 8628), and the
   CLI holds a server-side session of kind `cli` presented as a bearer

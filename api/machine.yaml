@@ -2525,6 +2525,15 @@ components:
             replacement its `agent:replace` reference.
         replaces:
           $ref: '#/components/schemas/AgentEnrollmentReplacement'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: >-
+            What the organization calls the new agent, trimmed, 1 to 100
+            characters (ADR-0119). Optional; it is part of what a retry
+            repeats, so a retry asking for another name is a conflict.
+            A replacement keeps the agent's name and carries none.
     AgentEnrollmentReplacement:
       type: object
       required: [agent, expectedAssignee, expectedEpoch]
@@ -2556,6 +2565,9 @@ components:
           type: string
         replaces:
           $ref: '#/components/schemas/AgentEnrollmentReplacement'
+        name:
+          type: string
+          description: The name the approval binds, absent where it binds none.
     AgentAdmission:
       type: object
       required: [grn, placement, assignee, epoch, lineage, mode, credentialDelivery]
@@ -2598,6 +2610,14 @@ components:
         operationRef:
           type: string
           description: The member's durable `agent:create` reference.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: >-
+            What the organization calls the new agent, trimmed, 1 to 100
+            characters (ADR-0119). Optional; it is part of what a retry
+            repeats, so a retry asking for another name is a conflict.
     ManagedAgent:
       type: object
       required: [grn, epoch]

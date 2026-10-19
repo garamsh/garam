@@ -31,7 +31,8 @@ The user commands sit at the top level:
 | `garam orgs list` | the organizations the user belongs to |
 | `garam orgs use <org>` | saves the organization later commands act in |
 | `garam operators list` | the organization's operators |
-| `garam agents list`, `garam agents get <agent>` | the organization's agents |
+| `garam agents list`, `garam agents get <agent>` | the organization's agents, with each one's name |
+| `garam agents rename <agent> <name>`, `--clear` | names an agent, or clears its name ([ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)) |
 
 Every one of them takes `--endpoint`, `--org` and `--output`
 (`-o table`, the default, or `-o json`, which writes the API's own
@@ -95,8 +96,8 @@ API's message under its kind.
 
 ## Not established
 
-- **Writes.** The CLI does not yet create, change or delete anything.
-  `agents rename` waits for the agent name of #1610.
+- **Writes.** An agent's rename is the one write the CLI makes. It
+  creates and deletes nothing yet.
 - **Other platforms.** The file lock is `flock(2)`, which builds where
   `syscall.Flock` does. No release publishes the binary for a platform
   without it.

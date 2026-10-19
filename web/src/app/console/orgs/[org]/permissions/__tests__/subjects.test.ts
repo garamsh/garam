@@ -235,17 +235,17 @@ describe("reachOf", () => {
 });
 
 describe("agent subjects", () => {
-  it("offers each agent by its identifier, since garam holds no name for one", () => {
+  it("offers an agent the organization calls nothing by its identifier alone (ADR-0119)", () => {
     const agents = listSubjects(catalogs).filter(
       (subject) => subject.kind === "agent",
     );
 
     expect(agents.map((subject) => subject.label)).toEqual([
-      "Unnamed agent (1c3d5e7f90a2b4c6)",
+      "1c3d5e7f90a2b4c6",
     ]);
     expect(describeSubject(reportedAgent.grn, catalogs)).toMatchObject({
       kind: "agent",
-      label: "Unnamed agent (1c3d5e7f90a2b4c6)",
+      label: "1c3d5e7f90a2b4c6",
       lookup: "found",
     });
   });

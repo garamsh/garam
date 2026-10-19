@@ -36,6 +36,43 @@ test.describe("no garam form", () => {
   });
 });
 
+test.describe("an agent's name", () => {
+  test("the owner names an agent, which the list then shows, and clears it again (ADR-0119)", async ({
+    page,
+    signedIn,
+  }) => {
+    const identifier = signedIn.agentIdentifier;
+    const agentPage = `/console/orgs/${signedIn.orgSlug}/agents/${identifier}`;
+    await page.goto(agentPage);
+    await expectHydrated(page);
+    const name = page.getByRole("textbox", { name: "Name", exact: true });
+    await name.fill("Sherlock");
+    await page.getByRole("button", { name: "Save name", exact: true }).click();
+    await expect(page.getByRole("status")).toHaveText("Renamed to Sherlock.");
+
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Sherlock", exact: true }),
+    ).toBeVisible();
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents`);
+    await expect(
+      page.getByRole("link", { name: "Sherlock", exact: true }),
+    ).toBeVisible();
+
+    // The control: cleared, the agent is titled by its identifier
+    // again.
+    await page.goto(agentPage);
+    await expectHydrated(page);
+    await name.fill("");
+    await page.getByRole("button", { name: "Save name", exact: true }).click();
+    await expect(page.getByRole("status")).toHaveText("Name cleared.");
+    await page.reload();
+    await expect(
+      page.getByRole("heading", { level: 1, name: identifier, exact: true }),
+    ).toBeVisible();
+  });
+});
+
 test.describe("an agent as a member", () => {
   test("a team and a policy take an agent by its identifier", async ({
     page,
@@ -43,8 +80,8 @@ test.describe("an agent as a member", () => {
   }) => {
     const identifier = signedIn.agentIdentifier;
 
-    // garam holds no name for an agent, so a team offers it by its
-    // identifier beside what stands in its name's place.
+    // An agent with no name is offered by its identifier, which the
+    // choice also shows beside it (ADR-0119).
     const team = `/console/orgs/${signedIn.orgSlug}/teams/engineering`;
     await page.goto(team);
     await expectHydrated(page);
@@ -53,7 +90,7 @@ test.describe("an agent as a member", () => {
       .click();
     await page
       .getByRole("option", {
-        name: `Unnamed agent ${identifier}`,
+        name: `${identifier} ${identifier}`,
         exact: true,
       })
       .click();
@@ -74,7 +111,7 @@ test.describe("an agent as a member", () => {
     await expect(
       page.getByRole("heading", {
         level: 2,
-        name: `Unnamed agent (${identifier}) · Agent`,
+        name: `${identifier} · Agent`,
         exact: true,
       }),
     ).toBeVisible();
@@ -95,8 +132,9 @@ test.describe("agents", () => {
       page.getByRole("row", { name: signedIn.nickname }),
     ).toHaveCount(0);
     const first = page.getByRole("row").nth(1);
+    // With no name, the agent's link is its identifier (ADR-0119).
     await expect(
-      first.getByText(signedIn.agentIdentifier, { exact: true }),
+      first.getByRole("link", { name: signedIn.agentIdentifier, exact: true }),
     ).toBeVisible();
     await expect(first.getByText("Failing", { exact: true })).toBeVisible();
     await expect(
@@ -130,12 +168,16 @@ test.describe("agents accessibility", () => {
     {
       name: "an agent",
       href: (a) => `${a.agents}/${a.agent}`,
-      heading: "Unnamed agent",
+      // An agent with no name is titled by its identifier (ADR-0119),
+      // which the seed draws, so the heading matches its shape.
+      heading: "[0-9a-f]{16}",
     },
     {
       name: "an agent's Execution tab",
       href: (a) => `${a.agents}/${a.agent}`,
-      heading: "Unnamed agent",
+      // An agent with no name is titled by its identifier (ADR-0119),
+      // which the seed draws, so the heading matches its shape.
+      heading: "[0-9a-f]{16}",
       tab: "Execution",
     },
     {

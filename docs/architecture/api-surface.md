@@ -458,7 +458,8 @@ and not in the same place on every surface.
   policies and projects then drop each object whose own read is
   denied, in one `CheckBatch` per kind, as the filtered lists above do
   (ADR-0115). A person is found by nickname or identifier, and an agent
-  by its identifier alone. Each kind answers its
+  by its name or identifier, answered with its name where it has one
+  ([ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)). Each kind answers its
   first `limit` objects (1 to 20, 5 by default) in its list's order,
   and counts the readable matches past them. The match runs in each
   store, so a search reads the rows that match and not the whole list.
@@ -862,6 +863,10 @@ document owes an update.
   — every legacy path goes now with nothing migrated: the browser
   surface serves no definition and names no agent, and the machine
   listener authenticates no certificate
+- [ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)
+  — a managed agent carries a name on its own record, set at creation
+  on both machine routes and renamed on the browser surface under
+  `agent:rename`, authorized on the agent itself
 - [ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)
   — the CLI signs in by the device grant, and the browser API accepts
   its session as a bearer wherever it accepts the cookie

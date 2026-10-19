@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import {
-  UNNAMED_AGENT,
+  agentDisplayName,
   directoryAgents,
   getOrg,
   lookupAgents,
@@ -104,7 +104,7 @@ export default async function AgentsPage({ params, searchParams }: Params) {
       kind: "agent",
       grn: entry.grn,
       identifier: entry.identifier,
-      name: entry.name ?? UNNAMED_AGENT,
+      name: agentDisplayName(entry),
       href: orgHref(org, `agents/${entry.identifier}`),
       status: { tone: health.tone, label: health.label },
       detail: health.detail,

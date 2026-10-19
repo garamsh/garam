@@ -7,8 +7,8 @@
  * the server-only backend client into the browser bundle.
  */
 export {
-  UNNAMED_AGENT,
   agentChoiceLabel,
+  agentDisplayName,
   directoryAgents,
   isFailing,
   lookUpAgent,

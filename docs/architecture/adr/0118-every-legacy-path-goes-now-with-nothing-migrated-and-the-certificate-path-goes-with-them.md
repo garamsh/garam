@@ -1,6 +1,6 @@
 # ADR 0118: Every legacy path goes now with nothing migrated, and the certificate path goes with them
 
-> Status: accepted
+> Status: superseded in part by [ADR-0119](./0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md) (an agent's name and `agent:rename`)
 > Date: 2026-10-19
 
 Drafted for #1593's fifth pull request, for which the Garam PM reserved

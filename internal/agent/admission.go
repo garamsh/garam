@@ -91,18 +91,28 @@ func ParseApprovalID(s string) (ApprovalID, error) {
 // repeats: the request identifier, the placement, the assignee and the
 // member's reference, agent:create for a new agent. Replaces is the
 // agent a replacement moves and the assignment it expects, and nil for
-// a new agent; its reference is agent:replace (ADR-0107).
+// a new agent; its reference is agent:replace (ADR-0107). Name is the
+// name a new agent is given, nil for none (ADR-0119).
 type EnrollmentBinding struct {
 	RequestID    RequestID
 	Placement    Placement
 	Assignee     grn.GRN
 	OperationRef string
 	Replaces     *Replacement
+	Name         *Name
 }
+
+// ErrReplacementKeepsName refuses a name on a replacement: it moves an
+// agent that already has whatever name it has (ADR-0119).
+var ErrReplacementKeepsName = errorx.New(errorx.KindInvalidArgument,
+	"a replacement keeps the agent's name; rename it on the browser surface")
 
 // admissible refuses what the contract does not admit, before any
 // authority is read: it admits managed placement alone.
 func (b EnrollmentBinding) admissible() error {
+	if b.Replaces != nil && b.Name != nil {
+		return ErrReplacementKeepsName
+	}
 	switch b.Placement {
 	case PlacementManaged:
 		return nil
@@ -132,7 +142,7 @@ func (a *EnrollmentApproval) binds(b EnrollmentBinding) bool {
 	sameReplaced := held.Replaces == nil && b.Replaces == nil ||
 		held.Replaces != nil && b.Replaces != nil && *held.Replaces == *b.Replaces
 	return held.RequestID == b.RequestID && held.Placement == b.Placement && held.Assignee == b.Assignee &&
-		held.OperationRef == b.OperationRef && sameReplaced
+		held.OperationRef == b.OperationRef && sameReplaced && sameName(held.Name, b.Name)
 }
 
 // IdentityAdmission is what admitting an identity writes, under
@@ -149,4 +159,6 @@ type IdentityAdmission struct {
 	Assignee grn.GRN
 	Lineage  Lineage
 	Replaces *Replacement
+	// Name is a new agent's name, nil for none.
+	Name *Name
 }

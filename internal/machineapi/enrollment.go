@@ -43,8 +43,13 @@ func (s *Server) CreateManagedAgent(w http.ResponseWriter, r *http.Request, cont
 		writeError(w, err)
 		return
 	}
+	name, err := optionalName(body.Name)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	creation, created, err := s.executions.CreateManaged(r.Context(), caller, agent.ManagedCreationInput{
-		Controller: controller, RequestID: requestID, OperationRef: body.OperationRef,
+		Controller: controller, RequestID: requestID, OperationRef: body.OperationRef, Name: name,
 	})
 	if err != nil {
 		writeError(w, withinBudget(r, err))
@@ -53,6 +58,19 @@ func (s *Server) CreateManagedAgent(w http.ResponseWriter, r *http.Request, cont
 	writeJSON(w, createdOrReplayed(created), machinegen.ManagedAgent{
 		Grn: creation.Agent.String(), Epoch: strconv.Itoa(creation.Epoch),
 	})
+}
+
+// optionalName parses a name a body may carry, nil where it carries
+// none (ADR-0119).
+func optionalName(sent *string) (*agent.Name, error) {
+	if sent == nil {
+		return nil, nil
+	}
+	n, err := agent.ParseName(*sent)
+	if err != nil {
+		return nil, err
+	}
+	return &n, nil
 }
 
 // createdOrReplayed is 201 for what this request wrote and 200 for

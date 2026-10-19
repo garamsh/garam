@@ -25,7 +25,9 @@ const routes: {
   {
     name: "an agent",
     href: (a) => `${a.agents}/${a.agent}`,
-    heading: "Unnamed agent",
+    // An agent with no name is titled by its identifier (ADR-0119),
+    // which the seed draws, so the heading matches its shape.
+    heading: "[0-9a-f]{16}",
   },
   {
     name: "the new agent wizard",

@@ -15,6 +15,7 @@ type Agent struct {
 	RuntimeState      string
 	CreatedAt         pgtype.Timestamptz
 	UpdatedAt         pgtype.Timestamptz
+	Name              pgtype.Text
 }
 
 type AgentAssignment struct {

@@ -20,3 +20,4 @@ output-options:
     - listOperators
     - listAgents
     - getAgent
+    - renameAgent

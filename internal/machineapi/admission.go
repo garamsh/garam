@@ -55,6 +55,10 @@ func (s *Server) PrepareAgentEnrollment(w http.ResponseWriter, r *http.Request, 
 			Agent: r.Agent.String(), ExpectedAssignee: r.Assignee.String(), ExpectedEpoch: strconv.Itoa(r.Epoch),
 		}
 	}
+	if n := b.Name; n != nil {
+		name := string(*n)
+		answer.Name = &name
+	}
 	writeJSON(w, createdOrReplayed(created), answer)
 }
 
@@ -132,7 +136,13 @@ func bindingOf(body machinegen.AgentEnrollmentBinding) (agent.EnrollmentBinding,
 	if err != nil {
 		return agent.EnrollmentBinding{}, errorx.Wrap(err, "assignee", errorx.KindInvalidArgument)
 	}
-	b := agent.EnrollmentBinding{RequestID: requestID, Placement: placement, Assignee: assignee, OperationRef: body.OperationRef}
+	name, err := optionalName(body.Name)
+	if err != nil {
+		return agent.EnrollmentBinding{}, err
+	}
+	b := agent.EnrollmentBinding{
+		RequestID: requestID, Placement: placement, Assignee: assignee, OperationRef: body.OperationRef, Name: name,
+	}
 	if r := body.Replaces; r != nil {
 		replaced, err := grn.Parse(r.Agent)
 		if err != nil {

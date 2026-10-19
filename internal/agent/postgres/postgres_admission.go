@@ -36,7 +36,7 @@ func admit(ctx context.Context, q *db.Queries, a agent.IdentityAdmission, exec *
 		}
 		if err := q.CreateManagedAgent(ctx, db.CreateManagedAgentParams{
 			Grn: a.Agent.String(), OrgGrn: a.Org.String(), ProvisioningState: string(identity.ProvisioningState()),
-			RuntimeState: string(identity.RuntimeState()), CreatedAt: now,
+			RuntimeState: string(identity.RuntimeState()), CreatedAt: now, Name: nameText(a.Name),
 		}); err != nil {
 			return 0, storageError(err, "create agent", nil, agent.ErrAgentAlreadyExists)
 		}
@@ -74,6 +74,7 @@ func admit(ctx context.Context, q *db.Queries, a agent.IdentityAdmission, exec *
 func createManaged(ctx context.Context, q *db.Queries, c *agent.ManagedCreation, now pgtype.Timestamptz) error {
 	epoch, err := admit(ctx, q, agent.IdentityAdmission{
 		Agent: c.Agent, Org: grn.Org(c.Agent.Organization), Assignee: c.Controller, Lineage: c.Lineage,
+		Name: c.Name,
 	}, nil, now)
 	if err != nil {
 		return err
@@ -88,6 +89,7 @@ func createManaged(ctx context.Context, q *db.Queries, c *agent.ManagedCreation,
 		Epoch:         epoch,
 		Lineage:       pgUUID(uuid.UUID(c.Lineage)),
 		CreatedAt:     now,
+		Name:          nameText(c.Name),
 	}), "record creation", nil, agent.ErrCreationConflict)
 }
 
@@ -101,6 +103,7 @@ func (s *Store) PrepareApproval(ctx context.Context, a agent.EnrollmentApproval)
 		AssigneeGrn:  a.Binding.Assignee.String(),
 		OperationRef: a.Binding.OperationRef,
 		CreatedAt:    pgxtype.Timestamptz(a.CreatedAt),
+		Name:         nameText(a.Binding.Name),
 	}
 	if r := a.Binding.Replaces; r != nil {
 		params.ReplacedAgentGrn = pgtype.Text{String: r.Agent.String(), Valid: true}
@@ -249,6 +252,23 @@ func (s *Store) GetReplacement(ctx context.Context, ref string) (*agent.ManagedC
 	return approval.Admitted, nil
 }
 
+// nameText binds an optional name, NULL for none.
+func nameText(n *agent.Name) pgtype.Text {
+	if n == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: string(*n), Valid: true}
+}
+
+// storedName reads an optional name back, nil for NULL.
+func storedName(t pgtype.Text) *agent.Name {
+	if !t.Valid {
+		return nil
+	}
+	n := agent.Name(t.String)
+	return &n
+}
+
 // replacementOf reads the agent and assignment a stored approval
 // replaces, nil for a new agent's.
 func replacementOf(row db.AgentEnrollmentApproval) (*agent.Replacement, error) {
@@ -294,7 +314,7 @@ func approvalOf(ctx context.Context, q *db.Queries, row db.AgentEnrollmentApprov
 		ID: agent.ApprovalID(row.ID.Bytes), Org: org, Audience: audience,
 		Binding: agent.EnrollmentBinding{
 			RequestID: agent.RequestID(row.RequestID), Placement: placement, Assignee: assignee,
-			OperationRef: row.OperationRef, Replaces: replaced,
+			OperationRef: row.OperationRef, Replaces: replaced, Name: storedName(row.Name),
 		},
 		CreatedAt: row.CreatedAt.Time,
 	}

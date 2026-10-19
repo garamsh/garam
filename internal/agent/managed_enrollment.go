@@ -28,11 +28,13 @@ var (
 
 // ManagedCreationInput is a managed creation as received: the
 // controller the new agent is assigned to, the request identifier and
-// the member's agent:create reference both are bound by.
+// the member's agent:create reference both are bound by, and the name
+// the agent is given, nil for none (ADR-0119).
 type ManagedCreationInput struct {
 	Controller   grn.GRN
 	RequestID    RequestID
 	OperationRef string
+	Name         *Name
 }
 
 // ManagedCreation is an agent the hosted control service created: its
@@ -47,6 +49,9 @@ type ManagedCreation struct {
 	OperationRef string
 	Epoch        int
 	Lineage      Lineage
+	// Name is the name the creation asked for, nil for none; a rename
+	// since changes the agent and not this.
+	Name *Name
 }
 
 // CreateManaged registers an agent and its first assignment under the
@@ -70,13 +75,18 @@ func (s *executionService) CreateManaged(ctx context.Context, caller grn.GRN, in
 		}
 		creation, created, err = s.executions.CreateManaged(ctx, ManagedCreation{
 			Agent: agentGRN, Audience: caller, Controller: in.Controller, RequestID: in.RequestID,
-			OperationRef: in.OperationRef, Lineage: NewLineage(),
+			OperationRef: in.OperationRef, Lineage: NewLineage(), Name: in.Name,
 		})
 		if err != nil {
 			return nil, false, err
 		}
 	}
 	if !created {
+		// A retry asks for what the creation asked for, its name
+		// included.
+		if !sameName(creation.Name, in.Name) {
+			return nil, false, ErrCreationConflict
+		}
 		// An earlier answer is the same only while the agent is still
 		// where that creation put it.
 		assignment, err := s.store.GetAssignment(ctx, creation.Agent)

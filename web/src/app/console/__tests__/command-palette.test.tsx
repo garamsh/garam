@@ -251,7 +251,7 @@ describe("command palette", () => {
       screen.queryByRole("option", { name: /1c3d5e7f90a2b4c6/ }),
     ).not.toBeInTheDocument();
 
-    // An agent is found by its identifier: garam holds no name for one.
+    // An agent with no name is found and shown by its identifier.
     await user.type(screen.getByRole("combobox"), "1c3d");
     // Presence: the option's name goes on to carry the identifier.
     expect(
@@ -265,6 +265,37 @@ describe("command palette", () => {
     expect(route.push).toHaveBeenCalledWith(
       "/console/orgs/acme/agents/1c3d5e7f90a2b4c6",
     );
+  });
+
+  it("shows an agent by the name the search answers with (ADR-0119)", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/search`, () =>
+        HttpResponse.json({
+          found: [
+            {
+              kind: "agent",
+              objects: [
+                {
+                  grn: "grn:acme:default:agent:1c3d5e7f90a2b4c6",
+                  name: "Sherlock",
+                },
+              ],
+              more: 0,
+            },
+          ],
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderPalette();
+
+    await openPalette(user);
+    await user.type(screen.getByRole("combobox"), "sher");
+
+    // Presence: the option's name goes on to carry the identifier.
+    expect(
+      await screen.findByRole("option", { name: /^Sherlock/ }),
+    ).toBeVisible();
   });
 
   it("answers a few of each kind and links the list for the rest", async () => {

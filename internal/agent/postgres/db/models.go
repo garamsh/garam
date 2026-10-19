@@ -63,6 +63,7 @@ type AgentEnrollmentApproval struct {
 	ExpectedEpoch       pgtype.Int4
 	AdmittedEpoch       pgtype.Int4
 	AdmittedLineage     pgtype.UUID
+	Name                pgtype.Text
 }
 
 type AgentExecution struct {
@@ -83,6 +84,7 @@ type AgentManagedCreation struct {
 	Epoch         int32
 	Lineage       pgtype.UUID
 	CreatedAt     pgtype.Timestamptz
+	Name          pgtype.Text
 }
 
 type AgentRecovery struct {

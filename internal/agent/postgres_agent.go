@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/garamsh/garam/internal/agent/db"
 	"github.com/garamsh/garam/internal/errorx"
@@ -193,7 +194,21 @@ func rowToAgent(row db.Agent) (*Agent, error) {
 		runtime:      runtime,
 		createdAt:    row.CreatedAt.Time,
 		updatedAt:    row.UpdatedAt.Time,
+		name:         Name(row.Name.String),
 	}, nil
+}
+
+// Rename sets or clears the agent's name.
+func (s *PostgresStore) Rename(ctx context.Context, g grn.GRN, name *Name) (*Agent, error) {
+	params := db.RenameAgentParams{Grn: g.String()}
+	if name != nil {
+		params.Name = pgtype.Text{String: string(*name), Valid: true}
+	}
+	row, err := s.q.RenameAgent(ctx, params)
+	if err != nil {
+		return nil, pgxerr.Classify(err, "rename agent", ErrAgentNotFound, nil)
+	}
+	return rowToAgent(row)
 }
 
 // CountByOrg counts the organization's agents, which deleting the
@@ -206,20 +221,20 @@ func (s *PostgresStore) CountByOrg(ctx context.Context, orgGRN grn.GRN) (OrgCoun
 	return OrgCounts{Agents: int(count)}, nil
 }
 
-// SearchByOrg returns the organization's agents whose identifier holds
-// n, ordered by GRN.
-func (s *PostgresStore) SearchByOrg(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]grn.GRN, error) {
+// SearchByOrg returns the organization's agents whose identifier or
+// name holds n, ordered by GRN.
+func (s *PostgresStore) SearchByOrg(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*Agent, error) {
 	rows, err := s.q.SearchAgentsByOrg(ctx, db.SearchAgentsByOrgParams{OrgGrn: orgGRN.String(), Pattern: pgxtype.Contains(n.Text())})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "search agents", nil, nil)
 	}
-	found := make([]grn.GRN, 0, len(rows))
+	found := make([]*Agent, 0, len(rows))
 	for _, row := range rows {
-		g, err := grn.Parse(row)
+		a, err := rowToAgent(row)
 		if err != nil {
-			return nil, errorx.Wrap(err, "agent grn", errorx.KindInternal)
+			return nil, err
 		}
-		found = append(found, g)
+		found = append(found, a)
 	}
 	return found, nil
 }

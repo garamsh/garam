@@ -63,11 +63,13 @@ describe("a project's page", () => {
     await user.click(screen.getByRole("combobox", { name: "Person or agent" }));
     // Presence: an option's name goes on to carry the identifier.
     await user.click(
-      await screen.findByRole("option", { name: /^Unnamed agent / }),
+      await screen.findByRole("option", { name: /^1c3d5e7f90a2b4c6 / }),
     );
     await user.click(screen.getByRole("button", { name: "Add to project" }));
 
-    expect(await screen.findByText("Added Unnamed agent.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Added 1c3d5e7f90a2b4c6."),
+    ).toBeInTheDocument();
     expect(added).toEqual(["grn:acme:default:agent:1c3d5e7f90a2b4c6"]);
   });
 

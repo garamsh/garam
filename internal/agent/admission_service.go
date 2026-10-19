@@ -99,7 +99,7 @@ func (s *admissionService) Admit(ctx context.Context, caller grn.GRN, id Approva
 		}
 		approval.Admitted, created, err = s.approvals.Admit(ctx, id, ManagedCreation{
 			Agent: agentGRN, Audience: caller, Controller: b.Assignee, RequestID: b.RequestID,
-			OperationRef: b.OperationRef, Lineage: NewLineage(),
+			OperationRef: b.OperationRef, Lineage: NewLineage(), Name: b.Name,
 		})
 		if err != nil {
 			return nil, false, err

@@ -1,7 +1,7 @@
 import { slugFromGrn } from "@/lib/grn";
 
 import {
-  UNNAMED_AGENT,
+  agentDisplayName,
   directoryAgents,
   lookUpAgent,
   type AgentDirectory,
@@ -94,7 +94,6 @@ export function resolveTeamMembers(
         };
       }
       case "agent": {
-        // garam holds no name for an agent (ADR-0118).
         const { lookup, agent } = lookUpAgent(agents, memberGrn);
         return {
           grn: memberGrn,
@@ -121,8 +120,8 @@ export function resolveTeamMembers(
 /**
  * The people and agents of the organization the team does not hold,
  * people first, each with its identifier. A person without a name on
- * record is offered as having none, as is every agent, since garam
- * holds no name for one. A refused list offers no one.
+ * record is offered as having none, and an agent the organization calls
+ * nothing by its identifier (ADR-0119). A refused list offers no one.
  */
 export function teamCandidates(
   members: readonly GroupMember[],
@@ -144,7 +143,7 @@ export function teamCandidates(
       .map((agent): Candidate => ({
         grn: agent.grn,
         kind: "agent",
-        name: agent.name ?? UNNAMED_AGENT,
+        name: agentDisplayName(agent),
         identifier: agent.identifier,
       })),
   ];
@@ -153,7 +152,9 @@ export function teamCandidates(
 /**
  * What stands in a name's place for a member without one: none on
  * record, one the organization no longer holds, one whose list was not
- * read, and an identity of neither type. Never its identifier.
+ * read, and an identity of neither type. A person's identifier never
+ * stands there; an agent the organization calls nothing is shown by
+ * its identifier (ADR-0119).
  */
 export function memberName(member: TeamMember): string {
   if (member.label !== null) return member.label;
@@ -164,7 +165,7 @@ export function memberName(member: TeamMember): string {
   if (member.lookup === "missing") {
     return member.kind === "agent" ? "Unknown agent" : "Unknown person";
   }
-  return member.kind === "agent" ? UNNAMED_AGENT : "No name on record";
+  return member.kind === "agent" ? member.identifier : "No name on record";
 }
 
 /**

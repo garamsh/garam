@@ -22,7 +22,6 @@ function member(overrides: Partial<TeamMember>): TeamMember {
 
 describe("team member names", () => {
   it.each([
-    ["an agent no definition names", {}, "Unnamed agent", "an unnamed agent"],
     [
       "an agent whose definitions were not read",
       { nameRead: false },
@@ -63,6 +62,13 @@ describe("team member names", () => {
       expect(memberLabel(subject)).not.toContain(ID);
     },
   );
+
+  it("shows an agent the organization calls nothing by its identifier, and says it is unnamed in a sentence (ADR-0119)", () => {
+    const subject = member({});
+
+    expect(memberName(subject)).toBe(ID);
+    expect(memberLabel(subject)).toBe("an unnamed agent");
+  });
 
   it("calls a named member by its name alone", () => {
     const scout = member({ label: "Scout" });

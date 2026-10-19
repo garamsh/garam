@@ -58,13 +58,13 @@ describe("Home", () => {
     await renderServerComponent(HomePage(params("acme")));
 
     expect(lede()).toHaveTextContent(
-      "Nothing is waiting on you. You are in Engineering. Unnamed agent needs a look.",
+      "Nothing is waiting on you. You are in Engineering. 1c3d5e7f90a2b4c6 needs a look.",
     );
     expect(
       within(lede()).getByRole("link", { name: "Engineering" }),
     ).toHaveAttribute("href", "/console/orgs/acme/teams/eng");
     expect(
-      within(lede()).getByRole("link", { name: "Unnamed agent" }),
+      within(lede()).getByRole("link", { name: "1c3d5e7f90a2b4c6" }),
     ).toHaveAttribute("href", "/console/orgs/acme/agents/1c3d5e7f90a2b4c6");
   });
 
@@ -92,7 +92,10 @@ describe("Home", () => {
           .map((child) => child.textContent)
           .join(" "),
       );
-    expect(members).toEqual([`${alice.nickname} you`, "Unnamed agent agent"]);
+    expect(members).toEqual([
+      `${alice.nickname} you`,
+      "1c3d5e7f90a2b4c6 agent",
+    ]);
   });
 
   it("lists only the teams garam answers the caller is in", async () => {
@@ -130,7 +133,7 @@ describe("Home", () => {
 
     const look = screen.getByRole("region", { name: /^Worth a look/ });
     expect(
-      within(look).getByRole("link", { name: "Unnamed agent" }),
+      within(look).getByRole("link", { name: "1c3d5e7f90a2b4c6" }),
     ).toHaveAttribute("href", "/console/orgs/acme/agents/1c3d5e7f90a2b4c6");
     expect(look).toHaveTextContent(/Provisioning failed.*Disconnected/);
     // No operator state is a failure Home reports (ADR-0117).

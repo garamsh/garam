@@ -115,8 +115,8 @@ INSERT INTO agent_recoveries (
 -- execution row before the assignment: the lock order every
 -- transaction follows (ADR-0080).
 -- name: CreateManagedAgent :exec
-INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $5);
+INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name)
+VALUES ($1, $2, $3, $4, $5, $5, sqlc.narg('name'));
 
 -- The execution starts in a lineage holding no credential, so
 -- agent_credential_current refuses every certificate of the agent
@@ -133,8 +133,8 @@ RETURNING epoch;
 -- name: InsertManagedCreation :exec
 INSERT INTO agent_managed_creations (
     agent_grn, audience_grn, controller_grn, request_id, operation_ref,
-    epoch, lineage, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+    epoch, lineage, created_at, name
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, sqlc.narg('name'));
 
 -- name: IsManagedCreation :one
 SELECT EXISTS (SELECT 1 FROM agent_managed_creations WHERE agent_grn = $1);
@@ -280,8 +280,8 @@ WHERE t.token_hash = $1 AND t.expires_at > now() AND s.ended_at IS NULL;
 -- name: InsertEnrollmentApproval :execrows
 INSERT INTO agent_enrollment_approvals (
     id, org_grn, request_id, placement, audience_grn, assignee_grn, operation_ref, created_at,
-    replaced_agent_grn, expected_assignee_grn, expected_epoch
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    replaced_agent_grn, expected_assignee_grn, expected_epoch, name
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, sqlc.narg('name'))
 ON CONFLICT DO NOTHING;
 
 -- name: GetEnrollmentApprovalByRequest :one

@@ -463,8 +463,11 @@ type AgentAdmissionPlacement string
 
 // AgentEnrollmentApproval defines model for AgentEnrollmentApproval.
 type AgentEnrollmentApproval struct {
-	ApprovalId   openapi_types.UUID               `json:"approvalId"`
-	Assignee     string                           `json:"assignee"`
+	ApprovalId openapi_types.UUID `json:"approvalId"`
+	Assignee   string             `json:"assignee"`
+
+	// Name The name the approval binds, absent where it binds none.
+	Name         *string                          `json:"name,omitempty"`
 	OperationRef string                           `json:"operationRef"`
 	Placement    AgentEnrollmentApprovalPlacement `json:"placement"`
 
@@ -480,6 +483,9 @@ type AgentEnrollmentApprovalPlacement string
 type AgentEnrollmentBinding struct {
 	// Assignee The operator GRN the agent is assigned to, its controller.
 	Assignee string `json:"assignee"`
+
+	// Name What the organization calls the new agent, trimmed, 1 to 100 characters (ADR-0119). Optional; it is part of what a retry repeats, so a retry asking for another name is a conflict. A replacement keeps the agent's name and carries none.
+	Name *string `json:"name,omitempty"`
 
 	// OperationRef The member's durable `agent:create` reference, or for a replacement its `agent:replace` reference.
 	OperationRef string `json:"operationRef"`
@@ -682,6 +688,9 @@ type ManagedAgent struct {
 
 // ManagedAgentRequest defines model for ManagedAgentRequest.
 type ManagedAgentRequest struct {
+	// Name What the organization calls the new agent, trimmed, 1 to 100 characters (ADR-0119). Optional; it is part of what a retry repeats, so a retry asking for another name is a conflict.
+	Name *string `json:"name,omitempty"`
+
 	// OperationRef The member's durable `agent:create` reference.
 	OperationRef string `json:"operationRef"`
 

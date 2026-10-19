@@ -26,6 +26,14 @@ WHERE x.agent_grn = $1 AND x.activation_id IS NOT NULL;
 -- name: GetAgent :one
 SELECT * FROM agents WHERE grn = $1;
 
+-- Renaming changes what the organization calls the agent and nothing
+-- else (ADR-0119): no assignment, lineage or token moves, and
+-- updated_at, which a state report moves, stays.
+-- name: RenameAgent :one
+UPDATE agents SET name = sqlc.narg('name')
+WHERE grn = sqlc.arg('grn')
+RETURNING *;
+
 -- name: ListAgentsByOrg :many
 SELECT * FROM agents
 WHERE org_grn = sqlc.arg('org_grn')
@@ -81,9 +89,9 @@ RETURNING *;
 -- SearchAgentsByOrg answers the org's agents whose identifier (the
 -- GRN's fifth segment) matches pattern, case aside, ordered by GRN.
 -- name: SearchAgentsByOrg :many
-SELECT grn FROM agents
+SELECT * FROM agents
 WHERE org_grn = sqlc.arg('org_grn')
-  AND split_part(grn, ':', 5) ILIKE sqlc.arg('pattern')
+  AND (split_part(grn, ':', 5) ILIKE sqlc.arg('pattern') OR name ILIKE sqlc.arg('pattern'))
 ORDER BY grn;
 
 -- name: CountAgentsByOrg :one

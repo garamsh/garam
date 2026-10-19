@@ -147,6 +147,7 @@ export const InvitationParser = parserFor<Invitation>()(
 export const AgentParser = parserFor<Agent>()(
   z.object({
     grn: GrnParser,
+    name: z.string().optional(),
     orgGrn: GrnParser,
     provisioningState: z.enum(["pending", "provisioned", "ready", "failed"]),
     runtimeState: z.enum(["unknown", "connected", "disconnected"]),

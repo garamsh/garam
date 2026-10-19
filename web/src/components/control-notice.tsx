@@ -70,10 +70,7 @@ export function controlReach<H extends ReachableOperator>(
   if (hosted.problem !== null) return blocked(hosted.problem, fix);
   const { delegation } = hosted;
   if (delegation === null) {
-    return blocked(
-      `${hosted.name} holds no delegation.`,
-      fix,
-    );
+    return blocked(`${hosted.name} holds no delegation.`, fix);
   }
   const missing = operations.find(
     (operation) => !delegation.operations.some((op) => op === operation),

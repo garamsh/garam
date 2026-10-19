@@ -32,6 +32,13 @@ type Store interface {
 	// organization's agents, ordered by agent GRN. An unassigned agent
 	// has none, so the result is not one per agent.
 	ListAssignmentsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Assignment, error)
+	// LatestGeneration answers the generation garam last activated for
+	// the agent, whether that activation is current or has ended, or
+	// nil for an agent never activated.
+	LatestGeneration(ctx context.Context, agentGRN grn.GRN) (*Generation, error)
+	// LatestGenerationsByOrg answers LatestGeneration for each of the
+	// organization's agents; one never activated has no entry.
+	LatestGenerationsByOrg(ctx context.Context, orgGRN grn.GRN) (map[grn.GRN]Generation, error)
 	// ReportProvisioningState records what the operator assigned at
 	// epoch says about the agent's pod, or ErrStaleEpoch.
 	ReportProvisioningState(ctx context.Context, agentGRN grn.GRN, epoch int, state ProvisioningState) (*Agent, error)

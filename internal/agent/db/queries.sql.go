@@ -306,6 +306,22 @@ func (q *Queries) GetAgentTokenShownTo(ctx context.Context, arg GetAgentTokenSho
 	return i, err
 }
 
+const getLatestGeneration = `-- name: GetLatestGeneration :one
+SELECT a.generation FROM agent_executions e
+JOIN agent_activations a ON a.id = e.latest_activation_id
+WHERE e.agent_grn = $1
+`
+
+// GetLatestGeneration answers the generation of the agent's most
+// recent activation, current or ended; no row for an agent never
+// activated.
+func (q *Queries) GetLatestGeneration(ctx context.Context, agentGrn string) (string, error) {
+	row := q.db.QueryRow(ctx, getLatestGeneration, agentGrn)
+	var generation string
+	err := row.Scan(&generation)
+	return generation, err
+}
+
 const holdAgentOrg = `-- name: HoldAgentOrg :one
 SELECT grn FROM orgs WHERE grn = $1 FOR KEY SHARE
 `
@@ -543,6 +559,41 @@ func (q *Queries) ListAgentsByOrg(ctx context.Context, arg ListAgentsByOrgParams
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestGenerationsByOrg = `-- name: ListLatestGenerationsByOrg :many
+SELECT e.agent_grn, a.generation FROM agent_executions e
+JOIN agent_activations a ON a.id = e.latest_activation_id
+JOIN agents g ON g.grn = e.agent_grn
+WHERE g.org_grn = $1
+ORDER BY e.agent_grn
+`
+
+type ListLatestGenerationsByOrgRow struct {
+	AgentGrn   string
+	Generation string
+}
+
+// ListLatestGenerationsByOrg answers GetLatestGeneration for each of
+// the organization's agents that was ever activated.
+func (q *Queries) ListLatestGenerationsByOrg(ctx context.Context, orgGrn string) ([]ListLatestGenerationsByOrgRow, error) {
+	rows, err := q.db.Query(ctx, listLatestGenerationsByOrg, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLatestGenerationsByOrgRow
+	for rows.Next() {
+		var i ListLatestGenerationsByOrgRow
+		if err := rows.Scan(&i.AgentGrn, &i.Generation); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -818,6 +818,17 @@ func (s *fakeAgentStore) ListDefinitionsByOrg(_ context.Context, orgGRN grn.GRN)
 	return out, nil
 }
 
+// LatestGeneration answers what a store holding no activation does:
+// the fake records none, so every agent is one never activated.
+func (s *fakeAgentStore) LatestGeneration(context.Context, grn.GRN) (*agent.Generation, error) {
+	return nil, nil
+}
+
+// LatestGenerationsByOrg answers LatestGeneration for every agent.
+func (s *fakeAgentStore) LatestGenerationsByOrg(context.Context, grn.GRN) (map[grn.GRN]agent.Generation, error) {
+	return map[grn.GRN]agent.Generation{}, nil
+}
+
 func (s *fakeAgentStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN) ([]*agent.Assignment, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

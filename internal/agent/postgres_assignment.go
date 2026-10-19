@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/garamsh/garam/internal/agent/db"
@@ -77,6 +78,50 @@ func (s *PostgresStore) ListAssignmentsByOrg(ctx context.Context, orgGRN grn.GRN
 		assignments = append(assignments, a)
 	}
 	return assignments, nil
+}
+
+// errNeverActivated is the row LatestGeneration finds for an agent
+// never activated: none, which it answers as nil rather than an error.
+var errNeverActivated = errorx.New(errorx.KindNotFound, "agent never activated")
+
+// LatestGeneration reads the generation of the agent's most recent
+// activation.
+func (s *PostgresStore) LatestGeneration(ctx context.Context, agentGRN grn.GRN) (*Generation, error) {
+	raw, err := s.q.GetLatestGeneration(ctx, agentGRN.String())
+	if err != nil {
+		err = pgxerr.Classify(err, "get latest generation", errNeverActivated, nil)
+		if errors.Is(err, errNeverActivated) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	g, err := ParseGeneration(raw)
+	if err != nil {
+		return nil, errorx.Wrap(err, "stored generation", errorx.KindInternal)
+	}
+	return &g, nil
+}
+
+// LatestGenerationsByOrg reads the generation of each of the
+// organization's agents' most recent activation.
+func (s *PostgresStore) LatestGenerationsByOrg(ctx context.Context, orgGRN grn.GRN) (map[grn.GRN]Generation, error) {
+	rows, err := s.q.ListLatestGenerationsByOrg(ctx, orgGRN.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "list latest generations", nil, nil)
+	}
+	out := make(map[grn.GRN]Generation, len(rows))
+	for _, row := range rows {
+		agentGRN, err := grn.Parse(row.AgentGrn)
+		if err != nil {
+			return nil, errorx.Wrap(err, "stored activation agent grn", errorx.KindInternal)
+		}
+		g, err := ParseGeneration(row.Generation)
+		if err != nil {
+			return nil, errorx.Wrap(err, "stored generation", errorx.KindInternal)
+		}
+		out[agentGRN] = g
+	}
+	return out, nil
 }
 
 func rowToAssignment(row db.AgentAssignment) (*Assignment, error) {

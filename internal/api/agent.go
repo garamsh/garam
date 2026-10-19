@@ -45,9 +45,18 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apig
 		writeError(w, err)
 		return
 	}
+	generations, err := s.agents.LatestGenerationsByOrg(r.Context(), orgGRN(orgSlug))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	out := make([]apigen.Agent, 0, len(agents))
 	for _, a := range agents {
-		out = append(out, agentToAPI(a, assignments[a.GRN().String()]))
+		var generation *agent.Generation
+		if g, ok := generations[a.GRN()]; ok {
+			generation = &g
+		}
+		out = append(out, agentToAPI(a, assignments[a.GRN().String()], generation))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -74,7 +83,12 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, agentToAPI(a, assignment))
+	generation, err := s.agents.LatestGeneration(r.Context(), g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, agentToAPI(a, assignment, generation))
 }
 
 // ListAgentDefinitions lists the agents the org says it should have.
@@ -193,9 +207,10 @@ func agentGRN(orgSlug, agentSlug string) grn.GRN {
 }
 
 // agentToAPI renders an Agent together with the assignment holding it,
-// which is nil when nothing does. The two states stay separate
-// fields: different parties report them (ADR-0012).
-func agentToAPI(a *agent.Agent, assignment *agent.Assignment) apigen.Agent {
+// which is nil when nothing does, and the generation garam last
+// activated for it, nil before any activation. The two states stay
+// separate fields: different parties report them (ADR-0012).
+func agentToAPI(a *agent.Agent, assignment *agent.Assignment, generation *agent.Generation) apigen.Agent {
 	out := apigen.Agent{
 		Grn:               a.GRN().String(),
 		OrgGrn:            a.Organization().String(),
@@ -203,6 +218,10 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment) apigen.Agent {
 		RuntimeState:      apigen.AgentRuntimeState(a.RuntimeState()),
 		CreatedAt:         a.CreatedAt(),
 		UpdatedAt:         a.UpdatedAt(),
+	}
+	if generation != nil {
+		g := string(*generation)
+		out.Generation = &g
 	}
 	if assignment != nil {
 		out.Assignment = &apigen.AgentAssignment{

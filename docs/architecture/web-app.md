@@ -121,26 +121,26 @@ carried by a collapsible sidebar shell over every `/console/*` route
 ([ADR-0011](./adr/0011-console-shell.md)). Its org-scoped sections are
 declared in one place, `web/src/app/console/_components/navigation.ts`,
 which is what the sidebar, the breadcrumb, the command palette and the
-active marking all read. The sidebar is Roster's
-([ADR-0113](./adr/0113-the-console-is-roster-one-policy-shaped-ui-where-people-and-agents-are-members.md)):
-Home, then Members (People and agents, and Teams), Projects, and
-Organization (Permissions, Operators, Hosts, Templates, Consents and
-Settings). The same file's `CONSOLE_NAV` is where each one is placed,
-with a link only for a route that exists, and names the action each
-section's list is read under; adding one is an entry there, a place
-in a group and a route folder. Activity is not listed: garam records
-nothing it would show (§Not established).
+active marking all read. The sidebar is
+[ADR-0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md):
+Home, Projects, and Organization (People, Agents, Teams, Permissions,
+Operators, Hosts and Settings). The same file's `CONSOLE_NAV` is where
+each one is placed, with a link only for a route that exists, and
+`CONSOLE_SECTIONS` names the action each section's list is read under;
+adding one is an entry there, a place in a group and a route folder.
+Consents is a section in no group: Settings links it and the palette
+finds it. Activity is not listed: garam records nothing it would show
+(§Not established).
 
 A section is left out of the sidebar and the palette where the server
 denies the caller its read. The organization's layout asks once for
 every section, in one permission check
 (`web/src/app/console/_components/org-shell-read.tsx`), and the
-sidebar says once which sections it left out, explaining why in place
-when asked. Until the answer arrives, or where it never does, every
-section is listed. A section whose
-entries each have a page of their own declares it there too, and
-People and agents, Teams, Projects, Agents, Operators and Permissions
-do: `…/members/{person}` is a person's page, `…/projects/{project}` a
+sidebar says once, in one line, which sections it left out. Until the
+answer arrives, or where it never does, every section is listed. A
+section whose entries each have a page of their own declares it there
+too, and People, Agents, Teams, Projects, Operators and Permissions
+do: `…/people/{person}` is a person's page, `…/projects/{project}` a
 project's,
 `/console/orgs/{org}/teams/{team}` is a team's page and `…/teams/new`
 creates one, `…/agents/{agent}` is an agent's and `…/agents/new`
@@ -153,10 +153,7 @@ and `…/operators/{operator}/connect` is that operator's setup; below
 an operator, `connect` and `keys` are reserved for its own pages, which
 sit under the identifier and so take none,
 and `…/permissions/{policy}` and `…/permissions/new` are a policy's.
-Agents is listed in the sidebar by its Templates view alone, since
-its list is People and agents', so on an agent's page the sidebar
-marks People and agents as the location. On such a page the sidebar
-marks the section as the location, and the
+On such a page the sidebar marks the section as the location, and the
 breadcrumb links the section and names the entry with the name the
 page read, handed to it through
 `web/src/app/console/_components/item-crumb.tsx` because the layout
@@ -166,12 +163,8 @@ A section may also declare named views beside its entries, which the
 breadcrumb names by label: Permissions declares Attachments, at
 `…/permissions/attachments`
 ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)).
-A view may have item pages of its own, and the breadcrumb then links
-the section and the view above the entry: Agents declares Templates,
-at `…/agents/templates`, with `…/agents/templates/{template}` below it
-and no create page, since garam's templates are retired read-only
-([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md),
-[ADR-0088](./adr/0088-garams-agent-templates-are-retired-read-only-and-not-imported.md)).
+garam's retired templates have no page: the console shows none of
+them (ADR-0116, #1593).
 
 The shell's links prefetch on intent, not on sight. The sidebar's
 sections and the breadcrumb are `IntentLink`s
@@ -223,27 +216,23 @@ API behind it rather than of the console:
 |---|---|
 | Home | **On Roster.** The organization as the person signed in meets it (ADR-0113): a sentence generated from what follows, its names linked; Needs you, which says nothing waits on them while garam has no work items; their teams, which `listGroups` answers in one request with `member=me`, with the people and agents in each read per team; and the agents and operators they can read that are failing. A part whose read was refused or not answered is said and never shown as empty, and the sentence leaves it out |
 | Teams | **On the design system.** The organization's groups, presented as teams ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)): lists them, creates one, and on a team's page reads its members, adds and removes people and agents, renames it and deletes it. A member is shown by the name and type the organization's people and agents give it, and one neither holds stays listed and removable, marked as not found; where the caller is refused the people or agents list, those members are marked not checked and the team stays readable. An agent is offered and shown by its definition's name with its identifier, including one no operator has claimed yet, and a refused definitions list is said rather than offered as none ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)) |
-| People and agents | **On Roster.** One list of the organization's people and agents ([ADR-0113](./adr/0113-the-console-is-roster-one-policy-shaped-ui-where-people-and-agents-are-members.md)), each with its mark, filtered by kind, team and what an agent runs on, kept in the address. An agent reads as one state derived from its two reports, with both named under it, and failing agents lead; a definition cutting over is marked as it is wherever definitions are listed. The chosen members, or one row's, are added to a team or given a policy, one request each since garam takes one member per request, offered only for the teams and policies the server does not deny, asked in one check; the policy dialog says that a first attachment narrows a policy that applied to the whole organization. Inviting a person ([ADR-0006](./adr/0006-invitation-tokens.md)) and creating an agent open from the header, kept there inactive with the reason where the server denies them. A person's page names their role and since when. A list the caller is refused is said, never shown as empty |
-| Agents | **On the design system.** An agent's page, for every agent the organization defined by name, whether or not anything holds it, and every reported agent no definition names, shows the two states its operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)). Its header states what holds it, an operator or a standalone host ([ADR-0082](./adr/0082-a-standalone-host-runs-its-agent-under-a-supervisor-an-administrator-approves-by-its-keys.md)), at which epoch, when it last reported and who defined it; no read garam serves answers a generation, so none is shown. Replace host approves a new standalone host for an agent a standalone host holds, from exactly the assignment the header read, so garam refuses it if the agent has moved since. A new agent is created on its own page from a template the control service published, and no form there sends garam a definition or a value; no garam template is offered as a start ([ADR-0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)). An agent's page shows what was requested apart from what was reported and renames it; a definition whose cutover is frozen or switched is marked, there and wherever definitions are listed, as cut-over in progress or managed by the Operator, and its page says its values are archival and read-only in garam, offering the rename alone ([ADR-0086](./adr/0086-a-legacy-agent-cuts-over-through-stages-garam-records-under-its-execution-lock.md)); an agent with no definition has a page with the report alone, saying its operator's control service created it or a standalone host enrolled it. The hosted operator's control service is reached for its published templates and profiles, publishing a template version, creating an agent from one, and an agent's pending, rendered and runtime-reported execution (§How it reaches a control service); the Templates view shows its templates first, and below them garam's own as archived records, each with a page showing what it said and offering no edit, deletion or start ([ADR-0088](./adr/0088-garams-agent-templates-are-retired-read-only-and-not-imported.md)) |
+| People | **On Roster.** The organization's people, apart from its agents ([ADR-0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md)), each with their role, filtered by team, kept in the address. The chosen people, or one row's, are added to a team or given a policy, one request each since garam takes one member per request, offered only for the teams and policies the server does not deny, asked in one check; the policy dialog says that a first attachment narrows a policy that applied to the whole organization. Inviting a person ([ADR-0006](./adr/0006-invitation-tokens.md)) is the header's one action, kept there inactive with the reason where the server denies it. A person's page names their role and since when. A list the caller is refused is said, never shown as empty |
+| Agents | **On Roster.** The organization's agents, apart from its people (ADR-0116), failing ones first, each reading as one state derived from its two reports with both named under it, filtered by team and by what runs it, read from the assignment's assignee, kept in the address, and added to a team or given a policy as People's are. Creating one is the header's one action, and the empty state's, kept inactive with the reason where the server denies it. An agent's page, for every agent the organization defined by name, whether or not anything holds it, and every reported agent no definition names, shows in its header the two states its operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)), what holds it, an operator or a standalone host ([ADR-0082](./adr/0082-a-standalone-host-runs-its-agent-under-a-supervisor-an-administrator-approves-by-its-keys.md)), the generation garam last activated where the agent read answers one and nothing where it does not (#1576), when it last reported and who defined it. Replace host approves a new standalone host for an agent a standalone host holds, from exactly the assignment the header read, so garam refuses it if the agent has moved since. A new agent is created on its own page from a template the control service published, and no form there sends garam a definition or a value ([ADR-0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)); below the wizard, Templates lists the control service's published templates and profiles and publishes a template version, shown only where a hosted operator's grant reads them. An agent's page shows what was defined and renames it, and marks no cut-over stage (#1592); an agent with no definition has a page with the report alone, saying its operator's control service created it or a standalone host enrolled it. The hosted operator's control service is reached for its published templates and profiles, publishing a template version, creating an agent from one, and an agent's pending, rendered and runtime-reported execution (§How it reaches a control service). garam's retired templates are not shown (ADR-0116) |
 | Projects | **On the design system.** Lists the projects the organization owns, each with its identifier, and creates one from a dialog the list's header opens, which is also its empty state's next step — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console. A project's page reads its members by name, adds and removes people and agents, renames it and deletes it once its name is typed, on the same membership parts a team's page uses (`web/src/app/console/_components/membership/`), with Your access. A list the caller is refused is said, never shown as empty |
 | Hosts | **On Roster.** The organization's standalone and direct hosts ([ADR-0082](./adr/0082-a-standalone-host-runs-its-agent-under-a-supervisor-an-administrator-approves-by-its-keys.md), [ADR-0111](./adr/0111-a-directly-attached-runtime-is-activated-by-a-one-agent-host-authority-on-the-generation-it-reports-and-its-store-lock.md)): its supervisors, each with the agent it runs, at which epoch and when that agent last activated, and the approvals that stood them up, with their state. A host is approved from the output of `garam standalone prepare` pasted whole, read against what that command prints and never said back, with the host's name, how it runs its agent and how long the approval lasts, at most the day garam allows. An unspent approval is withdrawn and an active supervisor revoked, each after a dialog saying what ends. Where the server denies `agent:enroll` each stays, inactive, with the reason. A list the caller is refused is said, never shown as empty |
 | Operators | **On the design system.** Lists the operators the organization registered by name, with the identifier under each, its control service's host and where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)), and the images each reported running and its last contact (#1047). Every hosted operator whose grant carries `operator:read` is asked, each through the operation-authority seam under its own authority, and the answers are merged by GRN, since a service answers only for the controllers that reached it: an operator a service that answered lists among its grant's controllers but left out, or one that reported no image, is not reported; one no answering service serves is not checked, with the reason in the console's words where a service refused or did not answer; a control service's own identity is named as one rather than as a controller; none is shown as an empty list; no service is asked where every operator is a control service, an organization with none hosted shows no notice, and the columns are left out only where the server denies the caller `operator:read`; connects one by registering it in a dialog over the list, offered unless the server denies the caller registering, which keeps the credential and enrollment token it answers behind a closed disclosure for an operator not yet on keys ([ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)), then on the operator's setup page issues its key, shows the private key once, gives the Secret each identity reads it from, and waits for its first sign-in, resuming from the keys garam holds ([ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)). An operator's page has Overview, Keys, Control service, Delegation and Settings: what garam knows of it, and the same report in full: each image's name and reference, its digest where one was given, shortened and copied whole, when they were reported, and its last contact; its keys, rotated from its setup page and revoked after a confirmation; its control endpoint; its delegation; and its name, description and legacy credential, re-issued after a confirmation saying the previous one and its tokens stop authenticating; and, for an operator holding no certificate, a fresh enrollment token issued after a confirmation saying any earlier one stops working, and shown once ([ADR-0067](./adr/0067-a-member-mints-a-second-enrollment-token-where-the-operator-holds-no-certificate.md)). Where garam would refuse it, because the operator has enrolled or the server denies the caller `operator:register`, the control stays on the page, inactive, with the reason beside it ([ADR-0113](./adr/0113-the-console-is-roster-one-policy-shaped-ui-where-people-and-agents-are-members.md)). A danger zone deletes it once its identifier is typed, saying that work already running in its cluster does not stop ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)). The delete is not offered while a definition names it, which the dialog names, and a refused definitions list is marked not checked |
 | Consents | **On the design system.** Shows each cross-organization consent relation the organization is a side of as a card naming where the pair stands and both halves, the other organization by its identifier in a copy field alone ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)); grants this organization's half from the card of a pair the other side holds, after a confirmation saying messages cross from then on; opens a new pair from a dialog the header opens, which is also its empty state's next step; and withdraws a half after a confirmation saying what stops. A list the caller is refused is said, never shown as empty |
-| Permissions | **On the design system.** The organization's policies and their attachments ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)), through the existing policy operations only. An agent is chosen by its definition's name with its identifier, including one awaiting an operator ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)). The Policies view lists policies and opens a page per policy, where one is created as a draft; its document is edited as statements or as JSON, one text, and published as the next version — appended and made the default in one step, confirmed after a diff against the default — or saved without publishing; any stored version is made the default, it is activated and archived, and it is attached to and detached from teams, people and agents chosen by name. Each of these writes is offered unless the server denies it to the caller ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)). A write that makes a policy evaluate states the version and whom it reaches first, and one reaching everyone, or reaching a scope garam will not list, needs an explicit confirmation. The Attachments view shows each policy's attachments and, for one chosen subject, the policies attached to it, to its teams and to no one, without calling that its access. A list the caller is refused is shown as unchecked, never as empty; a Condition is shown as not evaluated. Neither view deletes a policy or explains a decision, since no operation does |
-| Settings | **On the design system.** The organization's name, renamed in place, beside its identifier to copy; and a danger zone that deletes the organization once garam has counted what the deletion takes, read again when the dialog opens, and the person has typed the organization's name ([ADR-0065](./adr/0065-garam-states-what-deleting-an-organization-destroys-before-the-act.md)). The count names each kind the organization holds and says when its certificate authority goes with it; where garam did not answer the count, the dialog says so and has no confirm field, so the delete cannot be confirmed. Each write is offered unless the server denies it to the caller, and a caller denied the rename reads the name instead |
+| Permissions | **On the design system.** The organization's policies and their attachments ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)), through the existing policy operations only. An agent is chosen by its definition's name with its identifier, including one awaiting an operator ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)). The Policies view lists policies and opens a page per policy, where one is created as a draft; its document is edited as statements or as JSON, one text, and published as the next version — appended and made the default in one step, confirmed after a diff against the default — or saved without publishing; any stored version is made the default, it is activated and archived, and it is attached to and detached from teams, people and agents chosen by name. Each of these writes is offered unless the server denies it to the caller ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)). A write that makes a policy evaluate states whom it reaches first, and one reaching everyone, or reaching a scope garam will not list, needs an explicit confirmation. The Attachments view shows each policy's attachments and, for one chosen subject, the policies attached to it, to its teams and to no one, without calling that its access. A list the caller is refused is shown as unchecked, never as empty; a Condition is shown as not evaluated. Neither view deletes a policy or explains a decision, since no operation does |
+| Settings | **On the design system.** The organization's name, renamed in place, beside its identifier to copy; a link to Consents, which no sidebar entry lists (ADR-0116); and a danger zone that deletes the organization once garam has counted what the deletion takes, read again when the dialog opens, and the person has typed the organization's name ([ADR-0065](./adr/0065-garam-states-what-deleting-an-organization-destroys-before-the-act.md)). The count names each kind the organization holds and says when its certificate authority goes with it; where garam did not answer the count, the dialog says so and has no confirm field, so the delete cannot be confirmed. Each write is offered unless the server denies it to the caller, and a caller denied the rename reads the name instead, with no sentence saying so |
 
-Every section's empty state names the absence and no next step. Where
-a section creates in place, that next step is the form standing under
-it; Teams carries it as the header's create link, and `/console/orgs`
-states one in words, because each one's create path is a route of its
-own rather than a form on the page. What an empty state can carry is
-`web/src/app/console/_components/empty-state.tsx`, which is
-authoritative for it and holds no control.
+Every section's empty state is one line, and the page's create action
+where it has one, the header's repeated (ADR-0116). What an empty state
+can carry is `web/src/app/console/_components/empty-state.tsx`, which
+is authoritative for it.
 
-`/console/orgs/{org}/groups` and `…/policies`, two sections' former
-addresses, redirect to Teams and Permissions, and `…/people` and the
-`…/agents` list redirect to People and agents with the kind they held
-(`web/next.config.ts`).
+`/console/orgs/{org}/members`, the one list People and Agents were
+until ADR-0116, and a person's page under it redirect to People
+(`web/next.config.ts`); no other former address is kept (#1592).
 
 Organizations are created, and an invitation is accepted at
 `/console/invitations/{token}` — which is itself behind sign-in,
@@ -424,15 +413,20 @@ what a page owes once it is built on the system.
 **Roster is built in part.**
 [ADR-0113](./adr/0113-the-console-is-roster-one-policy-shaped-ui-where-people-and-agents-are-members.md)
 replaces ADR-0103's grouped sidebar, its set of pages and its hiding
-of a denied action. Built (§What it serves):
+of a denied action, and
+[ADR-0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md)
+replaces its Members list and its sidebar. Built (§What it serves):
 - the sidebar, Home in place of the overview, and the palette that
   finds objects and the page's actions;
-- People and agents in one list, each member's kind told by the shape
+- People and Agents, two lists, each member's kind told by the shape
   of its mark (`web/src/components/member-mark.tsx`);
 - a uniform object header, the Detail template's mark and facts;
 - Your access on the pages of an agent, a person, a team, a project,
   a policy and an operator
-  (`web/src/app/console/_components/your-access.tsx`);
+  (`web/src/app/console/_components/your-access.tsx`): one line names
+  what the caller may not do, and an expander holds each action's
+  grant, or the permission a denied one lacks and who holds it, never
+  the reason the inactive control already gives;
 - Hosts, and replacing the standalone host an agent runs on.
 
 Your access is asked in one permission check for the page's actions,
@@ -447,7 +441,7 @@ asked or an action is denied, beside the shell's own reads.
 
 Unbuilt:
 - a denied action kept visible as an inactive control everywhere:
-  People and agents keeps its denied actions so
+  People and Agents keep their denied actions so
   (`web/src/app/console/_components/inactive-button.tsx`), and the
   other pages still leave theirs out;
 - replacing the host of an agent an operator holds, which its control
@@ -485,8 +479,13 @@ it is under Roster.
   - a top bar holding the breadcrumb and the command palette, which
     keeps the organization's name on mobile.
 
-  Templates is a sidebar entry under Organization, while its address
-  and breadcrumb stay as ADR-0075 has them.
+- **Density.** A page shows a sentence of explanation only where its
+  action is not self-evident, and a one-line consequence lives in the
+  dialog that confirms the action: a dialog given a `command` and no
+  description says its consequence. Each page has one primary action,
+  at the end of its header row
+  (`web/src/app/console/_components/page-header.tsx`). A table keeps
+  the columns a reader acts on (ADR-0116).
 - **Templates.** Every console page is a List, a Detail, a Settings
   page or a Wizard, as ADR-0103 §Page templates lays each out. A
   Detail page keeps every tab mounted and hides the inactive ones, so
@@ -611,10 +610,6 @@ files (ADR-0009, `docs/convention/stack-nextjs.md`
   carries an accountable person, as Entra Agent ID's sponsor does.
   garam holds no such field. Until the owner decides, an agent's page
   is to show who defined it, from its definition's `definedBy`.
-- **Where an agent's generation is read from.** ADR-0113's object
-  header names an agent's generation beside its holder and epoch, and
-  the browser API's agent carries holder and epoch alone, so an agent's
-  page shows no generation until a read answers one.
 - **Where Home's feed and the shared timeline are read from.** Audit
   records message sends alone, with no read route
   ([audit.md](./audit.md)). Watching an agent keeps nothing
@@ -653,11 +648,10 @@ These decide the application itself:
   the name alone could be ambiguous
 - [ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)
   — agents are listed by name whether or not an operator has claimed
-  them, a new agent starts from a template copied once, and Templates
-  is a view inside Agents
+  them, and a new agent starts from a template copied once
 - [ADR-0088](./adr/0088-garams-agent-templates-are-retired-read-only-and-not-imported.md)
-  — garam's own templates are archived records the console neither
-  edits nor offers as a start
+  — garam's own templates are retired records the console offers as no
+  start; since ADR-0116 it shows none of them
 - [ADR-0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)
   — the console offers no form that sends garam a definition, and a
   new agent is created through the control service
@@ -671,7 +665,12 @@ These decide the application itself:
   — the console is Roster, one UI shaped by the caller's policies,
   with a Home, people and agents as members, and a Your access panel
   on every object page; it replaces ADR-0103's navigation, its set of
-  pages and its hiding of a denied action, and is unbuilt
+  pages and its hiding of a denied action, and is built in part
+- [ADR-0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md)
+  — People and Agents are two lists under Organization, beside Teams,
+  Permissions, Operators, Hosts and Settings, and a page explains only
+  what is not self-evident, with one primary action; it supersedes
+  ADR-0113's Members list and its sidebar
 
 The rest bear on it without being about it:
 
@@ -740,8 +739,8 @@ The rest bear on it without being about it:
   is built from what the release builds, and is told apart by its tag
 - [ADR-0086](./adr/0086-a-legacy-agent-cuts-over-through-stages-garam-records-under-its-execution-lock.md)
   — a definition whose agent cuts over keeps its values as an archive
-  only its name still changes, which the Agents and Operators sections
-  mark
+  only its name still changes; the console no longer marks the stage
+  (#1592)
 - [ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — `structure.md` governs what a module under `web/src/` may import,
   so a feature reaches a sibling through its declared entry points and

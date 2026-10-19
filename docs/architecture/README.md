@@ -888,7 +888,8 @@ ADRs:
   denied action visible as an inactive control with its reason;
   ADR-0103's visual system stays; unbuilt, and the API for explaining
   access and the source of Home's feed and the timeline are open;
-  supersedes 0103 in part
+  supersedes 0103 in part; its Members list and its sidebar are
+  superseded by 0116
 - [0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)
   — every issuance, renewal and refusal of an operator's or a
   supervisor's certificate or credential, an operator enrollment token
@@ -901,3 +902,10 @@ ADRs:
   and `listPolicies` drop each object whose own read the caller is
   denied, asked of the engine in one `CheckBatch` call per page; a page
   is filtered as read, so a short page is not the end
+- [0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md)
+  — the console's navigation is Home, Projects and Organization, which
+  holds People, Agents, Teams, Permissions, Operators, Hosts and
+  Settings, with People and Agents two lists; a page explains only
+  what is not self-evident, a consequence lives in the dialog that
+  confirms it, and a page has one primary action; supersedes 0113 in
+  part

@@ -22,8 +22,11 @@ test.describe("garam's retired templates", () => {
       `${agents}/templates`,
       `${agents}/templates/${kept.identifier}`,
     ]) {
-      const response = await page.goto(href);
-      expect(response?.status()).toBe(404);
+      // A streamed notFound() answers 200, so the page says it instead.
+      await page.goto(href);
+      await expect(
+        page.getByRole("heading", { level: 1, name: "Page not found" }),
+      ).toBeVisible();
       await expect(page.getByText("Researcher")).toHaveCount(0);
     }
 

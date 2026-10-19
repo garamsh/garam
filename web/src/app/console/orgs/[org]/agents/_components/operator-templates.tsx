@@ -220,7 +220,7 @@ export function OperatorTemplates({
               ? "No profile is published."
               : `Published: ${profiles.data.profiles
                   .map((p) => `${p.name} version ${p.version}`)
-                  .join(", ")}.`}{" "}
+                  .join(", ")}.`}
           </p>
         ) : (
           <ControlNotice

@@ -122,8 +122,6 @@ test.describe("an agent's host", () => {
 
     const replace = page.getByRole("button", { name: "Replace host" });
     await expect(replace).toHaveAttribute("aria-disabled", "true");
-    await expect(replace).toHaveAccessibleDescription(
-      "Nothing holds it yet, so there is no host to replace.",
-    );
+    await expect(replace).toHaveAccessibleDescription("Nothing runs it yet.");
   });
 });

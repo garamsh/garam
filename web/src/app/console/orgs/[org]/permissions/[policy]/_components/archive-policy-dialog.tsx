@@ -31,12 +31,19 @@ export function ArchivePolicyDialog({
         </Button>
       }
       title={`Archive ${policyName}?`}
+      description={
+        <p>
+          It stops taking part in checks. Its versions and attachments are kept,
+          and it can be activated again.
+        </p>
+      }
       action={archivePolicy}
       initialState={initialState}
       fields={{ org, policy }}
       command={{
         label: "Archive policy",
-        consequence: "It grants nothing until activated again.",
+        consequence:
+          "It stops taking part in checks; versions and attachments are kept.",
       }}
       confirmLabel="Archive policy"
       pendingLabel="Archiving…"

@@ -275,14 +275,17 @@ test.describe("teams", () => {
     ).toHaveCount(0);
   });
 
-  test("sends the old Groups and Members addresses to Teams and People", async ({
+  test("sends the old Members address to People, and keeps no older one", async ({
     page,
     signedIn,
   }) => {
+    // The redirects older than Members went with #1592.
     await page.goto(`/console/orgs/${signedIn.orgSlug}/groups`);
-    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/teams`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Page not found" }),
+    ).toBeVisible();
 
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
     await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/people`);
     // Presence: the heading carries the list's count after the title.
     await expect(
@@ -353,7 +356,7 @@ test.describe("teams", () => {
 
     await page.goto(`${teams}/new`);
     await expect(
-      page.getByText("You cannot create teams here", { exact: true }),
+      page.getByText("No policy lets you create teams", { exact: true }),
     ).toBeVisible();
     await expect(page.getByLabel("Team name", { exact: true })).toBeHidden();
   });

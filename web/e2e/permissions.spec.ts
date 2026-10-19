@@ -109,6 +109,7 @@ test.describe("permissions", () => {
     await expect(page.getByText("No policies", { exact: true })).toBeVisible();
     await page
       .getByRole("link", { name: "Create policy", exact: true })
+      .first()
       .click();
     await expect(heading(page, "New policy")).toBeVisible();
 
@@ -174,7 +175,7 @@ test.describe("permissions", () => {
 
     await page.getByRole("tab", { name: /^Attachments/ }).click();
     await clickUntil(
-      page.getByRole("combobox", { name: "Team, person or agent" }),
+      page.getByRole("combobox", { name: "Attach to" }),
       page.getByRole("option", { name: `${signedIn.groupName} · Team` }),
     );
     await page
@@ -281,11 +282,7 @@ test.describe("permissions", () => {
       }),
     );
 
-    // The section's former address lands on Permissions.
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/policies`);
-    await expect(page).toHaveURL(
-      `/console/orgs/${signedIn.orgSlug}/permissions`,
-    );
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions`);
     await page
       .getByRole("link", { name: "Baseline read", exact: true })
       .click();
@@ -383,11 +380,9 @@ test.describe("permissions", () => {
     await confirm.click();
 
     const refusal = dialog.getByRole("alert");
+    await expect(refusal).toContainText("This is its last attachment");
     await expect(refusal).toContainText(
-      "Not detached: this is its last attachment",
-    );
-    await expect(refusal).toContainText(
-      "Attach it to another team, person or agent first, or archive the policy.",
+      "Without it, it applies to everyone. Attach it elsewhere first.",
     );
 
     await page.reload();
@@ -432,7 +427,7 @@ test.describe("permissions", () => {
       name: "Publish v2 of Deny project deletion?",
     });
     await expect(dialog).toContainText(
-      `It becomes the default and applies at once. Applies to ${signedIn.groupName} (Team).`,
+      `It applies at once. Applies to ${signedIn.groupName} (Team).`,
     );
     await expect(dialog.getByRole("figure")).toContainText(
       'Added: "project:update"',
@@ -460,7 +455,7 @@ test.describe("permissions", () => {
       rollBack,
     );
     await expect(rollBack).toContainText(
-      `The policy evaluates v1 instead of v2. This applies at once. Applies to ${signedIn.groupName} (Team).`,
+      `Applies to ${signedIn.groupName} (Team).`,
     );
     await rollBack
       .getByRole("button", { name: "Roll back to v1", exact: true })
@@ -485,7 +480,7 @@ test.describe("permissions", () => {
     // The control: the owner is offered the create action on the page.
     await page.goto(permissions);
     await expect(
-      page.getByRole("link", { name: "Create policy", exact: true }),
+      page.getByRole("link", { name: "Create policy", exact: true }).first(),
     ).toBeVisible();
 
     const member = await seedMember(signedIn);

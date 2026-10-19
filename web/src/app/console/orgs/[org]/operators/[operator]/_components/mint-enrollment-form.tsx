@@ -74,7 +74,13 @@ export function MintEnrollmentForm({
           </Button>
         }
         title={`Issue ${name} a new enrollment token?`}
-        description={<p>Any earlier token stops working.</p>}
+        description={
+          <p>
+            Any token issued before it stops working the moment you confirm. The
+            operator enrolls with the new one from its own cluster, where it
+            generates its key.
+          </p>
+        }
         action={mintOperatorEnrollment}
         initialState={initialState}
         fields={{ org, operator }}
@@ -92,8 +98,8 @@ export function MintEnrollmentForm({
         title="Save the enrollment token"
         description={
           <>
-            Works once, until <Time value={minted?.expiresAt ?? ""} />. Shown
-            only now.
+            It works once, until <Time value={minted?.expiresAt ?? ""} />, and
+            is shown only now. Any earlier token no longer works.
           </>
         }
         secret={minted?.token ?? ""}

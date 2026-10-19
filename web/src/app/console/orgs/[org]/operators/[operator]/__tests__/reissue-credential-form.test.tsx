@@ -53,9 +53,8 @@ describe("re-issue credential form", () => {
     const dialog = screen.getByRole("alertdialog", {
       name: "Re-issue Field one's credential?",
     });
-    expect(dialog).toHaveTextContent(
-      "The current credential and its tokens stop authenticating.",
-    );
+    // Presence: the sentence goes on to say when the operator recovers.
+    expect(dialog).toHaveTextContent(/stop working the moment you confirm/);
     expect(posted).toEqual([]);
 
     await user.click(

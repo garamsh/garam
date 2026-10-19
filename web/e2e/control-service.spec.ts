@@ -534,11 +534,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await page
       .getByRole("button", { name: "Create from template", exact: true })
       .click();
-    await expect(
-      page.getByText(
-        /at revision 1\. It keeps the template version it copied\./,
-      ),
-    ).toBeVisible();
+    await expect(page.getByText(/^Created at revision 1\.$/)).toBeVisible();
 
     const create = received.find((r) => r.method === "POST")!;
     const controller = `grn:${signedIn.orgSlug}:default:operator:${signedIn.operatorIdentifier}`;
@@ -759,6 +755,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await page.getByRole("tab", { name: "Execution", exact: true }).click();
     await expect(page.getByText(failed, { exact: true })).toBeVisible();
 
+    // The wizard and the Templates below it each say so.
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     await expect(
       page.getByRole("heading", {
@@ -767,7 +764,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page.getByText(failed, { exact: true })).toBeVisible();
+    await expect(page.getByText(failed, { exact: true }).first()).toBeVisible();
   });
 
   test("with no registered endpoint the console reaches no control service and says so", async ({

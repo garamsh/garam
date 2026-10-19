@@ -2,13 +2,8 @@ package integration_test
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/pem"
-	"math/big"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -95,36 +90,11 @@ func (s *countingSigner) Chain(context.Context, grn.GRN) (*agent.Chain, error) {
 	return &chain, nil
 }
 
-// selfIssuer issues a parseable certificate with the next serial.
-type selfIssuer struct{ next atomic.Int64 }
-
-func (s *selfIssuer) Issue(_ context.Context, _ grn.GRN) (*agent.Certificate, error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, err
-	}
-	now := time.Now()
-	template := &x509.Certificate{
-		SerialNumber: big.NewInt(s.next.Add(1)),
-		NotBefore:    now.Add(-time.Minute),
-		NotAfter:     now.Add(time.Hour),
-	}
-	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-	if err != nil {
-		return nil, err
-	}
-	return &agent.Certificate{
-		CertificatePEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
-		NotAfter:       template.NotAfter,
-	}, nil
-}
-
 type lifecycle struct {
 	fence
 	authorizer *grantingAuthorizer
 	operations *boundOperations
 	signer     *countingSigner
-	issuer     *selfIssuer
 	service    agent.ExecutionService
 	audience   grn.GRN
 }
@@ -137,12 +107,10 @@ func newLifecycle(t *testing.T) lifecycle {
 		authorizer: &grantingAuthorizer{},
 		operations: &boundOperations{refs: map[string]*agent.OperationBinding{}, handoffs: map[string]*agent.OperationBinding{}},
 		signer:     &countingSigner{chain: agent.Chain{IssuerPEM: "issuer 1", ServerRootPEM: "server root 1"}},
-		issuer:     &selfIssuer{},
 		audience:   scopedGRN("acme", agent.ServiceTypeOperator, "control"),
 	}
-	l.issuer.next.Store(1000)
 	leaves := namedLeaves{"leaf-1": valid("1"), "leaf-2": valid("2"), "expired": expiredCredential("1")}
-	l.service = agent.NewExecutionService(f.agents, f.exec, l.authorizer, l.operations, leaves, f.agents, l.signer, l.issuer)
+	l.service = agent.NewExecutionService(f.agents, f.exec, l.authorizer, l.operations, leaves, f.agents, l.signer)
 	return l
 }
 
@@ -193,7 +161,7 @@ func TestExecutionService_OnlyALifecycleAuthorityActivates(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "unknown freshness refuses")
 	e, err := l.exec.GetExecution(ctx, l.agent)
 	require.NoError(t, err)
-	assert.Equal(t, agent.ModeLegacy, e.Mode, "nothing was written by a refusal")
+	assert.Nil(t, e.Current, "nothing was written by a refusal")
 
 	l.authorizer.err = nil
 	res, err := l.service.Activate(ctx, l.audience, l.input("r1", generation(1), nil, "leaf-1"))
@@ -258,7 +226,6 @@ func TestExecutionService_IntrospectionAnswersForThePresentedCertificate(t *test
 	require.NoError(t, err)
 	assert.Equal(t, agent.CredentialCurrent, in.Credential)
 	assert.Equal(t, agent.GenerationNone, in.Generation, "before any activation")
-	assert.Equal(t, agent.ModeLegacy, in.Mode)
 	assert.Equal(t, l.controller, in.Assignee)
 
 	expired, err := l.service.Introspect(ctx, l.audience, l.agent, leafNamed("expired"), nil)
@@ -308,8 +275,8 @@ func (l lifecycle) handoff(authority, body string) {
 // be shown to the caller, forwarded by that caller, is the control.
 func TestExecutionService_AnOperatorForwardsNoTokenMintedForGaram(t *testing.T) {
 	ctx := context.Background()
-	f := newLegacyFence(t)
-	service := agent.NewExecutionService(f.agents, f.exec, &grantingAuthorizer{}, nil, namedLeaves{}, f.agents, nil, nil)
+	f, _ := newLineageFence(t)
+	service := agent.NewExecutionService(f.agents, f.exec, &grantingAuthorizer{}, nil, namedLeaves{}, f.agents, nil)
 
 	own := f.mintedIn(t)
 	_, err := service.Introspect(ctx, f.controller, f.agent, agent.ForwardedToken(own.Value), nil)
@@ -341,7 +308,7 @@ func TestExecutionService_AMalformedForwardedTokenReadsNothing(t *testing.T) {
 	ctx := context.Background()
 	l := newLifecycle(t)
 	reader := &countingShown{ShownTokenReader: l.agents}
-	service := agent.NewExecutionService(l.agents, l.exec, l.authorizer, l.operations, namedLeaves{}, reader, l.signer, l.issuer)
+	service := agent.NewExecutionService(l.agents, l.exec, l.authorizer, l.operations, namedLeaves{}, reader, l.signer)
 
 	for _, malformed := range []string{
 		"", agent.AccessTokenPrefix + strings.Repeat("0", 63), agent.AccessTokenPrefix + strings.Repeat("Z", 64),
@@ -424,26 +391,6 @@ func TestExecutionService_RecoveryIsBoundToItsExactBodyAndAnsweredOnce(t *testin
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "lifecycle authority without agent:recover")
 }
 
-func TestExecutionService_RenewalIssuesOnlyInsideTheCurrentExecution(t *testing.T) {
-	ctx := context.Background()
-	l := newLifecycle(t)
-	res, err := l.service.Activate(ctx, l.audience, l.input("r1", generation(1), nil, "leaf-1"))
-	require.NoError(t, err)
-
-	cert, err := l.service.Renew(ctx, l.agent, fencing(l.agent, &res.Token, valid("1")))
-	require.NoError(t, err, "the current generation renews")
-	assert.NotEmpty(t, cert.CertificatePEM)
-
-	stale, err := agent.NewToken()
-	require.NoError(t, err)
-	_, err = l.service.Renew(ctx, l.agent, fencing(l.agent, &stale, valid("1")))
-	assert.ErrorIs(t, err, agent.ErrExecutionTokenStale)
-	_, err = l.service.Renew(ctx, l.agent, fencing(l.agent, &res.Token, expiredCredential("1")))
-	assert.ErrorIs(t, err, agent.ErrCredentialFenced)
-	_, err = l.service.Renew(ctx, l.audience, fencing(l.audience, &res.Token, valid("1")))
-	assert.ErrorIs(t, err, agent.ErrNotTheAgent)
-}
-
 // interleaving is the real execution store with a recovery and an
 // activation committed once, right after the first read it answers:
 // the moment a proof assembled from more than one read would mix two
@@ -490,7 +437,7 @@ func TestExecutionService_IntrospectionNeverMixesTwoExecutions(t *testing.T) {
 
 	store := &interleaving{Store: l.exec}
 	leaves := namedLeaves{"leaf-1": valid("1"), "leaf-2": valid("2")}
-	service := agent.NewExecutionService(l.agents, store, l.authorizer, l.operations, leaves, l.agents, l.signer, l.issuer)
+	service := agent.NewExecutionService(l.agents, store, l.authorizer, l.operations, leaves, l.agents, l.signer)
 	next := generation(2)
 	store.between = func() {
 		body := `{"request_id":"rec-1","certificate_request_pem":"csr-2"}`

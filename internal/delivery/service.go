@@ -84,9 +84,8 @@ type Config struct {
 }
 
 // Ends is the agent the loop runs beside, what it carries between and
-// what it presents. Authority is nil for a legacy execution, which
-// activates nothing; Outbox is nil where no outbox is mounted, which
-// forwards nothing.
+// what it presents. Authority is what activates the execution, and
+// Outbox where the runtime records its replies.
 type Ends struct {
 	Agent       grn.GRN
 	Queue       Queue
@@ -98,8 +97,7 @@ type Ends struct {
 }
 
 // Service is the delivery loop of docs/architecture/adapter.md: hold
-// an activation of the runtime's generation where the agent is fenced,
-// claim a message with its lease, post it into the gateway under its
+// an activation of the runtime's generation, claim a message with its lease, post it into the gateway under its
 // own identifier, watch for a turn ending, complete that message's
 // claim when the runtime says a turn that consumed it committed, and
 // forward the replies the runtime records in its outbox.
@@ -119,8 +117,8 @@ type service struct {
 }
 
 // NewService constructs the loop over the ends it carries between, or
-// refuses a configuration that would renew nothing or a fenced
-// execution with nothing to activate it or forward its replies.
+// refuses a configuration that would renew nothing or an execution
+// with nothing to activate it or forward its replies.
 func NewService(ends Ends, cfg Config) (Service, error) {
 	cfg = withDefaults(cfg)
 	switch {
@@ -128,10 +126,8 @@ func NewService(ends Ends, cfg Config) (Service, error) {
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: the agent's GRN is required")
 	case ends.Queue == nil || ends.Gateway == nil || ends.Execution == nil || ends.Credentials == nil:
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: the queue, the gateway, the execution and the credentials are required")
-	case ends.Execution.fenced && (ends.Authority == nil || ends.Outbox == nil):
-		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: a fenced execution needs a lifecycle authority and an outbox")
-	case !ends.Execution.fenced && ends.Authority != nil:
-		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: a legacy execution activates nothing")
+	case ends.Authority == nil || ends.Outbox == nil:
+		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: an execution needs a lifecycle authority and an outbox")
 	case cfg.RetryDelay <= 0 || cfg.MaxRetryDelay < cfg.RetryDelay:
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: retry delay must be positive and under its cap")
 	case cfg.MinRenewInterval <= 0:

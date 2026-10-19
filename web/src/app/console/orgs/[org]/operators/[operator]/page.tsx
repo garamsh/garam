@@ -17,7 +17,6 @@ import {
   getOrg,
   listHostedOperators,
   listOperatorKeys,
-  lookupAgentDefinitions,
   lookupOperators,
   lookupOrgMembers,
   slugFromGrn,
@@ -49,7 +48,6 @@ import { ControlEndpointForm } from "./_components/control-endpoint-form";
 import { DelegationForm } from "./_components/delegation-form";
 import { DeleteOperatorForm } from "./_components/delete-operator-form";
 import { KeysPanel } from "./_components/keys-panel";
-import { NamingDefinitions } from "./_components/naming-definitions";
 import { OperatorDetailsForm } from "./_components/operator-details-form";
 
 /** Head metadata for an operator's route; Next.js reads it by name. */
@@ -139,7 +137,6 @@ export default async function OperatorPage({ params, searchParams }: Params) {
     organization,
     record,
     keys,
-    definitions,
     delegation,
     operators,
     members,
@@ -149,7 +146,6 @@ export default async function OperatorPage({ params, searchParams }: Params) {
     getOrg(org),
     getOperator(org, operator),
     listOperatorKeys(org, operator),
-    lookupAgentDefinitions(org),
     getOperatorDelegation(org, operator),
     lookupOperators(org),
     lookupOrgMembers(org),
@@ -160,8 +156,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
 
   if (
     organization.status === "unreachable" ||
-    record.status === "unreachable" ||
-    definitions.status === "unreachable"
+    record.status === "unreachable"
   ) {
     return (
       <Unavailable>
@@ -182,17 +177,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
   const o = record.data;
   const allowed = (name: Parameters<typeof permissions.get>[0]) =>
     permissions.get(name) !== "denied";
-  const agentsHref = orgHref(org, "agents");
   const setupHref = `${orgHref(org, "operators")}/${operator}/connect`;
-  const naming =
-    definitions.status === "forbidden"
-      ? definitions
-      : {
-          status: "ok" as const,
-          data: definitions.data.filter(
-            (definition) => definition.operatorGrn === o.grn,
-          ),
-        };
   const registeredBy =
     members.status === "ok"
       ? members.data.find((member) => member.userGrn === o.registeredBy)
@@ -267,7 +252,6 @@ export default async function OperatorPage({ params, searchParams }: Params) {
           },
         ]}
       />
-      <NamingDefinitions definitions={naming} agentsHref={agentsHref} />
     </div>
   );
   const overviewTab = allowed("readReports") ? (
@@ -398,14 +382,6 @@ export default async function OperatorPage({ params, searchParams }: Params) {
                       org={org}
                       operator={operator}
                       name={o.name}
-                      blocking={
-                        naming.status === "ok"
-                          ? naming.data.map((definition) => ({
-                              name: definition.name,
-                              href: `${agentsHref}/${slugFromGrn(definition.agentGrn)}`,
-                            }))
-                          : null
-                      }
                     />
                   ),
                 },

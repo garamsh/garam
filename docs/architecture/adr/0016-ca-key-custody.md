@@ -1,6 +1,7 @@
 # ADR 0016: A certificate authority's key is sealed by a key the process holds
 
 > Status: superseded by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+> and [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
 > Date: 2026-08-16
 
 ## Contents

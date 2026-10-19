@@ -30,18 +30,9 @@ type fence struct {
 	controller grn.GRN
 }
 
-// newFence is a legacy agent whose cutover is switched and that has not
-// been activated: what every test below starts from, since a legacy
-// agent's first activation waits for its switch (ADR-0086).
+// newFence is an agent assigned to the controller and never
+// activated: what every test below starts from.
 func newFence(t *testing.T) fence {
-	t.Helper()
-	f := newLegacyFence(t)
-	f.switched(t, "fixture-cutover")
-	return f
-}
-
-// newLegacyFence is a legacy agent no cutover has reached.
-func newLegacyFence(t *testing.T) fence {
 	t.Helper()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
@@ -51,6 +42,30 @@ func newLegacyFence(t *testing.T) fence {
 	_, err := agents.Assign(context.Background(), g, controller)
 	require.NoError(t, err)
 	return fence{p: p, agents: agents, exec: agentpg.New(p), agent: g, controller: controller}
+}
+
+// newLineageFence is newFence once it has been activated and a
+// recovery has opened the lineage its tokens are minted in, as a
+// managed creation opens one: an agent with no lineage is minted no
+// token (ADR-0100). It answers the activation the recovery ended, which
+// the next activation replaces.
+func newLineageFence(t *testing.T) (fence, agent.ActivationID) {
+	t.Helper()
+	f := newFence(t)
+	return f, f.openLineage(t)
+}
+
+// openLineage activates f's agent once and recovers it, which opens a
+// lineage and ends that activation, and answers the activation it
+// ended.
+func (f fence) openLineage(t *testing.T) agent.ActivationID {
+	t.Helper()
+	ended, _ := f.activate(t, "fixture-r0", generation(1000), nil, valid("0"))
+	rec := f.recovery("fixture-rec", "fixture-ref-"+f.agent.Identifier, 0xff, valid("1"))
+	rec.Epoch = f.epoch(t)
+	_, err := f.exec.Recover(context.Background(), rec)
+	require.NoError(t, err)
+	return ended.ID
 }
 
 func generation(n int) agent.Generation { return agent.Generation(fmt.Sprintf("%032x", n)) }
@@ -141,30 +156,24 @@ func awaitLockWaiter(t *testing.T, p *pgxpool.Pool) {
 	}, 10*time.Second, 10*time.Millisecond)
 }
 
-func TestExecution_EveryAgentStartsLegacyAndATokenCannotSelectAnotherMode(t *testing.T) {
-	ctx := context.Background()
+// TestExecution_AnAgentNeverActivatedAdmitsNoWrite holds that every
+// agent's writes wait for an activation (ADR-0118): with no legacy
+// mode, a write offering no token is refused as one that needs it, and
+// one offering a token the agent was never activated with is refused
+// as stale. The activation's own token is the control.
+func TestExecution_AnAgentNeverActivatedAdmitsNoWrite(t *testing.T) {
 	f := newFence(t)
+	e, err := f.exec.GetExecution(context.Background(), f.agent)
+	require.NoError(t, err)
+	require.Nil(t, e.Current, "the agent was never activated")
 
-	e, err := f.exec.GetExecution(ctx, f.agent)
+	stranger, err := agent.NewToken()
 	require.NoError(t, err)
-	assert.Equal(t, agent.ModeLegacy, e.Mode)
-	assert.Nil(t, e.Current)
-	assert.Nil(t, e.Lineage)
+	assert.Equal(t, agent.AdmissionTokenRequired, f.admit(t, nil, valid("1")))
+	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &stranger, valid("1")))
 
-	// An agent a claimed definition minted gets its row in the same
-	// transaction as the agent row.
-	operator := scopedGRN("acme", agent.ServiceTypeOperator, "claimant")
-	d := defineAgent(t, f.p, f.agents, operator, agent.Values{})
-	_, err = f.agents.Claim(ctx, d.Agent(), operator)
-	require.NoError(t, err)
-	claimed, err := f.exec.GetExecution(ctx, d.Agent())
-	require.NoError(t, err)
-	assert.Equal(t, agent.ModeLegacy, claimed.Mode)
-
-	token, err := agent.NewToken()
-	require.NoError(t, err)
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, nil, valid("1")), "control: legacy admits without a token")
-	assert.Equal(t, agent.AdmissionNotCutOver, f.admit(t, &token, valid("1")))
+	_, token := f.activate(t, "r1", generation(1), nil, valid("1"))
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &token, valid("1")), "control: its activation's token is admitted")
 }
 
 func TestExecution_ActivationFencesEveryOtherToken(t *testing.T) {
@@ -180,14 +189,13 @@ func TestExecution_ActivationFencesEveryOtherToken(t *testing.T) {
 
 	e, err := f.exec.GetExecution(context.Background(), f.agent)
 	require.NoError(t, err)
-	assert.Equal(t, agent.ModeFenced, e.Mode)
 	require.NotNil(t, e.Current)
 	assert.Equal(t, generation(2), e.Current.Generation)
 }
 
 // TestExecution_ReplacementIsOrderedAgainstAdmittedWrites pauses a
-// write after admission and before its commit, at the first cutover
-// and at a later replacement. The replacement waits for the write to
+// write after admission and before its commit, at a replacement of the
+// first activation. The replacement waits for the write to
 // commit, and the same token is refused on the next write: no write of
 // the old generation commits after its replacement did.
 func TestExecution_ReplacementIsOrderedAgainstAdmittedWrites(t *testing.T) {
@@ -225,8 +233,8 @@ func TestExecution_ReplacementIsOrderedAgainstAdmittedWrites(t *testing.T) {
 		return e.Latest, next
 	}
 
-	latest, first := replace(t, nil, generation(1), nil)
-	assert.Equal(t, agent.AdmissionTokenRequired, f.admit(t, nil, valid("1")), "first cutover: a legacy write is refused after it")
+	activated, first := f.activate(t, "r1", generation(1), nil, valid("1"))
+	latest := &activated.ID
 	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &first, valid("1")), "control: the activation is admitted")
 
 	_, second := replace(t, &first, generation(2), latest)
@@ -494,32 +502,6 @@ func TestExecution_RecoveryFencesTheLegacyCohortAndEveryOlderLineage(t *testing.
 	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t3, valid("3")))
 }
 
-func TestExecution_RenewalStaysInTheLineageItWasAdmittedIn(t *testing.T) {
-	ctx := context.Background()
-	f := newFence(t)
-	a1, t1 := f.activate(t, "r1", generation(1), nil, valid("1"))
-
-	// In the legacy cohort a renewal records nothing and any
-	// certificate of the agent stays admitted.
-	require.NoError(t, f.exec.RecordRenewal(ctx, fencing(f.agent, &t1, valid("1")), valid("2")))
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t1, valid("2")))
-
-	rec := f.recovery("rec-1", "ref-1", 1, valid("10"))
-	rec.Epoch = f.epoch(t)
-	_, err := f.exec.Recover(ctx, rec)
-	require.NoError(t, err)
-	_, t2 := f.activate(t, "r2", generation(2), &a1.ID, valid("10"))
-
-	require.NoError(t, f.exec.RecordRenewal(ctx, fencing(f.agent, &t2, valid("10")), valid("11")))
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, valid("11")), "the successor joins the lineage")
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, valid("10")), "the predecessor stays valid until it expires")
-	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t2, valid("12")), "control: an unrecorded serial is not")
-
-	err = f.exec.RecordRenewal(ctx, fencing(f.agent, &t1, valid("10")), valid("13"))
-	assert.ErrorIs(t, err, agent.ErrExecutionTokenStale)
-	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t2, valid("13")), "a refused renewal records nothing")
-}
-
 // fencing is what a request of agentGRN presenting c and token offers
 // the execution fence.
 func fencing(agentGRN grn.GRN, token *agent.Token, c agent.Credential) agent.Fencing {
@@ -676,12 +658,11 @@ func TestExecution_NoPathHoldsALockWhileAwaitingAnotherConnection(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	req, t1 := f.activation(t, "r1", generation(1), nil, valid("1"))
+	req, _ := f.activation(t, "r1", generation(1), nil, valid("1"))
 	a1, _, err := exec.Activate(ctx, req)
 	require.NoError(t, err)
 	_, _, err = exec.Activate(ctx, req)
 	require.NoError(t, err, "a retry reminting the token")
-	require.NoError(t, exec.RecordRenewal(ctx, fencing(f.agent, &t1, valid("1")), valid("2")))
 	_, err = exec.Deactivate(ctx, f.agent, a1.ID, authority(f.controller))
 	require.NoError(t, err)
 	rec := f.recovery("rec-1", "ref-1", 1, valid("3"))
@@ -701,7 +682,8 @@ func TestExecution_AnAgentNobodyHoldsIsUnknownToTheFence(t *testing.T) {
 	f := newFence(t)
 	stranger := fence{p: f.p, agent: scopedGRN("acme", agent.ServiceType, "nobody")}
 	assert.Equal(t, agent.AdmissionUnknownAgent, stranger.admit(t, nil, valid("1")))
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, nil, valid("1")), "control: a held agent is admitted")
+	assert.Equal(t, agent.AdmissionTokenRequired, f.admit(t, nil, valid("1")),
+		"control: the fence knows a held agent, and asks it for its activation's token")
 	_, err := f.exec.GetExecution(context.Background(), stranger.agent)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 }

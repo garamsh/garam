@@ -53,11 +53,12 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.ErrorIs(t, err, agent.ErrAssignmentNotFound)
 
 	// An agent with no assignment has no current epoch, so every report
-	// about it is stale.
+	// the operator makes about it is stale; the agent's own is a write
+	// the execution fence refuses first, since nothing activated it.
 	_, err = s.ReportProvisioningState(ctx, g, 1, agent.ProvisioningStateReady)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
-	_, err = s.ReportRuntimeState(ctx, g, 1, agent.RuntimeStateConnected, legacyFence(g))
-	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
+	_, err = s.ReportRuntimeState(ctx, g, 1, agent.RuntimeStateConnected, tokenless(g))
+	assert.ErrorIs(t, err, agent.ErrExecutionTokenRequired)
 
 	first := grnOf(agent.ServiceTypeOperator, "one")
 	assigned, err := s.Assign(ctx, g, first)
@@ -77,7 +78,8 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.WithinDuration(t, a.CreatedAt(), provisioned.CreatedAt(), time.Microsecond)
 	assert.True(t, provisioned.UpdatedAt().After(a.UpdatedAt()), "a report moves the update stamp")
 
-	running, err := s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateConnected, legacyFence(g))
+	firstFence, firstActivation := activatedFence(t, p, g, first, "r1", 1, nil)
+	running, err := s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateConnected, firstFence)
 	require.NoError(t, err)
 	assert.Equal(t, agent.RuntimeStateConnected, running.RuntimeState())
 	assert.Equal(t, agent.ProvisioningStateReady, running.ProvisioningState())
@@ -98,14 +100,17 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, 2, stored.Epoch())
 
 	// A pod left running by the replaced operator still holds epoch 1.
+	// The new assignee activates the agent, so the epoch alone is what
+	// refuses it.
+	secondFence, _ := activatedFence(t, p, g, second, "r2", 2, &firstActivation)
 	_, err = s.ReportProvisioningState(ctx, g, assigned.Epoch(), agent.ProvisioningStateFailed)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
-	_, err = s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateDisconnected, legacyFence(g))
+	_, err = s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateDisconnected, secondFence)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 
 	// An epoch too wide for the column shares its low 32 bits with the
 	// live one and is stale all the same.
-	_, err = s.ReportRuntimeState(ctx, g, stored.Epoch()+1<<32, agent.RuntimeStateDisconnected, legacyFence(g))
+	_, err = s.ReportRuntimeState(ctx, g, stored.Epoch()+1<<32, agent.RuntimeStateDisconnected, secondFence)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 
 	after, err := s.Get(ctx, g)
@@ -114,11 +119,11 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, agent.RuntimeStateConnected, after.RuntimeState())
 
 	// The current epoch still writes.
-	current, err := s.ReportRuntimeState(ctx, g, stored.Epoch(), agent.RuntimeStateDisconnected, legacyFence(g))
+	current, err := s.ReportRuntimeState(ctx, g, stored.Epoch(), agent.RuntimeStateDisconnected, secondFence)
 	require.NoError(t, err)
 	assert.Equal(t, agent.RuntimeStateDisconnected, current.RuntimeState())
 
-	_, err = s.ReportRuntimeState(ctx, grnOf("agent", "missing"), 1, agent.RuntimeStateConnected, legacyFence(grnOf("agent", "missing")))
+	_, err = s.ReportRuntimeState(ctx, grnOf("agent", "missing"), 1, agent.RuntimeStateConnected, tokenless(grnOf("agent", "missing")))
 	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
 
 	// An agent belongs to its org and disappears with it, assignment
@@ -154,7 +159,8 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.ReportProvisioningState(ctx, held, assigned.Epoch(), agent.ProvisioningStateReady)
 	require.NoError(t, err)
-	_, err = s.ReportRuntimeState(ctx, held, assigned.Epoch(), agent.RuntimeStateConnected, legacyFence(held))
+	heldFence, _ := activatedFence(t, p, held, operator, "r1", 1, nil)
+	_, err = s.ReportRuntimeState(ctx, held, assigned.Epoch(), agent.RuntimeStateConnected, heldFence)
 	require.NoError(t, err)
 	_, err = s.Assign(ctx, elsewhere, scopedGRN(globex.Identifier, agent.ServiceTypeOperator, "field-two"))
 	require.NoError(t, err)
@@ -308,157 +314,4 @@ func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, operator, stored.Assignee(), "the rejected reassignment left the row alone")
 	assert.Equal(t, 1, stored.Epoch())
-}
-
-// TestAgentDefinitionStore_RoundTrip covers what a definition is
-// (ADR-0026): an organization's record of what an agent should be,
-// kept from before garam stopped accepting them, holding no agent.
-// The agent GRN it names answers nothing among the agents, because
-// garam learns an agent exists from the operator that reports it.
-func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
-	ctx := context.Background()
-	p := pool(t)
-	s := agent.NewPostgresStore(p)
-	orgs := orgpg.New(p)
-	orgGRN := grnOf("org", "acme")
-	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
-	otherOrgGRN := grn.New(grn.RootOwner, grn.DefaultProject, "org", "globex")
-	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(otherOrgGRN, "globex")))
-
-	values, err := agent.ParseValues(map[string]string{"model": "haiku", "workspace": "frontend"})
-	require.NoError(t, err)
-	definedBy := grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada")
-	d, err := agent.NewDefinition(orgGRN, registerOperator(t, p, grnOf(agent.ServiceTypeOperator, "one")), "Field agent", values, definedBy)
-	require.NoError(t, err)
-	keepDefinition(t, p, d)
-
-	stored, err := s.ListDefinitionsByOrg(ctx, orgGRN)
-	require.NoError(t, err)
-	require.Len(t, stored, 1)
-	assert.Equal(t, d.Agent(), stored[0].Agent())
-	assert.Equal(t, d.Operator(), stored[0].Operator())
-	assert.Equal(t, definedBy, stored[0].DefinedBy())
-	assert.Equal(t, values, stored[0].Values(), "every key and value survives the column")
-	assert.False(t, stored[0].CreatedAt().IsZero())
-
-	// The definition put no agent anywhere: reading the GRN it names
-	// answers as it did before the definition was written, while an
-	// agent an operator reported is found.
-	_, err = s.Get(ctx, d.Agent())
-	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
-	_, err = s.GetAssignment(ctx, d.Agent())
-	assert.ErrorIs(t, err, agent.ErrAssignmentNotFound)
-	reported, err := agent.NewGRN(orgGRN)
-	require.NoError(t, err)
-	a, err := agent.New(reported, orgGRN)
-	require.NoError(t, err)
-	require.NoError(t, s.Create(ctx, a))
-	_, err = s.Get(ctx, reported)
-	assert.NoError(t, err, "an agent that was reported is found, so the miss above is the definition")
-	agents, err := s.ListByOrg(ctx, orgGRN, listfilter.Filter{})
-	require.NoError(t, err)
-	require.Len(t, agents, 1)
-	assert.Equal(t, reported, agents[0].GRN())
-
-	// A definition belongs to the org that wrote it.
-	elsewhere, err := agent.NewDefinition(otherOrgGRN, registerOperator(t, p, scopedGRN("globex", agent.ServiceTypeOperator, "one")), "Field agent", agent.Values{}, definedBy)
-	require.NoError(t, err)
-	keepDefinition(t, p, elsewhere)
-	stored, err = s.ListDefinitionsByOrg(ctx, orgGRN)
-	require.NoError(t, err)
-	require.Len(t, stored, 1, "this org's definitions and no other org's")
-	assert.Equal(t, d.Agent(), stored[0].Agent())
-
-	// An empty payload is stored as one and read back as one: an
-	// operator reads no values rather than a missing object.
-	storedElsewhere, err := s.ListDefinitionsByOrg(ctx, otherOrgGRN)
-	require.NoError(t, err)
-	require.Len(t, storedElsewhere, 1)
-	assert.Equal(t, agent.Values{}, storedElsewhere[0].Values())
-}
-
-// TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject covers the
-// schema's rules for a definition. internal/agent refuses the same
-// pairings, so only a direct statement reaches the constraints — and a
-// row the database accepted and the domain refused to read would be
-// neither writable nor readable.
-func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
-	ctx := context.Background()
-	p := pool(t)
-	orgGRN := grnOf("org", "acme")
-	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
-	g, err := agent.NewGRN(orgGRN)
-	require.NoError(t, err)
-	registered := registerOperator(t, p, grnOf(agent.ServiceTypeOperator, "one"))
-
-	// A second organization with an operator of its own, so a case that
-	// names one rule violates that rule alone. Reaching across the
-	// boundary with this org's operator would break the ownership rule
-	// and the same-org rule together, and dropping either would leave
-	// the other still refusing the row.
-	require.NoError(t, orgpg.New(p).CreateOrg(ctx,
-		org.NewOrganization(orgRootGRN("globex"), "globex")))
-	globexOperator := registerOperator(t, p, scopedGRN("globex", agent.ServiceTypeOperator, "one"))
-
-	// A case naming an operator or a value rule takes an agent GRN of its
-	// own. agent_grn is the primary key, so two cases sharing one collide
-	// the moment a dropped rule lets the first row in — the sibling then
-	// fails on the key rather than on the rule it names, and this test
-	// stops isolating the thing it exists to isolate.
-	acmeAgent := func() grn.GRN {
-		minted, err := agent.NewGRN(orgGRN)
-		require.NoError(t, err)
-		return minted
-	}
-
-	// `constraint` is the rule Postgres must refuse the row by. Asserting
-	// it is what separates these cases: five rules share one statement,
-	// and a bare error cannot say which of them did the refusing, so any
-	// one could stop being enforced while its siblings kept this green.
-	rejected := []struct {
-		name       string
-		agentGRN   grn.GRN
-		operator   grn.GRN
-		values     string
-		constraint string
-	}{
-		{"another org's agent", scopedGRN("globex", agent.ServiceType, "deadbeef"), globexOperator, `{}`,
-			"agent_definitions_grn_ownership"},
-		{"an identity that is not an agent", grnOf("user", "ada"), registered, `{}`,
-			"agent_definitions_grn_ownership"},
-		{"another org's operator", acmeAgent(), globexOperator, `{}`,
-			"agent_definitions_same_org"},
-		{"an identity that is not an operator", acmeAgent(), grnOf(agent.ServiceType, "deadbeef"), `{}`,
-			"agent_definitions_operator_service_type"},
-		{"an operator this org has not registered", acmeAgent(), grnOf(agent.ServiceTypeOperator, "two"), `{}`,
-			"agent_definitions_operator_registered"},
-		{"values that are not an object", acmeAgent(), registered, `[]`,
-			"agent_definitions_values_object"},
-	}
-	// 000035 refuses every insert before a constraint is read
-	// (ADR-0090), so each one is made with that guard off, as a release
-	// before it made one, and rolled back.
-	insert := func(agentGRN, operatorGRN grn.GRN, values string) error {
-		tx, err := p.Begin(ctx)
-		require.NoError(t, err)
-		defer func() { _ = tx.Rollback(ctx) }()
-		_, err = tx.Exec(ctx, "ALTER TABLE agent_definitions DISABLE TRIGGER agent_definitions_closed")
-		require.NoError(t, err)
-		_, err = tx.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at)
-			VALUES ($1, $2, $3, 'Field agent', $4::jsonb, $5, now())`,
-			agentGRN.String(), orgGRN.String(), operatorGRN.String(), values, grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
-		return err
-	}
-	for _, tt := range rejected {
-		t.Run(tt.name, func(t *testing.T) {
-			err := insert(tt.agentGRN, tt.operator, tt.values)
-			var refused *pgconn.PgError
-			require.ErrorAs(t, err, &refused, "the row was not refused by Postgres")
-			assert.Equal(t, tt.constraint, refused.ConstraintName)
-		})
-	}
-
-	// The same statement naming this org's agent and operator is
-	// accepted, so the constraints reject a row rather than every row.
-	require.NoError(t, insert(g, registered, `{"model":"haiku"}`))
 }

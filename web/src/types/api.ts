@@ -221,7 +221,7 @@ export interface paths {
          * Ask whether the signed-in caller may take each of a list of actions. Requires membership.
          * @description Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
          *
-         *     Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:cutover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
+         *     Some actions are decided by more than that `Check`. `agent:create`, `agent:configure`, `agent:recover`, `agent:replace`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read` are minted through `mintOperationAuthority`, which reads a delegation grant to the operator (ADR-0078), holds the operation against it, and decides the caller's authority last. Each is put to that last check, with the same caller, action and resource, on the organization's current policy read past the engine's cache. Where it denies, the answer is `deny`, and the mint would refuse. Where it allows, the answer is `unknown`: this operation reads no grant, so the grant is left to decide. `operator:delegate` is put to the check `writeOperatorDelegation`, `endOperatorDelegation`, `setOperatorControlEndpoint` and `clearOperatorControlEndpoint` run, on the same current policy, and that check is all of their authority, so it is answered `allow` or `deny`. `agent:enroll` is put to the check `approveAgentEnrollment`, `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on the same current policy, on the organization for a new host and on the agent for one acting on an agent; that check is all of their authority, so it is answered `allow` or `deny`. `unknown` is answered only where a delegation grant is left to decide. A caller renders the control for `unknown` and lets the operation decide.
          *
          *     A pair without `resource` asks about the organization itself. Each action is checked on the organization or on resources of the kinds its operations address, and a pair naming any other kind is refused with 400, naming the pair: no operation asks it, so the answer would describe nothing. An action garam does not define is answered `deny` rather than refused, because a wildcard in a role or a policy would otherwise allow a name no operation checks.
          *
@@ -301,7 +301,7 @@ export interface paths {
          *
          *     Each kind is authorized as its list is: people on `org:member-list`, as `listOrgMembers` is; agents on `agent:read`, teams on `group:read`, policies on `policy:read` and projects on `project:read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
          *
-         *     A person is found by nickname or identifier, and an agent by its definition's name or its identifier. Each kind answers its first `limit` objects in the order its list gives them, the defined agents before the rest, and how many more it found past those.
+         *     A person is found by nickname or identifier, and an agent by its identifier. Each kind answers its first `limit` objects in the order its list gives them, and how many more it found past those.
          */
         get: operations["searchOrg"];
         put?: never;
@@ -550,51 +550,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/agent-definitions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List an organization's agent definitions. Requires the `member` role.
-         * @description The agents the organization said it should have. No route writes a new one: garam accepts no desired runtime value, and an agent is created through its operator's control service (ADR-0090). An entry here is not an agent, and an agent under `/orgs/{org}/agents` is not a definition. No response joins them; a consumer can. A claim writes the agent under the GRN its definition minted (ADR-0033), so `agentGrn` here and that agent's `grn` are one identity, and a definition no operator has claimed has no agent to match. Leaves out each definition whose agent's own `agent:read` the caller is denied, as `listAgents` leaves out the agent.
-         */
-        get: operations["listAgentDefinitions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/orgs/{org}/agent-definitions/{agent}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read one of an organization's agent definitions. Requires the `member` role.
-         * @description The definition that minted this agent identifier, answered as `listAgentDefinitions` answers each entry. It says what the organization asked for and nothing about whether an operator has claimed or built the agent.
-         */
-        get: operations["getAgentDefinition"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Rename a defined agent. Requires the `member` role.
-         * @description Changes what the organization calls the agent and nothing else (ADR-0075). The agent's GRN, its operator, its values, the assignment a claim wrote and every team membership or policy attachment naming the GRN stand as they were, and no operator is told: a name is not configuration.
-         *     It is authorized on `agent:rename`, an action of its own, because it moves no value an operator reads.
-         */
-        patch: operations["renameAgentDefinition"];
-        trace?: never;
-    };
     "/orgs/{org}/agent-enrollments": {
         parameters: {
             query?: never;
@@ -728,7 +683,7 @@ export interface paths {
         put?: never;
         /**
          * Register an operator of an organization. Requires the `admin` role.
-         * @description Records that this organization has an operator under the identifier given, so a definition can name one garam holds a record of (ADR-0045). The identifier is supplied and not minted: an operator that already holds a certificate is registered under the GRN that certificate names.
+         * @description Records that this organization has an operator under the identifier given (ADR-0045). The identifier is supplied and not minted: an operator that already holds a certificate is registered under the GRN that certificate names.
          *     The record is what the operator authenticates on. A handshake presenting its certificate is checked against this record as well as against the organization's certificate authority, so `deleteOperator` stops the operator rather than only tidying a list (ADR-0070). The record of the certificate garam last issued goes with it.
          *     It issues nothing: an operator enters by a key, which `issueOperatorKey` issues on the registration and answers once (ADR-0102, ADR-0117).
          */
@@ -758,7 +713,6 @@ export interface paths {
          * @description Removes the organization's record of the operator, and with it what the operator authenticates on. A handshake presenting that operator's certificate is refused from the moment this returns: the machine listener reads this record per connection, so the certificate stops being an identity rather than staying valid until it expires (ADR-0070). This reverses what ADR-0014 called revocation by lifetime, for an operator and for nothing else.
          *     **It is not a certificate revocation.** There is no revocation list and no responder, nothing is published, and no other certificate is affected — an agent the operator provisioned keeps its own, which garam admits by the claim the operator made while it still held the record (ADR-0033). What is withdrawn is the organization's statement that this operator is theirs, and refusing the certificate is what that statement turning out to be load-bearing means.
          *     garam's record of the certificate it last issued goes with the record, and so do its keys, so the identifier is left holding nothing. Registering it again is therefore a clean start rather than an operator that reads as already holding a certificate.
-         *     **It is refused while an agent definition names the operator.** Nothing is deleted in that case: a definition names the operator that is to run its agent, and deleting the operator underneath it would leave the definition naming a record garam no longer holds, which is the state registering an operator exists to prevent. `listAgentDefinitions` is what names them. Point those definitions at another operator first, or delete them.
          *     Deleting an operator that never enrolled is the same call and the same answer. Nothing here asks whether a certificate was ever issued.
          */
         delete: operations["deleteOperator"];
@@ -766,7 +720,7 @@ export interface paths {
         head?: never;
         /**
          * Rename or describe an operator. Requires the `admin` role.
-         * @description Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier, the GRN it builds and the certificate subject that GRN is are not fields here and do not move: the certificate garam last issued, its keys and every definition naming the operator stand as they were.
+         * @description Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier, the GRN it builds and the certificate subject that GRN is are not fields here and do not move: the certificate garam last issued and its keys stand as they were.
          *     It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
          */
         patch: operations["updateOperator"];
@@ -884,9 +838,9 @@ export interface paths {
          * Hand a delegated operator one operation. Requires the operation's action, decided now.
          * @description Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
          *
-         *     `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure`, `agent:recover` and `agent:cutover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:cutover` authorizes one stage of moving a legacy agent's source to the audience (ADR-0086). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
+         *     `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:replace` targets the agent, is authorized on it, binds where it runs now and binds `destination`, the controller a replacement under `agent-enrollment.v1` moves it to (ADR-0107). `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` target this organization and are authorized on it; `operator:read` reads what the Operator reports for every operator of it (#1374). `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller; for `agent:replace`, both the controller the agent is on and `destination`.
          *
-         *     Those five operations and `agent:cutover` also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. For `agent:cutover` that route is garam's own cutover read or stage of the agent, so a reference minted for one stage authorizes no other. No other operation takes one.
+         *     Those five operations also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
          *
          *     The same `requestId` with the same binding under the same grant mints a new authority for the same `operationRef`, replacing the previous one. Any other binding under it, including a replaced grant or a changed placement, is refused with 409: a newly authorized operation takes a new `requestId`.
          */
@@ -1320,7 +1274,7 @@ export interface components {
         };
         FoundObject: {
             grn: string;
-            /** @description Its name: a person's nickname, or an agent's definition's name. Absent for an agent no definition names. */
+            /** @description A person's nickname. Absent for an agent, which garam holds no name for. */
             name?: string;
         };
         PermissionHolders: {
@@ -1353,8 +1307,6 @@ export interface components {
             policies: number;
             /** @description Agents, each taking its operator assignment with it. */
             agents: number;
-            /** @description Agent definitions, which are records of what the organization said an agent should be (ADR-0026). */
-            agentDefinitions: number;
             /** @description Registered operators, each taking its keys with it. A certificate an operator already holds is not counted and outlives the record (ADR-0045). */
             operators: number;
             /** @description Cross-organization consent relations this organization is a side of (ADR-0035). Each is a pair, so deleting this organization removes it for the other organization too, which loses the relation without acting. */
@@ -1599,7 +1551,7 @@ export interface components {
             provisioningState: components["schemas"]["AgentProvisioningState"];
             runtimeState: components["schemas"]["AgentRuntimeState"];
             assignment?: components["schemas"]["AgentAssignment"];
-            /** @description The runtime generation garam last activated for the agent: the most recent activation's, whether it still admits the agent's writes or has since ended — deactivated, superseded, recovered or reassigned. Absent for an agent never activated, which includes every legacy agent that has not cut over (ADR-0078). */
+            /** @description The runtime generation garam last activated for the agent: the most recent activation's, whether it still admits the agent's writes or has since ended — deactivated, superseded, recovered or reassigned. Absent for an agent never activated (ADR-0078). */
             generation?: string;
             /** Format: date-time */
             createdAt: string;
@@ -1736,48 +1688,6 @@ export interface components {
         OperatorName: string;
         /** @description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was. */
         OperatorDescription: string;
-        /**
-         * @description What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. garam accepts no new one (ADR-0090); what it answers was stored before then. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
-         * @example {
-         *       "model": "haiku",
-         *       "workspace": "grn-acme-default-project-frontend"
-         *     }
-         */
-        AgentValues: {
-            [key: string]: string;
-        };
-        /**
-         * @description What the organization calls an agent: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
-         * @example Research assistant
-         */
-        AgentName: string;
-        /** @description A change to what the organization calls a defined agent. */
-        AgentDefinitionPatch: {
-            name: components["schemas"]["AgentName"];
-        };
-        /** @description What an organization said an agent should be (ADR-0026), written before garam stopped accepting definitions (ADR-0090). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim. */
-        AgentDefinition: {
-            /** @example grn:acme:default:agent:9f2ac1b40d8e7a35 */
-            agentGrn: string;
-            name: components["schemas"]["AgentName"];
-            orgGrn: string;
-            /** @example grn:acme:default:operator:field-one */
-            operatorGrn: string;
-            values: components["schemas"]["AgentValues"];
-            /**
-             * @description The member that defined the agent.
-             * @example grn:root:default:user:117421510527410544321
-             */
-            definedBy: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** @description The agent's open cutover attempt (ADR-0086), null where none is open. A `frozen` or `switched` definition is archival: its values stay preserved here and are no longer what its operator reads, and only its name still changes. */
-            cutover: components["schemas"]["AgentDefinitionCutover"] | null;
-        };
-        AgentDefinitionCutover: {
-            /** @enum {string} */
-            stage: "frozen" | "switched";
-        };
         DelegationWrite: {
             requestId: components["schemas"]["RequestId"];
             /** @description The grant the caller read as current. Absent where it read none. */
@@ -1814,19 +1724,19 @@ export interface components {
          * @description `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it. `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
          * @enum {string}
          */
-        DelegatedOperation: "agent:create" | "agent:configure" | "agent:activate" | "agent:recover" | "agent-template:read" | "agent-template:publish" | "execution-profile:read" | "agent:execution-read" | "agent:cutover" | "operator:read" | "agent:replace";
+        DelegatedOperation: "agent:create" | "agent:configure" | "agent:activate" | "agent:recover" | "agent-template:read" | "agent-template:publish" | "execution-profile:read" | "agent:execution-read" | "operator:read" | "agent:replace";
         RequestId: string;
         OperationAuthorityRequest: {
             /** @description GRN of the hosted operator that will act. */
             audience: string;
             /** @enum {string} */
-            operation: "agent:create" | "agent:configure" | "agent:recover" | "agent-template:read" | "agent-template:publish" | "execution-profile:read" | "agent:execution-read" | "agent:cutover" | "operator:read" | "agent:replace";
-            /** @description Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read`, `agent:cutover` and `agent:replace`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`. */
+            operation: "agent:create" | "agent:configure" | "agent:recover" | "agent-template:read" | "agent-template:publish" | "execution-profile:read" | "agent:execution-read" | "operator:read" | "agent:replace";
+            /** @description Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`. */
             target: string;
             requestId: components["schemas"]["RequestId"];
             /** @description Lowercase hexadecimal SHA-256 of the exact request body the Operator receives; for a GET, that of the empty body. */
             bodySha256: string;
-            /** @description Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read`, `agent:cutover` and `operator:read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. For `agent:cutover` it is the machine listener's cutover route of the agent, such as `/agents/{agent}/cutover/switch`, and garam compares it with the target that route receives. garam binds it as given and decodes nothing. */
+            /** @description Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `operator:read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing. */
             requestTarget?: string;
             /** @description Required for `agent:replace` and refused with 400 for every other operation: the GRN of the controller of this organization the replacement moves the agent to (ADR-0107). */
             destination?: string;
@@ -2990,93 +2900,6 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    listAgentDefinitions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The organization's agent definitions. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentDefinition"][];
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    getAgentDefinition: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-                /** @description Agent identifier (the last GRN segment). */
-                agent: components["parameters"]["agent"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The definition. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentDefinition"];
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    renameAgentDefinition: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-                /** @description Agent identifier (the last GRN segment). */
-                agent: components["parameters"]["agent"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentDefinitionPatch"];
-            };
-        };
-        responses: {
-            /** @description The definition as stored after the change. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentDefinition"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
     listAgentEnrollments: {
         parameters: {
             query?: {
@@ -3376,7 +3199,6 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
-            409: components["responses"]["Error"];
         };
     };
     updateOperator: {

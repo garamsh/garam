@@ -20,7 +20,6 @@ const KIND: Record<keyof Counts, [one: string, many: string]> = {
   groups: ["team", "teams"],
   projects: ["project", "projects"],
   agents: ["agent", "agents"],
-  agentDefinitions: ["agent definition", "agent definitions"],
   operators: ["operator", "operators"],
   policies: ["policy", "policies"],
   invitations: ["invitation", "invitations"],

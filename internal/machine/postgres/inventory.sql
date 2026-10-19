@@ -17,8 +17,7 @@ WITH callers AS (
     UNION ALL
     SELECT grn, 'supervisor' FROM agent_supervisors WHERE ended_at IS NULL
     UNION ALL
-    SELECT a.grn, CASE WHEN e.mode = 'fenced' THEN 'agent' ELSE 'legacy_agent' END
-    FROM agents a LEFT JOIN agent_executions e ON e.agent_grn = a.grn
+    SELECT grn, 'agent' FROM agents
 ),
 evidence AS (
     SELECT caller_grn,

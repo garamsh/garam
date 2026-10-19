@@ -10,7 +10,6 @@ import {
   getOrg,
   isFailing,
   listGroupMembers,
-  lookupAgentDefinitions,
   lookupAgents,
   lookupMyGroups,
   lookupOrgMembers,
@@ -115,16 +114,13 @@ function catalog<T>(read: Part<T[]>): Catalog<T> {
  */
 export default async function HomePage({ params }: Params) {
   const { org: slug } = await params;
-  const [org, session, groups, people, agents, definitions] = await Promise.all(
-    [
-      getOrg(slug),
-      getSession(),
-      lookupMyGroups(slug),
-      lookupOrgMembers(slug),
-      lookupAgents(slug),
-      lookupAgentDefinitions(slug),
-    ],
-  );
+  const [org, session, groups, people, agents] = await Promise.all([
+    getOrg(slug),
+    getSession(),
+    lookupMyGroups(slug),
+    lookupOrgMembers(slug),
+    lookupAgents(slug),
+  ]);
 
   if (org.status === "unreachable") {
     return (
@@ -137,10 +133,7 @@ export default async function HomePage({ params }: Params) {
 
   const href = (segment: string) => orgHref(slug, segment);
   const me = session.status === "signed-in" ? session.user.grn : null;
-  const directory = {
-    agents: catalog(agents),
-    definitions: catalog(definitions),
-  };
+  const directory = { agents: catalog(agents) };
 
   const teams: Part<MyTeam[]> =
     groups.status !== "ok"
@@ -155,18 +148,10 @@ export default async function HomePage({ params }: Params) {
           ),
         };
 
-  const named = new Map(
-    definitions.status === "ok"
-      ? definitions.data.map((definition) => [
-          definition.agentGrn,
-          definition.name,
-        ])
-      : [],
-  );
   const attention: Attention[] = (agents.status === "ok" ? agents.data : [])
     .filter((agent) => isFailing(agent))
     .map((agent) => ({
-      name: named.get(agent.grn) ?? UNNAMED_AGENT,
+      name: UNNAMED_AGENT,
       href: href(`agents/${slugFromGrn(agent.grn)}`),
       states: agentStates(agent),
     }));

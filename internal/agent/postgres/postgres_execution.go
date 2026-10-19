@@ -40,17 +40,6 @@ func (s *Store) Activate(ctx context.Context, req agent.ActivationRequest) (*age
 		if !current {
 			return agent.ErrCredentialFenced
 		}
-		// A legacy agent's first activation is its cutover's last step,
-		// admitted only once the switch is recorded (ADR-0086).
-		if exec.Mode == string(agent.ModeLegacy) {
-			cutOver, err := q.IsCutOver(ctx, req.Agent.String())
-			if err != nil {
-				return storageError(err, "read cutover", nil, nil)
-			}
-			if !cutOver {
-				return agent.ErrCutoverRequired
-			}
-		}
 		prior, err := q.GetActivationByRequest(ctx, db.GetActivationByRequestParams{
 			AgentGrn: req.Agent.String(), RequestID: string(req.RequestID),
 		})
@@ -283,40 +272,6 @@ func recoveryOf(row db.AgentRecovery) *agent.Recovery {
 		out.Chain = &agent.Chain{IssuerPEM: row.IssuerPem.String, ServerRootPEM: row.ServerRootPem.String}
 	}
 	return out
-}
-
-func (s *Store) RecordRenewal(ctx context.Context, fence agent.Fencing, successor agent.Credential) error {
-	agentGRN := fence.Agent
-	return s.inTx(ctx, "record renewal", func(q *db.Queries) error {
-		answer, err := q.Admit(ctx, db.AdmitParams{
-			AgentGrn:  agentGRN.String(),
-			TokenHash: fence.TokenBytes(),
-			Serial:    fence.Credential.Serial,
-			NotBefore: pgxtype.Timestamptz(fence.Credential.NotBefore),
-			NotAfter:  pgxtype.Timestamptz(fence.Credential.NotAfter),
-		})
-		if err != nil {
-			return storageError(err, "admit", nil, nil)
-		}
-		if err := agent.Admission(answer).Err(); err != nil {
-			return err
-		}
-		// The admit above holds the row FOR SHARE, so the lineage read
-		// here is the one the fenced certificate was admitted in.
-		exec, err := q.GetExecution(ctx, agentGRN.String())
-		if err != nil {
-			return storageError(err, "get execution", agent.ErrAgentNotFound, nil)
-		}
-		if !exec.Lineage.Valid {
-			return nil
-		}
-		if err := q.PruneCredentials(ctx, agentGRN.String()); err != nil {
-			return storageError(err, "prune credentials", nil, nil)
-		}
-		return storageError(q.InsertCredential(ctx, db.InsertCredentialParams{
-			AgentGrn: agentGRN.String(), Serial: successor.Serial, Lineage: exec.Lineage, NotAfter: pgxtype.Timestamptz(successor.NotAfter),
-		}), "record credential", nil, nil)
-	})
 }
 
 func activationOf(agentGRN grn.GRN, row db.AgentActivation) *agent.Activation {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/x509"
-	"encoding/pem"
 	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
@@ -66,9 +65,6 @@ type ExecutionService interface {
 	// signed under; under execution-fence.v2 it signs nothing, and the
 	// assignee mints the agent's tokens in the new lineage.
 	Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*RecoveredCredential, error)
-	// Renew issues the calling agent's next certificate inside the
-	// lineage the presented one is current in.
-	Renew(ctx context.Context, caller grn.GRN, fence Fencing) (*Certificate, error)
 	// CreateManaged registers an agent and its first assignment under
 	// a member's agent:create reference, and answers an identical
 	// retry with the same agent rather than another.
@@ -77,19 +73,6 @@ type ExecutionService interface {
 	// certificate over its request's key, and answers an identical
 	// retry with the same certificate rather than another.
 	IssueInitialCertificate(ctx context.Context, caller grn.GRN, in InitialCertificateInput) (*InitialCertificate, bool, error)
-	// GetCutover answers what the Operator imports a legacy agent
-	// from, and the agent's most recent cutover attempt (ADR-0086).
-	GetCutover(ctx context.Context, caller grn.GRN, in CutoverInput) (*Cutover, error)
-	// FreezeCutover freezes the agent's source once it matches the
-	// digest the Operator imported, and answers an identical retry
-	// with the same attempt rather than another.
-	FreezeCutover(ctx context.Context, caller grn.GRN, in FreezeInput) (*CutoverAttempt, bool, error)
-	// SwitchCutover records that the Operator now owns the agent's
-	// source, before the Operator releases anything.
-	SwitchCutover(ctx context.Context, caller grn.GRN, in CutoverInput) (*CutoverAttempt, error)
-	// RollBackCutover ends a frozen attempt, which lists the agent's
-	// definition to its operator again.
-	RollBackCutover(ctx context.Context, caller grn.GRN, in CutoverInput) (*CutoverAttempt, error)
 }
 
 // ActivationInput is an activation request as received.
@@ -171,7 +154,6 @@ type Introspection struct {
 	Org        grn.GRN
 	Assignee   grn.GRN
 	Epoch      int
-	Mode       Mode
 	Credential CredentialStanding
 	Generation GenerationStanding
 	Current    *ActivationID
@@ -185,17 +167,16 @@ type executionService struct {
 	leaves     LeafVerifier
 	tokens     ShownTokenReader
 	signer     RequestSigner
-	issuer     Issuer
 }
 
 // NewExecutionService constructs the execution service over the store
 // it reads assignments from, the execution store, and the authority,
 // verification and signing boundaries it consults: a forwarded
 // certificate is proven by leaves and a forwarded token by tokens.
-func NewExecutionService(store Store, executions ExecutionStore, authorizer LifecycleAuthorizer, operations OperationResolver, leaves LeafVerifier, tokens ShownTokenReader, signer RequestSigner, issuer Issuer) ExecutionService {
+func NewExecutionService(store Store, executions ExecutionStore, authorizer LifecycleAuthorizer, operations OperationResolver, leaves LeafVerifier, tokens ShownTokenReader, signer RequestSigner) ExecutionService {
 	return &executionService{
 		store: store, executions: executions, authorizer: authorizer,
-		operations: operations, leaves: leaves, tokens: tokens, signer: signer, issuer: issuer,
+		operations: operations, leaves: leaves, tokens: tokens, signer: signer,
 	}
 }
 
@@ -383,7 +364,6 @@ func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.
 		Org:        grn.Org(agentGRN.Organization),
 		Assignee:   *snapshot.Assignee,
 		Epoch:      snapshot.Epoch,
-		Mode:       snapshot.Mode,
 		Credential: CredentialFenced,
 		Generation: standing(snapshot.Current, generation),
 	}
@@ -476,48 +456,4 @@ func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in Recov
 	}
 	return &RecoveredCredential{Lineage: recovered.Lineage,
 		Signed: &SignedRecovery{CertificatePEM: recovered.CertificatePEM, Chain: *chain}}, nil
-}
-
-func (s *executionService) Renew(ctx context.Context, caller grn.GRN, fence Fencing) (*Certificate, error) {
-	if caller.ServiceType != ServiceType {
-		return nil, ErrNotTheAgent
-	}
-	if fence.Agent != caller {
-		return nil, errorx.New(errorx.KindInternal, "agent: the fence names another agent")
-	}
-	// Checked before signing so a fenced certificate costs no
-	// signature; RecordRenewal is what decides.
-	current, err := s.executions.CredentialCurrent(ctx, caller, fence.Credential)
-	if err != nil {
-		return nil, err
-	}
-	if !current {
-		return nil, ErrCredentialFenced
-	}
-	certificate, err := s.issuer.Issue(ctx, caller)
-	if err != nil {
-		return nil, err
-	}
-	successor, err := credentialOf(certificate.CertificatePEM)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.executions.RecordRenewal(ctx, fence, successor); err != nil {
-		return nil, err
-	}
-	return certificate, nil
-}
-
-// credentialOf reads the credential of a certificate this deployment
-// just issued. One that does not parse is an internal error.
-func credentialOf(certificatePEM []byte) (Credential, error) {
-	block, _ := pem.Decode(certificatePEM)
-	if block == nil {
-		return Credential{}, errorx.New(errorx.KindInternal, "issued certificate is not PEM")
-	}
-	leaf, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return Credential{}, errorx.Wrap(err, "issued certificate", errorx.KindInternal)
-	}
-	return Credential{Serial: leaf.SerialNumber.String(), NotBefore: leaf.NotBefore, NotAfter: leaf.NotAfter}, nil
 }

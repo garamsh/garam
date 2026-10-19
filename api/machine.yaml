@@ -89,15 +89,6 @@ tags:
       runtime state are separate facts reported by different parties,
       and each report is accepted only at the assignment's current
       epoch (ADR-0012).
-  - name: definition
-    description: >-
-      What an organization said its agents should be, read by the
-      operator each definition names (ADR-0026). garam accepts no new
-      definition (ADR-0090): those it holds are what is answered here,
-      each as it was written. An operator polls its
-      definitions and claims one, which binds it to the agent GRN the
-      definition minted and admits it to that agent's certificate route
-      (ADR-0033).
   - name: message
     description: >-
       The queue a message reaches an agent through (ADR-0013). A caller
@@ -126,17 +117,6 @@ tags:
       activation issued, and every one of them is admitted against the
       current activation and lineage when it writes, on a connection
       already open too (ADR-0080).
-  - name: cutover
-    description: >-
-      How the hosted Operator control service moves a legacy agent's
-      source to itself under the agent's existing GRN, one agent at a
-      time (ADR-0086, `agent-cutover.v1`). It reads the source, imports
-      it inactive, has garam freeze and verify it, has garam record the
-      switch, and only then releases the agent; a frozen attempt may be
-      rolled back, a switched one may not. Each call carries an owner's
-      or administrator's durable `agent:cutover` reference minted for
-      that one route, rechecked fresh, beside the caller's own
-      lifecycle authority.
   - name: enrollment
     description: >-
       How the hosted Operator control service creates a managed agent
@@ -398,116 +378,6 @@ paths:
           $ref: '#/components/responses/OAuthError'
         '503':
           $ref: '#/components/responses/OAuthError'
-  /agents:
-    post:
-      operationId: createAgent
-      tags: [agent]
-      security:
-        - machineCertificate: []
-        - machineToken: []
-        - machineBearer: []
-      summary: Create an agent and assign it to the calling operator.
-      description: >-
-        garam mints the agent's GRN in the calling operator's
-        organization (ADR-0012) and assigns the agent to that operator.
-        There is no request body: the organization and the operator are
-        what the certificate names. A caller that is not an operator is
-        refused.
-
-        The agent it mints has no definition. This route keeps minting
-        for agents no definition describes (ADR-0033) and writes none
-        itself, so the agent is assigned to the caller and absent from
-        every `listDefinitions` answer, which answers definitions
-        rather than assignments. It is an ordinary assigned agent
-        otherwise: `issueAgentCertificate` answers for it on the
-        assignment alone. An operator that constructs the agents its
-        definitions name therefore never constructs this one.
-
-        It creates a legacy agent and nothing else: no delegation
-        authorizes it and none is read. An agent the separated
-        lifecycle runs is created by `createManagedAgent`, and this
-        route never reaches one.
-      responses:
-        '201':
-          description: Agent created and assigned to the calling operator.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentAssignment'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-  /agents/{agent}/certificate:
-    post:
-      operationId: issueAgentCertificate
-      tags: [agent]
-      security:
-        - machineCertificate: []
-          executionToken: []
-        - machineCertificate: []
-        - machineToken: []
-        - machineBearer: []
-      summary: Issue the certificate an agent authenticates with.
-      description: >-
-        Answers for an agent assigned to the calling operator at the
-        current epoch, and for the agent itself renewing over the
-        connection its current certificate authenticated (ADR-0040).
-
-        Once an agent's cutover is switched (ADR-0086), its operator is
-        refused here with 409: the check is read after signing, under
-        the agent's execution row, so no certificate is answered once
-        the switch has committed.
-
-        Once an agent's execution has been activated, or from its
-        creation for an agent `createManagedAgent` made, its operator
-        is refused here with 409: its certificates come from
-        `issueInitialCertificate`, its own renewal or
-        `recoverAgentCredential` (ADR-0078). The agent's
-        own renewal then presents its execution token and is admitted
-        against the current activation and credential lineage, which
-        the new certificate joins; the certificate it renews stays
-        valid until it expires, so no restart is needed. A missing
-        token is 401, one that is not current 403, and a certificate
-        that is not current 409.
-        Every other caller is refused, which is the whole of the
-        authorization here (ADR-0015). A renewal grants nothing: the
-        caller already holds that identity, and an expired certificate
-        has no connection left to renew over. Each call signs a new
-        certificate and generates the private key it returns once, so
-        it is a POST rather than a GET.
-
-        An agent that authenticates with a token has no certificate to
-        renew: its own token is 401 here, and its assignee mints the
-        next with `mintAgentToken` (ADR-0100).
-
-        The assignment is the whole of the precondition as well. There
-        is no renewal window and no lineage here: a caller the
-        assignment admits may ask at any time and as often as it needs,
-        and a certificate this route has already replaced asks again
-        successfully. Contrast `renewIdentityCertificate`, which
-        replaces the caller's own certificate and holds both bounds.
-        The durable step is therefore storing what comes back rather
-        than making the call, and a store that fails is answered by
-        asking for another certificate rather than by retrying the
-        store.
-      parameters:
-        - $ref: '#/components/parameters/agent'
-      responses:
-        '201':
-          description: Certificate issued.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MachineCertificate'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '409':
-          $ref: '#/components/responses/Error'
   /agents/{agent}/tokens:
     post:
       operationId: mintAgentToken
@@ -532,10 +402,9 @@ paths:
         lineage the agent's execution holds, and every request
         presenting it is read against both as they stand then: a
         reassignment or a recovery refuses it from the next request,
-        on a connection already open too. It is admitted where the
-        certificate route would be — an agent still legacy whose
-        cutover is not switched — and for an agent whose lifecycle
-        authority opened a lineage, inside it. A fenced agent's protected
+        on a connection already open too. It is admitted for an agent
+        whose lifecycle authority opened a lineage, inside it. A fenced
+        agent's protected
         calls still carry their activation's token, in the
         `Garam-Execution` header.
 
@@ -591,8 +460,8 @@ paths:
         `failed_precondition`, which is what stops the pod a replaced
         operator left running from writing over its successor's report;
         an agent with no assignment has no current epoch, so every
-        report about it is stale. The epoch to send is the one
-        `createAgent` or `claimDefinition` answered with.
+        report about it is stale. The epoch to send is the one the
+        agent's creation or admission answered with.
 
         An operator the agent is not assigned to is refused, and an
         agent that does not exist is refused the same way, so a caller
@@ -647,8 +516,8 @@ paths:
         epoch the agent's assignment is currently on; a stale one is
         refused under `failed_precondition`. The agent is told its
         epoch by the operator that constructed it — garam answers the
-        operator with it on `createAgent` and `claimDefinition` and
-        serves it to the agent nowhere.
+        operator with it on `createManagedAgent` and serves it to the
+        agent nowhere.
 
         This route never moves the provisioning state: that is what the
         operator sees of the pod, and `reportProvisioningState` is
@@ -679,99 +548,6 @@ paths:
       responses:
         '204':
           description: Recorded. garam has nothing to answer with.
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-        '409':
-          $ref: '#/components/responses/Error'
-  /definitions:
-    get:
-      operationId: listDefinitions
-      tags: [definition]
-      security:
-        - machineCertificate: []
-        - machineToken: []
-        - machineBearer: []
-      summary: List the definitions naming the calling operator.
-      description: >-
-        The agents the organization says this operator should run
-        (ADR-0026): the agent GRN each definition minted, the values the
-        operator constructs it from, and whether it is claimed. The
-        answer is scoped by the definition's operator field, so it names
-        nothing the caller is not named in and no policy check stands in
-        front of it (ADR-0033). A caller that is not an operator is
-        refused.
-
-        A definition whose agent's execution is fenced, or whose agent's
-        cutover is frozen or switched (ADR-0086), is absent: its values
-        stay preserved in garam and are no longer this operator's
-        source. A rolled-back cutover lists it again.
-
-        This answers definitions, not assignments. An agent assigned to
-        the calling operator that no definition describes is absent
-        from it, and `createAgent` mints exactly that: it assigns the
-        agent it creates and writes no definition (ADR-0033). Such an
-        agent hands over a certificate on request and appears in no
-        answer here, so a loop that constructs the agents this route
-        names constructs a subset of the agents assigned to the caller.
-        Nothing reports the difference, and this listener answers no
-        list of assignments to compare against.
-
-        A claim here is not evidence of holding. What the claim field
-        reports is the agent's assignment as it stands now, while the
-        definition carrying it names its operator once and is never
-        rewritten — so the two come apart as soon as the agent is
-        assigned elsewhere, and the definition stays listed, stays
-        claimed, and carries the epoch of whoever holds the agent by
-        then. The certificate route is the only place that epoch is
-        met: it is where an operator the assignment no longer names is
-        refused, under `permission_denied`, and nothing before it
-        refuses one.
-      responses:
-        '200':
-          description: The caller's definitions, ordered by agent GRN.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Definition'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-  /definitions/{agent}/claim:
-    post:
-      operationId: claimDefinition
-      tags: [definition]
-      security:
-        - machineCertificate: []
-        - machineToken: []
-        - machineBearer: []
-      summary: Claim the agent a definition minted for the calling operator.
-      description: >-
-        Binds the calling operator to the definition's agent GRN: the
-        assignment is written at its first epoch, and it is what admits
-        the operator to that agent's certificate route — which refuses
-        the GRN as unassigned until then, exactly as before (ADR-0033).
-        A definition is claimed once: a second claim of the same agent
-        GRN is a conflict, never an override. A definition that names
-        another operator answers as one that does not exist, because the
-        claim inherits the read's scoping.
-      parameters:
-        - $ref: '#/components/parameters/agent'
-      responses:
-        '201':
-          description: The agent is assigned to the calling operator.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentAssignment'
         '400':
           $ref: '#/components/responses/Error'
         '401':
@@ -1449,8 +1225,8 @@ paths:
         activation, current or ended, and is null only before the
         first. Another value is 409, so a stale placement's replay never
         wins, and a generation already activated in the current lineage
-        is 409 too. The first activation is the agent's cutover, after
-        which every call offering `executionToken` requires the token.
+        is 409 too. After the first activation, every call offering
+        `executionToken` requires the token.
 
 
         `operationRef` is null for the revision the runtime last
@@ -1467,14 +1243,6 @@ paths:
         reference is accepted for that first activation alone, with a
         null `replacesActivationId`, and for its identical retry; any
         other `agent:create` reference is 403.
-
-
-        An agent that has never been activated and that no managed
-        creation or standalone approval made is a legacy agent, and its
-        first activation is the last step of its cutover (ADR-0086):
-        until `switchAgentCutover` has recorded its switch, it is 409
-        with `reason` `cutover_required`, whatever else the request
-        carries. That is the only refusal here that sets `reason`.
 
 
         The same `requestId` with the same request answers the same
@@ -1703,265 +1471,6 @@ paths:
           $ref: '#/components/responses/ExecutionContractError'
         '409':
           $ref: '#/components/responses/ExecutionContractError'
-  /agents/{agent}/cutover:
-    get:
-      operationId: getAgentCutover
-      tags: [cutover]
-      security:
-        - machineCertificate: []
-          operationAuthority: []
-        - machineToken: []
-        - machineBearer: []
-          operationHeader: []
-      summary: Read what the Operator imports a legacy agent from, and its most recent cutover attempt.
-      description: >-
-        Authorized as `activateAgent` is, and additionally by
-        `Authorization: Garam-Operation <ref>`, where `ref` is a durable
-        `agent:cutover` reference an owner or an administrator minted
-        for this caller, this agent, the assignment it is on now and
-        this route's exact request target: its escaped path and raw
-        query, as the request carries them. garam rechecks the
-        reference from current state on this and every cutover call,
-        and compares its request target with the one received, so a
-        reference minted for one cutover route authorizes no other
-        (ADR-0086). A GRN no operator holds, an unclaimed definition's
-        included, is 403 on every cutover route, as an agent the caller
-        holds no authority over is: authorization runs before
-        eligibility.
-
-
-        `source` is the agent's definition, values included, and null
-        for an agent no definition describes, whose values are empty,
-        and for one whose stored values garam cannot read, whose
-        `class` is `blocked:unparseable`. `sourceDigest` is the
-        lowercase hex SHA-256 of the RFC 8785 JSON of `{agentGrn,
-        operatorGrn, values}`, where `operatorGrn` is the definition's
-        operator, or `assignee` where `source` is null; it is null where
-        the values cannot be read. The name is not covered and stays
-        garam's. `attempt` is the agent's most recent attempt, null
-        before the first freeze.
-
-
-        Under `agent-cutover.v2` the caller presents its own token, and
-        the `agent:cutover` reference travels in a `Garam-Operation`
-        header of its own rather than in `Authorization` (ADR-0100).
-      parameters:
-        - $ref: '#/components/parameters/cutoverContractVersion'
-        - $ref: '#/components/parameters/agent'
-      responses:
-        '200':
-          description: The agent's cutover.
-          headers:
-            Garam-Contract-Version:
-              $ref: '#/components/headers/CutoverContractVersion'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Cutover'
-        '400':
-          $ref: '#/components/responses/CutoverContractError'
-        '401':
-          $ref: '#/components/responses/CutoverContractError'
-        '403':
-          $ref: '#/components/responses/CutoverContractError'
-        '404':
-          $ref: '#/components/responses/CutoverContractError'
-  /agents/{agent}/cutover/freeze:
-    post:
-      operationId: freezeAgentCutover
-      tags: [cutover]
-      security:
-        - machineCertificate: []
-          operationAuthority: []
-        - machineToken: []
-        - machineBearer: []
-          operationHeader: []
-      summary: Freeze a legacy agent's source, verified against the digest the Operator imported.
-      description: >-
-        Authorized as `getAgentCutover` is. In one transaction, under
-        the agent's execution lock and then its definition's, garam
-        rechecks the assignment, `epoch` and the grant's expiry,
-        requires the agent's execution to be legacy and no other
-        attempt to be open, computes the digest of the source under
-        those locks and records the attempt `frozen` only if it equals
-        `sourceDigest`. From then on `listDefinitions` omits the agent,
-        and its definition stays preserved and read-only.
-
-
-        A digest that differs is 409 `digest_mismatch` and freezes
-        nothing: import again. Another attempt open is 409
-        `attempt_open`; an `importId` already rolled back is 409
-        `attempt_ended`, which refuses a late replay. An agent whose
-        execution is fenced, or whose stored values cannot be read, is
-        422 `not_cut_over_eligible`; an unclaimed definition's GRN has no
-        assignment to authorize against and is 403, as
-        `getAgentCutover` states. The same `importId` and digest
-        answer the recorded attempt with 200. Past garam's ten-second
-        deadline the answer is 503, which does not say whether the
-        freeze committed: read the agent's cutover back before retrying.
-
-
-        Under `agent-cutover.v2` the caller presents its own token, and
-        the `agent:cutover` reference travels in a `Garam-Operation`
-        header of its own rather than in `Authorization` (ADR-0100).
-      parameters:
-        - $ref: '#/components/parameters/cutoverContractVersion'
-        - $ref: '#/components/parameters/agent'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CutoverFreezeRequest'
-      responses:
-        '200':
-          description: The attempt an earlier identical freeze recorded.
-          headers:
-            Garam-Contract-Version:
-              $ref: '#/components/headers/CutoverContractVersion'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CutoverAttempt'
-        '201':
-          description: The frozen attempt.
-          headers:
-            Garam-Contract-Version:
-              $ref: '#/components/headers/CutoverContractVersion'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CutoverAttempt'
-        '400':
-          $ref: '#/components/responses/CutoverContractError'
-        '401':
-          $ref: '#/components/responses/CutoverContractError'
-        '403':
-          $ref: '#/components/responses/CutoverContractError'
-        '404':
-          $ref: '#/components/responses/CutoverContractError'
-        '409':
-          $ref: '#/components/responses/CutoverContractError'
-        '422':
-          $ref: '#/components/responses/CutoverContractError'
-  /agents/{agent}/cutover/switch:
-    post:
-      operationId: switchAgentCutover
-      tags: [cutover]
-      security:
-        - machineCertificate: []
-          operationAuthority: []
-        - machineToken: []
-        - machineBearer: []
-          operationHeader: []
-      summary: Record that the Operator owns a frozen agent's source, before it releases anything.
-      description: >-
-        Authorized as `getAgentCutover` is, under the same two locks as
-        the freeze. Moves the attempt `importId` names from `frozen` to
-        `switched`; a retry answers the switched attempt again. From
-        then on `issueAgentCertificate` refuses the agent's operator
-        with 409, and `activateAgent` admits the agent's first
-        activation. The Operator releases the agent on its controller
-        feed only after this answer. Nothing returns a switched agent to
-        garam: a rollback is 409.
-
-
-        An attempt rolled back is 409 `attempt_ended`, an `importId`
-        other than the open attempt's is 409 `attempt_open`, and one the
-        agent never froze is 404. Past garam's ten-second deadline the
-        answer is 503; repeating the request is safe.
-
-
-        Under `agent-cutover.v2` the caller presents its own token, and
-        the `agent:cutover` reference travels in a `Garam-Operation`
-        header of its own rather than in `Authorization` (ADR-0100).
-      parameters:
-        - $ref: '#/components/parameters/cutoverContractVersion'
-        - $ref: '#/components/parameters/agent'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CutoverStageRequest'
-      responses:
-        '200':
-          description: The switched attempt.
-          headers:
-            Garam-Contract-Version:
-              $ref: '#/components/headers/CutoverContractVersion'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CutoverAttempt'
-        '400':
-          $ref: '#/components/responses/CutoverContractError'
-        '401':
-          $ref: '#/components/responses/CutoverContractError'
-        '403':
-          $ref: '#/components/responses/CutoverContractError'
-        '404':
-          $ref: '#/components/responses/CutoverContractError'
-        '409':
-          $ref: '#/components/responses/CutoverContractError'
-  /agents/{agent}/cutover/rollback:
-    post:
-      operationId: rollBackAgentCutover
-      tags: [cutover]
-      security:
-        - machineCertificate: []
-          operationAuthority: []
-        - machineToken: []
-        - machineBearer: []
-          operationHeader: []
-      summary: End a frozen attempt, which lists the agent's definition to its operator again.
-      description: >-
-        Authorized as `getAgentCutover` is, under the same two locks as
-        the freeze. Moves the attempt `importId` names from `frozen` to
-        `rolled_back`, after which the Operator discards its inactive
-        import. A switched attempt is 409 `reverse_migration_required`:
-        the Operator's source cannot return to garam, so only a reverse
-        migration restores one. No request reaches an ended attempt, a
-        repeated rollback included: it is 409 `attempt_ended`, which
-        says the rollback holds. An `importId` other than the open
-        attempt's is 409 `attempt_open`, and one the agent never froze
-        is 404, so an earlier attempt's request never undoes a later
-        one. Past garam's ten-second deadline the answer is 503;
-        repeating the request is safe.
-
-
-        Under `agent-cutover.v2` the caller presents its own token, and
-        the `agent:cutover` reference travels in a `Garam-Operation`
-        header of its own rather than in `Authorization` (ADR-0100).
-      parameters:
-        - $ref: '#/components/parameters/cutoverContractVersion'
-        - $ref: '#/components/parameters/agent'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CutoverStageRequest'
-      responses:
-        '200':
-          description: The rolled-back attempt.
-          headers:
-            Garam-Contract-Version:
-              $ref: '#/components/headers/CutoverContractVersion'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CutoverAttempt'
-        '400':
-          $ref: '#/components/responses/CutoverContractError'
-        '401':
-          $ref: '#/components/responses/CutoverContractError'
-        '403':
-          $ref: '#/components/responses/CutoverContractError'
-        '404':
-          $ref: '#/components/responses/CutoverContractError'
-        '409':
-          $ref: '#/components/responses/CutoverContractError'
   /operators/{controller}/managed-agents:
     post:
       operationId: createManagedAgent
@@ -1990,8 +1499,7 @@ paths:
         birth with no active generation and in a credential lineage
         holding no certificate, so no certificate of the agent
         authorizes anything until `issueInitialCertificate` records
-        the first one, and `issueAgentCertificate` and claiming a
-        definition never reach it.
+        the first one.
 
 
         The first answer is 201. The same `operationRef` and
@@ -2558,18 +2066,6 @@ components:
       x-go-name: DeliveryContractVersion
       schema:
         type: string
-    cutoverContractVersion:
-      name: Garam-Contract-Version
-      in: header
-      required: true
-      description: >-
-        `agent-cutover.v1` where the caller presents a certificate and
-        `agent-cutover.v2` where it presents a token (ADR-0086, ADR-0100); any other
-        value, or one that disagrees with the credential, is refused
-        with 400 naming the value the credential takes.
-      x-go-name: CutoverContractVersion
-      schema:
-        type: string
     executionContractVersion:
       name: Garam-Contract-Version
       in: header
@@ -2630,7 +2126,7 @@ components:
       name: agent
       in: path
       required: true
-      description: Agent GRN, as `createAgent` or `listDefinitions` returned it.
+      description: Agent GRN, as its creation or admission answered it.
       x-go-name: AgentGrn
       schema:
         type: string
@@ -2650,25 +2146,6 @@ components:
         grn:
           type: string
           example: grn:acme:default:agent:0a1b2c3d4e5f6071
-    AgentAssignment:
-      type: object
-      description: >-
-        An agent and the operator that runs it, at the epoch that
-        binding holds.
-      required: [grn, operator, epoch]
-      properties:
-        grn:
-          type: string
-          example: grn:acme:default:agent:0a1b2c3d4e5f6071
-        operator:
-          type: string
-          example: grn:acme:default:operator:one
-        epoch:
-          type: integer
-          minimum: 1
-          description: >-
-            Rises with every assignment and fences the operator it
-            replaced. An agent presents it when it connects.
     ProvisioningState:
       type: string
       description: >-
@@ -2703,7 +2180,7 @@ components:
           minimum: 1
           description: >-
             The epoch the reporter believes the assignment is on, as
-            `createAgent` or `claimDefinition` answered with. garam
+            the agent's creation or admission answered it. garam
             accepts the report only at the epoch the assignment is
             currently on.
         state:
@@ -2888,41 +2365,6 @@ components:
           description: >-
             When the certificate stops being valid. It carries jitter,
             so certificates issued together do not expire together.
-    Definition:
-      type: object
-      description: >-
-        What an organization says an agent should be, answered to the
-        operator it names (ADR-0026). `claim` is absent while no
-        operator has claimed the definition and carries the agent's
-        assignment epoch once one has — the only claimant a definition
-        admits is the operator it names, so who claimed it is always
-        the caller.
-      required: [agentGrn, values]
-      properties:
-        agentGrn:
-          type: string
-          description: >-
-            The identity garam minted for the agent this definition
-            describes. No agent answers under it until the claim.
-          example: grn:acme:default:agent:9f2ac1b40d8e7a35
-        values:
-          type: object
-          description: >-
-            What the operator constructs the agent from. garam stores
-            the keys and the strings and interprets neither.
-          additionalProperties:
-            type: string
-        claim:
-          $ref: '#/components/schemas/DefinitionClaim'
-    DefinitionClaim:
-      type: object
-      description: The agent's assignment, first written by the claim (ADR-0033).
-      required: [epoch]
-      properties:
-        epoch:
-          type: integer
-          minimum: 1
-          description: The epoch the agent's assignment holds at now.
     MessageSubmission:
       type: object
       description: What a sender supplies. Who is sending is the certificate's to say.
@@ -3189,7 +2631,7 @@ components:
           type: string
         operation:
           type: string
-          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover, operator:read, agent:replace]
+          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, operator:read, agent:replace]
           description: >-
             Each operation is served on one route with one fixed HTTP
             method. A release that does not know an operation refuses
@@ -3199,8 +2641,8 @@ components:
           description: >-
             The controller for `agent:create`; the agent for
             `agent:configure`, `agent:recover`,
-            `agent:execution-read`, `agent:cutover` and
-            `agent:replace`; the organization
+            `agent:execution-read` and `agent:replace`; the
+            organization
             for
             `agent-template:read`, `agent-template:publish`,
             `execution-profile:read` and `operator:read`.
@@ -3222,11 +2664,9 @@ components:
           maxLength: 2048
           description: >-
             Present for `agent-template:read`, `agent-template:publish`,
-            `execution-profile:read`, `agent:execution-read`,
-            `agent:cutover` and `operator:read`, absent for every other operation. For
-            `agent:cutover` it is garam's own cutover route the
-            reference is carried to, and garam compares it (ADR-0086).
-            Otherwise it is the exact origin-form
+            `execution-profile:read`, `agent:execution-read` and
+            `operator:read`, absent for every other operation. It is
+            the exact origin-form
             request target the console sent: the escaped path and the
             raw query, with no scheme or authority, including any path
             prefix of the registered control endpoint. Compare it, before
@@ -3243,8 +2683,7 @@ components:
       description: >-
         Where the agent ran when an operation on it was authorized.
         Present for `agent:configure`, `agent:recover`,
-        `agent:execution-read`, `agent:cutover` and `agent:replace`
-        only.
+        `agent:execution-read` and `agent:replace` only.
       properties:
         operatorGrn:
           type: string
@@ -3363,117 +2802,6 @@ components:
         lineage:
           type: [string, 'null']
           description: The credential lineage checked, null for the certificates issued before any recovery.
-    Cutover:
-      type: object
-      required: [agent, assignee, epoch, mode, class, source, sourceDigest, attempt]
-      properties:
-        agent:
-          type: string
-        assignee:
-          type: string
-          description: The operator the agent is assigned to now.
-        epoch:
-          type: string
-          description: The assignment's epoch. Opaque.
-        mode:
-          type: string
-          enum: [legacy, fenced]
-        class:
-          type: string
-          enum: [eligible, 'blocked:unparseable', not-applicable]
-          description: >-
-            `eligible` for a legacy agent whose source garam can read,
-            `blocked:unparseable` for one whose stored values it cannot,
-            which stay preserved, and `not-applicable` for an agent whose
-            execution is already fenced.
-        source:
-          oneOf:
-            - $ref: '#/components/schemas/CutoverSource'
-            - type: 'null'
-        sourceDigest:
-          type: [string, 'null']
-          pattern: '^[0-9a-f]{64}$'
-        attempt:
-          oneOf:
-            - $ref: '#/components/schemas/CutoverAttempt'
-            - type: 'null'
-    CutoverSource:
-      type: object
-      required: [operator, values, definedBy, createdAt]
-      properties:
-        operator:
-          type: string
-        values:
-          type: object
-          additionalProperties:
-            type: string
-          description: The definition's values, every one verbatim.
-        definedBy:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-    CutoverAttempt:
-      type: object
-      required: [importId, stage, frozenDigest, createdAt, switchedAt, endedAt]
-      properties:
-        importId:
-          type: string
-        stage:
-          type: string
-          enum: [frozen, switched, rolled_back]
-        frozenDigest:
-          type: string
-          pattern: '^[0-9a-f]{64}$'
-          description: The source digest the freeze verified.
-        createdAt:
-          type: string
-          format: date-time
-        switchedAt:
-          type: [string, 'null']
-          format: date-time
-        endedAt:
-          type: [string, 'null']
-          format: date-time
-          description: When the attempt was rolled back.
-    CutoverError:
-      type: object
-      description: >-
-        `Error` as the cutover routes answer it, with the closed set of
-        reasons `agent-cutover.v1` lists (ADR-0086). A refusal outside
-        the set carries no `reason`.
-      required: [kind, message]
-      properties:
-        kind:
-          type: string
-          description: errorx kind, e.g. `not_found`, `permission_denied`.
-        message:
-          type: string
-        reason:
-          type: string
-          enum: [digest_mismatch, attempt_open, attempt_ended, not_cut_over_eligible, reverse_migration_required]
-    CutoverFreezeRequest:
-      type: object
-      required: [importId, sourceDigest, epoch]
-      properties:
-        importId:
-          type: string
-          pattern: '^[A-Za-z0-9._~-]{1,128}$'
-          description: The Operator's identifier for the import, which names the attempt.
-        sourceDigest:
-          type: string
-          pattern: '^[0-9a-f]{64}$'
-          description: The digest the Operator verified its import against.
-        epoch:
-          type: string
-          description: The assignment's epoch the import read. Opaque.
-    CutoverStageRequest:
-      type: object
-      required: [importId]
-      properties:
-        importId:
-          type: string
-          pattern: '^[A-Za-z0-9._~-]{1,128}$'
     ExecutionIntrospectionRequest:
       type: object
       properties:
@@ -3499,7 +2827,7 @@ components:
           description: A generation to compare with the active one.
     ExecutionIntrospection:
       type: object
-      required: [grn, org, assignee, epoch, mode, credential, generation, activationId]
+      required: [grn, org, assignee, epoch, credential, generation, activationId]
       properties:
         grn:
           type: string
@@ -3511,12 +2839,6 @@ components:
         epoch:
           type: string
           description: Opaque.
-        mode:
-          type: string
-          enum: [legacy, fenced]
-          description: >-
-            `fenced` once the agent has been activated, and from its
-            creation for an agent `createManagedAgent` made.
         credential:
           type: string
           enum: [current, fenced]
@@ -3828,11 +3150,7 @@ components:
           description: >-
             Which refusal this is, where the kind alone does not say,
             set only on a route whose contract lists its reasons
-            (ADR-0086) and absent everywhere else. The `agent-cutover.v1`
-            routes set `digest_mismatch`, `attempt_open`,
-            `attempt_ended`, `not_cut_over_eligible` or
-            `reverse_migration_required`; `activateAgent` sets
-            `cutover_required` and nothing else; the
+            and absent everywhere else. The
             `agent-enrollment.v1` routes set `binding_conflict`,
             `approval_spent`, `superseded` or `direct_placement_gated`.
             Branch on it only on
@@ -3881,12 +3199,6 @@ components:
       description: >-
         The contract version this answer follows: `durable-delivery.v1`
         or `durable-delivery.v2`, as the request's credential takes.
-      schema:
-        type: string
-    CutoverContractVersion:
-      description: >-
-        The contract version this answer follows: `agent-cutover.v1` or
-        `agent-cutover.v2`, as the request's credential takes.
       schema:
         type: string
     ExecutionContractVersion:
@@ -3962,15 +3274,6 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
-    CutoverContractError:
-      description: Error response of a cutover route.
-      headers:
-        Garam-Contract-Version:
-          $ref: '#/components/headers/CutoverContractVersion'
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/CutoverError'
     ExecutionContractError:
       description: Error response of an execution route.
       headers:
@@ -4056,11 +3359,7 @@ components:
       description: >-
         A user's handoff for one operation, as `Authorization:
         Garam-Operation <authority>` beside the client certificate. It
-        is minted for the exact request body it accompanies. On the
-        cutover routes it carries instead the durable `agent:cutover`
-        reference such a handoff was minted under, which binds that
-        route's request target rather than a body and is rechecked from
-        current state on every call (ADR-0086).
+        is minted for the exact request body it accompanies.
     machineCertificate:
       type: mutualTLS
       description: >-

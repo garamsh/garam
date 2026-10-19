@@ -81,8 +81,8 @@ type garamQueue struct {
 	claimsRefusedSeen   int
 	renewals            int
 	completions         int
-	// token is the one execution token garam admits, empty for an agent
-	// never cut over, which is admitted presenting none.
+	// token is the one execution token garam admits, empty before the
+	// agent's first activation, when garam admits no protected call.
 	token string
 	// live is the agent tokens garam accepts in the token mode, nil in
 	// the certificate mode, where the connection authenticates.
@@ -157,10 +157,6 @@ func (q *garamQueue) admits(w http.ResponseWriter, r *http.Request) bool {
 		}
 	}
 	switch {
-	case q.token == "" && got == "":
-		return true
-	case q.token == "":
-		writeJSON(w, http.StatusConflict, machinegen.Error{Kind: "failed_precondition", Message: "agent has not cut over to activated execution"})
 	case got == "":
 		writeJSON(w, http.StatusUnauthorized, machinegen.Error{Kind: "unauthenticated", Message: "execution token required"})
 	case got != "Garam-Execution "+q.token:
@@ -863,12 +859,17 @@ func brief() delivery.Config {
 	}
 }
 
-// legacyEnds is the loop of an agent never cut over, against the two
-// fakes, forwarding outbox when it is not nil.
-func legacyEnds(t *testing.T, queue *garamQueue, gateway *agentGateway, outbox *delivery.Outbox) delivery.Ends {
+// fencedEnds is the loop against the two fakes and a control that
+// activates whatever generation the runtime reports, forwarding outbox,
+// or a fresh one where it is nil.
+func fencedEnds(t *testing.T, queue *garamQueue, gateway *agentGateway, outbox *delivery.Outbox) delivery.Ends {
 	t.Helper()
-	execution := delivery.NewLegacyExecution()
-	return ends(t, queue, gateway, execution, nil, newMounted(), outbox)
+	if outbox == nil {
+		var err error
+		outbox, err = delivery.NewOutbox(t.TempDir())
+		require.NoError(t, err)
+	}
+	return ends(t, queue, gateway, delivery.NewFencedExecution(), newControl(queue), newMounted(), outbox)
 }
 
 // ends assembles the loop's ends over the fakes, through the HTTP
@@ -887,7 +888,7 @@ func ends(t *testing.T, queue *garamQueue, gateway *agentGateway, execution *del
 	}
 }
 
-// run starts the legacy loop against the two fakes and stops it when
+// run starts the loop against the two fakes and stops it when
 // the test ends. It answers the stop, so a test can end one process and
 // start another against the same two fakes.
 func run(t *testing.T, queue *garamQueue, gateway *agentGateway) context.CancelFunc {
@@ -899,7 +900,7 @@ func run(t *testing.T, queue *garamQueue, gateway *agentGateway) context.CancelF
 // more tightly than the defaults do.
 func runWith(t *testing.T, queue *garamQueue, gateway *agentGateway, cfg delivery.Config) context.CancelFunc {
 	t.Helper()
-	return start(t, legacyEnds(t, queue, gateway, nil), cfg)
+	return start(t, fencedEnds(t, queue, gateway, nil), cfg)
 }
 
 // start runs a loop over ends until the test ends or the answer is
@@ -958,7 +959,7 @@ func holding(t *testing.T, queue *garamQueue, message, renewals int) {
 func TestNewService_RefusesAConfigurationThatDeliversNothing(t *testing.T) {
 	queue := newGaramQueue(t, time.Second)
 	gateway := newAgentGateway(t)
-	working := legacyEnds(t, queue, gateway, nil)
+	working := fencedEnds(t, queue, gateway, nil)
 
 	_, err := delivery.NewService(working, delivery.Config{})
 	require.NoError(t, err, "the defaults run")
@@ -986,13 +987,12 @@ func TestNewService_RefusesAConfigurationThatDeliversNothing(t *testing.T) {
 	require.NoError(t, err, "the fenced control: an authority and an outbox beside it")
 
 	broken := map[string]func(e *delivery.Ends){
-		"no queue":                             func(e *delivery.Ends) { e.Queue = nil },
-		"no gateway":                           func(e *delivery.Ends) { e.Gateway = nil },
-		"no credentials":                       func(e *delivery.Ends) { e.Credentials = nil },
-		"no agent":                             func(e *delivery.Ends) { e.Agent = grn.GRN{} },
-		"a fenced execution with no authority": func(e *delivery.Ends) { e.Authority = nil },
-		"a fenced execution with no outbox":    func(e *delivery.Ends) { e.Outbox = nil },
-		"a legacy execution with an authority": func(e *delivery.Ends) { e.Execution = delivery.NewLegacyExecution() },
+		"no queue":       func(e *delivery.Ends) { e.Queue = nil },
+		"no gateway":     func(e *delivery.Ends) { e.Gateway = nil },
+		"no credentials": func(e *delivery.Ends) { e.Credentials = nil },
+		"no agent":       func(e *delivery.Ends) { e.Agent = grn.GRN{} },
+		"no authority":   func(e *delivery.Ends) { e.Authority = nil },
+		"no outbox":      func(e *delivery.Ends) { e.Outbox = nil },
 	}
 	for name, breaks := range broken {
 		t.Run(name, func(t *testing.T) {
@@ -1032,7 +1032,7 @@ func TestRun_CompletesTheClaimATurnSucceededOnAndNamedIt(t *testing.T) {
 	eventually(t, func() bool { return queue.delivered() == 1 }, "the turn that named it completes it")
 	assert.Equal(t, 1, queue.completionCalls(), "an event that is not a turn ending completes nothing")
 	assert.Equal(t, 1, queue.deliveries(0), "a completed message is not handed out again")
-	assert.Equal(t, []string{""}, queue.claimsPresenting()[:1], "an agent never cut over presents no token")
+	assert.Equal(t, []string{tokenOf(1, 1)}, queue.claimsPresenting()[:1], "the claim carries the activation's token")
 }
 
 // TestRun_LeavesAFailedTurnsMessageForRedelivery is §Failure and
@@ -1461,11 +1461,31 @@ func (s idleStream) Next() (delivery.TurnEnd, error) {
 
 func (s idleStream) Close() error { return nil }
 
-// idleEnds is a legacy loop over queue and an idle gateway.
-func idleEnds(queue delivery.Queue, done <-chan struct{}) delivery.Ends {
+// idleAuthority activates nothing: the loop it runs in holds its
+// activation already, and an idle gateway reports no status to ask
+// another for.
+type idleAuthority struct{}
+
+func (idleAuthority) Contract() string { return delivery.ExecutionContract }
+
+func (idleAuthority) Activate(context.Context, string, delivery.Binding, string) (*delivery.Activation, error) {
+	return nil, errorx.New(errorx.KindUnavailable, "delivery: no authority here")
+}
+
+func (idleAuthority) Report(context.Context, string, *delivery.RuntimeStatus, time.Time) error {
+	return nil
+}
+
+// idleEnds is a loop over queue and an idle gateway that holds its
+// activation already, so what it does with its claims is all there is.
+func idleEnds(t *testing.T, queue delivery.Queue, done <-chan struct{}) delivery.Ends {
+	t.Helper()
+	outbox, err := delivery.NewOutbox(t.TempDir())
+	require.NoError(t, err)
 	return delivery.Ends{
 		Agent: agentGRN(), Queue: queue, Gateway: idleGateway{done: done},
-		Execution: delivery.NewLegacyExecution(), Credentials: newMounted(),
+		Execution: delivery.HeldExecution("held-token"), Credentials: newMounted(),
+		Authority: idleAuthority{}, Outbox: outbox,
 	}
 }
 
@@ -1496,7 +1516,7 @@ func runPolling(t *testing.T, answer error) int {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 	queue := &pollingQueue{err: answer}
-	s, err := delivery.NewService(idleEnds(queue, ctx.Done()), delivery.Config{
+	s, err := delivery.NewService(idleEnds(t, queue, ctx.Done()), delivery.Config{
 		RetryDelay:       10 * time.Second,
 		MinRenewInterval: time.Second,
 		ClaimTimeout:     10 * time.Second,
@@ -1537,7 +1557,7 @@ func runHolding(t *testing.T, answer error) int {
 	// The lease divided by three is the renewal interval, and the floor
 	// below is what a lease this short takes instead.
 	queue := &heldQueue{expires: 30 * time.Millisecond, err: answer}
-	s, err := delivery.NewService(idleEnds(queue, ctx.Done()), delivery.Config{
+	s, err := delivery.NewService(idleEnds(t, queue, ctx.Done()), delivery.Config{
 		RetryDelay:       20 * time.Millisecond,
 		MinRenewInterval: 10 * time.Millisecond,
 		ClaimTimeout:     10 * time.Second,

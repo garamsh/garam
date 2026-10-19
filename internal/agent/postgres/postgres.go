@@ -101,13 +101,8 @@ func (s *Store) GetExecution(ctx context.Context, agentGRN grn.GRN) (*agent.Exec
 	if err != nil {
 		return nil, storageError(err, "get execution", agent.ErrAgentNotFound, nil)
 	}
-	mode, err := agent.ParseMode(row.Mode)
-	if err != nil {
-		return nil, errorx.Wrap(err, "stored execution mode", errorx.KindInternal)
-	}
 	e := &agent.Execution{
 		Agent:   agentGRN,
-		Mode:    mode,
 		Lineage: lineageOf(row.Lineage),
 		Latest:  activationIDOf(row.LatestActivationID),
 	}
@@ -131,11 +126,7 @@ func (s *Store) Introspect(ctx context.Context, agentGRN grn.GRN, c agent.Creden
 	if err != nil {
 		return nil, storageError(err, "introspect", agent.ErrAgentNotFound, nil)
 	}
-	mode, err := agent.ParseMode(row.Mode)
-	if err != nil {
-		return nil, errorx.Wrap(err, "stored execution mode", errorx.KindInternal)
-	}
-	snapshot := &agent.Snapshot{Mode: mode, CredentialCurrent: row.CredentialCurrent}
+	snapshot := &agent.Snapshot{CredentialCurrent: row.CredentialCurrent}
 	if row.Assignee.Valid {
 		assignee, err := grn.Parse(row.Assignee.String)
 		if err != nil {

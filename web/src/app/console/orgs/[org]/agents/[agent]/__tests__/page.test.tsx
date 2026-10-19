@@ -5,21 +5,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import AgentPage from "@/app/console/orgs/[org]/agents/[agent]/page";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { enter } from "@/testing/enter";
 import { renderServerComponent } from "@/testing/render";
-import {
-  API_URL,
-  answerPermissionChecks,
-  fieldAgent,
-  fieldOne,
-  reportedAgent,
-} from "@/testing/mocks/handlers";
+import { API_URL, fieldOne, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-// The rename's Server Action stays real; the control service's
-// authority is counted, which is what a re-read would mint again.
+// The control service's authority is counted, which is what a re-read
+// would mint again.
 const minted = vi.hoisted(() => ({ count: 0 }));
 vi.mock("@/features/orgs/actions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/orgs/actions")>()),
@@ -35,12 +28,10 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   },
-  usePathname: () => "/console/orgs/acme/agents/9f2ac1b40d8e7a35",
+  usePathname: () => "/console/orgs/acme/agents/1c3d5e7f90a2b4c6",
 }));
 
-const ONE = `${API_URL}/orgs/acme/agent-definitions/9f2ac1b40d8e7a35`;
-
-function renderAgent(agent = "9f2ac1b40d8e7a35") {
+function renderAgent(agent = "1c3d5e7f90a2b4c6") {
   return renderServerComponent(
     AgentPage({ params: Promise.resolve({ org: "acme", agent }) }),
     { wrapper: TooltipProvider },
@@ -53,125 +44,62 @@ async function openTab(name: string) {
 }
 
 describe("agent page", () => {
-  it("names the agent, states its reports once in the header, and shows its definition", async () => {
+  it("calls the agent unnamed, never by its identifier, and states its reports once in the header", async () => {
     const { container } = await renderAgent();
 
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Scout" }),
-    ).toBeInTheDocument();
-    // The identifier is offered to copy, in mono, and is not the title.
-    expect(screen.getByRole("group", { name: "Identifier" })).toHaveTextContent(
-      "9f2ac1b40d8e7a35",
-    );
-    // The reports are the header's alone (ADR-0116): no second section
-    // repeats them.
-    expect(screen.getAllByText("Awaiting operator")).toHaveLength(1);
-    expect(
-      screen.queryByRole("heading", { name: "Reported" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("heading", { name: "Definition" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("haiku")).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Field cluster one" }),
-    ).toHaveAttribute("href", "/console/orgs/acme/operators/field-one");
-    expect(
-      screen.getByRole("link", { name: "Manage policies" }),
-    ).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/permissions/attachments?subject=agent%3A9f2ac1b40d8e7a35",
-    );
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
-      "Overview",
-      "Execution",
-      "Settings",
-    ]);
-    expect(container.textContent).not.toContain("grn:");
-  });
-
-  it("calls an agent garam holds no name for unnamed, never by its identifier, and offers no rename", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/agent-definitions/1c3d5e7f90a2b4c6`, () =>
-        HttpResponse.json(
-          { kind: "not_found", message: "agent definition not found" },
-          { status: 404 },
-        ),
-      ),
-    );
-
-    await renderAgent("1c3d5e7f90a2b4c6");
-
+    // garam holds no name for an agent (ADR-0118).
     expect(
       screen.getByRole("heading", { level: 1, name: "Unnamed agent" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("heading", { name: "1c3d5e7f90a2b4c6" }),
     ).toBeNull();
+    // The identifier is offered to copy, in mono, and is not the title.
     expect(screen.getByRole("group", { name: "Identifier" })).toHaveTextContent(
       "1c3d5e7f90a2b4c6",
     );
-    expect(screen.getByText("No definition in garam.")).toBeInTheDocument();
+    // The reports are the header's alone (ADR-0116): no second section
+    // repeats them.
+    expect(screen.getAllByText("Provisioning failed")).toHaveLength(1);
+    expect(screen.getAllByText("Disconnected")).toHaveLength(1);
+    expect(
+      screen.queryByRole("heading", { name: "Reported" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Nothing holds it yet.")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Manage policies" }),
+    ).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/permissions/attachments?subject=agent%3A1c3d5e7f90a2b4c6",
+    );
     // Nothing of it is garam's to rename.
-    expect(screen.queryByRole("tab", { name: "Settings" })).toBeNull();
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Overview",
+      "Execution",
+    ]);
+    expect(container.textContent).not.toContain("grn:");
   });
 
-  it("shows the states an operator and the agent reported once one claims it", async () => {
+  it("answers 404 for an identifier the agents list does not hold", async () => {
+    await expect(renderAgent("9f2ac1b40d8e7a35")).rejects.toThrow(
+      "NEXT_NOT_FOUND",
+    );
+  });
+
+  it("says a refused agents list is refused rather than missing", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/agents`, () =>
-        HttpResponse.json([{ ...reportedAgent, grn: fieldAgent.agentGrn }]),
+        HttpResponse.json(
+          { kind: "permission_denied", message: "no" },
+          { status: 403 },
+        ),
       ),
     );
 
     await renderAgent();
 
-    // In the header, each its own dot and label, said once.
-    expect(screen.getAllByText("Provisioning failed")).toHaveLength(1);
-    expect(screen.getAllByText("Disconnected")).toHaveLength(1);
-    expect(screen.queryByText("Awaiting operator")).not.toBeInTheDocument();
-  });
-
-  it("renames the agent through the form under Settings", async () => {
-    let body: unknown;
-    server.use(
-      http.patch(ONE, async ({ request }) => {
-        body = await request.json();
-        return HttpResponse.json({ ...fieldAgent, name: "Ranger" });
-      }),
-    );
-    const user = userEvent.setup();
-    await renderAgent();
-    await openTab("Settings");
-
-    await user.clear(screen.getByLabelText("Name"));
-    await enter(user, screen.getByLabelText("Name"), " Ranger ");
-    await user.click(screen.getByRole("button", { name: "Save name" }));
-
-    // Inactive panels stay mounted, so the answer is read in the panel
-    // that asked.
-    expect(
-      await within(
-        screen.getByRole("tabpanel", { name: "Settings" }),
-      ).findByRole("status"),
-    ).toHaveTextContent("Renamed to Ranger.");
-    expect(body).toEqual({ name: "Ranger" });
-  });
-
-  it("keeps an unsaved rename through a switch to another tab and back", async () => {
-    const user = userEvent.setup();
-    await renderAgent();
-    await openTab("Settings");
-    const name = screen.getByLabelText("Name");
-    // The control: the field starts at the saved name, so what it holds
-    // after the switch is what was typed.
-    expect(name).toHaveValue("Scout");
-    await user.clear(name);
-    await enter(user, name, "Ranger");
-
-    await openTab("Overview");
-    await openTab("Settings");
-
-    expect(screen.getByLabelText("Name")).toHaveValue("Ranger");
+    expect(screen.getByText("You can't view this agent")).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).toBeNull();
   });
 
   it("reads the execution once, and a switch back to Execution does not read it again", async () => {
@@ -223,46 +151,6 @@ describe("agent page", () => {
     expect(minted.count).toBe(1);
   });
 
-  it("leaves the rename out where the server denies it, and keeps it where the server cannot say", async () => {
-    // The control: unanswered, the rename stays, and the server's
-    // refusal of the write is the backstop (ADR-0103).
-    server.use(answerPermissionChecks(() => "unknown"));
-    const unknown = await renderAgent();
-    expect(screen.getByRole("tab", { name: "Settings" })).toBeInTheDocument();
-    unknown.unmount();
-
-    server.use(
-      answerPermissionChecks((action) =>
-        action === "agent:rename" ? "deny" : "allow",
-      ),
-    );
-    await renderAgent();
-
-    expect(screen.queryByRole("tab", { name: "Settings" })).toBeNull();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Scout" }),
-    ).toBeInTheDocument();
-  });
-
-  it("shows no cut-over marker, even for a definition with one open (#1592)", async () => {
-    server.use(
-      http.get(ONE, () =>
-        HttpResponse.json({ ...fieldAgent, cutover: { stage: "switched" } }),
-      ),
-    );
-
-    await renderAgent();
-
-    // The control: the definition itself rendered, values and all.
-    expect(
-      screen.getByRole("heading", { name: "Definition" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("haiku")).toBeInTheDocument();
-    expect(screen.queryByText(/Managed by the Operator/)).toBeNull();
-    expect(screen.queryByText(/Cut-over/)).toBeNull();
-    expect(screen.queryByText(/archival/)).toBeNull();
-  });
-
   it("says a missing control service under Execution and links to where it is fixed", async () => {
     await renderAgent();
     await openTab("Execution");
@@ -301,39 +189,7 @@ describe("agent page", () => {
     expect(screen.queryByRole("link", { name: /^Open/ })).toBeNull();
   });
 
-  it("says a refused definition is refused rather than missing", async () => {
-    let refusing = false;
-    server.use(
-      http.get(ONE, () =>
-        refusing
-          ? HttpResponse.json(
-              { kind: "permission_denied", message: "no" },
-              { status: 403 },
-            )
-          : HttpResponse.json(fieldAgent),
-      ),
-    );
-    // The control: answered, the same agent renders under its name and
-    // says nothing is refused.
-    const allowed = await renderAgent();
-    expect(
-      screen.getByRole("heading", { level: 1, name: "Scout" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText("You can't view this agent"),
-    ).not.toBeInTheDocument();
-    allowed.unmount();
-
-    refusing = true;
-    await renderAgent();
-
-    expect(screen.getByText("You can't view this agent")).toBeInTheDocument();
-    expect(screen.queryByRole("tab")).toBeNull();
-  });
-
   describe("header", () => {
-    const UNDEFINED = `${API_URL}/orgs/acme/agent-definitions/1c3d5e7f90a2b4c6`;
-
     /** The value a fact of the header holds. */
     function headerFact(term: string) {
       const dt = screen
@@ -344,26 +200,20 @@ describe("agent page", () => {
 
     function heldBy(assignment: object | undefined) {
       server.use(
-        http.get(UNDEFINED, () =>
-          HttpResponse.json(
-            { kind: "not_found", message: "no" },
-            { status: 404 },
-          ),
-        ),
         http.get(`${API_URL}/orgs/acme/agents`, () =>
           HttpResponse.json([{ ...reportedAgent, assignment }]),
         ),
       );
     }
 
-    it("states what holds an agent, read from its assignee, and why garam holds no definition", async () => {
+    it("states what holds an agent, read from its assignee, and where it came from", async () => {
       heldBy({
         assigneeGrn: "grn:acme:default:operator:field-one",
         epoch: 7,
         since: "2026-10-01T00:00:00Z",
       });
 
-      await renderAgent("1c3d5e7f90a2b4c6");
+      await renderAgent();
 
       expect(headerFact("Runs on")).toHaveTextContent("Field cluster one");
       expect(
@@ -374,9 +224,7 @@ describe("agent page", () => {
     it("shows the generation garam last activated where the read answers one (#1576)", async () => {
       server.use(
         http.get(`${API_URL}/orgs/acme/agents`, () =>
-          HttpResponse.json([
-            { ...reportedAgent, grn: fieldAgent.agentGrn, generation: "4" },
-          ]),
+          HttpResponse.json([{ ...reportedAgent, generation: "4" }]),
         ),
       );
 
@@ -389,7 +237,7 @@ describe("agent page", () => {
       // The control for the case above.
       server.use(
         http.get(`${API_URL}/orgs/acme/agents`, () =>
-          HttpResponse.json([{ ...reportedAgent, grn: fieldAgent.agentGrn }]),
+          HttpResponse.json([reportedAgent]),
         ),
       );
 
@@ -408,34 +256,12 @@ describe("agent page", () => {
         since: "2026-10-01T00:00:00Z",
       });
 
-      await renderAgent("1c3d5e7f90a2b4c6");
+      await renderAgent();
 
       expect(headerFact("Runs on")).toHaveTextContent("build-07 (standalone)");
       expect(
         screen.getByText("Enrolled by the standalone host build-07."),
       ).toBeInTheDocument();
-    });
-
-    it("says what holds it is not checked where reports are refused, never nowhere", async () => {
-      server.use(
-        http.get(`${API_URL}/orgs/acme/agents`, () =>
-          HttpResponse.json(
-            { kind: "permission_denied", message: "no" },
-            { status: 403 },
-          ),
-        ),
-      );
-
-      await renderAgent();
-
-      expect(headerFact("Runs on")).toHaveTextContent("Not checked");
-      expect(headerFact("Last report")).toHaveTextContent("Not checked");
-    });
-
-    it("names who defined it", async () => {
-      await renderAgent();
-
-      expect(headerFact("Defined by")).toHaveTextContent("Alice");
     });
   });
 
@@ -443,9 +269,7 @@ describe("agent page", () => {
     function heldBy(assignment: object) {
       server.use(
         http.get(`${API_URL}/orgs/acme/agents`, () =>
-          HttpResponse.json([
-            { ...reportedAgent, grn: fieldAgent.agentGrn, assignment },
-          ]),
+          HttpResponse.json([{ ...reportedAgent, assignment }]),
         ),
       );
     }
@@ -471,9 +295,9 @@ describe("agent page", () => {
 
       await user.click(screen.getByRole("button", { name: "Replace host" }));
       const dialog = screen.getByRole("alertdialog", {
-        name: "Replace Scout's host?",
+        name: "Replace Unnamed agent's host?",
       });
-      expect(dialog).toHaveTextContent(/build-07 stops running Scout/);
+      expect(dialog).toHaveTextContent(/build-07 stops running Unnamed agent/);
       await user.click(
         within(dialog).getByRole("textbox", {
           name: "What garam standalone prepare printed",
@@ -494,7 +318,7 @@ describe("agent page", () => {
         expect(sent).toEqual([
           expect.objectContaining({
             replaces: {
-              agentGrn: fieldAgent.agentGrn,
+              agentGrn: reportedAgent.grn,
               assigneeGrn: "grn:acme:default:supervisor:build-07",
               epoch: 2,
             },

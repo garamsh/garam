@@ -8,7 +8,6 @@ import { renderServerComponent } from "@/testing/render";
 import {
   API_URL,
   answerPermissionChecks,
-  fieldAgent,
   fieldOne,
   fieldOneKey,
   signedOut,
@@ -27,7 +26,6 @@ vi.mock("next/navigation", () => ({
 }));
 
 const OPERATOR = `${API_URL}/orgs/acme/operators/field-one`;
-const DEFINITIONS = `${API_URL}/orgs/acme/agent-definitions`;
 
 function renderOperator(tab?: string) {
   return renderServerComponent(
@@ -83,52 +81,6 @@ describe("operator page", () => {
     expect(fact("Certificate")).toHaveTextContent("Issued");
     // Registered by a member, named rather than identified.
     expect(fact("Registered")).toHaveTextContent("by Alice");
-  });
-
-  it("names the agents that run on it and links each, with no identifier", async () => {
-    server.use(
-      http.get(DEFINITIONS, () =>
-        HttpResponse.json([
-          fieldAgent,
-          {
-            ...fieldAgent,
-            agentGrn: "grn:acme:default:agent:0000000000000001",
-            name: "Elsewhere",
-            operatorGrn: "grn:acme:default:operator:elsewhere",
-          },
-        ]),
-      ),
-    );
-
-    const { container } = await renderOperator();
-
-    const section = within(
-      screen.getByRole("region", { name: "Agents it runs" }),
-    );
-    expect(section.getByRole("link", { name: "Scout" })).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/agents/9f2ac1b40d8e7a35",
-    );
-    // A definition naming another operator is not this one's.
-    expect(section.queryByText("Elsewhere")).not.toBeInTheDocument();
-    expect(container.textContent).not.toContain("9f2ac1b40d8e7a35");
-  });
-
-  it("says the agents are unchecked rather than none when the list is refused", async () => {
-    server.use(
-      http.get(DEFINITIONS, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "no" },
-          { status: 403 },
-        ),
-      ),
-    );
-
-    await renderOperator();
-
-    const agents = screen.getByRole("region", { name: "Agents it runs" });
-    expect(agents).toHaveTextContent("Not checked.");
-    expect(agents).not.toHaveTextContent("None.");
   });
 
   it("lists its keys with their state and last sign-in, and offers rotating and revoking", async () => {

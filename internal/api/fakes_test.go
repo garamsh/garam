@@ -641,34 +641,20 @@ func (s *fakeOrgStore) spent(token string) bool {
 }
 
 // fakeAgentStore is an in-memory agent.Store double. The API reads
-// agents and the assignments holding them and writes definitions; the
-// write methods an operator reaches over the machine listener stay
-// unimplemented and panic through the embedded interface.
-//
-// Definitions are held apart from agents, as the schema holds them:
-// defining an agent puts nothing in `agents`, so a test that finds one
-// there found what an operator reported.
+// agents and the assignments holding them; the write methods an
+// operator reaches over the machine listener stay unimplemented and
+// panic through the embedded interface.
 type fakeAgentStore struct {
 	agent.Store
 	mu          sync.Mutex
 	agents      map[string]*agent.Agent
 	assignments map[string]*agent.Assignment
-	definitions map[string]*agent.Definition
-	// renames records each rename the API asked for.
-	renames []rename
-}
-
-// rename is one RenameDefinition call.
-type rename struct {
-	agent grn.GRN
-	name  agent.Name
 }
 
 func newFakeAgentStore() *fakeAgentStore {
 	return &fakeAgentStore{
 		agents:      map[string]*agent.Agent{},
 		assignments: map[string]*agent.Assignment{},
-		definitions: map[string]*agent.Definition{},
 	}
 }
 
@@ -727,60 +713,6 @@ func (s *fakeAgentStore) GetAssignment(_ context.Context, agentGRN grn.GRN) (*ag
 		return nil, agent.ErrAssignmentNotFound
 	}
 	return a, nil
-}
-
-// keepDefinition stores a definition as one written before garam
-// stopped accepting them: no route writes one any more (ADR-0090).
-func (s *fakeAgentStore) keepDefinition(d *agent.Definition) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.definitions[d.Agent().String()] = d
-}
-
-// definitionCount answers how many definitions the store holds.
-func (s *fakeAgentStore) definitionCount() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return len(s.definitions)
-}
-
-func (s *fakeAgentStore) GetDefinition(_ context.Context, g grn.GRN) (*agent.Definition, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	d, ok := s.definitions[g.String()]
-	if !ok {
-		return nil, agent.ErrDefinitionNotFound
-	}
-	return d, nil
-}
-
-func (s *fakeAgentStore) RenameDefinition(_ context.Context, g grn.GRN, name agent.Name) (*agent.Definition, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	d, ok := s.definitions[g.String()]
-	if !ok {
-		return nil, agent.ErrDefinitionNotFound
-	}
-	s.renames = append(s.renames, rename{agent: g, name: name})
-	renamed := *d
-	renamed.Name = name
-	s.definitions[g.String()] = &renamed
-	return &renamed, nil
-}
-
-func (s *fakeAgentStore) ListDefinitionsByOrg(_ context.Context, orgGRN grn.GRN) ([]*agent.Definition, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := []*agent.Definition{}
-	for _, d := range s.definitions {
-		if d.Organization() == orgGRN {
-			out = append(out, d)
-		}
-	}
-	slices.SortFunc(out, func(a, b *agent.Definition) int {
-		return strings.Compare(a.Agent().String(), b.Agent().String())
-	})
-	return out, nil
 }
 
 // LatestGeneration answers what a store holding no activation does:
@@ -1161,10 +1093,6 @@ type fakeOperatorStore struct {
 	operator.Store
 	mu        sync.Mutex
 	operators map[string]*operator.Operator
-	// The operators an agent definition names. The real store reads
-	// this off the foreign key the delete trips; nothing here writes
-	// definitions, so a test says which operators one names.
-	namedByDefinition map[string]bool
 	// keys holds each operator's keys by GRN, and issuances the
 	// rotation each issuance was asked under.
 	keys      map[string][]operator.Key
@@ -1173,9 +1101,8 @@ type fakeOperatorStore struct {
 
 func newFakeOperatorStore() *fakeOperatorStore {
 	return &fakeOperatorStore{
-		operators:         map[string]*operator.Operator{},
-		namedByDefinition: map[string]bool{},
-		keys:              map[string][]operator.Key{},
+		operators: map[string]*operator.Operator{},
+		keys:      map[string][]operator.Key{},
 	}
 }
 
@@ -1267,30 +1194,15 @@ func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator) (*
 }
 
 // Delete removes the record and the certificate the fake holds beside
-// it, as the statement pair does. The refusal for an operator a
-// definition names is the real store's, read off the foreign key
-// inside its own transaction; this one answers it off what
-// markNamedByDefinition recorded, so what these tests cover is the
-// handler's half — the status and the sentence a refused caller reads.
+// it, as the statement pair does.
 func (s *fakeOperatorStore) Delete(_ context.Context, g grn.GRN) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.operators[g.String()]; !ok {
 		return operator.ErrOperatorNotFound
 	}
-	if s.namedByDefinition[g.String()] {
-		return operator.ErrOperatorNamedByDefinition
-	}
 	delete(s.operators, g.String())
 	return nil
-}
-
-// markNamedByDefinition records that an agent definition names the
-// operator, which is the state a delete is refused for.
-func (s *fakeOperatorStore) markNamedByDefinition(g grn.GRN) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.namedByDefinition[g.String()] = true
 }
 
 // UpdateDetails replaces the record with one carrying the patched
@@ -1394,7 +1306,7 @@ func (s *fakeOrgStore) CountOrgContents(_ context.Context, orgGRN grn.GRN) (org.
 	return c, nil
 }
 
-// CountByOrg counts the organization's agents and definitions.
+// CountByOrg counts the organization's agents.
 func (s *fakeAgentStore) CountByOrg(_ context.Context, orgGRN grn.GRN) (agent.OrgCounts, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1402,11 +1314,6 @@ func (s *fakeAgentStore) CountByOrg(_ context.Context, orgGRN grn.GRN) (agent.Or
 	for _, a := range s.agents {
 		if a.Organization() == orgGRN {
 			c.Agents++
-		}
-	}
-	for _, d := range s.definitions {
-		if d.Organization() == orgGRN {
-			c.Definitions++
 		}
 	}
 	return c, nil

@@ -3,7 +3,9 @@
 > Status: accepted — the record read per connection through a seam
 > of the trust root's shape is superseded by
 > [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md),
-> which reads it per request beside the token
+> which reads it per request beside the token; the refusal while a
+> definition names the operator is superseded by
+> [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
 > Date: 2026-09-06
 
 ## Contents

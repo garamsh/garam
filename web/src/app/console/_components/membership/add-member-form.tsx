@@ -44,18 +44,12 @@ export function AddMemberForm({
   scope,
   candidates,
   unlisted,
-  partlyListed = [],
 }: {
   org: string;
   scope: MembershipScope;
   candidates: Candidate[];
   /** The kinds whose list garam refused the caller, as plural nouns. */
   unlisted: string[];
-  /**
-   * Refused lists whose kind another list still offers, as plural
-   * nouns: some of that kind are offered and some may be missing.
-   */
-  partlyListed?: string[];
 }) {
   const kind = SCOPE_KIND[scope.kind];
   const [state, formAction, pending] = useActionState(kind.add, initialState);
@@ -89,11 +83,6 @@ export function AddMemberForm({
     ...(unlisted.length > 0
       ? [
           `This organization's ${unlisted.join(" and ")} are not listed to you, so none of them can be chosen here.`,
-        ]
-      : []),
-    ...(partlyListed.length > 0
-      ? [
-          `This organization's ${partlyListed.join(" and ")} are not listed to you, so some agents may be missing here.`,
         ]
       : []),
   ];

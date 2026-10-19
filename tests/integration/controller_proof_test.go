@@ -230,18 +230,24 @@ func onOpenConnection(t *testing.T, p proof, status int, msg string) {
 	assert.True(t, p.reused, "%s: the request reused an open connection", msg)
 }
 
-// provision has the controller holding pair create an agent assigned to
-// it, as an operator does on this listener.
+// provision stands an agent up assigned to the controller client
+// authenticates as, read off the listener, and answers it with its
+// epoch.
 func (s *proofStack) provision(t *testing.T, client *http.Client) (string, int) {
 	t.Helper()
-	status, body := machineRequest(t, client, http.MethodPost, s.url+"/agents")
-	require.Equal(t, http.StatusCreated, status, string(body))
-	var created struct {
-		Grn   string `json:"grn"`
-		Epoch int    `json:"epoch"`
+	status, body := machineRequest(t, client, http.MethodGet, s.url+"/identity")
+	require.Equal(t, http.StatusOK, status, string(body))
+	var identity struct {
+		Grn string `json:"grn"`
 	}
-	require.NoError(t, json.Unmarshal(body, &created))
-	return created.Grn, created.Epoch
+	require.NoError(t, json.Unmarshal(body, &identity))
+	controller, err := grn.Parse(identity.Grn)
+	require.NoError(t, err)
+	agents := agent.NewPostgresStore(s.pool)
+	g := seedAgent(t, agents, grn.Org(controller.Organization))
+	assignment, err := agents.Assign(context.Background(), g, controller)
+	require.NoError(t, err)
+	return g.String(), assignment.Epoch()
 }
 
 // selfSignedFor is a certificate naming subject that nothing but its

@@ -44,7 +44,7 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 	memberGRN := userGRNOf("member-sub")
 	require.NoError(t, f.orgs.AddMember(ctx, org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 
-	// 4 agents, 5 definitions, 6 operators.
+	// 4 agents, 6 operators.
 	for range 4 {
 		g, err := agent.NewGRN(orgGRN)
 		require.NoError(t, err)
@@ -52,15 +52,7 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, f.agents.Create(ctx, a))
 	}
-	operatorGRN := registerOperator(t, f, slug, "op-defs")
-	for range 5 {
-		d, err := agent.NewDefinition(orgGRN, operatorGRN, "Field agent", agent.Values{}, ownerGRN)
-		require.NoError(t, err)
-		f.agents.keepDefinition(d)
-	}
-	// One operator is already registered above for the definitions to
-	// name, so five more make six.
-	for _, id := range []string{"o1", "o2", "o3", "o4", "o5"} {
+	for _, id := range []string{"o1", "o2", "o3", "o4", "o5", "o6"} {
 		registerOperator(t, f, slug, id)
 	}
 
@@ -85,7 +77,6 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 	assert.Equal(t, 3, body.Counts.Invitations)
 	assert.Equal(t, 8, body.Counts.Policies)
 	assert.Equal(t, 4, body.Counts.Agents)
-	assert.Equal(t, 5, body.Counts.AgentDefinitions)
 	assert.Equal(t, 6, body.Counts.Operators)
 	assert.Equal(t, 7, body.Counts.Consents)
 }
@@ -201,15 +192,12 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 	f.permit(permission{ownerGRN, org.ActionOrgDelete})
 
 	ctx := testCtx(t)
-	operatorGRN := registerOperator(t, f, slug, "op-unseen")
+	registerOperator(t, f, slug, "op-unseen")
 	agentGRN, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
 	a, err := agent.New(agentGRN, orgGRN)
 	require.NoError(t, err)
 	require.NoError(t, f.agents.Create(ctx, a))
-	d, err := agent.NewDefinition(orgGRN, operatorGRN, "Field agent", agent.Values{}, ownerGRN)
-	require.NoError(t, err)
-	f.agents.keepDefinition(d)
 	_, err = f.consents.Grant(ctx, orgGRN, orgGRNOf("elsewhere"))
 	require.NoError(t, err)
 
@@ -226,7 +214,6 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 	// Counted although the caller may not list them: the delete takes
 	// them regardless, so the preview names them regardless.
 	assert.Equal(t, 1, body.Counts.Agents, "agents are counted without agent:read")
-	assert.Equal(t, 1, body.Counts.AgentDefinitions)
 	assert.Equal(t, 1, body.Counts.Operators)
 	assert.Equal(t, 1, body.Counts.Consents)
 

@@ -7,7 +7,6 @@ import {
   UNNAMED_AGENT,
   directoryAgents,
   getOrg,
-  lookupAgentDefinitions,
   lookupAgents,
   lookupOperators,
   slugFromGrn,
@@ -51,16 +50,14 @@ const STANDALONE = "standalone";
  */
 export default async function AgentsPage({ params, searchParams }: Params) {
   const [{ org }, query] = await Promise.all([params, searchParams]);
-  const [organization, agents, definitions, operators, choices] =
-    await Promise.all([
-      getOrg(org),
-      lookupAgents(org),
-      lookupAgentDefinitions(org),
-      lookupOperators(org),
-      readMemberChoices(org, query.team, {
-        create: { action: "agent:create" },
-      }),
-    ]);
+  const [organization, agents, operators, choices] = await Promise.all([
+    getOrg(org),
+    lookupAgents(org),
+    lookupOperators(org),
+    readMemberChoices(org, query.team, {
+      create: { action: "agent:create" },
+    }),
+  ]);
 
   const create =
     choices.may.get("create") === "denied" ? (
@@ -78,12 +75,18 @@ export default async function AgentsPage({ params, searchParams }: Params) {
 
   if (
     organization.status === "unreachable" ||
-    agents.status === "unreachable" ||
-    definitions.status === "unreachable"
+    agents.status === "unreachable"
   ) {
     return (
       <ListPage title={TITLE} primaryAction={create}>
         <ApiUnreachable subject="this organization's agents" />
+      </ListPage>
+    );
+  }
+  if (agents.status === "forbidden") {
+    return (
+      <ListPage title={TITLE} primaryAction={create}>
+        <RefusedRead subject="this organization's agents" />
       </ListPage>
     );
   }
@@ -92,40 +95,31 @@ export default async function AgentsPage({ params, searchParams }: Params) {
   const operatorNames = new Map(
     operatorList.map((operator) => [operator.grn, operator.name]),
   );
-  const reported = new Map(
-    (agents.status === "ok" ? agents.data : []).map((agent) => [
-      agent.grn,
-      agent,
-    ]),
-  );
-  const all: MemberRow[] = directoryAgents({ agents, definitions }).map(
-    (entry) => {
-      const agent = reported.get(entry.grn);
-      const health = agentHealth(entry.reported, agent);
-      const holder = holderOf(agent, operatorNames);
-      return {
-        kind: "agent",
-        grn: entry.grn,
-        identifier: entry.identifier,
-        name:
-          entry.name ??
-          (definitions.status === "ok" ? UNNAMED_AGENT : "Name not available"),
-        href: orgHref(org, `agents/${entry.identifier}`),
-        status: { tone: health.tone, label: health.label },
-        detail: health.detail,
-        runsOn:
-          holder === null
-            ? { key: NOWHERE, label: "Nowhere yet" }
-            : holder.kind === "operator"
-              ? {
-                  key: slugFromGrn(agent?.assignment?.assigneeGrn ?? ""),
-                  label: holder.name,
-                }
-              : { key: STANDALONE, label: `${holder.name} (standalone)` },
-        lastSeen: agent?.updatedAt ?? null,
-      };
-    },
-  );
+  const reported = new Map(agents.data.map((agent) => [agent.grn, agent]));
+  const all: MemberRow[] = directoryAgents({ agents }).map((entry) => {
+    const agent = reported.get(entry.grn);
+    const health = agentHealth(entry.reported, agent);
+    const holder = holderOf(agent, operatorNames);
+    return {
+      kind: "agent",
+      grn: entry.grn,
+      identifier: entry.identifier,
+      name: entry.name ?? UNNAMED_AGENT,
+      href: orgHref(org, `agents/${entry.identifier}`),
+      status: { tone: health.tone, label: health.label },
+      detail: health.detail,
+      runsOn:
+        holder === null
+          ? { key: NOWHERE, label: "Nowhere yet" }
+          : holder.kind === "operator"
+            ? {
+                key: slugFromGrn(agent?.assignment?.assigneeGrn ?? ""),
+                label: holder.name,
+              }
+            : { key: STANDALONE, label: `${holder.name} (standalone)` },
+      lastSeen: agent?.updatedAt ?? null,
+    };
+  });
   // Failing agents lead, each group in the lists' order.
   const ordered = [
     ...all.filter((row) => isFailingHealth(row.status)),
@@ -138,23 +132,7 @@ export default async function AgentsPage({ params, searchParams }: Params) {
   );
 
   return (
-    <ListPage
-      title={TITLE}
-      count={
-        agents.status === "ok" && definitions.status === "ok"
-          ? all.length
-          : undefined
-      }
-      primaryAction={create}
-    >
-      {definitions.status === "forbidden" && (
-        <RefusedRead subject="this organization's agent definitions">
-          Agents awaiting an operator are left out.
-        </RefusedRead>
-      )}
-      {agents.status === "forbidden" && (
-        <RefusedRead subject="what agents report" />
-      )}
+    <ListPage title={TITLE} count={all.length} primaryAction={create}>
       {choices.teamUnread && (
         <RefusedRead subject="this team's members">
           The team filter is not applied.

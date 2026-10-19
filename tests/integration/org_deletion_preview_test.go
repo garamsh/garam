@@ -106,10 +106,6 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	a, err := agent.New(agentGRN, orgGRN)
 	require.NoError(t, err)
 	require.NoError(t, agents.Create(ctx, a))
-	d, err := agent.NewDefinition(orgGRN, op.GRN(), "Field agent", agent.Values{}, ownerGRN)
-	require.NoError(t, err)
-	keepDefinition(t, p, d)
-
 	_, err = consents.Grant(ctx, orgGRN, otherGRN)
 	require.NoError(t, err)
 
@@ -125,7 +121,6 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	agentCounts, err := agents.CountByOrg(ctx, orgGRN)
 	require.NoError(t, err)
 	assert.Equal(t, 1, agentCounts.Agents)
-	assert.Equal(t, 1, agentCounts.Definitions)
 
 	operatorCount, err := operators.CountByOrg(ctx, orgGRN)
 	require.NoError(t, err)
@@ -149,10 +144,6 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound), "operators go")
 	_, err = agents.Get(ctx, agentGRN)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound), "agents go")
-
-	definitions, err := agents.ListDefinitionsByOrg(ctx, orgGRN)
-	require.NoError(t, err)
-	assert.Empty(t, definitions, "agent definitions go")
 
 	// The other organization survives, so the cascade took one org's
 	// rows rather than every row.

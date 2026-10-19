@@ -4,14 +4,14 @@ garam is the core of a workflow management product: identity,
 organization, and authorization for people and autonomous agents that
 collaborate on a shared plan.
 
-Pending removals
-([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
-garam keeps no legacy path no live deployment uses, and each removal is
-its own pull request of #1593. What this document says of each holds
-until its pull request lands: legacy execution mode, the staged
-cut-over and legacy definitions in the fifth, after #1594. The operator
+Pending removal
+([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)):
+the certificate path goes in G4 (#1494), and what this document says
+of it holds until then. Legacy execution mode, the staged cut-over and
+every agent definition are gone (ADR-0118), as are the operator
 enrollment token and shared-secret credential, garam's retired
-templates and the browser's `operatorGrn` are gone.
+templates and the browser's `operatorGrn`
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)).
 
 ## Contents
 - In scope
@@ -112,8 +112,7 @@ templates and the browser's `operatorGrn` are gone.
   minted under it; every mint, read back and proof is decided from
   current state. Delegating is `operator:delegate`, creating
   `agent:create`, configuring `agent:configure`, recovering
-  `agent:recover`, cutting a legacy agent over `agent:cutover`
-  (ADR-0086) and moving one to another controller `agent:replace`
+  `agent:recover` and moving one to another controller `agent:replace`
   (ADR-0107). Reading the operator's published templates and
   profiles, publishing a template version and reading an agent's
   execution are each an operation of their own, bound to the exact
@@ -138,27 +137,6 @@ templates and the browser's `operatorGrn` are gone.
   supervises the host's runtime is `garam standalone run`
   (ADR-0085), and its joint acceptance with garam and Sherlock is
   unverified (#1180).
-- The agents an organization's members **defined**, under
-  `/orgs/{org}/agent-definitions` — which operator is to run each, and
-  with what values (ADR-0026). A definition is a record rather than a
-  command: garam minted the agent's GRN, writes no `agents` row, and
-  knows nothing about whether an operator acted on it. The operator the
-  definition names reads its definitions on the machine listener and
-  **claims** one: the claim binds the operator to the definition's
-  agent GRN — the assignment, at a bumped epoch — and admits it to that
-  agent's certificate route (ADR-0033). A definition is immutable and
-  claimed once, and a definition's agent and one `POST /agents`
-  created can never be the same agent. The operator a definition names
-  is one the organization registered, which the schema's foreign key
-  holds (ADR-0045). garam accepts no new definition: no route and no
-  role writes one, and the schema refuses one, any changed value and a
-  direct delete from whichever release sends it; every definition it
-  holds stays readable, claimable and cut over as written, goes only
-  with its organization, and an agent is created through its
-  operator's control service (ADR-0090). A definition
-  carries a name the organization calls the agent by, which
-  `agent:rename` changes without touching the identity, operator or
-  values (ADR-0075).
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
   a reader dies holding one (ADR-0013). A message is bounded by an
@@ -184,9 +162,9 @@ templates and the browser's `operatorGrn` are gone.
   does not arrive is a redelivery, which the platform recognises by the
   identifier (ADR-0018, ADR-0079). It forwards the replies the platform
   records in its outbox to garam and removes each only on an
-  acknowledgement of it. For an agent cut over to activated execution
-  it first obtains its generation's activation from the lifecycle
-  authority and reports the runtime's status back (ADR-0084).
+  acknowledgement of it. It first obtains its generation's activation
+  from the lifecycle authority and reports the runtime's status back
+  (ADR-0084).
   Forwarding what a turn says to whoever is watching is not part of it
   (see Out of scope).
 - Whom a caller may post to, decided by policy on that listener
@@ -244,12 +222,11 @@ templates and the browser's `operatorGrn` are gone.
 - A web console under `/console` for the org structure the API exposes:
   organizations are listed and created, members are invited by link and
   the invitation accepted, groups and projects are read, an operator is
-  registered and the organization's operators read (ADR-0045), an agent
-  is defined and the organization's definitions and agents read — each
-  agent with the two states its operator and it report (ADR-0026,
-  ADR-0053) — and the organization's cross-organization consent
-  relations are read, its own half of one granted and withdrawn
-  (ADR-0009, ADR-0035).
+  registered and the organization's operators read (ADR-0045), the
+  organization's agents are read — each with the two states its
+  operator and it report (ADR-0053) — and the organization's
+  cross-organization consent relations are read, its own half of one
+  granted and withdrawn (ADR-0009, ADR-0035).
   Its shell is a collapsible sidebar over
   `Organizations → organization → section`, and it addresses resources
   by the GRN's last segment rather than printing GRNs (ADR-0011).
@@ -536,7 +513,7 @@ it and imports no request surface and no domain.
 | `operator.Operator` | `internal/operator` | an organization's record that it has an operator |
 | `agent.Agent` | `internal/agent` | autonomous actor an operator provisions |
 | `agent.Assignment` | `internal/agent` | agent-to-operator binding, fenced by an epoch |
-| `agent.Service` | `internal/agent` | creates an agent for an operator, issues or renews the certificate of one, answers an operator the definitions naming it and claims one, and records the state each party reports |
+| `agent.Service` | `internal/agent` | records the state each party reports, and mints an agent's tokens for the operator or supervisor holding it |
 | `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
 | `ca.Certificate` | `internal/ca` | signed client certificate identified by a SAN URI, over a key garam generated or one a request carried |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
@@ -593,7 +570,7 @@ it and imports no request surface and no domain.
 | A deployment may hold message signing keys in OpenBao Transit; the file key-encryption key stays the default | Transit signs, so no private half reaches the database or garam's memory, and an optional provider a deployment hosts itself is no vendor every deployment must reach; the authorities stay on the key-encryption key because they go at G4. | [adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md) |
 | Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
 | garam presents one pinned server certificate and certificates rotate without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; expiry is the only revocation, and a lifetime short enough to be one is unusable when every rotation is a restart. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
-| An organization registers an operator, and a definition may name no other | A definition naming an operator nobody registered was a definition no operator would ever claim, and nothing reported it. | [adr/0045-an-organization-registers-an-operator.md](./adr/0045-an-organization-registers-an-operator.md) |
+| An organization registers an operator | The registration is the record the console lists and the machine listener admits an operator on, so an identity nobody registered is one nothing reports. | [adr/0045-an-organization-registers-an-operator.md](./adr/0045-an-organization-registers-an-operator.md) |
 | An organization deletes an operator, and the record it withdraws is what that operator authenticated on | A route that removed a record and left the certificate working was what ADR-0045 refused; making the record what admits the certificate reverses ADR-0014's revocation-by-lifetime for an operator without a list, a responder or a stored serial. | [adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md) |
 | An operator renews its certificate by presenting the one it holds | Provisioning one on a schedule needs a standing write path to the key-encryption key, for every tenant; and with no revocation, only a record of the certificate garam last issued keeps a stolen copy from renewing forever. | [adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md) |
 | An operator is a machine identity of the same kind as an agent | One mechanism to secure and rotate; the assignment row already bounds what an operator may fetch. | [adr/0015-operator-identity.md](./adr/0015-operator-identity.md) |

@@ -84,7 +84,6 @@ export {
   revokeAgentSupervisor,
   type RevokeAgentSupervisorState,
 } from "./api/revoke-agent-supervisor";
-export { renameAgent, type RenameAgentState } from "./api/rename-agent";
 export {
   revokeOperatorKey,
   type RevokeOperatorKeyState,

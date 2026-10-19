@@ -331,26 +331,28 @@ func TestOutbox_TheRouteRefusesWithoutItsContractOrCreationInstantBeforeAnyWrite
 	}
 
 	created := o.clock(t).Add(-time.Minute).UTC().Format(time.RFC3339Nano)
-	const v1 = message.DeliveryContractVersion
+	// The sender presents a token, so the value its route serves is the
+	// token's, and the certificate's is the one it does not.
+	const served = message.TokenDeliveryContractVersion
 	for _, tc := range []struct{ name, version, body string }{
 		{name: "no contract version", body: entryTo(recipientGRN, "entry-1", created)},
-		{name: "a version this route does not serve", version: "durable-delivery.v2", body: entryTo(recipientGRN, "entry-1", created)},
-		{name: "no creation instant", version: v1, body: `{"recipient":"` + recipientGRN.String() + `","idempotencyKey":"entry-1","body":"hello"}`},
-		{name: "a creation instant that does not parse", version: v1, body: entryTo(recipientGRN, "entry-1", "yesterday")},
+		{name: "a version this route does not serve", version: message.DeliveryContractVersion, body: entryTo(recipientGRN, "entry-1", created)},
+		{name: "no creation instant", version: served, body: `{"recipient":"` + recipientGRN.String() + `","idempotencyKey":"entry-1","body":"hello"}`},
+		{name: "a creation instant that does not parse", version: served, body: entryTo(recipientGRN, "entry-1", "yesterday")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			status, version, body := outboxPost(t, sender, url, tc.version, tc.body)
 			assert.Equal(t, http.StatusBadRequest, status, string(body))
-			assert.Equal(t, v1, version)
+			assert.Equal(t, served, version)
 			assert.Contains(t, string(body), `"kind":"invalid_argument"`)
 			assert.Equal(t, 1, witnessed(), "the refusal swept the queue")
 			assert.Equal(t, 0, o.stored(t, senderGRN, "entry-1"), "the refusal stored the entry")
 		})
 	}
 
-	status, version, body := outboxPost(t, sender, url, v1, entryTo(recipientGRN, "entry-1", created))
+	status, version, body := outboxPost(t, sender, url, served, entryTo(recipientGRN, "entry-1", created))
 	require.Equal(t, http.StatusCreated, status, string(body))
-	assert.Equal(t, v1, version)
+	assert.Equal(t, served, version)
 	var stored machinegen.Message
 	require.NoError(t, json.Unmarshal(body, &stored))
 	assert.NotEmpty(t, stored.Id)
@@ -359,14 +361,14 @@ func TestOutbox_TheRouteRefusesWithoutItsContractOrCreationInstantBeforeAnyWrite
 	assert.Equal(t, "entry-1", stored.IdempotencyKey)
 	assert.Equal(t, 0, witnessed(), "control: the admitted write swept the queue")
 
-	status, _, body = outboxPost(t, sender, url, v1, entryTo(recipientGRN, "entry-1", created))
+	status, _, body = outboxPost(t, sender, url, served, entryTo(recipientGRN, "entry-1", created))
 	require.Equal(t, http.StatusCreated, status, string(body))
 	var replayed machinegen.Message
 	require.NoError(t, json.Unmarshal(body, &replayed))
 	assert.Equal(t, stored.Id, replayed.Id, "a retry is answered with the stored message")
 
 	foreign := scopedGRN("globex", agent.ServiceType, "0a1b2c3d4e5f6071")
-	status, _, body = outboxPost(t, sender, url, v1, entryTo(foreign, "entry-2", created))
+	status, _, body = outboxPost(t, sender, url, served, entryTo(foreign, "entry-2", created))
 	require.Equal(t, http.StatusCreated, status, string(body))
 	var refusal machinegen.Message
 	require.NoError(t, json.Unmarshal(body, &refusal))

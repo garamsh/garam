@@ -24,8 +24,6 @@ var (
 		operator.ErrUnsupportedContract, operator.ErrUnsupportedTokenAuthorityContract}
 	executionValues = contractValues{agent.ExecutionContractVersion, agent.TokenExecutionContractVersion,
 		agent.ErrUnsupportedExecutionContract, agent.ErrUnsupportedTokenExecutionContract}
-	cutoverValues = contractValues{agent.CutoverContractVersion, agent.TokenCutoverContractVersion,
-		agent.ErrUnsupportedCutoverContract, agent.ErrUnsupportedTokenCutoverContract}
 	enrollmentValues = contractValues{agent.EnrollmentContractVersion, agent.TokenEnrollmentContractVersion,
 		agent.ErrUnsupportedEnrollmentContract, agent.ErrUnsupportedTokenEnrollmentContract}
 	deliveryValues = contractValues{message.DeliveryContractVersion, message.TokenDeliveryContractVersion,

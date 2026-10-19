@@ -3,10 +3,9 @@
 What the adapter garam ships must do, and what it rests on to do it.
 
 Pending removal
-([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
-the adapter's legacy mode goes in the fifth pull request of #1593, after
-#1594 moves aurora's agent off it. What this document says of it holds
-until then.
+([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)):
+the certificate mode goes in G4 (#1494), and what this document says
+of it holds until then. The adapter's legacy mode is gone (ADR-0118).
 
 ## Contents
 - What it is
@@ -31,9 +30,9 @@ garam is a message API and an agent platform speaks a different
 protocol. The adapter is the piece between them: it long-polls garam,
 posts into the platform's gateway over loopback, watches the gateway's
 event stream, reports back, and forwards the replies the platform
-records in its outbox. Where the agent is fenced it first obtains the
-activation of the platform's running generation from the lifecycle
-authority (§Activation and runtime status). garam writes it as a
+records in its outbox. It first obtains the activation of the
+platform's running generation from the lifecycle authority
+(§Activation and runtime status). garam writes it as a
 library with a thin binary and an orchestrator deploys it
 ([ADR-0013](./adr/0013-agent-messaging.md)); we own its correctness and
 they own its placement.
@@ -76,9 +75,9 @@ it.
 | Setting | Holds | Where it is set |
 |---|---|---|
 | `GARAM_ADAPTER_TOKEN_FILE` | The agent token garam accepts: minted with no audience | Every token-mode adapter; it selects the mode |
-| `GARAM_ADAPTER_CONTROL_TOKEN_FILE` | The token the lifecycle authority accepts: on a managed agent, an agent token minted with the control service as its audience; on a standalone host, the token the supervisor draws for the generation, which garam never issued ([agents.md](./agents.md) §The host's runner) | A fenced token-mode adapter, beside the three control settings |
+| `GARAM_ADAPTER_CONTROL_TOKEN_FILE` | The token the lifecycle authority accepts: on a managed agent, an agent token minted with the control service as its audience; on a standalone host, the token the supervisor draws for the generation, which garam never issued ([agents.md](./agents.md) §The host's runner) | Every token-mode adapter, beside the three control settings |
 | `GARAM_ADAPTER_SERVER_ROOT_FILE` | The garam server root `mintAgentToken` answers as `serverRootPem` | Every adapter |
-| `GARAM_ADAPTER_CONTROL_ROOT_FILE` | The root the control service's serving certificate chains to | A fenced adapter, as in the certificate mode |
+| `GARAM_ADAPTER_CONTROL_ROOT_FILE` | The root the control service's serving certificate chains to | Every adapter, as in the certificate mode |
 
 - **One credential mode, chosen at startup.** `GARAM_ADAPTER_TOKEN_FILE`
   and `GARAM_ADAPTER_TLS_CERT_FILE`/`GARAM_ADAPTER_TLS_KEY_FILE` are two
@@ -86,12 +85,6 @@ it.
   other. `GARAM_ADAPTER_CONTROL_TOKEN_FILE` is required beside the
   control settings in the token mode and refused anywhere else
   (`internal/cli/delivery.go`).
-- **An unfenced adapter runs on its garam token alone.** A
-  `Garam`-source agent of the Operator, which garam-agent-operator ADR
-  0068 leaves with no control settings, is named
-  `GARAM_ADAPTER_TOKEN_FILE` and nothing of control's; its operator
-  mints and refreshes the token as for any agent it holds
-  ([agents.md](./agents.md) §Tokens in place of certificates).
 - **The file format is the token alone**: `garam_at_` and 64 lowercase
   hex characters, which `api/machine.yaml` spells for `AgentToken`.
   Carriage returns and newlines after it are ignored; any other
@@ -125,8 +118,7 @@ it.
   token changes neither the identifier nor the placement token.
 - **A 401 in the token mode is undecided.** An expired token, one not
   yet replaced and one a reassignment or a recovery refused all answer
-  it, and garam answers it to an unfenced adapter of an agent already
-  cut over too. The call is made again after a backoff that doubles up
+  it. The call is made again after a backoff that doubles up
   to the configured ceiling, reading the file again each time, so a
   replacement whose bytes match the last is still tried. Protected work
   waits and the outbox is kept. A file's change is never needed to
@@ -142,8 +134,8 @@ it.
 
 `internal/delivery/token_mode_test.go` holds the adapter's reading,
 retrying and re-arming against stand-ins.
-`tests/integration/adapter_token_test.go` holds the unfenced and fenced
-modes, the two audiences and a recovery against the real listener, and
+`tests/integration/adapter_token_test.go` holds the token mode, the two
+audiences and a recovery against the real listener, and
 `internal/cli/delivery_test.go` holds the settings.
 
 ## API access after common enrollment
@@ -556,9 +548,9 @@ pins it for this adapter.
   and origin generation. Nothing in the entry is rewritten before it
   goes; a delivery or a refusal is logged by its identifier, origin
   and in-reply-to, never its content.
-- **An outbox is optional where the agent is legacy.** Where none is
-  named nothing is forwarded, as before this contract; the fenced mode
-  requires one.
+- **Every adapter forwards an outbox.** `GARAM_ADAPTER_OUTBOX_DIR` is
+  required beside the control settings, and an adapter naming none
+  refuses to start (`internal/cli/delivery.go`).
 - **What is still not promised.** A turn interrupted before it
   committed may repeat its effects. Delivery stays at-least-once and
   completion stays §Completion's rule.
@@ -582,13 +574,11 @@ contract, `agent-execution.v1`, and in the token mode
 authority serves: the Operator control service when managed, the local
 supervisor when standalone or direct.
 
-- **The deployment chooses the mode.** Without control settings the
-  adapter is legacy, for an agent never cut over: no activation, no
-  token, no status report. With them it is fenced, and what follows
-  applies; some but not all is refused at startup, and neither mode
-  falls back to the other. garam refuses a cut-over agent's claim made
-  without a token, so a misconfigured legacy adapter carries nothing.
-  The legacy mode lasts until #1171 retires its source.
+- **Every adapter is fenced.** The three control settings are required
+  together, and an adapter naming none or some refuses to start
+  (`internal/cli/delivery.go`): garam admits no agent's write without
+  an activation's token ([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)), so an adapter with
+  no lifecycle authority to ask could carry nothing.
 - **Control authenticates the agent's leaf**, read per handshake, over
   mTLS; the leaf names the GRN in the path, and garam's token never
   goes to control. In the token mode it authenticates the control token
@@ -596,7 +586,7 @@ supervisor when standalone or direct.
 - **A standalone adapter dials its supervisor's socket.**
   `GARAM_ADAPTER_CONTROL_SOCKET` makes every control connection reach
   that unix socket while TLS still verifies the control URL's host;
-  it is valid only beside the fenced mode's settings, and nothing else
+  it is valid only beside the control settings, and nothing else
   in the client changes (ADR-0085).
 - **Every protected call carries the activation's token**, as
   `Authorization: Garam-Execution <token>`, or in a `Garam-Execution`

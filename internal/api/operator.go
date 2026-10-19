@@ -52,10 +52,6 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 // registers: registering grants nothing, and this withdraws what an
 // operator runs on, so a member who may add one does not thereby hold
 // the power to stop one.
-//
-// The refusal for an operator a definition names is the store's,
-// decided by the foreign key beside the write: this handler holds no
-// second count of what names the operator.
 func (s *Server) DeleteOperator(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug) {
 	u, err := s.currentUser(r)
 	if err != nil {

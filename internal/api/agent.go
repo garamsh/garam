@@ -91,93 +91,6 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen
 	writeJSON(w, http.StatusOK, agentToAPI(a, assignment, generation))
 }
 
-// ListAgentDefinitions lists the agents the org says it should have.
-// Requires the member role. An entry is a definition and not an agent:
-// nothing here reads the agent rows an operator reports. It leaves out
-// each definition whose agent the caller is denied agent:read on, as
-// ListAgents leaves out the agent (ADR-0115).
-func (s *Server) ListAgentDefinitions(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
-	u, err := s.currentUser(r)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	c, err := s.authorizedCaller(r, orgGRN(orgSlug), orgGRN(orgSlug), u, org.ActionAgentRead)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	definitions, err := s.agents.ListDefinitionsByOrg(r.Context(), orgGRN(orgSlug))
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	definitions, err = visible(s, r, c, org.ActionAgentRead, definitions, func(d *agent.Definition) BatchObject { return onItself(d.Agent()) })
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	out := make([]apigen.AgentDefinition, 0, len(definitions))
-	for _, d := range definitions {
-		out = append(out, definitionToAPI(d))
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-// GetAgentDefinition returns the definition that minted an agent of the
-// org. Requires the member role. It answers what the org asked for and
-// nothing an operator reported.
-func (s *Server) GetAgentDefinition(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, agentSlug apigen.AgentSlug) {
-	u, err := s.currentUser(r)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	g := agentGRN(orgSlug, agentSlug)
-	if err := s.authorizeOn(r, orgGRN(orgSlug), g, u, org.ActionAgentRead); err != nil {
-		writeError(w, err)
-		return
-	}
-	d, err := s.agents.GetDefinition(r.Context(), g)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, definitionToAPI(d))
-}
-
-// RenameAgentDefinition changes what the org calls a defined agent and
-// nothing else (ADR-0075). Requires the member role, on an action of
-// its own: the name is not a value any operator reads.
-func (s *Server) RenameAgentDefinition(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, agentSlug apigen.AgentSlug) {
-	u, err := s.currentUser(r)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	g := agentGRN(orgSlug, agentSlug)
-	if err := s.authorizeOn(r, orgGRN(orgSlug), g, u, org.ActionAgentRename); err != nil {
-		writeError(w, err)
-		return
-	}
-	var body apigen.AgentDefinitionPatch
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, err)
-		return
-	}
-	name, err := agent.ParseName(body.Name)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	d, err := s.agents.RenameDefinition(r.Context(), g, name)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, definitionToAPI(d))
-}
-
 // assignmentsOf resolves the org's assignments in one query, keyed by
 // agent GRN. An agent assigned between the two reads is absent from the
 // map: the reads are not atomic, and the next request carries it.
@@ -237,26 +150,6 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment, generation *agent.
 			Epoch:       assignment.Epoch(),
 			Since:       assignment.UpdatedAt(),
 		}
-	}
-	return out
-}
-
-// definitionToAPI renders a Definition. It shares no field with
-// [agentToAPI]: a definition carries no state, because no one has
-// reported any (ADR-0026), and the agent GRN it names is the identity
-// minted for an agent that may not exist.
-func definitionToAPI(d *agent.Definition) apigen.AgentDefinition {
-	out := apigen.AgentDefinition{
-		AgentGrn:    d.Agent().String(),
-		OrgGrn:      d.Organization().String(),
-		Name:        string(d.Name),
-		OperatorGrn: d.Operator().String(),
-		Values:      apigen.AgentValues(d.Values()),
-		DefinedBy:   d.DefinedBy().String(),
-		CreatedAt:   d.CreatedAt(),
-	}
-	if d.Cutover != nil {
-		out.Cutover = &apigen.AgentDefinitionCutover{Stage: apigen.AgentDefinitionCutoverStage(*d.Cutover)}
 	}
 	return out
 }

@@ -4,12 +4,10 @@ import {
   getOrg,
   getProject,
   listProjectMembers,
-  lookupAgentDefinitions,
   lookupAgents,
   lookupOrgMembers,
   memberLabel,
   memberName,
-  refusedAgentLists,
   resolveTeamMembers,
   teamCandidates,
 } from "@/features/orgs";
@@ -78,14 +76,13 @@ export default async function ProjectPage({ params }: Params) {
       check: { action: "project:delete", resource: scope },
     },
   ]);
-  const [organization, read, members, people, agents, definitions, readings] =
+  const [organization, read, members, people, agents, readings] =
     await Promise.all([
       getOrg(org),
       getProject(org, project),
       listProjectMembers(org, project),
       lookupOrgMembers(org),
       lookupAgents(org),
-      lookupAgentDefinitions(org),
       access,
     ]);
   const may = accessDecisions(readings);
@@ -95,8 +92,7 @@ export default async function ProjectPage({ params }: Params) {
     read.status === "unreachable" ||
     members.status === "unreachable" ||
     people.status === "unreachable" ||
-    agents.status === "unreachable" ||
-    definitions.status === "unreachable"
+    agents.status === "unreachable"
   ) {
     return (
       <div className="flex flex-col gap-6">
@@ -115,13 +111,9 @@ export default async function ProjectPage({ params }: Params) {
   }
 
   const name = read.data.name;
-  const directory = { agents, definitions };
+  const directory = { agents };
   const resolved = resolveTeamMembers(members.data, people, directory);
-  // Agents are known by two lists. Both refused, no agent can be
-  // chosen; one refused, the other still offers some, and the page says
-  // some may be missing rather than none can be chosen (ADR-0075).
-  const refusedAgents = refusedAgentLists(directory);
-  const agentsUnlisted = refusedAgents.length === 2;
+  const agentsUnlisted = agents.status === "forbidden";
   const unlisted = [
     ...(people.status === "forbidden" ? ["people"] : []),
     ...(agentsUnlisted ? ["agents"] : []),
@@ -157,7 +149,6 @@ export default async function ProjectPage({ params }: Params) {
           scope={{ kind: "project", id: project, name }}
           candidates={teamCandidates(members.data, people, directory)}
           unlisted={unlisted}
-          partlyListed={agentsUnlisted ? [] : refusedAgents}
         />
       )}
     </>

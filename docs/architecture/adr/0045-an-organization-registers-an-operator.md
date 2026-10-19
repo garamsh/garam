@@ -4,7 +4,9 @@
 > and the delete-route item of §Rejected alternatives, are superseded by
 > [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md);
 > "a registration grants nothing; it issues no credential" is superseded
-> by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+> by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md);
+> a definition naming a registered operator is superseded by
+> [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
 > Date: 2026-08-25
 
 ## Contents

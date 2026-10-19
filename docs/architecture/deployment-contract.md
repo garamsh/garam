@@ -454,13 +454,12 @@ alone. What binds instead is who signs them
 - **An operator with no registration does not authenticate.** The
   machine listener reads the record per connection, so the registration
   is a precondition for the certificate rather than a separate tidiness
-  the definition route happens to want
   ([ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)).
   **This is what a deployment carrying operators registered before that
   decision has to act on**: one that bootstrapped out of band and
-  skipped the registration had an operator that authenticated and no
-  definition could name, and now has one that does not authenticate at
-  all. Registering the identifier is the whole repair, it needs no
+  skipped the registration had an operator that authenticated with no
+  record, and now has one that does not authenticate at all.
+  Registering the identifier is the whole repair, it needs no
   certificate operation, and registering a GRN that already holds a
   certificate is permitted — the token it mints beside the record is
   one that operator does not need and does not have to spend.

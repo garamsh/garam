@@ -100,12 +100,10 @@ var actionRules = map[string]actionRule{
 
 	org.ActionAgentRead:            {on: []apigen.PermissionResourceType{onOrg, kindAgent}},
 	org.ActionAgentWatch:           {on: []apigen.PermissionResourceType{kindAgent}},
-	org.ActionAgentRename:          {on: []apigen.PermissionResourceType{kindAgent}},
 	org.ActionAgentEnroll:          {on: []apigen.PermissionResourceType{onOrg, kindAgent}, decidedBy: decidedByEnroll},
 	org.ActionAgentCreate:          {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},
 	org.ActionAgentConfigure:       {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentRecover:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
-	org.ActionAgentCutover:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentReplace:         {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentExecutionRead:   {on: []apigen.PermissionResourceType{kindAgent}, decidedBy: decidedByGrant},
 	org.ActionAgentTemplateRead:    {on: []apigen.PermissionResourceType{onOrg}},

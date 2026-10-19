@@ -67,19 +67,6 @@ WHERE grn = sqlc.arg('grn')
   )
 RETURNING *;
 
--- ShareAgentExecution holds the agent's execution row FOR SHARE until
--- the transaction ends: a cutover switch, which takes it FOR UPDATE,
--- either commits before it or waits for the transaction to end.
--- name: ShareAgentExecution :one
-SELECT mode FROM agent_executions WHERE agent_grn = $1 FOR SHARE;
-
--- IsAgentCutOver is a statement of its own after ShareAgentExecution,
--- so its snapshot is taken once that lock is granted.
--- name: IsAgentCutOver :one
-SELECT EXISTS (
-    SELECT 1 FROM agent_cutovers WHERE agent_grn = $1 AND stage = 'switched'
-);
-
 -- name: ReportAgentRuntimeState :one
 UPDATE agents SET
     runtime_state = sqlc.arg('runtime_state'),
@@ -91,92 +78,19 @@ WHERE grn = sqlc.arg('grn')
   )
 RETURNING *;
 
--- A definition is read with the stage of its GRN's open cutover
--- attempt, if any: a frozen or switched definition is archival, its
--- values preserved and no longer the source (ADR-0086). Nothing here
--- writes one: garam accepts no new definition, and an existing one
--- keeps its operator and values (ADR-0090, migration 000035); its
--- name is what RenameAgentDefinition changes alone.
--- name: GetAgentDefinition :one
-SELECT d.*, c.stage AS cutover_stage
-FROM agent_definitions d
-LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
-WHERE d.agent_grn = $1;
-
--- name: RenameAgentDefinition :one
-WITH renamed AS (
-    UPDATE agent_definitions SET name = sqlc.arg('name')
-    WHERE agent_definitions.agent_grn = sqlc.arg('agent_grn')
-    RETURNING *
-)
-SELECT d.*, c.stage AS cutover_stage
-FROM renamed d
-LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back';
-
--- SearchAgentDefinitionsByOrg answers the org's definitions whose name
--- or agent identifier (the GRN's fifth segment) matches pattern, case
--- aside, ordered by agent GRN.
--- name: SearchAgentDefinitionsByOrg :many
-SELECT agent_grn, name FROM agent_definitions
+-- SearchAgentsByOrg answers the org's agents whose identifier (the
+-- GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+-- name: SearchAgentsByOrg :many
+SELECT grn FROM agents
 WHERE org_grn = sqlc.arg('org_grn')
-  AND (name ILIKE sqlc.arg('pattern') OR split_part(agent_grn, ':', 5) ILIKE sqlc.arg('pattern'))
-ORDER BY agent_grn;
-
--- SearchUndefinedAgentsByOrg answers the org's agents no definition
--- names whose identifier matches pattern, case aside, ordered by GRN.
--- name: SearchUndefinedAgentsByOrg :many
-SELECT a.grn FROM agents a
-WHERE a.org_grn = sqlc.arg('org_grn')
-  AND split_part(a.grn, ':', 5) ILIKE sqlc.arg('pattern')
-  AND NOT EXISTS (SELECT 1 FROM agent_definitions d WHERE d.agent_grn = a.grn)
-ORDER BY a.grn;
-
--- name: ListAgentDefinitionsByOrg :many
-SELECT d.*, c.stage AS cutover_stage
-FROM agent_definitions d
-LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
-WHERE d.org_grn = $1
-ORDER BY d.agent_grn;
-
--- The claim state is the assignment the claim wrote: an unclaimed
--- definition has none, and a claimed one binds the operator it names.
--- An agent whose execution is fenced, or whose cutover is frozen or
--- switched, is moving or has moved to the Operator control service,
--- and its definition is no longer the operator's source (ADR-0077,
--- ADR-0086), so it is not listed.
--- name: ListAgentDefinitionsByOperator :many
-SELECT d.*, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
-FROM agent_definitions d
-LEFT JOIN agent_assignments a ON a.agent_grn = d.agent_grn
-LEFT JOIN agent_executions e ON e.agent_grn = d.agent_grn
-WHERE d.operator_grn = $1 AND (e.mode IS NULL OR e.mode = 'legacy')
-  AND NOT EXISTS (
-      SELECT 1 FROM agent_cutovers c
-      WHERE c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
-  )
-ORDER BY d.agent_grn;
-
--- A claim holds its organization's row before the definition's, with
--- the KEY SHARE lock the agent insert's foreign key takes anyway: an
--- organization's deletion holds that row before its cascade reaches
--- the definition, so the two take them in one order (#1441).
--- name: HoldAgentOrg :one
-SELECT grn FROM orgs WHERE grn = $1 FOR KEY SHARE;
-
--- LockAgentDefinition is the lock a claim serializes on: two claims of
--- one definition take the row lock in turn, and the second reads the
--- assignment the first wrote.
--- name: LockAgentDefinition :one
-SELECT * FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE;
+  AND split_part(grn, ':', 5) ILIKE sqlc.arg('pattern')
+ORDER BY grn;
 
 -- name: CountAgentsByOrg :one
--- The agents and the definitions the organization holds, which
--- deleting the organization removes with it. One row, so the two
--- numbers describe one moment. An agent's assignment goes with the
--- agent and is not counted apart from it.
-SELECT
-    (SELECT count(*) FROM agents            a WHERE a.org_grn = $1) AS agent_count,
-    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count;
+-- The agents the organization holds, which deleting the organization
+-- removes with it. An agent's assignment goes with the agent and is
+-- not counted apart from it.
+SELECT count(*) AS agent_count FROM agents WHERE org_grn = $1;
 
 -- AdmitExecution runs the agent execution fence (ADR-0080) as the
 -- first statement of a protected write's transaction; the row it locks
@@ -188,12 +102,12 @@ SELECT agent_execution_admit(
 )::text;
 
 -- The execution a token is minted against, held FOR SHARE so a
--- recovery or a cutover switch committing first is seen and one
--- committing after waits for the mint (ADR-0100). The assignment and
--- the cutover are read by statements of their own after it, so their
--- snapshot is taken once this lock is granted.
+-- recovery committing first is seen and one committing after waits
+-- for the mint (ADR-0100). The assignment is read by a statement of
+-- its own after it, so its snapshot is taken once this lock is
+-- granted.
 -- name: ShareAgentLineage :one
-SELECT mode, lineage FROM agent_executions WHERE agent_grn = $1 FOR SHARE;
+SELECT lineage FROM agent_executions WHERE agent_grn = $1 FOR SHARE;
 
 -- name: RecordAgentToken :exec
 INSERT INTO agent_tokens (token_hash, serial, agent_grn, assignee_grn, epoch, lineage,

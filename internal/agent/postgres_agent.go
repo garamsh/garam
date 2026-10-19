@@ -140,38 +140,6 @@ func (s *PostgresStore) ReportRuntimeState(ctx context.Context, agentGRN grn.GRN
 	return rowToAgent(row)
 }
 
-// AdmitLegacyIssuance answers whether the operator's certificate
-// route may answer for the agent now: its execution is still legacy
-// and its cutover is not switched. Both are read under the execution
-// row FOR SHARE, so a switch committing first is seen.
-func (s *PostgresStore) AdmitLegacyIssuance(ctx context.Context, agentGRN grn.GRN) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-	q := s.q.WithTx(tx)
-	stored, err := q.ShareAgentExecution(ctx, agentGRN.String())
-	if err != nil {
-		return pgxerr.Classify(err, "execution mode", ErrAgentNotFound, nil)
-	}
-	mode, err := ParseMode(stored)
-	if err != nil {
-		return errorx.Wrap(err, "stored execution mode", errorx.KindInternal)
-	}
-	if mode == ModeFenced {
-		return ErrIssuedByLifecycle
-	}
-	cutOver, err := q.IsAgentCutOver(ctx, agentGRN.String())
-	if err != nil {
-		return pgxerr.Classify(err, "cutover", nil, nil)
-	}
-	if cutOver {
-		return ErrCutOver
-	}
-	return nil
-}
-
 // narrowEpoch converts a reported epoch to the width of the `epoch`
 // column. The module converts to a sqlc parameter without checking;
 // here the value decides the fence, and one that truncates onto the
@@ -228,16 +196,30 @@ func rowToAgent(row db.Agent) (*Agent, error) {
 	}, nil
 }
 
-// CountByOrg counts the organization's agents and definitions, which
-// deleting the organization removes with it. One
-// query, so the numbers describe one moment rather than several.
+// CountByOrg counts the organization's agents, which deleting the
+// organization removes with it.
 func (s *PostgresStore) CountByOrg(ctx context.Context, orgGRN grn.GRN) (OrgCounts, error) {
-	row, err := s.q.CountAgentsByOrg(ctx, orgGRN.String())
+	count, err := s.q.CountAgentsByOrg(ctx, orgGRN.String())
 	if err != nil {
 		return OrgCounts{}, pgxerr.Classify(err, "count agents by org", nil, nil)
 	}
-	return OrgCounts{
-		Agents:      int(row.AgentCount),
-		Definitions: int(row.DefinitionCount),
-	}, nil
+	return OrgCounts{Agents: int(count)}, nil
+}
+
+// SearchByOrg returns the organization's agents whose identifier holds
+// n, ordered by GRN.
+func (s *PostgresStore) SearchByOrg(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]grn.GRN, error) {
+	rows, err := s.q.SearchAgentsByOrg(ctx, db.SearchAgentsByOrgParams{OrgGrn: orgGRN.String(), Pattern: pgxtype.Contains(n.Text())})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "search agents", nil, nil)
+	}
+	found := make([]grn.GRN, 0, len(rows))
+	for _, row := range rows {
+		g, err := grn.Parse(row)
+		if err != nil {
+			return nil, errorx.Wrap(err, "agent grn", errorx.KindInternal)
+		}
+		found = append(found, g)
+	}
+	return found, nil
 }

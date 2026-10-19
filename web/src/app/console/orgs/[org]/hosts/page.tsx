@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import {
   UNNAMED_AGENT,
   getOrg,
-  lookupAgentDefinitions,
   lookupAgentEnrollments,
   lookupAgentSupervisors,
   slugFromGrn,
@@ -83,14 +82,12 @@ function approvalWhen(listing: AgentEnrollmentListing): ApprovalRow["when"] {
  */
 export default async function HostsPage({ params }: Params) {
   const { org } = await params;
-  const [organization, enrollments, supervisors, definitions, may] =
-    await Promise.all([
-      getOrg(org),
-      lookupAgentEnrollments(org),
-      lookupAgentSupervisors(org),
-      lookupAgentDefinitions(org),
-      checkPermissions(org, { enroll: { action: "agent:enroll" } }),
-    ]);
+  const [organization, enrollments, supervisors, may] = await Promise.all([
+    getOrg(org),
+    lookupAgentEnrollments(org),
+    lookupAgentSupervisors(org),
+    checkPermissions(org, { enroll: { action: "agent:enroll" } }),
+  ]);
 
   const denied = may.get("enroll") === "denied" ? DENIED : null;
   const approve =
@@ -117,14 +114,8 @@ export default async function HostsPage({ params }: Params) {
     );
   }
 
-  const names = new Map(
-    (definitions.status === "ok" ? definitions.data : []).map((definition) => [
-      definition.agentGrn,
-      definition.name,
-    ]),
-  );
   const agentOf = (grn: string): HostAgent => ({
-    name: names.get(grn) ?? UNNAMED_AGENT,
+    name: UNNAMED_AGENT,
     href: orgHref(org, `agents/${slugFromGrn(grn)}`),
   });
   const hostOf = new Map(

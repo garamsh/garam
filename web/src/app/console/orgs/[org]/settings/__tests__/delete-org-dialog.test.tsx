@@ -75,7 +75,6 @@ describe("delete organization dialog", () => {
       "1team",
       "1project",
       "1agent",
-      "1agent definition",
       "1operator",
       "2policies",
       "1consent relation, which the other organization loses too",

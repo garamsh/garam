@@ -182,8 +182,6 @@ func refusalOf(answer string) error {
 		return nil
 	case "unknown_agent":
 		return errorx.New(errorx.KindNotFound, "agent not found")
-	case "not_cut_over":
-		return errorx.New(errorx.KindFailedPrecondition, "agent has not cut over to activated execution")
 	case "token_required":
 		return errorx.New(errorx.KindUnauthenticated, "execution token required")
 	case "token_stale":

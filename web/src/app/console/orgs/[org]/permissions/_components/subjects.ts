@@ -3,11 +3,8 @@ import {
   agentChoiceLabel,
   directoryAgents,
   kindFromGrn,
-  lookUpAgent,
-  refusedAgentLists,
   slugFromGrn,
   type Agent,
-  type AgentDefinition,
   type Catalog,
   type Group,
   type GroupMember,
@@ -22,15 +19,12 @@ import type { ChoiceGroup } from "./attach-policy-form";
 
 /**
  * The organization's teams, people and agents, as the page read them.
- * Agents are known by two lists: those operators reported and those the
- * organization defined, which have a GRN before any operator claims
- * them (ADR-0075).
+ * Agents are known by the one list garam holds (ADR-0118).
  */
 export type Catalogs = {
   teams: Catalog<Group>;
   people: Catalog<Member>;
   agents: Catalog<Agent>;
-  definitions: Catalog<AgentDefinition>;
 };
 
 /** A team, person or agent of the organization, by name. */
@@ -98,9 +92,8 @@ function personLabel(member: Member): string {
 
 /**
  * The subjects of one kind, or null where garam refused that list. An
- * agent is labelled by the name its definition gives it, with its
- * identifier beside it since names repeat; it is null only where both
- * agent lists were refused.
+ * agent is labelled with its identifier beside what stands in its
+ * name's place, since garam holds no name for one.
  */
 function subjectsOf(catalogs: Catalogs, kind: SubjectKind): Subject[] | null {
   const subject = (grn: string, label: string): Subject => ({
@@ -121,8 +114,7 @@ function subjectsOf(catalogs: Catalogs, kind: SubjectKind): Subject[] | null {
           )
         : null;
     case "agent":
-      return catalogs.agents.status === "forbidden" &&
-        catalogs.definitions.status === "forbidden"
+      return catalogs.agents.status === "forbidden"
         ? null
         : directoryAgents(catalogs).map((agent) =>
             subject(agent.grn, agentChoiceLabel(agent)),
@@ -138,17 +130,6 @@ export function listSubjects(catalogs: Catalogs): Subject[] {
 /** The kinds whose list garam refused the caller. */
 export function refusedKinds(catalogs: Catalogs): SubjectKind[] {
   return SUBJECT_KINDS.filter((kind) => subjectsOf(catalogs, kind) === null);
-}
-
-/**
- * The agent lists refused where the other was read: agents are offered,
- * but not every one, so the page says which list it could not read
- * rather than letting the choices pass for all of them.
- */
-export function partlyListedAgents(catalogs: Catalogs): string[] {
-  return subjectsOf(catalogs, "agent") === null
-    ? []
-    : refusedAgentLists(catalogs);
 }
 
 /**
@@ -178,10 +159,6 @@ export function describeSubject(
   const found = listed.find((subject) => subject.grn === grn);
   if (found !== undefined) {
     return { grn, kind, identifier, label: found.label, lookup: "found" };
-  }
-  // An agent neither list holds is missing only where both were read.
-  if (kind === "agent" && lookUpAgent(catalogs, grn).lookup === "refused") {
-    return { grn, kind, identifier, label: identifier, lookup: "refused" };
   }
   return { grn, kind, identifier, label: null, lookup: "missing" };
 }
@@ -225,9 +202,7 @@ export function resolveSubjectQuery(
     (candidate) => candidate.identifier === identifier,
   );
   if (subject !== undefined) return { status: "found", subject };
-  return kind === "agent" && partlyListedAgents(catalogs).length > 0
-    ? { status: "refused", kind }
-    : { status: "missing" };
+  return { status: "missing" };
 }
 
 /** A policy and what reading its attachments answered. */

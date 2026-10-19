@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
@@ -120,25 +119,20 @@ func (s *Server) searchPeople(r *http.Request, c *caller, n listfilter.Needle) (
 	return out, nil
 }
 
-// searchAgents finds the org's agents by their definition's name or
-// their identifier, leaving out each one whose agent:read c is denied.
+// searchAgents finds the org's agents by their identifier, leaving out
+// each one whose agent:read c is denied, as listAgents does.
 func (s *Server) searchAgents(r *http.Request, c *caller, n listfilter.Needle) ([]apigen.FoundObject, error) {
 	agents, err := s.agents.SearchByOrg(r.Context(), c.org, n)
 	if err != nil {
 		return nil, err
 	}
-	agents, err = visible(s, r, c, org.ActionAgentRead, agents, func(a agent.Found) BatchObject { return onItself(a.GRN) })
+	agents, err = visible(s, r, c, org.ActionAgentRead, agents, onItself)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]apigen.FoundObject, 0, len(agents))
 	for _, a := range agents {
-		found := apigen.FoundObject{Grn: a.GRN.String()}
-		if a.Name != nil {
-			name := string(*a.Name)
-			found.Name = &name
-		}
-		out = append(out, found)
+		out = append(out, apigen.FoundObject{Grn: a.String()})
 	}
 	return out, nil
 }

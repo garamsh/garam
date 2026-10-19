@@ -418,9 +418,9 @@ ADRs:
 - [0015](./adr/0015-operator-identity.md) — operators authenticate as
   agents do; key material travels as files; mTLS for operators, the
   out-of-band first certificate and the shared expiry are superseded by
-  0100
+  0100, and an operator obtaining an agent's certificate by 0118
 - [0016](./adr/0016-ca-key-custody.md) — a certificate authority's key
-  is sealed by a key the process holds; superseded by 0100
+  is sealed by a key the process holds; superseded by 0100 and 0118
 - [0017](./adr/0017-machine-process.md) — machine identities are served
   by a process of their own
 - [0018](./adr/0018-delivery-acknowledgement.md) — a message is
@@ -442,7 +442,8 @@ ADRs:
   unattached policy's org scope is the caller's to hold
 - [0026](./adr/0026-the-console-defines-an-agent.md) — the console
   defines an agent and an operator reads that definition; the runtime
-  values are superseded by 0077, and the define route by 0090
+  values are superseded by 0077, the define route by 0090, and the
+  definition garam holds by 0118
 - [0027](./adr/0027-a-watch-crosses-processes-through-postgres.md) — a
   watch crosses between processes through Postgres
 - [0028](./adr/0028-oauth-state-is-a-server-side-record.md) — a login's
@@ -457,11 +458,12 @@ ADRs:
   as its remedy is superseded by 0117
 - [0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)
   — garam ships the command that mints an operator's first certificate;
-  superseded by 0100
+  superseded by 0100 and 0118
 - [0033](./adr/0033-an-operator-claims-the-agent-a-definition-mints.md)
   — an operator claims the agent a definition mints; superseded by
   0077 as the controller's source and as how a managed agent is
-  created, and by 0100 as what admits it to a certificate route
+  created, by 0100 as what admits it to a certificate route, and by
+  0118 in what was left of the definition read and the claim
 - [0034](./adr/0034-a-delivered-message-keeps-its-key-and-drops-its-body.md)
   — a delivered message keeps its key and drops its body
 - [0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)
@@ -497,10 +499,11 @@ ADRs:
   ADR-0010
 - [0045](./adr/0045-an-organization-registers-an-operator.md) — an
   organization registers an operator, and a definition may name no
-  other; that a registration issues no credential is superseded by 0100
+  other; that a registration issues no credential is superseded by
+  0100, and a definition naming a registered operator by 0118
 - [0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)
   — an operator renews its certificate by presenting the one it holds,
-  and only the newest one renews; superseded by 0100
+  and only the newest one renews; superseded by 0100 and 0118
 - [0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md)
   — garam is partitioned by domain, and a boundary reaches a sibling
   through the surface that sibling declares
@@ -590,7 +593,8 @@ ADRs:
   and no stored serial. Supersedes ADR-0045's refusal of a delete route
   and, for an operator alone, ADR-0014's "revocation is by lifetime";
   an agent is answered without a read and its certificate is untouched;
-  its per-connection read is superseded by 0100's per-request one
+  its per-connection read is superseded by 0100's per-request one, and
+  the refusal while a definition names the operator by 0118
 - [0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
   — a development image shares the release repository, and its tag says
   it is not a release: one repository per image, a bare `X.Y.Z` for a
@@ -625,7 +629,8 @@ ADRs:
   apart from what operators report. Which service owns a template is
   superseded by 0077, its template writes and forms by 0088, and
   copying values into a new definition by 0090; the read of garam's own
-  templates is superseded by 0117
+  templates is superseded by 0117, and the agent's own name and its
+  rename by 0118
 - [0077](./adr/0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
   — execution definitions and templates move to a separately deployed
   Operator control service with its own store, garam keeps identity,
@@ -817,7 +822,7 @@ ADRs:
   credential issuance/exchange and separate target enrollment, keeping
   token transport, fencing and existing cohorts. 0101 is unchanged. The
   Operator shared-secret cohort and its removal gate are superseded by
-  0117.
+  0117, and the certificate path's removal gate by 0118.
 - [0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
   — the console is built on one design system: principles, oklch
   tokens in light and dark, Pretendard Variable and Geist Mono, a
@@ -925,4 +930,14 @@ ADRs:
   legacy definitions go once #1594 moves aurora's agent off them; each
   removal is its own pull request of #1593; supersedes 0086, 0088 and
   0090, and parts of 0031, 0064, 0073, 0075, 0077, 0080, 0082, 0084
-  and 0102
+  and 0102; item 5's gate is superseded by 0118
+- [0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
+  — every legacy path goes now with nothing migrated, and the
+  certificate path goes with them: #1593's fifth pull request removes
+  legacy execution mode, the staged cut-over, every agent definition
+  and the browser's definition surface without waiting on #1594, and
+  deletes aurora's legacy agent; G4 then removes the certificate path
+  without the seven days, keeping the listener's serving chain,
+  `serverRootPem` and the sealed authority rows; supersedes parts of
+  0015, 0026, 0033, 0045, 0070, 0075, 0102 and 0117, and 0016, 0032
+  and 0046 in what they decided of certificates

@@ -61,11 +61,14 @@ describe("a project's page", () => {
     await renderProject();
 
     await user.click(screen.getByRole("combobox", { name: "Person or agent" }));
-    await user.click(await screen.findByRole("option", { name: /^Scout / }));
+    // Presence: an option's name goes on to carry the identifier.
+    await user.click(
+      await screen.findByRole("option", { name: /^Unnamed agent / }),
+    );
     await user.click(screen.getByRole("button", { name: "Add to project" }));
 
-    expect(await screen.findByText("Added Scout.")).toBeInTheDocument();
-    expect(added).toEqual(["grn:acme:default:agent:9f2ac1b40d8e7a35"]);
+    expect(await screen.findByText("Added Unnamed agent.")).toBeInTheDocument();
+    expect(added).toEqual(["grn:acme:default:agent:1c3d5e7f90a2b4c6"]);
   });
 
   it("deletes the project only once its name is typed", async () => {

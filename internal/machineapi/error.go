@@ -71,8 +71,6 @@ func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 		case admissionRoute(r):
 			w.Header().Set(operator.ContractVersionHeader, agent.AdmissionContractVersion)
 			writeError(w, agent.ErrUnsupportedAdmissionContract)
-		case cutoverRoute(r):
-			served(w, r, "", cutoverValues)
 		case r.URL.Path == "/outbox-messages":
 			served(w, r, "", deliveryValues)
 		case tokenRoute(r):
@@ -102,16 +100,6 @@ func enrollmentRoute(r *http.Request) bool {
 	p := r.URL.Path
 	return (strings.HasPrefix(p, "/operators/") && strings.HasSuffix(p, "/managed-agents")) ||
 		(strings.HasPrefix(p, "/agents/") && strings.HasSuffix(p, "/initial-certificate"))
-}
-
-// cutoverRoute reports whether r is one of the cutover routes, whose
-// contract is agent-cutover: the read of an agent's cutover and the
-// three stages under it.
-func cutoverRoute(r *http.Request) bool {
-	p := r.URL.Path
-	return strings.HasPrefix(p, "/agents/") && (strings.HasSuffix(p, "/cutover") ||
-		strings.HasSuffix(p, "/cutover/freeze") || strings.HasSuffix(p, "/cutover/switch") ||
-		strings.HasSuffix(p, "/cutover/rollback"))
 }
 
 // standaloneRoute reports whether r is one of the standalone

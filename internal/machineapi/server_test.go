@@ -58,27 +58,14 @@ type stateReport struct {
 }
 
 // agentService is an agent.Service recording what the surface passed
-// it. Create answers no assignment: one is constructed by
-// internal/agent alone, and what the real service returns for a
-// created agent is the round trip in tests/integration.
+// it.
 type agentService struct {
-	certificate  *agent.Certificate
 	err          error
 	calls        []call
-	states       []*agent.DefinitionState
-	assignment   *agent.Assignment
 	provisioning []stateReport
 	runtime      []stateReport
 	// audiences is what each mint asked for.
 	audiences []*grn.GRN
-}
-
-func (s *agentService) Create(_ context.Context, operator grn.GRN) (*agent.Assignment, error) {
-	s.calls = append(s.calls, call{operator: operator})
-	if s.err == nil {
-		return nil, errorx.New(errorx.KindUnimplemented, "an assignment is internal/agent's to construct")
-	}
-	return nil, s.err
 }
 
 // MintAccessToken answers a token for the agent named, recording the
@@ -92,30 +79,6 @@ func (s *agentService) MintAccessToken(_ context.Context, caller, agentGRN grn.G
 	return &agent.AccessToken{Value: agent.AccessTokenPrefix + strings.Repeat("a", 64), Agent: agentGRN,
 		Assignee: caller, Epoch: 3, Audience: audience, ServerRootPEM: []byte("server root"),
 		ExpiresAt: time.Date(2026, time.October, 9, 13, 0, 0, 0, time.UTC)}, nil
-}
-
-func (s *agentService) IssueCertificate(_ context.Context, operator, agentGRN grn.GRN) (*agent.Certificate, error) {
-	s.calls = append(s.calls, call{operator: operator, subject: agentGRN})
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.certificate, nil
-}
-
-func (s *agentService) Definitions(_ context.Context, operator grn.GRN) ([]*agent.DefinitionState, error) {
-	s.calls = append(s.calls, call{operator: operator})
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.states, nil
-}
-
-func (s *agentService) Claim(_ context.Context, operator, agentGRN grn.GRN) (*agent.Assignment, error) {
-	s.calls = append(s.calls, call{operator: operator, subject: agentGRN})
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.assignment, nil
 }
 
 func (s *agentService) ReportProvisioningState(_ context.Context, operator, agentGRN grn.GRN, epoch int, state agent.ProvisioningState) error {
@@ -391,52 +354,6 @@ func do(t *testing.T, client *http.Client, method, url string) (int, string) {
 	return resp.StatusCode, string(body)
 }
 
-// TestServer_IssuesForTheAgentThePathNames covers what reaches the
-// agent service and what comes back. The refusals are asserted beside
-// the answer, because a 403 holds for a surface that refuses
-// everything and a 400 for one that parses nothing.
-func TestServer_IssuesForTheAgentThePathNames(t *testing.T) {
-	operator := operatorGRN("acme")
-	held := agentGRN("acme", "0a1b2c3d4e5f6071")
-	notAfter := time.Date(2026, time.August, 17, 12, 0, 0, 0, time.UTC)
-	agents := &agentService{certificate: &agent.Certificate{
-		CertificatePEM: []byte("certificate"),
-		PrivateKeyPEM:  []byte("private key"),
-		IssuerPEM:      []byte("issuer"),
-		ServerRootPEM:  []byte("server root"),
-		NotAfter:       notAfter,
-	}}
-	url, client := listener(t, agents, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, operator)
-
-	status, body := do(t, client, http.MethodPost, url+"/agents/"+held.String()+"/certificate")
-	require.Equal(t, http.StatusCreated, status)
-	assert.JSONEq(t, `{
-		"grn": "`+held.String()+`",
-		"certificatePem": "certificate",
-		"privateKeyPem": "private key",
-		"issuerPem": "issuer",
-		"serverRootPem": "server root",
-		"notAfter": "2026-08-17T12:00:00Z"
-	}`, body)
-	assert.Equal(t, []call{{operator: operator, subject: held}}, agents.calls,
-		"the caller is what the certificate named and the subject is what the path named")
-
-	// What the service refuses is a refusal here, and it carries the
-	// kind rather than a status invented at the boundary.
-	agents.err = agent.ErrNotAssigned
-	status, body = do(t, client, http.MethodPost, url+"/agents/"+held.String()+"/certificate")
-	assert.Equal(t, http.StatusForbidden, status)
-	assert.JSONEq(t, `{"kind":"permission_denied","message":"`+agent.ErrNotAssigned.Error()+`"}`, body)
-
-	// A path segment that is not a GRN names no agent, and the service
-	// is never asked about one.
-	before := len(agents.calls)
-	status, body = do(t, client, http.MethodPost, url+"/agents/bot-1/certificate")
-	assert.Equal(t, http.StatusBadRequest, status)
-	assert.Contains(t, body, `"kind":"invalid_argument"`)
-	assert.Len(t, agents.calls, before, "an unparsed subject reached the service")
-}
-
 // TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody keeps
 // every handler behind the identity the listener resolved. The answer
 // through the listener sits beside the refusals, because a 401 from
@@ -461,17 +378,13 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	t.Cleanup(plain.Close)
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071").String()
 	routes := map[string]struct{ method, path string }{
-		"identity":    {http.MethodGet, "/identity"},
-		"renewal":     {http.MethodPost, "/identity/certificate"},
-		"create":      {http.MethodPost, "/agents"},
-		"certificate": {http.MethodPost, "/agents/" + bot + "/certificate"},
-		"definitions": {http.MethodGet, "/definitions"},
-		"claim agent": {http.MethodPost, "/definitions/" + bot + "/claim"},
-		"post":        {http.MethodPost, "/messages"},
-		"claim":       {http.MethodPost, "/agents/" + bot + "/claims"},
-		"renew":       {http.MethodPost, "/agents/" + bot + "/claims/claim-1/renewal"},
-		"complete":    {http.MethodPost, "/agents/" + bot + "/claims/claim-1/completion"},
-		"forward":     {http.MethodPost, "/agents/" + bot + "/turn-events"},
+		"identity": {http.MethodGet, "/identity"},
+		"renewal":  {http.MethodPost, "/identity/certificate"},
+		"post":     {http.MethodPost, "/messages"},
+		"claim":    {http.MethodPost, "/agents/" + bot + "/claims"},
+		"renew":    {http.MethodPost, "/agents/" + bot + "/claims/claim-1/renewal"},
+		"complete": {http.MethodPost, "/agents/" + bot + "/claims/claim-1/completion"},
+		"forward":  {http.MethodPost, "/agents/" + bot + "/turn-events"},
 	}
 	for name, route := range routes {
 		t.Run(name, func(t *testing.T) {

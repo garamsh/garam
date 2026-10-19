@@ -16,7 +16,6 @@ const ACTIVE_PANEL = '[role="tabpanel"][data-state="active"]';
 import { expect, test } from "./fixtures";
 import {
   recordedAuthority,
-  seedDefinition,
   seedHostedOperator,
   seedKeyExchange,
   seedMember,
@@ -200,7 +199,7 @@ test.describe("operators", () => {
     await expect(revoked).toHaveCount(1);
   });
 
-  test("renames, and deletes only what no definition names", async ({
+  test("renames, and deletes once its identifier is typed", async ({
     page,
     signedIn,
   }) => {
@@ -226,25 +225,8 @@ test.describe("operators", () => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Saved as Staging cluster")).toBeVisible();
 
-    // A definition naming the operator refuses its delete, and the
-    // dialog names it rather than offering the confirmation.
-    await seedDefinition(signedIn, "Batch runner");
-    await page.goto(`${seeded}?tab=settings`);
-    await expectHydrated(page);
-    await page
-      .getByRole("button", { name: "Delete operator", exact: true })
-      .click();
-    const blocked = page.getByRole("alertdialog");
-    await expect(
-      blocked.getByRole("link", { name: "Batch runner", exact: true }),
-    ).toBeVisible();
-    await expect(
-      blocked.getByRole("button", { name: "Delete operator", exact: true }),
-    ).toBeDisabled();
-    await blocked.getByRole("button", { name: "Cancel" }).click();
-
-    // The control: an operator no definition names is deleted by the
-    // same dialog once its identifier is typed.
+    // An operator is deleted by its dialog once its identifier is
+    // typed.
     await page.goto(operators);
     await expectHydrated(page);
     await page

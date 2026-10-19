@@ -356,21 +356,6 @@ func TestServer_AnAgentTokenCarriesItsExecutionTokenInAHeaderOfItsOwn(t *testing
 	assert.Len(t, messages.calls, 1, "the operator's token reached no claim")
 }
 
-// TestServer_AnAgentTokenRenewsNoCertificate holds that an agent's
-// token reaches its own certificate route and renews nothing there:
-// its assignee mints it another token instead (ADR-0100).
-func TestServer_AnAgentTokenRenewsNoCertificate(t *testing.T) {
-	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
-	srv := machineapi.NewServer(&agentService{}, &operatorService{}, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
-	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot}, machineapi.ConfineTokens)
-
-	status, _, body := tokenRequest(t, anonymous(t), http.MethodPost, url+"/agents/"+bot.String()+"/certificate",
-		"garam_at_live", nil, "")
-	assert.Equal(t, http.StatusUnauthorized, status)
-	assert.Contains(t, body, "no certificate was presented")
-}
-
 // TestServer_ADurableSubmissionTakesTheValueItsCredentialTakes holds
 // durable-delivery.v2 (ADR-0100): a request an agent token
 // authenticated is served under v2 and refused under v1, naming v2.

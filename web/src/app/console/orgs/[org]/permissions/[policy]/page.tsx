@@ -8,7 +8,6 @@ import {
   listPolicies,
   listPolicyAttachments,
   listPolicyVersions,
-  lookupAgentDefinitions,
   lookupAgents,
   lookupGroups,
   lookupOrgMembers,
@@ -32,7 +31,6 @@ import {
   KIND_PLURAL,
   describeSubject,
   listSubjects,
-  partlyListedAgents,
   reachOf,
   reachSentence,
   refusedKinds,
@@ -145,7 +143,6 @@ export default async function PolicyPage({ params }: Params) {
     teams,
     people,
     agents,
-    definitions,
     readings,
   ] = await Promise.all([
     getOrg(org),
@@ -155,7 +152,6 @@ export default async function PolicyPage({ params }: Params) {
     lookupGroups(org),
     lookupOrgMembers(org),
     lookupAgents(org),
-    lookupAgentDefinitions(org),
     access,
   ]);
   const permissions = accessDecisions(readings);
@@ -167,8 +163,7 @@ export default async function PolicyPage({ params }: Params) {
     attachments.status === "unreachable" ||
     teams.status === "unreachable" ||
     people.status === "unreachable" ||
-    agents.status === "unreachable" ||
-    definitions.status === "unreachable"
+    agents.status === "unreachable"
   ) {
     return (
       <Unshown>
@@ -192,8 +187,7 @@ export default async function PolicyPage({ params }: Params) {
   const canAttach = permissions.get("attach") !== "denied";
   const canDetach = permissions.get("detach") !== "denied";
   const canDelete = permissions.get("delete") !== "denied";
-  const catalogs: Catalogs = { teams, people, agents, definitions };
-  const partlyListed = partlyListedAgents(catalogs);
+  const catalogs: Catalogs = { teams, people, agents };
   const reach = reachOf(attachments, catalogs);
   const sentence = reachSentence(reach);
   const orgWide = reach.kind !== "attached";
@@ -346,12 +340,6 @@ export default async function PolicyPage({ params }: Params) {
                         : "Would apply to everyone once active."
                     }
                   />
-                )}
-                {partlyListed.length > 0 && (
-                  <p className="text-muted-foreground">
-                    Some agents may be missing: {partlyListed.join(" and ")} not
-                    listed to you.
-                  </p>
                 )}
                 {canAttach && (
                   <section

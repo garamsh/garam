@@ -122,93 +122,6 @@ func (e ClientAssertionRequestGrantType) Valid() bool {
 	}
 }
 
-// Defines values for CutoverClass.
-const (
-	BlockedUnparseable CutoverClass = "blocked:unparseable"
-	Eligible           CutoverClass = "eligible"
-	NotApplicable      CutoverClass = "not-applicable"
-)
-
-// Valid indicates whether the value is a known member of the CutoverClass enum.
-func (e CutoverClass) Valid() bool {
-	switch e {
-	case BlockedUnparseable:
-		return true
-	case Eligible:
-		return true
-	case NotApplicable:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CutoverMode.
-const (
-	CutoverModeFenced CutoverMode = "fenced"
-	CutoverModeLegacy CutoverMode = "legacy"
-)
-
-// Valid indicates whether the value is a known member of the CutoverMode enum.
-func (e CutoverMode) Valid() bool {
-	switch e {
-	case CutoverModeFenced:
-		return true
-	case CutoverModeLegacy:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CutoverAttemptStage.
-const (
-	Frozen     CutoverAttemptStage = "frozen"
-	RolledBack CutoverAttemptStage = "rolled_back"
-	Switched   CutoverAttemptStage = "switched"
-)
-
-// Valid indicates whether the value is a known member of the CutoverAttemptStage enum.
-func (e CutoverAttemptStage) Valid() bool {
-	switch e {
-	case Frozen:
-		return true
-	case RolledBack:
-		return true
-	case Switched:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for CutoverErrorReason.
-const (
-	AttemptEnded             CutoverErrorReason = "attempt_ended"
-	AttemptOpen              CutoverErrorReason = "attempt_open"
-	DigestMismatch           CutoverErrorReason = "digest_mismatch"
-	NotCutOverEligible       CutoverErrorReason = "not_cut_over_eligible"
-	ReverseMigrationRequired CutoverErrorReason = "reverse_migration_required"
-)
-
-// Valid indicates whether the value is a known member of the CutoverErrorReason enum.
-func (e CutoverErrorReason) Valid() bool {
-	switch e {
-	case AttemptEnded:
-		return true
-	case AttemptOpen:
-		return true
-	case DigestMismatch:
-		return true
-	case NotCutOverEligible:
-		return true
-	case ReverseMigrationRequired:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for ExecutionIntrospectionCredential.
 const (
 	ExecutionIntrospectionCredentialCurrent ExecutionIntrospectionCredential = "current"
@@ -245,24 +158,6 @@ func (e ExecutionIntrospectionGeneration) Valid() bool {
 	case ExecutionIntrospectionGenerationNotCurrent:
 		return true
 	case ExecutionIntrospectionGenerationNotSupplied:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for ExecutionIntrospectionMode.
-const (
-	ExecutionIntrospectionModeFenced ExecutionIntrospectionMode = "fenced"
-	ExecutionIntrospectionModeLegacy ExecutionIntrospectionMode = "legacy"
-)
-
-// Valid indicates whether the value is a known member of the ExecutionIntrospectionMode enum.
-func (e ExecutionIntrospectionMode) Valid() bool {
-	switch e {
-	case ExecutionIntrospectionModeFenced:
-		return true
-	case ExecutionIntrospectionModeLegacy:
 		return true
 	default:
 		return false
@@ -402,7 +297,6 @@ func (e OAuthTokenTokenType) Valid() bool {
 const (
 	AgentConfigure       OperationBindingOperation = "agent:configure"
 	AgentCreate          OperationBindingOperation = "agent:create"
-	AgentCutover         OperationBindingOperation = "agent:cutover"
 	AgentExecutionRead   OperationBindingOperation = "agent:execution-read"
 	AgentRecover         OperationBindingOperation = "agent:recover"
 	AgentReplace         OperationBindingOperation = "agent:replace"
@@ -418,8 +312,6 @@ func (e OperationBindingOperation) Valid() bool {
 	case AgentConfigure:
 		return true
 	case AgentCreate:
-		return true
-	case AgentCutover:
 		return true
 	case AgentExecutionRead:
 		return true
@@ -572,14 +464,6 @@ type AgentAdmissionMode string
 // AgentAdmissionPlacement defines model for AgentAdmission.Placement.
 type AgentAdmissionPlacement string
 
-// AgentAssignment An agent and the operator that runs it, at the epoch that binding holds.
-type AgentAssignment struct {
-	// Epoch Rises with every assignment and fences the operator it replaced. An agent presents it when it connects.
-	Epoch    int    `json:"epoch"`
-	Grn      string `json:"grn"`
-	Operator string `json:"operator"`
-}
-
 // AgentEnrollmentApproval defines model for AgentEnrollmentApproval.
 type AgentEnrollmentApproval struct {
 	ApprovalId   openapi_types.UUID               `json:"approvalId"`
@@ -650,7 +534,7 @@ type AuthorityIntrospection struct {
 	Authority string `json:"authority"`
 }
 
-// BoundAssignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover`, `agent:execution-read`, `agent:cutover` and `agent:replace` only.
+// BoundAssignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace` only.
 type BoundAssignment struct {
 	// Epoch Opaque.
 	Epoch       string `json:"epoch"`
@@ -735,110 +619,13 @@ type CredentialRecoveryRequest struct {
 	RequestId string `json:"requestId"`
 }
 
-// Cutover defines model for Cutover.
-type Cutover struct {
-	Agent string `json:"agent"`
-
-	// Assignee The operator the agent is assigned to now.
-	Assignee string          `json:"assignee"`
-	Attempt  *CutoverAttempt `json:"attempt"`
-
-	// Class `eligible` for a legacy agent whose source garam can read, `blocked:unparseable` for one whose stored values it cannot, which stay preserved, and `not-applicable` for an agent whose execution is already fenced.
-	Class CutoverClass `json:"class"`
-
-	// Epoch The assignment's epoch. Opaque.
-	Epoch        string         `json:"epoch"`
-	Mode         CutoverMode    `json:"mode"`
-	Source       *CutoverSource `json:"source"`
-	SourceDigest *string        `json:"sourceDigest"`
-}
-
-// CutoverClass `eligible` for a legacy agent whose source garam can read, `blocked:unparseable` for one whose stored values it cannot, which stay preserved, and `not-applicable` for an agent whose execution is already fenced.
-type CutoverClass string
-
-// CutoverMode defines model for Cutover.Mode.
-type CutoverMode string
-
-// CutoverAttempt defines model for CutoverAttempt.
-type CutoverAttempt struct {
-	CreatedAt time.Time `json:"createdAt"`
-
-	// EndedAt When the attempt was rolled back.
-	EndedAt *time.Time `json:"endedAt"`
-
-	// FrozenDigest The source digest the freeze verified.
-	FrozenDigest string              `json:"frozenDigest"`
-	ImportId     string              `json:"importId"`
-	Stage        CutoverAttemptStage `json:"stage"`
-	SwitchedAt   *time.Time          `json:"switchedAt"`
-}
-
-// CutoverAttemptStage defines model for CutoverAttempt.Stage.
-type CutoverAttemptStage string
-
-// CutoverError `Error` as the cutover routes answer it, with the closed set of reasons `agent-cutover.v1` lists (ADR-0086). A refusal outside the set carries no `reason`.
-type CutoverError struct {
-	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
-	Kind    string              `json:"kind"`
-	Message string              `json:"message"`
-	Reason  *CutoverErrorReason `json:"reason,omitempty"`
-}
-
-// CutoverErrorReason defines model for CutoverError.Reason.
-type CutoverErrorReason string
-
-// CutoverFreezeRequest defines model for CutoverFreezeRequest.
-type CutoverFreezeRequest struct {
-	// Epoch The assignment's epoch the import read. Opaque.
-	Epoch string `json:"epoch"`
-
-	// ImportId The Operator's identifier for the import, which names the attempt.
-	ImportId string `json:"importId"`
-
-	// SourceDigest The digest the Operator verified its import against.
-	SourceDigest string `json:"sourceDigest"`
-}
-
-// CutoverSource defines model for CutoverSource.
-type CutoverSource struct {
-	CreatedAt time.Time `json:"createdAt"`
-	DefinedBy string    `json:"definedBy"`
-	Operator  string    `json:"operator"`
-
-	// Values The definition's values, every one verbatim.
-	Values map[string]string `json:"values"`
-}
-
-// CutoverStageRequest defines model for CutoverStageRequest.
-type CutoverStageRequest struct {
-	ImportId string `json:"importId"`
-}
-
-// Definition What an organization says an agent should be, answered to the operator it names (ADR-0026). `claim` is absent while no operator has claimed the definition and carries the agent's assignment epoch once one has — the only claimant a definition admits is the operator it names, so who claimed it is always the caller.
-type Definition struct {
-	// AgentGrn The identity garam minted for the agent this definition describes. No agent answers under it until the claim.
-	AgentGrn string `json:"agentGrn"`
-
-	// Claim The agent's assignment, first written by the claim (ADR-0033).
-	Claim *DefinitionClaim `json:"claim,omitempty"`
-
-	// Values What the operator constructs the agent from. garam stores the keys and the strings and interprets neither.
-	Values map[string]string `json:"values"`
-}
-
-// DefinitionClaim The agent's assignment, first written by the claim (ADR-0033).
-type DefinitionClaim struct {
-	// Epoch The epoch the agent's assignment holds at now.
-	Epoch int `json:"epoch"`
-}
-
 // Error defines model for Error.
 type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
 
-	// Reason Which refusal this is, where the kind alone does not say, set only on a route whose contract lists its reasons (ADR-0086) and absent everywhere else. The `agent-cutover.v1` routes set `digest_mismatch`, `attempt_open`, `attempt_ended`, `not_cut_over_eligible` or `reverse_migration_required`; `activateAgent` sets `cutover_required` and nothing else; the `agent-enrollment.v1` routes set `binding_conflict`, `approval_spent`, `superseded` or `direct_placement_gated`. Branch on it only on those routes; a new reason is a new contract value.
+	// Reason Which refusal this is, where the kind alone does not say, set only on a route whose contract lists its reasons and absent everywhere else. The `agent-enrollment.v1` routes set `binding_conflict`, `approval_spent`, `superseded` or `direct_placement_gated`. Branch on it only on those routes; a new reason is a new contract value.
 	Reason *string `json:"reason,omitempty"`
 }
 
@@ -857,10 +644,7 @@ type ExecutionIntrospection struct {
 	// Generation With a generation supplied, whether it is the active one; without one, `none` when no generation is active and `not_supplied` otherwise.
 	Generation ExecutionIntrospectionGeneration `json:"generation"`
 	Grn        string                           `json:"grn"`
-
-	// Mode `fenced` once the agent has been activated, and from its creation for an agent `createManagedAgent` made.
-	Mode ExecutionIntrospectionMode `json:"mode"`
-	Org  string                     `json:"org"`
+	Org        string                           `json:"org"`
 }
 
 // ExecutionIntrospectionCredential defines model for ExecutionIntrospection.Credential.
@@ -868,9 +652,6 @@ type ExecutionIntrospectionCredential string
 
 // ExecutionIntrospectionGeneration With a generation supplied, whether it is the active one; without one, `none` when no generation is active and `not_supplied` otherwise.
 type ExecutionIntrospectionGeneration string
-
-// ExecutionIntrospectionMode `fenced` once the agent has been activated, and from its creation for an agent `createManagedAgent` made.
-type ExecutionIntrospectionMode string
 
 // ExecutionIntrospectionRequest defines model for ExecutionIntrospectionRequest.
 type ExecutionIntrospectionRequest struct {
@@ -1067,7 +848,7 @@ type OperationBinding struct {
 	// ActorGrn The user the operation is performed for.
 	ActorGrn string `json:"actorGrn"`
 
-	// Assignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover`, `agent:execution-read`, `agent:cutover` and `agent:replace` only.
+	// Assignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace` only.
 	Assignment  *BoundAssignment `json:"assignment,omitempty"`
 	AudienceGrn string           `json:"audienceGrn"`
 	BodySha256  string           `json:"bodySha256"`
@@ -1085,10 +866,10 @@ type OperationBinding struct {
 	OrgGrn       string                    `json:"orgGrn"`
 	RequestId    string                    `json:"requestId"`
 
-	// RequestTarget Present for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read`, `agent:cutover` and `operator:read`, absent for every other operation. For `agent:cutover` it is garam's own cutover route the reference is carried to, and garam compares it (ADR-0086). Otherwise it is the exact origin-form request target the console sent: the escaped path and the raw query, with no scheme or authority, including any path prefix of the registered control endpoint. Compare it, before decoding, routing or reading any data, with the target the request arrived with, byte for byte; the empty body's digest does not tell one read from another.
+	// RequestTarget Present for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `operator:read`, absent for every other operation. It is the exact origin-form request target the console sent: the escaped path and the raw query, with no scheme or authority, including any path prefix of the registered control endpoint. Compare it, before decoding, routing or reading any data, with the target the request arrived with, byte for byte; the empty body's digest does not tell one read from another.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// TargetGrn The controller for `agent:create`; the agent for `agent:configure`, `agent:recover`, `agent:execution-read`, `agent:cutover` and `agent:replace`; the organization for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
+	// TargetGrn The controller for `agent:create`; the agent for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace`; the organization for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
 	TargetGrn string `json:"targetGrn"`
 }
 
@@ -1122,7 +903,7 @@ type ProvisioningState string
 
 // ProvisioningStateReport One operator's account of an agent's pod, at the epoch it holds the agent. It carries no runtime state: what the agent says about itself is the agent's to report.
 type ProvisioningStateReport struct {
-	// Epoch The epoch the reporter believes the assignment is on, as `createAgent` or `claimDefinition` answered with. garam accepts the report only at the epoch the assignment is currently on.
+	// Epoch The epoch the reporter believes the assignment is on, as the agent's creation or admission answered it. garam accepts the report only at the epoch the assignment is currently on.
 	Epoch int `json:"epoch"`
 
 	// State What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is reserved — report it only from an observation that separates a workload that cannot start from one that is still starting, which a ready replica count does not, so a reporter reading that count alone reports `provisioned`.
@@ -1243,9 +1024,6 @@ type ContractVersion = string
 // ControllerGrn defines model for controller.
 type ControllerGrn = string
 
-// CutoverContractVersion defines model for cutoverContractVersion.
-type CutoverContractVersion = string
-
 // DeliveryContractVersion defines model for deliveryContractVersion.
 type DeliveryContractVersion = string
 
@@ -1272,9 +1050,6 @@ type AgentEnrollmentContractError = Error
 
 // ContractError defines model for ContractError.
 type ContractError = Error
-
-// CutoverContractError `Error` as the cutover routes answer it, with the closed set of reasons `agent-cutover.v1` lists (ADR-0086). A refusal outside the set carries no `reason`.
-type CutoverContractError = CutoverError
 
 // DeliveryContractError defines model for DeliveryContractError.
 type DeliveryContractError = Error
@@ -1325,30 +1100,6 @@ type DeactivateAgentParams struct {
 type RecoverAgentCredentialParams struct {
 	// ExecutionContractVersion `execution-fence.v1` where the caller presents a certificate and `execution-fence.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
-}
-
-// GetAgentCutoverParams defines parameters for GetAgentCutover.
-type GetAgentCutoverParams struct {
-	// CutoverContractVersion `agent-cutover.v1` where the caller presents a certificate and `agent-cutover.v2` where it presents a token (ADR-0086, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
-	CutoverContractVersion CutoverContractVersion `json:"Garam-Contract-Version"`
-}
-
-// FreezeAgentCutoverParams defines parameters for FreezeAgentCutover.
-type FreezeAgentCutoverParams struct {
-	// CutoverContractVersion `agent-cutover.v1` where the caller presents a certificate and `agent-cutover.v2` where it presents a token (ADR-0086, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
-	CutoverContractVersion CutoverContractVersion `json:"Garam-Contract-Version"`
-}
-
-// RollBackAgentCutoverParams defines parameters for RollBackAgentCutover.
-type RollBackAgentCutoverParams struct {
-	// CutoverContractVersion `agent-cutover.v1` where the caller presents a certificate and `agent-cutover.v2` where it presents a token (ADR-0086, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
-	CutoverContractVersion CutoverContractVersion `json:"Garam-Contract-Version"`
-}
-
-// SwitchAgentCutoverParams defines parameters for SwitchAgentCutover.
-type SwitchAgentCutoverParams struct {
-	// CutoverContractVersion `agent-cutover.v1` where the caller presents a certificate and `agent-cutover.v2` where it presents a token (ADR-0086, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
-	CutoverContractVersion CutoverContractVersion `json:"Garam-Contract-Version"`
 }
 
 // IntrospectAgentExecutionParams defines parameters for IntrospectAgentExecution.
@@ -1426,15 +1177,6 @@ type ActivateAgentJSONRequestBody = ActivationRequest
 // RecoverAgentCredentialJSONRequestBody defines body for RecoverAgentCredential for application/json ContentType.
 type RecoverAgentCredentialJSONRequestBody = CredentialRecoveryRequest
 
-// FreezeAgentCutoverJSONRequestBody defines body for FreezeAgentCutover for application/json ContentType.
-type FreezeAgentCutoverJSONRequestBody = CutoverFreezeRequest
-
-// RollBackAgentCutoverJSONRequestBody defines body for RollBackAgentCutover for application/json ContentType.
-type RollBackAgentCutoverJSONRequestBody = CutoverStageRequest
-
-// SwitchAgentCutoverJSONRequestBody defines body for SwitchAgentCutover for application/json ContentType.
-type SwitchAgentCutoverJSONRequestBody = CutoverStageRequest
-
 // IntrospectAgentExecutionJSONRequestBody defines body for IntrospectAgentExecution for application/json ContentType.
 type IntrospectAgentExecutionJSONRequestBody = ExecutionIntrospectionRequest
 
@@ -1488,18 +1230,12 @@ type ServerInterface interface {
 	// EnrollStandaloneAgent Spend an administrator's approval and obtain a supervisor's credential, or its and its agent's first certificates.
 	// (POST /agent-enrollments)
 	EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, params EnrollStandaloneAgentParams)
-	// CreateAgent Create an agent and assign it to the calling operator.
-	// (POST /agents)
-	CreateAgent(w http.ResponseWriter, r *http.Request)
 	// ActivateAgent Admit a runtime generation of an agent, and issue the token its calls carry.
 	// (POST /agents/{agent}/activations)
 	ActivateAgent(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params ActivateAgentParams)
 	// DeactivateAgent End an activation of an agent, if it is still the current one.
 	// (POST /agents/{agent}/activations/{activation}/deactivation)
 	DeactivateAgent(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, activationId ActivationId, params DeactivateAgentParams)
-	// IssueAgentCertificate Issue the certificate an agent authenticates with.
-	// (POST /agents/{agent}/certificate)
-	IssueAgentCertificate(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
 	// ClaimMessage Claim the next message addressed to an agent.
 	// (POST /agents/{agent}/claims)
 	ClaimMessage(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
@@ -1512,18 +1248,6 @@ type ServerInterface interface {
 	// RecoverAgentCredential Replace an agent's credential lineage under an administrator's handoff.
 	// (POST /agents/{agent}/credential-recovery)
 	RecoverAgentCredential(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params RecoverAgentCredentialParams)
-	// GetAgentCutover Read what the Operator imports a legacy agent from, and its most recent cutover attempt.
-	// (GET /agents/{agent}/cutover)
-	GetAgentCutover(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params GetAgentCutoverParams)
-	// FreezeAgentCutover Freeze a legacy agent's source, verified against the digest the Operator imported.
-	// (POST /agents/{agent}/cutover/freeze)
-	FreezeAgentCutover(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params FreezeAgentCutoverParams)
-	// RollBackAgentCutover End a frozen attempt, which lists the agent's definition to its operator again.
-	// (POST /agents/{agent}/cutover/rollback)
-	RollBackAgentCutover(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params RollBackAgentCutoverParams)
-	// SwitchAgentCutover Record that the Operator owns a frozen agent's source, before it releases anything.
-	// (POST /agents/{agent}/cutover/switch)
-	SwitchAgentCutover(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params SwitchAgentCutoverParams)
 	// IntrospectAgentExecution Ask whether an agent certificate and a generation are current, together.
 	// (POST /agents/{agent}/execution/introspection)
 	IntrospectAgentExecution(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params IntrospectAgentExecutionParams)
@@ -1542,12 +1266,6 @@ type ServerInterface interface {
 	// ForwardTurnEvent Forward one turn event to whoever is watching the agent.
 	// (POST /agents/{agent}/turn-events)
 	ForwardTurnEvent(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
-	// ListDefinitions List the definitions naming the calling operator.
-	// (GET /definitions)
-	ListDefinitions(w http.ResponseWriter, r *http.Request)
-	// ClaimDefinition Claim the agent a definition minted for the calling operator.
-	// (POST /definitions/{agent}/claim)
-	ClaimDefinition(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
 	// GetIdentity Return the identity the connection authenticated as.
 	// (GET /identity)
 	GetIdentity(w http.ResponseWriter, r *http.Request)
@@ -1742,20 +1460,6 @@ func (siw *ServerInterfaceWrapper) EnrollStandaloneAgent(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
-// CreateAgent operation middleware
-func (siw *ServerInterfaceWrapper) CreateAgent(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.CreateAgent(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ActivateAgent operation middleware
 func (siw *ServerInterfaceWrapper) ActivateAgent(w http.ResponseWriter, r *http.Request) {
 
@@ -1864,32 +1568,6 @@ func (siw *ServerInterfaceWrapper) DeactivateAgent(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeactivateAgent(w, r, agentGrn, activationId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// IssueAgentCertificate operation middleware
-func (siw *ServerInterfaceWrapper) IssueAgentCertificate(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "agent" -------------
-	var agentGrn AgentGrn
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.IssueAgentCertificate(w, r, agentGrn)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2040,222 +1718,6 @@ func (siw *ServerInterfaceWrapper) RecoverAgentCredential(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RecoverAgentCredential(w, r, agentGrn, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetAgentCutover operation middleware
-func (siw *ServerInterfaceWrapper) GetAgentCutover(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "agent" -------------
-	var agentGrn AgentGrn
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetAgentCutoverParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "Garam-Contract-Version" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
-		var CutoverContractVersion CutoverContractVersion
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &CutoverContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
-			return
-		}
-
-		params.CutoverContractVersion = CutoverContractVersion
-
-	} else {
-		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetAgentCutover(w, r, agentGrn, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// FreezeAgentCutover operation middleware
-func (siw *ServerInterfaceWrapper) FreezeAgentCutover(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "agent" -------------
-	var agentGrn AgentGrn
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params FreezeAgentCutoverParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "Garam-Contract-Version" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
-		var CutoverContractVersion CutoverContractVersion
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &CutoverContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
-			return
-		}
-
-		params.CutoverContractVersion = CutoverContractVersion
-
-	} else {
-		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.FreezeAgentCutover(w, r, agentGrn, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RollBackAgentCutover operation middleware
-func (siw *ServerInterfaceWrapper) RollBackAgentCutover(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "agent" -------------
-	var agentGrn AgentGrn
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RollBackAgentCutoverParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "Garam-Contract-Version" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
-		var CutoverContractVersion CutoverContractVersion
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &CutoverContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
-			return
-		}
-
-		params.CutoverContractVersion = CutoverContractVersion
-
-	} else {
-		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RollBackAgentCutover(w, r, agentGrn, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SwitchAgentCutover operation middleware
-func (siw *ServerInterfaceWrapper) SwitchAgentCutover(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "agent" -------------
-	var agentGrn AgentGrn
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SwitchAgentCutoverParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "Garam-Contract-Version" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
-		var CutoverContractVersion CutoverContractVersion
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &CutoverContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
-			return
-		}
-
-		params.CutoverContractVersion = CutoverContractVersion
-
-	} else {
-		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SwitchAgentCutover(w, r, agentGrn, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2496,46 +1958,6 @@ func (siw *ServerInterfaceWrapper) ForwardTurnEvent(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ForwardTurnEvent(w, r, agentGrn)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListDefinitions operation middleware
-func (siw *ServerInterfaceWrapper) ListDefinitions(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListDefinitions(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ClaimDefinition operation middleware
-func (siw *ServerInterfaceWrapper) ClaimDefinition(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "agent" -------------
-	var agentGrn AgentGrn
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ClaimDefinition(w, r, agentGrn)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3107,13 +2529,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/identity/certificate", wrapper.RenewIdentityCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tokens", wrapper.ExchangeToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/oauth/token", wrapper.ExchangeClientAssertion)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/certificate", wrapper.IssueAgentCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/tokens", wrapper.MintAgentToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/provisioning-state", wrapper.ReportProvisioningState)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/runtime-state", wrapper.ReportRuntimeState)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/definitions", wrapper.ListDefinitions)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/definitions/{agent}/claim", wrapper.ClaimDefinition)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages", wrapper.PostMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/outbox-messages", wrapper.PostOutboxMessage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/messages/{message}", wrapper.GetMessageStatus)
@@ -3129,10 +2547,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/activations/{activation}/deactivation", wrapper.DeactivateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/execution/introspection", wrapper.IntrospectAgentExecution)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/credential-recovery", wrapper.RecoverAgentCredential)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/agents/{agent}/cutover", wrapper.GetAgentCutover)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/cutover/freeze", wrapper.FreezeAgentCutover)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/cutover/switch", wrapper.SwitchAgentCutover)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/cutover/rollback", wrapper.RollBackAgentCutover)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operators/{controller}/managed-agents", wrapper.CreateManagedAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/initial-certificate", wrapper.IssueInitialCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agent-enrollments", wrapper.EnrollStandaloneAgent)

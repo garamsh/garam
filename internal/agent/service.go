@@ -8,10 +8,9 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// Service is what an operator does to the agents it runs — it creates
-// them, obtains the certificates they authenticate with, and reports
-// what it sees of their pods — and what an agent reports about its own
-// runtime state. An agent renews its own certificate through
+// Service is what an operator does to the agents it runs — it mints
+// their tokens and reports what it sees of their pods — and what an
+// agent reports about its own runtime state. An agent renews its own certificate through
 // ExecutionService instead (ADR-0078).
 //
 // Every method takes the caller, and an operator's answers are bounded
@@ -20,31 +19,11 @@ import (
 // acts on the identity it authenticated as and reaches nothing else
 // (ADR-0012).
 type Service interface {
-	// Create mints an agent in the operator's own organization and
-	// assigns it to that operator.
-	Create(ctx context.Context, operator grn.GRN) (*Assignment, error)
-	// IssueCertificate returns the certificate the named agent
-	// authenticates with, for an agent assigned to a calling operator at
-	// the current epoch whose execution is still legacy and whose
-	// cutover is not switched, and refuses every other caller. An agent
-	// renews its own through ExecutionService.Renew, inside its
-	// execution fence (ADR-0078).
-	IssueCertificate(ctx context.Context, caller, agentGRN grn.GRN) (*Certificate, error)
-	// Definitions returns the definitions naming operator, each with
-	// its claim state. The definition's operator field is the scoping,
-	// so the answer can name nothing the caller is not named in and no
-	// policy engine is asked (ADR-0033).
-	Definitions(ctx context.Context, operator grn.GRN) ([]*DefinitionState, error)
-	// Claim binds operator to the agent GRN a definition naming it
-	// minted, which is what admits the operator to that agent's
-	// certificate route. A definition is claimed once: a second claim
-	// of the same agent GRN is a conflict.
-	Claim(ctx context.Context, operator, agentGRN grn.GRN) (*Assignment, error)
 	// ReportProvisioningState records what the calling operator says
 	// about the agent's pod, at the epoch it holds the agent
-	// (ADR-0012). It is bounded by the same assignment the certificate
-	// route is, and a report carrying any epoch but the current one is
-	// refused as stale.
+	// (ADR-0012). It is bounded by the operator's assignment, and a
+	// report carrying any epoch but the current one is refused as
+	// stale.
 	ReportProvisioningState(ctx context.Context, operator, agentGRN grn.GRN, epoch int, state ProvisioningState) error
 	// ReportRuntimeState records what an agent says about itself, at
 	// the epoch its assignment is on. The caller reports for the
@@ -56,10 +35,9 @@ type Service interface {
 	// place of a certificate, for an agent the calling operator or
 	// supervisor holds at the current epoch, accepted by garam where
 	// audience is nil and by that hosted operator where it names one
-	// (ADR-0100). It is
-	// admitted where the certificate route would be, and inside the
-	// lineage of an agent whose lifecycle authority opened one; every
-	// other caller and agent is refused as AccessTokenStore says.
+	// (ADR-0100). It is admitted inside the lineage of an agent whose
+	// lifecycle authority opened one; every other caller and agent is
+	// refused as AccessTokenStore says.
 	MintAccessToken(ctx context.Context, caller, agentGRN grn.GRN, audience *grn.GRN) (*AccessToken, error)
 }
 
@@ -86,7 +64,6 @@ type service struct {
 	store         Store
 	tokens        AccessTokenStore
 	audiences     RegisteredOperators
-	issuer        Issuer
 	tokenLifetime time.Duration
 	backdate      time.Duration
 	serverRoot    []byte
@@ -94,10 +71,9 @@ type service struct {
 }
 
 // NewService constructs the service over the store it reads
-// assignments from, the store agent tokens are recorded in, the
-// operators a token's audience is checked against, and the issuer it
-// signs through.
-func NewService(store Store, tokens AccessTokenStore, audiences RegisteredOperators, issuer Issuer, cfg Config) (Service, error) {
+// assignments from, the store agent tokens are recorded in, and the
+// operators a token's audience is checked against.
+func NewService(store Store, tokens AccessTokenStore, audiences RegisteredOperators, cfg Config) (Service, error) {
 	lifetime, err := ParseAccessTokenLifetime(cfg.TokenLifetime)
 	if err != nil {
 		return nil, err
@@ -106,7 +82,7 @@ func NewService(store Store, tokens AccessTokenStore, audiences RegisteredOperat
 	if now == nil {
 		now = time.Now
 	}
-	return &service{store: store, tokens: tokens, audiences: audiences, issuer: issuer, tokenLifetime: lifetime,
+	return &service{store: store, tokens: tokens, audiences: audiences, tokenLifetime: lifetime,
 		backdate: cfg.Backdate, serverRoot: cfg.ServerRootPEM, now: now}, nil
 }
 
@@ -147,55 +123,6 @@ func (s *service) MintAccessToken(ctx context.Context, caller, agentGRN grn.GRN,
 	return token, nil
 }
 
-func (s *service) Create(ctx context.Context, operator grn.GRN) (*Assignment, error) {
-	if err := operates(operator); err != nil {
-		return nil, err
-	}
-	orgGRN := grn.Org(operator.Organization)
-	g, err := NewGRN(orgGRN)
-	if err != nil {
-		return nil, err
-	}
-	a, err := New(g, orgGRN)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.store.Create(ctx, a); err != nil {
-		return nil, err
-	}
-	// Assignment is a relation rather than part of the agent
-	// (ADR-0012), so it is a second write. One that fails leaves an
-	// agent no operator holds: it grants nothing and answers nobody,
-	// and the caller creates another.
-	return s.store.Assign(ctx, g, operator)
-}
-
-func (s *service) IssueCertificate(ctx context.Context, caller, agentGRN grn.GRN) (*Certificate, error) {
-	if err := operates(caller); err != nil {
-		return nil, err
-	}
-	if err := s.holds(ctx, caller, agentGRN); err != nil {
-		return nil, err
-	}
-	// Once an agent's execution is fenced, a certificate outside its
-	// lineage would reach nothing, and one inside it is issued only by
-	// renewal or recovery (ADR-0078); once its cutover is switched, its
-	// operator no longer owns it (ADR-0086). The first read spares a
-	// signature; the second decides, after signing, so no certificate
-	// is answered once a switch has committed.
-	if err := s.store.AdmitLegacyIssuance(ctx, agentGRN); err != nil {
-		return nil, err
-	}
-	certificate, err := s.issuer.Issue(ctx, agentGRN)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.store.AdmitLegacyIssuance(ctx, agentGRN); err != nil {
-		return nil, err
-	}
-	return certificate, nil
-}
-
 // holds refuses an operator the agent is not assigned to. The row
 // holds one operator at the epoch it is assigned at, so the comparison
 // is the epoch fence as well. An agent that does not exist has no
@@ -213,20 +140,6 @@ func (s *service) holds(ctx context.Context, operator, agentGRN grn.GRN) error {
 		return ErrNotAssigned
 	}
 	return nil
-}
-
-func (s *service) Definitions(ctx context.Context, operator grn.GRN) ([]*DefinitionState, error) {
-	if err := operates(operator); err != nil {
-		return nil, err
-	}
-	return s.store.ListDefinitionsByOperator(ctx, operator)
-}
-
-func (s *service) Claim(ctx context.Context, operator, agentGRN grn.GRN) (*Assignment, error) {
-	if err := operates(operator); err != nil {
-		return nil, err
-	}
-	return s.store.Claim(ctx, agentGRN, operator)
 }
 
 func (s *service) ReportProvisioningState(ctx context.Context, operator, agentGRN grn.GRN, epoch int, state ProvisioningState) error {

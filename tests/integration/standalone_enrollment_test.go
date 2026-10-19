@@ -248,14 +248,13 @@ func TestStandalone_AnApprovedHostEnrollsWithoutAnOperator(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, changed.status, "a spent approval answers its own request alone: %s", changed.body)
 
 	ctx := context.Background()
-	var assignee, mode string
+	var assignee string
 	var epoch int
 	require.NoError(t, s.pool.QueryRow(ctx,
-		`SELECT a.assignee_grn, a.epoch, x.mode FROM agent_assignments a JOIN agent_executions x USING (agent_grn) WHERE agent_grn = $1`,
-		e.agent.String()).Scan(&assignee, &epoch, &mode))
+		`SELECT a.assignee_grn, a.epoch FROM agent_assignments a JOIN agent_executions x USING (agent_grn) WHERE agent_grn = $1`,
+		e.agent.String()).Scan(&assignee, &epoch))
 	assert.Equal(t, e.supervisor.String(), assignee)
 	assert.Equal(t, 1, epoch)
-	assert.Equal(t, "fenced", mode, "a standalone agent is fenced from birth")
 	assert.Equal(t, operatorsBefore, countRows(t, s.pool, `SELECT count(*) FROM operators`), "no operator is registered for it")
 	assert.Zero(t, countRows(t, s.pool, `SELECT count(*) FROM agent_managed_creations WHERE agent_grn = $1`, e.agent.String()))
 	assert.Equal(t, 1, countRows(t, s.pool, `SELECT count(*) FROM agents WHERE grn = $1`, e.agent.String()),
@@ -298,8 +297,6 @@ func TestStandalone_TheSupervisorActivatesItsOwnAgentAndNothingElse(t *testing.T
 	assert.Equal(t, http.StatusCreated, posted.status, "the control: an ordinary sender posts: %s", posted.body)
 	for _, route := range []struct{ method, path, body string }{
 		{http.MethodPost, "/messages", submissionTo(e.agent, s.key())},
-		{http.MethodGet, "/definitions", ""},
-		{http.MethodPost, "/agents", ""},
 		{http.MethodPost, s.agentPath("/claims"), ""},
 		{http.MethodPost, "/identity/certificate", ""},
 	} {

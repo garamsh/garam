@@ -42,7 +42,7 @@ export function reportedDots(
   if (reported === "unchecked") {
     return { provisioning: NOT_CHECKED, runtime: NOT_CHECKED };
   }
-  if (reported === "awaiting" || agent === undefined) {
+  if (agent === undefined) {
     return {
       provisioning: { tone: "neutral", label: "Awaiting operator" },
       runtime: { tone: "neutral", label: "No report yet" },
@@ -69,7 +69,7 @@ export function agentHealth(
   if (reported === "unchecked") {
     return { ...NOT_CHECKED, detail: "Reports are not shown to you." };
   }
-  if (reported === "awaiting" || agent === undefined) {
+  if (agent === undefined) {
     return {
       tone: "neutral",
       label: "Not placed",

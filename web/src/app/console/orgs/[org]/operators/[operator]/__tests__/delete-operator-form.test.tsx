@@ -48,14 +48,13 @@ function recordDeletions() {
   return deleted;
 }
 
-function renderForm(blocking: { name: string; href: string }[] | null = []) {
+function renderForm() {
   return render(
     <Navigation>
       <DeleteOperatorForm
         org="acme"
         operator="field-one"
         name="Field cluster one"
-        blocking={blocking}
       />
     </Navigation>,
   );
@@ -116,40 +115,20 @@ describe("delete operator form", () => {
     );
   });
 
-  it("names the definitions that refuse the delete, and offers no confirmation while they do", async () => {
-    const deleted = recordDeletions();
-    const user = userEvent.setup();
-    renderForm([{ name: "Scout", href: "/console/orgs/acme/agents/scout" }]);
-
-    await user.click(screen.getByRole("button", { name: "Delete operator" }));
-    const dialog = within(screen.getByRole("alertdialog"));
-
-    expect(dialog.getByRole("link", { name: "Scout" })).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/agents/scout",
-    );
-    expect(dialog.queryByLabelText(/to confirm/)).not.toBeInTheDocument();
-    expect(
-      dialog.getByRole("button", { name: "Delete operator" }),
-    ).toBeDisabled();
-    expect(deleted).toEqual([]);
-  });
-
   it("renders garam's refusal inside the dialog and keeps it open", async () => {
     server.use(
       http.delete(`${API_URL}/orgs/acme/operators/field-one`, () =>
         HttpResponse.json(
           {
             kind: "failed_precondition",
-            message: "an agent definition names this operator",
+            message: "the operator is not deletable now",
           },
           { status: 409 },
         ),
       ),
     );
     const user = userEvent.setup();
-    // Definitions unchecked: the server decides, and refuses.
-    renderForm(null);
+    renderForm();
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
     const dialog = within(screen.getByRole("alertdialog"));

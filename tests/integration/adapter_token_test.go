@@ -250,21 +250,15 @@ func serverTLSOnly(t *testing.T) *http.Client {
 }
 
 // startTokenAdapter runs a token-mode adapter for g beside rt, fenced
-// through c where c is not nil, forwarding the outbox in dir.
+// through c, forwarding the outbox in dir.
 func startTokenAdapter(t *testing.T, s *tokenStack, c *tokenControlStandIn, rt *runtimeDouble, g grn.GRN, files tokenFiles, dir string) *adapterProcess {
 	t.Helper()
 	garam := tokenFileOf(t, files.garam)
-	execution := delivery.NewLegacyExecution()
-	credentials := delivery.NewFileCredentials("", garam)
-	var authority delivery.Authority
-	if c != nil {
-		control := tokenFileOf(t, files.control)
-		execution = delivery.NewFencedExecution()
-		credentials = delivery.NewFileCredentials(files.placement, garam, control)
-		a, err := delivery.NewHTTPAuthority(c.server.Client(), c.server.URL, g, control)
-		require.NoError(t, err)
-		authority = a
-	}
+	control := tokenFileOf(t, files.control)
+	execution := delivery.NewFencedExecution()
+	credentials := delivery.NewFileCredentials(files.placement, garam, control)
+	authority, err := delivery.NewHTTPAuthority(c.server.Client(), c.server.URL, g, control)
+	require.NoError(t, err)
 	queue, err := delivery.NewHTTPQueue(serverTLSOnly(t), s.machine, g, execution, garam)
 	require.NoError(t, err)
 	gateway, err := delivery.NewHTTPGateway(rt.server.Client(), rt.server.URL, g)
@@ -330,44 +324,6 @@ func carried(t *testing.T, s *executionStack, rt *runtimeDouble, id string) {
 		"the turn's end completes it at garam")
 }
 
-// TestAdapterTokenMode_AnUnfencedAdapterRunsOnItsGaramTokenAlone is the
-// Operator's Garam-source agent (garam-agent-operator ADR 0068) against
-// the real listener: no control settings, a garam token its assignee
-// minted and nothing else. It carries a message and forwards a reply
-// under durable-delivery.v2. A reassignment refuses that token from
-// the next request, and protected work waits rather than stops; the new
-// assignee's token written over the file is read on the next request,
-// which is the control on the refusal.
-func TestAdapterTokenMode_AnUnfencedAdapterRunsOnItsGaramTokenAlone(t *testing.T) {
-	s := newTokenStack(t)
-	g := createdBy(t, s.client, s.machine, s.controllerToken)
-	own := mintedFor(t, s.client, s.machine, s.controllerToken, g)
-	files := newTokenFiles(t, own.Token, "")
-	rt := newRuntimeDouble(t, g, 1, generationOf(1))
-	dir := t.TempDir()
-	startTokenAdapter(t, s, nil, rt, g, files, dir)
-
-	carried(t, s.executionStack, rt, s.postToAgent(t, g, "hello"))
-	writeOutboxEntry(t, dir, "reply-1", g, s.peer, "the reply", time.Now())
-	require.Eventually(t, func() bool {
-		_, err := os.Stat(filepath.Join(dir, "reply-1.json"))
-		return os.IsNotExist(err)
-	}, 10*time.Second, 20*time.Millisecond, "the reply is acknowledged under durable-delivery.v2 and removed")
-
-	second, secondKey := keyed(t, operator.NewPostgresStore(s.pool), "second")
-	_, err := agent.NewPostgresStore(s.pool).Assign(context.Background(), g, second)
-	require.NoError(t, err)
-	refused := s.postToAgent(t, g, "after the reassignment")
-	time.Sleep(time.Second)
-	for _, got := range rt.received() {
-		assert.NotEqual(t, refused, got["id"], "the reassigned assignee's token carries nothing")
-	}
-
-	next := mintedFor(t, s.client, s.machine, exchangeKey(t, s.client, s.machine, second, secondKey, nil), g)
-	replaceToken(t, files.garam, next.Token)
-	carried(t, s.executionStack, rt, refused)
-}
-
 // TestAdapterTokenMode_AFencedAdapterKeepsItsTwoAudiencesApart holds
 // ADR-0100's separation against the real listener: garam refuses the
 // control audience's token on a claim and the authority cannot activate
@@ -381,8 +337,18 @@ func TestAdapterTokenMode_AFencedAdapterKeepsItsTwoAudiencesApart(t *testing.T) 
 	shown := s.agentToken(t, m.agent, &s.hosted)
 	c := newTokenControlStandIn(t, s, m)
 
+	files := newTokenFiles(t, own.Token, shown.Token)
+	rt := newRuntimeDouble(t, m.agent, 1, generationOf(1))
+	process := startTokenAdapter(t, s, c, rt, m.agent, files, t.TempDir())
+	carried(t, s.executionStack, rt, s.postToAgent(t, m.agent, "hello"))
+	_, err := process.execution.Present()
+	require.NoError(t, err, "the control: each token in its own place activates and carries")
+	asked := c.requests()
+
+	// The same activation, presented beside the control audience's token
+	// in garam's place: garam refuses that token.
 	misplaced := newTokenFiles(t, shown.Token, own.Token)
-	claims, err := delivery.NewHTTPQueue(serverTLSOnly(t), s.machine, m.agent, delivery.NewLegacyExecution(),
+	claims, err := delivery.NewHTTPQueue(serverTLSOnly(t), s.machine, m.agent, process.execution,
 		tokenFileOf(t, misplaced.garam))
 	require.NoError(t, err)
 	_, err = claims.Claim(context.Background())
@@ -395,13 +361,6 @@ func TestAdapterTokenMode_AFencedAdapterKeepsItsTwoAudiencesApart(t *testing.T) 
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition), "garam's token activates nothing: %v", err)
 
-	files := newTokenFiles(t, own.Token, shown.Token)
-	rt := newRuntimeDouble(t, m.agent, 1, generationOf(1))
-	process := startTokenAdapter(t, s, c, rt, m.agent, files, t.TempDir())
-	carried(t, s.executionStack, rt, s.postToAgent(t, m.agent, "hello"))
-	_, err = process.execution.Present()
-	require.NoError(t, err, "the control: each token in its own place activates and carries")
-	asked := c.requests()
 	b.Generation = string(generationOf(1))
 	assert.Equal(t, delivery.RequestID(delivery.TokenExecutionContract, b, "placement-1"), asked[len(asked)-1])
 }

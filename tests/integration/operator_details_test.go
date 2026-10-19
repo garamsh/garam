@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
@@ -47,8 +46,7 @@ func rowOf(t *testing.T, p *pgxpool.Pool, query string, g grn.GRN) string {
 //
 // The operator holding a certificate keeps the certificate row a
 // renewal is measured against, keeps authenticating with the
-// certificate it holds, is still named by its definition, and is still
-// refused a delete for it. The operator holding a key keeps that key
+// certificate it holds. The operator holding a key keeps that key
 // live. Both answers carry the new details, so the update is shown to
 // have happened on the rows the rest is read from.
 func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesBy(t *testing.T) {
@@ -62,10 +60,6 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesBy(t *testing
 
 	enrolled := register(t, store, "enrolled")
 	certificate := mintedOutOfBand(t, keyFile, enrolled)
-	d, err := agent.NewDefinition(orgRootGRN("acme"), enrolled, "Field agent", agent.Values{"image": "ghcr.io/acme/bot:1"},
-		scopedGRN("acme", "user", "ada"))
-	require.NoError(t, err)
-	keepDefinition(t, p, d)
 	keyed := register(t, store, "keyed")
 	_, key := issueKey(t, store, keyed, operator.KeyRotationFirst)
 
@@ -81,9 +75,6 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesBy(t *testing
 	assert.Equal(t, serial, rowOf(t, p, `SELECT serial FROM operator_certificates WHERE operator_grn = $1`, enrolled),
 		"the lineage a renewal is measured against is where it was")
 	assert.Equal(t, http.StatusOK, identifies(t, url, certificate), "the certificate it holds still authenticates")
-	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM agent_definitions WHERE operator_grn = $1`, enrolled.String()))
-	assert.ErrorIs(t, store.Delete(ctx, enrolled), operator.ErrOperatorNamedByDefinition,
-		"the definition still refuses the delete")
 
 	renamed, err := store.UpdateDetails(ctx, keyed, detailsPatch(t, "Staging", ""))
 	require.NoError(t, err)
@@ -93,11 +84,6 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesBy(t *testing
 	require.Len(t, keys, 1)
 	assert.Equal(t, key.KID, keys[0].KID)
 	assert.Equal(t, operator.KeyStateActive, keys[0].State, "the key it holds is still live")
-
-	// The control for the refusal above: the other operator, which no
-	// definition names, is deleted by the same store, so what refused
-	// the first is its definition and not a delete refused for all.
-	require.NoError(t, store.Delete(ctx, keyed))
 }
 
 // TestOperatorUpdateDetails_ReachesOneOrganizationsRecord covers the

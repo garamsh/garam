@@ -66,8 +66,8 @@ func readAgents(t *testing.T, url string, s *executionStack) (apigen.Agent, map[
 // the second is deactivated, through both agent reads. The generation
 // is absent until the first activation, then the latest one's, and a
 // deactivation leaves it: it names the generation last activated, not
-// one still admitted. The stack's peer agent, never activated, is the
-// control on the list: it carries none throughout.
+// one still admitted. An agent of the organization never activated is
+// the control on the list: it carries none.
 func TestAgentRead_AnswersTheGenerationLastActivated(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
@@ -96,6 +96,8 @@ func TestAgentRead_AnswersTheGenerationLastActivated(t *testing.T) {
 	require.NotNil(t, one.Generation)
 	assert.Equal(t, string(generationOf(2)), *one.Generation, "a deactivation leaves the generation last activated")
 
-	require.Contains(t, all, s.peer.String(), "the peer agent is listed")
-	assert.Nil(t, all[s.peer.String()].Generation, "control: an agent never activated carries none")
+	quiet := seedAgent(t, agent.NewPostgresStore(p), s.acme)
+	_, all = readAgents(t, url, s)
+	require.Contains(t, all, quiet.String(), "the agent never activated is listed")
+	assert.Nil(t, all[quiet.String()].Generation, "control: an agent never activated carries none")
 }

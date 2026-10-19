@@ -38,7 +38,7 @@ func newManagedStack(t *testing.T) *executionStack {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
-	s.delegate(t, "agent:create", "agent:activate", "agent:recover", "agent:configure", "agent:cutover")
+	s.delegate(t, "agent:create", "agent:activate", "agent:recover", "agent:configure")
 	return s
 }
 
@@ -180,23 +180,22 @@ func (s *executionStack) standingOf(t *testing.T, g grn.GRN, leaf string) machin
 }
 
 // collaborate makes protected calls of three domains as g over client
-// carrying token: a runtime report, a turn event and a renewal.
+// carrying token: a runtime report and a turn event.
 func (s *executionStack) collaborate(t *testing.T, client *http.Client, g grn.GRN, token string) map[string]int {
 	t.Helper()
 	path := "/agents/" + g.String()
 	return map[string]int{
 		"runtime-state": s.send(t, client, http.MethodPost, path+"/runtime-state", "", bearer(token), reportBody(1, "connected")).status,
 		"turn-event":    s.send(t, client, http.MethodPost, path+"/turn-events", "", bearer(token), `{"kind":"turn.start","body":"b"}`).status,
-		"certificate":   s.send(t, client, http.MethodPost, path+"/certificate", "", bearer(token), "").status,
 	}
 }
 
 var collaborated = map[string]int{
-	"runtime-state": http.StatusNoContent, "turn-event": http.StatusAccepted, "certificate": http.StatusCreated,
+	"runtime-state": http.StatusNoContent, "turn-event": http.StatusAccepted,
 }
 
 var fencedCollaboration = map[string]int{
-	"runtime-state": http.StatusConflict, "turn-event": http.StatusConflict, "certificate": http.StatusConflict,
+	"runtime-state": http.StatusConflict, "turn-event": http.StatusConflict,
 }
 
 // racing sends three requests at once while a connection of its own
@@ -348,35 +347,27 @@ func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 // TestManagedEnrollment_AManagedAgentIsFencedFromBirth shows the
 // shared admission predicate refusing every certificate of a managed
 // agent that its initial issuance did not record, before that
-// issuance and after it, with the recorded leaf as the control; and
-// that the legacy certificate route and definition claiming reach it
-// at neither point.
+// issuance and after it, with the recorded leaf as the control.
 func TestManagedEnrollment_AManagedAgentIsFencedFromBirth(t *testing.T) {
 	ctx := context.Background()
 	s := newManagedStack(t)
 	m := s.created(t, "birth")
 	strayTLS, stray := s.uninstalled(t, m.agent)
-	path := "/agents/" + m.agent.String()
 
 	in := s.standingOf(t, m.agent, stray)
-	assert.Equal(t, machinegen.ExecutionIntrospectionModeFenced, in.Mode, "fenced from birth")
 	assert.Equal(t, machinegen.ExecutionIntrospectionGenerationNone, in.Generation)
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialFenced, in.Credential, "a signed leaf no issuance recorded")
 	got := s.activateManaged(t, m.agent, "a-stray", generationOf(1), nil, &m.ref, stray)
 	assert.Equal(t, http.StatusConflict, got.status, "it cannot activate: %s", got.body)
-	got = s.send(t, s.controlTLS, http.MethodPost, path+"/certificate", "", "", "")
-	assert.Equal(t, http.StatusConflict, got.status, "the legacy route issues nothing for it: %s", got.body)
-	got = s.send(t, s.controlTLS, http.MethodPost, "/definitions/"+m.agent.String()+"/claim", "", "", "")
-	assert.Equal(t, http.StatusNotFound, got.status, "no definition claims it: %s", got.body)
 	assert.Equal(t, map[string]int{
-		"runtime-state": http.StatusUnauthorized, "turn-event": http.StatusUnauthorized, "certificate": http.StatusConflict,
+		"runtime-state": http.StatusUnauthorized, "turn-event": http.StatusUnauthorized,
 	}, s.collaborate(t, strayTLS, m.agent, ""), "nor does it collaborate before an activation")
 	execution, err := agentpg.New(s.pool).GetExecution(ctx, m.agent)
 	require.NoError(t, err)
-	assert.Equal(t, agent.ModeFenced, execution.Mode)
+	assert.NotNil(t, execution.Lineage, "fenced from birth, in the lineage its creation opened")
 
-	// The legacy cohort's predicate is the same one: a legacy agent's
-	// signed leaf is current, which is what a managed agent never
+	// The predicate is the same one for an agent with no lineage: any
+	// signed leaf of it is current, which is what a managed agent never
 	// inherits.
 	_, legacyStray := s.uninstalled(t, s.agent)
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, s.standingOf(t, s.agent, legacyStray).Credential)
@@ -386,9 +377,6 @@ func TestManagedEnrollment_AManagedAgentIsFencedFromBirth(t *testing.T) {
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialFenced, s.standingOf(t, m.agent, stray).Credential, "still fenced after issuance")
 	got = s.activateManaged(t, m.agent, "a-stray-2", generationOf(1), nil, &m.ref, stray)
 	assert.Equal(t, http.StatusConflict, got.status, "it still cannot activate: %s", got.body)
-	got = s.send(t, s.controlTLS, http.MethodPost, path+"/certificate", "", "", "")
-	assert.Equal(t, http.StatusConflict, got.status, "nor reach the legacy route: %s", got.body)
-
 	first := s.activateManaged(t, m.agent, "a-1", generationOf(1), nil, &m.ref, initial)
 	require.Equal(t, http.StatusCreated, first.status, "control: the recorded leaf activates: %s", first.body)
 	token := activationOf(t, first).Token
@@ -430,7 +418,7 @@ func TestManagedEnrollment_TheInitialCertificateIsIssuedOnceAndReplayedExactly(t
 		status int
 	}{
 		{"another agent's creation reference on the same controller", s.hostedTLS, m.agent, initialBody("i-1", "1", request, other.ref), http.StatusForbidden},
-		{"a creation reference for a legacy agent", s.hostedTLS, s.agent, initialBody("i-1", "1", request, m.ref), http.StatusForbidden},
+		{"a creation reference for an agent it did not create", s.hostedTLS, s.agent, initialBody("i-1", "1", request, m.ref), http.StatusForbidden},
 		{"the controller", s.controlTLS, m.agent, body, http.StatusForbidden},
 		{"a stale epoch", s.hostedTLS, m.agent, initialBody("i-1", "2", request, m.ref), http.StatusConflict},
 	}

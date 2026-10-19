@@ -1,6 +1,7 @@
 # ADR 0046: An operator renews its certificate by presenting the one it holds
 
 > Status: superseded by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+> and [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
 > Date: 2026-08-25
 
 ## Contents

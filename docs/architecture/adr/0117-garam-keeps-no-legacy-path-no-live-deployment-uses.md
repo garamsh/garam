@@ -1,6 +1,6 @@
 # ADR 0117: Garam keeps no legacy path no live deployment uses
 
-> Status: accepted
+> Status: superseded in part by [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md) (item 5's gate)
 > Date: 2026-10-19
 
 Drafted for #1593, for which the Garam PM reserved this number on

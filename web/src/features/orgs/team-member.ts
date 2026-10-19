@@ -94,8 +94,7 @@ export function resolveTeamMembers(
         };
       }
       case "agent": {
-        // An agent's name is its definition's; a reported agent no
-        // definition read names has none, or one that was not read.
+        // garam holds no name for an agent (ADR-0118).
         const { lookup, agent } = lookUpAgent(agents, memberGrn);
         return {
           grn: memberGrn,
@@ -103,7 +102,7 @@ export function resolveTeamMembers(
           kind,
           label: agent?.name ?? null,
           lookup,
-          nameRead: agents.definitions.status !== "forbidden",
+          nameRead: true,
         };
       }
       case "unknown":
@@ -122,10 +121,8 @@ export function resolveTeamMembers(
 /**
  * The people and agents of the organization the team does not hold,
  * people first, each with its identifier. A person without a name on
- * record is offered as having none. An agent is offered by name,
- * including one still awaiting an operator: its GRN is minted with its
- * definition, and a team holds GRNs (ADR-0075). A refused list offers
- * no one.
+ * record is offered as having none, as is every agent, since garam
+ * holds no name for one. A refused list offers no one.
  */
 export function teamCandidates(
   members: readonly GroupMember[],
@@ -149,7 +146,6 @@ export function teamCandidates(
         kind: "agent",
         name: agent.name ?? UNNAMED_AGENT,
         identifier: agent.identifier,
-        ...(agent.reported === "awaiting" ? { note: "awaiting operator" } : {}),
       })),
   ];
 }

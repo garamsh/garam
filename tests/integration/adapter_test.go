@@ -372,13 +372,29 @@ func (s *executionStack) stateOf(t *testing.T, id string) string {
 	return string(status.State)
 }
 
+// activatedProcess runs a fenced adapter for the stack's agent until
+// its execution holds an activation, then stops its loop, so a test can
+// make calls of its own on what that activation opened.
+func activatedProcess(t *testing.T, s *executionStack) *adapterProcess {
+	t.Helper()
+	c := newControlStandIn(t, s)
+	proc := startAdapter(t, s, c, newRuntimeDouble(t, s.agent, s.epoch, generationOf(1)),
+		&heldPair{pair: s.agentPair(t)}, placementToken(t, "placement-1"))
+	require.Eventually(t, func() bool {
+		_, err := proc.execution.Present()
+		return err == nil
+	}, 10*time.Second, 10*time.Millisecond, "the adapter activates its generation")
+	proc.stop()
+	return proc
+}
+
 // TestAdapter_ReadsAClaimsConflictAsTheFenceAndARenewalsAsALapse holds
 // ADR-0084's reading of the claim route against the real listener: a
 // 409 on a claim has no source but the fence, so a certificate past its
 // validity on the connection it opened is read as the fence and closes
-// the execution. The same certificate's own current successor claiming
-// unfenced is the control, and a renewal's 409 for a hold that is gone
-// still reads as a lapse.
+// the execution, though it presents the current activation's token. The
+// current certificate claiming under that token is the control, and a
+// renewal's 409 for a hold that is gone still reads as a lapse.
 func TestAdapter_ReadsAClaimsConflictAsTheFenceAndARenewalsAsALapse(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
@@ -393,83 +409,51 @@ func TestAdapter_ReadsAClaimsConflictAsTheFenceAndARenewalsAsALapse(t *testing.T
 	s.clock.shift(leaf.NotAfter.Add(-time.Minute).Sub(time.Now()))
 	s.open(t, expiredTLS)
 	s.clock.shift(0)
+	proc := activatedProcess(t, s)
 
-	expired := delivery.NewLegacyExecution()
-	queue, err := delivery.NewHTTPQueue(expiredTLS, s.machine, s.agent, expired, delivery.NewCertificate(nil))
+	s.postTo(t, "hello")
+	claim, err := proc.queue.Claim(context.Background())
+	require.NoError(t, err, "the control: the current certificate claims under the activation")
+	require.NoError(t, proc.queue.Complete(context.Background(), claim.ID))
+	_, err = proc.queue.Renew(context.Background(), claim.ID)
+	assert.ErrorIs(t, err, delivery.ErrClaimLapsed, "a renewal's 409 for a hold that is gone is a lapse")
+	_, err = proc.execution.Present()
+	assert.NoError(t, err, "which fences nothing")
+
+	expired, err := delivery.NewHTTPQueue(expiredTLS, s.machine, s.agent, proc.execution, delivery.NewCertificate(nil))
 	require.NoError(t, err)
-	_, err = queue.Claim(context.Background())
+	_, err = expired.Claim(context.Background())
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "the claim's 409 is the fence: %v", err)
 	assert.Contains(t, err.Error(), "409 failed_precondition: credential is not current")
-	_, err = expired.Present()
+	_, err = proc.execution.Present()
 	assert.ErrorIs(t, err, delivery.ErrInactive, "and closes the execution")
-
-	current := delivery.NewLegacyExecution()
-	control, err := delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, current, delivery.NewCertificate(nil))
-	require.NoError(t, err)
-	s.postTo(t, "hello")
-	claim, err := control.Claim(context.Background())
-	require.NoError(t, err, "the control: the current certificate claims unfenced")
-	require.NoError(t, control.Complete(context.Background(), claim.ID))
-	_, err = control.Renew(context.Background(), claim.ID)
-	assert.ErrorIs(t, err, delivery.ErrClaimLapsed, "a renewal's 409 for a hold that is gone is a lapse")
-	_, err = current.Present()
-	assert.NoError(t, err, "which fences nothing")
-}
-
-// TestAdapter_ALegacyAdapterOfACutOverAgentIsRefusedByGaram is the
-// misconfiguration ADR-0084 leaves to garam: an adapter run without
-// control settings for an agent already activated presents no token,
-// and garam refuses its claim. The same legacy claim before the cutover
-// is the control.
-func TestAdapter_ALegacyAdapterOfACutOverAgentIsRefusedByGaram(t *testing.T) {
-	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
-
-	before := delivery.NewLegacyExecution()
-	queue, err := delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, before, delivery.NewCertificate(nil))
-	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_, err = queue.Claim(ctx)
-	assert.ErrorIs(t, err, delivery.ErrNoMessageReady, "the control: a legacy agent claims without a token")
-
-	s.activated(t, "r-1", generationOf(1), nil, s.leaf)
-	after := delivery.NewLegacyExecution()
-	queue, err = delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, after, delivery.NewCertificate(nil))
-	require.NoError(t, err)
-	_, err = queue.Claim(context.Background())
-	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "%v", err)
-	assert.Contains(t, err.Error(), "401 unauthenticated")
 }
 
 // TestAdapter_ReadsAnotherTenantsRefusalAsTheFence is an adapter
 // presenting another organization's agent certificate against this
-// agent's queue: garam refuses it, and the adapter stops rather than
-// retrying. That certificate's own queue is the control.
+// agent's queue, beside the activation's token: garam refuses it, and
+// the adapter stops rather than retrying. The agent's own certificate
+// on the same queue under the same token is the control.
 func TestAdapter_ReadsAnotherTenantsRefusalAsTheFence(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	other := scopedGRN("globex", "agent", "0f0e0d0c0b0a0908")
 	otherTLS := machineClient(t, installed(t, p, s.issuer, other))
+	proc := activatedProcess(t, s)
 
-	wrong := delivery.NewLegacyExecution()
-	queue, err := delivery.NewHTTPQueue(otherTLS, s.machine, s.agent, wrong, delivery.NewCertificate(nil))
-	require.NoError(t, err)
-	_, err = queue.Claim(context.Background())
-	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "%v", err)
-	_, err = wrong.Present()
-	assert.ErrorIs(t, err, delivery.ErrInactive, "another tenant's refusal stops protected work")
-
-	own := delivery.NewLegacyExecution()
-	queue, err = delivery.NewHTTPQueue(otherTLS, s.machine, other, own, delivery.NewCertificate(nil))
-	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err = queue.Claim(ctx)
-	assert.ErrorIs(t, err, delivery.ErrNoMessageReady, "the control: its own queue answers")
+	_, err := proc.queue.Claim(ctx)
+	assert.ErrorIs(t, err, delivery.ErrNoMessageReady, "the control: its own certificate's queue answers")
+
+	wrong, err := delivery.NewHTTPQueue(otherTLS, s.machine, s.agent, proc.execution, delivery.NewCertificate(nil))
+	require.NoError(t, err)
+	_, err = wrong.Claim(context.Background())
+	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "%v", err)
+	_, err = proc.execution.Present()
+	assert.ErrorIs(t, err, delivery.ErrInactive, "another tenant's refusal stops protected work")
 }
 
 // TestAdapter_CarriesAMessageAndAReplacementFencesTheGenerationBefore
@@ -563,8 +547,8 @@ func TestAdapter_ForwardsWhatGaramSignedSoTheRuntimeCanVerifyIt(t *testing.T) {
 
 // TestAdapter_ReplaysItsActivationAcrossRenewalAndRestart is the
 // consumer test #1169's 16:47 decision asks for. A restarted adapter
-// presenting a renewed certificate replays the same request and is
-// answered the same activation at a higher token version. The expired
+// presenting another certificate of the agent replays the same request
+// and is answered the same activation at a higher token version. The expired
 // first certificate, and the same request after the activation ended,
 // are refused, and the adapter pauses on each rather than retrying.
 func TestAdapter_ReplaysItsActivationAcrossRenewalAndRestart(t *testing.T) {
@@ -582,20 +566,17 @@ func TestAdapter_ReplaysItsActivationAcrossRenewalAndRestart(t *testing.T) {
 	first := s.standing(t, s.leaf, ptr(generationOf(1)))
 	require.Equal(t, machinegen.ExecutionIntrospectionGenerationCurrent, first.Generation)
 
-	// The agent renews its own certificate over its connection, as
-	// ADR-0040 has it, presenting the token it holds.
-	presented, err := one.execution.Present()
-	require.NoError(t, err)
-	renewal := s.send(t, s.agentTLS, http.MethodPost, s.agentPath("/certificate"), "", bearer(string(presented)), "")
-	require.Equal(t, http.StatusCreated, renewal.status, renewal.body)
-	var renewed machinegen.MachineCertificate
-	require.NoError(t, json.Unmarshal([]byte(renewal.body), &renewed))
+	// The agent holds a second certificate garam issued it.
 	one.stop()
+	renewed, err := s.issuer.Issue(context.Background(), s.agent)
+	require.NoError(t, err)
+	renewedPair, err := tls.X509KeyPair(renewed.CertificatePEM(), renewed.PrivateKeyPEM())
+	require.NoError(t, err)
 
-	held.replace(pairOf(t, renewed))
+	held.replace(renewedPair)
 	two := startAdapter(t, s, c, rt, held, token)
 	require.Eventually(t, func() bool { _, err := two.execution.Present(); return err == nil },
-		10*time.Second, 10*time.Millisecond, "the restarted process is activated with the renewed certificate")
+		10*time.Second, 10*time.Millisecond, "the restarted process is activated with the second certificate")
 	asked := c.requests()
 	require.Len(t, asked, 2)
 	assert.Equal(t, asked[0], asked[1], "the restart replays the same request: the certificate is not part of it")
@@ -624,7 +605,7 @@ func TestAdapter_ReplaysItsActivationAcrossRenewalAndRestart(t *testing.T) {
 	require.NotNil(t, first.ActivationId)
 	ended := s.deactivate(t, *first.ActivationId)
 	require.Equal(t, http.StatusOK, ended.status, ended.body)
-	held.replace(pairOf(t, renewed))
+	held.replace(renewedPair)
 	four := startAdapter(t, s, c, rt, held, token)
 	require.Eventually(t, func() bool { return len(c.requests()) == 4 }, 10*time.Second, 10*time.Millisecond)
 	assert.Equal(t, asked[0], c.requests()[3], "the same request")

@@ -74,8 +74,8 @@ what performs it.** `DeleteOrg` issues one statement against `orgs`;
 every row that goes does so through a foreign key declared `ON DELETE
 CASCADE`, so what is taken is fixed by the migrations rather than by any
 code path. Directly: this domain's groups, projects, memberships and
-invitations, the policies the engine stores, the agents, agent
-definitions `internal/agent` owns, the operators
+invitations, the policies the engine stores, the agents
+`internal/agent` owns, the operators
 `internal/operator` registers, and the organization's certificate
 authority. Through those: a group's and a project's members, a policy's
 versions and attachments, an agent's assignment, and an operator's keys

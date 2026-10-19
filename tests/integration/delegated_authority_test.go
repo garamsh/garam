@@ -19,6 +19,7 @@ import (
 
 	apigen "github.com/garamsh/garam/api"
 	machinegen "github.com/garamsh/garam/api/machine"
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
@@ -224,14 +225,14 @@ func TestDelegatedAuthority_EndToEnd(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, status, "a retried withdrawal")
 }
 
-// provisionAgent has the controller create an agent assigned to it.
+// provisionAgent stands an agent up assigned to the controller.
 func (s *authorityStack) provisionAgent(t *testing.T) string {
 	t.Helper()
-	status, body := machineRequest(t, s.controlTLS, http.MethodPost, s.machine+"/agents")
-	require.Equal(t, http.StatusCreated, status, string(body))
-	var created machinegen.AgentAssignment
-	require.NoError(t, json.Unmarshal(body, &created))
-	return created.Grn
+	agents := agent.NewPostgresStore(s.pool)
+	g := seedAgent(t, agents, grn.Org(s.controller.Organization))
+	_, err := agents.Assign(context.Background(), g, s.controller)
+	require.NoError(t, err)
+	return g.String()
 }
 
 // TestDelegatedAuthority_RefusesPastAStaleCachedAllow holds that a Deny

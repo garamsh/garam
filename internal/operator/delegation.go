@@ -76,12 +76,6 @@ const (
 	// runtime-reported execution. Reading the agent's identity, which
 	// agent:read is, grants none of it.
 	OperationExecutionRead Operation = "agent:execution-read"
-	// OperationAgentCutover moves a legacy agent's source to the hosted
-	// operator under the agent's existing GRN: a high-trust action no
-	// member role grants. Each reference binds the request target of the
-	// one cutover route it is carried to, so it authorizes one stage
-	// (ADR-0086).
-	OperationAgentCutover Operation = "agent:cutover"
 	// OperationOperatorRead reads what the Operator reports for every
 	// operator of the organization: its images and its last contact
 	// (#1374). It is the action a member already holds to list them.
@@ -99,7 +93,7 @@ func ParseOperation(s string) (Operation, error) {
 	switch o := Operation(s); o {
 	case OperationAgentCreate, OperationAgentConfigure, OperationAgentActivate, OperationAgentRecover,
 		OperationTemplateRead, OperationTemplatePublish, OperationProfileRead, OperationExecutionRead,
-		OperationAgentCutover, OperationOperatorRead, OperationAgentReplace:
+		OperationOperatorRead, OperationAgentReplace:
 		return o, nil
 	}
 	return "", errorx.New(errorx.KindInvalidArgument, "unknown operation "+s)
@@ -116,7 +110,7 @@ func (o Operation) IsMintable() bool {
 // it is minted.
 func (o Operation) TargetsAgent() bool {
 	return o == OperationAgentConfigure || o == OperationAgentRecover || o == OperationExecutionRead ||
-		o == OperationAgentCutover || o == OperationAgentReplace
+		o == OperationAgentReplace
 }
 
 // BindsDestination reports whether an authority for the operation
@@ -138,7 +132,7 @@ func (o Operation) TargetsOrg() bool {
 // operation that does was added with that binding; the earlier ones
 // bind only their body and take none.
 func (o Operation) BindsRequestTarget() bool {
-	return o.TargetsOrg() || o == OperationExecutionRead || o == OperationAgentCutover
+	return o.TargetsOrg() || o == OperationExecutionRead
 }
 
 // RequestID is a caller's stable identifier for one write, which makes

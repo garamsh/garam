@@ -247,7 +247,6 @@ func TestCheckPermissions_AsksAGrantActionAsItsMintDoes(t *testing.T) {
 		{org.ActionExecutionProfileRead, nil, false},
 		{org.ActionAgentConfigure, agentX, true},
 		{org.ActionAgentRecover, agentX, true},
-		{org.ActionAgentCutover, agentX, true},
 		{org.ActionAgentExecutionRead, agentX, true},
 	}
 	for _, tc := range tests {

@@ -19,33 +19,23 @@ const (
 )
 
 // Execution is what this adapter's protected calls present and whether
-// they may be made at all. A legacy execution presents no token and is
-// open from the start, for an agent that was never cut over; a fenced
-// one opens only on an activation. Either closes on garam refusing what
-// was presented.
+// they may be made at all. It opens only on an activation and closes on
+// garam refusing what was presented.
 type Execution struct {
-	fenced bool
-
 	mu         sync.Mutex
 	gate       gate
 	activation *Activation
 	changed    chan struct{}
 }
 
-// NewLegacyExecution is the execution of an agent never cut over to
-// activated execution: no token, and no activation to wait for.
-func NewLegacyExecution() *Execution {
-	return &Execution{gate: gateOpen, changed: make(chan struct{})}
-}
-
 // NewFencedExecution is the execution of an agent whose protected calls
 // carry an activation's token, closed until one is held.
 func NewFencedExecution() *Execution {
-	return &Execution{fenced: true, gate: gateClosed, changed: make(chan struct{})}
+	return &Execution{gate: gateClosed, changed: make(chan struct{})}
 }
 
-// Present answers the token a protected call carries, empty for a
-// legacy execution, or ErrInactive while the gate is not open.
+// Present answers the token a protected call carries, or ErrInactive
+// while the gate is not open.
 func (e *Execution) Present() (Token, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -129,14 +119,6 @@ func (e *Execution) withdraw() {
 	if e.gate == gateOpen {
 		e.set(gateClosed)
 	}
-}
-
-// open lets protected calls through on what is already held, which for
-// a legacy execution is nothing.
-func (e *Execution) open() {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	e.set(gateOpen)
 }
 
 // set moves the gate and wakes whoever waits on it. The caller holds

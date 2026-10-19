@@ -27,10 +27,6 @@ const TokenExecutionContractVersion = "execution-fence.v2"
 // which part of the fence refused it; none says which process holds
 // the agent now.
 var (
-	// ErrExecutionNotCutOver refuses an execution token presented for
-	// an agent that has never been activated: its mode is still legacy,
-	// and a token cannot select another.
-	ErrExecutionNotCutOver = errorx.New(errorx.KindFailedPrecondition, "agent has not cut over to activated execution")
 	// ErrExecutionTokenRequired refuses a write without a token for an
 	// agent whose execution is fenced.
 	ErrExecutionTokenRequired = errorx.New(errorx.KindUnauthenticated, "execution token required")
@@ -59,12 +55,10 @@ var (
 	// ErrAuthorityExpired refuses an act whose grant or handoff expired
 	// before the fence was taken, however recently it was checked.
 	ErrAuthorityExpired = errorx.New(errorx.KindPermissionDenied, "authority expired")
-	// ErrIssuedByLifecycle refuses an operator's request for the
-	// certificate of an agent whose execution is fenced: from its
-	// cutover on, or from its managed creation, its certificates come
-	// from initial issuance, renewal inside its lineage or recovery
-	// (ADR-0078).
-	ErrIssuedByLifecycle = errorx.New(errorx.KindFailedPrecondition, "agent certificates are issued by renewal or recovery once its execution is fenced")
+	// ErrIssuedByLifecycle refuses a token for an agent whose execution
+	// holds no lineage yet: its lifecycle authority opens one, and its
+	// tokens are minted inside it (ADR-0078, ADR-0100).
+	ErrIssuedByLifecycle = errorx.New(errorx.KindFailedPrecondition, "agent tokens are minted inside the lineage its lifecycle authority opened")
 	// ErrUnsupportedExecutionContract refuses a request carrying no
 	// contract version, or another.
 	ErrUnsupportedExecutionContract = errorx.New(errorx.KindInvalidArgument,
@@ -87,26 +81,6 @@ var (
 	// recovered.
 	ErrRecoveryConflict = errorx.New(errorx.KindAlreadyExists, "recovery conflicts with an earlier one")
 )
-
-// Mode is whether an agent's writes are fenced by an activation. An
-// agent is legacy until its first activation and fenced from then on,
-// and one a managed creation made is fenced from birth; nothing a
-// caller sends selects it.
-type Mode string
-
-const (
-	ModeLegacy Mode = "legacy"
-	ModeFenced Mode = "fenced"
-)
-
-// ParseMode reads a stored mode.
-func ParseMode(s string) (Mode, error) {
-	switch m := Mode(s); m {
-	case ModeLegacy, ModeFenced:
-		return m, nil
-	}
-	return "", errorx.New(errorx.KindInvalidArgument, "unknown execution mode")
-}
 
 var generationPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
@@ -229,7 +203,6 @@ type Admission string
 const (
 	AdmissionAdmitted         Admission = "admitted"
 	AdmissionUnknownAgent     Admission = "unknown_agent"
-	AdmissionNotCutOver       Admission = "not_cut_over"
 	AdmissionTokenRequired    Admission = "token_required"
 	AdmissionTokenStale       Admission = "token_stale"
 	AdmissionCredentialFenced Admission = "credential_fenced"
@@ -244,8 +217,6 @@ func (a Admission) Err() error {
 		return nil
 	case AdmissionUnknownAgent:
 		return ErrAgentNotFound
-	case AdmissionNotCutOver:
-		return ErrExecutionNotCutOver
 	case AdmissionTokenRequired:
 		return ErrExecutionTokenRequired
 	case AdmissionTokenStale:
@@ -303,11 +274,10 @@ type ActivationRequest struct {
 	TokenHash    TokenHash
 }
 
-// Execution is an agent's execution as it stands: its mode, the
+// Execution is an agent's execution as it stands: its lineage, the
 // activation admitting writes now if any, and the most recent one.
 type Execution struct {
 	Agent   grn.GRN
-	Mode    Mode
 	Lineage *Lineage
 	Current *CurrentActivation
 	Latest  *ActivationID
@@ -319,7 +289,6 @@ type Snapshot struct {
 	// Assignee is nil for an agent with no assignment.
 	Assignee          *grn.GRN
 	Epoch             int
-	Mode              Mode
 	CredentialCurrent bool
 	Current           *CurrentActivation
 }

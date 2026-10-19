@@ -45,38 +45,12 @@ type Store interface {
 	// about itself, or ErrStaleEpoch, in one transaction the execution
 	// fence admits first (ADR-0080).
 	ReportRuntimeState(ctx context.Context, agentGRN grn.GRN, epoch int, state RuntimeState, fence Fencing) (*Agent, error)
-	// AdmitLegacyIssuance answers nil while the operator's certificate
-	// route may answer for the agent, ErrIssuedByLifecycle once its
-	// execution is fenced, ErrCutOver once its cutover is switched, or
-	// ErrAgentNotFound. It reads both under the execution row FOR
-	// SHARE (ADR-0086).
-	AdmitLegacyIssuance(ctx context.Context, agentGRN grn.GRN) error
-	// GetDefinition returns the definition naming the agent, or
-	// ErrDefinitionNotFound.
-	GetDefinition(ctx context.Context, agentGRN grn.GRN) (*Definition, error)
-	// RenameDefinition changes what the organization calls the agent
-	// and nothing else, or answers ErrDefinitionNotFound (ADR-0075).
-	RenameDefinition(ctx context.Context, agentGRN grn.GRN, name Name) (*Definition, error)
-	// CountByOrg counts the organization's agents and definitions,
-	// which deleting the organization removes with it. An
+	// CountByOrg counts the organization's agents, which deleting the
+	// organization removes with it. An
 	// organization that does not exist holds none, so the zero
 	// OrgCounts is its answer rather than an error.
 	CountByOrg(ctx context.Context, orgGRN grn.GRN) (OrgCounts, error)
-	// ListDefinitionsByOrg returns the organization's definitions,
-	// ordered by the agent GRN each one names.
-	ListDefinitionsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Definition, error)
-	// SearchByOrg answers the organization's agents whose name or
-	// identifier holds n, case aside: the defined ones ordered by GRN,
-	// then the ones no definition names, ordered by GRN.
-	SearchByOrg(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]Found, error)
-	// ListDefinitionsByOperator returns the definitions naming the
-	// operator, each with the assignment claiming it, ordered by the
-	// agent GRN each one names.
-	ListDefinitionsByOperator(ctx context.Context, operatorGRN grn.GRN) ([]*DefinitionState, error)
-	// Claim binds the definition's agent to the operator: the agent row
-	// and the assignment at its first epoch, in one transaction, so the
-	// record and the binding never exist apart. It answers
-	// ErrDefinitionNotFound when no definition names the agent for this
-	// operator and ErrDefinitionClaimed when one already claimed it.
-	Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error)
+	// SearchByOrg answers the organization's agents whose identifier
+	// holds n, case aside, ordered by GRN.
+	SearchByOrg(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]grn.GRN, error)
 }

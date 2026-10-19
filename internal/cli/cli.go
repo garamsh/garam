@@ -1,11 +1,7 @@
 // Package cli owns the cobra command tree for the garam binary
 // (ADR-0003, ADR-0017): `serve api`, `serve authz`, `serve machine`,
-// `migrate`, `probe`, `issue-certificate`, `cutover-inventory` and
-// `adapter`. Commands are constructed here; cmd/garam only executes the
-// root.
-//
-// `cutover-inventory` reads, and prints no value: it accounts for an
-// organization's agent sources before their cutover (ADR-0086).
+// `migrate`, `probe`, `issue-certificate` and `adapter`. Commands are
+// constructed here; cmd/garam only executes the root.
 //
 // `adapter` is the one command that serves nothing and connects
 // outward: the delivery loop docs/architecture/adapter.md specifies,
@@ -104,9 +100,8 @@
 //	                       authority that issued the certificate above
 //	                       (required for adapter)
 //	GARAM_ADAPTER_CONTROL_URL  https base URL of the lifecycle authority
-//	                       the adapter activates through (ADR-0084; set
-//	                       with the next two, or none of the three for an
-//	                       agent never cut over)
+//	                       the adapter activates through (ADR-0084;
+//	                       required, with the next two)
 //	GARAM_ADAPTER_CONTROL_ROOT_FILE  the root that authority's serving
 //	                       certificate chains to, PEM (with the URL)
 //	GARAM_ADAPTER_PLACEMENT_TOKEN_FILE  the mounted placement token,
@@ -145,7 +140,7 @@ func NewRootCommand() *cobra.Command {
 	}
 	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(),
 		newIssueCertificateCommand(), newAdapterCommand(), newStandaloneCommand(),
-		newCutoverInventoryCommand(), newCopyMemoryCommand(), newRetireMessageSigningKeyCommand())
+		newCopyMemoryCommand(), newRetireMessageSigningKeyCommand())
 	silenceUsageOnRun(root)
 	return root
 }

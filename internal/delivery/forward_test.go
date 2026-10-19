@@ -42,12 +42,12 @@ func writeEntry(t *testing.T, dir string, entry map[string]any) {
 	require.NoError(t, os.Rename(tmp, filepath.Join(dir, entry["id"].(string)+".json")))
 }
 
-// forwarding runs a legacy loop forwarding dir's outbox.
+// forwarding runs a loop forwarding dir's outbox.
 func forwarding(t *testing.T, queue *garamQueue, dir string) func() {
 	t.Helper()
 	outbox, err := delivery.NewOutbox(dir)
 	require.NoError(t, err)
-	return start(t, legacyEnds(t, queue, newAgentGateway(t), outbox), brief())
+	return start(t, fencedEnds(t, queue, newAgentGateway(t), outbox), brief())
 }
 
 func gone(path string) func() bool {

@@ -2,6 +2,7 @@ import { HttpResponse, http, type JsonBodyType } from "msw";
 import { z } from "zod";
 
 import type { PermissionExplanation } from "@/lib/permission-explanation";
+import type { components } from "@/types/api";
 import type { User } from "@/features/auth";
 import type {
   Agent,
@@ -22,6 +23,9 @@ import type {
   PolicyVersion,
   Project,
 } from "@/features/orgs";
+
+type OrgSearch = components["schemas"]["OrgSearch"];
+type FoundKind = components["schemas"]["FoundKind"]["kind"];
 
 /** The backend base URL the tests run the server-side client against. */
 export const API_URL = "http://localhost:8080";
@@ -391,10 +395,67 @@ export const ownerAllows: Omit<PermissionExplanation, "action" | "resource"> = {
 };
 
 /** The signed-in happy path: Alice owns Acme, which holds one of each. */
+/**
+ * What `searchOrg` answers over the fixtures above: acme's objects of
+ * each kind whose name or identifier holds `q`, case aside, at most
+ * `limit` of each with the count of the rest. Another organization
+ * holds none.
+ */
+function searchFixtures(org: string, q: string, limit: number): OrgSearch {
+  const kinds: [FoundKind, { grn: string; name?: string }[]][] = [
+    [
+      "person",
+      [{ grn: aliceMembership.userGrn, name: aliceMembership.nickname }],
+    ],
+    [
+      "agent",
+      [
+        { grn: fieldAgent.agentGrn, name: fieldAgent.name },
+        ...(reportedAgent.grn === fieldAgent.agentGrn
+          ? []
+          : [{ grn: reportedAgent.grn }]),
+      ],
+    ],
+    ["team", [engineering]],
+    ["policy", [denyDeletes, baselineRead]],
+    ["project", [frontend]],
+  ];
+  const needle = q.trim().toLowerCase();
+  const holds = (text: string | undefined) =>
+    text !== undefined && text.toLowerCase().includes(needle);
+  return {
+    found: kinds.map(([kind, objects]) => {
+      const matched =
+        org === "acme"
+          ? objects
+              .filter(
+                ({ grn, name }) => holds(name) || holds(grn.split(":").at(-1)),
+              )
+              .map(({ grn, name }) => ({ grn, name }))
+          : [];
+      return {
+        kind,
+        objects: matched.slice(0, limit),
+        more: Math.max(0, matched.length - limit),
+      };
+    }),
+  };
+}
+
 export const handlers = [
   ...routes.map(({ path, body }) =>
     http.get(`${API_URL}${path}`, () => HttpResponse.json(body)),
   ),
+  http.get(`${API_URL}/orgs/:org/search`, ({ params, request }) => {
+    const query = new URL(request.url).searchParams;
+    return HttpResponse.json(
+      searchFixtures(
+        String(params.org),
+        query.get("q") ?? "",
+        Number(query.get("limit") ?? 5),
+      ),
+    );
+  }),
   // An owner may take every action, by the owner role.
   answerPermissionChecks(() => "allow"),
   answerExplanations(() => ownerAllows),

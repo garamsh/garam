@@ -1,6 +1,6 @@
 # ADR 0112: Promotions run on GitHub-hosted runners and no CI job moves to aurora
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-18
 
 Drafted for #1512, which reserved this number. It supersedes

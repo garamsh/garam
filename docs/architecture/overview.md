@@ -4,13 +4,11 @@ garam is the core of a workflow management product: identity,
 organization, and authorization for people and autonomous agents that
 collaborate on a shared plan.
 
-Pending removal
-([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)):
-the certificate path goes in G4 (#1494), and what this document says
-of it holds until then. Legacy execution mode, the staged cut-over and
-every agent definition are gone (ADR-0118), as are the operator
-enrollment token and shared-secret credential, garam's retired
-templates and the browser's `operatorGrn`
+Legacy execution mode, the staged cut-over, every agent definition and
+the certificate path are gone
+([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)),
+as are the operator enrollment token and shared-secret credential,
+garam's retired templates and the browser's `operatorGrn`
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)).
 
 ## Contents
@@ -26,45 +24,26 @@ templates and the browser's `operatorGrn`
 - Identities for users, including organization membership. Agent
   identity and the operator an agent is assigned to are persisted
   (ADR-0012); an agent is never an org member (ADR-0014).
-- A certificate authority per organization, created on demand, which
-  issues the client certificates machine identities authenticate with
-  (ADR-0014). The subject's GRN travels in a SAN URI; the CA private key
-  reaches Postgres sealed under a key-encryption key.
 - A listener machine identities authenticate on, `garam serve machine` —
   a process of its own, the third from the one image (ADR-0017). It
-  terminates TLS itself, asks for a client certificate, and verifies
-  the one it is given against the authority of the organization the
-  certificate's own SAN names (ADR-0014). A connection that presents
-  none, and one whose certificate does not verify, completes the
-  handshake carrying no identity rather than being refused there —
-  which is what leaves a standalone host's enrollment and the token
-  exchanges reachable to a caller that holds none, and costs nothing
-  elsewhere, because every other operation refuses a request carrying
-  no identity. An agent and an
-  operator authenticate the same way (ADR-0015), and neither
-  authenticates through a user row, a session or a membership.
+  terminates TLS itself, asks for no client certificate, and reads the
+  token a request presents on every request
+  ([ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md),
+  ADR-0118). A request that presents none carries no identity rather
+  than being refused there — which is what leaves a standalone host's
+  enrollment and the token exchanges reachable to a caller that holds
+  none, and costs nothing elsewhere, because every other operation
+  refuses a request carrying no identity. An agent, an operator and a
+  supervisor authenticate the same way, and none authenticates through
+  a user row, a session or a membership.
   What that listener serves has a specification of its own (ADR-0019).
-  The other direction rests on a different root: the listener presents
-  one certificate signed by a garam server authority the deployment
-  holds and garam never does, every identity is given that root with its
-  own certificate, and both ends read their pair per handshake so a
-  replaced one is served without a restart (ADR-0040).
-- An operator creating an agent and obtaining its certificate, on that
-  listener. garam mints the agent's GRN in the operator's own
-  organization and assigns it at an epoch; an operator obtains the
-  certificate of an agent assigned to it at the current epoch and of no
-  other, which is the whole of the authorization there (ADR-0015). The
-  process that issues holds the key its authorities are sealed under
-  and does not start without it (ADR-0016).
-- An operator renewing its own certificate on that listener, by
-  presenting the one it holds (ADR-0046). garam records the certificate
-  it last issued each operator and renews that one alone, so a copy of
-  it stops renewing the moment the operator does; a certificate outside
-  its renewal window and one that has expired are both refused, and what
-  follows an expired one is the out-of-band mint (ADR-0032). Nothing
-  on this route withdraws a certificate: it narrows what a copy may do
-  next and leaves it authenticating, and what withdraws one is deleting
-  the operator (ADR-0070).
+  garam is verified by a different root: the listener presents one
+  certificate signed by a garam server authority the deployment holds
+  and garam never does, every caller is given that root beside the
+  credential garam issues it, and the listener reads its pair per
+  handshake so a replaced one is served without a restart (ADR-0040).
+  The process holds the key-encryption key its message signing keys are
+  sealed under and does not start without it (ADR-0016, ADR-0101).
 - An operator reporting what it sees of an agent's pod, and an agent
   reporting what it says about itself, each on a route of its own on
   the machine listener (ADR-0053). They are the two facts ADR-0012 puts
@@ -72,13 +51,13 @@ templates and the browser's `operatorGrn`
   the epoch its assignment is on and is accepted only at the current
   one, so the pod a replaced operator left running writes nothing; the
   operator route is bounded by the assignment besides, exactly as the
-  certificate route is.
+  token mint is.
 - An organization's members reading the agents it holds, over the
   browser API under `/orgs/{org}/agents`. An agent is answered with the
   state its operator reports and the state it reports itself, kept as
   the separate facts ADR-0012 makes them, and with the operator or
   standalone supervisor holding it at which epoch. That surface reads
-  only: it assigns no agent and issues no certificate.
+  only: it assigns no agent and issues no credential.
 - An organization **registering** an operator, under
   `/orgs/{org}/operators`, and its members reading the list (ADR-0045).
   A record is a GRN, who registered it and when, and it reports
@@ -86,12 +65,11 @@ templates and the browser's `operatorGrn`
   nothing: the operator enters by a key issued on the record, whose
   signed assertions it exchanges for short-lived tokens (ADR-0102,
   ADR-0117). What the record grants is admission: the
-  machine listener reads it per connection for a certificate and per
-  request for a token, so an operator authenticates while its
-  organization holds the record and stops when the record goes
-  (ADR-0070). The identifier is supplied rather than minted, since an
-  operator that already holds a certificate has to be registered under
-  the GRN that certificate names. A name and description beside it are
+  machine listener reads it on every request for a token, so an
+  operator authenticates while its organization holds the record and
+  stops when the record goes (ADR-0070). The identifier is supplied
+  rather than minted, since the operator is configured with it before
+  it is registered. A name and description beside it are
   the organization's words about the record and not its identity
   (ADR-0074). Registering is granted by `operator:register`, reading by
   `operator:read`, renaming and describing by `operator:update`,
@@ -105,8 +83,8 @@ templates and the browser's `operatorGrn`
   `/orgs/{org}/operation-authorities`, which the operator reads back on
   the machine listener (ADR-0078), where it also proves a controller's
   current authority before each lifecycle decision, creates a managed
-  agent and issues its first certificate under a member's
-  `agent:create` reference (ADR-0077), and activates, inspects,
+  agent under a member's `agent:create` reference (ADR-0077), and
+  activates, inspects,
   deactivates and recovers an agent's execution. A grant is
   immutable and a replacement or withdrawal is final for what was
   minted under it; every mint, read back and proof is decided from
@@ -122,15 +100,15 @@ templates and the browser's `operatorGrn`
   holds the rest.
 - An administrator **approving a standalone host** for one agent,
   under `/orgs/{org}/agent-enrollments`, by the hash of the host's
-  bootstrap secret and the fingerprints of its two keys, or of none
-  for a v2 host, and the placement its supervisor runs the agent
+  bootstrap secret and the placement its supervisor runs the agent
   under, its own three containers or a runtime the host runs
   directly (ADR-0111), and revoking
   the supervisor that approval registered under
   `/orgs/{org}/agent-supervisors` (ADR-0082). The host spends the
-  approval on the machine listener for its supervisor's and its
-  agent's first certificates, and the supervisor then activates that
-  one agent on the execution routes and renews its own certificate.
+  approval on the machine listener for its supervisor's credential,
+  which the supervisor exchanges for tokens, mints its agent's tokens
+  with, and activates that one agent on the execution routes with
+  (ADR-0100).
   No operator, grant or hosted service is involved. Approving,
   withdrawing and revoking are `agent:enroll`;
   [agents.md](./agents.md) §Standalone hosts holds the rest, and what
@@ -265,43 +243,15 @@ templates and the browser's `operatorGrn`
   the chart renders no exposure at all.
 - Workflow execution engine, scheduler, queue.
 - Notifications.
-- The rest of the agent surface. An operator creates an agent, obtains
-  its certificate and reports what it sees of the pod, the agent
-  reports itself, and a message is posted, claimed, renewed and
-  completed (see In scope); what the listener does not serve is
-  deprovisioning an agent. A state is reported and never expired, so
-  nothing tells an agent that has gone quiet from one that is running
-  (ADR-0053). The adapter carries messages and forwards nothing (see
-  the watching entry below). An agent renews its own certificate on the
-  certificate route (ADR-0040) and an operator renews its own by
-  presenting it (ADR-0046); an operator's first is minted out of band
-  (ADR-0032), and an agent's first
-  still arrives on the route its operator's claim admits it to, unless
-  the agent was created managed: then it is signed over its
-  controller's key under the creation's reference, or created
-  standalone: then it is signed over the host's approved key with its
-  supervisor's (ADR-0082). Once an agent's GRN cuts over, its renewal
-  is inside its current lineage and a lost certificate is recovered
-  rather than reissued (ADR-0078). A standalone host's supervisor runs
-  on the host, not in garam (ADR-0085).
-- Revoking a certificate. There is still no revocation list, no
-  responder, and no serial the TLS handshake checks, so an agent's
-  certificate authenticates a connection until it expires (ADR-0014).
-  What it may then do is narrower: once the agent has been recovered,
-  a certificate outside the new lineage is refused per request by the
-  execution fence, though its connection still authenticates
-  (`machine-identity.md` §Generation and lineage). An operator is the
-  other exception and it is
-  not a certificate mechanism either: deleting the operator withdraws
-  the record its certificate authenticates on, so every certificate
-  naming it is refused from the next connection while none of them is
-  revoked (ADR-0070). A standalone host's supervisor is the same:
-  revoking or replacing it ends the registration its certificate
-  authenticates on (ADR-0082).
-- Requiring a registered operator before minting its certificate out
-  of band. `garam issue-certificate` mints one reading no record, and
-  whether it should require one is a real question ADR-0045 raises and
-  leaves open.
+- The rest of the agent surface. An operator creates an agent, mints
+  its tokens and reports what it sees of the pod, the agent reports
+  itself, and a message is posted, claimed, renewed and completed (see
+  In scope); what the listener does not serve is deprovisioning an
+  agent. A state is reported and never expired, so nothing tells an
+  agent that has gone quiet from one that is running (ADR-0053). The
+  adapter carries messages and forwards nothing (see the watching entry
+  below). A standalone host's supervisor runs on the host, not in garam
+  (ADR-0085).
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies no
   sender (Sherlock at
@@ -417,22 +367,19 @@ templates and the browser's `operatorGrn`
   every postgres-backed store binds and scans through, and the `ILIKE`
   pattern a search binds. Shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
-  | `serve machine` | `migrate` | `probe` | `issue-certificate` |
-  `adapter`).
+  | `serve machine` | `migrate` | `probe` | `adapter`).
 - `internal/health/` — what liveness and readiness mean, and the two
   probes every serve command mounts (ADR-0021).
 - `internal/operator/` — the record that an organization has an
   operator (ADR-0045), which holds no reported state; the operator's
-  keys and the tokens it exchanges them for (ADR-0102); and the
-  operator's own certificate: which one garam last issued it, and what
-  it takes to replace that with the next (ADR-0046).
+  keys and the tokens it exchanges them for (ADR-0102).
 - `internal/agent/` — agent identities and the operator each is
   assigned to.
-- `internal/ca/` — the per-organization certificate authority and the
-  certificates it issues.
-- `internal/machine/` — the machine identity a client certificate
-  names, the listener that verifies one, and the evidence of how each
-  caller authenticated, kept by `internal/machine/postgres` (ADR-0109).
+- `internal/ca/` — the sealer key material is sealed under against a
+  database dump, opened by the key-encryption key (ADR-0016).
+- `internal/machine/` — the machine identity a token names, the
+  listener that reads one, and the evidence of how each caller
+  authenticated, kept by `internal/machine/postgres` (ADR-0109).
 - `internal/machineapi/` — handlers implementing the ServerInterface
   generated from the machine listener's spec.
 - `internal/message/` — the durable queue a message reaches an agent
@@ -514,13 +461,10 @@ it and imports no request surface and no domain.
 | `agent.Agent` | `internal/agent` | autonomous actor an operator provisions |
 | `agent.Assignment` | `internal/agent` | agent-to-operator binding, fenced by an epoch |
 | `agent.Service` | `internal/agent` | records the state each party reports, and mints an agent's tokens for the operator or supervisor holding it |
-| `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
-| `ca.Certificate` | `internal/ca` | signed client certificate identified by a SAN URI, over a key garam generated or one a request carried |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
-| `operator.Credential` | `internal/operator` | the certificate a connection authenticated with, as the renewal rule reads it |
-| `operator.Service` | `internal/operator` | mints an operator's certificate out of band, renews the one an operator presents, and exchanges a key's signed assertion for a token |
-| `machine.Identity` | `internal/machine` | the GRN a verified client certificate names, and which certificate named it |
-| `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |
+| `operator.Service` | `internal/operator` | exchanges a key's signed assertion for a token, and proves an operator by a token shown to another |
+| `machine.Identity` | `internal/machine` | the GRN a token names, with the token's serial and dates |
+| `machine.Recheck` | `internal/machine` | reads an identity's token dates and registration again for one decision |
 | `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |
 | `machine.Evidence` | `internal/machine` | each caller's last authentication by path, the G3 gate's inventory, never a credential (ADR-0109) |
 | `message.Message` | `internal/message` | one message addressed to a recipient |
@@ -567,20 +511,20 @@ it and imports no request surface and no domain.
 | Agents are provisioned by operators garam never dials | An operator is a peer, so a user can supply their own; garam is never the side that connects. | [adr/0012-agent-operator-model.md](./adr/0012-agent-operator-model.md) |
 | Messages reach an agent by polling, not by push | A queue in Postgres has no connection to route to, so any instance answers any poll. | [adr/0013-agent-messaging.md](./adr/0013-agent-messaging.md) |
 | garam signs every message it hands out | An agent judges a message by a signature that travels with it, not by the path it arrived on, so it can verify garam without trusting garam's transport. | [adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md) |
-| A deployment may hold message signing keys in OpenBao Transit; the file key-encryption key stays the default | Transit signs, so no private half reaches the database or garam's memory, and an optional provider a deployment hosts itself is no vendor every deployment must reach; the authorities stay on the key-encryption key because they go at G4. | [adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md) |
-| Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
-| garam presents one pinned server certificate and certificates rotate without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; expiry is the only revocation, and a lifetime short enough to be one is unusable when every rotation is a restart. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
+| A deployment may hold message signing keys in OpenBao Transit; the file key-encryption key stays the default | Transit signs, so no private half reaches the database or garam's memory, and an optional provider a deployment hosts itself is no vendor every deployment must reach. | [adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md) |
+| Every machine caller authenticates with a garam-issued credential and short-lived tokens over server TLS | A token read on every request is withdrawn on the next one, where a certificate stays valid until it expires; a separate listener needs no trusted proxy header. | [adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md) |
+| Every legacy path goes now, and the certificate path with them | The owner directed it, and aurora's evidence showed no caller on the certificate path; the sealed authority rows stay until the owner decides their drop. | [adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md) |
+| garam presents one pinned server certificate that rotates without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; every caller pins one root, and a replaced pair is served on the next handshake. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
 | An organization registers an operator | The registration is the record the console lists and the machine listener admits an operator on, so an identity nobody registered is one nothing reports. | [adr/0045-an-organization-registers-an-operator.md](./adr/0045-an-organization-registers-an-operator.md) |
-| An organization deletes an operator, and the record it withdraws is what that operator authenticated on | A route that removed a record and left the certificate working was what ADR-0045 refused; making the record what admits the certificate reverses ADR-0014's revocation-by-lifetime for an operator without a list, a responder or a stored serial. | [adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md) |
-| An operator renews its certificate by presenting the one it holds | Provisioning one on a schedule needs a standing write path to the key-encryption key, for every tenant; and with no revocation, only a record of the certificate garam last issued keeps a stolen copy from renewing forever. | [adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md) |
+| An organization deletes an operator, and the record it withdraws is what that operator authenticated on | A route that removed a record and left the credential working was what ADR-0045 refused; the record is what admits the operator's token on every request. | [adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md) |
 | An operator is a machine identity of the same kind as an agent | One mechanism to secure and rotate; the assignment row already bounds what an operator may fetch. | [adr/0015-operator-identity.md](./adr/0015-operator-identity.md) |
-| A CA's key is sealed by a key the process holds, not by a KMS | A database dump opens nothing; issuing depends on no hosted service, which is what lets a user bring their own operator. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |
-| Machine identities are served by a process of their own | The surface that issues certificates holds every organization's key-encryption key, and the process serving browsers must not. | [adr/0017-machine-process.md](./adr/0017-machine-process.md) |
+| Key material garam stores is sealed by a key the process holds, not by a KMS | A database dump opens nothing, and sealing depends on no hosted service. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |
+| Machine identities are served by a process of their own | The surface that signs messages holds the key-encryption key, and the process serving browsers must not. | [adr/0017-machine-process.md](./adr/0017-machine-process.md) |
 | An agent is watched only while someone is watching | garam cannot dial an adapter, so the poll it already holds carries the watcher count; an unwatched agent costs nothing. | [adr/0022-watching-an-agent.md](./adr/0022-watching-an-agent.md) |
 | garam publishes a chart that describes its deployment | An executable artefact is checked against the source, and prose was falsified three times in one night; cluster state stays in one place because the consumer holds a values file rather than manifests. | [adr/0042-a-chart-is-the-description-of-a-garam-deployment.md](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md) |
 | A message is completed by the turn-end event naming it | It is the only signal that pairs deterministically; a lost one redelivers, so delivery is at-least-once rather than exactly-once. | [adr/0018-delivery-acknowledgement.md](./adr/0018-delivery-acknowledgement.md) |
 | The machine listener has a specification of its own | One contract per listener: the browser client generates no types for a surface it cannot call, and whoever writes an operator has something to build against. | [adr/0019-machine-openapi-spec.md](./adr/0019-machine-openapi-spec.md) |
-| Liveness and readiness answer on a credential-free port | Restarting is the expensive answer, so only readiness reads a dependency; the mTLS listener admits no probe, so that process gets a port for them. | [adr/0021-liveness-and-readiness.md](./adr/0021-liveness-and-readiness.md) |
+| Liveness and readiness answer on a credential-free port | Restarting is the expensive answer, so only readiness reads a dependency; the machine listener serves its specification's operations alone, so that process gets a port for them. | [adr/0021-liveness-and-readiness.md](./adr/0021-liveness-and-readiness.md) |
 | The web app answers the same two probes | A fourth surface configured differently is configured wrong silently; probing page routes makes navigation a deployment interface, and a readiness that reads the API darkens the console during the outage it should report. | [adr/0023-web-probes.md](./adr/0023-web-probes.md) |
 | Readiness reports what a replica cannot serve without | A probe gated on a dependency every replica shares fails on all of them at once, so it withdraws the fleet instead of degrading it; a replica reloading its policy cache can still answer, and staleness that ever needs refusing is refused by the check. | [adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md) |
 | A policy decides what an agent may send | An attachment nothing reads is a control that is not there; the identity's own GRN grants its organization, so closing the gap breaks no working agent, and the boundary out of it is a precondition because no statement could hold it. | [adr/0024-policy-decides-what-an-agent-sends.md](./adr/0024-policy-decides-what-an-agent-sends.md) |

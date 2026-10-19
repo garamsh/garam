@@ -28,7 +28,7 @@ func garamAnswering(t *testing.T, answer http.HandlerFunc) (*delivery.HTTPQueue,
 	server := httptest.NewServer(answer)
 	t.Cleanup(server.Close)
 	execution := delivery.HeldExecution("held-token")
-	queue, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution, certificateMode())
+	queue, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution, agentCredential())
 	require.NoError(t, err)
 	return queue, execution
 }
@@ -41,9 +41,10 @@ func garamAnswering(t *testing.T, answer http.HandlerFunc) (*delivery.HTTPQueue,
 // what the path segment survives as is part of it.
 func TestHTTPQueue_ClaimReadsTheHoldGaramAnsweredWith(t *testing.T) {
 	expires := time.Now().Add(30 * time.Second).UTC().Truncate(time.Second)
-	var route, method, authorization string
+	var route, method, authorization, execution string
 	queue, _ := garamAnswering(t, func(w http.ResponseWriter, r *http.Request) {
 		route, method, authorization = r.URL.Path, r.Method, r.Header.Get("Authorization")
+		execution = r.Header.Get("Garam-Execution")
 		writeJSON(w, http.StatusOK, machinegen.Claim{
 			Id:        "claim-1",
 			ExpiresAt: expires,
@@ -59,7 +60,8 @@ func TestHTTPQueue_ClaimReadsTheHoldGaramAnsweredWith(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodPost, method)
 	assert.Equal(t, "/agents/"+agentGRN().String()+"/claims", route)
-	assert.Equal(t, "Garam-Execution held-token", authorization, "the claim carries the activation's token")
+	assert.Equal(t, "Garam-Token "+agentTokenOf("a"), authorization, "the claim carries the agent's token")
+	assert.Equal(t, "held-token", execution, "and the activation's")
 	assert.Equal(t, delivery.ClaimID("claim-1"), claim.ID)
 	assert.Equal(t, delivery.MessageID("message-1"), claim.Message)
 	assert.Equal(t, senderGRN(), claim.Sender)
@@ -126,13 +128,14 @@ func TestHTTPQueue_RenewAndCompleteReportAHoldThatIsGone(t *testing.T) {
 }
 
 // TestHTTPQueue_ReadsTheFenceFromItsAnswers holds the client to
-// ADR-0084's reading of garam's refusals: a 401 or a 403 on any call is
-// the fence, and so is a 409 on a claim, where no hold exists to have
+// ADR-0084's reading of garam's refusals: a 403 on any call is the
+// fence, and so is a 409 on a claim, where no hold exists to have
 // lapsed, and a submission's 409 of kind failed_precondition, which
 // ADR-0083 keeps apart from a conflicting key's already_exists. Each
 // closes the execution, so nothing more reaches garam. A 503 on the
 // same call is the control: it is undecided and closes
-// nothing.
+// nothing. A 401 is the agent token refused, which
+// TestHTTPQueue_TokenModeReadsARefusedTokenAsUndecided holds.
 func TestHTTPQueue_ReadsTheFenceFromItsAnswers(t *testing.T) {
 	claim := func(q *delivery.HTTPQueue) error { _, err := q.Claim(context.Background()); return err }
 	submit := func(q *delivery.HTTPQueue) error { _, err := q.Post(context.Background(), outbound()); return err }
@@ -141,7 +144,6 @@ func TestHTTPQueue_ReadsTheFenceFromItsAnswers(t *testing.T) {
 		kind   string
 		call   func(*delivery.HTTPQueue) error
 	}{
-		"a claim's 401":                          {http.StatusUnauthorized, "unauthenticated", claim},
 		"a claim's 403":                          {http.StatusForbidden, "permission_denied", claim},
 		"a claim's 409":                          {http.StatusConflict, "failed_precondition", claim},
 		"a renewal's 403":                        {http.StatusForbidden, "permission_denied", func(q *delivery.HTTPQueue) error { _, err := q.Renew(context.Background(), "c"); return err }},
@@ -154,7 +156,7 @@ func TestHTTPQueue_ReadsTheFenceFromItsAnswers(t *testing.T) {
 			calls := 0
 			queue, execution := garamAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
 				calls++
-				w.Header().Set("Garam-Contract-Version", delivery.DeliveryContract)
+				w.Header().Set("Garam-Contract-Version", delivery.TokenDeliveryContract)
 				writeJSON(w, refusal.status, machinegen.Error{Kind: refusal.kind, Message: "execution token is not current"})
 			})
 			err := refusal.call(queue)
@@ -196,7 +198,7 @@ func TestHTTPQueue_PostOffersAReplyUnderDurableDelivery(t *testing.T) {
 	queue, _ := garamAnswering(t, func(w http.ResponseWriter, r *http.Request) {
 		route, version = r.URL.Path, r.Header.Get("Garam-Contract-Version")
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
-		w.Header().Set("Garam-Contract-Version", delivery.DeliveryContract)
+		w.Header().Set("Garam-Contract-Version", delivery.TokenDeliveryContract)
 		writeJSON(w, http.StatusCreated, machinegen.Message{
 			Id: "stored-1", Sender: agentGRN().String(), Recipient: senderGRN().String(), IdempotencyKey: "entry-1",
 		})
@@ -204,7 +206,7 @@ func TestHTTPQueue_PostOffersAReplyUnderDurableDelivery(t *testing.T) {
 	stored, err := queue.Post(context.Background(), outbound())
 	require.NoError(t, err)
 	assert.Equal(t, "/outbox-messages", route)
-	assert.Equal(t, delivery.DeliveryContract, version)
+	assert.Equal(t, delivery.TokenDeliveryContract, version)
 	assert.Equal(t, map[string]any{
 		"recipient": senderGRN().String(), "idempotencyKey": "entry-1", "body": "reply",
 		"createdAt": "2026-10-05T01:02:03.456789Z",
@@ -220,10 +222,10 @@ func TestHTTPQueue_PostOffersAReplyUnderDurableDelivery(t *testing.T) {
 		"an old server's 404":            {http.StatusNotFound, "", "not_found", errorx.KindUnimplemented},
 		"an answer outside the contract": {http.StatusCreated, "", "", errorx.KindUnimplemented},
 		"an undecided 503":               {http.StatusServiceUnavailable, "", "unavailable", errorx.KindUnavailable},
-		"a future creation instant":      {http.StatusBadRequest, delivery.DeliveryContract, "out_of_range", errorx.KindOutOfRange},
-		"an invalid submission":          {http.StatusBadRequest, delivery.DeliveryContract, "invalid_argument", errorx.KindFailedPrecondition},
-		"an expired entry":               {http.StatusGone, delivery.DeliveryContract, "deadline_exceeded", errorx.KindFailedPrecondition},
-		"a conflicting key":              {http.StatusConflict, delivery.DeliveryContract, "already_exists", errorx.KindFailedPrecondition},
+		"a future creation instant":      {http.StatusBadRequest, delivery.TokenDeliveryContract, "out_of_range", errorx.KindOutOfRange},
+		"an invalid submission":          {http.StatusBadRequest, delivery.TokenDeliveryContract, "invalid_argument", errorx.KindFailedPrecondition},
+		"an expired entry":               {http.StatusGone, delivery.TokenDeliveryContract, "deadline_exceeded", errorx.KindFailedPrecondition},
+		"a conflicting key":              {http.StatusConflict, delivery.TokenDeliveryContract, "already_exists", errorx.KindFailedPrecondition},
 	}
 	for name, answer := range answers {
 		t.Run(name, func(t *testing.T) {
@@ -274,7 +276,7 @@ func TestNewHTTPQueue_RefusesWhatItCannotCall(t *testing.T) {
 	t.Cleanup(server.Close)
 	execution := delivery.HeldExecution("held-token")
 
-	_, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution, certificateMode())
+	_, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution, agentCredential())
 	require.NoError(t, err, "an address and an agent that work")
 
 	tests := map[string]struct {
@@ -291,7 +293,7 @@ func TestNewHTTPQueue_RefusesWhatItCannotCall(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := delivery.NewHTTPQueue(tt.client, tt.base, tt.agent, tt.execution, certificateMode())
+			_, err := delivery.NewHTTPQueue(tt.client, tt.base, tt.agent, tt.execution, agentCredential())
 			require.Error(t, err)
 		})
 	}

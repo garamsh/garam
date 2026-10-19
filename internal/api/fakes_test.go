@@ -1181,8 +1181,7 @@ func (s *fakeOperatorStore) RevokeKey(_ context.Context, g grn.GRN, kid string) 
 
 // Register writes the record, as the statement does, and answers the
 // operator it stored. The real store reads that back inside the same
-// transaction; this one holds no certificates, so the operator it
-// answers holds none.
+// transaction; this one answers the operator it stored.
 func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator) (*operator.Operator, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1193,8 +1192,7 @@ func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator) (*
 	return o, nil
 }
 
-// Delete removes the record and the certificate the fake holds beside
-// it, as the statement pair does.
+// Delete removes the record, as the statement does.
 func (s *fakeOperatorStore) Delete(_ context.Context, g grn.GRN) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1206,9 +1204,8 @@ func (s *fakeOperatorStore) Delete(_ context.Context, g grn.GRN) error {
 }
 
 // UpdateDetails replaces the record with one carrying the patched
-// details, keeping what the patch left out. It touches neither the
-// tokens nor the certificate flag, as the statement touches neither
-// table.
+// details, keeping what the patch left out. It touches no token, as
+// the statement touches no other table.
 func (s *fakeOperatorStore) UpdateDetails(_ context.Context, g grn.GRN, patch operator.DetailsPatch) (*operator.Operator, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

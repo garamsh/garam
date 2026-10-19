@@ -135,14 +135,10 @@ type Attachment struct {
 	StatusInterval time.Duration
 }
 
-// AdapterFiles is what the adapter presents and verifies by, copied
-// into its container before it starts. The certificate, its key and
-// its issuer are the certificate mode's alone; the token mode copies
-// tokens in instead (Config.Tokens).
+// AdapterFiles is what the adapter verifies garam by and where it
+// reaches garam, copied into its container before it starts; its
+// tokens are copied in beside them (Config.Tokens).
 type AdapterFiles struct {
-	CertificatePEM []byte
-	KeyPEM         []byte
-	IssuerPEM      []byte
-	ServerRootPEM  []byte
-	MachineURL     string
+	ServerRootPEM []byte
+	MachineURL    string
 }

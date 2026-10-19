@@ -91,6 +91,17 @@ func (s *Store) CountOrgContents(ctx context.Context, g grn.GRN) (org.Contents, 
 	}, nil
 }
 
+// HoldsCertificateAuthority reports whether the organization still
+// holds a retired certificate authority, which deleting it destroys
+// (ADR-0118). It reads presence and nothing of the row.
+func (s *Store) HoldsCertificateAuthority(ctx context.Context, g grn.GRN) (bool, error) {
+	held, err := s.q.HoldsCertificateAuthority(ctx, g.String())
+	if err != nil {
+		return false, pgxerr.Classify(err, "read certificate authority presence", nil, nil)
+	}
+	return held, nil
+}
+
 // rowToOrg converts a sqlc row into the domain aggregate. A stored
 // GRN that no longer parses is data corruption, hence internal.
 func rowToOrg(row db.Org) (*org.Organization, error) {

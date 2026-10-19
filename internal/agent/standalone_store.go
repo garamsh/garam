@@ -58,13 +58,4 @@ type StandaloneStore interface {
 	// unknown to the organization, or already ended, is
 	// ErrSupervisorNotFound.
 	Revoke(ctx context.Context, org, g grn.GRN) error
-	// Renew records req.Signed as the successor of the presented
-	// certificate under the registration's row lock, and answers it
-	// with created true. Where an identical renewal of the same
-	// certificate already won it answers that one with created false;
-	// another request, or a presented certificate that is neither the
-	// current one nor its recorded predecessor, refuses with
-	// ErrRenewalConflict, and an ended registration with
-	// ErrSupervisorNotFound.
-	Renew(ctx context.Context, req SupervisorRenewal) (*SupervisorCertificate, bool, error)
 }

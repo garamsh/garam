@@ -1,32 +1,19 @@
-// Package machine authenticates a machine identity — an agent or an
-// operator — by the client certificate it presents (ADR-0014,
-// ADR-0015).
+// Package machine authenticates a machine identity — an agent, an
+// operator or a standalone host's supervisor — by the token a request
+// presents (ADR-0100, ADR-0118).
 //
-// What the certificate asserts is the GRN in its SAN URI and nothing
-// else: no user row, no session, no organization membership. What it is
-// — its serial and its dates — travels beside that GRN, asserting
-// nothing and answering the one caller that asks to replace it
-// (ADR-0046). A presented certificate is verified against the
-// certificate authority of the organization its own SAN names, so a
-// certificate another organization's CA signed does not authenticate
-// here however valid it is elsewhere — tenancy holds in the trust root
-// rather than in a check a caller could forget.
-//
-// The listener [NewServer] builds terminates TLS itself and asks for a
-// client certificate. A connection whose certificate does not
-// authenticate carries no [Identity] rather than being refused, which
-// is what leaves room for the one route a caller reaches before it has
-// a certificate (ADR-0064); every other route refuses a request
-// carrying none. Nothing here reads a forwarded client-certificate
-// header: one is trustworthy only where every deployment strips it at
-// the edge (ADR-0014).
+// What the token asserts is the GRN it was issued to and nothing else:
+// no user row, no session, no organization membership. Its serial and
+// dates travel beside that GRN, which is what the execution fence
+// judges an agent's request by. The listener [NewServer] builds
+// terminates TLS itself and asks for no client certificate; a request
+// presenting no token carries no [Identity] rather than being refused,
+// and what it may reach is the handler's to decide.
 //
 // What it presents in the other direction is one certificate every
 // machine identity pins, asked for per handshake through
 // [ServerCertificate] so a replaced one is served without a restart
-// (ADR-0040). That root is not this package's per-organization one:
-// garam verifies an identity by its organization's authority, and an
-// identity verifies garam by the root every organization shares.
+// (ADR-0040).
 package machine
 
 import (
@@ -36,69 +23,37 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// Sentinels of a decision that verifies a certificate again rather
-// than once per connection.
-var (
-	// ErrNotProven refuses a presented certificate that does not prove
-	// the identity it is presented for: another SAN, or a chain to no
-	// authority of that identity's organization.
-	ErrNotProven = errorx.New(errorx.KindInvalidArgument,
-		"machine: the certificate does not prove the identity it is presented for")
-	// ErrOutsideValidity refuses a certificate before its validity
-	// period or after it.
-	ErrOutsideValidity = errorx.New(errorx.KindPermissionDenied,
-		"machine: the certificate is outside its validity period")
-)
+// ErrOutsideValidity refuses an identity whose token's dates no longer
+// hold when a decision reads them again.
+var ErrOutsideValidity = errorx.New(errorx.KindPermissionDenied,
+	"machine: the token is outside its validity period")
 
-// Identity is the machine identity a verified client certificate
-// names, and which certificate named it, or the identity a token the
-// request presented stands for. Only [Service.Authenticate],
-// [Service.Prove] and the listener's token read construct one, so an Identity holds a GRN whose
-// certificate chained to its own organization's certificate authority.
-// One Authenticate returned was also valid, and its record held, when
-// its connection was made; one Prove returned establishes neither, and
-// [Service.Recheck] is what asks them now. The listener carries what
-// Authenticate returned rather than reading the certificate again.
+// Identity is the machine identity the token a request presented
+// stands for. Only the listener's token read constructs one, so an
+// Identity holds a GRN whose token was live, and whose record held,
+// when its request was read; [Recheck] is what asks them again for a
+// later decision.
 //
-// The GRN is the whole of what the certificate asserts — no roles, no
-// claims. The three fields below describe the certificate itself, which
-// is what a caller asking to replace it is answered by (ADR-0046).
+// The GRN is the whole of what the token asserts — no roles, no
+// claims. The three fields below describe the token itself.
 type Identity struct {
 	grn       grn.GRN
-	method    Method
 	serial    string
 	notBefore time.Time
 	notAfter  time.Time
 }
 
-// Method is how a request proved the identity it carries.
-type Method string
-
-const (
-	// MethodCertificate is a client certificate the connection's
-	// handshake verified (ADR-0014).
-	MethodCertificate Method = "certificate"
-	// MethodToken is a token the request presented, read with the
-	// record it rests on for that request (ADR-0100).
-	MethodToken Method = "token"
-)
-
-// Method returns how the identity was proven. One a token proved
-// carries no certificate: its serial and dates are the token's, and an
-// operator's token has no serial at all.
-func (i Identity) Method() Method { return i.method }
-
-// GRN returns the identity's GRN, which is the whole of what the
-// certificate carries.
+// GRN returns the identity's GRN, which is the whole of what the token
+// asserts.
 func (i Identity) GRN() grn.GRN { return i.grn }
 
-// Serial returns the presented certificate's serial number in decimal,
-// which is what tells it from another certificate naming the same
-// identity.
+// Serial returns the token's serial, which is what tells it from
+// another token naming the same identity. An operator's token has
+// none.
 func (i Identity) Serial() string { return i.serial }
 
-// NotBefore returns when the presented certificate became valid.
+// NotBefore returns when the token was issued.
 func (i Identity) NotBefore() time.Time { return i.notBefore }
 
-// NotAfter returns when the presented certificate stops being valid.
+// NotAfter returns when the token stops being accepted.
 func (i Identity) NotAfter() time.Time { return i.notAfter }

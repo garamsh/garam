@@ -1,8 +1,6 @@
 package delivery
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"os"
 	"strings"
 
@@ -50,39 +48,4 @@ func (c *FileCredentials) Fingerprint() (string, error) {
 		parts = append(parts, part)
 	}
 	return strings.Join(parts, "/"), nil
-}
-
-// Certificate is the certificate mode's credential: the agent's
-// certificate, which the connection presents per handshake.
-type Certificate struct {
-	leaf func() (*tls.Certificate, error)
-}
-
-// NewCertificate reads the certificate through leaf, which is what the
-// handshake presents.
-func NewCertificate(leaf func() (*tls.Certificate, error)) *Certificate {
-	return &Certificate{leaf: leaf}
-}
-
-// Authorization is empty: the connection carries the certificate.
-func (c *Certificate) Authorization() (string, error) { return "", nil }
-
-// IsToken is false.
-func (c *Certificate) IsToken() bool { return false }
-
-// Fingerprint answers the serial of the certificate the files hold
-// now, which renewal changes.
-func (c *Certificate) Fingerprint() (string, error) {
-	pair, err := c.leaf()
-	if err != nil {
-		return "", errorx.Wrap(err, "delivery: agent certificate", errorx.KindUnavailable)
-	}
-	if len(pair.Certificate) == 0 {
-		return "", errorx.New(errorx.KindUnavailable, "delivery: no agent certificate")
-	}
-	leaf, err := x509.ParseCertificate(pair.Certificate[0])
-	if err != nil {
-		return "", errorx.Wrap(err, "delivery: agent certificate", errorx.KindUnavailable)
-	}
-	return leaf.SerialNumber.String(), nil
 }

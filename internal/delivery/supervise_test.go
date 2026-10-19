@@ -21,9 +21,6 @@ import (
 // new activation. refuse answers every activation instead.
 type control struct {
 	queue *garamQueue
-	// contract is what the authority is called under: the certificate
-	// mode's unless a test names the token mode's.
-	contract string
 
 	mu          sync.Mutex
 	activations map[string]delivery.Activation
@@ -45,12 +42,7 @@ func newControl(queue *garamQueue) *control {
 	return &control{queue: queue, activations: map[string]delivery.Activation{}}
 }
 
-func (c *control) Contract() string {
-	if c.contract != "" {
-		return c.contract
-	}
-	return delivery.ExecutionContract
-}
+func (c *control) Contract() string { return delivery.TokenExecutionContract }
 
 func (c *control) Activate(_ context.Context, requestID string, b delivery.Binding, placementToken string) (*delivery.Activation, error) {
 	c.mu.Lock()
@@ -106,10 +98,10 @@ func (c *control) reported() []controlReport {
 	return append([]controlReport(nil), c.reports...)
 }
 
-// tokenOf is the Authorization a claim carries under the n-th token of
-// the n-th activation control made.
+// tokenOf is the execution token a claim carries under the n-th token
+// of the n-th activation control made.
 func tokenOf(activation, version int) string {
-	return fmt.Sprintf("Garam-Execution token-activation-%d-%d", activation, version)
+	return fmt.Sprintf("token-activation-%d-%d", activation, version)
 }
 
 // runFenced starts a fenced loop against the fakes, forwarding from a
@@ -151,7 +143,7 @@ func TestRun_ClaimsNothingUntilTheGenerationIsActivated(t *testing.T) {
 
 	c.answer(nil)
 	eventually(t, func() bool { return len(gateway.posted()) == 1 }, "the control: claims flow once it is held")
-	for _, presented := range queue.claimsPresenting() {
+	for _, presented := range queue.claimsExecuting() {
 		assert.Equal(t, tokenOf(1, 1), presented, "every claim carries the activation's token")
 	}
 	binding := c.bindings[0]
@@ -182,7 +174,7 @@ func TestRun_ReplaysItsActivationAfterARestart(t *testing.T) {
 	asked := c.requests()
 	require.Len(t, asked, 2)
 	assert.Equal(t, asked[0], asked[1], "the restart replays the same request")
-	presented := queue.claimsPresenting()
+	presented := queue.claimsExecuting()
 	assert.Equal(t, tokenOf(1, 2), presented[len(presented)-1], "and presents the newer token of the same activation")
 	assert.Contains(t, presented, tokenOf(1, 1), "the control: the first process presented the first token")
 	assert.Equal(t, 1, gateway.sourceCount(), "the runtime holds one source")
@@ -210,7 +202,7 @@ func TestRun_ActivatesTheGenerationTheRuntimeNowReports(t *testing.T) {
 	assert.NotEqual(t, asked[0], asked[1], "under a new request")
 	assert.Equal(t, strings.Repeat("b", 32), c.bindings[1].Generation)
 	eventually(t, func() bool {
-		presented := queue.claimsPresenting()
+		presented := queue.claimsExecuting()
 		return presented[len(presented)-1] == tokenOf(2, 1)
 	}, "claims carry the new generation's token")
 
@@ -253,7 +245,7 @@ func TestRun_StopsProtectedWorkOnAFenceUntilTheLeafChanges(t *testing.T) {
 	asked := c.requests()
 	require.Len(t, asked, 2)
 	assert.Equal(t, asked[0], asked[1], "renewal keeps the request identifier")
-	assert.Equal(t, "Garam-Execution token-activation-1-2", queue.submissions()[0].Authorization)
+	assert.Equal(t, tokenOf(1, 2), queue.submissions()[0].Execution)
 	eventually(t, func() bool { return queue.claimsAttempted() > refusedAt }, "and claims resume")
 }
 
@@ -292,7 +284,7 @@ func TestRun_PausesADefiniteActivationRefusalUntilAnInputChanges(t *testing.T) {
 	eventually(t, func() bool { return len(gateway.posted()) == 1 }, "a renewed certificate re-arms it too")
 	asked = c.requests()
 	assert.Equal(t, asked[1], asked[2], "under the same request: the certificate is not part of it")
-	assert.NotContains(t, queue.claimsPresenting(), "", "nothing was claimed without a token")
+	assert.NotContains(t, queue.claimsExecuting(), "", "nothing was claimed without a token")
 }
 
 // TestRun_StopsReportingAGenerationControlSaysIsNotCurrent is ADR-0084's

@@ -69,16 +69,12 @@ const CLAIMS: Claim[] = [
     facts: [{ kind: "path", path: "internal/adapter", exists: false }],
   },
   {
-    prose: [
-      "The listener, the certificate authority behind it, and the message queue are built.",
-    ],
+    prose: ["The listener and the message queue are built."],
     pinned: [],
     facts: [
       { kind: "path", path: "internal/machine", exists: true },
       { kind: "path", path: "internal/machineapi", exists: true },
-      { kind: "path", path: "internal/ca", exists: true },
       { kind: "path", path: "internal/message", exists: true },
-      { kind: "migration", table: "certificate_authorities" },
       { kind: "migration", table: "messages" },
     ],
   },

@@ -62,16 +62,4 @@ type ExecutionStore interface {
 	// ref authorized admitted, or nil where it admitted nothing
 	// (ADR-0107).
 	GetReplacement(ctx context.Context, ref string) (*ManagedCreation, error)
-	// InstallInitialCertificate records req.Signed as the first
-	// certificate of req.Lineage and answers it with created true. A
-	// retry of the recorded request answers the recorded certificate
-	// with created false. It refuses with ErrStaleEpoch,
-	// ErrNotAssigned, ErrAuthorityExpired, ErrLineageSuperseded once a
-	// recovery replaced req.Lineage, and ErrInitialCertificateConflict
-	// for any other request once one is recorded.
-	InstallInitialCertificate(ctx context.Context, req InitialCertificateRequest) (*InitialCertificate, bool, error)
-	// GetInitialCertificate answers the agent's recorded initial
-	// issuance, or nil, so a retry is answered before anything is
-	// signed again.
-	GetInitialCertificate(ctx context.Context, agentGRN grn.GRN) (*InitialCertificate, error)
 }

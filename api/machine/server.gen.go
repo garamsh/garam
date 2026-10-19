@@ -404,7 +404,7 @@ type Activation struct {
 	Generation string `json:"generation"`
 	Grn        string `json:"grn"`
 
-	// Lineage The credential lineage checked, null for the certificates issued before any recovery.
+	// Lineage The credential lineage checked.
 	Lineage *string `json:"lineage"`
 
 	// Token What the runtime's calls carry as `Authorization: Garam-Execution <token>`. Shown once; garam keeps its hash.
@@ -416,9 +416,6 @@ type Activation struct {
 
 // ActivationRequest defines model for ActivationRequest.
 type ActivationRequest struct {
-	// CertificatePem Under `execution-fence.v1`, the agent's leaf certificate in PEM form, exactly as the agent presented it to the caller. Required there, and refused under `execution-fence.v2`.
-	CertificatePem *string `json:"certificatePem,omitempty"`
-
 	// Epoch The assignment's epoch the caller expects. Opaque.
 	Epoch string `json:"epoch"`
 
@@ -432,8 +429,8 @@ type ActivationRequest struct {
 	ReplacesActivationId *string `json:"replacesActivationId"`
 	RequestId            string  `json:"requestId"`
 
-	// Token Under `execution-fence.v2`, the agent's token its assignee minted to be shown to the caller, or, where the caller is the assignee itself — a standalone host's supervisor — the token it minted for garam, exactly as the agent presented it (ADR-0100). Required there, and refused under `execution-fence.v1`.
-	Token *string `json:"token,omitempty"`
+	// Token The agent's token its assignee minted to be shown to the caller, or, where the caller is the assignee itself — a standalone host's supervisor — the token it minted for garam, exactly as the agent presented it (ADR-0100).
+	Token string `json:"token"`
 }
 
 // AgentAdmission defines model for AgentAdmission.
@@ -590,11 +587,8 @@ type ControllerIntrospection struct {
 	// Agent An agent GRN, to prove that agent's placement on the controller. Absent or null proves the controller alone.
 	Agent *string `json:"agent,omitempty"`
 
-	// CertificatePem Under `operation-authority.v1`, the controller's leaf certificate in PEM form, exactly as the controller presented it in its TLS handshake with the caller. Required there, and refused under `operation-authority.v2`.
-	CertificatePem *string `json:"certificatePem,omitempty"`
-
-	// Token Under `operation-authority.v2`, the token the controller exchanged its credential for to be shown to the caller, exactly as the controller presented it (ADR-0100). Required there, and refused under `operation-authority.v1`.
-	Token *string `json:"token,omitempty"`
+	// Token The token the controller exchanged its credential for to be shown to the caller, exactly as the controller presented it (ADR-0100).
+	Token string `json:"token"`
 }
 
 // ControllerProof defines model for ControllerProof.
@@ -611,9 +605,6 @@ type ControllerProof struct {
 
 // CredentialRecoveryRequest defines model for CredentialRecoveryRequest.
 type CredentialRecoveryRequest struct {
-	// CertificateRequestPem Under `execution-fence.v1`, a PEM-encoded PKCS#10 request over an ECDSA P-256 key the holder generated; only its key is read. Required there, and refused under `execution-fence.v2`, whose recovery signs nothing: the assignee mints the agent's tokens in the new lineage (ADR-0100).
-	CertificateRequestPem *string `json:"certificateRequestPem,omitempty"`
-
 	// Epoch The assignment's epoch the caller expects. Opaque.
 	Epoch     string `json:"epoch"`
 	RequestId string `json:"requestId"`
@@ -655,64 +646,16 @@ type ExecutionIntrospectionGeneration string
 
 // ExecutionIntrospectionRequest defines model for ExecutionIntrospectionRequest.
 type ExecutionIntrospectionRequest struct {
-	// CertificatePem Under `execution-fence.v1`, the agent's leaf certificate in PEM form, exactly as the agent presented it to the caller. Required there, and refused under `execution-fence.v2`.
-	CertificatePem *string `json:"certificatePem,omitempty"`
-
 	// Generation A generation to compare with the active one.
 	Generation *string `json:"generation,omitempty"`
 
-	// Token Under `execution-fence.v2`, the agent's token its assignee minted to be shown to the caller, or, where the caller is the assignee itself — a standalone host's supervisor — the token it minted for garam, exactly as the agent presented it (ADR-0100). Required there, and refused under `execution-fence.v1`.
-	Token *string `json:"token,omitempty"`
+	// Token The agent's token its assignee minted to be shown to the caller, or, where the caller is the assignee itself — a standalone host's supervisor — the token it minted for garam, exactly as the agent presented it (ADR-0100).
+	Token string `json:"token"`
 }
 
 // Identity defines model for Identity.
 type Identity struct {
 	Grn string `json:"grn"`
-}
-
-// InitialCertificate A managed agent's first certificate, the authority that signed it and the garam server root the holder verifies garam by. It carries no private key: the key stays where it was generated.
-type InitialCertificate struct {
-	CertificatePem string `json:"certificatePem"`
-
-	// IssuerPem The authority that signed this certificate. It is not what garam is verified against (ADR-0040).
-	IssuerPem string `json:"issuerPem"`
-
-	// NotAfter When the certificate stops being valid.
-	NotAfter time.Time `json:"notAfter"`
-
-	// ServerRootPem The garam server root, which the holder verifies garam's listener against (ADR-0040).
-	ServerRootPem string `json:"serverRootPem"`
-}
-
-// InitialCertificateRequest defines model for InitialCertificateRequest.
-type InitialCertificateRequest struct {
-	// CertificateRequestPem One PEM-encoded PKCS#10 request over an ECDSA P-256 key the controller generated. Only its key is read.
-	CertificateRequestPem string `json:"certificateRequestPem"`
-
-	// Epoch The assignment's epoch the caller expects. Opaque.
-	Epoch string `json:"epoch"`
-
-	// OperationRef The `agent:create` reference of this agent's creation.
-	OperationRef string `json:"operationRef"`
-	RequestId    string `json:"requestId"`
-}
-
-// MachineCertificate A client certificate, the private key it was issued with, the authority that signed it, and the garam server root the holder verifies garam by. garam stores no private key, so this one is returned once and a holder that loses it asks for another certificate. One shape for both routes that generate a key pair: what an agent is given and what an operator renews differ in who may ask, not in what comes back.
-type MachineCertificate struct {
-	CertificatePem string `json:"certificatePem"`
-
-	// Grn The identity the certificate names, which is also what its SAN URI holds.
-	Grn string `json:"grn"`
-
-	// IssuerPem The authority that signed this certificate. It is not what garam is verified against: the two directions rest on different roots (ADR-0040).
-	IssuerPem string `json:"issuerPem"`
-
-	// NotAfter When the certificate stops being valid. It carries jitter, so certificates issued together do not expire together.
-	NotAfter      time.Time `json:"notAfter"`
-	PrivateKeyPem string    `json:"privateKeyPem"`
-
-	// ServerRootPem The garam server root. A holder verifies garam's listener against this and against nothing else — one root for every organization, separate from the authority above and signing only what garam presents (ADR-0040).
-	ServerRootPem string `json:"serverRootPem"`
 }
 
 // MachineToken defines model for MachineToken.
@@ -808,7 +751,7 @@ type MessageStatus struct {
 	State MessageState `json:"state"`
 }
 
-// MessageSubmission What a sender supplies. Who is sending is the certificate's to say.
+// MessageSubmission What a sender supplies. Who is sending is the token's to say.
 type MessageSubmission struct {
 	// Body The message itself. The queue carries it and never reads it, so it may be empty. It is bounded (ADR-0034): `maxLength` counts characters, so the bound is 65536 of them — well past any plausible agent turn — and UTF-8 spends up to four bytes on each, so a body weighs up to 256 KiB. The bound is what keeps the table's worst case arithmetic, and 256 KiB is the figure that arithmetic runs on: size a buffer or a row estimate against it, not against the character count.
 	Body string `json:"body"`
@@ -822,12 +765,12 @@ type MessageSubmission struct {
 
 // OAuthError RFC 6749's error response (ADR-0102).
 type OAuthError struct {
-	// Error `invalid_request` for a malformed or repeated parameter, a client certificate or `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+	// Error `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
 	Error            OAuthErrorError `json:"error"`
 	ErrorDescription *string         `json:"error_description,omitempty"`
 }
 
-// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a client certificate or `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
 type OAuthErrorError string
 
 // OAuthToken RFC 6749's successful token response (ADR-0102).
@@ -876,7 +819,7 @@ type OperationBinding struct {
 // OperationBindingOperation Each operation is served on one route with one fixed HTTP method. A release that does not know an operation refuses to mint it rather than minting it without its binding.
 type OperationBindingOperation string
 
-// OutboxSubmission What a sender supplies for one outbox entry. Who is sending is the certificate's to say.
+// OutboxSubmission What a sender supplies for one outbox entry. Who is sending is the token's to say.
 type OutboxSubmission struct {
 	// Body The message itself, bounded as `MessageSubmission`'s body is (ADR-0034).
 	Body string `json:"body"`
@@ -910,17 +853,10 @@ type ProvisioningStateReport struct {
 	State ProvisioningState `json:"state"`
 }
 
-// RecoveredCredential The agent and its new lineage. Under `execution-fence.v1` it adds the recovered certificate, the authority that signed it and the garam server root the holder verifies garam by, and carries no private key; under `execution-fence.v2` it carries none of the three (ADR-0100).
+// RecoveredCredential The agent and its new lineage; the assignee mints the agent's tokens in it (ADR-0100).
 type RecoveredCredential struct {
-	CertificatePem *string `json:"certificatePem,omitempty"`
-	Grn            string  `json:"grn"`
-
-	// IssuerPem The authority that signed `certificatePem`. It is not what garam is verified against (ADR-0040).
-	IssuerPem *string `json:"issuerPem,omitempty"`
-	Lineage   string  `json:"lineage"`
-
-	// ServerRootPem The garam server root the recovered credential trusts, which the holder verifies garam's listener against (ADR-0040).
-	ServerRootPem *string `json:"serverRootPem,omitempty"`
+	Grn     string `json:"grn"`
+	Lineage string `json:"lineage"`
 }
 
 // RuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
@@ -935,23 +871,17 @@ type RuntimeStateReport struct {
 	State RuntimeState `json:"state"`
 }
 
-// StandaloneEnrollment What an enrollment issued and the garam server root the host verifies garam by: under `standalone-enrollment.v1` both certificates and the authority that signed them, carrying no private key; under v2 the supervisor's credential (ADR-0100).
+// StandaloneEnrollment The supervisor's credential and the garam server root the host verifies garam by (ADR-0100).
 type StandaloneEnrollment struct {
-	// AgentCertificatePem Under `standalone-enrollment.v1` alone.
-	AgentCertificatePem *string `json:"agentCertificatePem,omitempty"`
-
-	// Credential Under `standalone-enrollment.v2` alone: the supervisor's credential, prefixed `garam_sc_`, answered by this call alone. garam stores only its hash, and a retry re-issues it.
-	Credential *string `json:"credential,omitempty"`
+	// Credential The supervisor's credential, prefixed `garam_sc_`, answered by this call alone. garam stores only its hash, and a retry re-issues it.
+	Credential string `json:"credential"`
 
 	// Epoch Opaque. The assignment epoch the supervisor holds the agent at.
 	Epoch string `json:"epoch"`
 
 	// Grn The agent's GRN.
-	Grn string `json:"grn"`
-
-	// IssuerPem The authority that signed both, under `standalone-enrollment.v1` alone. It is not what garam is verified against (ADR-0040).
-	IssuerPem *string            `json:"issuerPem,omitempty"`
-	Lineage   openapi_types.UUID `json:"lineage"`
+	Grn     string             `json:"grn"`
+	Lineage openapi_types.UUID `json:"lineage"`
 
 	// Placement Where the host runs its agent's runtime, as the approval named it: started by the supervisor, or attached to (ADR-0111).
 	Placement StandaloneEnrollmentPlacement `json:"placement"`
@@ -961,10 +891,7 @@ type StandaloneEnrollment struct {
 
 	// ServerRootPem The garam server root, which the host verifies garam's listener against (ADR-0040).
 	ServerRootPem string `json:"serverRootPem"`
-
-	// SupervisorCertificatePem Under `standalone-enrollment.v1` alone.
-	SupervisorCertificatePem *string `json:"supervisorCertificatePem,omitempty"`
-	SupervisorGrn            string  `json:"supervisorGrn"`
+	SupervisorGrn string `json:"supervisorGrn"`
 }
 
 // StandaloneEnrollmentPlacement Where the host runs its agent's runtime, as the approval named it: started by the supervisor, or attached to (ADR-0111).
@@ -972,20 +899,8 @@ type StandaloneEnrollmentPlacement string
 
 // StandaloneEnrollmentRequest defines model for StandaloneEnrollmentRequest.
 type StandaloneEnrollmentRequest struct {
-	// AgentCertificateRequestPem A PKCS#10 request over the agent key whose fingerprint was approved. Required under `standalone-enrollment.v1`, and refused under v2.
-	AgentCertificateRequestPem *string `json:"agentCertificateRequestPem,omitempty"`
-
 	// RequestId The identifier the host chose and the administrator approved.
 	RequestId string `json:"requestId"`
-
-	// SupervisorCertificateRequestPem A PKCS#10 request over the supervisor key whose fingerprint was approved. Required under `standalone-enrollment.v1`, and refused under v2.
-	SupervisorCertificateRequestPem *string `json:"supervisorCertificateRequestPem,omitempty"`
-}
-
-// SupervisorRenewalRequest defines model for SupervisorRenewalRequest.
-type SupervisorRenewalRequest struct {
-	CertificateRequestPem string `json:"certificateRequestPem"`
-	RequestId             string `json:"requestId"`
 }
 
 // TokenExchange What an exchange asks for. A supervisor's token is garam's alone, so the body names nothing.
@@ -1080,38 +995,32 @@ type AdmitAgentEnrollmentParams struct {
 
 // EnrollStandaloneAgentParams defines parameters for EnrollStandaloneAgent.
 type EnrollStandaloneAgentParams struct {
-	// StandaloneContractVersion `standalone-enrollment.v1` or, on `enrollStandaloneAgent`, `standalone-enrollment.v2` (ADR-0100); any other value is refused with 400 naming what the route serves. `renewSupervisorCertificate` takes no v2 value.
+	// StandaloneContractVersion `standalone-enrollment.v2` (ADR-0100, ADR-0118); any other value is refused with 400 naming it.
 	StandaloneContractVersion StandaloneContractVersion `json:"Garam-Contract-Version"`
 }
 
 // ActivateAgentParams defines parameters for ActivateAgent.
 type ActivateAgentParams struct {
-	// ExecutionContractVersion `execution-fence.v1` where the caller presents a certificate and `execution-fence.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
+	// ExecutionContractVersion `execution-fence.v2` (ADR-0100, ADR-0118); any other value is refused with 400 naming it.
 	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
 }
 
 // DeactivateAgentParams defines parameters for DeactivateAgent.
 type DeactivateAgentParams struct {
-	// ExecutionContractVersion `execution-fence.v1` where the caller presents a certificate and `execution-fence.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
+	// ExecutionContractVersion `execution-fence.v2` (ADR-0100, ADR-0118); any other value is refused with 400 naming it.
 	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
 }
 
 // RecoverAgentCredentialParams defines parameters for RecoverAgentCredential.
 type RecoverAgentCredentialParams struct {
-	// ExecutionContractVersion `execution-fence.v1` where the caller presents a certificate and `execution-fence.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
+	// ExecutionContractVersion `execution-fence.v2` (ADR-0100, ADR-0118); any other value is refused with 400 naming it.
 	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
 }
 
 // IntrospectAgentExecutionParams defines parameters for IntrospectAgentExecution.
 type IntrospectAgentExecutionParams struct {
-	// ExecutionContractVersion `execution-fence.v1` where the caller presents a certificate and `execution-fence.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
+	// ExecutionContractVersion `execution-fence.v2` (ADR-0100, ADR-0118); any other value is refused with 400 naming it.
 	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
-}
-
-// IssueInitialCertificateParams defines parameters for IssueInitialCertificate.
-type IssueInitialCertificateParams struct {
-	// EnrollmentContractVersion `managed-enrollment.v1` where the caller presents a certificate and, on `createManagedAgent`, `managed-enrollment.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes. `issueInitialCertificate` takes no token and no v2 value.
-	EnrollmentContractVersion EnrollmentContractVersion `json:"Garam-Contract-Version"`
 }
 
 // MintAgentTokenParams defines parameters for MintAgentToken.
@@ -1122,38 +1031,32 @@ type MintAgentTokenParams struct {
 
 // IntrospectOperationAuthorityParams defines parameters for IntrospectOperationAuthority.
 type IntrospectOperationAuthorityParams struct {
-	// ContractVersion `operation-authority.v1` where the caller presents a certificate and `operation-authority.v2` where it presents a token (ADR-0079, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
+	// ContractVersion `operation-authority.v2` (ADR-0079, ADR-0100, ADR-0118); any other value is refused with 400 naming it.
 	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
 }
 
 // CheckOperationReferenceParams defines parameters for CheckOperationReference.
 type CheckOperationReferenceParams struct {
-	// ContractVersion `operation-authority.v1` where the caller presents a certificate and `operation-authority.v2` where it presents a token (ADR-0079, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
+	// ContractVersion `operation-authority.v2` (ADR-0079, ADR-0100, ADR-0118); any other value is refused with 400 naming it.
 	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
 }
 
 // IntrospectControllerParams defines parameters for IntrospectController.
 type IntrospectControllerParams struct {
-	// ContractVersion `operation-authority.v1` where the caller presents a certificate and `operation-authority.v2` where it presents a token (ADR-0079, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
+	// ContractVersion `operation-authority.v2` (ADR-0079, ADR-0100, ADR-0118); any other value is refused with 400 naming it.
 	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
 }
 
 // CreateManagedAgentParams defines parameters for CreateManagedAgent.
 type CreateManagedAgentParams struct {
-	// EnrollmentContractVersion `managed-enrollment.v1` where the caller presents a certificate and, on `createManagedAgent`, `managed-enrollment.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes. `issueInitialCertificate` takes no token and no v2 value.
+	// EnrollmentContractVersion `managed-enrollment.v2` (ADR-0100, ADR-0118); any other value is refused with 400 naming it.
 	EnrollmentContractVersion EnrollmentContractVersion `json:"Garam-Contract-Version"`
 }
 
 // PostOutboxMessageParams defines parameters for PostOutboxMessage.
 type PostOutboxMessageParams struct {
-	// DeliveryContractVersion `durable-delivery.v1` where the caller presents a certificate and `durable-delivery.v2` where it presents an agent token (ADR-0083, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
+	// DeliveryContractVersion `durable-delivery.v2` (ADR-0083, ADR-0100, ADR-0118); any other value is refused with 400 naming it.
 	DeliveryContractVersion DeliveryContractVersion `json:"Garam-Contract-Version"`
-}
-
-// RenewSupervisorCertificateParams defines parameters for RenewSupervisorCertificate.
-type RenewSupervisorCertificateParams struct {
-	// StandaloneContractVersion `standalone-enrollment.v1` or, on `enrollStandaloneAgent`, `standalone-enrollment.v2` (ADR-0100); any other value is refused with 400 naming what the route serves. `renewSupervisorCertificate` takes no v2 value.
-	StandaloneContractVersion StandaloneContractVersion `json:"Garam-Contract-Version"`
 }
 
 // ExchangeTokenParams defines parameters for ExchangeToken.
@@ -1179,9 +1082,6 @@ type RecoverAgentCredentialJSONRequestBody = CredentialRecoveryRequest
 
 // IntrospectAgentExecutionJSONRequestBody defines body for IntrospectAgentExecution for application/json ContentType.
 type IntrospectAgentExecutionJSONRequestBody = ExecutionIntrospectionRequest
-
-// IssueInitialCertificateJSONRequestBody defines body for IssueInitialCertificate for application/json ContentType.
-type IssueInitialCertificateJSONRequestBody = InitialCertificateRequest
 
 // ReportProvisioningStateJSONRequestBody defines body for ReportProvisioningState for application/json ContentType.
 type ReportProvisioningStateJSONRequestBody = ProvisioningStateReport
@@ -1213,9 +1113,6 @@ type CreateManagedAgentJSONRequestBody = ManagedAgentRequest
 // PostOutboxMessageJSONRequestBody defines body for PostOutboxMessage for application/json ContentType.
 type PostOutboxMessageJSONRequestBody = OutboxSubmission
 
-// RenewSupervisorCertificateJSONRequestBody defines body for RenewSupervisorCertificate for application/json ContentType.
-type RenewSupervisorCertificateJSONRequestBody = SupervisorRenewalRequest
-
 // ExchangeTokenJSONRequestBody defines body for ExchangeToken for application/json ContentType.
 type ExchangeTokenJSONRequestBody = TokenExchange
 
@@ -1227,7 +1124,7 @@ type ServerInterface interface {
 	// AdmitAgentEnrollment Admit the agent an approval binds, fenced and with no active generation.
 	// (POST /agent-enrollment-approvals/{approval}/admission)
 	AdmitAgentEnrollment(w http.ResponseWriter, r *http.Request, approvalId ApprovalId, params AdmitAgentEnrollmentParams)
-	// EnrollStandaloneAgent Spend an administrator's approval and obtain a supervisor's credential, or its and its agent's first certificates.
+	// EnrollStandaloneAgent Spend an administrator's approval and obtain a supervisor's credential.
 	// (POST /agent-enrollments)
 	EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, params EnrollStandaloneAgentParams)
 	// ActivateAgent Admit a runtime generation of an agent, and issue the token its calls carry.
@@ -1248,19 +1145,16 @@ type ServerInterface interface {
 	// RecoverAgentCredential Replace an agent's credential lineage under an administrator's handoff.
 	// (POST /agents/{agent}/credential-recovery)
 	RecoverAgentCredential(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params RecoverAgentCredentialParams)
-	// IntrospectAgentExecution Ask whether an agent certificate and a generation are current, together.
+	// IntrospectAgentExecution Ask whether an agent token and a generation are current, together.
 	// (POST /agents/{agent}/execution/introspection)
 	IntrospectAgentExecution(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params IntrospectAgentExecutionParams)
-	// IssueInitialCertificate Sign a managed agent's first certificate over the key its controller generated.
-	// (POST /agents/{agent}/initial-certificate)
-	IssueInitialCertificate(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params IssueInitialCertificateParams)
 	// ReportProvisioningState Report what the operator sees of an agent's pod.
 	// (POST /agents/{agent}/provisioning-state)
 	ReportProvisioningState(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
 	// ReportRuntimeState Report what an agent says about itself.
 	// (POST /agents/{agent}/runtime-state)
 	ReportRuntimeState(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
-	// MintAgentToken Mint the token an agent authenticates with in place of a certificate.
+	// MintAgentToken Mint the token an agent authenticates with.
 	// (POST /agents/{agent}/tokens)
 	MintAgentToken(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params MintAgentTokenParams)
 	// ForwardTurnEvent Forward one turn event to whoever is watching the agent.
@@ -1269,9 +1163,6 @@ type ServerInterface interface {
 	// GetIdentity Return the identity the connection authenticated as.
 	// (GET /identity)
 	GetIdentity(w http.ResponseWriter, r *http.Request)
-	// RenewIdentityCertificate Renew the certificate the connection authenticated with.
-	// (POST /identity/certificate)
-	RenewIdentityCertificate(w http.ResponseWriter, r *http.Request)
 	// GetMessageSigningKeys Read the public keys garam signs messages with.
 	// (GET /message-signing-keys)
 	GetMessageSigningKeys(w http.ResponseWriter, r *http.Request)
@@ -1299,9 +1190,6 @@ type ServerInterface interface {
 	// PostOutboxMessage Post a durable reply under the creation instant its outbox entry holds.
 	// (POST /outbox-messages)
 	PostOutboxMessage(w http.ResponseWriter, r *http.Request, params PostOutboxMessageParams)
-	// RenewSupervisorCertificate Renew the calling supervisor's certificate over a key it generated.
-	// (POST /supervisors/self/certificate)
-	RenewSupervisorCertificate(w http.ResponseWriter, r *http.Request, params RenewSupervisorCertificateParams)
 	// ExchangeToken Exchange a supervisor's credential for a short-lived token.
 	// (POST /tokens)
 	ExchangeToken(w http.ResponseWriter, r *http.Request, params ExchangeTokenParams)
@@ -1781,60 +1669,6 @@ func (siw *ServerInterfaceWrapper) IntrospectAgentExecution(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
-// IssueInitialCertificate operation middleware
-func (siw *ServerInterfaceWrapper) IssueInitialCertificate(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "agent" -------------
-	var agentGrn AgentGrn
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
-		return
-	}
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params IssueInitialCertificateParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "Garam-Contract-Version" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
-		var EnrollmentContractVersion EnrollmentContractVersion
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &EnrollmentContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
-			return
-		}
-
-		params.EnrollmentContractVersion = EnrollmentContractVersion
-
-	} else {
-		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.IssueInitialCertificate(w, r, agentGrn, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ReportProvisioningState operation middleware
 func (siw *ServerInterfaceWrapper) ReportProvisioningState(w http.ResponseWriter, r *http.Request) {
 
@@ -1972,20 +1806,6 @@ func (siw *ServerInterfaceWrapper) GetIdentity(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetIdentity(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RenewIdentityCertificate operation middleware
-func (siw *ServerInterfaceWrapper) RenewIdentityCertificate(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RenewIdentityCertificate(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2315,51 +2135,6 @@ func (siw *ServerInterfaceWrapper) PostOutboxMessage(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
-// RenewSupervisorCertificate operation middleware
-func (siw *ServerInterfaceWrapper) RenewSupervisorCertificate(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RenewSupervisorCertificateParams
-
-	headers := r.Header
-
-	// ------------- Required header parameter "Garam-Contract-Version" -------------
-	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
-		var StandaloneContractVersion StandaloneContractVersion
-		n := len(valueList)
-		if n != 1 {
-			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
-			return
-		}
-
-		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &StandaloneContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
-		if err != nil {
-			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
-			return
-		}
-
-		params.StandaloneContractVersion = StandaloneContractVersion
-
-	} else {
-		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
-		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RenewSupervisorCertificate(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ExchangeToken operation middleware
 func (siw *ServerInterfaceWrapper) ExchangeToken(w http.ResponseWriter, r *http.Request) {
 
@@ -2526,7 +2301,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetIdentity)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/identity/certificate", wrapper.RenewIdentityCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tokens", wrapper.ExchangeToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/oauth/token", wrapper.ExchangeClientAssertion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/tokens", wrapper.MintAgentToken)
@@ -2548,9 +2322,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/execution/introspection", wrapper.IntrospectAgentExecution)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/credential-recovery", wrapper.RecoverAgentCredential)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operators/{controller}/managed-agents", wrapper.CreateManagedAgent)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/initial-certificate", wrapper.IssueInitialCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agent-enrollments", wrapper.EnrollStandaloneAgent)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/supervisors/self/certificate", wrapper.RenewSupervisorCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agent-enrollment-approvals", wrapper.PrepareAgentEnrollment)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agent-enrollment-approvals/{approval}/admission", wrapper.AdmitAgentEnrollment)
 

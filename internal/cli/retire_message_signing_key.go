@@ -11,9 +11,8 @@ import (
 // signing key at once, which is how a compromised key is withdrawn
 // (ADR-0101). The key stops signing and leaves the published set
 // immediately; the next hand-out signs under a new key from that moment.
-// It is a sibling of `serve`, as `issue-certificate` is, so no serving
-// process withdraws a key. It needs no key-encryption key, because it
-// opens nothing.
+// It is a sibling of `serve`, so no serving process withdraws a key. It
+// needs no key-encryption key, because it opens nothing.
 func newRetireMessageSigningKeyCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "retire-message-signing-key <kid>",

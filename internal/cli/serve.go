@@ -21,8 +21,6 @@ import (
 	auditpg "github.com/garamsh/garam/internal/audit/postgres"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
-	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/health"
@@ -126,7 +124,7 @@ func serveAPI(cmd *cobra.Command) error {
 		providers,
 		api.NewGRPCEvaluator(conn),
 		api.NewGRPCPolicyManager(conn),
-		authorityPresence{store: capg.New(pool)},
+		authorityPresence{orgs: orgpg.New(pool)},
 		NewAuthorityService(pool, conn),
 		NewStandaloneService(pool, conn),
 		api.Config{
@@ -339,26 +337,16 @@ func (o *observability) engineServer() *grpc.Server {
 	)
 }
 
-// authorityPresence is the certificate authority as the browser
-// listener reads it (api.AuthorityReader): whether an organization has
-// one, and nothing else. The composition root is where this is
-// assembled, as it is for the seams the agents and operators domains
-// sign through — the listener never imports `internal/ca`, and the
-// question it asks needs no key, so `garam serve api` still reads no
-// key-encryption key and still opens nothing.
+// authorityPresence is whether an organization still holds a retired
+// certificate authority, as the browser listener reads it
+// (api.AuthorityReader): presence and nothing else, the one read of
+// certificate_authorities left (ADR-0118). Deleting the organization
+// destroys that sealed row, and this is what the deletion preview warns
+// of; nothing here opens or decodes it.
 type authorityPresence struct {
-	store ca.Store
+	orgs *orgpg.Store
 }
 
 func (a authorityPresence) HasAuthority(ctx context.Context, orgGRN grn.GRN) (bool, error) {
-	switch _, err := a.store.Get(ctx, orgGRN); {
-	case err == nil:
-		return true, nil
-	case errorx.IsKind(err, errorx.KindNotFound):
-		// An organization that has needed no certificate has no
-		// authority yet, which is an answer and not a failure.
-		return false, nil
-	default:
-		return false, err
-	}
+	return a.orgs.HoldsCertificateAuthority(ctx, orgGRN)
 }

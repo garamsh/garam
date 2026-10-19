@@ -78,7 +78,7 @@ describe("operator page", () => {
 
     expect(fact("Description")).toHaveTextContent("Runs the batch agents.");
     expect(fact("Signs in with")).toHaveTextContent("Key in use");
-    expect(fact("Certificate")).toHaveTextContent("Issued");
+    expect(screen.queryByText("Certificate", { selector: "dt" })).toBeNull();
     // Registered by a member, named rather than identified.
     expect(fact("Registered")).toHaveTextContent("by Alice");
   });

@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -102,64 +101,6 @@ func writeTLSKeyPair(t *testing.T, dir string) (string, string) {
 	return certFile, keyFile
 }
 
-// authorities is a ca.Store in memory: the adapter needs a real
-// authority per organization and nothing else a store does.
-type authorities map[grn.GRN]*ca.Authority
-
-func (a authorities) Create(_ context.Context, authority *ca.Authority) error {
-	if _, held := a[authority.Organization]; held {
-		return ca.ErrAuthorityAlreadyExists
-	}
-	a[authority.Organization] = authority
-	return nil
-}
-
-func (a authorities) Get(_ context.Context, org grn.GRN) (*ca.Authority, error) {
-	authority, held := a[org]
-	if !held {
-		return nil, ca.ErrAuthorityNotFound
-	}
-	return authority, nil
-}
-
-// TestCertificateAuthorities_ReadsTheOrganizationsOwnAuthority is the
-// tenancy rule at the composition root: which authority a certificate
-// has to chain to is read off the organization segment of the identity
-// it names. One organization answering with a certificate would hold
-// for an adapter that returns whichever authority it finds first, so
-// two are here, and a subject of one that holds no certificate of its
-// own still reads its organization's.
-func TestCertificateAuthorities_ReadsTheOrganizationsOwnAuthority(t *testing.T) {
-	// Internal: NewMachineServer reads authorities from Postgres.
-	ctx := context.Background()
-	store := authorities{}
-	key := make([]byte, ca.KeySize)
-	_, err := rand.Read(key)
-	require.NoError(t, err)
-	sealer, err := ca.NewAESGCMSealer(key)
-	require.NoError(t, err)
-	issuer, err := ca.NewService(store, sealer, ca.Config{})
-	require.NoError(t, err)
-	for _, subject := range []grn.GRN{machineGRN("acme", "bot-1"), machineGRN("other", "bot-1")} {
-		_, err := issuer.Issue(ctx, subject)
-		require.NoError(t, err)
-	}
-
-	roots := certificateAuthorities{store: store}
-	acme, err := roots.Get(ctx, machineGRN("acme", "bot-2"))
-	require.NoError(t, err)
-	other, err := roots.Get(ctx, machineGRN("other", "bot-1"))
-	require.NoError(t, err)
-
-	assert.Equal(t, store[orgGRN("acme")].Certificate, acme)
-	assert.Equal(t, store[orgGRN("other")].Certificate, other)
-	assert.NotEqual(t, acme, other, "two organizations share one authority")
-
-	_, err = roots.Get(ctx, machineGRN("nobody", "bot-1"))
-	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
-}
-
 // TestMachineServer_AnswersAPanicOutsideTheSurfacesOwnMiddleware is
 // `serve machine`'s wiring. The generated middleware slice reaches the
 // spec operations alone, so a panic raised outside them — the identity
@@ -183,7 +124,7 @@ func TestMachineServer_AnswersAPanicOutsideTheSurfacesOwnMiddleware(t *testing.T
 	require.NoError(t, resp.Body.Close())
 	// The control: the same listener carries a request to a handler that
 	// does not panic, so what the 500 below reports is the panic rather
-	// than the certificate or the identity check refusing.
+	// than the token or the identity check refusing.
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 
 	var out lines

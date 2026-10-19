@@ -13,7 +13,7 @@ import (
 // binds, to its audience only and once current state still authorizes
 // it (ADR-0078). It consumes nothing.
 func (s *Server) IntrospectOperationAuthority(w http.ResponseWriter, r *http.Request, params machinegen.IntrospectOperationAuthorityParams) {
-	if !served(w, r, params.ContractVersion, authorityValues) {
+	if !served(w, params.ContractVersion, authorityValues) {
 		return
 	}
 	identity, ok := caller(w, r)
@@ -39,7 +39,7 @@ func (s *Server) IntrospectOperationAuthority(w http.ResponseWriter, r *http.Req
 // its audience, as an Operator does before activating a new desired
 // revision. It is not a restart capability.
 func (s *Server) CheckOperationReference(w http.ResponseWriter, r *http.Request, ref machinegen.OperationRef, params machinegen.CheckOperationReferenceParams) {
-	if !served(w, r, params.ContractVersion, authorityValues) {
+	if !served(w, params.ContractVersion, authorityValues) {
 		return
 	}
 	identity, ok := caller(w, r)

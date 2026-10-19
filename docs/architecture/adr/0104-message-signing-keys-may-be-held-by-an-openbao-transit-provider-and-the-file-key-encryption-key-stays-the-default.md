@@ -325,7 +325,7 @@ what it needs once the implementation has merged (#1476).
   where the signing keys are held;
   [deployment-contract.md](../deployment-contract.md) for what a
   deployment supplies and what the KEK still seals;
-  [certificate-authorities.md](../certificate-authorities.md) for the
+  [certificate-authorities.md](https://github.com/garamsh/garam/blob/c551f13ef50301340a755bee6350c2d446287965/docs/architecture/certificate-authorities.md) for the
   authorities staying on the file KEK; and
   [overview.md](../overview.md) for the decision's rationale.
 - **ADR-0101 is superseded in part**: §Keys' "Its keys are stored in

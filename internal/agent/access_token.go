@@ -54,11 +54,6 @@ var (
 	// operator of the agent's organization.
 	ErrAccessTokenAudience = errorx.New(errorx.KindInvalidArgument,
 		"an agent token's audience is another operator of the agent's organization")
-	// ErrNoCertificate refuses a caller that presented no certificate
-	// to a route that renews one: a token's holder is minted another
-	// token instead (ADR-0100).
-	ErrNoCertificate = errorx.New(errorx.KindUnauthenticated,
-		"no certificate was presented: a token is not renewed, its assignee mints another")
 )
 
 // AccessToken is a short-lived token an agent's assignee minted for it

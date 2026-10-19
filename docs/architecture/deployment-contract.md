@@ -168,7 +168,7 @@ and the agent ready at 00:44:37Z.
   Garam keeps public verification material only; generation/download
   expose the key once as ADR-0102 §Operator identity and custody states.
 - Declare one external/admin writer for the stable PEM, never a
-  competing Operator certificate-renewal writer. Atomic replacement
+  competing writer. Atomic replacement
   and reload per exchange use `kid` from that same key snapshot.
   Operator owns the exact owner-UID/0600 copy/mount mechanism; raw
   projection or `fsGroup` alone meets neither proof. Token refresh
@@ -182,25 +182,25 @@ and the agent ready at 00:44:37Z.
   ([operators.md](./operators.md) §Issued PEM identity).
 - Retain `server-root.pem` for adapter TLS and Sherlock's issuer-fetch
   `keys-ca-file`, moving consumer and mount atomically if their paths
-  change. Removing client mTLS does not remove server hostname/root
-  verification or fetch trust. The message issuer remains stable and
-  is not the OAuth token endpoint audience.
+  change. No caller presents a client certificate, and server
+  hostname/root verification and fetch trust stay. The message issuer
+  remains stable and is not the OAuth token endpoint audience.
 - A direct runtime can enroll without provisioning a Kubernetes Pod
   or Docker generation. Its one-agent connector still supplies current
   scoped API access and writer/lifecycle fencing; this is a new path,
   not a claim the current standalone runner already implements it.
-- Garam accepts an Operator's certificate cohort beside its key
-  cohort; the shared-secret cohort and the enrollment token are gone
-  ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)),
-  so a deployment issues each Operator identity a key before it runs
-  without a certificate. The Operator then cuts over in one mode after
-  support is deployed; no new Operator compatibility switch is
-  authorized. gitops#14 and infra#331 remain owner gates.
+- Garam accepts an Operator by its key alone; the certificate, the
+  shared-secret cohort and the enrollment token are gone
+  ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md),
+  [ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)),
+  so a deployment issues each Operator identity a key before it runs.
+  No Operator compatibility switch is authorized. gitops#14 and
+  infra#331 remain owner gates.
 - Message signing still seals private keys under the key-encryption
   key, unless the deployment holds them in Transit
-  (§A Transit provider for message signing keys). Retiring
-  per-organization certificate authorities alone never authorizes
-  removing that key, message trust roots or signing rows.
+  (§A Transit provider for message signing keys). The retired
+  per-organization certificate authorities never authorize removing
+  that key, message trust roots or signing rows.
 
 The existing plan,
 `docs/plans/2026-10-09-machine-identity-migration.md`, names sequence
@@ -224,21 +224,20 @@ the two agree, not that either is garam's.
 **It is enforced, not requested.** `internal/keyfile` refuses a key file
 when any group or other permission bit is set, and separately when its
 owner is not the process's own UID, and every key file a process reads
-at startup goes through it: the key-encryption key, the machine
-listener's own TLS key (`internal/cli/machine.go`) and the adapter's
-(`internal/cli/delivery.go`) alike, so either refusal stops the start of
-that process. Plain Kubernetes Secret projection satisfies neither half
-— a projected file is root-owned, and `fsGroup` changes the group owner
-rather than the user owner (read 2026-08-25; this repository pins no
-Kubernetes version). Relaxing the check to fit plain projection is not
-an option; the arrival shape the chart renders is what the rule
-requires.
+at startup goes through it: the key-encryption key and the machine
+listener's own TLS key (`internal/cli/machine.go`), so either refusal
+stops the start of that process. Plain Kubernetes Secret projection
+satisfies neither half — a projected file is root-owned, and `fsGroup`
+changes the group owner rather than the user owner (read 2026-08-25;
+this repository pins no Kubernetes version). Relaxing the check to fit
+plain projection is not an option; the arrival shape the chart renders
+is what the rule requires.
 
-Four qualifications:
+Two qualifications:
 
-- **Each `*_TLS_CERT_FILE` and `*_TLS_KEY_FILE` pair is re-read on every
-  handshake**, on the machine listener and in the adapter alike
-  (`internal/keyfile/pair.go`), so a replaced pair is presented on the
+- **The `GARAM_MACHINE_TLS_CERT_FILE` and `GARAM_MACHINE_TLS_KEY_FILE`
+  pair is re-read on every handshake** (`internal/keyfile/pair.go`), so
+  a replaced pair is presented on the
   next connection with nothing restarted
   ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)).
   Two obligations follow, and a deployment that meets neither has
@@ -251,60 +250,15 @@ Four qualifications:
     afterwards reaches the projected volume and not the copy the process
     reads. Whatever refreshes that copy must satisfy the arrival rule
     for the key on every refresh, not only the first.
-- **`GARAM_CERTIFICATE_LIFETIME` is a security parameter.** It bounds
-  every certificate garam signs — an agent's and an operator's, not the
-  listener's own pair, which garam does not issue
-  (`internal/ca/service.go`). Expiry is what bounds an agent's
-  certificate and there is no CRL and no responder for any of them
-  ([ADR-0014](./adr/0014-agent-authentication.md)), so the value is the
-  window a stolen agent certificate stays usable in. A stolen
-  operator certificate has a shorter one available: deleting the
-  operator refuses it from the next connection
-  ([ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)),
-  and a deployment weighing this value for an operator is weighing
-  what happens before somebody notices rather than the whole exposure.
-  `internal/ca/service.go` bounds it at one hour and thirty days and
-  refuses the start outside them. The default is deliberately loose
-  while rotation is new
-  ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md));
-  lowering it is safe only where the two obligations above are met on
-  the files each renewed certificate is written to, because an identity
-  whose files are replaced in place or left stale stops connecting
-  sooner the lower it goes.
-- **An operator renews its own certificate, so a deployment must not
-  build a job that rotates one.** It presents the certificate it holds
-  to `POST /identity/certificate` on the machine listener and receives
-  the next one
-  ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)).
-  Three consequences a deployment acts on:
-  - **Ask inside the window.** A renewal is admitted once two thirds of
-    the certificate's validity has passed, and refused before that.
-    Whatever asks has to run often enough to meet that window — at the
-    default lifetime it is about eight hours wide — and to write what
-    comes back to the files the process reads, under the two
-    obligations above.
-  - **Only the newest certificate renews.** garam records the
-    certificate it last issued an operator and renews that one alone, so
-    an operator identity is held by one process: two sharing one
-    certificate will both renew and one will be refused from then on.
-  - **Re-running `issue-certificate` is the recovery**, and it is the
-    same act as the bootstrap. It takes the lineage from every
-    certificate that already names the operator, which is what recovers
-    from a renewal answer that never arrived. It withdraws nothing: a
-    certificate that can no longer renew keeps authenticating until it
-    expires. What withdraws one is deleting the operator, which is a
-    different act with a different purpose — recovery keeps the
-    operator, deletion ends it (ADR-0070).
 - **There is no client CA bundle, and creating one is forbidden.** The
-  machine listener asks for a certificate and verifies the one it is
-  given, per connection, against the certificate authority of the
-  organization the certificate's own SAN names, read from the database
-  at handshake time (`internal/machine/listener.go`). A pool holding
-  every organization's authority would accept a certificate against a
-  root that is not its own — the tenancy hole
-  [ADR-0014](./adr/0014-agent-authentication.md) rests on the trust
-  root to close. There is nothing to mount and nothing to rotate for
-  it: what the workload mounts is its own certificate and key, the
+  machine listener asks for no client certificate and authenticates
+  every caller by a token, read on every request
+  (`internal/machine/listener.go`,
+  [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md),
+  [ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)),
+  so a bundle would verify nothing. There is nothing to mount and
+  nothing to rotate for it: what the workload mounts is its own
+  certificate and key, the
   garam server root `GARAM_MACHINE_SERVER_ROOT_FILE` names, and the
   key-encryption key — four files, and none of them a bundle of client
   authorities.
@@ -312,36 +266,36 @@ Four qualifications:
 ## The key-encryption key cannot be regenerated
 
 **The key-encryption key — the bytes in the file `GARAM_CA_KEY_FILE`
-names, not the path — cannot be regenerated.** Every organization's
-certificate authority is sealed under the key present when that
-authority was created, and the sealed bytes open only under that same
-key: a different one is refused by the identifier of the key it needs
-rather than read as corruption (`internal/ca/service.go`,
-`internal/ca/sealer.go`). Rotation is not built and not designed — the
+names, not the path — cannot be regenerated.** It seals the keys garam
+signs messages with
+([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)),
+each under the key present when it was created, and the sealed bytes
+open only under that same key: a different one is refused by the
+identifier of the key it needs rather than read as corruption
+(`internal/ca/sealer.go`). Rotation is not built and not designed — the
 identifier is what would make it possible later, and nothing performs
 it ([ADR-0016](./adr/0016-ca-key-custody.md)) — so there is no path
-from one key to another. Under a different key every authority sealed
-under the old one is unopenable and no certificate can be signed or
-renewed for its organization (`internal/ca/service.go`); the only
-remedy is a new authority per organization and a reissue of every
-certificate under it.
-
-It seals one other kind of key: the keys garam signs messages with
-([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)).
-Under a different key-encryption key the signing key does not open
-either, and every claim answers 500 naming that key in the listener's
-log. That one is replaceable where an authority is not:
+from one key to another. Under a different key-encryption key the
+signing key does not open, and every claim answers 500 naming that key
+in the listener's log. A signing key is replaceable:
 `garam retire-message-signing-key <kid>` withdraws it, and the next
 hand-out signs under a new key sealed by the key present. A verifier
 holding the published set as a file refuses the new key's signatures
 until the file is replaced. A deployment that configures the Transit
-provider below stops sealing new message keys under it; the
-authorities stay sealed under it until G4 retires them.
+provider below stops sealing new message keys under it; the keys
+already sealed stay sealed under it.
+
+It also holds sealed the private key of every organization's
+certificate authority an earlier release created. garam signs nothing
+with them and reads their rows only for whether one exists, which the
+organization deletion preview reports; the rows stay in place until
+their owner decides to drop them, and they open under no other key
+([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)).
 
 Nothing detects the substitution at start: the arrival checks above
 pass on any well-formed key, and nothing compares it against what the
 database already holds (`internal/cli/machine.go`). The wrong key
-starts cleanly and fails at the first certificate asked for.
+starts cleanly and fails at the first claim it signs.
 
 The obligation that follows, in the form a deployment can act on:
 
@@ -349,8 +303,8 @@ The obligation that follows, in the form a deployment can act on:
   key must be a no-op that keeps what already exists, never a
   regeneration.
 - **It must survive the cluster.** A key that exists only as something
-  the cluster generated is lost with the cluster, and every
-  organization's certificate authority is lost with it.
+  the cluster generated is lost with the cluster, and every key sealed
+  under it is lost with it.
 - **Where it lives is the cluster owner's decision.** garam requires
   the two properties above and names no store; choosing one is not
   this contract's to do.
@@ -374,8 +328,8 @@ certificate (recorded on #486). That the command read the restored row
 rather than the live one was shown and not assumed — with the copy's
 sealed key overwritten the same command refused, naming the key the
 corrupted row then needed, while the live row was unchanged throughout.
-So a sealed authority that has been through a dump and a restore opens
-under the same key and still signs. That is one leg of a restore and
+So a sealed authority that had been through a dump and a restore opened
+under the same key and signed. That is one leg of a restore and
 not a restore of a deployment; it says nothing about recovering one.
 Four limits are the distance between the two:
 
@@ -404,65 +358,42 @@ alone. What binds instead is who signs them
 ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)):
 
 - **One certificate authority signs that pair and signs nothing else.**
-  It is separate from every organization's authority, and garam never
-  holds its key — the process holds the pair it signed and its
-  certificate, and no more. cert-manager issuing from an issuer
+  garam never holds its key — the process holds the pair it signed and
+  its certificate, and no more. cert-manager issuing from an issuer
   dedicated to this listener satisfies this; an issuer that also signs
-  other workloads does not, because what it signs is what every agent
+  other workloads does not, because what it signs is what every caller
   trusts garam by.
 - **That authority's certificate is `GARAM_MACHINE_SERVER_ROOT_FILE`,
-  and garam hands it to every identity it issues a certificate to**
-  (`serverRootPem` in `api/machine.yaml`). It is public, it is read once
+  and garam hands it beside every credential it issues**
+  (`serverRootPem` in the agent-token mint answer and the standalone
+  enrollment answer, `api/machine.yaml`). It is public, it is read once
   at startup, and it must be the root the pair above chains to — a
-  mismatch reaches every agent and works for none. A deployment writing
+  mismatch reaches every caller and works for none. A deployment writing
   an adapter's files takes that same `serverRootPem` for
-  `GARAM_ADAPTER_SERVER_ROOT_FILE` and not `issuerPem`, which is the
-  authority that signed the agent rather than the one the agent verifies
-  garam by ([adapter.md](./adapter.md)).
-- **Replacing that authority invalidates what every agent already
-  holds**, and garam reads it once, so it is a restart plus a reissue
-  rather than a rotation. Nothing in garam schedules it; it should
-  outlive the certificates it signs by years.
-- **An enrolling operator needs that root before it calls, and it is
-  the only file it needs.** Registering the operator answers a one-time
-  token, the operator generates its own key pair in its own cluster and
-  presents the token with a certificate signing request, and garam signs
-  ([ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
-  The root is what the operator verifies garam by on that call, so it
-  reaches the operator's cluster ahead of the token — one public file
-  per deployment rather than one per operator. **An enrollment made
-  without verifying garam against it hands the token to whoever
-  answered.** No private key travels on this path at all: garam never
-  holds one, and a deployment has nothing to write.
-- **An operator bootstrapped by `issue-certificate` instead needs that
-  root too, and the command does not write it**: it writes
-  `certificate.pem`, `key.pem` and `issuer.pem` and no more
-  (`internal/cli/issue_certificate.go`). The root is public and the
-  deployment already holds it, so whoever installs that first
-  certificate out of band installs the same file
-  `GARAM_MACHINE_SERVER_ROOT_FILE` names beside it. That path stays
-  available and is the recovery from a token nobody received.
-- **Registering the operator is what the enrollment path starts with,
-  and what the out-of-band path still owes separately.** An owner or an
-  admin of the organization registers the operator over the browser API
-  (`POST /orgs/{org}/operators`), under the identifier the certificate's
-  subject GRN carries
-  ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md)); on
-  the enrollment path that call is also what mints the token, and it
-  answers the token once. Nothing registers one automatically — no
-  listener, no migration, and no command.
+  `GARAM_ADAPTER_SERVER_ROOT_FILE` ([adapter.md](./adapter.md)).
+- **Replacing that authority invalidates the root every caller already
+  holds**, and garam reads it once, so it is a restart, with every
+  holder's copy replaced, rather than a rotation. Nothing in garam
+  schedules it; it should outlive the certificates it signs by years.
+- **An operator needs that root before it calls.** The root is what the
+  operator verifies garam by on its first exchange, so it reaches the
+  operator's cluster ahead of the operator's key — one public file per
+  deployment rather than one per operator. **An exchange made without
+  verifying garam against it hands the operator's assertion to whoever
+  answered.**
+- **Registering the operator comes first.** An owner or an admin of the
+  organization registers the operator over the browser API
+  (`POST /orgs/{org}/operators`), under the identifier its GRN carries
+  ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md)),
+  and its key is issued on that record
+  ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)).
+  Nothing registers one automatically — no listener, no migration, and
+  no command.
 - **An operator with no registration does not authenticate.** The
-  machine listener reads the record per connection, so the registration
-  is a precondition for the certificate rather than a separate tidiness
+  machine listener reads the record on every request, so the
+  registration is a precondition for the operator's token rather than a
+  separate tidiness
   ([ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)).
-  **This is what a deployment carrying operators registered before that
-  decision has to act on**: one that bootstrapped out of band and
-  skipped the registration had an operator that authenticated with no
-  record, and now has one that does not authenticate at all.
-  Registering the identifier is the whole repair, it needs no
-  certificate operation, and registering a GRN that already holds a
-  certificate is permitted — the token it mints beside the record is
-  one that operator does not need and does not have to spend.
 
 ## A Transit provider for message signing keys
 
@@ -509,7 +440,8 @@ as an error; readiness does not report OpenBao, and the start
 does not reach it. Turning the provider on announces a Transit key with
 the full two-hour lead while the current sealed key goes on signing,
 so the key-encryption key must still be present then — it is, because
-the authorities need it until G4. Turning it off leaves the current
+`serve machine` does not start without it. Turning it off leaves the
+current
 Transit key unable to sign there: claims are refused until the sealed
 key announced in its place begins two hours later, or at once after
 `garam retire-message-signing-key` retires it.
@@ -662,14 +594,12 @@ here so they are not guessed, and so the chart does not offer a value
 that would assert one:
 
 - **Read-only root filesystem.** Not established for either image. What
-  is checkable: `issue-certificate` is the one command under `internal/`
-  or `cmd/` that writes a file — it creates the directory `--out-dir`
-  names and writes `certificate.pem`, `key.pem` and `issuer.pem` into it
-  (`internal/cli/issue_certificate.go`) — so that job needs a writable
-  path there and the three serve processes need none. Where the
-  directory cannot be created the run fails before a certificate is
-  minted; where it exists and cannot be written the run fails after, and
-  the private key in that answer exists nowhere else. What the web
+  is checkable: the code under `internal/` that writes a file is the
+  standalone host's commands (`internal/cli/standalone_host.go`,
+  `internal/cli/standalone_run.go`), the supervisor's workload
+  (`internal/workload/`) and the adapter's outbox
+  (`internal/delivery/outbox.go`), none of which a serve process runs,
+  so the three serve processes need no writable path. What the web
   runtime writes, if anything, is unverified — so the `securityContext`
   field is the deployment's to set either way.
 - **Replica safety above one.** Not established for `serve api`,
@@ -703,17 +633,17 @@ that would assert one:
   reached over plaintext gRPC inside the trust boundary
 - [ADR-0009](./adr/0009-web-frontend.md) — the web app and its `/api/*`
   rewrite
-- [ADR-0014](./adr/0014-agent-authentication.md) — mTLS on a listener of
-  its own, per-connection trust root
+- [ADR-0014](./adr/0014-agent-authentication.md) — a listener of its
+  own for machine callers
 - [ADR-0015](./adr/0015-operator-identity.md) — key material travels as
   files, never the environment
 - [ADR-0045](./adr/0045-an-organization-registers-an-operator.md) — an
   organization registers an operator, which no command does for it
 - [ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
-  — the record is what an operator's certificate authenticates on, so
+  — the record is what an operator's token authenticates on, so
   deleting it stops the operator and an unregistered one never starts
-- [ADR-0016](./adr/0016-ca-key-custody.md) — the key-encryption key the
-  authorities are sealed under
+- [ADR-0016](./adr/0016-ca-key-custody.md) — the key-encryption key,
+  which cannot be regenerated
 - [ADR-0017](./adr/0017-machine-process.md) — three serve processes from
   one image
 - [ADR-0018](./adr/0018-delivery-acknowledgement.md) — the adapter
@@ -745,7 +675,7 @@ that would assert one:
   `4df93d567fddb9afe9e5120449053222dee2b7c7`
 - [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the listener presents one certificate signed by a garam server
-  authority the deployment holds, every identity pins that root, and a
+  authority the deployment holds, every caller pins that root, and a
   replaced pair is served without a restart (superseding ADR-0037)
 - [ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
   — the chart describes the deployment and this document keeps what a
@@ -756,9 +686,6 @@ that would assert one:
 - [ADR-0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)
   — a workload's account is named by a value the deployment sets, which
   is the subject a role is scoped to
-- [ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)
-  — an operator renews its own certificate, so the out-of-band mint is a
-  bootstrap and not a schedule
 - [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)
   — state a working artifact carries and enforces stays there, and the
   document that owns the concern names what it hands over
@@ -770,6 +697,12 @@ that would assert one:
   — a deployment may hold its message signing keys in an OpenBao
   Transit key it supplies, and the authorities stay on the
   key-encryption key
+- [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+  — every machine caller authenticates with a garam-issued credential
+  and short-lived tokens over server TLS
 - [ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
   — an Operator enters by a key alone, so a deployment issues it one
-  before it runs without a certificate
+  before it runs
+- [ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
+  — the certificate path goes, and the sealed authority rows and the
+  key-encryption key stay

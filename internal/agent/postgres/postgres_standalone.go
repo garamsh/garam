@@ -33,9 +33,6 @@ func (s *Store) Approve(ctx context.Context, e agent.Enrollment) (*agent.Enrollm
 		ExpiresAt:     pgxtype.Timestamptz(e.ExpiresAt),
 		CreatedAt:     pgxtype.Timestamptz(e.CreatedAt),
 	}
-	if k := e.Keys; k != nil {
-		params.SupervisorKeySha256, params.AgentKeySha256 = k.Supervisor[:], k.Agent[:]
-	}
 	if r := e.Replaces; r != nil {
 		params.ExpectedAssigneeGrn = pgtype.Text{String: r.Assignee.String(), Valid: true}
 		params.ExpectedEpoch = pgtype.Int4{Int32: int32(r.Epoch), Valid: true}
@@ -144,20 +141,14 @@ func (s *Store) enroll(ctx context.Context, req agent.EnrollmentRequest) (*agent
 			if err := stillCurrent(ctx, q, row); err != nil {
 				return err
 			}
-			// garam keeps only a v2 credential's hash, so its retry
+			// garam keeps only the credential's hash, so a retry
 			// re-issues it, under this approval's row lock: the earlier
 			// credential and every token minted under it go.
-			if keyless(row) {
-				if err := reissue(ctx, q, row.SupervisorGrn, req.Credential, now); err != nil {
-					return err
-				}
+			if err := reissue(ctx, q, row.SupervisorGrn, req.Credential, now); err != nil {
+				return err
 			}
 			out, err = resultOf(row)
 			return err
-		}
-		signs := !keyless(row)
-		if signs && (req.Supervisor == nil || req.Agent == nil) || !signs && req.Credential == nil {
-			return errorx.New(errorx.KindInternal, "enroll: nothing recorded and nothing issued")
 		}
 		lineage := pgUUID(uuid.UUID(req.Lineage))
 		epoch, err := place(ctx, q, row, exec, held, lineage, now)
@@ -178,28 +169,11 @@ func (s *Store) enroll(ctx context.Context, req agent.EnrollmentRequest) (*agent
 			// activation does not move it.
 			spending.ReplacedActivationID = exec.LatestActivationID
 		}
-		if signs {
-			if err := q.InsertCredential(ctx, db.InsertCredentialParams{
-				AgentGrn: row.AgentGrn, Serial: req.Agent.Credential.Serial, Lineage: lineage,
-				NotAfter: pgxtype.Timestamptz(req.Agent.Credential.NotAfter),
-			}); err != nil {
-				return storageError(err, "record credential", nil, nil)
-			}
-			text := func(s string) pgtype.Text { return pgtype.Text{String: s, Valid: true} }
-			registration.Serial = text(req.Supervisor.Credential.Serial)
-			registration.NotAfter = pgxtype.Timestamptz(req.Supervisor.Credential.NotAfter)
-			spending.SupervisorCertificatePem = text(req.Supervisor.CertificatePEM)
-			spending.AgentCertificatePem = text(req.Agent.CertificatePEM)
-			spending.IssuerPem = text(req.Agent.IssuerPEM)
-			spending.ServerRootPem = text(req.Agent.ServerRootPEM)
-		}
 		if err := q.InsertSupervisor(ctx, registration); err != nil {
 			return storageError(err, "register supervisor", nil, agent.ErrEnrollmentConflict)
 		}
-		if !signs {
-			if err := reissue(ctx, q, row.SupervisorGrn, req.Credential, now); err != nil {
-				return err
-			}
+		if err := reissue(ctx, q, row.SupervisorGrn, req.Credential, now); err != nil {
+			return err
 		}
 		if err := q.SpendEnrollment(ctx, spending); err != nil {
 			return storageError(err, "spend enrollment", nil, nil)
@@ -217,10 +191,6 @@ func (s *Store) enroll(ctx context.Context, req agent.EnrollmentRequest) (*agent
 	}
 	return out, created, nil
 }
-
-// keyless reports whether an approval binds no key, which is spent
-// under standalone-enrollment.v2 and issues a credential.
-func keyless(row db.AgentEnrollment) bool { return row.SupervisorKeySha256 == nil }
 
 // reissue replaces the supervisor's credential with c: the earlier one
 // and every token minted under it go by the foreign key.
@@ -242,8 +212,8 @@ func reissue(ctx context.Context, q *db.Queries, supervisor string, c *agent.Sup
 // place admits the agent an approval binds onto its supervisor and
 // answers the epoch: a new agent, or a replacement from exactly the
 // assignment it expected, which also ends the replaced registration.
-// Either way the agent moves to lineage, which holds no certificate
-// until the caller records the enrolled one.
+// Either way the agent moves to lineage, in which its supervisor mints
+// its tokens.
 func place(ctx context.Context, q *db.Queries, row db.AgentEnrollment, exec db.AgentExecution, held bool, lineage pgtype.UUID, now pgtype.Timestamptz) (int32, error) {
 	orgGRN, err := grn.Parse(row.OrgGrn)
 	if err != nil {
@@ -369,79 +339,6 @@ func (s *Store) Revoke(ctx context.Context, org, g grn.GRN) error {
 	})
 }
 
-func (s *Store) Renew(ctx context.Context, req agent.SupervisorRenewal) (*agent.SupervisorCertificate, bool, error) {
-	var (
-		out     *agent.SupervisorCertificate
-		created bool
-	)
-	err := s.inTx(ctx, "renew supervisor", func(q *db.Queries) error {
-		registered, err := q.LockSupervisor(ctx, req.Supervisor.String())
-		if err != nil {
-			return storageError(err, "lock supervisor", agent.ErrSupervisorNotFound, nil)
-		}
-		if registered.EndedAt.Valid {
-			return agent.ErrSupervisorNotFound
-		}
-		now, err := q.Now(ctx)
-		if err != nil {
-			return storageError(err, "read clock", nil, nil)
-		}
-		if !now.Time.Before(req.Presented.NotAfter) {
-			return agent.ErrCredentialFenced
-		}
-		if !registered.Serial.Valid {
-			// A supervisor enrolled under v2 holds no certificate to renew.
-			return agent.ErrRenewalConflict
-		}
-		if req.Presented.Serial != registered.Serial.String {
-			// Only the current certificate's immediate predecessor, with
-			// the request that produced it, is answered again.
-			prior, err := q.GetSupervisorRenewal(ctx, db.GetSupervisorRenewalParams{
-				SupervisorGrn: registered.Grn, PredecessorSerial: req.Presented.Serial,
-			})
-			if err != nil {
-				return storageError(err, "read renewal", agent.ErrRenewalConflict, nil)
-			}
-			if !prior.Current || prior.RequestID != string(req.RequestID) || !bytes.Equal(prior.RequestSha256, req.RequestSHA256[:]) {
-				return agent.ErrRenewalConflict
-			}
-			out = &agent.SupervisorCertificate{
-				CertificatePEM: prior.CertificatePem, IssuerPEM: prior.IssuerPem,
-				ServerRootPEM: prior.ServerRootPem, NotAfter: prior.NotAfter.Time,
-			}
-			return nil
-		}
-		if req.Signed == nil {
-			return errorx.New(errorx.KindInternal, "renew supervisor: nothing recorded and nothing signed")
-		}
-		signed := req.Signed
-		if err := q.InsertSupervisorRenewal(ctx, db.InsertSupervisorRenewalParams{
-			SupervisorGrn: registered.Grn, PredecessorSerial: req.Presented.Serial,
-			RequestID: string(req.RequestID), RequestSha256: req.RequestSHA256[:],
-			Serial: signed.Credential.Serial, CertificatePem: signed.CertificatePEM, IssuerPem: signed.IssuerPEM,
-			ServerRootPem: signed.ServerRootPEM, NotAfter: pgxtype.Timestamptz(signed.Credential.NotAfter), CreatedAt: now,
-		}); err != nil {
-			return storageError(err, "record renewal", nil, agent.ErrRenewalConflict)
-		}
-		if err := q.MoveSupervisorCertificate(ctx, db.MoveSupervisorCertificateParams{
-			Grn: registered.Grn, Serial: pgtype.Text{String: signed.Credential.Serial, Valid: true},
-			NotAfter: pgxtype.Timestamptz(signed.Credential.NotAfter),
-		}); err != nil {
-			return storageError(err, "move supervisor certificate", nil, nil)
-		}
-		out = &agent.SupervisorCertificate{
-			CertificatePEM: signed.CertificatePEM, IssuerPEM: signed.IssuerPEM,
-			ServerRootPEM: signed.ServerRootPEM, NotAfter: signed.Credential.NotAfter,
-		}
-		created = true
-		return nil
-	})
-	if err != nil {
-		return nil, false, err
-	}
-	return out, created, nil
-}
-
 // orNoRows reports a row read but not this caller's as absent.
 func orNoRows(err error) error {
 	if err == nil {
@@ -479,11 +376,6 @@ func enrollmentOf(row db.AgentEnrollment) (*agent.Enrollment, error) {
 		HostName: agent.Name(row.HostName), RequestID: agent.RequestID(row.RequestID),
 		SecretSHA256: [32]byte(row.SecretSha256), ApprovedBy: approver,
 		ExpiresAt: row.ExpiresAt.Time, CreatedAt: row.CreatedAt.Time, Withdrawn: row.WithdrawnAt.Valid,
-	}
-	if !keyless(row) {
-		e.Keys = &agent.HostKeys{
-			Supervisor: agent.KeyFingerprint(row.SupervisorKeySha256), Agent: agent.KeyFingerprint(row.AgentKeySha256),
-		}
 	}
 	if row.ExpectedAssigneeGrn.Valid {
 		assignee, err := grn.Parse(row.ExpectedAssigneeGrn.String)
@@ -524,13 +416,6 @@ func resultOf(row db.AgentEnrollment) (*agent.EnrollmentResult, error) {
 		replaced := agent.ActivationID(row.ReplacedActivationID.Bytes)
 		out.ReplacesActivation = &replaced
 	}
-	if row.SupervisorCertificatePem.Valid {
-		out.Certificates = &agent.EnrollmentCertificates{
-			SupervisorCertificatePEM: row.SupervisorCertificatePem.String, AgentCertificatePEM: row.AgentCertificatePem.String,
-			IssuerPEM: row.IssuerPem.String,
-		}
-		out.ServerRootPEM = row.ServerRootPem.String
-	}
 	return out, nil
 }
 
@@ -543,12 +428,8 @@ func supervisorOf(row db.AgentSupervisor) (*agent.Supervisor, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "stored supervisor agent", errorx.KindInternal)
 	}
-	out := &agent.Supervisor{
+	return &agent.Supervisor{
 		GRN: g, Agent: agentGRN, Enrollment: agent.EnrollmentID(row.EnrollmentID.Bytes),
 		HostName: agent.Name(row.HostName),
-	}
-	if row.Serial.Valid {
-		out.Certificate = &agent.Credential{Serial: row.Serial.String, NotAfter: row.NotAfter.Time}
-	}
-	return out, nil
+	}, nil
 }

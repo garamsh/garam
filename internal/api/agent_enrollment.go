@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/hex"
 	"net/http"
+	"regexp"
 	"time"
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
@@ -58,13 +60,9 @@ func approvalInput(actor, org grn.GRN, body apigen.AgentEnrollmentApproval) (age
 	if err != nil {
 		return agent.ApprovalInput{}, err
 	}
-	secret, err := agent.ParseKeyFingerprint(body.SecretSha256)
+	secret, err := parseSHA256(body.SecretSha256)
 	if err != nil {
 		return agent.ApprovalInput{}, errorx.Wrap(err, "secretSha256")
-	}
-	keys, err := hostKeysOf(body.SupervisorKeySha256, body.AgentKeySha256)
-	if err != nil {
-		return agent.ApprovalInput{}, err
 	}
 	placement := agent.PlacementStandalone
 	if body.Placement != nil {
@@ -74,7 +72,7 @@ func approvalInput(actor, org grn.GRN, body apigen.AgentEnrollmentApproval) (age
 	}
 	in := agent.ApprovalInput{
 		Actor: actor, Org: org, Placement: placement, RequestID: requestID, HostName: hostName,
-		ExpiresAt: body.ExpiresAt, SecretSHA256: [32]byte(secret), Keys: keys,
+		ExpiresAt: body.ExpiresAt, SecretSHA256: secret,
 	}
 	if r := body.Replaces; r != nil {
 		agentGRN, err := grn.Parse(r.AgentGrn)
@@ -90,27 +88,18 @@ func approvalInput(actor, org grn.GRN, body apigen.AgentEnrollmentApproval) (age
 	return in, nil
 }
 
-// hostKeysOf parses the two fingerprints an approval binds for a host
-// enrolling under standalone-enrollment.v1, or answers nil where it
-// binds neither, for one enrolling under v2 (ADR-0100). One without
-// the other binds no contract.
-func hostKeysOf(supervisorSHA256, agentSHA256 *string) (*agent.HostKeys, error) {
-	if supervisorSHA256 == nil && agentSHA256 == nil {
-		return nil, nil
+// sha256Pattern is a SHA-256 digest as the wire carries it.
+var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
+
+// parseSHA256 reads a SHA-256 digest as 64 lowercase hexadecimal
+// characters.
+func parseSHA256(s string) ([32]byte, error) {
+	var d [32]byte
+	if !sha256Pattern.MatchString(s) {
+		return d, errorx.New(errorx.KindInvalidArgument, "a SHA-256 is 64 lowercase hexadecimal characters")
 	}
-	if supervisorSHA256 == nil || agentSHA256 == nil {
-		return nil, errorx.New(errorx.KindInvalidArgument,
-			"an approval binds both key fingerprints, for a certificate host, or neither, for a credential host")
-	}
-	supervisorKey, err := agent.ParseKeyFingerprint(*supervisorSHA256)
-	if err != nil {
-		return nil, errorx.Wrap(err, "supervisorKeySha256")
-	}
-	agentKey, err := agent.ParseKeyFingerprint(*agentSHA256)
-	if err != nil {
-		return nil, errorx.Wrap(err, "agentKeySha256")
-	}
-	return &agent.HostKeys{Supervisor: supervisorKey, Agent: agentKey}, nil
+	_, _ = hex.Decode(d[:], []byte(s))
+	return d, nil
 }
 
 // WithdrawAgentEnrollment withdraws an approval no host has spent.

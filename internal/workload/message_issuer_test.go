@@ -60,7 +60,7 @@ func TestRun_RendersGaramsIssuerIntoTheRuntime(t *testing.T) {
 		"keys-ca-file": "/etc/sherlock/garam-server-root.pem",
 	}}, issuers)
 	root := runtime.files["/etc/sherlock/garam-server-root.pem"]
-	assert.Equal(t, h.id.issuerPEM, root.Data)
+	assert.Equal(t, h.root.pem, root.Data)
 	assert.Equal(t, 0o600, int(root.Mode))
 	assert.Equal(t, 65532, root.UID)
 }
@@ -210,7 +210,7 @@ func stubGaramKeys(t *testing.T, h *host, keyring message.Keyring) string {
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
 		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
-	der, err := x509.CreateCertificate(rand.Reader, template, h.id.issuer, &key.PublicKey, h.id.issuerKey)
+	der, err := x509.CreateCertificate(rand.Reader, template, h.root.cert, &key.PublicKey, h.root.key)
 	require.NoError(t, err)
 	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/message-signing-keys" {

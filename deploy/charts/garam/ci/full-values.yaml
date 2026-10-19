@@ -67,7 +67,6 @@ machine:
     serverRootKey: server-root.pem
     kekKey: ca-kek.hex
     kekSecretName: garam-machine-ca-kek
-  certificateLifetime: 1h
   issuer: https://machine.garam.example
   # The operator exchange turned on, rendered on api and machine alike.
   # The minimal file leaves it unset, so the env renders on both sides.

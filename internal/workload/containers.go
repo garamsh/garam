@@ -30,8 +30,10 @@ func (s *Supervisor) recover(ctx context.Context, replace bool) (*intent, error)
 			return nil, err
 		}
 		d := s.cfg.Desired
-		sameMode := (s.cfg.Tokens != nil) == (in.ControlToken != "")
-		if !over && !replace && !d.Replace && sameMode &&
+		// An intent recorded without a control token is one a
+		// certificate-mode run left, which this supervisor cannot serve.
+		tokenMode := in.ControlToken != ""
+		if !over && !replace && !d.Replace && tokenMode &&
 			in.Revision == d.Revision && in.Epoch == d.Epoch && in.Images == d.Images {
 			return in, nil
 		}
@@ -307,15 +309,9 @@ func (s *Supervisor) spec(in *intent, r Role, genDir string) ContainerSpec {
 			"GARAM_ADAPTER_CONTROL_SOCKET=" + socketTarget + "/" + socketName,
 			"GARAM_ADAPTER_OUTBOX_DIR=" + outboxTarget,
 		}
-		if s.cfg.Tokens != nil {
-			spec.Env = append(spec.Env,
-				"GARAM_ADAPTER_TOKEN_FILE="+adapterFiles+"/"+agentTokenFile,
-				"GARAM_ADAPTER_CONTROL_TOKEN_FILE="+adapterFiles+"/"+controlTokenFile)
-		} else {
-			spec.Env = append(spec.Env,
-				"GARAM_ADAPTER_TLS_CERT_FILE="+adapterFiles+"/agent.crt",
-				"GARAM_ADAPTER_TLS_KEY_FILE="+adapterFiles+"/agent.key")
-		}
+		spec.Env = append(spec.Env,
+			"GARAM_ADAPTER_TOKEN_FILE="+adapterFiles+"/"+agentTokenFile,
+			"GARAM_ADAPTER_CONTROL_TOKEN_FILE="+adapterFiles+"/"+controlTokenFile)
 		// The adapter signs where the runtime beside it trusts garam's
 		// issuer, which the supervisor renders from the same setting
 		// (ADR-0101). The runtime starts first, so its entry is in
@@ -330,10 +326,9 @@ func (s *Supervisor) spec(in *intent, r Role, genDir string) ContainerSpec {
 // files is what is copied into a container before it starts, below
 // /etc: the runtime's configuration and the garam server root it
 // verifies garam's key set by, and the adapter's credential, roots and
-// placement token. The adapter's credential is the agent's certificate
-// and key, or in the token mode agentToken and the generation's control
-// token. Each is owned by the account the container runs as and
-// readable by it alone.
+// placement token. The adapter's credential is agentToken and the
+// generation's control token. Each is owned by the account the
+// container runs as and readable by it alone.
 func (s *Supervisor) files(in *intent, r Role, root []byte, agentToken string) []File {
 	dir := func(path string) File {
 		return File{Path: path, Mode: 0o700, Dir: true, UID: runtimeUID, GID: runtimeUID}
@@ -359,14 +354,9 @@ func (s *Supervisor) files(in *intent, r Role, root []byte, agentToken string) [
 			own("garam/control-root.pem", root, 0o600),
 			own("garam/placement-token", []byte(in.PlacementToken), 0o600),
 		}
-		if s.cfg.Tokens != nil {
-			return append(files,
-				own("garam/"+agentTokenFile, []byte(agentToken), 0o600),
-				own("garam/"+controlTokenFile, []byte(in.ControlToken), 0o600))
-		}
 		return append(files,
-			own("garam/agent.crt", a.CertificatePEM, 0o600),
-			own("garam/agent.key", a.KeyPEM, 0o600))
+			own("garam/"+agentTokenFile, []byte(agentToken), 0o600),
+			own("garam/"+controlTokenFile, []byte(in.ControlToken), 0o600))
 	}
 	return nil
 }

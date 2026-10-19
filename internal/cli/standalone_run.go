@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
-	"net/http"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -252,28 +250,13 @@ func runStandalone(ctx context.Context, s runSettings) error {
 			return err
 		}
 	}
-	var (
-		files     workload.AdapterFiles
-		activator workload.Activator
-		tokens    workload.AgentTokens
-	)
-	if tokenEnrolled(enrolled) {
-		session, err := newSupervisorTokens(dirs.supervisor, base, agentGRN)
-		if err != nil {
-			return err
-		}
-		activator, tokens = session, session
-		files, err = tokenAdapterFilesOf(dirs.agent, adapterBase)
-		if err != nil {
-			return err
-		}
-	} else {
-		if files, err = adapterFilesOf(dirs.agent, adapterBase); err != nil {
-			return err
-		}
-		if activator, err = newGaramActivator(dirs.supervisor, base, agentGRN); err != nil {
-			return err
-		}
+	session, err := newSupervisorTokens(dirs.supervisor, base, agentGRN)
+	if err != nil {
+		return err
+	}
+	files, err := adapterFilesOf(dirs.agent, adapterBase)
+	if err != nil {
+		return err
 	}
 	issuer, err := messageIssuerOf(s.messageIssuer)
 	if err != nil {
@@ -284,9 +267,9 @@ func runStandalone(ctx context.Context, s runSettings) error {
 		return err
 	}
 	defer func() { _ = engine.Close() }()
-	supervisor, err := workload.NewSupervisor(engine, activator, workload.Config{
+	supervisor, err := workload.NewSupervisor(engine, session, workload.Config{
 		Dir: dirs.supervisor, Prefix: s.prefix, Desired: desired, Adapter: files,
-		MessageIssuer: string(issuer), Tokens: tokens, Replaces: replaces,
+		MessageIssuer: string(issuer), Tokens: session, Replaces: replaces,
 	})
 	if err != nil {
 		return err
@@ -296,9 +279,8 @@ func runStandalone(ctx context.Context, s runSettings) error {
 
 // runAttached composes the supervisor's attach mode for a directly
 // placed runtime and runs it until the generation it forwarded ends or
-// ctx does (ADR-0111). It holds no engine. A direct approval binds no
-// key, so the host is enrolled under standalone-enrollment.v2 and the
-// adapter is handed tokens in the agent's directory.
+// ctx does (ADR-0111). It holds no engine, and the adapter is handed
+// tokens in the agent's directory.
 func runAttached(ctx context.Context, s runSettings, dirs hostDirs, base string, desired workload.Desired, replaces string) error {
 	address, err := runtimeAddressOf(s.runtimeAddress)
 	if err != nil {
@@ -412,86 +394,12 @@ func readModelEnv(path string) ([]string, error) {
 }
 
 // adapterFilesOf reads what the enrollment installed in the agent's
-// directory, which the adapter's container receives.
+// directory: the garam server root alone, since the adapter is handed
+// tokens (ADR-0100).
 func adapterFilesOf(dir, machineURL string) (workload.AdapterFiles, error) {
-	key, err := keyfile.Read(filepath.Join(dir, agentKeyFile))
-	if err != nil {
-		return workload.AdapterFiles{}, errorx.Wrap(err, "agent key")
-	}
-	files := workload.AdapterFiles{KeyPEM: key, MachineURL: machineURL}
-	for _, f := range []struct {
-		name string
-		into *[]byte
-	}{
-		{agentCertFile, &files.CertificatePEM},
-		{issuerFile, &files.IssuerPEM},
-		{serverRootFile, &files.ServerRootPEM},
-	} {
-		raw, err := os.ReadFile(filepath.Join(dir, f.name))
-		if err != nil {
-			return workload.AdapterFiles{}, errorx.Wrap(err, "agent directory: "+f.name, errorx.KindFailedPrecondition)
-		}
-		*f.into = raw
-	}
-	return files, nil
-}
-
-// tokenAdapterFilesOf reads what a v2 enrollment installed in the
-// agent's directory: the garam server root alone, since the adapter is
-// handed tokens rather than a certificate (ADR-0100).
-func tokenAdapterFilesOf(dir, machineURL string) (workload.AdapterFiles, error) {
 	root, err := os.ReadFile(filepath.Join(dir, serverRootFile))
 	if err != nil {
 		return workload.AdapterFiles{}, errorx.Wrap(err, "agent directory: "+serverRootFile, errorx.KindFailedPrecondition)
 	}
 	return workload.AdapterFiles{ServerRootPEM: root, MachineURL: machineURL}, nil
-}
-
-// garamActivator calls activateAgent with the supervisor's own
-// certificate, read per handshake so a renewal needs no restart.
-type garamActivator struct {
-	client *http.Client
-	url    string
-	agent  grn.GRN
-}
-
-func newGaramActivator(dir, base string, agentGRN grn.GRN) (*garamActivator, error) {
-	rootPEM, err := os.ReadFile(filepath.Join(dir, serverRootFile))
-	if err != nil {
-		return nil, errorx.Wrap(err, "server root", errorx.KindFailedPrecondition)
-	}
-	current := filepath.Join(dir, supervisorFile)
-	pair, err := keyfile.NewPair(current, current)
-	if err != nil {
-		return nil, err
-	}
-	client, err := standaloneClient(rootPEM, pair)
-	if err != nil {
-		return nil, err
-	}
-	return &garamActivator{client: client, url: base + "/agents/" + agentGRN.String() + "/activations", agent: agentGRN}, nil
-}
-
-func (g *garamActivator) Activate(ctx context.Context, req workload.ActivationRequest) (*workload.Activation, error) {
-	body := machinegen.ActivationRequest{
-		RequestId: req.RequestID, Epoch: req.Epoch, Generation: req.Generation,
-		CertificatePem: &req.CertificatePEM,
-	}
-	if req.Replaces != "" {
-		body.ReplacesActivationId = &req.Replaces
-	}
-	raw, err := json.Marshal(body)
-	if err != nil {
-		return nil, errorx.Wrap(err, "activation", errorx.KindInternal)
-	}
-	var answer machinegen.Activation
-	status, err := callStandalone(ctx, g.client, g.url, agent.ExecutionContractVersion, "", raw, &answer)
-	if err != nil {
-		return nil, err
-	}
-	return &workload.Activation{
-		ID: answer.ActivationId, Token: answer.Token, TokenVersion: answer.TokenVersion,
-		GRN: answer.Grn, Epoch: answer.Epoch, Generation: answer.Generation,
-		Replayed: status == http.StatusOK,
-	}, nil
 }

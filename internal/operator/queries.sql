@@ -20,52 +20,16 @@ WHERE grn = sqlc.arg('grn');
 UPDATE operators SET control_endpoint = sqlc.narg('control_endpoint')
 WHERE grn = sqlc.arg('grn');
 
--- When garam last issued the operator a certificate is read from
--- `operator_certificates` beside the record, and stored in neither.
 -- name: GetOperator :one
-SELECT sqlc.embed(o),
-       c.issued_at AS certificate_issued_at
-FROM operators o
-LEFT JOIN operator_certificates c ON c.operator_grn = o.grn
-WHERE o.grn = $1;
+SELECT * FROM operators WHERE grn = $1;
 
 -- name: ListOperatorsByOrg :many
-SELECT sqlc.embed(o),
-       c.issued_at AS certificate_issued_at
-FROM operators o
-LEFT JOIN operator_certificates c ON c.operator_grn = o.grn
-WHERE o.org_grn = $1
-ORDER BY o.grn;
-
--- name: AdoptOperatorCertificate :exec
-INSERT INTO operator_certificates (operator_grn, serial, issued_at)
-VALUES (sqlc.arg('operator_grn'), sqlc.arg('serial'), sqlc.arg('issued_at'))
-ON CONFLICT (operator_grn) DO UPDATE
-    SET serial = EXCLUDED.serial, issued_at = EXCLUDED.issued_at;
-
--- Moves the record only where it still holds the serial the caller
--- presented, so two holders of one identity cannot both carry the
--- lineage on. An operator with no row yet is adopted by the insert.
--- name: AdvanceOperatorCertificate :execrows
-INSERT INTO operator_certificates (operator_grn, serial, issued_at)
-VALUES (sqlc.arg('operator_grn'), sqlc.arg('serial'), sqlc.arg('issued_at'))
-ON CONFLICT (operator_grn) DO UPDATE
-    SET serial = EXCLUDED.serial, issued_at = EXCLUDED.issued_at
-    WHERE operator_certificates.serial = sqlc.arg('predecessor');
+SELECT * FROM operators WHERE org_grn = $1 ORDER BY grn;
 
 -- Deleting the record is what stops the operator authenticating
 -- (ADR-0070).
 -- name: DeleteOperator :execrows
 DELETE FROM operators WHERE grn = $1;
-
--- The record of the certificate garam last issued goes with the
--- registration. It has no cascade to go by (000019), so the delete
--- removes it and the two statements are one transaction. Left standing
--- it would outlive the registration exactly as the row ADR-0045's
--- errata found did, and the next registration of the same identifier
--- would read as holding a certificate it was never issued.
--- name: DeleteOperatorCertificate :exec
-DELETE FROM operator_certificates WHERE operator_grn = $1;
 
 -- Every token the operator holds or is the audience of, which the
 -- deletion's cascades would otherwise take in their own orders. Like

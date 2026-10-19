@@ -63,21 +63,21 @@ func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.As(err, &header) && header.ParamName == operator.ContractVersionHeader {
 		switch {
 		case executionRoute(r):
-			served(w, r, "", executionValues)
+			served(w, "", executionValues)
 		case enrollmentRoute(r):
-			served(w, r, "", enrollmentValues)
+			served(w, "", enrollmentValues)
 		case standaloneRoute(r):
 			standaloneContract(w, "")
 		case admissionRoute(r):
 			w.Header().Set(operator.ContractVersionHeader, agent.AdmissionContractVersion)
 			writeError(w, agent.ErrUnsupportedAdmissionContract)
 		case r.URL.Path == "/outbox-messages":
-			served(w, r, "", deliveryValues)
+			served(w, "", deliveryValues)
 		case tokenRoute(r):
 			w.Header().Set("Garam-Contract-Version", operator.TokenContractVersion)
 			writeError(w, operator.ErrUnsupportedTokenContract)
 		default:
-			served(w, r, "", authorityValues)
+			served(w, "", authorityValues)
 		}
 		return
 	}
@@ -94,19 +94,17 @@ func executionRoute(r *http.Request) bool {
 		strings.HasSuffix(p, "/credential-recovery"))
 }
 
-// enrollmentRoute reports whether r is one of the managed enrollment
-// routes, whose contract is managed-enrollment. Both are POSTs.
+// enrollmentRoute reports whether r is the managed creation route,
+// whose contract is managed-enrollment.
 func enrollmentRoute(r *http.Request) bool {
 	p := r.URL.Path
-	return (strings.HasPrefix(p, "/operators/") && strings.HasSuffix(p, "/managed-agents")) ||
-		(strings.HasPrefix(p, "/agents/") && strings.HasSuffix(p, "/initial-certificate"))
+	return strings.HasPrefix(p, "/operators/") && strings.HasSuffix(p, "/managed-agents")
 }
 
-// standaloneRoute reports whether r is one of the standalone
-// enrollment routes, whose contract is standalone-enrollment.v1.
+// standaloneRoute reports whether r is the standalone enrollment
+// route, whose contract is standalone-enrollment.
 func standaloneRoute(r *http.Request) bool {
-	p := r.URL.Path
-	return p == "/agent-enrollments" || p == "/supervisors/self/certificate"
+	return r.URL.Path == "/agent-enrollments"
 }
 
 // admissionRoute reports whether r is one of the agent-enrollment.v1

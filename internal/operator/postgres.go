@@ -29,9 +29,7 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 }
 
 // Register persists the record and reads the stored operator back in
-// the same transaction: whether garam already issued a certificate for
-// the GRN is in a table this write does not touch, so assuming none
-// here would be wrong for a GRN `garam issue-certificate` minted for.
+// the same transaction.
 func (s *PostgresStore) Register(ctx context.Context, o *Operator) (*Operator, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -54,7 +52,7 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator) (*Operator, e
 	if err != nil {
 		return nil, pgxerr.Classify(err, "read registered operator", nil, nil)
 	}
-	registered, err := rowToOperator(row.Operator, row.CertificateIssuedAt)
+	registered, err := rowToOperator(row)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +88,7 @@ func (s *PostgresStore) UpdateDetails(ctx context.Context, g grn.GRN, patch Deta
 	if err != nil {
 		return nil, pgxerr.Classify(err, "read updated operator", ErrOperatorNotFound, nil)
 	}
-	updated, err := rowToOperator(row.Operator, row.CertificateIssuedAt)
+	updated, err := rowToOperator(row)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +122,7 @@ func (s *PostgresStore) SetControlEndpoint(ctx context.Context, g grn.GRN, endpo
 	if err != nil {
 		return nil, pgxerr.Classify(err, "read operator", ErrOperatorNotFound, nil)
 	}
-	updated, err := rowToOperator(row.Operator, row.CertificateIssuedAt)
+	updated, err := rowToOperator(row)
 	if err != nil {
 		return nil, err
 	}
@@ -134,8 +132,8 @@ func (s *PostgresStore) SetControlEndpoint(ctx context.Context, g grn.GRN, endpo
 	return updated, nil
 }
 
-// Delete removes the record and the record of the certificate garam
-// last issued the operator, in one transaction.
+// Delete removes the record, in one transaction with the tokens it
+// holds.
 //
 // The transaction holds the registration first, as every writer of
 // the operator's keys and tokens does, and then deletes
@@ -162,9 +160,6 @@ func (s *PostgresStore) Delete(ctx context.Context, g grn.GRN) error {
 	if err := q.DeleteOperatorTokens(ctx, g.String()); err != nil {
 		return pgxerr.Classify(err, "delete operator tokens", nil, nil)
 	}
-	if err := q.DeleteOperatorCertificate(ctx, g.String()); err != nil {
-		return pgxerr.Classify(err, "delete operator certificate", nil, nil)
-	}
 	// The registration is held FOR UPDATE, so the row is there to
 	// delete; an absent one was refused by the hold.
 	if _, err := q.DeleteOperator(ctx, g.String()); err != nil {
@@ -182,7 +177,7 @@ func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*Operator, error) {
 	if err != nil {
 		return nil, pgxerr.Classify(err, "get operator", ErrOperatorNotFound, nil)
 	}
-	return rowToOperator(row.Operator, row.CertificateIssuedAt)
+	return rowToOperator(row)
 }
 
 // ListByOrg returns the organization's operators.
@@ -193,7 +188,7 @@ func (s *PostgresStore) ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Opera
 	}
 	operators := make([]*Operator, 0, len(rows))
 	for _, row := range rows {
-		o, err := rowToOperator(row.Operator, row.CertificateIssuedAt)
+		o, err := rowToOperator(row)
 		if err != nil {
 			return nil, err
 		}
@@ -203,10 +198,7 @@ func (s *PostgresStore) ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Opera
 }
 
 // CountByOrg counts the organization's registered operators, which
-// deleting the organization removes with it. A certificate one of them
-// already holds is not counted: that row carries no foreign key and
-// survives both the registration and the organization (ADR-0045
-// errata).
+// deleting the organization removes with it.
 func (s *PostgresStore) CountByOrg(ctx context.Context, orgGRN grn.GRN) (int, error) {
 	n, err := s.q.CountOperatorsByOrg(ctx, orgGRN.String())
 	if err != nil {
@@ -215,10 +207,9 @@ func (s *PostgresStore) CountByOrg(ctx context.Context, orgGRN grn.GRN) (int, er
 	return int(n), nil
 }
 
-// rowToOperator converts a sqlc row and the certificate date joined
-// beside it into the domain aggregate. A stored GRN that no longer
-// parses is data corruption, hence internal.
-func rowToOperator(row db.Operator, certificateIssuedAt pgtype.Timestamptz) (*Operator, error) {
+// rowToOperator converts a sqlc row into the domain aggregate. A stored
+// GRN that no longer parses is data corruption, hence internal.
+func rowToOperator(row db.Operator) (*Operator, error) {
 	g, err := grn.Parse(row.Grn)
 	if err != nil {
 		return nil, errorx.Wrap(err, "grn", errorx.KindInternal)
@@ -250,9 +241,6 @@ func rowToOperator(row db.Operator, certificateIssuedAt pgtype.Timestamptz) (*Op
 		Name:            row.Name,
 		Description:     row.Description,
 		ControlEndpoint: endpoint,
-		// An absent certificate leaves the zero time, which is what
-		// CertificateIssuedAt answers as "garam has issued none".
-		certificateIssuedAt: certificateIssuedAt.Time,
 	}, nil
 }
 

@@ -13,12 +13,12 @@ secret=machine-throwaway-key-material
 kubectl="kubectl --context minikube -n $namespace"
 
 # A Secret holding everything is kept rather than replaced. Every
-# certificate authority in the database is sealed under the
+# message signing key in the database is sealed under the
 # key-encryption key that was there when it was created, so a second
 # bring-up that generated a new one would leave them all unopenable
-# (ADR-0016).
+# (ADR-0016, ADR-0104).
 if $kubectl get secret "$secret" -o jsonpath='{.data.server-root\.pem}' 2>/dev/null | grep -q .; then
-  echo "$secret: present, kept — a new key-encryption key would orphan every sealed authority"
+  echo "$secret: present, kept — a new key-encryption key would orphan every sealed key"
   exit 0
 fi
 
@@ -28,8 +28,8 @@ trap 'rm -rf "$dir"' EXIT INT TERM
 # A Secret predating ADR-0040 carries no server root, and the pod cannot
 # start without one. Its key-encryption key is carried across unchanged
 # — it is the one value here that cannot be regenerated — and the TLS
-# material beside it is replaced, which costs nothing: it seals nothing
-# and this cluster's agents hold no certificate signed under it.
+# material beside it is replaced, which costs nothing here: it seals
+# nothing.
 migrating=false
 if $kubectl get secret "$secret" >/dev/null 2>&1; then
   migrating=true

@@ -19,10 +19,6 @@ packages:
   github.com/garamsh/garam/internal/authz:
     interfaces:
       Store: {}
-  github.com/garamsh/garam/internal/ca:
-    interfaces:
-      Sealer: {}
-      Store: {}
   github.com/garamsh/garam/internal/operator:
     interfaces:
       AuthorityService: {}

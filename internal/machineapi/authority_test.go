@@ -56,11 +56,11 @@ func configureBinding(audience grn.GRN) operator.Binding {
 	}
 }
 
-// TestIntrospectOperationAuthority_AnswersTheAudienceTheCertificateNames
+// TestIntrospectOperationAuthority_AnswersTheAudienceTheTokenNames
 // holds that the caller the service is asked for is the one the
 // handshake proved, never one the request names, and that the answer
 // carries the binding with the token's expiry and the contract version.
-func TestIntrospectOperationAuthority_AnswersTheAudienceTheCertificateNames(t *testing.T) {
+func TestIntrospectOperationAuthority_AnswersTheAudienceTheTokenNames(t *testing.T) {
 	hosted := grn.New("acme", "default", "operator", "hosted")
 	expiresAt := time.Date(2026, time.October, 4, 12, 5, 0, 0, time.UTC)
 	authority := operatormocks.NewMockAuthorityService(t)
@@ -69,9 +69,9 @@ func TestIntrospectOperationAuthority_AnswersTheAudienceTheCertificateNames(t *t
 	url, client := authorityListener(t, authority, hosted)
 
 	status, version, body := versioned(t, client, http.MethodPost, url+"/operation-authorities/introspection",
-		operator.ContractVersion, `{"authority":"secret"}`)
+		operator.TokenAuthorityContractVersion, `{"authority":"secret"}`)
 	require.Equal(t, http.StatusOK, status, body)
-	assert.Equal(t, operator.ContractVersion, version)
+	assert.Equal(t, operator.TokenAuthorityContractVersion, version)
 	var got machinegen.OperationBinding
 	require.NoError(t, json.Unmarshal([]byte(body), &got))
 	require.NotNil(t, got.ExpiresAt)
@@ -96,8 +96,8 @@ func TestOperationAuthorityRoutes_RefuseAMissingOrUnsupportedVersion(t *testing.
 		for _, v := range []string{"", "operation-authority.v0"} {
 			status, version, body := versioned(t, client, route.method, url+route.path, v, route.body)
 			assert.Equal(t, http.StatusBadRequest, status, route.path)
-			assert.Equal(t, operator.ContractVersion, version, route.path)
-			assert.Contains(t, body, operator.ContractVersion, route.path)
+			assert.Equal(t, operator.TokenAuthorityContractVersion, version, route.path)
+			assert.Contains(t, body, operator.TokenAuthorityContractVersion, route.path)
 		}
 	}
 }
@@ -120,9 +120,9 @@ func TestOperationAuthorityRoutes_MapRefusals(t *testing.T) {
 		authority := operatormocks.NewMockAuthorityService(t)
 		authority.EXPECT().Reference(mock.Anything, hosted, operator.OperationRef("ref-1")).Return(operator.Binding{}, c.err).Once()
 		url, client := authorityListener(t, authority, hosted)
-		status, version, body := versioned(t, client, http.MethodGet, url+"/operation-references/ref-1", operator.ContractVersion, "")
+		status, version, body := versioned(t, client, http.MethodGet, url+"/operation-references/ref-1", operator.TokenAuthorityContractVersion, "")
 		assert.Equal(t, c.status, status, c.err.Error())
-		assert.Equal(t, operator.ContractVersion, version)
+		assert.Equal(t, operator.TokenAuthorityContractVersion, version)
 		if c.status == http.StatusServiceUnavailable {
 			assert.Contains(t, body, `"message":"internal error"`)
 		}
@@ -138,7 +138,7 @@ func TestCheckOperationReference_AnswersNoExpiry(t *testing.T) {
 	authority.EXPECT().Reference(mock.Anything, hosted, operator.OperationRef("ref-1")).Return(configureBinding(hosted), nil).Once()
 	url, client := authorityListener(t, authority, hosted)
 
-	status, _, body := versioned(t, client, http.MethodGet, url+"/operation-references/ref-1", operator.ContractVersion, "")
+	status, _, body := versioned(t, client, http.MethodGet, url+"/operation-references/ref-1", operator.TokenAuthorityContractVersion, "")
 	require.Equal(t, http.StatusOK, status, body)
 	assert.NotContains(t, body, "expiresAt")
 	assert.Contains(t, body, `"operationRef":"ref-1"`)

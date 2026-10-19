@@ -22,7 +22,6 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
@@ -91,49 +90,6 @@ func (s *agentService) ReportRuntimeState(_ context.Context, caller, agentGRN gr
 	s.runtime = append(s.runtime, stateReport{
 		call: call{operator: caller, subject: agentGRN}, epoch: epoch, state: string(state)})
 	return s.err
-}
-
-// authorities is a ca.Store in memory. The tests need a real
-// certificate authority per organization to sign a caller's
-// certificate, and nothing else a store does.
-type authorities map[grn.GRN]*ca.Authority
-
-func (a authorities) Create(_ context.Context, authority *ca.Authority) error {
-	if _, held := a[authority.Organization]; held {
-		return ca.ErrAuthorityAlreadyExists
-	}
-	a[authority.Organization] = authority
-	return nil
-}
-
-func (a authorities) Get(_ context.Context, orgGRN grn.GRN) (*ca.Authority, error) {
-	authority, held := a[orgGRN]
-	if !held {
-		return nil, ca.ErrAuthorityNotFound
-	}
-	return authority, nil
-}
-
-// trustRoots reads what a presented certificate must chain to out of
-// the authorities it was issued from — the adapter the composition
-// root builds over ca.Store, in the form a test can hold.
-// everyRecordHeld admits every identity its authority signed for.
-// What a withdrawn record does to a handshake is the machine
-// package's, and these tests are about what the surface answers a
-// caller that has one (ADR-0070).
-type everyRecordHeld struct{}
-
-func (everyRecordHeld) Holds(context.Context, grn.GRN) error { return nil }
-
-type trustRoots struct{ store authorities }
-
-func (r trustRoots) Get(ctx context.Context, subject grn.GRN) ([]byte, error) {
-	authority, err := r.store.Get(ctx,
-		grn.New(grn.RootOwner, grn.DefaultProject, "org", subject.Organization))
-	if err != nil {
-		return nil, err
-	}
-	return authority.Certificate, nil
 }
 
 // memberGroups is the machineapi.Groups seam in memory: which groups
@@ -245,11 +201,10 @@ func (c listenerCertificate) Get() (*tls.Certificate, error) {
 }
 
 // listener serves the surface behind the machine listener and returns
-// its URL with a client holding the certificate the caller's own
-// organization signed. Everything below the surface is real except the
-// services it answers from: a request arrives over a handshake garam
-// verified, so the identity a handler reads is the one a certificate
-// carried.
+// its URL with a client presenting a token for the caller. Everything
+// below the surface is real except the services it answers from: the
+// identity a handler reads is the one the listener resolved the token
+// to.
 func listener(t *testing.T, agents agent.Service, operators operator.Service, messages message.Service, standing message.ConsentStore, watches watch.Service, groups machineapi.Groups, engine machineapi.Evaluator, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
 	return serveTLS(t, machineapi.NewServer(agents, operators, messages, standing, watches, groups, engine, nil, nil, nil, nil, nil, nil, stubKeyring{}), caller)
@@ -301,25 +256,41 @@ func (k presentedTokens) Resolve(_ context.Context, token string) (machine.Beare
 		ExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
+// callerToken is the token the test client presents for the caller,
+// on every request whose Authorization a test does not set itself.
+const callerToken = "garam_at_caller"
+
+// callerTokens answers callerToken for caller and every other token
+// from base.
+type callerTokens struct {
+	base   machine.Tokens
+	caller grn.GRN
+}
+
+func (c callerTokens) Resolve(ctx context.Context, token string) (machine.Bearer, error) {
+	if token != callerToken {
+		return c.base.Resolve(ctx, token)
+	}
+	return presentedTokens{callerToken: c.caller}.Resolve(ctx, token)
+}
+
+// presentingCaller sets the caller's token on a request that carries no
+// Authorization of its own, as a caller's client does on every call.
+type presentingCaller struct{ base http.RoundTripper }
+
+func (p presentingCaller) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Header.Get("Authorization") == "" {
+		r = r.Clone(r.Context())
+		r.Header.Set("Authorization", machine.TokenScheme+" "+callerToken)
+	}
+	return p.base.RoundTrip(r)
+}
+
 // serveTLSTokens is serveTLS answering a presented token from tokens.
 func serveTLSTokens(t *testing.T, srv *machineapi.Server, caller grn.GRN, tokens machine.Tokens, middlewares ...machinegen.MiddlewareFunc) (string, *http.Client) {
 	t.Helper()
-	store := authorities{}
-	key := make([]byte, ca.KeySize)
-	_, err := rand.Read(key)
-	require.NoError(t, err)
-	sealer, err := ca.NewAESGCMSealer(key)
-	require.NoError(t, err)
-	issuer, err := ca.NewService(store, sealer, ca.Config{})
-	require.NoError(t, err)
-	issued, err := issuer.Issue(context.Background(), caller)
-	require.NoError(t, err)
-	pair, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
-	require.NoError(t, err)
-
 	served := machine.NewServer(
-		machine.NewService(trustRoots{store: store}, everyRecordHeld{}, machine.Config{}),
-		tokens,
+		callerTokens{base: tokens, caller: caller},
 		nil,
 		loopback(t),
 		machinegen.HandlerWithOptions(srv, machinegen.StdHTTPServerOptions{
@@ -331,13 +302,13 @@ func serveTLSTokens(t *testing.T, srv *machineapi.Server, caller grn.GRN, tokens
 	go func() { _ = served.ServeTLS(lis, "", "") }()
 	t.Cleanup(func() { _ = served.Close() })
 
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+	transport := &http.Transport{TLSClientConfig: &tls.Config{
 		//nolint:gosec // the listener's own certificate is not under test.
 		InsecureSkipVerify: true,
 		MinVersion:         tls.VersionTLS13,
-		Certificates:       []tls.Certificate{pair},
-	}}}
-	t.Cleanup(client.CloseIdleConnections)
+	}}
+	client := &http.Client{Transport: presentingCaller{base: transport}}
+	t.Cleanup(transport.CloseIdleConnections)
 	return "https://" + lis.Addr().String(), client
 }
 
@@ -379,7 +350,6 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071").String()
 	routes := map[string]struct{ method, path string }{
 		"identity": {http.MethodGet, "/identity"},
-		"renewal":  {http.MethodPost, "/identity/certificate"},
 		"post":     {http.MethodPost, "/messages"},
 		"claim":    {http.MethodPost, "/agents/" + bot + "/claims"},
 		"renew":    {http.MethodPost, "/agents/" + bot + "/claims/claim-1/renewal"},

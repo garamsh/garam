@@ -19,7 +19,7 @@ garam's domains, named by the subject matter each owns, and what else under `int
 A domain is a boundary named for the subject matter it owns and never
 for a technical role
 ([structure.md](./structure.md) §Boundaries and dependency direction).
-garam has ten, and each has a responsibility
+garam has nine, and each has a responsibility
 document of its own named for the subject: the Go package implementing
 a domain is named in that document and is not the domain's name
 ([ADR-0048](./adr/0048-garams-domains-are-named-by-subject-matter.md)).
@@ -43,12 +43,8 @@ the Go package implementing it is in parentheses.
   the session that carries the proof afterwards (`internal/authn`)
 - [authz.md](./authz.md) — the rules that decide what a subject may do,
   and the engine that decides (`internal/authz`)
-- [certificate-authorities.md](./certificate-authorities.md) — the
-  certificate authority an organization signs machine identities with
-  (`internal/ca`)
 - [operators.md](./operators.md) — what an organization records about
-  an operator, where that operator stands in obtaining a certificate,
-  and what it authenticates with (`internal/operator`)
+  an operator and what it authenticates with (`internal/operator`)
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam (`internal/agent`)
 - [machine-identity.md](./machine-identity.md) — who is calling on the
@@ -81,14 +77,14 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**Four of the ten have this shape today: `internal/user`,
-`internal/ca`, `internal/watch` and `internal/org`.** `internal/machine`
+**Three of the nine have this shape today: `internal/user`,
+`internal/watch` and `internal/org`.** `internal/machine`
 persists through `internal/machine/postgres` and had no driver import
 to move. The other five — `agent`, `message`, `authz`, `operator` and
 `authn` — keep a store that imports `jackc/pgx` inside the domain
 package, and each moves in its own pull request following #1083. Until
 then `go list -deps` on a domain package names `jackc/pgx` exactly for
-those five, and the shape above describes four of ten.
+those five, and the shape above describes three of nine.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,
 inside the same package, when one Postgres type carries the methods of
@@ -115,12 +111,13 @@ in a domain that has not converted, and is one in a domain that has.
 
 `internal/machine` persists only the evidence of how each caller
 authenticated (ADR-0109), and its package holds none of the storage
-files above. It is its types, its service, the listener it builds, and
-the seams it reads and writes through: a trust root for the caller, the
-registration that admits the caller (ADR-0070), a certificate for
-itself, and the recorder that evidence goes to. The composition root
-satisfies all of them, so the package imports neither `internal/ca` nor
-`internal/operator` and the domains cooperate through `grn.GRN` alone.
+files above. It is its types, the recheck a lifecycle decision asks,
+the listener it builds, and the seams it reads and writes through: the
+tokens a caller presents, the registration that admits the caller
+(ADR-0070), a certificate for itself, and the recorder that evidence
+goes to. The composition root satisfies all of them, so the package
+imports neither `internal/agent` nor `internal/operator` and the
+domains cooperate through `grn.GRN` alone.
 The recorder's store is `internal/machine/postgres`.
 
 `queries.sql` and `db/` are a source and its output, not two copies. Every
@@ -173,7 +170,7 @@ each other at all (ADR-0017).
 | `Service` | opens a watch, carries a forwarded event to the watchers of that agent, and reports how many there are |
 | `Store` | the watches that are open |
 | `Relay` | the announcement that carries an event to the process holding a stream |
-| `Fence` | what the forwarding agent presents to the agent execution fence: the agent, the certificate its connection verified and its execution token's hash (ADR-0080) |
+| `Fence` | what the forwarding agent presents to the agent execution fence: the agent, the serial and dates of the token it presented, and its execution token's hash (ADR-0080) |
 
 Nothing accumulates for an agent nobody watches, which is what the
 boundary exists to keep true: the service holds an entry per open
@@ -261,16 +258,13 @@ a caller to it is [api-surface.md](./api-surface.md).
   domains and the watch boundary.
 - `internal/cli` — the cobra commands and the composition root behind
   them. It is what satisfies every seam a domain declares — the
-  `Issuer` the agents and operators domains reach `internal/ca`
-  through, the `TrustRoot` and `ServerCertificate` the machine-identity
-  domain reads, and the `Groups` the machine listener reads org
-  membership through.
+  `Tokens` and `ServerCertificate` the machine-identity domain reads,
+  and the `Groups` the machine listener reads org membership through.
 
 A surface parses what a path names, hands the caller over to the domain
 that decides, and renders the answer — turning an `errorx` kind into a
-status at its own boundary. What an operator may reach, whose queue a
-caller may act on and whether a presented certificate may be replaced
-are none of its decisions.
+status at its own boundary. What an operator may reach and whose queue
+a caller may act on are none of its decisions.
 
 The two listeners reach their domains differently, and what each holds
 shows it. The machine listener holds `Service` contracts and exactly
@@ -282,15 +276,13 @@ the policy engine through, and `AuthorityReader`.
 Neither listener imports the other and they never run in one process
 (ADR-0017). Neither imports the policy engine: each holds a gRPC client
 of its own, and the conversions onto the wire contract are declared
-once in `internal/wire`. Neither imports `internal/ca` either, and
-neither issues or opens anything a certificate authority holds. What
-the browser-facing one reads of an authority is whether an
+once in `internal/wire`. Neither imports `internal/ca` either. What
+the browser-facing one reads of a certificate authority is whether an
 organization has one, through `AuthorityReader`, which the composition
-root satisfies as it satisfies the `Issuer` the agents and operators
-domains sign through. Presence is the whole of that seam: the question
-is asked to say what deleting an organization would destroy, it needs
-no key to answer, and `garam serve api` still reads no key-encryption
-key.
+root satisfies with the organizations store's presence read below.
+Presence is the whole of that seam: the question is asked to say what
+deleting an organization would destroy, it needs no key to answer, and
+`garam serve api` still reads no key-encryption key.
 
 Two decisions live at a surface rather than in a domain, because each
 is a question about the caller rather than about the subject. Whom a
@@ -331,7 +323,7 @@ middle column below is a count of domains, and #783 records that
 column being counted four times and answering with four different
 numbers for want of saying what it counts, so the rule is here:
 
-- **Only a domain counts.** The ten entries above are the whole
+- **Only a domain counts.** The nine entries above are the whole
   list. A delivery surface, a sub-responsibility held in a boundary of
   its own and another shared package import these packages too, and
   none of those importers is a domain.
@@ -358,13 +350,13 @@ go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{e
 
 | Package | Domains importing it | Standing |
 |---|---|---|
-| `internal/errorx` | 10 — every domain | earns its place |
-| `internal/grn` | 10 — every domain | earns its place |
-| `internal/pgxerr` | 9 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` `audit` | earns its place |
-| `internal/pgxtype` | 9 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` `audit` | earns its place |
+| `internal/errorx` | 9 — every domain | earns its place |
+| `internal/grn` | 9 — every domain | earns its place |
+| `internal/pgxerr` | 9 — `org` `user` `authz` `agent` `operator` `authn` `message` `audit` `machine` | earns its place |
+| `internal/pgxtype` | 9 — `org` `user` `authz` `agent` `operator` `authn` `message` `audit` `machine` | earns its place |
 | `internal/listfilter` | 5 — `org` `agent` `audit` `authz` `user` | earns its place; ADR-0052 placed it before the count did |
 | `internal/wire` | 1 — `authz` | permitted by the wire-format carve-out, not by the count |
-| `internal/keyfile` | 1 — `ca` | under the threshold; belongs with the domain that owns it |
+| `internal/keyfile` | 1 — `message` | under the threshold; belongs with the domain that owns it |
 | `internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
 
 `internal/grn` holds the `GRN` value type with `New`, `Parse`,
@@ -385,15 +377,14 @@ transport-agnostic by design, so the same errors flow over any surface,
 and a pgx dependency there would end that. Which sqlstate becomes which
 kind is the package's own doc comment; it is code, and a copy here would
 be a second thing to keep true. Every postgres-backed store answers
-through it, which is nine domains: the five that each held their own
-copy — `org`, `authz`, `ca`, `user`, `agent` — `operator`, which never
-had one, the sign-in and messaging domains, whose stores read the
-driver's error inline until they were routed through it too, and
-audit, whose writer has answered through it from the start. Machine
-identity, the tenth domain, persists nothing and has no store. The watch
-boundary's store answers through it as well and is not a domain, which
-is why the query above names ten importers where the column counts
-nine.
+through it, which is nine domains: the four that each held their own
+copy — `org`, `authz`, `user`, `agent` — `operator`, which never had
+one, the sign-in and messaging domains, whose stores read the driver's
+error inline until they were routed through it too, and audit and
+machine identity, whose stores have answered through it from the
+start. The watch boundary's store answers through it as well and is
+not a domain, which is why the query above names ten importers where
+the column counts nine.
 
 `internal/pgxtype` holds the timestamptz conversion the stores bind and
 scan: `Timestamptz` makes a present value of a `time.Time`, and `Time`
@@ -446,11 +437,26 @@ they arrive at rather than as what they held at startup, so every read
 answers with the files as they are now and a replaced pair is presented
 on the next handshake without a restart (ADR-0040). The key goes
 through the rule above on every read; the certificate beside it is
-public. It depends on `errorx` only. Two domains read it — the
-certificate authorities domain, for the key-encryption key, and the
+public. It depends on `errorx` only. One domain reads it, the
 messaging domain's `internal/message/transit`, for the OpenBao token
-on every call (ADR-0104) — and the composition root reads the machine
-listener's pair and the adapter's through it.
+on every call (ADR-0104); `internal/ca` reads the key-encryption key
+through it, and the composition root reads the machine listener's pair
+and a standalone supervisor's credential through it.
+
+`internal/ca` holds the sealer the key-encryption key opens
+(ADR-0016): the message signing keys are sealed through it unless a
+transit provider holds them (ADR-0104). It signs nothing, and garam
+holds no certificate authority of its own (ADR-0118). The rows of
+`certificate_authorities` an earlier release wrote, each an
+authority's private key sealed under the key-encryption key, stay in
+place, because nothing can make one again once it is dropped and the
+drop is the owner's decision. Nothing reads them, with one exception:
+the organizations store's `HoldsCertificateAuthority`
+(`internal/org/postgres`) asks whether an organization holds a row,
+opening and decoding nothing, so the deletion preview can warn that
+deleting the organization destroys one
+([organizations.md](./organizations.md)). The composition root alone
+imports `internal/ca`.
 
 `internal/health` holds what liveness and readiness mean and the two
 probes every serve command mounts (ADR-0021). No domain imports it; the

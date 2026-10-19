@@ -195,9 +195,7 @@ export interface paths {
          *
          *     The counts are of the resources keyed on the organization itself. What is keyed on those in turn goes with its parent and is not counted apart from it — a group's members with the group, a project's members with the project, a policy's versions and attachments with the policy, an agent's assignment with the agent, and an operator's keys with the operator.
          *
-         *     `certificateAuthority` is outside `counts` because it is the one thing on this answer that cannot be created again. The rest can be re-made by whoever made them; the authority's private key is stored sealed and goes with the row, no route imports or restores one, and every certificate it ever signed stops verifying for good (ADR-0014, ADR-0016).
-         *
-         *     A certificate an operator already holds is not counted and does not go: that row carries no foreign key to the registration or the organization (ADR-0045). It stops authenticating all the same, because the authority that signed it is gone.
+         *     `certificateAuthority` is outside `counts` because it is the one thing on this answer that cannot be created again. The rest can be re-made by whoever made them; the retired authority's private key is stored sealed and goes with the row, and nothing imports or restores one (ADR-0016, ADR-0118).
          */
         get: operations["getOrgDeletionPreview"];
         put?: never;
@@ -569,7 +567,7 @@ export interface paths {
         put?: never;
         /**
          * Approve a standalone host's enrollment. Requires current `agent:enroll`.
-         * @description Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps, the fingerprints of the two public keys it generated — its supervisor's and its agent's — and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
+         * @description Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
          *     A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
          *     Repeating a `requestId` with the same request answers the same approval with 200, spent or not, while it is neither withdrawn nor expired; any other request under it is refused with 409, and a withdrawn or expired one is never revived.
          */
@@ -634,7 +632,7 @@ export interface paths {
         post?: never;
         /**
          * Revoke a standalone host's supervisor. Requires current `agent:enroll`.
-         * @description Ends the supervisor's registration, the agent's current activation and every unspent approval for that agent, in one transaction under the agent's execution lock (ADR-0082). The supervisor's certificate stops authenticating from its next connection and its open ones refuse every lifecycle request; the agent's protected writes are refused from its next request, because no activation admits them. The agent, its GRN and the memory its host keeps are untouched, and only a new approval stands a supervisor up for it again. Authorization is decided on the agent. A supervisor the organization holds no current registration of answers 404.
+         * @description Ends the supervisor's registration, the agent's current activation and every unspent approval for that agent, in one transaction under the agent's execution lock (ADR-0082). The supervisor's credential and every token exchanged for it are refused from the next request; the agent's protected writes are refused from its next request, because no activation admits them. The agent, its GRN and the memory its host keeps are untouched, and only a new approval stands a supervisor up for it again. Authorization is decided on the agent. A supervisor the organization holds no current registration of answers 404.
          */
         delete: operations["revokeAgentSupervisor"];
         options?: never;
@@ -651,7 +649,7 @@ export interface paths {
         };
         /**
          * List what garam issued, renewed and refused of one machine identity's credentials, newest first.
-         * @description Answers the credential events garam recorded for `subject`, an operator, agent or supervisor of the organization (ADR-0114): each issuance, renewal and refusal of its certificate, a supervisor's credential or an agent token, newest first, paged by `limit` and `offset` like every other list.
+         * @description Answers the credential events garam recorded for `subject`, an operator, agent or supervisor of the organization (ADR-0114): each issuance, renewal and refusal of a supervisor's credential or an agent token, and of a certificate before garam stopped issuing them (ADR-0118), newest first, paged by `limit` and `offset` like every other list.
          *
          *     An event names what was decided and, for a certificate, its serial and validity, read off the certificate garam answered; for a token or a credential, when it was minted and until when it is accepted. A refusal names the class of the failure and nothing the caller sent. No event carries a key, a token, a credential, a certificate or any part or hash of one.
          *
@@ -677,14 +675,14 @@ export interface paths {
         };
         /**
          * List an organization's operators. Requires the `member` role.
-         * @description The operators this organization has registered, each with when garam last issued it a certificate. An entry says garam holds the record and what garam already knows about the operator; it does not say the operator is running or reachable — garam never dials one (ADR-0012) and learns nothing about it until it calls, so `certificateIssuedAt` says a certificate was obtained and not that the operator is alive.
+         * @description The operators this organization has registered. An entry says garam holds the record; it does not say the operator is running or reachable — garam never dials one (ADR-0012) and learns nothing about it until it calls.
          */
         get: operations["listOperators"];
         put?: never;
         /**
          * Register an operator of an organization. Requires the `admin` role.
-         * @description Records that this organization has an operator under the identifier given (ADR-0045). The identifier is supplied and not minted: an operator that already holds a certificate is registered under the GRN that certificate names.
-         *     The record is what the operator authenticates on. A handshake presenting its certificate is checked against this record as well as against the organization's certificate authority, so `deleteOperator` stops the operator rather than only tidying a list (ADR-0070). The record of the certificate garam last issued goes with it.
+         * @description Records that this organization has an operator under the identifier given (ADR-0045). The identifier is supplied and not minted: the operator is configured with it before it is registered.
+         *     The record is what the operator authenticates on. Every request presenting its token is read against this record, so `deleteOperator` stops the operator rather than only tidying a list (ADR-0070).
          *     It issues nothing: an operator enters by a key, which `issueOperatorKey` issues on the registration and answers once (ADR-0102, ADR-0117).
          */
         post: operations["registerOperator"];
@@ -710,17 +708,15 @@ export interface paths {
         post?: never;
         /**
          * Delete an operator, which stops it authenticating. Requires the `admin` role.
-         * @description Removes the organization's record of the operator, and with it what the operator authenticates on. A handshake presenting that operator's certificate is refused from the moment this returns: the machine listener reads this record per connection, so the certificate stops being an identity rather than staying valid until it expires (ADR-0070). This reverses what ADR-0014 called revocation by lifetime, for an operator and for nothing else.
-         *     **It is not a certificate revocation.** There is no revocation list and no responder, nothing is published, and no other certificate is affected — an agent the operator provisioned keeps its own, which garam admits by the claim the operator made while it still held the record (ADR-0033). What is withdrawn is the organization's statement that this operator is theirs, and refusing the certificate is what that statement turning out to be load-bearing means.
-         *     garam's record of the certificate it last issued goes with the record, and so do its keys, so the identifier is left holding nothing. Registering it again is therefore a clean start rather than an operator that reads as already holding a certificate.
-         *     Deleting an operator that never enrolled is the same call and the same answer. Nothing here asks whether a certificate was ever issued.
+         * @description Removes the organization's record of the operator, and with it what the operator authenticates on. A request presenting that operator's token is refused from the moment this returns: the machine listener reads this record per request (ADR-0070).
+         *     Its keys and their tokens go with the record, so the identifier is left holding nothing, and registering it again is a clean start. No agent the operator held is touched: what is withdrawn is the organization's statement that this operator is theirs.
          */
         delete: operations["deleteOperator"];
         options?: never;
         head?: never;
         /**
          * Rename or describe an operator. Requires the `admin` role.
-         * @description Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier, the GRN it builds and the certificate subject that GRN is are not fields here and do not move: the certificate garam last issued and its keys stand as they were.
+         * @description Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier and the GRN it builds are not fields here and do not move: its keys stand as they were.
          *     It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
          */
         patch: operations["updateOperator"];
@@ -1195,7 +1191,7 @@ export interface components {
         };
         /** @description What deleting one organization would destroy, read from the server rather than assembled from what a caller happens to hold. A count taken from a list the caller already has is wrong exactly when that list is filtered or stale, which is when the answer matters most. */
         OrgDeletionPreview: {
-            /** @description The organization holds a certificate authority, which the deletion destroys and nothing restores. It is its own field and not an entry in `counts` because it is the only thing here that cannot be created again: the private key is stored sealed under a key-encryption key and goes with the row, `internal/ca` has no import, restore or recreate route, and every certificate the authority signed stops verifying permanently (ADR-0014, ADR-0016). False where the organization has needed no certificate yet, because the authority is created on the first one it needs. */
+            /** @description The organization still holds a retired certificate authority, which the deletion destroys and nothing restores. It is its own field and not an entry in `counts` because it is the only thing here that cannot be created again: the private key is stored sealed under a key-encryption key and goes with the row, and garam has no import, restore or recreate route (ADR-0016, ADR-0118). garam creates no authority since ADR-0118, so it is false for an organization that never needed one. */
             certificateAuthority: boolean;
             counts: components["schemas"]["OrgDeletionCounts"];
         };
@@ -1307,7 +1303,7 @@ export interface components {
             policies: number;
             /** @description Agents, each taking its operator assignment with it. */
             agents: number;
-            /** @description Registered operators, each taking its keys with it. A certificate an operator already holds is not counted and outlives the record (ADR-0045). */
+            /** @description Registered operators, each taking its keys with it. */
             operators: number;
             /** @description Cross-organization consent relations this organization is a side of (ADR-0035). Each is a pair, so deleting this organization removes it for the other organization too, which loses the relation without acting. */
             consents: number;
@@ -1438,10 +1434,10 @@ export interface components {
          * @enum {string}
          */
         AgentRuntimeState: "unknown" | "connected" | "disconnected";
-        /** @description An approval binds the host's two key fingerprints, or neither. With both, the host enrolls under `standalone-enrollment.v1` and is signed a certificate over each key; with neither, it enrolls under `standalone-enrollment.v2` and is answered a supervisor credential. Each contract refuses the other's approval (ADR-0100). One fingerprint without the other is 400. */
+        /** @description An approval the host spends under `standalone-enrollment.v2`, answered a supervisor credential (ADR-0100, ADR-0118). */
         AgentEnrollmentApproval: {
             /**
-             * @description Where the host runs its agent's runtime. `standalone` is three containers the host's supervisor starts (ADR-0085). `direct` is a runtime already running on the host, which the supervisor attaches to and starts nothing of (ADR-0111). A direct approval binds no key fingerprint and is spent under `standalone-enrollment.v2` alone; one binding both is 400. This approval is the only way garam admits a direct agent: `agent-enrollment.v1` refuses direct placement to an operator.
+             * @description Where the host runs its agent's runtime. `standalone` is three containers the host's supervisor starts (ADR-0085). `direct` is a runtime already running on the host, which the supervisor attaches to and starts nothing of (ADR-0111). This approval is the only way garam admits a direct agent: `agent-enrollment.v1` refuses direct placement to an operator.
              * @default standalone
              * @enum {string}
              */
@@ -1457,10 +1453,6 @@ export interface components {
             expiresAt: string;
             /** @description SHA-256 of the bootstrap secret the host keeps. */
             secretSha256: string;
-            /** @description SHA-256 of the supervisor key's SubjectPublicKeyInfo DER, for a host enrolling under `standalone-enrollment.v1`. */
-            supervisorKeySha256?: string;
-            /** @description SHA-256 of the agent key's SubjectPublicKeyInfo DER, for a host enrolling under `standalone-enrollment.v1`. */
-            agentKeySha256?: string;
             replaces?: components["schemas"]["AgentEnrollmentReplacement"];
         };
         /** @description The assignment a replacement replaces, exactly as it stands when approved. */
@@ -1582,7 +1574,7 @@ export interface components {
             /** Format: date-time */
             recordedAt: string;
         };
-        /** @description An operator this organization has registered. The record grants nothing and admits nothing (ADR-0045); `certificateIssuedAt` is what garam knows from its own tables and never a report from the operator. */
+        /** @description An operator this organization has registered. The record grants nothing and admits nothing (ADR-0045), and nothing on it is a report from the operator. */
         Operator: {
             /** @example grn:acme:default:operator:field-one */
             grn: string;
@@ -1603,11 +1595,6 @@ export interface components {
              * @example https://control.example.com
              */
             controlEndpoint?: string;
-            /**
-             * Format: date-time
-             * @description When garam last issued this operator a certificate, absent where it has issued none. It is the certificate the operator holds now and not the one it enrolled with — a renewal moves the record this is read from — so it answers when garam last signed for the operator rather than when the operator enrolled. Which certificate that is decides a renewal and is the machine listener's alone (ADR-0046); no part of it is answered here.
-             */
-            certificateIssuedAt?: string;
         };
         /** @description How an issued key stands beside the keys the operator holds (ADR-0102). */
         OperatorKeyIssuance: {
@@ -1669,7 +1656,7 @@ export interface components {
         OperatorKeyState: "active" | "retiring" | "revoked";
         OperatorRegistration: {
             /**
-             * @description Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is what the certificate signed for it holds in its SAN URI — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
+             * @description Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, and it is supplied rather than minted because the operator is configured with it before it is registered.
              * @example field-one
              */
             identifier: string;
@@ -3188,7 +3175,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Operator deleted; its certificate no longer authenticates. */
+            /** @description Operator deleted; its tokens no longer authenticate. */
             204: {
                 headers: {
                     [name: string]: unknown;

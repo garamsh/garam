@@ -36,7 +36,7 @@ const (
 	DefaultCallTimeout = 5 * time.Second
 	// DefaultStatusInterval is how often the runtime's status and the
 	// mounted credentials are read. It bounds how long a new generation
-	// or a renewed certificate waits to be acted on, and nothing else
+	// or a rewritten token waits to be acted on, and nothing else
 	// waits on it.
 	DefaultStatusInterval = 5 * time.Second
 	// DefaultOutboxInterval is how often the outbox is read for replies

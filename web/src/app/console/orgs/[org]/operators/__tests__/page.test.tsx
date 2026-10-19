@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -67,29 +67,6 @@ describe("operators list", () => {
       "/console/orgs/acme/operators/field-one",
       "/console/orgs/acme/operators/field-two",
     ]);
-  });
-
-  it("says in words whether garam issued a certificate and shows no ISO date", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/operators`, () =>
-        HttpResponse.json([
-          fieldOne,
-          {
-            ...fieldOne,
-            grn: "grn:acme:default:operator:none-one",
-            certificateIssuedAt: undefined,
-          },
-        ]),
-      ),
-    );
-
-    const { container } = await renderPage();
-
-    const rows = screen.getAllByRole("row").slice(1);
-    expect(
-      rows.map((row) => within(row).getAllByRole("cell")[2]?.textContent),
-    ).toEqual(["Issued", "None"]);
-    expect(container.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 
   it("names the control service's host where one is registered", async () => {

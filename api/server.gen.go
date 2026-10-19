@@ -687,18 +687,15 @@ type AgentEnrollment struct {
 // AgentEnrollmentPlacement defines model for AgentEnrollment.Placement.
 type AgentEnrollmentPlacement string
 
-// AgentEnrollmentApproval An approval binds the host's two key fingerprints, or neither. With both, the host enrolls under `standalone-enrollment.v1` and is signed a certificate over each key; with neither, it enrolls under `standalone-enrollment.v2` and is answered a supervisor credential. Each contract refuses the other's approval (ADR-0100). One fingerprint without the other is 400.
+// AgentEnrollmentApproval An approval the host spends under `standalone-enrollment.v2`, answered a supervisor credential (ADR-0100, ADR-0118).
 type AgentEnrollmentApproval struct {
-	// AgentKeySha256 SHA-256 of the agent key's SubjectPublicKeyInfo DER, for a host enrolling under `standalone-enrollment.v1`.
-	AgentKeySha256 *string `json:"agentKeySha256,omitempty"`
-
 	// ExpiresAt When the approval stops being spendable; within the next 24 hours.
 	ExpiresAt time.Time `json:"expiresAt"`
 
 	// HostName What the organization calls the host; trimmed, 1 to 100 characters.
 	HostName string `json:"hostName"`
 
-	// Placement Where the host runs its agent's runtime. `standalone` is three containers the host's supervisor starts (ADR-0085). `direct` is a runtime already running on the host, which the supervisor attaches to and starts nothing of (ADR-0111). A direct approval binds no key fingerprint and is spent under `standalone-enrollment.v2` alone; one binding both is 400. This approval is the only way garam admits a direct agent: `agent-enrollment.v1` refuses direct placement to an operator.
+	// Placement Where the host runs its agent's runtime. `standalone` is three containers the host's supervisor starts (ADR-0085). `direct` is a runtime already running on the host, which the supervisor attaches to and starts nothing of (ADR-0111). This approval is the only way garam admits a direct agent: `agent-enrollment.v1` refuses direct placement to an operator.
 	Placement *AgentEnrollmentApprovalPlacement `json:"placement,omitempty"`
 
 	// Replaces The assignment a replacement replaces, exactly as it stands when approved.
@@ -709,12 +706,9 @@ type AgentEnrollmentApproval struct {
 
 	// SecretSha256 SHA-256 of the bootstrap secret the host keeps.
 	SecretSha256 string `json:"secretSha256"`
-
-	// SupervisorKeySha256 SHA-256 of the supervisor key's SubjectPublicKeyInfo DER, for a host enrolling under `standalone-enrollment.v1`.
-	SupervisorKeySha256 *string `json:"supervisorKeySha256,omitempty"`
 }
 
-// AgentEnrollmentApprovalPlacement Where the host runs its agent's runtime. `standalone` is three containers the host's supervisor starts (ADR-0085). `direct` is a runtime already running on the host, which the supervisor attaches to and starts nothing of (ADR-0111). A direct approval binds no key fingerprint and is spent under `standalone-enrollment.v2` alone; one binding both is 400. This approval is the only way garam admits a direct agent: `agent-enrollment.v1` refuses direct placement to an operator.
+// AgentEnrollmentApprovalPlacement Where the host runs its agent's runtime. `standalone` is three containers the host's supervisor starts (ADR-0085). `direct` is a runtime already running on the host, which the supervisor attaches to and starts nothing of (ADR-0111). This approval is the only way garam admits a direct agent: `agent-enrollment.v1` refuses direct placement to an operator.
 type AgentEnrollmentApprovalPlacement string
 
 // AgentEnrollmentListing An approval as listed. `replaces` is present for a replacement; `spentAt` and `epoch` once a host enrolled; `withdrawnAt` once withdrawn.
@@ -1049,11 +1043,8 @@ type OperationAuthorityRequest struct {
 // OperationAuthorityRequestOperation defines model for OperationAuthorityRequest.Operation.
 type OperationAuthorityRequestOperation string
 
-// Operator An operator this organization has registered. The record grants nothing and admits nothing (ADR-0045); `certificateIssuedAt` is what garam knows from its own tables and never a report from the operator.
+// Operator An operator this organization has registered. The record grants nothing and admits nothing (ADR-0045), and nothing on it is a report from the operator.
 type Operator struct {
-	// CertificateIssuedAt When garam last issued this operator a certificate, absent where it has issued none. It is the certificate the operator holds now and not the one it enrolled with — a renewal moves the record this is read from — so it answers when garam last signed for the operator rather than when the operator enrolled. Which certificate that is decides a renewal and is the machine listener's alone (ADR-0046); no part of it is answered here.
-	CertificateIssuedAt *time.Time `json:"certificateIssuedAt,omitempty"`
-
 	// ControlEndpoint Where this operator's control service answers the console, absent where none is registered. The console sends an operation authority to no other origin. It is written only by `setOperatorControlEndpoint` and `clearOperatorControlEndpoint`, never by `updateOperator`.
 	ControlEndpoint *string   `json:"controlEndpoint,omitempty"`
 	CreatedAt       time.Time `json:"createdAt"`
@@ -1131,7 +1122,7 @@ type OperatorRegistration struct {
 	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
 	Description *OperatorDescription `json:"description,omitempty"`
 
-	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is what the certificate signed for it holds in its SAN URI — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
+	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, and it is supplied rather than minted because the operator is configured with it before it is registered.
 	Identifier string `json:"identifier"`
 
 	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
@@ -1170,7 +1161,7 @@ type OrgDeletionCounts struct {
 	// Members Memberships of this organization. The user accounts themselves are not owned by the organization and stay.
 	Members int `json:"members"`
 
-	// Operators Registered operators, each taking its keys with it. A certificate an operator already holds is not counted and outlives the record (ADR-0045).
+	// Operators Registered operators, each taking its keys with it.
 	Operators int `json:"operators"`
 
 	// Policies Policies, each taking its versions and its attachments with it (ADR-0008).
@@ -1182,7 +1173,7 @@ type OrgDeletionCounts struct {
 
 // OrgDeletionPreview What deleting one organization would destroy, read from the server rather than assembled from what a caller happens to hold. A count taken from a list the caller already has is wrong exactly when that list is filtered or stale, which is when the answer matters most.
 type OrgDeletionPreview struct {
-	// CertificateAuthority The organization holds a certificate authority, which the deletion destroys and nothing restores. It is its own field and not an entry in `counts` because it is the only thing here that cannot be created again: the private key is stored sealed under a key-encryption key and goes with the row, `internal/ca` has no import, restore or recreate route, and every certificate the authority signed stops verifying permanently (ADR-0014, ADR-0016). False where the organization has needed no certificate yet, because the authority is created on the first one it needs.
+	// CertificateAuthority The organization still holds a retired certificate authority, which the deletion destroys and nothing restores. It is its own field and not an entry in `counts` because it is the only thing here that cannot be created again: the private key is stored sealed under a key-encryption key and goes with the row, and garam has no import, restore or recreate route (ADR-0016, ADR-0118). garam creates no authority since ADR-0118, so it is false for an organization that never needed one.
 	CertificateAuthority bool `json:"certificateAuthority"`
 
 	// Counts How many of each kind the deletion removes. Every one of these can be created again; what cannot is on `OrgDeletionPreview` itself.

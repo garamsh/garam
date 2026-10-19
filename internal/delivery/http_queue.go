@@ -21,29 +21,24 @@ import (
 // held in memory whole.
 const maxAnswerBody = 4 << 10
 
-// DeliveryContract is the outbox submission contract garam's
-// `POST /outbox-messages` serves (ADR-0083) to a certificate-mode
-// adapter. There is no other route an outbox reply is offered on.
-const DeliveryContract = "durable-delivery.v1"
-
-// TokenDeliveryContract is the same contract for a token-mode adapter,
-// whose execution token moves to a Garam-Execution header (ADR-0100).
+// TokenDeliveryContract is the outbox submission contract garam's
+// `POST /outbox-messages` serves (ADR-0083, ADR-0100). There is no
+// other route an outbox reply is offered on.
 const TokenDeliveryContract = "durable-delivery.v2"
 
-// executionHeader carries a token-mode adapter's execution token, since
-// its agent token takes Authorization (ADR-0100).
+// executionHeader carries the adapter's execution token, since its
+// agent token takes Authorization (ADR-0100).
 const executionHeader = "Garam-Execution"
 
 // HTTPQueue is garam's queue over the machine API (api/machine.yaml):
 // the claim, its renewal and its completion, for the one agent this
 // adapter runs beside, and the outbox reply it posts for that agent.
 //
-// Who garam takes the caller to be is what the credential presents:
-// the client certificate on the connection (ADR-0014), or the agent
-// token read from its file before every call (ADR-0100). The GRN here
-// is only the queue this adapter reads. Every call presents what the
-// execution holds, and a refusal of it is recorded there before it is
-// answered.
+// Who garam takes the caller to be is what the credential presents: the
+// agent token read from its file before every call (ADR-0100). The GRN
+// here is only the queue this adapter reads. Every call presents what
+// the execution holds, and a refusal of it is recorded there before it
+// is answered.
 type HTTPQueue struct {
 	client     *http.Client
 	execution  *Execution
@@ -77,15 +72,11 @@ func NewHTTPQueue(client *http.Client, base string, agent grn.GRN, execution *Ex
 	if !root.IsAbs() || root.Host == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: garam address must be an absolute URL")
 	}
-	contract := DeliveryContract
-	if credential.IsToken() {
-		contract = TokenDeliveryContract
-	}
 	return &HTTPQueue{
 		client:     client,
 		execution:  execution,
 		credential: credential,
-		contract:   contract,
+		contract:   TokenDeliveryContract,
 		claims:     root.JoinPath("agents", agent.String(), "claims"),
 		outbox:     root.JoinPath("outbox-messages"),
 	}, nil
@@ -178,7 +169,7 @@ func (q *HTTPQueue) Post(ctx context.Context, o Outbound) (*Stored, error) {
 	}
 	if resp.StatusCode == http.StatusConflict {
 		// 409 is a conflicting key under already_exists and the fence's
-		// certificate refusal under failed_precondition; the kinds were
+		// credential refusal under failed_precondition; the kinds were
 		// kept apart so that no text is read (ADR-0083).
 		text, kind := said(resp)
 		if kind == errorx.KindFailedPrecondition.String() {
@@ -226,14 +217,9 @@ func (q *HTTPQueue) post(ctx context.Context, target *url.URL, payload []byte) (
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set(contractHeader, q.contract)
 	}
-	switch {
-	case authorization != "":
-		req.Header.Set("Authorization", authorization)
-		if presented != "" {
-			req.Header.Set(executionHeader, string(presented))
-		}
-	case presented != "":
-		req.Header.Set("Authorization", executionHeader+" "+string(presented))
+	req.Header.Set("Authorization", authorization)
+	if presented != "" {
+		req.Header.Set(executionHeader, string(presented))
 	}
 	resp, err := q.client.Do(req)
 	if err != nil {
@@ -287,7 +273,7 @@ func (q *HTTPQueue) fenced(resp *http.Response, presented Token) error {
 // the claim loop treats as transient and the forwarder sorts. Only
 // out_of_range clears with time.
 func (q *HTTPQueue) answered(resp *http.Response, presented Token) error {
-	if resp.StatusCode == http.StatusUnauthorized && q.credential.IsToken() {
+	if resp.StatusCode == http.StatusUnauthorized {
 		text, _ := said(resp)
 		return errorx.Wrap(ErrTokenRefused, text)
 	}

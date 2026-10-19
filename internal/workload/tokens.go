@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// The token mode's files in the adapter's directory: the agent token
+// The adapter's credential files in its directory: the agent token
 // garam accepts, and the generation's control token (ADR-0100).
 const (
 	agentTokenFile   = "agent-token"
@@ -20,10 +20,10 @@ const (
 // allows.
 const defaultTokenCheckInterval = 30 * time.Second
 
-// agentToken answers the agent token an adapter starts with, in the
-// token mode, and nothing for any other role or mode.
+// agentToken answers the agent token an adapter starts with, and
+// nothing for any other role.
 func (s *Supervisor) agentToken(ctx context.Context, r Role) (string, error) {
-	if r != RoleAdapter || s.cfg.Tokens == nil {
+	if r != RoleAdapter {
 		return "", nil
 	}
 	token, err := s.cfg.Tokens.Current(ctx)
@@ -42,9 +42,6 @@ func (s *Supervisor) agentToken(ctx context.Context, r Role) (string, error) {
 // refresh never stops the generation; garam refusing the token the
 // adapter holds is what does.
 func (s *Supervisor) refresh(ctx context.Context, hand func(token string) error) {
-	if s.cfg.Tokens == nil {
-		return
-	}
 	interval := s.cfg.TokenCheckInterval
 	if interval <= 0 {
 		interval = defaultTokenCheckInterval

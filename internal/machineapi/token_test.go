@@ -63,7 +63,7 @@ func (s *supervisorService) Exchange(_ context.Context, credential string) (*age
 }
 
 // TestServer_ExchangesASupervisorsCredentialForAToken is the exchange
-// seen from the wire: a caller with no certificate presents its
+// seen from the wire: a caller with no token presents its
 // credential and the contract, and is answered the token the domain
 // minted with the contract named on the answer. The refusals beside it
 // each lack one thing the accepted call has, so what refuses each is
@@ -73,7 +73,7 @@ func TestServer_ExchangesASupervisorsCredentialForAToken(t *testing.T) {
 	subject := operatorGRN("acme")
 	supervisor := grn.New("acme", grn.DefaultProject, agent.ServiceTypeSupervisor, "host-1")
 	supervisors := &supervisorService{supervisor: supervisor, credential: "garam_sc_held"}
-	url, _ := serveTLS(t, machineapi.NewServer(&agentService{}, &operatorService{}, &messageService{}, consenting(),
+	url, _ := serveTLS(t, machineapi.NewServer(&agentService{}, nil, &messageService{}, consenting(),
 		unwatched(t), &memberGroups{}, &engine{}, nil, nil, nil, nil, supervisors, nil, stubKeyring{}), subject)
 	client := anonymous(t)
 
@@ -110,116 +110,14 @@ func TestServer_ExchangesASupervisorsCredentialForAToken(t *testing.T) {
 	assert.Contains(t, body, "Garam-Credential")
 }
 
-// TestConfineTokens_ATokenReachesTheRoutesThatListIt holds that a
-// token reaches the operations api/machine.yaml lists machineToken on
-// and no other. The certificate is the control: the same route refuses
-// the token and admits the certificate, so what refuses the token is
-// the confinement and not the route.
-func TestConfineTokens_ATokenReachesTheRoutesThatListIt(t *testing.T) {
-	subject := operatorGRN("acme")
-	operators := &operatorService{certificate: &operator.Certificate{Subject: subject}}
-	srv := machineapi.NewServer(&agentService{}, operators, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
-	url, certified := serveTLSTokens(t, srv, subject, presentedTokens{"garam_ot_live": subject},
-		machineapi.ConfineTokens)
-	client := anonymous(t)
-
-	request := func(c *http.Client, method, path, token string) int {
-		req, err := http.NewRequest(method, url+path, nil)
-		require.NoError(t, err)
-		if token != "" {
-			req.Header.Set("Authorization", "Garam-Token "+token)
-		}
-		resp, err := c.Do(req)
-		require.NoError(t, err)
-		_ = resp.Body.Close()
-		return resp.StatusCode
-	}
-
-	assert.Equal(t, http.StatusOK, request(client, http.MethodGet, "/identity", "garam_ot_live"),
-		"a route listing machineToken admits the token")
-	assert.Equal(t, http.StatusUnauthorized, request(client, http.MethodGet, "/identity", "garam_ot_dead"),
-		"a token no row stands for is refused")
-	assert.Equal(t, http.StatusUnauthorized, request(client, http.MethodPost, "/identity/certificate", "garam_ot_live"),
-		"a route a certificate alone reaches refuses the token")
-	assert.NotEqual(t, http.StatusUnauthorized, request(certified, http.MethodPost, "/identity/certificate", ""),
-		"the same route admits the certificate")
-}
-
-// TestServer_ARouteReadingTheCertificateRefusesAToken holds the refusal
-// that does not rest on ConfineTokens: with no confinement in front of
-// it, a token's identity still reaches no route that reads the
-// certificate a connection presented (ADR-0100). The renewal is that
-// route, and the certificate reaching it is the control: the same
-// route renews for a certificate, so what refuses the token is the
-// missing certificate and not the route refusing everyone.
-func TestServer_ARouteReadingTheCertificateRefusesAToken(t *testing.T) {
-	subject := operatorGRN("acme")
-	operators := &operatorService{certificate: &operator.Certificate{Subject: subject}}
-	srv := machineapi.NewServer(&agentService{}, operators, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
-	url, certified := serveTLSTokens(t, srv, subject, presentedTokens{"garam_ot_live": subject})
-
-	req, err := http.NewRequest(http.MethodPost, url+"/identity/certificate", nil)
-	require.NoError(t, err)
-	req.Header.Set("Authorization", "Garam-Token garam_ot_live")
-	resp, err := anonymous(t).Do(req)
-	require.NoError(t, err)
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
-	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-	assert.Contains(t, string(body), "a token carries none")
-	assert.Empty(t, operators.renewed, "nothing reached the renewal")
-
-	status, _ := do(t, certified, http.MethodPost, url+"/identity/certificate")
-	assert.Equal(t, http.StatusCreated, status, "the certificate renews")
-	assert.Len(t, operators.renewed, 1)
-}
-
-// TestServer_InitialIssuanceRefusesATokenItself holds that initial
-// issuance, which goes with the certificate path (ADR-0100), refuses a
-// token without ConfineTokens in front of it, now that the lifecycle
-// routes beside it admit one. The certificate is the control: the same
-// request with it is answered past that refusal, by the contract check
-// naming the certificate's value.
-func TestServer_InitialIssuanceRefusesATokenItself(t *testing.T) {
-	subject := operatorGRN("acme")
-	srv := machineapi.NewServer(&agentService{}, &operatorService{}, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
-	url, certified := serveTLSTokens(t, srv, subject, presentedTokens{"garam_ot_live": subject})
-	path := url + "/agents/" + agentGRN("acme", "bot").String() + "/initial-certificate"
-
-	send := func(client *http.Client, token string) (int, string) {
-		req, err := http.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
-		require.NoError(t, err)
-		req.Header.Set("Garam-Contract-Version", agent.TokenEnrollmentContractVersion)
-		if token != "" {
-			req.Header.Set("Authorization", "Garam-Token "+token)
-		}
-		resp, err := client.Do(req)
-		require.NoError(t, err)
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		require.NoError(t, resp.Body.Close())
-		return resp.StatusCode, string(body)
-	}
-	status, body := send(anonymous(t), "garam_ot_live")
-	assert.Equal(t, http.StatusUnauthorized, status, body)
-	assert.Contains(t, body, "initial issuance takes no token")
-
-	status, body = send(certified, "")
-	assert.Equal(t, http.StatusBadRequest, status, body)
-	assert.Contains(t, body, agent.EnrollmentContractVersion, "control: a certificate reaches the contract check")
-}
-
-// TestTokenRoutes_AreTheOperationsTheSpecificationListsMachineTokenOn
-// holds the hand-kept route set against the file that states it: every
-// operation api/machine.yaml lists machineToken on is in the set, and
-// nothing else is. The count of operations read is asserted too, so a
-// file that failed to parse into paths could not pass as one listing
-// none.
-func TestTokenRoutes_AreTheOperationsTheSpecificationListsMachineTokenOn(t *testing.T) {
+// TestSpecification_EveryOperationButTheExemptOnesTakesAToken holds the
+// specification to what the listener does (ADR-0118): every operation
+// lists machineToken but the four that authenticate by what else a
+// request carries, and the Bearer alias is listed exactly where
+// machineToken is (ADR-0102). The count of operations read is asserted
+// too, so a file that failed to parse into paths could not pass as one
+// listing none.
+func TestSpecification_EveryOperationButTheExemptOnesTakesAToken(t *testing.T) {
 	raw, err := os.ReadFile("../../api/machine.yaml")
 	require.NoError(t, err)
 	var spec struct {
@@ -230,7 +128,9 @@ func TestTokenRoutes_AreTheOperationsTheSpecificationListsMachineTokenOn(t *test
 	}
 	require.NoError(t, yaml.Unmarshal(raw, &spec))
 
-	listed, bearer := map[string]bool{}, map[string]bool{}
+	exempt := map[string]bool{standaloneEnrollmentRoute: true, tokenExchangeRoute: true,
+		assertionExchangeRoute: true, keySetRoute: true}
+	listed, bearer, every := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	operations := 0
 	for path, methods := range spec.Paths {
 		for method, operation := range methods {
@@ -238,19 +138,23 @@ func TestTokenRoutes_AreTheOperationsTheSpecificationListsMachineTokenOn(t *test
 				continue
 			}
 			operations++
+			route := strings.ToUpper(method) + " " + path
+			if !exempt[route] {
+				every[route] = true
+			}
 			for _, requirement := range operation.Security {
 				if _, ok := requirement["machineToken"]; ok {
-					listed[strings.ToUpper(method)+" "+path] = true
+					listed[route] = true
 				}
 				if _, ok := requirement["machineBearer"]; ok {
-					bearer[strings.ToUpper(method)+" "+path] = true
+					bearer[route] = true
 				}
 			}
 		}
 	}
 	require.Equal(t, reflect.TypeOf((*machinegen.ServerInterface)(nil)).Elem().NumMethod(), operations,
 		"every operation the generated interface declares was read")
-	assert.Equal(t, listed, machineapi.TokenRoutes)
+	assert.Equal(t, every, listed, "every operation but the exempt ones takes a token")
 	assert.Equal(t, listed, bearer, "the Bearer alias is listed exactly where machineToken is (ADR-0102)")
 }
 
@@ -285,10 +189,9 @@ func TestServer_MintsAnAgentTokenForTheCallingOperator(t *testing.T) {
 	controller := operatorGRN("acme")
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
 	agents := &agentService{}
-	srv := machineapi.NewServer(agents, &operatorService{}, &messageService{}, consenting(), unwatched(t),
+	srv := machineapi.NewServer(agents, nil, &messageService{}, consenting(), unwatched(t),
 		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
-	url, _ := serveTLSTokens(t, srv, controller, presentedTokens{"garam_ot_live": controller},
-		machineapi.ConfineTokens)
+	url, _ := serveTLSTokens(t, srv, controller, presentedTokens{"garam_ot_live": controller})
 	client := anonymous(t)
 	path := url + "/agents/" + bot.String() + "/tokens"
 	contract := map[string]string{"Garam-Contract-Version": operator.TokenContractVersion}
@@ -321,8 +224,8 @@ func TestServer_MintsAnAgentTokenForTheCallingOperator(t *testing.T) {
 
 // TestServer_AnAgentTokenCarriesItsExecutionTokenInAHeaderOfItsOwn
 // holds the fence an agent token presents (ADR-0100): the token's
-// serial and dates stand in for a certificate's, and the execution
-// token travels in Garam-Execution because the agent token takes
+// serial and dates are what the fence reads, and the execution token
+// travels in Garam-Execution because the agent token takes
 // Authorization. An operator's token on the same route is refused, as
 // it carries no serial for the fence to read — so what admitted the
 // agent's is its credential and not the route admitting every token.
@@ -330,10 +233,9 @@ func TestServer_AnAgentTokenCarriesItsExecutionTokenInAHeaderOfItsOwn(t *testing
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
 	controller := operatorGRN("acme")
 	messages := &messageService{}
-	srv := machineapi.NewServer(&agentService{}, &operatorService{}, messages, consenting(), unwatched(t),
+	srv := machineapi.NewServer(&agentService{}, nil, messages, consenting(), unwatched(t),
 		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
-	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot, "garam_ot_live": controller},
-		machineapi.ConfineTokens)
+	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot, "garam_ot_live": controller})
 	client := anonymous(t)
 	execution, err := agent.NewToken()
 	require.NoError(t, err)
@@ -346,7 +248,7 @@ func TestServer_AnAgentTokenCarriesItsExecutionTokenInAHeaderOfItsOwn(t *testing
 	require.Len(t, messages.fences, 1)
 	fence := messages.fences[0]
 	require.NotNil(t, fence)
-	assert.Equal(t, "t"+strings.Repeat("0", 32), fence.Serial, "the token's serial stands in for a certificate's")
+	assert.Equal(t, "t"+strings.Repeat("0", 32), fence.Serial, "the fence reads the token's serial")
 	hash := execution.Hash()
 	assert.Equal(t, hash[:], fence.TokenHash, "the execution token is read from its own header")
 
@@ -356,18 +258,18 @@ func TestServer_AnAgentTokenCarriesItsExecutionTokenInAHeaderOfItsOwn(t *testing
 	assert.Len(t, messages.calls, 1, "the operator's token reached no claim")
 }
 
-// TestServer_ADurableSubmissionTakesTheValueItsCredentialTakes holds
-// durable-delivery.v2 (ADR-0100): a request an agent token
-// authenticated is served under v2 and refused under v1, naming v2.
-func TestServer_ADurableSubmissionTakesTheValueItsCredentialTakes(t *testing.T) {
+// TestServer_ADurableSubmissionIsServedUnderV2Alone holds
+// durable-delivery.v2 (ADR-0100, ADR-0118): a durable submission is
+// served under v2 and refused under the retired v1, naming v2.
+func TestServer_ADurableSubmissionIsServedUnderV2Alone(t *testing.T) {
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
-	srv := machineapi.NewServer(&agentService{}, &operatorService{}, &messageService{}, consenting(), unwatched(t),
+	srv := machineapi.NewServer(&agentService{}, nil, &messageService{}, consenting(), unwatched(t),
 		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
-	url, certified := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot}, machineapi.ConfineTokens)
+	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot})
 	client := anonymous(t)
 
 	status, version, body := tokenRequest(t, client, http.MethodPost, url+"/outbox-messages", "garam_at_live",
-		map[string]string{"Garam-Contract-Version": message.DeliveryContractVersion}, `{}`)
+		map[string]string{"Garam-Contract-Version": "durable-delivery.v1"}, `{}`)
 	assert.Equal(t, http.StatusBadRequest, status)
 	assert.Equal(t, message.TokenDeliveryContractVersion, version)
 	assert.Contains(t, body, message.TokenDeliveryContractVersion)
@@ -378,25 +280,20 @@ func TestServer_ADurableSubmissionTakesTheValueItsCredentialTakes(t *testing.T) 
 		map[string]string{"Garam-Contract-Version": message.TokenDeliveryContractVersion}, `{}`)
 	assert.NotContains(t, body, "Garam-Contract-Version", "v2 is past the contract check")
 	assert.Equal(t, message.TokenDeliveryContractVersion, version)
-
-	status, version, _ = tokenRequest(t, certified, http.MethodPost, url+"/outbox-messages", "",
-		map[string]string{"Garam-Contract-Version": message.TokenDeliveryContractVersion}, `{}`)
-	assert.Equal(t, http.StatusBadRequest, status, "a certificate is served under v1 and refused under v2")
-	assert.Equal(t, message.DeliveryContractVersion, version)
 }
 
 // TestServer_ABearerTokenTakesWhatAGaramTokenTakes holds the alias at
-// the routes (ADR-0102): the same agent token under Bearer is confined
-// to the routes listing machineToken, is served under the v2 contract
-// value and refused under v1 naming v2, and carries its execution
-// token in Garam-Execution. Each assertion is made beside the same
-// request under Garam-Token, which is what the alias must equal.
+// the routes (ADR-0102): the same agent token under Bearer is served
+// under the v2 contract value and refused under v1 naming v2, and
+// carries its execution token in Garam-Execution. Each assertion is
+// made beside the same request under Garam-Token, which is what the
+// alias must equal.
 func TestServer_ABearerTokenTakesWhatAGaramTokenTakes(t *testing.T) {
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	srv := machineapi.NewServer(&agentService{}, &operatorService{}, messages, consenting(), unwatched(t),
+	srv := machineapi.NewServer(&agentService{}, nil, messages, consenting(), unwatched(t),
 		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
-	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot}, machineapi.ConfineTokens)
+	url, _ := serveTLSTokens(t, srv, bot, presentedTokens{"garam_at_live": bot})
 	client := anonymous(t)
 	execution, err := agent.NewToken()
 	require.NoError(t, err)
@@ -411,12 +308,8 @@ func TestServer_ABearerTokenTakesWhatAGaramTokenTakes(t *testing.T) {
 			return headers
 		}
 
-		status, _, body := tokenRequest(t, client, http.MethodGet, url+"/message-signing-keys", "", authorization, "")
-		assert.Equal(t, http.StatusUnauthorized, status, scheme)
-		assert.Contains(t, body, "this operation does not accept a token", scheme)
-
 		status, version, body := tokenRequest(t, client, http.MethodPost, url+"/outbox-messages", "",
-			with(map[string]string{"Garam-Contract-Version": message.DeliveryContractVersion}), `{}`)
+			with(map[string]string{"Garam-Contract-Version": "durable-delivery.v1"}), `{}`)
 		assert.Equal(t, http.StatusBadRequest, status, scheme)
 		assert.Equal(t, message.TokenDeliveryContractVersion, version, scheme)
 		assert.Contains(t, body, message.TokenDeliveryContractVersion, scheme)

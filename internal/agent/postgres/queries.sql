@@ -103,24 +103,13 @@ UPDATE agent_executions SET
     updated_at    = sqlc.arg('updated_at')
 WHERE agent_grn = sqlc.arg('agent_grn');
 
--- name: InsertCredential :exec
-INSERT INTO agent_credentials (agent_grn, serial, lineage, not_after)
-VALUES ($1, $2, $3, $4);
-
--- Expired credentials admit nothing, so dropping them changes no
--- answer; it keeps a lineage's rows to the certificates still valid.
--- name: PruneCredentials :exec
-DELETE FROM agent_credentials
-WHERE agent_grn = $1 AND not_after <= clock_timestamp();
-
 -- name: GetRecovery :one
 SELECT * FROM agent_recoveries WHERE agent_grn = $1 AND request_id = $2;
 
 -- name: InsertRecovery :exec
 INSERT INTO agent_recoveries (
-    agent_grn, request_id, operation_ref, body_sha256, lineage,
-    certificate_pem, issuer_pem, server_root_pem, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+    agent_grn, request_id, operation_ref, body_sha256, lineage, created_at
+) VALUES ($1, $2, $3, $4, $5, $6);
 
 -- A managed creation writes these four in one transaction, the
 -- execution row before the assignment: the lock order every
@@ -156,26 +145,16 @@ SELECT * FROM agent_managed_creations WHERE agent_grn = $1;
 -- name: GetManagedCreationByReference :one
 SELECT * FROM agent_managed_creations WHERE operation_ref = $1;
 
--- name: GetInitialCertificate :one
-SELECT * FROM agent_initial_certificates WHERE agent_grn = $1;
-
--- name: InsertInitialCertificate :exec
-INSERT INTO agent_initial_certificates (
-    agent_grn, request_id, operation_ref, epoch, request_sha256, lineage,
-    certificate_pem, issuer_pem, server_root_pem, not_after, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
-
 -- Standalone approvals and supervisors (ADR-0082).
 
 -- name: InsertEnrollment :execrows
 INSERT INTO agent_enrollments (
-    id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256,
-    agent_key_sha256, expected_assignee_grn, expected_epoch, request_id,
+    id, org_grn, agent_grn, supervisor_grn, host_name,
+    expected_assignee_grn, expected_epoch, request_id,
     approved_by, secret_sha256, expires_at, created_at, placement
 ) VALUES (
     sqlc.arg('id'), sqlc.arg('org_grn'), sqlc.arg('agent_grn'), sqlc.arg('supervisor_grn'),
-    sqlc.arg('host_name'), sqlc.arg('supervisor_key_sha256'), sqlc.arg('agent_key_sha256'),
-    sqlc.narg('expected_assignee_grn'), sqlc.narg('expected_epoch'), sqlc.arg('request_id'),
+    sqlc.arg('host_name'), sqlc.narg('expected_assignee_grn'), sqlc.narg('expected_epoch'), sqlc.arg('request_id'),
     sqlc.arg('approved_by'), sqlc.arg('secret_sha256'), sqlc.arg('expires_at'), sqlc.arg('created_at'),
     sqlc.arg('placement')
 )
@@ -212,10 +191,6 @@ UPDATE agent_enrollments SET
     request_sha256             = sqlc.arg('request_sha256'),
     epoch                      = sqlc.arg('epoch'),
     lineage                    = sqlc.arg('lineage'),
-    supervisor_certificate_pem = sqlc.arg('supervisor_certificate_pem'),
-    agent_certificate_pem      = sqlc.arg('agent_certificate_pem'),
-    issuer_pem                 = sqlc.arg('issuer_pem'),
-    server_root_pem            = sqlc.arg('server_root_pem'),
     replaced_activation_id     = sqlc.narg('replaced_activation_id')
 WHERE id = sqlc.arg('id');
 
@@ -233,8 +208,8 @@ WHERE agent_grn = sqlc.arg('agent_grn')
 RETURNING epoch;
 
 -- name: InsertSupervisor :exec
-INSERT INTO agent_supervisors (grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
+INSERT INTO agent_supervisors (grn, agent_grn, enrollment_id, host_name, registered_at)
+VALUES ($1, $2, $3, $4, $5);
 
 -- name: GetSupervisor :one
 SELECT * FROM agent_supervisors WHERE grn = $1;
@@ -250,21 +225,6 @@ UPDATE agent_supervisors SET ended_at = $2 WHERE agent_grn = $1 AND ended_at IS 
 
 -- name: EndSupervisor :exec
 UPDATE agent_supervisors SET ended_at = $2 WHERE grn = $1 AND ended_at IS NULL;
-
--- name: MoveSupervisorCertificate :exec
-UPDATE agent_supervisors SET serial = $2, not_after = $3 WHERE grn = $1;
-
--- name: GetSupervisorRenewal :one
-SELECT r.*, (s.ended_at IS NULL AND s.serial = r.serial)::boolean AS current
-FROM agent_supervisor_renewals r
-JOIN agent_supervisors s ON s.grn = r.supervisor_grn
-WHERE r.supervisor_grn = $1 AND r.predecessor_serial = $2;
-
--- name: InsertSupervisorRenewal :exec
-INSERT INTO agent_supervisor_renewals (
-    supervisor_grn, predecessor_serial, request_id, request_sha256, serial,
-    certificate_pem, issuer_pem, server_root_pem, not_after, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
 
 -- A supervisor's credential and tokens under standalone-enrollment.v2
 -- (ADR-0100 G1d). Every read joins the registration and requires it

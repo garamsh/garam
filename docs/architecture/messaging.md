@@ -23,11 +23,11 @@ state of a message it sent, described below (ADR-0055).
 | `Status` | how far one message has got, as the sender that posted it may observe it (ADR-0055) |
 | `Consent` | one pair of organizations and the two halves of their cross-organization consent (ADR-0035); it stands while both halves do |
 | `Config` | the delivery parameters: lease, ceiling, attempts, and how long a claim waits |
-| `Fence` | what an agent's call presents to the agent execution fence: the agent, the certificate its connection verified and its execution token's hash (ADR-0080) |
+| `Fence` | what an agent's call presents to the agent execution fence: the agent, the serial and dates of the token its request presented, and its execution token's hash (ADR-0080, ADR-0100) |
 | `Service` | what a machine identity does to its own queue: post, post a durable reply within its budget, record a post a policy denied, claim, renew, complete, and read the state of what it sent |
 | `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, and the send path asking whether both halves stand |
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
-| `SubmissionBudget` | how long after its creation a durable reply may still store a message, fixed by `durable-delivery.v1` (ADR-0083) |
+| `SubmissionBudget` | how long after its creation a durable reply may still store a message, fixed by `durable-delivery.v2` (ADR-0083) |
 | `Author` | who wrote a message: its sender, or garam for the refusal it writes itself — what a signature names as the sender garam vouches for (ADR-0101) |
 | `Keyring` | the keys messages are signed with: opens the one that signs now, before a claim's wait, and answers the published set (ADR-0101) |
 | `Signer` | signs one hand-out under the key the keyring opened, inside the transaction that claims it (ADR-0104) |
@@ -189,8 +189,8 @@ to; `api/machine.yaml` is authoritative for the claim's members and the
 key-set route.
 
 The keys are rows of their own, never deleted. With no provider
-configured each is sealed under the key-encryption key the certificate
-authorities are sealed under and bound to its row. A deployment that
+configured each is sealed under the key-encryption key the machine
+process is given and bound to its row. A deployment that
 sets `GARAM_TRANSIT_ADDR` holds every key it creates from then on in
 one OpenBao or Vault Transit key instead: each garam key is one version
 of it, made by `rotate`, its row naming the mount, the key and the

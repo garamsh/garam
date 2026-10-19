@@ -79,7 +79,7 @@ func newSupervisorTokens(dir, base string, agentGRN grn.GRN) (*supervisorTokens,
 	if err != nil {
 		return nil, errorx.Wrap(err, "server root", errorx.KindFailedPrecondition)
 	}
-	client, err := standaloneClient(rootPEM, nil)
+	client, err := standaloneClient(rootPEM)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +127,7 @@ func (s *supervisorTokens) Activate(ctx context.Context, req workload.Activation
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	body := machinegen.ActivationRequest{
-		RequestId: req.RequestID, Epoch: req.Epoch, Generation: req.Generation, Token: &req.Token,
+		RequestId: req.RequestID, Epoch: req.Epoch, Generation: req.Generation, Token: req.Token,
 	}
 	if req.Replaces != "" {
 		body.ReplacesActivationId = &req.Replaces

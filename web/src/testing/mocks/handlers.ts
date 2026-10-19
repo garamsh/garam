@@ -59,9 +59,7 @@ export const frontend: Project = {
 };
 
 /**
- * The single operator Acme has registered, which enrolled: it holds a
- * certificate, and `certificateIssuedAt` is when garam last signed for
- * it rather than when it enrolled. Its name differs from its
+ * The single operator Acme has registered. Its name differs from its
  * identifier, so a page showing one where the other belongs is caught.
  */
 export const fieldOne: Operator = {
@@ -71,7 +69,6 @@ export const fieldOne: Operator = {
   orgGrn: acme.grn,
   registeredBy: alice.grn,
   createdAt: "2026-01-02T03:04:05Z",
-  certificateIssuedAt: "2026-03-04T05:06:07Z",
 };
 
 /**

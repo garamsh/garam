@@ -13,14 +13,10 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// ExecutionContractVersion names the contract the execution routes
-// serve, carried in the Garam-Contract-Version header.
-const ExecutionContractVersion = "execution-fence.v1"
-
-// TokenExecutionContractVersion is the same contract for a request a
-// token authenticated: activation and introspection take the agent's
-// token minted for the caller, and a recovery signs nothing
-// (ADR-0100).
+// TokenExecutionContractVersion names the contract the execution
+// routes serve, carried in the Garam-Contract-Version header:
+// activation and introspection take the agent's token minted for the
+// caller, and a recovery signs nothing (ADR-0100, ADR-0118).
 const TokenExecutionContractVersion = "execution-fence.v2"
 
 // Execution sentinels (ADR-0078). A refusal of a protected write names
@@ -34,8 +30,9 @@ var (
 	// activation's: an older generation's, a deactivated one, or one a
 	// remint replaced.
 	ErrExecutionTokenStale = errorx.New(errorx.KindPermissionDenied, "execution token is not current")
-	// ErrCredentialFenced refuses a certificate outside its validity at
-	// this instant or outside the agent's current lineage.
+	// ErrCredentialFenced refuses an agent token outside its validity at
+	// this instant, or outside the agent's current assignment or
+	// lineage.
 	ErrCredentialFenced = errorx.New(errorx.KindFailedPrecondition, "credential is not current")
 	// ErrActivationStale refuses an activation naming another
 	// activation than the agent's most recent one as what it replaces.
@@ -59,18 +56,10 @@ var (
 	// holds no lineage yet: its lifecycle authority opens one, and its
 	// tokens are minted inside it (ADR-0078, ADR-0100).
 	ErrIssuedByLifecycle = errorx.New(errorx.KindFailedPrecondition, "agent tokens are minted inside the lineage its lifecycle authority opened")
-	// ErrUnsupportedExecutionContract refuses a request carrying no
-	// contract version, or another.
-	ErrUnsupportedExecutionContract = errorx.New(errorx.KindInvalidArgument,
-		"unsupported Garam-Contract-Version: this route serves "+ExecutionContractVersion)
-	// ErrUnsupportedTokenExecutionContract is that refusal for a
-	// request a token authenticated (ADR-0100).
+	// ErrUnsupportedTokenExecutionContract refuses a request carrying
+	// no contract version, or another.
 	ErrUnsupportedTokenExecutionContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: a request presenting a token is served under "+TokenExecutionContractVersion)
-	// ErrLeafNotProven refuses a forwarded certificate that does not
-	// prove the agent it is presented for: another SAN, or a chain to
-	// no authority of the agent's organization.
-	ErrLeafNotProven = errorx.New(errorx.KindInvalidArgument, "the certificate does not prove the agent it is presented for")
 	// ErrTokenNotProven refuses a forwarded token that does not prove
 	// the agent it is presented for: not a token's shape, unknown,
 	// minted for another agent, or minted to be shown to another
@@ -169,9 +158,9 @@ func (t Token) String() string { return base64.RawURLEncoding.EncodeToString(t[:
 // Hash returns what a store keeps of the token.
 func (t Token) Hash() TokenHash { return sha256.Sum256(t[:]) }
 
-// Credential is a certificate as the fence reads it: which one, and
-// when it is valid. It is taken from a certificate whose chain was
-// verified, never from a field a caller wrote.
+// Credential is an agent token as the fence reads it: which one, and
+// when it is valid. It is taken from a token the listener or a mint's
+// record resolved, never from a field a caller wrote.
 type Credential struct {
 	Serial    string
 	NotBefore time.Time
@@ -179,7 +168,7 @@ type Credential struct {
 }
 
 // Fencing is what a protected write of an agent presents to the
-// execution fence (ADR-0080): the certificate its request
+// execution fence (ADR-0080): the agent token its request
 // authenticated with and the execution token it carries, if any. The
 // domain owning the write runs the fence first in its own transaction.
 type Fencing struct {
@@ -299,8 +288,8 @@ type CurrentActivation struct {
 	Generation Generation
 }
 
-// RecoveryRequest is a recovery the authority admitted: the new lineage
-// and the certificate it starts with, signed over the requester's key.
+// RecoveryRequest is a recovery the authority admitted: the new
+// lineage, in which the assignee mints the agent's tokens (ADR-0100).
 type RecoveryRequest struct {
 	Agent          grn.GRN
 	RequestID      RequestID
@@ -310,33 +299,14 @@ type RecoveryRequest struct {
 	OperationRef   string
 	BodySHA256     [32]byte
 	Lineage        Lineage
-	Credential     Credential
-	CertificatePEM string
-	Chain          Chain
 }
 
 // Recovery is what a recovery recorded, the first time and on a retry.
-// CertificatePEM is empty for one that signed nothing (ADR-0100), and
-// Chain is nil for it and for a recovery recorded before migration
-// 000036, which stored none.
 type Recovery struct {
-	Lineage        Lineage
-	CertificatePEM string
-	Chain          *Chain
+	Lineage Lineage
 }
 
-// RecoveredCredential is what a recovery answers: the new lineage, and
-// under execution-fence.v1 the certificate signed in it. Signed is nil
-// for a recovery under execution-fence.v2, which signs nothing
-// (ADR-0100).
+// RecoveredCredential is what a recovery answers: the new lineage.
 type RecoveredCredential struct {
 	Lineage Lineage
-	Signed  *SignedRecovery
-}
-
-// SignedRecovery is the certificate a recovery signed, and the chain it
-// was signed under.
-type SignedRecovery struct {
-	CertificatePEM string
-	Chain          Chain
 }

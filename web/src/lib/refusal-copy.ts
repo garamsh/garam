@@ -64,10 +64,7 @@ const CONSENT_PARTNER_NOT_FOUND =
   "No organization has that identifier. Check it with the other organization and try again.";
 
 const PREPARED_UNREADABLE =
-  "That isn't what garam standalone prepare prints. Paste its whole output: requestId and secretSha256, and for a keyed host both key fingerprints.";
-
-const DIRECT_WITH_KEYS =
-  "A direct host is approved without key fingerprints. Prepare it for direct placement, or choose standalone.";
+  "That isn't what garam standalone prepare prints. Paste its whole output: requestId and secretSha256.";
 
 const APPROVAL_REQUEST_TAKEN =
   "garam already holds this request identifier with other values. The host needs a fresh preparation.";
@@ -134,7 +131,6 @@ export const REFUSAL_COPY = {
   consentWithItself: CONSENT_WITH_ITSELF,
   consentPartnerNotFound: CONSENT_PARTNER_NOT_FOUND,
   preparedUnreadable: PREPARED_UNREADABLE,
-  directWithKeys: DIRECT_WITH_KEYS,
   approvalRequestTaken: APPROVAL_REQUEST_TAKEN,
   approvalNoLongerApplies: APPROVAL_NO_LONGER_APPLIES,
   approvalSpent: APPROVAL_SPENT,

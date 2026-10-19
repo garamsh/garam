@@ -9,7 +9,6 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
-	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -27,13 +26,12 @@ func NewStandaloneService(pool *pgxpool.Pool, engine grpc.ClientConnInterface) a
 }
 
 // newSupervisorService composes how a standalone host's supervisor
-// enrolls, renews and exchanges its credential over the database, the
-// policy engine, which decides the approving administrator's authority
-// again, and the certificate authority.
-func newSupervisorService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, issuer ca.Service, serverRoot []byte, now func() time.Time) agent.SupervisorService {
+// enrolls and exchanges its credential over the database and the policy
+// engine, which decides the approving administrator's authority again;
+// serverRoot is answered beside the credential.
+func newSupervisorService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, serverRoot []byte, now func() time.Time) agent.SupervisorService {
 	store := agentpg.New(pool)
-	return agent.NewSupervisorService(store, store, memberAuthorization(pool, engine),
-		requestSigner{issuer: issuer, serverRoot: serverRoot}, serverRoot, now)
+	return agent.NewSupervisorService(store, store, memberAuthorization(pool, engine), serverRoot, now)
 }
 
 // memberAuthorization is a user's authority decided from current

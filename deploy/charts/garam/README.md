@@ -158,14 +158,15 @@ place before the release's first install rather than with it.
 ### Which workloads need one
 
 `serve machine` is the only one that needs an account today. It reads
-the key-encryption key every organization's certificate authority is
-sealed under
-([ADR-0016](../../../docs/architecture/adr/0016-ca-key-custody.md)) and
-refuses to start without it (`internal/cli/machine.go`). That key
-arrives in the Secret `machine.keyMaterial.secretName` names, which this
-chart does not create; whatever populates it grants to a subject, and
-that subject is the machine listener's own rather than one every pod in
-the namespace presents.
+the key-encryption key the message signing keys are sealed under, which
+an earlier release also sealed each organization's certificate authority
+under
+([ADR-0016](../../../docs/architecture/adr/0016-ca-key-custody.md),
+ADR-0104), and refuses to start without it (`internal/cli/machine.go`).
+That key arrives in the Secret `machine.keyMaterial.secretName` names,
+which this chart does not create; whatever populates it grants to a
+subject, and that subject is the machine listener's own rather than one
+every pod in the namespace presents.
 
 `serve api` needs one when it reads a cloud-held secret of its own —
 Google sign-in is the pending case. `authz`, `web` and `migrate` read
@@ -230,15 +231,6 @@ the render and names the one missing. garam refuses to start holding one
 half of the credential, and a release installed without the other half
 is one whose sign-in method is silently absent.
 
-`machine.certificateLifetime` defaults to the binary's own `24h` and is
-a security parameter: it bounds every certificate garam signs for an
-agent or an operator, expiry is the only revocation garam has, and the
-binary refuses to start outside one hour and thirty days
-(`deployment-contract.md` §What the binary enforces about key material).
-Lowering it is safe only where each of those identities renews and
-rewrites its own files without a restart, which this chart does not
-deploy and cannot check.
-
 `machine.agentTokenLifetime` defaults to the binary's own `1h` and
 bounds every agent token garam mints (ADR-0100): the binary refuses to
 start outside twenty minutes and twenty-four hours. The agent's
@@ -300,8 +292,6 @@ that the source no longer reads.
 | `GARAM_ADAPTER_AGENT` | The adapter is not one of garam's workloads: it runs beside one agent, in that agent's pod, deployed by whoever runs the agent (`docs/architecture/adapter.md`). |
 | `GARAM_ADAPTER_MACHINE_URL` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_GATEWAY_URL` | Same: the adapter's own deployment. |
-| `GARAM_ADAPTER_TLS_CERT_FILE` | Same: the adapter's own deployment. |
-| `GARAM_ADAPTER_TLS_KEY_FILE` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_TOKEN_FILE` | Same: the adapter's own deployment, whose assignee keeps the token current (ADR-0100). |
 | `GARAM_ADAPTER_CONTROL_TOKEN_FILE` | Same: the adapter's own deployment, beside its control settings (ADR-0100). |
 | `GARAM_ADAPTER_SERVER_ROOT_FILE` | Same: the adapter's own deployment. |
@@ -319,13 +309,6 @@ Two things sit outside that comparison:
   image sets it (`deploy/local/Dockerfile.web`) and Next.js reads it, so
   the chart sets no value and names 3000 on the container port and both
   probes to match.
-- `issue-certificate` is a command rather than a workload, run by hand
-  against the same database: the bootstrap ADR-0015 leaves out of band.
-  It is not the only step a deployment performs out of band — the key
-  material §Key material and secrets names is the other. The three
-  variables `issue-certificate` reads are already rendered above for the
-  workloads that need them, and whoever runs it supplies the same
-  values.
 
 ## Exposure is the cluster owner's
 
@@ -340,13 +323,12 @@ One rule binds whatever a consumer puts in front of the machine
 listener:
 
 - **Nothing that terminates TLS may stand in front of port 8443.** The
-  listener terminates TLS itself and authenticates the client
-  certificate per connection against the certificate authority of the
-  organization the certificate's SAN names (ADR-0014). A terminating
-  proxy strips that certificate and every machine call fails
-  authentication — a failure ADR-0014 calls silent and total. Expose it
-  by TCP passthrough or directly, never through an HTTP router that
-  re-originates the connection.
+  listener terminates TLS itself, under the pair its callers pin
+  garam's server root against (ADR-0040). A terminating proxy presents
+  a certificate of its own, which no caller pinning that root accepts,
+  so every machine call fails. Expose it by TCP passthrough or
+  directly, never through an HTTP router that re-originates the
+  connection.
 - **There is no client CA bundle to mount, and creating one is
   forbidden**, per
   `deployment-contract.md` §What the binary enforces about key material.
@@ -377,12 +359,12 @@ world-writable with or without `fsGroup`, so the write is not what the
 setting buys (measured 2026-08-26 on Kubernetes v1.36.3; this
 repository pins no Kubernetes version).
 
-Four files reach the process, and `machine.keyMaterial` names the
-Secret each is read from and the key it is under: the listener's
-certificate and key, the garam server root that signed them and that
-every identity garam issues to pins garam by, and the key-encryption
-key. One authority signs that pair and nothing else, so an issuer that
-also signs other workloads must not mint it (ADR-0040).
+Four files reach the process, and `machine.keyMaterial` names the Secret
+each is read from and the key it is under: the listener's certificate
+and key, the garam server root that signed them and that every caller
+garam issues a credential to pins garam by, and the key-encryption key.
+One authority signs that pair and nothing else, so an issuer that also
+signs other workloads must not mint it (ADR-0040).
 
 **The four need not sit in one Secret.** A file takes
 `machine.keyMaterial.secretName` unless it names its own —
@@ -393,8 +375,8 @@ Secret carries is projected. Two Secrets is the layout of the one
 deployment this chart has been rendered against (#1093): what issues
 the listener's pair and what holds the key-encryption key are
 different systems there. Moving the key-encryption key into the issued
-Secret to fit one name would change how every organization's authority
-is sealed, which is not a packaging decision to take, per
+Secret to fit one name would change how every message signing key is
+sealed, which is not a packaging decision to take, per
 `deployment-contract.md` §The key-encryption key cannot be regenerated.
 
 **The copy is made once, and rotation is the deployment's other half.**
@@ -413,13 +395,12 @@ that copy carries both obligations
   the file the process opens stays owned by that process with no group
   or other bit set.
 
-The chart generates no key material, and the key-encryption key is why
-— it cannot be regenerated, per
-`deployment-contract.md` §The key-encryption key cannot be regenerated:
-a chart that minted one would leave every
-certificate authority in the database unopenable on its second
-install. Supplying it, keeping it beyond the cluster's life, and
-choosing where it lives are the deployment's.
+The chart generates no key material, and the key-encryption key is why —
+it cannot be regenerated, per `deployment-contract.md` §The
+key-encryption key cannot be regenerated: a chart that minted one would
+leave every key sealed under the first unopenable on its second install.
+Supplying it, keeping it beyond the cluster's life, and choosing where
+it lives are the deployment's.
 
 ## Message signing keys in OpenBao Transit
 

@@ -38,14 +38,9 @@ var (
 	// teaches a caller nothing about the queue outside its own messages
 	// (ADR-0055).
 	ErrNoSuchMessage = errorx.New(errorx.KindNotFound, "no such message")
-	// ErrUnsupportedDeliveryContract refuses a durable submission
+	// ErrUnsupportedTokenDeliveryContract refuses a durable submission
 	// carrying no contract version, or one this release does not serve,
-	// and names the one it does (ADR-0083).
-	ErrUnsupportedDeliveryContract = errorx.New(errorx.KindInvalidArgument,
-		"unsupported Garam-Contract-Version: this route serves "+DeliveryContractVersion)
-	// ErrUnsupportedTokenDeliveryContract is that refusal for a request
-	// an agent token authenticated, which is served under the token's
-	// value (ADR-0100).
+	// and names the one it does (ADR-0083, ADR-0100).
 	ErrUnsupportedTokenDeliveryContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: a request presenting an agent token is served under "+TokenDeliveryContractVersion)
 	// ErrCreatedLater refuses a durable submission created after the
@@ -83,22 +78,18 @@ const (
 	// suppress a retry — the budget is the senders', and the window
 	// names it.
 	RetentionWindow = 30 * 24 * time.Hour
-	// SubmissionBudget is how long after its creation a durable
-	// submission may still store a message (ADR-0083). It is part of
-	// DeliveryContractVersion rather than a setting, and sits well inside
-	// RetentionWindow, so every message it admits outlives the last
+	// SubmissionBudget is how long after its creation a durable submission
+	// may still store a message (ADR-0083). It is part of
+	// TokenDeliveryContractVersion rather than a setting, and sits well
+	// inside RetentionWindow, so every message it admits outlives the last
 	// retry that could duplicate it.
 	SubmissionBudget = 7 * 24 * time.Hour
 )
 
-// DeliveryContractVersion names the durable submission contract
-// (ADR-0083). Its route requires the version in the
-// Garam-Contract-Version header and answers with it.
-const DeliveryContractVersion = "durable-delivery.v1"
-
-// TokenDeliveryContractVersion is the same contract for a request an
-// agent token authenticated, whose execution token travels in a header
-// of its own (ADR-0100).
+// TokenDeliveryContractVersion names the durable submission contract
+// (ADR-0083, ADR-0100). Its route requires the version in the
+// Garam-Contract-Version header and answers with it, and the caller's
+// execution token travels in a header of its own.
 const TokenDeliveryContractVersion = "durable-delivery.v2"
 
 // ID identifies a stored message. ClaimID identifies one reader's hold

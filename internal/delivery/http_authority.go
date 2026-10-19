@@ -25,11 +25,9 @@ const placementHeader = "Garam-Placement"
 
 // HTTPAuthority is the lifecycle authority's two routes over HTTPS
 // (ADR-0084). Who the caller is, is what the credential presents: the
-// agent certificate on the connection under agent-execution.v1, or the
-// control token read from its file before every call under
-// agent-execution.v2 (ADR-0100). The placement token rides activation
-// alone, and garam's execution token and garam's agent token never go
-// here.
+// control token read from its file before every call (ADR-0100). The
+// placement token rides activation alone, and garam's execution token
+// and garam's agent token never go here.
 type HTTPAuthority struct {
 	client      *http.Client
 	credential  Credential
@@ -55,14 +53,10 @@ func NewHTTPAuthority(client *http.Client, base string, agent grn.GRN, credentia
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: control address must be an absolute https URL")
 	}
 	served := root.JoinPath("v1", "agents", agent.String())
-	contract := ExecutionContract
-	if credential.IsToken() {
-		contract = TokenExecutionContract
-	}
 	return &HTTPAuthority{
 		client:      client,
 		credential:  credential,
-		contract:    contract,
+		contract:    TokenExecutionContract,
 		activations: served.JoinPath("activations"),
 		status:      served.JoinPath("runtime-status"),
 	}, nil
@@ -175,14 +169,9 @@ func (a *HTTPAuthority) post(ctx context.Context, target *url.URL, payload []byt
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(contractHeader, a.contract)
-	switch {
-	case authorization != "":
-		req.Header.Set("Authorization", authorization)
-		if placementToken != "" {
-			req.Header.Set(placementHeader, placementToken)
-		}
-	case placementToken != "":
-		req.Header.Set("Authorization", placementHeader+" "+placementToken)
+	req.Header.Set("Authorization", authorization)
+	if placementToken != "" {
+		req.Header.Set(placementHeader, placementToken)
 	}
 	resp, err := a.client.Do(req)
 	if err != nil {
@@ -192,7 +181,7 @@ func (a *HTTPAuthority) post(ctx context.Context, target *url.URL, payload []byt
 		defer func() { _ = resp.Body.Close() }()
 		return nil, errorx.New(errorx.KindUnavailable, "delivery: control answered "+strconv.Itoa(resp.StatusCode))
 	}
-	if resp.StatusCode == http.StatusUnauthorized && a.credential.IsToken() {
+	if resp.StatusCode == http.StatusUnauthorized {
 		defer func() { _ = resp.Body.Close() }()
 		return nil, errorx.Wrap(ErrTokenRefused, controlRefused(resp).Error())
 	}

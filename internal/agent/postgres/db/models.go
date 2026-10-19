@@ -26,31 +26,25 @@ type AgentActivation struct {
 }
 
 type AgentEnrollment struct {
-	ID                       pgtype.UUID
-	OrgGrn                   string
-	AgentGrn                 string
-	SupervisorGrn            string
-	HostName                 string
-	SupervisorKeySha256      []byte
-	AgentKeySha256           []byte
-	ExpectedAssigneeGrn      pgtype.Text
-	ExpectedEpoch            pgtype.Int4
-	RequestID                string
-	ApprovedBy               string
-	SecretSha256             []byte
-	ExpiresAt                pgtype.Timestamptz
-	CreatedAt                pgtype.Timestamptz
-	WithdrawnAt              pgtype.Timestamptz
-	ConsumedAt               pgtype.Timestamptz
-	RequestSha256            []byte
-	Epoch                    pgtype.Int4
-	Lineage                  pgtype.UUID
-	SupervisorCertificatePem pgtype.Text
-	AgentCertificatePem      pgtype.Text
-	IssuerPem                pgtype.Text
-	ServerRootPem            pgtype.Text
-	Placement                string
-	ReplacedActivationID     pgtype.UUID
+	ID                   pgtype.UUID
+	OrgGrn               string
+	AgentGrn             string
+	SupervisorGrn        string
+	HostName             string
+	ExpectedAssigneeGrn  pgtype.Text
+	ExpectedEpoch        pgtype.Int4
+	RequestID            string
+	ApprovedBy           string
+	SecretSha256         []byte
+	ExpiresAt            pgtype.Timestamptz
+	CreatedAt            pgtype.Timestamptz
+	WithdrawnAt          pgtype.Timestamptz
+	ConsumedAt           pgtype.Timestamptz
+	RequestSha256        []byte
+	Epoch                pgtype.Int4
+	Lineage              pgtype.UUID
+	Placement            string
+	ReplacedActivationID pgtype.UUID
 }
 
 type AgentEnrollmentApproval struct {
@@ -80,20 +74,6 @@ type AgentExecution struct {
 	UpdatedAt          pgtype.Timestamptz
 }
 
-type AgentInitialCertificate struct {
-	AgentGrn       string
-	RequestID      string
-	OperationRef   string
-	Epoch          int32
-	RequestSha256  []byte
-	Lineage        pgtype.UUID
-	CertificatePem string
-	IssuerPem      string
-	ServerRootPem  string
-	NotAfter       pgtype.Timestamptz
-	CreatedAt      pgtype.Timestamptz
-}
-
 type AgentManagedCreation struct {
 	AgentGrn      string
 	AudienceGrn   string
@@ -106,15 +86,12 @@ type AgentManagedCreation struct {
 }
 
 type AgentRecovery struct {
-	AgentGrn       string
-	RequestID      string
-	OperationRef   string
-	BodySha256     []byte
-	Lineage        pgtype.UUID
-	CertificatePem pgtype.Text
-	CreatedAt      pgtype.Timestamptz
-	IssuerPem      pgtype.Text
-	ServerRootPem  pgtype.Text
+	AgentGrn     string
+	RequestID    string
+	OperationRef string
+	BodySha256   []byte
+	Lineage      pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
 }
 
 type AgentSupervisor struct {
@@ -122,8 +99,6 @@ type AgentSupervisor struct {
 	AgentGrn     string
 	EnrollmentID pgtype.UUID
 	HostName     string
-	Serial       pgtype.Text
-	NotAfter     pgtype.Timestamptz
 	RegisteredAt pgtype.Timestamptz
 	EndedAt      pgtype.Timestamptz
 }

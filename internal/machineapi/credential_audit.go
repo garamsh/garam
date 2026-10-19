@@ -2,8 +2,6 @@ package machineapi
 
 import (
 	"context"
-	"crypto/x509"
-	"encoding/pem"
 	"log/slog"
 	"net/http"
 	"time"
@@ -55,27 +53,4 @@ func (s *Server) auditCredential(r *http.Request, c audit.Credential) {
 // refusedCredential records err as subject's refused request.
 func (s *Server) refusedCredential(r *http.Request, subject grn.GRN, kind audit.CredentialKind, action audit.CredentialAction, err error) {
 	s.auditCredential(r, audit.CredentialRefused(subject, kind, action, errorx.KindOf(err)))
-}
-
-// issuedCertificate records a certificate the listener answered, its
-// serial and validity read off the certificate itself so the event
-// says what the subject holds. A PEM that does not parse records the
-// issuance without them rather than not at all.
-func (s *Server) issuedCertificate(r *http.Request, subject grn.GRN, kind audit.CredentialKind, action audit.CredentialAction, certificatePEM string, replay bool) {
-	serial, v := certificateFacts(certificatePEM)
-	s.auditCredential(r, audit.CredentialIssued(subject, kind, action, serial, v, replay))
-}
-
-// certificateFacts reads a PEM certificate's decimal serial and
-// validity, and nothing else of it.
-func certificateFacts(certificatePEM string) (string, audit.Validity) {
-	block, _ := pem.Decode([]byte(certificatePEM))
-	if block == nil {
-		return "", audit.Validity{}
-	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return "", audit.Validity{}
-	}
-	return cert.SerialNumber.String(), audit.Validity{NotBefore: cert.NotBefore, NotAfter: cert.NotAfter}
 }

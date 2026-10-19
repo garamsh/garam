@@ -76,7 +76,7 @@ func TestRun_ForwardsAReplyAndRemovesItOnAnAcknowledgementOfIt(t *testing.T) {
 				IdempotencyKey: "refusal:" + s.IdempotencyKey,
 			}
 		}
-		return http.StatusCreated, delivery.DeliveryContract, stored
+		return http.StatusCreated, delivery.TokenDeliveryContract, stored
 	})
 	dir := t.TempDir()
 	writeEntry(t, dir, entryFor("entry-refused", "across the boundary"))
@@ -117,13 +117,13 @@ func TestRun_KeepsAnEntryGaramRefusesOnItsMeritsAndOffersItNoMore(t *testing.T) 
 			return http.StatusCreated, "", machinegen.Message{Id: "x"}
 		},
 		"entry-expired": func() (int, string, any) {
-			return http.StatusGone, delivery.DeliveryContract, machinegen.Error{Kind: "deadline_exceeded", Message: "expired"}
+			return http.StatusGone, delivery.TokenDeliveryContract, machinegen.Error{Kind: "deadline_exceeded", Message: "expired"}
 		},
 		"entry-conflict": func() (int, string, any) {
-			return http.StatusConflict, delivery.DeliveryContract, machinegen.Error{Kind: "already_exists", Message: "another request"}
+			return http.StatusConflict, delivery.TokenDeliveryContract, machinegen.Error{Kind: "already_exists", Message: "another request"}
 		},
 		"entry-future": func() (int, string, any) {
-			return http.StatusBadRequest, delivery.DeliveryContract, machinegen.Error{Kind: "out_of_range", Message: "future"}
+			return http.StatusBadRequest, delivery.TokenDeliveryContract, machinegen.Error{Kind: "out_of_range", Message: "future"}
 		},
 	}
 	queue := newGaramQueue(t, time.Second)
@@ -164,7 +164,7 @@ func TestRun_ForwardsAReplyOnceGaramServesItsContractWithoutARestart(t *testing.
 			unserved--
 			return http.StatusNotFound, "", machinegen.Error{Kind: "not_found", Message: "no route"}
 		}
-		return http.StatusCreated, delivery.DeliveryContract, machinegen.Message{
+		return http.StatusCreated, delivery.TokenDeliveryContract, machinegen.Message{
 			Id: "stored-1", Sender: agentGRN().String(), Recipient: s.Recipient, IdempotencyKey: s.IdempotencyKey,
 		}
 	})
@@ -204,7 +204,7 @@ func TestRun_RetriesAnUnavailableGaramUnderTheSameIdentity(t *testing.T) {
 			failures--
 			return http.StatusServiceUnavailable, "", machinegen.Error{Kind: "unavailable", Message: "internal error"}
 		}
-		return http.StatusCreated, delivery.DeliveryContract, machinegen.Message{
+		return http.StatusCreated, delivery.TokenDeliveryContract, machinegen.Message{
 			Id: "stored-1", Sender: agentGRN().String(), Recipient: s.Recipient, IdempotencyKey: s.IdempotencyKey,
 		}
 	})

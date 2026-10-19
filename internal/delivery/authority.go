@@ -9,15 +9,11 @@ import (
 	"time"
 )
 
-// ExecutionContract is the adapter-facing activation and runtime-status
-// contract garam owns (ADR-0084), as a certificate-mode adapter calls
-// it. Every request and answer of the lifecycle authority's two routes
-// names the contract they are made under.
-const ExecutionContract = "agent-execution.v1"
-
-// TokenExecutionContract is the same contract for a token-mode
-// adapter: the control token in Authorization and the placement token
-// in a Garam-Placement header of its own (ADR-0100).
+// TokenExecutionContract is the adapter-facing activation and
+// runtime-status contract garam owns (ADR-0084): the control token in
+// Authorization and the placement token in a Garam-Placement header of
+// its own (ADR-0100). Every request and answer of the lifecycle
+// authority's two routes names the contract they are made under.
 const TokenExecutionContract = "agent-execution.v2"
 
 // Authority is the lifecycle authority's adapter-facing side: the
@@ -42,9 +38,9 @@ type Authority interface {
 // RequestID is the activation request identifier ADR-0084 derives: a
 // version 8 UUID over SHA-256 of the contract, the binding and the
 // placement token's own SHA-256, each field prefixed by its length. The
-// same intent has one identifier across restarts, certificate renewal
-// and token refresh, and the token cannot be read back from it. A
-// change of contract is new intent (ADR-0100).
+// same intent has one identifier across restarts and token refresh, and
+// the token cannot be read back from it. A change of contract is new
+// intent (ADR-0100).
 func RequestID(contract string, b Binding, placementToken string) string {
 	fingerprint := sha256.Sum256([]byte(placementToken))
 	h := sha256.New()

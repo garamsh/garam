@@ -38,11 +38,7 @@ import {
   ProvidedLastContact,
   ProvidedReportsNotice,
 } from "../_components/operator-reports";
-import {
-  certificateStatus,
-  keyConnection,
-  liveKeys,
-} from "../_components/operator-status";
+import { keyConnection, liveKeys } from "../_components/operator-status";
 import { reportsSource } from "../_components/reports-source";
 import { ControlEndpointForm } from "./_components/control-endpoint-form";
 import { DelegationForm } from "./_components/delegation-form";
@@ -209,19 +205,6 @@ export default async function OperatorPage({ params, searchParams }: Params) {
               <StatusDot {...connection} />
             ) : (
               <span className="text-muted-foreground">Not checked</span>
-            ),
-          },
-          {
-            term: "Certificate",
-            description: (
-              <span className="flex flex-wrap items-center gap-x-1.5">
-                <StatusDot {...certificateStatus(o.certificateIssuedAt)} />
-                {o.certificateIssuedAt && (
-                  <span className="text-muted-foreground">
-                    · last issued <Time value={o.certificateIssuedAt} />
-                  </span>
-                )}
-              </span>
             ),
           },
           ...(allowed("readReports")

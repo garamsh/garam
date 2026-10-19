@@ -16,11 +16,9 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -84,68 +82,40 @@ func mustGRN(s string) grn.GRN {
 	return g
 }
 
-// identity is an issuer and a leaf it signed for one GRN, as garam
-// signs an agent's.
-type identity struct {
-	issuerPEM []byte
-	leaf      tls.Certificate
-	leafPEM   []byte
-	keyPEM    []byte
-
-	issuer    *x509.Certificate
-	issuerKey *ecdsa.PrivateKey
+// serverRoot is the garam server root a host is configured with, and
+// the key that signs what it verifies.
+type serverRoot struct {
+	pem  []byte
+	cert *x509.Certificate
+	key  *ecdsa.PrivateKey
 }
 
-func newIdentity(t *testing.T, subject string) identity {
-	t.Helper()
-	issuerKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	template := &x509.Certificate{
-		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "acme authority"},
-		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
-		KeyUsage: x509.KeyUsageCertSign, BasicConstraintsValid: true, IsCA: true,
-	}
-	issuerDER, err := x509.CreateCertificate(rand.Reader, template, template, &issuerKey.PublicKey, issuerKey)
-	require.NoError(t, err)
-	issuer, err := x509.ParseCertificate(issuerDER)
-	require.NoError(t, err)
-	id := identity{issuerPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issuerDER}),
-		issuer: issuer, issuerKey: issuerKey}
-	return id.sign(t, subject)
-}
-
-// sign answers the identity with a new leaf its issuer signed for
-// subject.
-func (id identity) sign(t *testing.T, subject string) identity {
+func newServerRoot(t *testing.T) serverRoot {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	uri, err := url.Parse(subject)
-	require.NoError(t, err)
-	leaf := &x509.Certificate{
-		SerialNumber: big.NewInt(2), URIs: []*url.URL{uri},
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "garam server root"},
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
-		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		KeyUsage: x509.KeyUsageCertSign, BasicConstraintsValid: true, IsCA: true,
 	}
-	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, id.issuer, &key.PublicKey, id.issuerKey)
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	require.NoError(t, err)
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	cert, err := x509.ParseCertificate(der)
 	require.NoError(t, err)
-	id.leafPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
-	id.keyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	id.leaf, err = tls.X509KeyPair(id.leafPEM, id.keyPEM)
-	require.NoError(t, err)
-	return id
+	return serverRoot{pem: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), cert: cert, key: key}
 }
 
 // host is one standalone host: its supervisor's directory, the engine,
-// garam, and the agent's credential.
+// garam, the server root and the agent's token.
 type host struct {
 	t      *testing.T
 	engine *stubEngine
 	garam  *stubGaram
 	dir    string
-	id     identity
+	root   serverRoot
+	// tokens is the agent's token as the supervisor holds it.
+	tokens *stubTokens
 	// machineURL is where the adapter, and the runtime beside it,
 	// reach garam.
 	machineURL string
@@ -165,7 +135,8 @@ func newHost(t *testing.T) *host {
 	dir, err := os.MkdirTemp("", "wl")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	return &host{t: t, engine: newStubEngine(), garam: &stubGaram{}, dir: dir, id: newIdentity(t, testAgent.String()),
+	return &host{t: t, engine: newStubEngine(), garam: &stubGaram{}, dir: dir, root: newServerRoot(t),
+		tokens:     &stubTokens{current: agentToken("a")},
 		machineURL: "https://garam.example", issuer: testIssuer}
 }
 
@@ -180,11 +151,10 @@ func (h *host) config(edit ...func(*workload.Desired)) workload.Config {
 	}
 	return workload.Config{
 		Dir: h.dir, Prefix: "garam-test-", Desired: d,
-		Adapter: workload.AdapterFiles{
-			CertificatePEM: h.id.leafPEM, KeyPEM: h.id.keyPEM, IssuerPEM: h.id.issuerPEM,
-			ServerRootPEM: h.id.issuerPEM, MachineURL: h.machineURL,
-		},
-		MessageIssuer: h.issuer,
+		Adapter:            workload.AdapterFiles{ServerRootPEM: h.root.pem, MachineURL: h.machineURL},
+		MessageIssuer:      h.issuer,
+		Tokens:             h.tokens,
+		TokenCheckInterval: 5 * time.Millisecond,
 	}
 }
 
@@ -196,7 +166,7 @@ type running struct {
 	err    error
 }
 
-// start runs the supervisor in the certificate mode.
+// start runs the supervisor.
 func (h *host) start(edit ...func(*workload.Desired)) *running {
 	h.t.Helper()
 	return h.run(h.config(edit...))
@@ -280,23 +250,29 @@ func (h *host) live(role workload.Role) *stubContainer {
 }
 
 // adapterOf is the adapter's own control client, built from what its
-// container was given: the socket it mounts, the root it verifies the
-// supervisor by, and its placement token.
+// container was given: its control token file, the root and the
+// socket, and its placement token.
 func (h *host) adapterOf(c *stubContainer) (*delivery.HTTPAuthority, string) {
 	h.t.Helper()
-	auth, err := delivery.NewHTTPAuthority(h.clientOf(c, h.id.leaf), "https://"+workload.ControlName, testAgent, delivery.NewCertificate(nil))
+	path := filepath.Join(h.t.TempDir(), "control-token")
+	require.NoError(h.t, os.WriteFile(path, c.files["/etc/garam/control-token"].Data, 0o600))
+	control, err := delivery.NewTokenFile(path)
+	require.NoError(h.t, err)
+	auth, err := delivery.NewHTTPAuthority(h.clientOf(c), "https://"+workload.ControlName, testAgent, control)
 	require.NoError(h.t, err)
 	return auth, string(c.files["/etc/garam/placement-token"].Data)
 }
 
-func (h *host) clientOf(c *stubContainer, presented tls.Certificate) *http.Client {
+// clientOf reaches the adapter's control as the adapter does: verifying
+// the generation's root and presenting no certificate.
+func (h *host) clientOf(c *stubContainer) *http.Client {
 	h.t.Helper()
 	roots := x509.NewCertPool()
 	require.True(h.t, roots.AppendCertsFromPEM(c.files["/etc/garam/control-root.pem"].Data))
 	require.Len(h.t, c.spec.Binds, 1)
 	socket := filepath.Join(c.spec.Binds[0].Source, "control.sock")
 	return &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{RootCAs: roots, Certificates: []tls.Certificate{presented}, MinVersion: tls.VersionTLS13},
+		TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS13},
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 			var d net.Dialer
 			return d.DialContext(ctx, "unix", socket)
@@ -358,14 +334,14 @@ func TestRun_BringsAGenerationUpInTheArrangementsShape(t *testing.T) {
 		assert.NotContains(t, runtime.files, path)
 		assert.NotContains(t, workspace.files, path)
 	}
-	assert.Equal(t, h.id.keyPEM, adapter.files["/etc/garam/agent.key"].Data)
-	assert.Equal(t, 0o600, int(adapter.files["/etc/garam/agent.key"].Mode))
-	assert.Equal(t, 65532, adapter.files["/etc/garam/agent.key"].UID)
+	assert.Equal(t, agentToken("a"), string(adapter.files["/etc/garam/agent-token"].Data))
+	assert.Equal(t, 0o600, int(adapter.files["/etc/garam/agent-token"].Mode))
+	assert.Equal(t, 65532, adapter.files["/etc/garam/agent-token"].UID)
 }
 
 // TestActivate_ForwardsTheGenerationTheRuntimeIs drives the adapter's
 // own client against the supervisor: the first activation is forwarded
-// with the presented leaf and no anchor, a retry repeats it exactly and
+// with the agent's token and no anchor, a retry repeats it exactly and
 // answers a newer token of the same activation, and the runtime's
 // status for it is taken.
 func TestActivate_ForwardsTheGenerationTheRuntimeIs(t *testing.T) {
@@ -374,7 +350,7 @@ func TestActivate_ForwardsTheGenerationTheRuntimeIs(t *testing.T) {
 	_, _, adapter := h.serving()
 	auth, token := h.adapterOf(adapter)
 	generation := newGeneration()
-	id := delivery.RequestID(delivery.ExecutionContract, binding(generation), token)
+	id := delivery.RequestID(delivery.TokenExecutionContract, binding(generation), token)
 
 	first, err := auth.Activate(context.Background(), id, binding(generation), token)
 	require.NoError(t, err)
@@ -387,7 +363,7 @@ func TestActivate_ForwardsTheGenerationTheRuntimeIs(t *testing.T) {
 	require.Len(t, asked, 2)
 	assert.Equal(t, asked[0], asked[1], "a retry repeats the first request")
 	assert.Equal(t, workload.ActivationRequest{
-		RequestID: id, Epoch: "3", Generation: generation, Replaces: "", CertificatePEM: string(h.id.leafPEM),
+		RequestID: id, Epoch: "3", Generation: generation, Replaces: "", Token: agentToken("a"),
 	}, asked[0])
 
 	status := &delivery.RuntimeStatus{Agent: testAgent, Epoch: "3", Generation: generation, Revision: "r1",
@@ -409,7 +385,7 @@ func TestActivate_RefusesWhatIsNotThisGeneration(t *testing.T) {
 	auth, token := h.adapterOf(adapter)
 
 	activate := func(b delivery.Binding, presented string) error {
-		_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, b, presented), b, presented)
+		_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.TokenExecutionContract, b, presented), b, presented)
 		return err
 	}
 	refusedAs := func(t *testing.T, err error, kind string) {
@@ -435,7 +411,7 @@ func TestActivate_RefusesWhatIsNotThisGeneration(t *testing.T) {
 	assert.Empty(t, h.garam.asked(), "nothing refused reached garam")
 
 	generation := newGeneration()
-	_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(generation), token), binding(generation), token)
+	_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.TokenExecutionContract, binding(generation), token), binding(generation), token)
 	require.NoError(t, err, "the control: this generation's own request is forwarded")
 
 	t.Run("a second generation of the same runtime", func(t *testing.T) {
@@ -448,55 +424,6 @@ func TestActivate_RefusesWhatIsNotThisGeneration(t *testing.T) {
 		refusedAs(t, activate(binding(generation), token), "placement_not_current")
 	})
 	assert.Len(t, h.garam.asked(), 1, "only the control reached garam")
-}
-
-// TestActivate_RefusesAnUnauthenticatedCaller holds the transport's
-// own checks: no placement token, a certificate naming another agent,
-// a certificate another authority signed, and a request under another
-// contract are refused, beside the adapter's own request accepted.
-func TestActivate_RefusesAnUnauthenticatedCaller(t *testing.T) {
-	h := newHost(t)
-	h.start()
-	_, _, adapter := h.serving()
-	_, token := h.adapterOf(adapter)
-	generation := newGeneration()
-	body := fmt.Sprintf(`{"requestId":%q,"epoch":"3","generation":%q,"configRevision":"r1"}`,
-		delivery.RequestID(delivery.ExecutionContract, binding(generation), token), generation)
-
-	post := func(client *http.Client, contract, authorization string) (*http.Response, error) {
-		req, err := http.NewRequest(http.MethodPost,
-			"https://supervisor/v1/agents/"+testAgent.String()+"/activations", strings.NewReader(body))
-		require.NoError(t, err)
-		req.Header.Set("Garam-Contract-Version", contract)
-		if authorization != "" {
-			req.Header.Set("Authorization", authorization)
-		}
-		resp, err := client.Do(req)
-		if err == nil {
-			t.Cleanup(func() { _ = resp.Body.Close() })
-		}
-		return resp, err
-	}
-	statusOf := func(resp *http.Response, err error) int {
-		require.NoError(t, err)
-		return resp.StatusCode
-	}
-	own := h.clientOf(adapter, h.id.leaf)
-
-	assert.Equal(t, http.StatusUnauthorized, statusOf(post(own, workload.ExecutionContract, "")),
-		"no placement token")
-	assert.Equal(t, http.StatusBadRequest, statusOf(post(own, "agent-execution.v0", "Garam-Placement "+token)),
-		"another contract")
-	sibling := h.id.sign(t, "grn:acme:default:agent:ffffffffffffffff")
-	assert.Equal(t, http.StatusForbidden, statusOf(post(h.clientOf(adapter, sibling.leaf),
-		workload.ExecutionContract, "Garam-Placement "+token)), "a certificate of the same authority naming another agent")
-	other := newIdentity(t, testAgent.String())
-	_, err := post(h.clientOf(adapter, other.leaf), workload.ExecutionContract, "Garam-Placement "+token)
-	require.Error(t, err, "a certificate another authority signed fails the handshake")
-	assert.Empty(t, h.garam.asked())
-
-	assert.Equal(t, http.StatusCreated, statusOf(post(own, workload.ExecutionContract, "Garam-Placement "+token)),
-		"the control: the adapter's own request")
 }
 
 // TestActivate_MapsGaramsAnswer holds what the adapter is told when
@@ -521,7 +448,7 @@ func TestActivate_MapsGaramsAnswer(t *testing.T) {
 			_, _, adapter := h.serving()
 			auth, token := h.adapterOf(adapter)
 			generation := newGeneration()
-			_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(generation), token), binding(generation), token)
+			_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.TokenExecutionContract, binding(generation), token), binding(generation), token)
 			require.Error(t, err)
 			assert.Equal(t, tt.want, errorx.KindOf(err), err.Error())
 			assert.Contains(t, err.Error(), tt.kind)
@@ -540,7 +467,7 @@ func TestActivate_RefusesAGenerationAnEarlierIntentActivated(t *testing.T) {
 	_, _, adapter := h.serving()
 	auth, token := h.adapterOf(adapter)
 	stale := newGeneration()
-	_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(stale), token), binding(stale), token)
+	_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.TokenExecutionContract, binding(stale), token), binding(stale), token)
 	require.NoError(t, err)
 	require.NoError(t, first.stop())
 
@@ -553,12 +480,12 @@ func TestActivate_RefusesAGenerationAnEarlierIntentActivated(t *testing.T) {
 	successor := h.live(workload.RoleAdapter)
 	h.engine.mu.Unlock()
 	auth, token = h.adapterOf(successor)
-	_, err = auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(stale), token), binding(stale), token)
+	_, err = auth.Activate(context.Background(), delivery.RequestID(delivery.TokenExecutionContract, binding(stale), token), binding(stale), token)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "placement_not_current")
 
 	fresh := newGeneration()
-	_, err = auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(fresh), token), binding(fresh), token)
+	_, err = auth.Activate(context.Background(), delivery.RequestID(delivery.TokenExecutionContract, binding(fresh), token), binding(fresh), token)
 	require.NoError(t, err, "the control: the successor's own generation")
 	asked := h.garam.asked()
 	require.Len(t, asked, 2)

@@ -1,6 +1,6 @@
 # ADR 0090: garam accepts no new agent definition, and keeps the ones it holds
 
-> Status: accepted
+> Status: superseded by [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
 > Date: 2026-10-07
 
 Drafted for #1204, which reserved this number. The scope is the PM's

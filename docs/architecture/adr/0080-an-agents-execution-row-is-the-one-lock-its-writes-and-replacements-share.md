@@ -1,6 +1,7 @@
 # ADR 0080: An agent's execution row is the one lock its writes and replacements share, reached through a declared admission function
 
-> Status: accepted
+> Status: accepted — the legacy mode of an agent's execution row is
+> superseded by [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
 > Date: 2026-10-04
 
 Decided by the PM in #1161 (the preflight decision and the boundary

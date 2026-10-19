@@ -1,7 +1,9 @@
 # ADR 0086: A legacy agent cuts over through stages garam records under its execution lock
 
-> Status: accepted — the operator's certificate route refusing a
-> switched agent is superseded by
+> Status: superseded by
+> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md);
+> the operator's certificate route refusing a switched agent was
+> superseded by
 > [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-10-05
 

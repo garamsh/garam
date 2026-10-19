@@ -1,9 +1,11 @@
 # ADR 0064: An operator enrols with a one-time token and keeps its key in its own cluster
 
-> Status: accepted — the enrollment token, the certificate request,
+> Status: superseded — the enrollment token, the certificate request,
 > `POST /enrollment` and the identity written from `VerifyConnection`
-> are superseded by
-> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+> by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md),
+> and what that left by
+> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
 > Date: 2026-09-04
 
 ## Contents

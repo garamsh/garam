@@ -1,6 +1,7 @@
 # ADR 0073: The console manages policies and their attachments under Permissions
 
-> Status: accepted
+> Status: accepted — the archive and "no delete" are superseded by
+> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md), which deletes a policy
 > Date: 2026-09-27
 
 ## Context

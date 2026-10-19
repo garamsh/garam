@@ -2,6 +2,12 @@
 
 What a garam deployment must plan for that no manifest can carry: what readiness reports, what bounds termination, how the migration fails, what the binary enforces about key material, and what is not known.
 
+Pending removal
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
+the second pull request of #1593 removes the operator enrollment token
+and shared-secret credential, after which an operator enters by a key
+alone; §Operator key and enrollment rollout holds until then.
+
 ## Contents
 - What it is
 - What readiness reports

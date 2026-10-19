@@ -3,7 +3,9 @@
 > Status: accepted — §Decision's cutover, as to templates, is
 > superseded by
 > [ADR-0088](./0088-garams-agent-templates-are-retired-read-only-and-not-imported.md):
-> garam's templates are retired read-only and not imported
+> garam's templates are retired read-only and not imported;
+> each legacy agent cutting over alone is superseded by
+> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
 > Date: 2026-10-04
 
 Decided by the PM under the owner's explicit delegation of 2026-10-04,

@@ -2,6 +2,12 @@
 
 What the adapter garam ships must do, and what it rests on to do it.
 
+Pending removal
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
+the adapter's legacy mode goes in the fifth pull request of #1593, after
+#1594 moves aurora's agent off it. What this document says of it holds
+until then.
+
 ## Contents
 - What it is
 - Token mode

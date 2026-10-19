@@ -18,9 +18,17 @@ FROM mirror.gcr.io/library/golang:1.27.2-alpine3.24@sha256:f92b6ef800e499660581e
 WORKDIR /src
 
 # Dependencies resolve from the manifests alone, so this layer survives
-# source-only edits.
+# source-only edits. The proxy has dropped a read mid-download (#1622),
+# so the download is tried three times, 10 and 20 seconds apart. Each
+# attempt fetches only what the last left missing, and verifies every
+# module against go.sum as the first did.
 COPY go.mod go.sum ./
-RUN go mod download
+RUN for attempt in 1 2 3; do \
+      go mod download && exit 0; \
+      [ "$attempt" = 3 ] && exit 1; \
+      echo "go mod download: attempt $attempt failed; retrying" >&2; \
+      sleep $((attempt * 10)); \
+    done
 
 COPY . .
 RUN CGO_ENABLED=0 go build -o /out/garam ./cmd/garam

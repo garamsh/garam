@@ -976,7 +976,7 @@ type FoundKindKind string
 type FoundObject struct {
 	Grn string `json:"grn"`
 
-	// Name Its name: a person's nickname, or an agent's definition's name. Absent for a person whose user row is gone and an agent no definition names.
+	// Name Its name: a person's nickname, or an agent's definition's name. Absent for an agent no definition names.
 	Name *string `json:"name,omitempty"`
 }
 

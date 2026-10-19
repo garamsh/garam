@@ -79,19 +79,17 @@ test.describe("signed in", () => {
       page.getByText(signedIn.projectName, { exact: true }),
     ).toBeVisible();
 
-    await nav
-      .getByRole("link", { name: "People and agents", exact: true })
-      .click();
-    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/members`);
+    await nav.getByRole("link", { name: "People", exact: true }).click();
+    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/people`);
     // Substring on purpose: a row's accessible name is all of its
     // cells, and the assertion asks which role one of them shows.
     await expect(
       page.getByRole("row", { name: signedIn.userSlug }),
     ).toContainText("Owner");
 
-    await expect(breadcrumb).toContainText("People and agents");
+    await expect(breadcrumb).toContainText("People");
     await expect(
-      nav.getByRole("link", { name: "People and agents", exact: true }),
+      nav.getByRole("link", { name: "People", exact: true }),
     ).toHaveAttribute("aria-current", "page");
   });
 

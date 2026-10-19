@@ -1,21 +1,14 @@
 import { axeViolations, expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
-import { seedArchivedTemplate, seedCutoverDefinition, type Seed } from "./seed";
+import { seedDefinition, type Seed } from "./seed";
 
 /** What the area's routes read, seeded into the test's organization. */
 async function seedArea(signedIn: Seed) {
-  const defined = await seedCutoverDefinition(signedIn, "Moving", "frozen");
-  const kept = await seedArchivedTemplate(signedIn, "Researcher", {
-    workspace: "papers",
-  });
-  return {
-    agents: `/console/orgs/${signedIn.orgSlug}/agents`,
-    defined,
-    kept: kept.identifier,
-  };
+  const defined = await seedDefinition(signedIn, "Moving");
+  return { agents: `/console/orgs/${signedIn.orgSlug}/agents`, defined };
 }
 
-// The Agents and Templates routes at 390px: a table scrolls inside its
+// The Agents routes at 390px: a table scrolls inside its
 // own container, never the page. One test reads one route.
 const routes: {
   name: string;
@@ -24,9 +17,8 @@ const routes: {
 }[] = [
   {
     name: "the agent list",
-    // Agents are listed among the members (ADR-0113).
-    href: (a) => a.agents.replace(/agents$/, "members?kind=agent"),
-    heading: "People and agents",
+    href: (a) => a.agents,
+    heading: "Agents",
   },
   {
     name: "an agent",
@@ -38,19 +30,9 @@ const routes: {
     href: (a) => `${a.agents}/new`,
     heading: "New agent",
   },
-  {
-    name: "the template list",
-    href: (a) => `${a.agents}/templates`,
-    heading: "Templates",
-  },
-  {
-    name: "an archived template",
-    href: (a) => `${a.agents}/templates/${a.kept}`,
-    heading: "Researcher",
-  },
 ];
 
-test.describe("agents and templates on a phone", () => {
+test.describe("agents on a phone", () => {
   for (const route of routes) {
     test(`${route.name} scrolls no wider than the screen and passes axe`, async ({
       page,

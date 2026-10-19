@@ -115,9 +115,7 @@ test.describe("teams", () => {
 
     // The seeded team takes both types.
     await page.goto(teamUrl(signedIn.orgSlug));
-    await expect(
-      page.getByText("This team has no members.", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("No members", { exact: true })).toBeVisible();
     await addMember(page, person);
     await expect(memberRow(page, signedIn.nickname)).toContainText("Person");
     await addMember(page, agent);
@@ -238,9 +236,7 @@ test.describe("teams", () => {
     await expect(confirm).toBeVisible();
     await confirm.click();
 
-    await expect(
-      page.getByText("This team has no members.", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("No members", { exact: true })).toBeVisible();
   });
 
   test("renames a team and deletes it after naming it", async ({
@@ -272,9 +268,7 @@ test.describe("teams", () => {
       .click();
 
     await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/teams`);
-    await expect(
-      page.getByText("This organization has no teams.", { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText("No teams", { exact: true })).toBeVisible();
     await page.goto(teamUrl(signedIn.orgSlug));
     await expect(
       page.getByRole("heading", { name: "Platform", exact: true }),
@@ -289,12 +283,10 @@ test.describe("teams", () => {
     await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/teams`);
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
-    await expect(page).toHaveURL(
-      `/console/orgs/${signedIn.orgSlug}/members?kind=person`,
-    );
+    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/people`);
     // Presence: the heading carries the list's count after the title.
     await expect(
-      page.getByRole("heading", { level: 1, name: /^People and agents/ }),
+      page.getByRole("heading", { level: 1, name: /^People/ }),
     ).toBeVisible();
   });
 

@@ -12,8 +12,8 @@ const ROUTES = [
   { name: "Teams", segment: "/teams" },
   { name: "a new team", segment: "/teams/new" },
   { name: "a team's page", segment: "/teams/engineering" },
-  { name: "People and agents", segment: "/members" },
-  { name: "a person's page", segment: "/members/SELF" },
+  { name: "People", segment: "/people" },
+  { name: "a person's page", segment: "/people/SELF" },
   { name: "Hosts", segment: "/hosts" },
   { name: "a project's page", segment: "/projects/frontend" },
 ];

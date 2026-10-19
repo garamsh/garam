@@ -157,8 +157,10 @@ func (h *host) mountedAt(id, target string) string {
 // faultingEngine is the real engine with the test's own act at one
 // point of a move: beforeCopy as the copy's helper starts, afterCopy
 // once it has exited and before the supervisor reads the copy, and
-// beforeRuntime as a runtime is created, after the copy verified. None
-// of these is the supervisor's behaviour.
+// beforeRuntime as a runtime is created, after the copy verified, and
+// beforeAdapter as an adapter is about to be created, which creates
+// none once it has seen ctx end. None of these is the supervisor's
+// behaviour.
 type faultingEngine struct {
 	workload.Engine
 	mu            sync.Mutex
@@ -166,11 +168,17 @@ type faultingEngine struct {
 	beforeCopy    func()
 	afterCopy     func()
 	beforeRuntime func(spec workload.ContainerSpec)
+	beforeAdapter func(ctx context.Context)
 }
 
 func (e *faultingEngine) CreateContainer(ctx context.Context, spec workload.ContainerSpec) (string, error) {
 	if strings.Contains(spec.Name, "runtime-") && e.beforeRuntime != nil {
 		e.beforeRuntime(spec)
+	}
+	if strings.Contains(spec.Name, "adapter-") && e.beforeAdapter != nil {
+		if e.beforeAdapter(ctx); ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 	}
 	id, err := e.Engine.CreateContainer(ctx, spec)
 	if err == nil && spec.Cmd[0] == workload.CopyCommand {
@@ -463,22 +471,32 @@ func TestRealEngine_KeepsTheMovePendingWhileTheRuntimeDoesNotExit(t *testing.T) 
 // of reach: a run with no move asked for, or another volume, refuses
 // rather than start on either volume, and creates nothing. The control
 // is the same move asked for again, which adopts its generation and
-// activates it once garam answers.
+// activates it once garam answers. The first run is stopped as it
+// would create the adapter: an adapter's first activation request
+// accepts the move, and a stop at any other point may cut off a create
+// the next run cannot yet adopt (#1580).
 func TestRealEngine_HoldsEveryRunToAnUnsettledMove(t *testing.T) {
 	h := newHost(t)
 	h.servedWithAStore()
 	target := h.prefix + "moved"
 	h.garam.setUndecided(true)
-	r := h.start(moveTo(target))
-	var runtime string
-	eventually(t, "the generation on the copy running", func() bool {
-		runtime = h.container(workload.RoleRuntime)
-		// The old runtime may be removed between the listing and this
-		// read, so a failed read is a no.
-		mounted, err := h.docker("inspect", "-f", `{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}`, runtime)
-		return runtime != "" && err == nil && mounted == target
-	})
+	engine := &faultingEngine{Engine: h.engine}
+	adapterNext := make(chan struct{})
+	engine.beforeAdapter = func(ctx context.Context) {
+		close(adapterNext)
+		<-ctx.Done()
+	}
+	r := h.startOn(engine, moveTo(target))
+	select {
+	case <-adapterNext:
+	case <-time.After(3 * time.Minute):
+		t.Fatal("the generation on the copy did not reach its adapter")
+	}
 	require.NoError(t, r.stop())
+	runtime := h.container(workload.RoleRuntime)
+	require.Equal(t, target, h.mountedAt(runtime, "/data"), "the generation on the copy runs")
+	require.Empty(t, h.container(workload.RoleAdapter), "and has no adapter to ask garam")
+	require.Empty(t, h.record().Move.Outcome, "so the move is not settled")
 
 	require.ErrorIs(t, h.start().result(t), workload.ErrMovePending)
 	elsewhere := h.prefix + "elsewhere"

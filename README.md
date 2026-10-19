@@ -90,13 +90,14 @@ make web-ci               # format, lint, typecheck, unit tests, build, codegen 
 pnpm --dir web dev        # dev server on http://localhost:3000
 ```
 
-Copy `web/.env.example` to `web/.env.local` and point `GARAM_API_URL`
-at your backend. Google sign-in registers only when the backend holds
+Copy `web/.env.example` to `web/.env.local` and point `GARAM_API_URL` at
+your backend. Google sign-in registers only when the backend holds
 `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and additionally needs
-`GOOGLE_REDIRECT_URL` set to `http://localhost:3000/api/auth/callback/google`,
-so the OAuth round trip stays on the web origin. Without the
-credentials the backend starts and serves everything else, and
-`GET /auth/providers` does not list `google`.
+`GOOGLE_REDIRECT_URL` set to
+`http://localhost:3000/api/auth/callback/google`, so the OAuth round
+trip stays on the web origin. Without the credentials the backend starts
+and serves everything else, and `GET /auth/providers` does not list
+`google`.
 
 ### Playwright end-to-end tests
 

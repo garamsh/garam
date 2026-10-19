@@ -62,10 +62,10 @@ describe("login page", () => {
   });
 
   // The three tests below assert a refusal, so each carries the control
-  // that isolates the mechanism in the same test (`testing.md` §Failing):
-  // the same page, the same query, with the backend registering the
-  // provider. Without it an absent button could be a page that failed to
-  // render or a query that never matched anything.
+  // that isolates the mechanism in the same test (`testing.md`
+  // §Failing): the same page, the same query, with the backend
+  // registering the provider. Without it an absent button could be a
+  // page that failed to render or a query that never matched anything.
   it("offers a provider button, and names Google, only when the backend registers one", async () => {
     server.use(...signedOutWith(["google"]));
     const registered = await renderServerComponent(LoginPage(NO_PARAMS));

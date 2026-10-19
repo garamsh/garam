@@ -87,8 +87,8 @@ describe("console sidebar", () => {
     await renderSidebar();
 
     expect(screen.getByRole("link", { name: "People" })).toBeInTheDocument();
-    // Presence: the sr-only label opens the trigger's name, and the slug
-    // and the reason follow it.
+    // Presence: the sr-only label opens the trigger's name, and the
+    // slug and the reason follow it.
     const switcher = screen.getByRole("button", {
       name: /Switch organization/,
     });

@@ -23,7 +23,8 @@ test.describe("console shell", () => {
     await expect(
       page.getByRole("navigation", { name: "Organization sections" }),
     ).toBeVisible();
-    // The organization's layout stayed mounted, so its role read did too.
+    // The organization's layout stayed mounted, so its role read did
+    // too.
     await expect(
       page.getByRole("button", { name: /Switch organization/ }),
     ).toContainText("Owner");
@@ -60,8 +61,8 @@ test.describe("console shell", () => {
     });
     await expect(link).toBeVisible();
 
-    // A key press first, so the browser treats the focus that follows as
-    // keyboard focus and applies :focus-visible.
+    // A key press first, so the browser treats the focus that follows
+    // as keyboard focus and applies :focus-visible.
     await page.keyboard.press("Shift");
     await link.focus();
     await expect(link).toBeFocused();

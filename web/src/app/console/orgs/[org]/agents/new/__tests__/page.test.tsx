@@ -66,8 +66,8 @@ function hostedWith(operations: string[]) {
 describe("new agent page", () => {
   it("offers no form that sends garam a definition or a template", async () => {
     // garam accepts no desired value (ADR-0090) and its templates left
-    // the console (ADR-0116): the page reads neither and offers no field
-    // to enter a value into.
+    // the console (ADR-0116): the page reads neither and offers no
+    // field to enter a value into.
     const read: string[] = [];
     server.events.on("request:start", ({ request }) => {
       read.push(new URL(request.url).pathname);

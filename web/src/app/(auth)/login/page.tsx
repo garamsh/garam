@@ -114,8 +114,8 @@ export default async function LoginPage({ searchParams }: Props) {
             : "Holding an invitation and no account yet?"}{" "}
           <Link
             href={withReturnPath("/register", returnPath)}
-            // The return path can hold an invitation token: a prefetch would
-            // send it in a request nobody asked for.
+            // The return path can hold an invitation token: a prefetch
+            // would send it in a request nobody asked for.
             prefetch={false}
             className="text-foreground underline underline-offset-4"
           >

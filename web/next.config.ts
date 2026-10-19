@@ -9,8 +9,8 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // @vercel/nft resolves package exports under `require`, which takes
   // @swc/helpers' cjs/ half; Node 22.12+ enables require(esm), so the
-  // standalone server resolves the same specifiers to esm/ and that half
-  // has to be traced as well.
+  // standalone server resolves the same specifiers to esm/ and that
+  // half has to be traced as well.
   outputFileTracingIncludes: {
     "/*": [
       "node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/esm/**/*",

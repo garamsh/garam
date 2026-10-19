@@ -116,7 +116,8 @@ describe("agents", () => {
         HttpResponse.json([
           {
             ...reportedAgent,
-            // No legacy operatorGrn: the assignee says it is an operator.
+            // No legacy operatorGrn: the assignee says it is an
+            // operator.
             assignment: {
               assigneeGrn: "grn:acme:default:operator:field-one",
               epoch: 3,

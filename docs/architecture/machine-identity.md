@@ -243,6 +243,10 @@ credential, and an agent holds the tokens its assignee mints for it
   for the lifecycle decision it is shown for
   ([operators.md](./operators.md) §Controller proof,
   [agents.md](./agents.md) §Tokens in place of certificates).
+- **The read is bounded.** It runs under `machine.ResolveDeadline`, the
+  ten seconds the lifecycle routes hold their own reads to. A read the
+  deadline ends — a store waiting on a lock, say — is answered
+  unavailable rather than held until the store lets go (#1613).
 - **One `Authorization` header.** A request carrying more than one
   while any of them presents a token carries no identity, and the reason
   travels with it, as it does for a token that proved nothing, so the

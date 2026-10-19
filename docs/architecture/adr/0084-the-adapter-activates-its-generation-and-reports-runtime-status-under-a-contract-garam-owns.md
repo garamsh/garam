@@ -3,7 +3,9 @@
 > Status: accepted — the agent's leaf over mTLS, `Garam-Placement`
 > in `Authorization` and `agent-execution.v1` as the identifier's first
 > field are superseded by
-> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md);
+> the adapter's legacy mode is superseded by
+> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
 > Date: 2026-10-05
 
 Drafted for #1186. The Operator PM recorded on

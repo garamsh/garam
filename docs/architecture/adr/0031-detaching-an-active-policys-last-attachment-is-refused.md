@@ -1,6 +1,8 @@
 # ADR 0031: Detaching an active policy's last attachment is refused
 
-> Status: accepted
+> Status: accepted — archiving, as the remedy the refusal names and as
+> a state whose last attachment detaches freely, is superseded by
+> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md): deleting the policy is the remedy
 > Date: 2026-08-18
 
 ## Contents

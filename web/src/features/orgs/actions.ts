@@ -27,7 +27,6 @@ export {
   approveAgentEnrollment,
   type ApproveAgentEnrollmentState,
 } from "./api/approve-agent-enrollment";
-export { archivePolicy, type ArchivePolicyState } from "./api/archive-policy";
 export { attachPolicy, type AttachPolicyState } from "./api/attach-policy";
 export {
   attachPolicyToMembers,
@@ -54,6 +53,7 @@ export {
   deleteOperator,
   type DeleteOperatorState,
 } from "./api/delete-operator";
+export { deletePolicy, type DeletePolicyState } from "./api/delete-policy";
 export { deleteProject, type DeleteProjectState } from "./api/delete-project";
 export {
   grantOrgConsent,

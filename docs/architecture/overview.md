@@ -4,6 +4,16 @@ garam is the core of a workflow management product: identity,
 organization, and authorization for people and autonomous agents that
 collaborate on a shared plan.
 
+Pending removals
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
+garam keeps no legacy path no live deployment uses, and each removal is
+its own pull request of #1593. What this document says of each holds
+until its pull request lands: the operator enrollment token and
+shared-secret credential in the second, garam's retired templates in the
+third and the browser's `operatorGrn` in the fourth, both after #1588,
+and legacy execution mode, the staged cut-over and legacy definitions in
+the fifth, after #1594.
+
 ## Contents
 - In scope
 - Out of scope (today)

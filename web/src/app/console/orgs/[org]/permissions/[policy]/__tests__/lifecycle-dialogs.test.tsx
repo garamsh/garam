@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { ActivatePolicyDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/activate-policy-dialog";
-import { ArchivePolicyDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/archive-policy-dialog";
+import { DeletePolicyDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/delete-policy-dialog";
 import { MakeDefaultDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/make-default-dialog";
 import { Outcome, OutcomeProvider } from "@/app/console/_components/outcome";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
@@ -246,61 +246,68 @@ describe("make default dialog", () => {
   });
 });
 
-describe("archive policy dialog", () => {
-  it("says the archive landed in the lifecycle area", async () => {
+describe("delete policy dialog", () => {
+  it("offers the delete only once the policy's whole name is typed", async () => {
+    let deleted = 0;
     server.use(
-      http.post(`${DENY}/archive`, () =>
-        HttpResponse.json({ ...denyDeletes, status: "archived" }),
-      ),
+      http.delete(DENY, () => {
+        deleted += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
     );
     const user = userEvent.setup();
     render(
-      <OutcomeProvider>
-        <Outcome area="lifecycle" />
-        <ArchivePolicyDialog
-          org="acme"
-          policy="d1e2f3a4b5c6d7e8"
-          policyName="Deny project deletion"
-        />
-      </OutcomeProvider>,
-    );
-    // The control: nothing is said before the write.
-    expect(screen.queryByText(/^Archived/)).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Archive policy" }));
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(
-      within(dialog).getByRole("button", { name: "Archive policy" }),
-    );
-
-    expect(
-      await screen.findByText("Archived. It can be activated again."),
-    ).toBeInTheDocument();
-  });
-
-  it("keeps a refusal in the dialog until it closes, and opens again without it", async () => {
-    server.use(
-      http.post(`${DENY}/archive`, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "denied: policy:archive" },
-          { status: 403 },
-        ),
-      ),
-    );
-    const user = userEvent.setup();
-    render(
-      <ArchivePolicyDialog
+      <DeletePolicyDialog
         org="acme"
         policy="d1e2f3a4b5c6d7e8"
         policyName="Deny project deletion"
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Archive policy" }));
+    await user.click(screen.getByRole("button", { name: "Delete policy" }));
+    const dialog = screen.getByRole("alertdialog", {
+      name: "Delete Deny project deletion?",
+    });
+    const confirm = within(dialog).getByRole("button", {
+      name: "Delete policy",
+    });
+    expect(confirm).toBeDisabled();
+
+    await user.type(within(dialog).getByRole("textbox"), "Deny project");
+    expect(confirm).toBeDisabled();
+    expect(deleted).toBe(0);
+    // The control: the whole name enables it. The delete it sends, and
+    // the list it opens, are the server action's (policy-lifecycle).
+    await user.type(within(dialog).getByRole("textbox"), " deletion");
+    expect(confirm).toBeEnabled();
+  });
+
+  it("keeps a refusal in the dialog until it closes, and opens again without it", async () => {
+    server.use(
+      http.delete(DENY, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "denied: policy:delete" },
+          { status: 403 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    render(
+      <DeletePolicyDialog
+        org="acme"
+        policy="d1e2f3a4b5c6d7e8"
+        policyName="Deny project deletion"
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete policy" }));
+    const dialog = screen.getByRole("alertdialog");
+    await user.type(
+      within(dialog).getByRole("textbox"),
+      "Deny project deletion",
+    );
     await user.click(
-      within(screen.getByRole("alertdialog")).getByRole("button", {
-        name: "Archive policy",
-      }),
+      within(dialog).getByRole("button", { name: "Delete policy" }),
     );
     // The control: the refusal is said, in the dialog that asked.
     expect(
@@ -308,7 +315,7 @@ describe("archive policy dialog", () => {
     ).toHaveTextContent(REFUSAL_COPY.permissionDenied);
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
-    await user.click(screen.getByRole("button", { name: "Archive policy" }));
+    await user.click(screen.getByRole("button", { name: "Delete policy" }));
 
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();

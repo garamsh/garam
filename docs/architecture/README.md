@@ -453,7 +453,8 @@ ADRs:
 - [0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md) —
   the login write rate is bounded at the store
 - [0031](./adr/0031-detaching-an-active-policys-last-attachment-is-refused.md)
-  — detaching an active policy's last attachment is refused
+  — detaching an active policy's last attachment is refused; archiving
+  as its remedy is superseded by 0117
 - [0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)
   — garam ships the command that mints an operator's first certificate;
   superseded by 0100
@@ -559,7 +560,7 @@ ADRs:
   — an operator enrols with a one-time token, generates its own key pair
   in its own cluster, and garam signs a key it never holds; the token,
   the request, the route and the handshake identity are superseded by
-  0100
+  0100; what 0100 left of it is superseded by 0117
 - [0065](./adr/0065-garam-states-what-deleting-an-organization-destroys-before-the-act.md)
   — garam answers what deleting an organization would destroy before
   the act, counting on the server and naming the certificate authority
@@ -607,7 +608,8 @@ ADRs:
   Permissions: a Policies and an Attachments view over the existing
   policy operations, any stored version made the default, a stated and
   confirmed scope before a policy evaluates, and a subject's policies
-  sorted by source with what was not read marked unchecked
+  sorted by source with what was not read marked unchecked; its archive
+  and "no delete" are superseded by 0117
 - [0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)
   — an operator carries a name and description beside its GRN, changed
   on `operator:update` and moving nothing it authenticates or enrols
@@ -622,14 +624,16 @@ ADRs:
   and moves nothing else, and the console lists desired agents by name
   apart from what operators report. Which service owns a template is
   superseded by 0077, its template writes and forms by 0088, and
-  copying values into a new definition by 0090
+  copying values into a new definition by 0090; the read of garam's own
+  templates is superseded by 0117
 - [0077](./adr/0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
   — execution definitions and templates move to a separately deployed
   Operator control service with its own store, garam keeps identity,
   names, assignment and collaboration, and existing agents cut over one
   GRN at a time with one active source and no new workload or volume;
   garam's managed creation is built, and the rest is unbuilt. Its
-  cutover of templates is superseded by 0088
+  cutover of templates is superseded by 0088; each legacy agent cutting
+  over alone is superseded by 0117
 - [0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)
   — a lifecycle authority activates a runtime generation distinct from
   the GRN, epoch and revision; old generations and replaced credential
@@ -649,7 +653,8 @@ ADRs:
   declared `agent_execution_admit` function in their own transaction,
   each reading its answer into its own input and refusal, and a
   replacement takes it exclusively, so no write of a replaced
-  generation commits after its replacement
+  generation commits after its replacement; its legacy mode is
+  superseded by 0117
 - [0081](./adr/0081-a-test-only-command-signs-in-the-first-principal-of-a-database-it-creates.md)
   — a test-only command under `tests/testprincipal` creates a fresh
   local database and signs in its first principal under a versioned
@@ -663,7 +668,7 @@ ADRs:
   its own certificate, and is replaced or revoked only by an
   administrator; the host's runner is 0085's; its key pairs, spending
   by certificate requests and certificate renewal are superseded by
-  0100
+  0100; the browser's legacy `operatorGrn` is superseded by 0117
 - [0083](./adr/0083-a-durable-reply-is-admitted-under-a-fixed-budget-from-its-creation-and-its-key-is-answered-after-it.md)
   — `POST /outbox-messages` under `durable-delivery.v1` stores a
   durable reply only while its creation instant is inside a fixed
@@ -679,7 +684,7 @@ ADRs:
   the adapter's half is built, a standalone supervisor serves it
   (0085), and the Operator control service does not yet; its mTLS
   transport and `Garam-Placement` in `Authorization` are superseded by
-  0100
+  0100; the adapter's legacy mode is superseded by 0117
 - [0085](./adr/0085-a-standalone-supervisor-owns-each-generation-as-three-containers-on-a-rootless-docker-daemon.md)
   — a standalone supervisor, a foreground host process holding the
   Docker socket alone, owns each generation as a runtime, a workspace
@@ -696,7 +701,7 @@ ADRs:
   lock, holds the agent's first activation and its operator's
   certificate route on that switch, keeps the values archival, and
   names each refusal in the machine `Error`'s `reason`; the
-  certificate route's refusal is superseded by 0100
+  certificate route's refusal is superseded by 0100; superseded by 0117
 - [0087](./adr/0087-a-standalone-runtime-revision-names-its-ego-and-instructions-and-the-adapter-has-its-own-way-to-garam.md)
   — a standalone runtime takes its ego and operator instructions from
   files the host names, and its configuration's revision names both,
@@ -707,7 +712,8 @@ ADRs:
   schema guard refuses every write to them from whichever release
   sends it, a template still goes with its organization, the write
   routes and actions are removed, and the console defines only from
-  the Operator's templates and shows garam's as archived records
+  the Operator's templates and shows garam's as archived records;
+  superseded by 0117
 - [0089](./adr/0089-a-standalone-agents-memory-moves-only-through-a-verified-copy-its-new-generation-accepts-before-it-activates.md)
   — a standalone agent's memory moves to a new volume only through
   `garam standalone run --move-memory-to`: the old runtime drained and
@@ -722,7 +728,7 @@ ADRs:
   a changed value or a direct delete from whichever release sends it
   while a rename and the organization's cascade stay admitted, every
   definition held stays readable, claimable and cut-over-able, and an
-  agent is created through the control service
+  agent is created through the control service; superseded by 0117
 - [0091](./adr/0091-a-recovered-credential-names-its-chain-and-garam-stores-it-with-the-recovery.md)
   — a recovered credential's answer names its issuer and garam server
   root, added to `execution-fence.v1` without a version change; garam
@@ -809,7 +815,9 @@ ADRs:
   managed/direct agents share admission separately from provisioning.
   Unbuilt; supersedes 0100 only for Operator long-lived
   credential issuance/exchange and separate target enrollment, keeping
-  token transport, fencing and existing cohorts. 0101 is unchanged.
+  token transport, fencing and existing cohorts. 0101 is unchanged. The
+  Operator shared-secret cohort and its removal gate are superseded by
+  0117.
 - [0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
   — the console is built on one design system: principles, oklch
   tokens in light and dark, Pretendard Variable and Geist Mono, a
@@ -909,3 +917,12 @@ ADRs:
   what is not self-evident, a consequence lives in the dialog that
   confirms it, and a page has one primary action; supersedes 0113 in
   part
+- [0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
+  — garam keeps no legacy path no live deployment uses: a policy is
+  deleted rather than archived; the operator enrollment token and
+  shared-secret credential, garam's retired templates and the legacy
+  `operatorGrn` go; legacy execution mode, the staged cut-over and
+  legacy definitions go once #1594 moves aurora's agent off them; each
+  removal is its own pull request of #1593; supersedes 0086, 0088 and
+  0090, and parts of 0031, 0064, 0073, 0075, 0077, 0080, 0082, 0084
+  and 0102

@@ -4,6 +4,14 @@ Who is calling on the listener a machine identity authenticates on
 (ADR-0014, ADR-0015, ADR-0100), and the evidence of how each caller
 authenticated (ADR-0109). Implemented by `internal/machine`.
 
+Pending removals
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
+the operator's shared-secret credential, its exchange and its enrollment
+token go in the second pull request of #1593, and the legacy cohort of
+an agent's generation and lineage in the fifth, after #1594. What this
+document says of each holds until then. The supervisor's shared-secret
+exchange and `machine-token.v1` stay.
+
 | Type | Responsibility |
 |------|----------------|
 | `Identity` | the GRN a verified client certificate names, and the certificate's own serial and dates — which is what a caller asking to replace it is answered by (ADR-0046) |

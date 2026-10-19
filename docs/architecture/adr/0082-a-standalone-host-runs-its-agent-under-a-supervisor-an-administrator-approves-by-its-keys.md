@@ -2,7 +2,9 @@
 
 > Status: accepted — the host's key pairs, spending by certificate
 > requests and the supervisor's certificate renewal are superseded by
-> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md);
+> the browser's legacy `operatorGrn` is superseded by
+> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
 > Date: 2026-10-05
 
 Decided by the PM for #1168 on 2026-10-04 and 2026-10-05, reviewing the

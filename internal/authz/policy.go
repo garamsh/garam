@@ -21,7 +21,7 @@ const ServiceTypePolicy = "policy"
 // ParsePolicyStatus parses a wire.PolicyStatus from its stored form.
 func ParsePolicyStatus(s string) (wire.PolicyStatus, error) {
 	switch p := wire.PolicyStatus(s); p {
-	case wire.PolicyStatusDraft, wire.PolicyStatusActive, wire.PolicyStatusArchived:
+	case wire.PolicyStatusDraft, wire.PolicyStatusActive:
 		return p, nil
 	}
 	return "", errorx.New(errorx.KindInvalidArgument, "authz: unknown policy status")

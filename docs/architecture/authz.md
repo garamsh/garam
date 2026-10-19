@@ -149,14 +149,15 @@ carries the metadata, status, and default-version pointer;
 stored version is never rewritten, and versions disappear only with
 the policy that owns them. Appending a version leaves the pointer where
 it is; rollback moves it to any stored version, older or newer than
-the current default; activation and archiving change the status and
-leave the pointer alone.
+the current default; activation changes the status and leaves the
+pointer alone. A policy is retired by deleting it, which removes it
+with its versions and its attachments in one statement holding its row
+lock ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)).
 
 | State | Meaning |
 |-------|---------|
 | `draft` | stored, evaluated by nothing |
 | `active` | contributes its default version's statements to checks |
-| `archived` | retained, no longer evaluated |
 
 The engine parses each org's active documents once and caches the
 resulting statement set. Writes made through the engine drop the org's
@@ -204,7 +205,7 @@ not know would be dropped unread and the call answered from its cache.
 
 Lifecycle is served by `PolicyService` in `proto/garam/authz/v1`:
 create, append a version, list policies and versions, activate,
-archive, roll back, attach, detach, and list attachments. Documents are
+delete, roll back, attach, detach, and list attachments. Documents are
 validated at the write boundary, so a stored document always parses.
 
 ## Managing policies over HTTP
@@ -216,10 +217,10 @@ imports the engine and never parses a document: a document that does
 not parse comes back as `invalid_argument` and leaves as 400.
 
 Policy management is authorized like any other action. The
-`policy:create`, `policy:read`, `policy:update`, `policy:attach`, and
-`policy:detach` constants live in `internal/org`, because the api
-server enforces them and may not import the engine that stores
-policies. `owner` and `admin` grant `policy:*`; `member` grants none,
+`policy:create`, `policy:read`, `policy:update`, `policy:attach`,
+`policy:detach` and `policy:delete` constants live in `internal/org`,
+because the api server enforces them and may not import the engine
+that stores policies. `owner` and `admin` grant `policy:*`; `member` grants none,
 so reading a policy is an admin action. The addressed policy's GRN is
 the object of the check, and its organization segment is the org in the
 path, so a policy of another org is not addressable.
@@ -285,14 +286,15 @@ Detaching an active policy's last attachment is refused, because the
 policy would not retire — it would widen back to the org, which for a
 Deny turns one subject's restriction into every subject's, and for an
 Allow hands that grant to every subject a caller asks about. The
-remedies the refusal names are the deliberate acts: archive the policy
+remedies the refusal names are the deliberate acts: delete the policy
 to retire it, or attach the next subject before detaching this one.
 The org-wide state itself is unchanged ([ADR-0008](./adr/0008-identity-based-policy-attachments.md)):
 a policy created and activated without an attachment applies to every
 subject the caller asks about, so entering that state stays possible
-and is never a side effect of removing an attachment. A draft or
-archived policy's last attachment detaches freely — nothing evaluates
-either. Archiving is what takes a policy out of every check.
+and is never a side effect of removing an attachment. A draft policy's
+last attachment detaches freely, since nothing evaluates it. Deleting
+is what takes a policy out of every check, attached or not: nothing of
+it is left to widen, so the deletion refuses nothing on attachments.
 
 An attached policy decides what an agent sends
 ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), inside

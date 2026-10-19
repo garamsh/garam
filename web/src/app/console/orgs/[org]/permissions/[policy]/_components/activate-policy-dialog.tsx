@@ -24,7 +24,7 @@ function asksForEveryone(state: ActivatePolicyState): boolean {
 }
 
 /**
- * Activates a draft or archived policy from a dialog stating the
+ * Activates a draft policy from a dialog stating the
  * version it will evaluate and whom it reaches. Where that is the whole
  * organization, the dialog carries a checkbox the form is not sent
  * without; garam finding no attachment when the page showed some asks

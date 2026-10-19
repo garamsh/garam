@@ -1,6 +1,8 @@
 # ADR 0102: An operator proves its identity by private_key_jwt and agents share enrollment
 
-> Status: accepted
+> Status: accepted — the Operator shared-secret cohort kept under
+> `machine-token.v1`, and the gate for removing it, are superseded by
+> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
 > Date: 2026-10-13
 
 Operator authentication and agent enrollment direction for #1353,

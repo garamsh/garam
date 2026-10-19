@@ -18,6 +18,13 @@ same tokens (ADR-0102). Implemented by `internal/operator`,
 whose grants and authorities persist through
 `internal/operator/postgres`.
 
+Pending removal
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
+the one-time enrollment token, its re-mint and the shared-secret
+credential go in the second pull request of #1593, after which an
+operator enters by a key alone. What this document says of them holds
+until then; the certificate path stays.
+
 | Type | Responsibility |
 |------|----------------|
 | `Operator` | an organization's record that it has an operator under this GRN: what it calls the operator and says it is for, who registered it and when, where that operator stands in obtaining a certificate, and the control endpoint the console sends its operations to |

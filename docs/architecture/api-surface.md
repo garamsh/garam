@@ -2,6 +2,18 @@
 
 What garam serves to a caller outside it: which listeners exist, what admits a caller to each, and what the file describing each one is authoritative for.
 
+Pending removals
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
+each of these goes in its own pull request of #1593, and what this
+document says of it holds until that pull request lands. The second
+removes `mintOperatorEnrollment`, `enrollOperator`,
+`reissueOperatorCredential`, and the enrollment token and credential
+`registerOperator` answers, so an operator enters by a key alone. The
+third removes `listAgentTemplates` and `getAgentTemplate`, after #1588.
+The fourth removes `AgentAssignment.operatorGrn`, after #1588. The fifth
+removes the cut-over operations, the legacy definition operations and
+legacy execution mode, after #1594 moves aurora's agent off them.
+
 ## Contents
 - What it is
 - The surfaces

@@ -533,26 +533,26 @@ func TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset(t *testing.T) {
 	})
 }
 
-// TestGRPCServer_RefusesFromAPolicyArchivedDuringAFill is what the
+// TestGRPCServer_RefusesFromAPolicyDeletedDuringAFill is what the
 // cache's lost invalidation costs at the surface that answers: the
-// engine allowed an action from a policy that had been archived, and
+// engine allowed an action from a policy that had been deleted, and
 // went on allowing it because nothing dropped the entry a second time.
 //
-// The archive lands while a check is inside the store, which is the one
-// interleaving that reaches it — PolicyGRPCServer.ArchivePolicy
+// The delete lands while a check is inside the store, which is the one
+// interleaving that reaches it — PolicyGRPCServer.DeletePolicy
 // invalidates after its commit, and the same process serves checks
 // against that cache. The decision the in-flight check returned is the
-// control: the policy did allow before it was archived, so the refusal
-// afterwards is the archive rather than an engine that refuses
+// control: the policy did allow before it was deleted, so the refusal
+// afterwards is the delete rather than an engine that refuses
 // everything. It keeps the mock because the interleaving is driven
 // from inside the store call.
-func TestGRPCServer_RefusesFromAPolicyArchivedDuringAFill(t *testing.T) {
+func TestGRPCServer_RefusesFromAPolicyDeletedDuringAFill(t *testing.T) {
 	acme := orgGRN("acme")
 	gate := newGatedFill()
 	live := authz.ActivePolicy{Document: authz.PolicyDocument{
 		Version: "2026-07-25",
 		Statement: []authz.Statement{{
-			Sid:      "archived-allow",
+			Sid:      "deleted-allow",
 			Effect:   wire.EffectAllow,
 			Action:   []string{"org:update"},
 			Resource: []string{"grn:root:default:org:acme"},
@@ -584,7 +584,7 @@ func TestGRPCServer_RefusesFromAPolicyArchivedDuringAFill(t *testing.T) {
 
 	resp, err := engine.Check(context.Background(), checkRequest())
 	require.NoError(t, err)
-	assert.False(t, resp.GetAllowed(), "the archived policy still allows")
+	assert.False(t, resp.GetAllowed(), "the deleted policy still allows")
 }
 
 // currentRequest asks CheckCurrent what req asks Check.

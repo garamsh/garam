@@ -81,44 +81,85 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 }
 
-// TestPolicyService_ArchiveRoundTrip drives the lifecycle service over
-// the real store: activate, then archive, and the org keeps nothing to
-// evaluate.
-func TestPolicyService_ArchiveRoundTrip(t *testing.T) {
+// TestPolicyService_DeleteRoundTrip drives deletion over the real
+// store: a draft is deleted as readily as an active policy, each goes
+// with its versions, the active one's statements leave the org on the
+// delete, and a second delete finds nothing.
+func TestPolicyService_DeleteRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := authz.NewPostgresStore(p)
 	cache := authz.NewPolicyCache(s)
 	srv := authz.NewPolicyGRPCServer(s, cache)
 	orgGRN := newPolicyOrg(t, p)
+	create := func(name string) string {
+		created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
+			OrgGrn:    orgGRN.String(),
+			Name:      name,
+			Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`,
+			CreatedBy: grnOf("user", "ada").String(),
+		})
+		require.NoError(t, err)
+		return created.GetPolicy().GetGrn()
+	}
+	listed := func() []string {
+		resp, err := srv.ListPolicies(ctx, &authzv1.ListPoliciesRequest{OrgGrn: orgGRN.String()})
+		require.NoError(t, err)
+		var grns []string
+		for _, policy := range resp.GetPolicies() {
+			grns = append(grns, policy.GetGrn())
+		}
+		return grns
+	}
 
-	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
-		OrgGrn:    orgGRN.String(),
-		Name:      "read-only",
-		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`,
-		CreatedBy: grnOf("user", "ada").String(),
-	})
-	require.NoError(t, err)
-	policyGRN := created.GetPolicy().GetGrn()
-
-	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
+	draft, active := create("draft"), create("active")
+	_, err := srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: active})
 	require.NoError(t, err)
 	statements, err := cache.Statements(ctx, orgGRN, nil)
 	require.NoError(t, err)
 	require.Len(t, statements, 1)
+	require.ElementsMatch(t, []string{draft, active}, listed())
 
-	archived, err := srv.ArchivePolicy(ctx, &authzv1.ArchivePolicyRequest{PolicyGrn: policyGRN})
+	_, err = srv.DeletePolicy(ctx, &authzv1.DeletePolicyRequest{PolicyGrn: draft})
 	require.NoError(t, err)
-	assert.Equal(t, authzv1.PolicyStatus_POLICY_STATUS_ARCHIVED, archived.GetPolicy().GetStatus())
+	assert.Equal(t, []string{active}, listed(), "the draft is gone and the active policy is not")
 
+	_, err = srv.DeletePolicy(ctx, &authzv1.DeletePolicyRequest{PolicyGrn: active})
+	require.NoError(t, err)
+	assert.Empty(t, listed())
 	statements, err = cache.Statements(ctx, orgGRN, nil)
 	require.NoError(t, err)
-	assert.Empty(t, statements)
+	assert.Empty(t, statements, "the deleted policy's statements left the org")
+	var versions int
+	require.NoError(t, p.QueryRow(ctx,
+		`SELECT count(*) FROM policy_versions WHERE policy_grn IN ($1, $2)`, draft, active).Scan(&versions))
+	assert.Zero(t, versions, "each policy's versions went with it")
 
-	// The policy and its versions survive the transition.
-	versions, err := srv.ListPolicyVersions(ctx, &authzv1.ListPolicyVersionsRequest{PolicyGrn: policyGRN})
+	_, err = srv.DeletePolicy(ctx, &authzv1.DeletePolicyRequest{PolicyGrn: active})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+// TestPolicies_RefuseTheArchivedStatus holds migration 000055: the
+// status check no longer admits archived. The same statement setting
+// draft is the control, so the refusal is the check's and not a missing
+// row or a malformed statement.
+func TestPolicies_RefuseTheArchivedStatus(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	orgGRN := newPolicyOrg(t, p)
+	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	assert.Len(t, versions.GetVersions(), 1)
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
+	require.NoError(t, err)
+
+	const set = `UPDATE policies SET status = $2 WHERE grn = $1`
+	_, err = p.Exec(ctx, set, g.String(), "archived")
+	var refused *pgconn.PgError
+	require.ErrorAs(t, err, &refused)
+	assert.Equal(t, "policies_status_check", refused.ConstraintName)
+	_, err = p.Exec(ctx, set, g.String(), "draft")
+	assert.NoError(t, err, "the same write naming a status the check admits succeeds")
 }
 
 func TestPolicyVersions_AppendOnly(t *testing.T) {
@@ -270,9 +311,10 @@ func TestPolicyWrite_Notifies(t *testing.T) {
 
 // TestPolicyAttachments_RoundTrip drives attachment over the real
 // store: an attached policy reaches the subject it names and the
-// group it names, an archived one reaches nobody, and detaching an
-// active policy's last attachment is refused rather than widening the
-// policy back to an org-wide grant.
+// group it names, detaching an active policy's last attachment is
+// refused rather than widening the policy back to an org-wide grant,
+// and deleting the policy is what retires it: the very next check no
+// longer reaches its statements, and its attachments went with it.
 func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -318,15 +360,6 @@ func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, attachments.GetAttachments(), 2)
 
-	// An archived policy is not evaluated even where it is attached.
-	_, err = srv.ArchivePolicy(ctx, &authzv1.ArchivePolicyRequest{PolicyGrn: policyGRN})
-	require.NoError(t, err)
-	statements, err = cache.Statements(ctx, orgGRN, []grn.GRN{ada, eng})
-	require.NoError(t, err)
-	assert.Empty(t, statements)
-	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
-	require.NoError(t, err)
-
 	// Detaching down to one attachment narrows as before, but the last
 	// one is refused: removing it would widen the active policy
 	// org-wide, so the policy keeps applying to eng and to eng only.
@@ -341,15 +374,25 @@ func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, statements, 1)
 
-	// Archiving is what retires the policy, and what nothing evaluates
-	// detaches freely.
-	_, err = srv.ArchivePolicy(ctx, &authzv1.ArchivePolicyRequest{PolicyGrn: policyGRN})
+	// Deleting is what retires the attached active policy. The check
+	// that the policy still allows eng before the delete is the control
+	// for the refusal after it.
+	engine := authz.NewGRPCServer(cache)
+	check := &authzv1.CheckRequest{
+		SubjectGrn: bob.String(), ObjectGrn: grnOf("project", "web").String(), Action: "org:read",
+		SubjectGroups: []string{eng.String()}, SubjectOrg: orgGRN.String(),
+	}
+	before, err := engine.Check(ctx, check)
 	require.NoError(t, err)
-	_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: eng.String()})
+	require.True(t, before.GetAllowed(), "the policy allows eng's member before the delete")
+	_, err = srv.DeletePolicy(ctx, &authzv1.DeletePolicyRequest{PolicyGrn: policyGRN})
 	require.NoError(t, err)
+	after, err := engine.Check(ctx, check)
+	require.NoError(t, err)
+	assert.False(t, after.GetAllowed(), "the next check still reaches the deleted policy")
 
-	_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: ada.String()})
-	assert.Equal(t, codes.NotFound, status.Code(err))
+	_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: eng.String()})
+	assert.Equal(t, codes.NotFound, status.Code(err), "the attachment went with the policy")
 }
 
 // TestPolicyAttachment_StaysInsideItsOrg covers the schema's

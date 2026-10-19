@@ -9,6 +9,9 @@ SELECT * FROM policies WHERE grn = $1;
 -- name: ListPolicies :many
 SELECT * FROM policies WHERE org_grn = $1 ORDER BY grn;
 
+-- name: DeletePolicy :one
+DELETE FROM policies WHERE grn = $1 RETURNING *;
+
 -- name: SetPolicyStatus :one
 UPDATE policies SET
     status     = sqlc.arg('status'),

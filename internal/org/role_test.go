@@ -70,6 +70,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionPolicyUpdate, "policy:update"},
 		{org.ActionPolicyAttach, "policy:attach"},
 		{org.ActionPolicyDetach, "policy:detach"},
+		{org.ActionPolicyDelete, "policy:delete"},
 
 		{org.ActionConsentRead, "consent:read"},
 		{org.ActionConsentGrant, "consent:grant"},

@@ -1,6 +1,6 @@
 # ADR 0088: garam's agent templates are retired read-only and not imported
 
-> Status: accepted
+> Status: superseded by [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
 > Date: 2026-10-05
 
 Drafted for #1188. The import contract was proposed on #1188 (comment

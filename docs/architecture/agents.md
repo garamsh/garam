@@ -3,6 +3,15 @@
 Autonomous identity, provisioned outside garam (ADR-0012). Implemented
 by `internal/agent`.
 
+Pending removals
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
+each goes in its own pull request of #1593, and what this document says
+of it holds until then. `Template` and its reads go in the third, after
+#1588, and the browser's `operatorGrn` in the fourth. Legacy execution
+mode, the staged cut-over, `garam cutover-inventory` and every
+`Definition` go together in the fifth, after #1594 moves aurora's one
+agent, which runs in legacy mode, to a managed agent.
+
 | Type | Responsibility |
 |------|----------------|
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |

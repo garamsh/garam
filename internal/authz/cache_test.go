@@ -195,7 +195,7 @@ func TestPolicyCache_InvalidateDropsOnlyTheOrgNamed(t *testing.T) {
 
 // gatedFill holds the first ActivePolicies call open so a test can act
 // while a fill is in flight, and counts every call. The second call and
-// after answer archived: the org grants nothing.
+// after answer the policy deleted: the org grants nothing.
 type gatedFill struct {
 	inStore chan struct{}
 	release chan struct{}
@@ -208,8 +208,8 @@ func newGatedFill() *gatedFill {
 
 // answer is the ActivePolicies the gated store returns. The first call
 // blocks inside the store until release is closed and then answers with
-// the policy that was live when it read; every later call answers
-// archived.
+// the policy that was live when it read; every later call answers it
+// deleted.
 func (g *gatedFill) answer(active []authz.ActivePolicy) func(context.Context, grn.GRN) ([]authz.ActivePolicy, error) {
 	return func(context.Context, grn.GRN) ([]authz.ActivePolicy, error) {
 		if g.calls.Add(1) == 1 {
@@ -223,14 +223,14 @@ func (g *gatedFill) answer(active []authz.ActivePolicy) func(context.Context, gr
 
 // TestPolicyCache_HonoursAnInvalidationRaisedDuringAFill drives the
 // window between the store read and the map write. The fill reads the
-// store, an archive invalidates the org while that read is in flight,
+// store, a delete invalidates the org while that read is in flight,
 // and the fill then finishes: what it read is a snapshot from before
-// the archive, and installing it would put the org back to where it was
+// the delete, and installing it would put the org back to where it was
 // with nothing left to drop it again.
 //
 // The interleaving is driven rather than described: the invalidation
 // runs while the loader is inside ActivePolicies, which is where
-// PolicyGRPCServer.ArchivePolicy's own Invalidate lands when a check
+// PolicyGRPCServer.DeletePolicy's own Invalidate lands when a check
 // misses at the same moment. The store call count is the second
 // assertion because an empty answer alone would also hold for a cache
 // that served an empty entry it should not have had. It keeps the mock
@@ -260,7 +260,7 @@ func TestPolicyCache_HonoursAnInvalidationRaisedDuringAFill(t *testing.T) {
 
 	got, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
 	require.NoError(t, err)
-	assert.Empty(t, got, "the archived policy is still being served")
+	assert.Empty(t, got, "the deleted policy is still being served")
 	assert.Equal(t, int64(2), gate.calls.Load(), "the store was not read again after the invalidation")
 }
 
@@ -345,7 +345,7 @@ func TestPolicyCache_CurrentStatementsReadsTheStoreOnEveryCall(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "before", cached[0].Sid)
 
-	_, err = store.SetPolicyStatus(context.Background(), before, wire.PolicyStatusArchived)
+	_, err = store.DeletePolicy(context.Background(), before)
 	require.NoError(t, err)
 	store.seed(t, acme, wire.PolicyStatusActive, policyDocument("after", wire.EffectDeny))
 	store.seed(t, acme, wire.PolicyStatusActive, policyDocument("bob-only", wire.EffectAllow), subjectGRN("bob"))

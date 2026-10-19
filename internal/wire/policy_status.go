@@ -8,21 +8,18 @@ import authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 type PolicyStatus string
 
 const (
-	PolicyStatusDraft    PolicyStatus = "draft"
-	PolicyStatusActive   PolicyStatus = "active"
-	PolicyStatusArchived PolicyStatus = "archived"
+	PolicyStatusDraft  PolicyStatus = "draft"
+	PolicyStatusActive PolicyStatus = "active"
 )
 
 // PolicyStatusToProto renders a PolicyStatus on the wire. A status
-// that is none of the three constants renders as unspecified.
+// that is none of the two constants renders as unspecified.
 func PolicyStatusToProto(s PolicyStatus) authzv1.PolicyStatus {
 	switch s {
 	case PolicyStatusDraft:
 		return authzv1.PolicyStatus_POLICY_STATUS_DRAFT
 	case PolicyStatusActive:
 		return authzv1.PolicyStatus_POLICY_STATUS_ACTIVE
-	case PolicyStatusArchived:
-		return authzv1.PolicyStatus_POLICY_STATUS_ARCHIVED
 	}
 	return authzv1.PolicyStatus_POLICY_STATUS_UNSPECIFIED
 }
@@ -36,8 +33,6 @@ func PolicyStatusFromProto(s authzv1.PolicyStatus) PolicyStatus {
 		return PolicyStatusDraft
 	case authzv1.PolicyStatus_POLICY_STATUS_ACTIVE:
 		return PolicyStatusActive
-	case authzv1.PolicyStatus_POLICY_STATUS_ARCHIVED:
-		return PolicyStatusArchived
 	}
 	return ""
 }

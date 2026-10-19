@@ -91,12 +91,13 @@ func TestParsePolicyDocument_RefusesWhatItCannotCarry(t *testing.T) {
 }
 
 func TestParsePolicyStatus(t *testing.T) {
-	for _, s := range []wire.PolicyStatus{wire.PolicyStatusDraft, wire.PolicyStatusActive, wire.PolicyStatusArchived} {
+	for _, s := range []wire.PolicyStatus{wire.PolicyStatusDraft, wire.PolicyStatusActive} {
 		got, err := authz.ParsePolicyStatus(string(s))
 		require.NoError(t, err)
 		assert.Equal(t, s, got)
 	}
-	_, err := authz.ParsePolicyStatus("pending")
+	// archived was a status until ADR-0117 replaced it with deletion.
+	_, err := authz.ParsePolicyStatus("archived")
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }
 

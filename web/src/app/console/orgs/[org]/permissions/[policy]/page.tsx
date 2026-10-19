@@ -43,7 +43,7 @@ import {
 } from "../_components/subjects";
 import { Outcome, OutcomeProvider } from "../../../../_components/outcome";
 import { ActivatePolicyDialog } from "./_components/activate-policy-dialog";
-import { ArchivePolicyDialog } from "./_components/archive-policy-dialog";
+import { DeletePolicyDialog } from "./_components/delete-policy-dialog";
 import {
   AttachmentTable,
   type AttachmentRow,
@@ -88,8 +88,8 @@ function Unshown({ children }: { children: React.ReactNode }) {
 
 /**
  * One policy, on the Detail template: its document and editor, its
- * versions, and whom it is attached to, with archiving in the danger
- * zone (ADR-0103).
+ * versions, and whom it is attached to, with deleting in the danger
+ * zone (ADR-0103, ADR-0117).
  *
  * garam has no read of one policy, so the page finds it in the
  * organization's list, and one the list does not hold is not found;
@@ -125,6 +125,14 @@ export default async function PolicyPage({ params }: Params) {
       label: "Detach it",
       check: {
         action: "policy:detach",
+        resource,
+      },
+    },
+    {
+      key: "delete",
+      label: "Delete it",
+      check: {
+        action: "policy:delete",
         resource,
       },
     },
@@ -183,6 +191,7 @@ export default async function PolicyPage({ params }: Params) {
   const canUpdate = permissions.get("update") !== "denied";
   const canAttach = permissions.get("attach") !== "denied";
   const canDetach = permissions.get("detach") !== "denied";
+  const canDelete = permissions.get("delete") !== "denied";
   const catalogs: Catalogs = { teams, people, agents, definitions };
   const partlyListed = partlyListedAgents(catalogs);
   const reach = reachOf(attachments, catalogs);
@@ -383,12 +392,12 @@ export default async function PolicyPage({ params }: Params) {
           },
         ]}
         dangerZone={
-          canUpdate && policy.status !== "archived"
+          canDelete
             ? [
                 {
-                  title: "Archive this policy",
+                  title: "Delete this policy",
                   control: (
-                    <ArchivePolicyDialog
+                    <DeletePolicyDialog
                       org={org}
                       policy={slug}
                       policyName={policy.name}

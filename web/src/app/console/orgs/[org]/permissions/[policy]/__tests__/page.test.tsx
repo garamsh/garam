@@ -77,7 +77,7 @@ describe("policy page", () => {
       document.getByRole("textbox", { name: "Statement 1 action 1" }),
     ).toHaveValue("project:delete");
     expect(document.getByRole("button", { name: "Publish v3" })).toBeDisabled();
-    // Archiving is in the danger zone, at the end of the last tab.
+    // Deleting is in the danger zone, at the end of the last tab.
     expect(container.textContent).not.toContain("grn:acme:default:group");
   });
 
@@ -103,7 +103,7 @@ describe("policy page", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      attachments.getByRole("button", { name: "Archive policy" }),
+      attachments.getByRole("button", { name: "Delete policy" }),
     ).toBeInTheDocument();
   });
 
@@ -199,7 +199,7 @@ describe("policy page", () => {
       attachments.queryByRole("button", { name: /^Detach/ }),
     ).not.toBeInTheDocument();
     expect(
-      attachments.queryByRole("button", { name: "Archive policy" }),
+      attachments.queryByRole("button", { name: "Delete policy" }),
     ).not.toBeInTheDocument();
     // The control: attaching, allowed, is still offered.
     expect(

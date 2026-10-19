@@ -6,8 +6,8 @@ import "google/protobuf/timestamp.proto";
 
 // PolicyService manages the org-scoped policy documents the engine
 // owns (ADR-0002). Versions are append-only; rollback moves the
-// default-version pointer, and activation and archiving change only
-// the status.
+// default-version pointer, activation changes only the status, and
+// deleting a policy removes it with its versions (ADR-0117).
 service PolicyService {
   // CreatePolicy stores a new draft policy with its first version.
   rpc CreatePolicy(CreatePolicyRequest) returns (CreatePolicyResponse);
@@ -25,9 +25,9 @@ service PolicyService {
   // ActivatePolicy makes a draft policy count in evaluation.
   rpc ActivatePolicy(ActivatePolicyRequest) returns (ActivatePolicyResponse);
 
-  // ArchivePolicy retires a policy: it is retained with its versions
-  // and stops contributing statements to checks.
-  rpc ArchivePolicy(ArchivePolicyRequest) returns (ArchivePolicyResponse);
+  // DeletePolicy removes a policy together with its versions and
+  // attachments, so it stops contributing statements to checks.
+  rpc DeletePolicy(DeletePolicyRequest) returns (DeletePolicyResponse);
 
   // RollbackPolicy points the policy at any stored version, older or
   // newer than its current default.
@@ -39,7 +39,7 @@ service PolicyService {
 
   // DetachPolicy removes one attachment. Removing an active policy's
   // last attachment is refused with FAILED_PRECONDITION rather than
-  // widening the policy to the whole org; archive the policy or attach
+  // widening the policy to the whole org; delete the policy or attach
   // another subject first. An active policy created without
   // attachments still applies org-wide (ADR-0008).
   rpc DetachPolicy(DetachPolicyRequest) returns (DetachPolicyResponse);
@@ -55,7 +55,8 @@ enum PolicyStatus {
   POLICY_STATUS_UNSPECIFIED = 0;
   POLICY_STATUS_DRAFT = 1;
   POLICY_STATUS_ACTIVE = 2;
-  POLICY_STATUS_ARCHIVED = 3;
+  reserved 3;
+  reserved "POLICY_STATUS_ARCHIVED";
 }
 
 // Policy is a versioned, org-managed rule set.
@@ -127,13 +128,11 @@ message ActivatePolicyResponse {
   Policy policy = 1;
 }
 
-message ArchivePolicyRequest {
+message DeletePolicyRequest {
   string policy_grn = 1;
 }
 
-message ArchivePolicyResponse {
-  Policy policy = 1;
-}
+message DeletePolicyResponse {}
 
 message RollbackPolicyRequest {
   string policy_grn = 1;

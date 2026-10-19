@@ -139,19 +139,19 @@ func (s *Server) ActivatePolicy(w http.ResponseWriter, r *http.Request, orgSlug 
 	writeJSON(w, http.StatusOK, policyToAPI(p))
 }
 
-// ArchivePolicy retires a policy. Requires the admin role.
-func (s *Server) ArchivePolicy(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, policySlug apigen.PolicySlug) {
-	g, _, err := s.authorizePolicy(r, orgSlug, policySlug, org.ActionPolicyUpdate)
+// DeletePolicy removes a policy with its versions and attachments.
+// Requires the admin role.
+func (s *Server) DeletePolicy(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, policySlug apigen.PolicySlug) {
+	g, _, err := s.authorizePolicy(r, orgSlug, policySlug, org.ActionPolicyDelete)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	p, err := s.policies.ArchivePolicy(r.Context(), g)
-	if err != nil {
+	if err := s.policies.DeletePolicy(r.Context(), g); err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, policyToAPI(p))
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // RollbackPolicy points a policy at an earlier version. Requires the

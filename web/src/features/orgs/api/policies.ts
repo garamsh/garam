@@ -38,7 +38,7 @@ export const PolicyParser = parserFor<Policy>()(
     grn: GrnParser,
     orgGrn: GrnParser,
     name: z.string(),
-    status: z.enum(["draft", "active", "archived"]),
+    status: z.enum(["draft", "active"]),
     defaultVersion: z.number().int().min(1),
     createdAt: z.string(),
     updatedAt: z.string(),

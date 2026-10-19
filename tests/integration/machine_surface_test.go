@@ -22,6 +22,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/wire"
@@ -155,9 +156,9 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 		`{"recipient":"`+ghost.String()+`","idempotencyKey":"key-2","body":"nobody is home"}`)
 	require.Equal(t, http.StatusCreated, status, string(body))
 
-	stranded, err := message.NewPostgresStore(p).Claim(ctx, ghost, time.Minute, 1, nil, nil)
+	stranded, err := messagepg.New(p).Claim(ctx, ghost, time.Minute, 1, nil, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "nobody is home", stranded.Message().Body())
+	assert.Equal(t, "nobody is home", stranded.Message.Body)
 	_, err = agentpg.New(p).Get(ctx, ghost)
 	assert.ErrorIs(t, err, agent.ErrAgentNotFound, "storing the message provisioned an agent")
 }
@@ -718,7 +719,7 @@ func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *test
 	siblingGRN, _ := provisioned(t, url, acmeOperator)
 	recipientGRN, recipient := provisioned(t, url, globexOperator)
 	bystanderGRN, _ := provisioned(t, url, initechOperator)
-	consents := message.NewPostgresStore(p)
+	consents := messagepg.New(p)
 	queue := url + "/agents/" + recipientGRN.String() + "/claims"
 
 	// No relation anywhere: the post comes back to the sender.

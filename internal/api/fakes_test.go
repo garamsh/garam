@@ -842,7 +842,7 @@ func (s *fakeConsentStore) Grant(_ context.Context, orgGRN, other grn.GRN) (*mes
 	if halves[b.String()] {
 		bAt = ptrTo(time.Now())
 	}
-	return message.NewConsent(a, b, aAt, bAt), nil
+	return &message.Consent{OrgA: a, OrgB: b, AConsentedAt: aAt, BConsentedAt: bAt}, nil
 }
 
 func (s *fakeConsentStore) Withdraw(_ context.Context, orgGRN, other grn.GRN) error {
@@ -891,10 +891,10 @@ func (s *fakeConsentStore) List(_ context.Context, orgGRN grn.GRN) ([]*message.C
 		if halves[b.String()] {
 			bAt = ptrTo(time.Now())
 		}
-		out = append(out, message.NewConsent(a, b, aAt, bAt))
+		out = append(out, &message.Consent{OrgA: a, OrgB: b, AConsentedAt: aAt, BConsentedAt: bAt})
 	}
 	slices.SortFunc(out, func(x, y *message.Consent) int {
-		return strings.Compare(x.OrgA().String()+x.OrgB().String(), y.OrgA().String()+y.OrgB().String())
+		return strings.Compare(x.OrgA.String()+x.OrgB.String(), y.OrgA.String()+y.OrgB.String())
 	})
 	return out, nil
 }

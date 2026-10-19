@@ -27,6 +27,7 @@ import (
 	"github.com/garamsh/garam/internal/delivery"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -380,7 +381,7 @@ func TestMessageSigningKeys_ConcurrentRotationsStoreOneKey(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, replicas)
 	for i := range replicas {
-		ring, err := message.NewKeyring(message.NewPostgresStore(p), testIssuer, message.Config{}, message.NewFileCustodian(sealer))
+		ring, err := message.NewKeyring(messagepg.New(p), testIssuer, message.Config{}, message.NewFileCustodian(sealer))
 		require.NoError(t, err)
 		wg.Add(1)
 		go func() {

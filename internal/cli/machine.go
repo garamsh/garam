@@ -27,6 +27,7 @@ import (
 	machinepg "github.com/garamsh/garam/internal/machine/postgres"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/message/transit"
 	"github.com/garamsh/garam/internal/operator"
 	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
@@ -216,7 +217,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	if err != nil {
 		return nil, err
 	}
-	messages, err := message.NewService(message.NewPostgresStore(pool), cfg.Delivery)
+	messages, err := message.NewService(messagepg.New(pool), cfg.Delivery)
 	if err != nil {
 		return nil, err
 	}
@@ -228,9 +229,9 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	sealed := message.NewFileCustodian(cfg.Sealer)
 	var keyring message.Keyring
 	if cfg.SigningCustodian == nil {
-		keyring, err = message.NewKeyring(message.NewPostgresStore(pool), cfg.Issuer, cfg.Delivery, sealed)
+		keyring, err = message.NewKeyring(messagepg.New(pool), cfg.Issuer, cfg.Delivery, sealed)
 	} else {
-		keyring, err = message.NewKeyring(message.NewPostgresStore(pool), cfg.Issuer, cfg.Delivery, cfg.SigningCustodian, sealed)
+		keyring, err = message.NewKeyring(messagepg.New(pool), cfg.Issuer, cfg.Delivery, cfg.SigningCustodian, sealed)
 	}
 	if err != nil {
 		return nil, err
@@ -238,7 +239,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// The consent a cross-organization post needs is the message
 	// domain's relation (ADR-0035); this process reads it and `serve
 	// api` is where an organization grants and withdraws its half.
-	consents := message.NewPostgresStore(pool)
+	consents := messagepg.New(pool)
 
 	// Whether anyone is watching is read from the rows `serve api` writes
 	// while it holds a stream, and a forwarded event is announced for

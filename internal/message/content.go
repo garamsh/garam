@@ -27,7 +27,7 @@ type content struct {
 // the intended recipient of the post it refuses (ADR-0035); who wrote
 // it is the signature's to say (ADR-0101).
 func Content(m *Message) (string, error) {
-	encoded, err := json.Marshal(content{Contract: ContentContract, Sender: m.sender.String(), Body: m.body})
+	encoded, err := json.Marshal(content{Contract: ContentContract, Sender: m.Sender.String(), Body: m.Body})
 	if err != nil {
 		return "", errorx.Wrap(err, "message: content", errorx.KindInternal)
 	}

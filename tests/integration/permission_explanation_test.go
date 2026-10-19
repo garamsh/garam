@@ -20,7 +20,7 @@ import (
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
@@ -72,7 +72,7 @@ func newExplainStack(t *testing.T) *explainStack {
 	require.NoError(t, orgs.AddGroupMember(ctx, s.eng, s.bobGRN))
 	s.agent = seedAgent(t, agents, acme)
 
-	srv := api.NewServer(users, orgs, agents, nil, message.NewPostgresStore(p), nil,
+	srv := api.NewServer(users, orgs, agents, nil, messagepg.New(p), nil,
 		authn.NewPostgresSessionStore(p), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), cli.NewStandaloneService(p, engine),
 		api.Config{SessionTTL: time.Hour})

@@ -86,7 +86,7 @@ func (q *queue) Status(_ context.Context, sender grn.GRN, id message.ID, maxAtte
 	defer q.mu.Unlock()
 	q.statuses++
 	q.statusSender, q.statusID, q.maxAttempts = sender, id, maxAttempts
-	return message.NewStatus(id, message.StatePending, 0, time.Now().UTC()), nil
+	return &message.Status{ID: id, State: message.StatePending, Attempts: 0, CreatedAt: time.Now().UTC()}, nil
 }
 
 // reads is how many times the service went to the queue, by any method.
@@ -262,10 +262,10 @@ func TestService_PostsToARecipientNothingKnowsAbout(t *testing.T) {
 	unknown := grn.New("acme", grn.DefaultProject, "agent", "nobodyhaseverseenthisone")
 	stored, err := s.Post(ctx, senderGRN(), unknown, "key-1", "hello", message.AuthorSender, nil)
 	require.NoError(t, err)
-	assert.Equal(t, unknown, stored.Recipient())
-	assert.Equal(t, senderGRN(), stored.Sender(), "the sender is the caller rather than anything the body said")
-	assert.Equal(t, "hello", stored.Body())
-	assert.Zero(t, stored.Attempts(), "a stored message has not been handed out")
+	assert.Equal(t, unknown, stored.Recipient)
+	assert.Equal(t, senderGRN(), stored.Sender, "the sender is the caller rather than anything the body said")
+	assert.Equal(t, "hello", stored.Body)
+	assert.Zero(t, stored.Attempts, "a stored message has not been handed out")
 	assert.Len(t, store.stored, 1)
 
 	_, err = s.Post(ctx, senderGRN(), grn.GRN{}, "key-1", "hello", message.AuthorSender, nil)
@@ -289,8 +289,8 @@ func TestService_PostWithinBudgetLeavesTheBudgetToTheStore(t *testing.T) {
 	long := time.Now().Add(-2 * message.SubmissionBudget)
 	stored, err := s.PostWithinBudget(ctx, senderGRN(), recipientGRN(), "entry-1", "hello", message.AuthorSender, long, nil)
 	require.NoError(t, err)
-	assert.Equal(t, senderGRN(), stored.Sender())
-	assert.Equal(t, "entry-1", stored.IdempotencyKey())
+	assert.Equal(t, senderGRN(), stored.Sender)
+	assert.Equal(t, "entry-1", stored.IdempotencyKey)
 	assert.Equal(t, []time.Time{long}, store.created, "the creation instant reached the store unjudged")
 
 	_, err = s.PostWithinBudget(ctx, senderGRN(), recipientGRN(), "", "hello", message.AuthorSender, long, nil)
@@ -317,7 +317,7 @@ func TestService_RefusesABodyPastTheBoundBeforeStoringIt(t *testing.T) {
 	at := strings.Repeat("b", message.MaxBodyLength)
 	stored, err := s.Post(ctx, senderGRN(), recipientGRN(), "key-2", at, message.AuthorSender, nil)
 	require.NoError(t, err)
-	assert.Equal(t, at, stored.Body())
+	assert.Equal(t, at, stored.Body)
 	assert.Len(t, store.stored, 1, "a body at the bound is stored")
 }
 
@@ -335,7 +335,7 @@ func TestService_StatusReadsUnderTheCallerAsTheSender(t *testing.T) {
 
 	status, err := s.Status(ctx, senderGRN(), "message-1", nil)
 	require.NoError(t, err)
-	assert.Equal(t, message.ID("message-1"), status.ID())
+	assert.Equal(t, message.ID("message-1"), status.ID)
 	assert.Equal(t, senderGRN(), store.statusSender, "the read named a sender the caller had not proved")
 	assert.Equal(t, message.ID("message-1"), store.statusID)
 	assert.Equal(t, message.DefaultAttempts, store.maxAttempts,

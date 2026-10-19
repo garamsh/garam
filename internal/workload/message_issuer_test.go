@@ -288,7 +288,7 @@ func garamSignature(t *testing.T, key *ecdsa.PrivateKey, kid string) string {
 	now := time.Now()
 	payload, err := json.Marshal(map[string]any{
 		"iss": testIssuer, "sub": sender.String(), "aud": testAgent.String(), "org": testAgent.Organization,
-		"message_id": string(m.ID()), "content_sha256": base64.RawURLEncoding.EncodeToString(digest[:]),
+		"message_id": string(m.ID), "content_sha256": base64.RawURLEncoding.EncodeToString(digest[:]),
 		"iat": now.Unix(), "exp": now.Add(5 * time.Minute).Unix(),
 	})
 	require.NoError(t, err)

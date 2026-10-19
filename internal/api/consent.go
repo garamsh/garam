@@ -106,18 +106,18 @@ func (s *Server) consentPartner(r *http.Request, g grn.GRN, otherSlug apigen.Oth
 // consentToAPI renders the relation from the side the path named: the
 // other organization's GRN and which halves stand.
 func consentToAPI(g grn.GRN, c *message.Consent) apigen.OrgConsent {
-	if c.OrgA() == g {
+	if c.OrgA == g {
 		return apigen.OrgConsent{
-			OrgGrn:       c.OrgB().String(),
-			GrantedHere:  c.AConsentedAt() != nil,
-			GrantedThere: c.BConsentedAt() != nil,
+			OrgGrn:       c.OrgB.String(),
+			GrantedHere:  c.AConsentedAt != nil,
+			GrantedThere: c.BConsentedAt != nil,
 			Stands:       c.Stands(),
 		}
 	}
 	return apigen.OrgConsent{
-		OrgGrn:       c.OrgA().String(),
-		GrantedHere:  c.BConsentedAt() != nil,
-		GrantedThere: c.AConsentedAt() != nil,
+		OrgGrn:       c.OrgA.String(),
+		GrantedHere:  c.BConsentedAt != nil,
+		GrantedThere: c.AConsentedAt != nil,
 		Stands:       c.Stands(),
 	}
 }

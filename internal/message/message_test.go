@@ -23,15 +23,15 @@ func senderGRN() grn.GRN {
 func TestNew_CarriesWhatTheSenderSuppliedUnderAnIdentifierOfItsOwn(t *testing.T) {
 	m, err := message.New(recipientGRN(), senderGRN(), "key-1", "hello")
 	require.NoError(t, err)
-	assert.Equal(t, recipientGRN(), m.Recipient())
-	assert.Equal(t, senderGRN(), m.Sender())
-	assert.Equal(t, "key-1", m.IdempotencyKey())
-	assert.Equal(t, "hello", m.Body())
-	assert.Len(t, m.ID(), 32, "sixteen random bytes, hex-encoded")
+	assert.Equal(t, recipientGRN(), m.Recipient)
+	assert.Equal(t, senderGRN(), m.Sender)
+	assert.Equal(t, "key-1", m.IdempotencyKey)
+	assert.Equal(t, "hello", m.Body)
+	assert.Len(t, m.ID, 32, "sixteen random bytes, hex-encoded")
 
 	other, err := message.New(recipientGRN(), senderGRN(), "key-1", "hello")
 	require.NoError(t, err)
-	assert.NotEqual(t, m.ID(), other.ID(), "the identifier is the queue's, not the sender's")
+	assert.NotEqual(t, m.ID, other.ID, "the identifier is the queue's, not the sender's")
 }
 
 // The queue carries the body without reading it, so an empty one is a
@@ -39,7 +39,7 @@ func TestNew_CarriesWhatTheSenderSuppliedUnderAnIdentifierOfItsOwn(t *testing.T)
 func TestNew_CarriesAnEmptyBody(t *testing.T) {
 	m, err := message.New(recipientGRN(), senderGRN(), "key-1", "")
 	require.NoError(t, err)
-	assert.Empty(t, m.Body())
+	assert.Empty(t, m.Body)
 }
 
 // TestNew_BoundsTheBodyAtTheSubmissionLimit pins the boundary exactly:
@@ -50,7 +50,7 @@ func TestNew_BoundsTheBodyAtTheSubmissionLimit(t *testing.T) {
 	at := strings.Repeat("b", message.MaxBodyLength)
 	m, err := message.New(recipientGRN(), senderGRN(), "key-1", at)
 	require.NoError(t, err)
-	assert.Equal(t, at, m.Body(), "a body at the bound is carried whole")
+	assert.Equal(t, at, m.Body, "a body at the bound is carried whole")
 
 	m, err = message.New(recipientGRN(), senderGRN(), "key-1", at+"b")
 	assert.Nil(t, m)

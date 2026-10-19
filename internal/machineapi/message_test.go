@@ -209,7 +209,7 @@ func (s *messageService) Status(_ context.Context, caller grn.GRN, id message.ID
 	if s.err != nil {
 		return nil, s.err
 	}
-	return message.NewStatus(id, message.StateExhausted, 2, storedAt), nil
+	return &message.Status{ID: id, State: message.StateExhausted, Attempts: 2, CreatedAt: storedAt}, nil
 }
 
 // send performs one request carrying a JSON body and returns the status

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -17,6 +18,9 @@ type Store interface {
 	CreatePolicy(ctx context.Context, p *Policy, doc PolicyDocument, createdBy grn.GRN) (*Policy, error)
 	GetPolicy(ctx context.Context, g grn.GRN) (*Policy, error)
 	ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*Policy, error)
+	// SearchPolicies answers the org's policies whose name or
+	// identifier holds n, case aside, ordered by GRN.
+	SearchPolicies(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*Policy, error)
 
 	// AddPolicyVersion appends a version, leaving the default-version
 	// pointer where it is.

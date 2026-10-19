@@ -2,6 +2,7 @@ package authz_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -394,4 +395,27 @@ func policyGRN(t *testing.T, orgGRN grn.GRN) grn.GRN {
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
 	return g
+}
+
+// TestPolicyGRPCServer_SearchPoliciesParsesItsQuery holds the engine to
+// its own boundary: a blank or overlong query is refused, whatever the
+// API server sent, and the accepted query finds the stored policy by
+// its name, which is the control that a refusal is the query's.
+func TestPolicyGRPCServer_SearchPoliciesParsesItsQuery(t *testing.T) {
+	acme := orgGRN("acme")
+	store := newFakeStore()
+	stored := store.seed(t, acme, wire.PolicyStatusActive, policyDocument("any", wire.EffectAllow))
+	srv, _ := newPolicyServer(store)
+
+	resp, err := srv.SearchPolicies(context.Background(), &authzv1.SearchPoliciesRequest{OrgGrn: acme.String(), Query: " READ "})
+	require.NoError(t, err)
+	require.Len(t, resp.GetPolicies(), 1)
+	assert.Equal(t, stored.String(), resp.GetPolicies()[0].GetGrn(), "control: the query finds the policy by name")
+
+	for name, query := range map[string]string{"blank": "  ", "overlong": strings.Repeat("r", 101)} {
+		t.Run(name, func(t *testing.T) {
+			_, err := srv.SearchPolicies(context.Background(), &authzv1.SearchPoliciesRequest{OrgGrn: acme.String(), Query: query})
+			assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		})
+	}
 }

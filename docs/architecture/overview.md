@@ -431,14 +431,14 @@ templates and the browser's `operatorGrn` are gone.
 - `internal/keyfile/` — the owner-only rule every key material file is
   read under (ADR-0015); shared primitive.
 - `internal/listfilter/` — the offset/limit filter a domain's list call
-  is scoped by; shared primitive.
+  is scoped by, and the needle a search matches by; shared primitive.
 - `internal/pgxerr/` — the mapping from postgres driver errors to
   errorx kinds every postgres-backed store answers through. The five
   copies the volume audit found have been collapsed into this one.
   Shared primitive.
 - `internal/pgxtype/` — the timestamptz conversion, both directions,
-  every postgres-backed store binds and scans through. Shared
-  primitive.
+  every postgres-backed store binds and scans through, and the `ILIKE`
+  pattern a search binds. Shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
   | `serve machine` | `migrate` | `probe` | `issue-certificate` |
   `adapter`).

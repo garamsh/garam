@@ -367,6 +367,33 @@ func (e ExplainedStatementSource) Valid() bool {
 	}
 }
 
+// Defines values for FoundKindKind.
+const (
+	FoundAgent   FoundKindKind = "agent"
+	FoundPerson  FoundKindKind = "person"
+	FoundPolicy  FoundKindKind = "policy"
+	FoundProject FoundKindKind = "project"
+	FoundTeam    FoundKindKind = "team"
+)
+
+// Valid indicates whether the value is a known member of the FoundKindKind enum.
+func (e FoundKindKind) Valid() bool {
+	switch e {
+	case FoundAgent:
+		return true
+	case FoundPerson:
+		return true
+	case FoundPolicy:
+		return true
+	case FoundProject:
+		return true
+	case FoundTeam:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationCreateRole.
 const (
 	InvitationCreateRoleAdmin  InvitationCreateRole = "admin"
@@ -933,6 +960,26 @@ type ExplainedStatementEffect string
 // ExplainedStatementSource defines model for ExplainedStatement.Source.
 type ExplainedStatementSource string
 
+// FoundKind defines model for FoundKind.
+type FoundKind struct {
+	Kind FoundKindKind `json:"kind"`
+
+	// More How many more of this kind matched past `limit`.
+	More    int           `json:"more"`
+	Objects []FoundObject `json:"objects"`
+}
+
+// FoundKindKind defines model for FoundKind.Kind.
+type FoundKindKind string
+
+// FoundObject defines model for FoundObject.
+type FoundObject struct {
+	Grn string `json:"grn"`
+
+	// Name Its name: a person's nickname, or an agent's definition's name. Absent for a person whose user row is gone and an agent no definition names.
+	Name *string `json:"name,omitempty"`
+}
+
 // Group defines model for Group.
 type Group struct {
 	Grn    string `json:"grn"`
@@ -1209,6 +1256,12 @@ type OrgDeletionPreview struct {
 	//
 	// A zero means the organization holds none of that kind. It never means the caller may not see them: no count here is filtered by what the caller could list, because the deletion is not filtered either — the cascade takes every row whatever the caller may read. A count narrowed to what one caller can see would under-report what the deletion destroys, which is the failure this operation exists to prevent. The one permission is on the operation itself.
 	Counts OrgDeletionCounts `json:"counts"`
+}
+
+// OrgSearch defines model for OrgSearch.
+type OrgSearch struct {
+	// Found One entry per kind the caller may list, in the order person, agent, team, policy, project.
+	Found []FoundKind `json:"found"`
 }
 
 // Organization defines model for Organization.
@@ -1611,6 +1664,15 @@ type ListProjectsParams struct {
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// SearchOrgParams defines parameters for SearchOrg.
+type SearchOrgParams struct {
+	// Q What to find, 1 to 100 characters once trimmed.
+	Q string `form:"q" json:"q"`
+
+	// Limit How many objects of each kind to answer, from 1 to 20; 5 when absent.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // LoginWithReturnPathFormdataRequestBody defines body for LoginWithReturnPath for application/x-www-form-urlencoded ContentType.
 type LoginWithReturnPathFormdataRequestBody = LoginReturnPath
 
@@ -1919,6 +1981,9 @@ type ServerInterface interface {
 	// RemoveProjectMember Remove a member from a project. Requires the `admin` role.
 	// (DELETE /orgs/{org}/projects/{project}/members/{member})
 	RemoveProjectMember(w http.ResponseWriter, r *http.Request, org Org, projectSlug ProjectSlug, memberGrn MemberGrn)
+	// SearchOrg Find an organization's people, agents, teams, policies and projects by name. Requires the `member` role.
+	// (GET /orgs/{org}/search)
+	SearchOrg(w http.ResponseWriter, r *http.Request, org Org, params SearchOrgParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -4748,6 +4813,61 @@ func (siw *ServerInterfaceWrapper) RemoveProjectMember(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// SearchOrg operation middleware
+func (siw *ServerInterfaceWrapper) SearchOrg(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchOrgParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchOrg(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -4885,6 +5005,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/permission-checks", wrapper.CheckPermissions)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/permission-explanation", wrapper.ExplainPermission)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/permission-holders", wrapper.ListPermissionHolders)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/search", wrapper.SearchOrg)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/members", wrapper.ListOrgMembers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/groups", wrapper.CreateGroup)

@@ -23,6 +23,7 @@ const (
 	PolicyService_CreatePolicy_FullMethodName          = "/garam.authz.v1.PolicyService/CreatePolicy"
 	PolicyService_AddPolicyVersion_FullMethodName      = "/garam.authz.v1.PolicyService/AddPolicyVersion"
 	PolicyService_ListPolicies_FullMethodName          = "/garam.authz.v1.PolicyService/ListPolicies"
+	PolicyService_SearchPolicies_FullMethodName        = "/garam.authz.v1.PolicyService/SearchPolicies"
 	PolicyService_ListPolicyVersions_FullMethodName    = "/garam.authz.v1.PolicyService/ListPolicyVersions"
 	PolicyService_ActivatePolicy_FullMethodName        = "/garam.authz.v1.PolicyService/ActivatePolicy"
 	PolicyService_DeletePolicy_FullMethodName          = "/garam.authz.v1.PolicyService/DeletePolicy"
@@ -48,6 +49,9 @@ type PolicyServiceClient interface {
 	AddPolicyVersion(ctx context.Context, in *AddPolicyVersionRequest, opts ...grpc.CallOption) (*AddPolicyVersionResponse, error)
 	// ListPolicies lists an org's policies in ascending GRN order.
 	ListPolicies(ctx context.Context, in *ListPoliciesRequest, opts ...grpc.CallOption) (*ListPoliciesResponse, error)
+	// SearchPolicies lists an org's policies whose name or identifier
+	// holds the query, case aside, in ascending GRN order.
+	SearchPolicies(ctx context.Context, in *SearchPoliciesRequest, opts ...grpc.CallOption) (*SearchPoliciesResponse, error)
 	// ListPolicyVersions lists a policy's versions, oldest first.
 	ListPolicyVersions(ctx context.Context, in *ListPolicyVersionsRequest, opts ...grpc.CallOption) (*ListPolicyVersionsResponse, error)
 	// ActivatePolicy makes a draft policy count in evaluation.
@@ -104,6 +108,16 @@ func (c *policyServiceClient) ListPolicies(ctx context.Context, in *ListPolicies
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListPoliciesResponse)
 	err := c.cc.Invoke(ctx, PolicyService_ListPolicies_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *policyServiceClient) SearchPolicies(ctx context.Context, in *SearchPoliciesRequest, opts ...grpc.CallOption) (*SearchPoliciesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchPoliciesResponse)
+	err := c.cc.Invoke(ctx, PolicyService_SearchPolicies_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +210,9 @@ type PolicyServiceServer interface {
 	AddPolicyVersion(context.Context, *AddPolicyVersionRequest) (*AddPolicyVersionResponse, error)
 	// ListPolicies lists an org's policies in ascending GRN order.
 	ListPolicies(context.Context, *ListPoliciesRequest) (*ListPoliciesResponse, error)
+	// SearchPolicies lists an org's policies whose name or identifier
+	// holds the query, case aside, in ascending GRN order.
+	SearchPolicies(context.Context, *SearchPoliciesRequest) (*SearchPoliciesResponse, error)
 	// ListPolicyVersions lists a policy's versions, oldest first.
 	ListPolicyVersions(context.Context, *ListPolicyVersionsRequest) (*ListPolicyVersionsResponse, error)
 	// ActivatePolicy makes a draft policy count in evaluation.
@@ -236,6 +253,9 @@ func (UnimplementedPolicyServiceServer) AddPolicyVersion(context.Context, *AddPo
 }
 func (UnimplementedPolicyServiceServer) ListPolicies(context.Context, *ListPoliciesRequest) (*ListPoliciesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPolicies not implemented")
+}
+func (UnimplementedPolicyServiceServer) SearchPolicies(context.Context, *SearchPoliciesRequest) (*SearchPoliciesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchPolicies not implemented")
 }
 func (UnimplementedPolicyServiceServer) ListPolicyVersions(context.Context, *ListPolicyVersionsRequest) (*ListPolicyVersionsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPolicyVersions not implemented")
@@ -329,6 +349,24 @@ func _PolicyService_ListPolicies_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PolicyServiceServer).ListPolicies(ctx, req.(*ListPoliciesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PolicyService_SearchPolicies_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchPoliciesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyServiceServer).SearchPolicies(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyService_SearchPolicies_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyServiceServer).SearchPolicies(ctx, req.(*SearchPoliciesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -477,6 +515,10 @@ var PolicyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPolicies",
 			Handler:    _PolicyService_ListPolicies_Handler,
+		},
+		{
+			MethodName: "SearchPolicies",
+			Handler:    _PolicyService_SearchPolicies_Handler,
 		},
 		{
 			MethodName: "ListPolicyVersions",

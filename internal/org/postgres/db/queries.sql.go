@@ -835,6 +835,90 @@ func (q *Queries) RemoveProjectMember(ctx context.Context, arg RemoveProjectMemb
 	return result.RowsAffected(), nil
 }
 
+const searchGroups = `-- name: SearchGroups :many
+SELECT grn, org_grn, name, roles, policies, created_at, updated_at FROM groups
+WHERE org_grn = $1
+  AND (name ILIKE $2 OR split_part(grn, ':', 5) ILIKE $2)
+ORDER BY grn
+`
+
+type SearchGroupsParams struct {
+	OrgGrn  string
+	Pattern string
+}
+
+// SearchGroups answers the org's groups whose name or identifier (the
+// GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+func (q *Queries) SearchGroups(ctx context.Context, arg SearchGroupsParams) ([]Group, error) {
+	rows, err := q.db.Query(ctx, searchGroups, arg.OrgGrn, arg.Pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Group
+	for rows.Next() {
+		var i Group
+		if err := rows.Scan(
+			&i.Grn,
+			&i.OrgGrn,
+			&i.Name,
+			&i.Roles,
+			&i.Policies,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchProjects = `-- name: SearchProjects :many
+SELECT grn, org_grn, name, roles, policies, created_at, updated_at FROM projects
+WHERE org_grn = $1
+  AND (name ILIKE $2 OR split_part(grn, ':', 5) ILIKE $2)
+ORDER BY grn
+`
+
+type SearchProjectsParams struct {
+	OrgGrn  string
+	Pattern string
+}
+
+// SearchProjects answers the org's projects as SearchGroups answers
+// its groups.
+func (q *Queries) SearchProjects(ctx context.Context, arg SearchProjectsParams) ([]Project, error) {
+	rows, err := q.db.Query(ctx, searchProjects, arg.OrgGrn, arg.Pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Project
+	for rows.Next() {
+		var i Project
+		if err := rows.Scan(
+			&i.Grn,
+			&i.OrgGrn,
+			&i.Name,
+			&i.Roles,
+			&i.Policies,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateGroup = `-- name: UpdateGroup :one
 UPDATE groups SET
     name       = coalesce($1, name),

@@ -100,6 +100,48 @@ func (q *Queries) ListUsersByGRNs(ctx context.Context, grns []string) ([]User, e
 	return items, nil
 }
 
+const searchUsersByGRNs = `-- name: SearchUsersByGRNs :many
+SELECT grn, nickname, roles, policies, created_at, updated_at FROM users
+WHERE grn = ANY($1::text[])
+  AND (nickname ILIKE $2 OR split_part(grn, ':', 5) ILIKE $2)
+ORDER BY grn
+`
+
+type SearchUsersByGRNsParams struct {
+	Grns    []string
+	Pattern string
+}
+
+// SearchUsersByGRNs answers the users among grns whose nickname or
+// identifier (the GRN's fifth segment) matches pattern, case aside,
+// ordered by GRN.
+func (q *Queries) SearchUsersByGRNs(ctx context.Context, arg SearchUsersByGRNsParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, searchUsersByGRNs, arg.Grns, arg.Pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.Grn,
+			&i.Nickname,
+			&i.Roles,
+			&i.Policies,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET
     nickname   = coalesce($1, nickname),

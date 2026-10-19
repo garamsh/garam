@@ -5,28 +5,23 @@
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import { z } from "zod";
 
+import { garamFetchAuthenticated, parserFor } from "@/lib/garam";
 import { slugFromGrn } from "@/lib/grn";
+import type { components } from "@/types/api";
 
-import { directoryAgents, UNNAMED_AGENT } from "../agent-directory";
-import {
-  lookupAgentDefinitions,
-  lookupAgents,
-  lookupGroups,
-  lookupOrgMembers,
-  lookupProjects,
-} from "./orgs";
-import { listPolicies } from "./policies";
+import { UNNAMED_AGENT } from "../agent-directory";
+import { GrnParser, orgPath } from "./orgs";
 
 /** What the palette finds by name. */
-export type FoundKind = "person" | "agent" | "team" | "policy" | "project";
+export type FoundKind = components["schemas"]["FoundKind"]["kind"];
 
 /** One thing found: what it is, its name, and the identifier it is at. */
 export type FoundObject = { name: string; identifier: string };
 
 /**
- * What a search answered: up to `PER_KIND` of each kind, in the order
- * the lists gave them, and how many more matched past that. A kind
- * whose list garam refused or did not answer finds nothing.
+ * What a search answered: up to `PER_KIND` of each kind garam lets the
+ * caller list, in the order its list gives them, and how many more
+ * matched past that.
  */
 export type ObjectSearch =
   | {
@@ -43,27 +38,26 @@ const Query = z.object({
   query: z.string().trim().min(1).max(100),
 });
 
-/** A read's entries, or none where it did not answer them. */
-async function entries<T>(
-  read: Promise<{ status: string; data?: readonly T[] }>,
-): Promise<readonly T[]> {
-  try {
-    const answer = await read;
-    return answer.status === "ok" ? (answer.data ?? []) : [];
-  } catch (error) {
-    // The session ending is the one failure that is not the read's.
-    if (isRedirectError(error)) throw error;
-    return [];
-  }
-}
+const OrgSearchParser = parserFor<components["schemas"]["OrgSearch"]>()(
+  z.object({
+    found: z.array(
+      z.object({
+        kind: z.enum(["person", "agent", "team", "policy", "project"]),
+        objects: z.array(
+          z.object({ grn: GrnParser, name: z.string().optional() }),
+        ),
+        more: z.number().int(),
+      }),
+    ),
+  }),
+);
 
 /**
  * Finds the organization's people, agents, teams, policies and
  * projects whose name or identifier holds what was typed, case aside,
- * for the command palette (ADR-0113). It reads the lists when asked,
- * so a page the palette is never searched on reads none of them.
- * garam offers no search of its own, so each list is read whole and
- * matched here, and only the first few of each kind cross back.
+ * for the command palette (ADR-0113). garam matches them
+ * (`searchOrg`), so only the first few of each kind cross to the web
+ * server, and a page the palette is never searched on asks nothing.
  */
 export async function searchOrgObjects(
   org: string,
@@ -71,55 +65,31 @@ export async function searchOrgObjects(
 ): Promise<ObjectSearch> {
   const parsed = Query.safeParse({ org, query });
   if (!parsed.success) return { status: "unanswered" };
-  const needle = parsed.data.query.toLowerCase();
-
-  const [people, groups, agents, definitions, policies, projects] =
-    await Promise.all([
-      entries(lookupOrgMembers(org)),
-      entries(lookupGroups(org)),
-      entries(lookupAgents(org)),
-      entries(lookupAgentDefinitions(org)),
-      entries(listPolicies(org)),
-      entries(lookupProjects(org)),
-    ]);
-
-  const all: Record<FoundKind, FoundObject[]> = {
-    person: people.map((member) => ({
-      name: member.nickname ?? "No name on record",
-      identifier: slugFromGrn(member.userGrn),
-    })),
-    agent: directoryAgents({
-      agents: { status: "ok", data: agents },
-      definitions: { status: "ok", data: definitions },
-    }).map((agent) => ({
-      name: agent.name ?? UNNAMED_AGENT,
-      identifier: agent.identifier,
-    })),
-    team: groups.map((group) => ({
-      name: group.name,
-      identifier: slugFromGrn(group.grn),
-    })),
-    policy: policies.map((policy) => ({
-      name: policy.name,
-      identifier: slugFromGrn(policy.grn),
-    })),
-    project: projects.map((project) => ({
-      name: project.name,
-      identifier: slugFromGrn(project.grn),
-    })),
-  };
-
-  const found = (Object.keys(all) as FoundKind[]).map((kind) => {
-    const matched = all[kind].filter(
-      (object) =>
-        object.name.toLowerCase().includes(needle) ||
-        object.identifier.toLowerCase().includes(needle),
+  const params = new URLSearchParams({
+    q: parsed.data.query,
+    limit: String(PER_KIND),
+  });
+  try {
+    const answer = await garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/search?${params}`,
+      OrgSearchParser,
     );
     return {
-      kind,
-      objects: matched.slice(0, PER_KIND),
-      more: Math.max(0, matched.length - PER_KIND),
+      status: "ok",
+      found: answer.found.map(({ kind, objects, more }) => ({
+        kind,
+        objects: objects.map((object) => ({
+          name:
+            object.name ??
+            (kind === "agent" ? UNNAMED_AGENT : "No name on record"),
+          identifier: slugFromGrn(object.grn),
+        })),
+        more,
+      })),
     };
-  });
-  return { status: "ok", found };
+  } catch (error) {
+    // The session ending is the one failure that is not the search's.
+    if (isRedirectError(error)) throw error;
+    return { status: "unanswered" };
+  }
 }

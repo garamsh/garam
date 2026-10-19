@@ -10,6 +10,15 @@ SELECT * FROM users
 WHERE grn = ANY(sqlc.arg('grns')::text[])
 ORDER BY grn;
 
+-- SearchUsersByGRNs answers the users among grns whose nickname or
+-- identifier (the GRN's fifth segment) matches pattern, case aside,
+-- ordered by GRN.
+-- name: SearchUsersByGRNs :many
+SELECT * FROM users
+WHERE grn = ANY(sqlc.arg('grns')::text[])
+  AND (nickname ILIKE sqlc.arg('pattern') OR split_part(grn, ':', 5) ILIKE sqlc.arg('pattern'))
+ORDER BY grn;
+
 -- name: UpdateUser :one
 UPDATE users SET
     nickname   = coalesce(sqlc.narg('nickname'), nickname),

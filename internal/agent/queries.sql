@@ -113,6 +113,24 @@ SELECT d.*, c.stage AS cutover_stage
 FROM renamed d
 LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back';
 
+-- SearchAgentDefinitionsByOrg answers the org's definitions whose name
+-- or agent identifier (the GRN's fifth segment) matches pattern, case
+-- aside, ordered by agent GRN.
+-- name: SearchAgentDefinitionsByOrg :many
+SELECT agent_grn, name FROM agent_definitions
+WHERE org_grn = sqlc.arg('org_grn')
+  AND (name ILIKE sqlc.arg('pattern') OR split_part(agent_grn, ':', 5) ILIKE sqlc.arg('pattern'))
+ORDER BY agent_grn;
+
+-- SearchUndefinedAgentsByOrg answers the org's agents no definition
+-- names whose identifier matches pattern, case aside, ordered by GRN.
+-- name: SearchUndefinedAgentsByOrg :many
+SELECT a.grn FROM agents a
+WHERE a.org_grn = sqlc.arg('org_grn')
+  AND split_part(a.grn, ':', 5) ILIKE sqlc.arg('pattern')
+  AND NOT EXISTS (SELECT 1 FROM agent_definitions d WHERE d.agent_grn = a.grn)
+ORDER BY a.grn;
+
 -- name: ListAgentDefinitionsByOrg :many
 SELECT d.*, c.stage AS cutover_stage
 FROM agent_definitions d

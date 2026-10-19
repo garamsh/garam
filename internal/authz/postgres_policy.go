@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/internal/authz/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/pgxtype"
 	"github.com/garamsh/garam/internal/wire"
@@ -69,6 +70,24 @@ func (s *PostgresStore) ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*Po
 	rows, err := s.q.ListPolicies(ctx, orgGRN.String())
 	if err != nil {
 		return nil, pgxerr.Classify(err, "list policies", nil, nil)
+	}
+	policies := make([]*Policy, 0, len(rows))
+	for _, row := range rows {
+		p, err := rowToPolicy(row)
+		if err != nil {
+			return nil, err
+		}
+		policies = append(policies, p)
+	}
+	return policies, nil
+}
+
+// SearchPolicies returns the org's policies whose name or identifier
+// holds n, ordered by GRN.
+func (s *PostgresStore) SearchPolicies(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*Policy, error) {
+	rows, err := s.q.SearchPolicies(ctx, db.SearchPoliciesParams{OrgGrn: orgGRN.String(), Pattern: pgxtype.Contains(n.Text())})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "search policies", nil, nil)
 	}
 	policies := make([]*Policy, 0, len(rows))
 	for _, row := range rows {

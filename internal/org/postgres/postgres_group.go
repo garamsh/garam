@@ -57,6 +57,27 @@ func (s *Store) ListGroups(ctx context.Context, orgGRN grn.GRN, f listfilter.Fil
 	return groups, nil
 }
 
+// SearchGroups returns the org's groups whose name or identifier holds
+// n, ordered by GRN.
+func (s *Store) SearchGroups(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*org.Group, error) {
+	rows, err := s.q.SearchGroups(ctx, db.SearchGroupsParams{
+		OrgGrn:  orgGRN.String(),
+		Pattern: pgxtype.Contains(n.Text()),
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "search groups", nil, nil)
+	}
+	groups := make([]*org.Group, 0, len(rows))
+	for _, row := range rows {
+		gr, err := rowToGroup(row)
+		if err != nil {
+			return nil, err
+		}
+		groups = append(groups, gr)
+	}
+	return groups, nil
+}
+
 // UpdateGroup applies a GroupPatch and returns the updated Group.
 func (s *Store) UpdateGroup(ctx context.Context, g grn.GRN, p org.GroupPatch) (*org.Group, error) {
 	row, err := s.q.UpdateGroup(ctx, db.UpdateGroupParams{

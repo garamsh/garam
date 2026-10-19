@@ -1,4 +1,4 @@
-// Package pgxtype converts between Go values and the pgtype values the
+// Package pgxtype converts between Go values and the values the
 // postgres-backed stores bind and scan. It holds a wire format the
 // stores already share and chooses no behaviour, which is what places
 // it below them (docs/architecture/structure.md §When a new boundary

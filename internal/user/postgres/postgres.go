@@ -11,6 +11,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/pgxtype"
 	"github.com/garamsh/garam/internal/user"
@@ -65,6 +66,31 @@ func (s *Store) ListByGRNs(ctx context.Context, grns []grn.GRN) ([]*user.User, e
 	rows, err := s.q.ListUsersByGRNs(ctx, keys)
 	if err != nil {
 		return nil, pgxerr.Classify(err, "list by grns", nil, nil)
+	}
+	users := make([]*user.User, 0, len(rows))
+	for _, row := range rows {
+		u, err := rowToUser(row)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
+// SearchByGRNs returns the Users among grns whose nickname or
+// identifier holds n, ordered by GRN.
+func (s *Store) SearchByGRNs(ctx context.Context, grns []grn.GRN, n listfilter.Needle) ([]*user.User, error) {
+	if len(grns) == 0 {
+		return []*user.User{}, nil
+	}
+	keys := make([]string, 0, len(grns))
+	for _, g := range grns {
+		keys = append(keys, g.String())
+	}
+	rows, err := s.q.SearchUsersByGRNs(ctx, db.SearchUsersByGRNsParams{Grns: keys, Pattern: pgxtype.Contains(n.Text())})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "search by grns", nil, nil)
 	}
 	users := make([]*user.User, 0, len(rows))
 	for _, row := range rows {

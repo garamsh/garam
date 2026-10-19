@@ -76,6 +76,13 @@ func isValueKey(k string) bool {
 	return true
 }
 
+// Found is an agent a search matched: its GRN, and the name its
+// definition gives it, nil where no definition names it.
+type Found struct {
+	GRN  grn.GRN
+	Name *Name
+}
+
 // Definition is what an organization said an agent should be: which
 // operator is to run it, and the values that operator constructs it
 // from (ADR-0026). garam accepts no new one: each is read back as

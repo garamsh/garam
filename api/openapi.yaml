@@ -622,6 +622,62 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/search:
+    get:
+      operationId: searchOrg
+      tags: [org]
+      summary: Find an organization's people, agents, teams, policies and projects by name. Requires the `member` role.
+      description: >-
+        Answers, for each kind the caller may list, the objects of that
+        kind whose name or identifier holds `q`, case aside. `q` matches
+        as typed: `%` and `_` match only themselves.
+
+
+        Each kind is authorized as its list is: people on
+        `org:member-list`, as `listOrgMembers` is; agents on
+        `agent:read`, teams on `group:read`, policies on `policy:read`
+        and projects on `project:read`, each on the organization. A kind
+        the caller may not list is left out of the answer. Agents,
+        teams, policies and projects then leave out each object whose
+        own read the caller is denied, as their lists do (ADR-0115).
+
+
+        A person is found by nickname or identifier, and an agent by
+        its definition's name or its identifier. Each kind answers its
+        first `limit` objects in the order its list gives them, the
+        defined agents before the rest, and how many more it found past
+        those.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - name: q
+          in: query
+          required: true
+          description: What to find, 1 to 100 characters once trimmed.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: >-
+            How many objects of each kind to answer, from 1 to 20; 5
+            when absent.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 20
+            default: 5
+      responses:
+        '200':
+          description: What was found, by kind.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgSearch'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/members:
     get:
       operationId: listOrgMembers
@@ -3021,6 +3077,43 @@ components:
             to the `group` named beside it.
           enum: [organization, caller, group]
           x-enum-varnames: [AttachmentOrganization, AttachmentCaller, AttachmentGroup]
+    OrgSearch:
+      type: object
+      required: [found]
+      properties:
+        found:
+          type: array
+          description: >-
+            One entry per kind the caller may list, in the order person,
+            agent, team, policy, project.
+          items:
+            $ref: '#/components/schemas/FoundKind'
+    FoundKind:
+      type: object
+      required: [kind, objects, more]
+      properties:
+        kind:
+          type: string
+          enum: [person, agent, team, policy, project]
+          x-enum-varnames: [FoundPerson, FoundAgent, FoundTeam, FoundPolicy, FoundProject]
+        objects:
+          type: array
+          items:
+            $ref: '#/components/schemas/FoundObject'
+        more:
+          type: integer
+          description: How many more of this kind matched past `limit`.
+    FoundObject:
+      type: object
+      required: [grn]
+      properties:
+        grn:
+          type: string
+        name:
+          type: string
+          description: >-
+            Its name: a person's nickname, or an agent's definition's
+            name. Absent for an agent no definition names.
     PermissionHolders:
       type: object
       required: [holders]

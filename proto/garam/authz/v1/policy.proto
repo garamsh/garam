@@ -19,6 +19,10 @@ service PolicyService {
   // ListPolicies lists an org's policies in ascending GRN order.
   rpc ListPolicies(ListPoliciesRequest) returns (ListPoliciesResponse);
 
+  // SearchPolicies lists an org's policies whose name or identifier
+  // holds the query, case aside, in ascending GRN order.
+  rpc SearchPolicies(SearchPoliciesRequest) returns (SearchPoliciesResponse);
+
   // ListPolicyVersions lists a policy's versions, oldest first.
   rpc ListPolicyVersions(ListPolicyVersionsRequest) returns (ListPolicyVersionsResponse);
 
@@ -109,6 +113,16 @@ message ListPoliciesRequest {
 }
 
 message ListPoliciesResponse {
+  repeated Policy policies = 1;
+}
+
+message SearchPoliciesRequest {
+  string org_grn = 1;
+  // The text matched: 1 to 100 characters once trimmed.
+  string query = 2;
+}
+
+message SearchPoliciesResponse {
   repeated Policy policies = 1;
 }
 

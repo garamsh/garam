@@ -50,6 +50,9 @@ type Store interface {
 	CreateGroup(ctx context.Context, g *Group) error
 	GetGroup(ctx context.Context, g grn.GRN) (*Group, error)
 	ListGroups(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*Group, error)
+	// SearchGroups answers every group of the org whose name or
+	// identifier holds n, case aside, ordered by GRN.
+	SearchGroups(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*Group, error)
 	UpdateGroup(ctx context.Context, g grn.GRN, p GroupPatch) (*Group, error)
 	DeleteGroup(ctx context.Context, g grn.GRN) error
 	AddGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error
@@ -68,6 +71,9 @@ type Store interface {
 	CreateProject(ctx context.Context, p *Project) error
 	GetProject(ctx context.Context, g grn.GRN) (*Project, error)
 	ListProjects(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*Project, error)
+	// SearchProjects answers the org's projects as SearchGroups answers
+	// its groups.
+	SearchProjects(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*Project, error)
 	UpdateProject(ctx context.Context, g grn.GRN, p ProjectPatch) (*Project, error)
 	DeleteProject(ctx context.Context, g grn.GRN) error
 	AddProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error

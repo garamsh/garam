@@ -3,6 +3,7 @@ package authz_test
 import (
 	"context"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -100,6 +102,22 @@ func (s *fakeStore) ListPolicies(_ context.Context, orgGRN grn.GRN) ([]*authz.Po
 	var out []*authz.Policy
 	for _, p := range s.policies {
 		if p.policy.Organization() == orgGRN {
+			out = append(out, p.policy)
+		}
+	}
+	return out, nil
+}
+
+// SearchPolicies matches as the query does: the name or the
+// identifier holds the needle, case aside.
+func (s *fakeStore) SearchPolicies(_ context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*authz.Policy, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	needle := strings.ToLower(n.Text())
+	var out []*authz.Policy
+	for _, p := range s.policies {
+		name, id := strings.ToLower(p.policy.Name()), strings.ToLower(p.policy.GRN().Identifier)
+		if p.policy.Organization() == orgGRN && (strings.Contains(name, needle) || strings.Contains(id, needle)) {
 			out = append(out, p.policy)
 		}
 	}

@@ -58,6 +58,27 @@ func (s *Store) ListProjects(ctx context.Context, orgGRN grn.GRN, f listfilter.F
 	return projects, nil
 }
 
+// SearchProjects returns the org's projects whose name or identifier
+// holds n, ordered by GRN.
+func (s *Store) SearchProjects(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*org.Project, error) {
+	rows, err := s.q.SearchProjects(ctx, db.SearchProjectsParams{
+		OrgGrn:  orgGRN.String(),
+		Pattern: pgxtype.Contains(n.Text()),
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "search projects", nil, nil)
+	}
+	projects := make([]*org.Project, 0, len(rows))
+	for _, row := range rows {
+		pr, err := rowToProject(row)
+		if err != nil {
+			return nil, err
+		}
+		projects = append(projects, pr)
+	}
+	return projects, nil
+}
+
 // UpdateProject applies a ProjectPatch and returns the updated Project.
 func (s *Store) UpdateProject(ctx context.Context, g grn.GRN, p org.ProjectPatch) (*org.Project, error) {
 	row, err := s.q.UpdateProject(ctx, db.UpdateProjectParams{

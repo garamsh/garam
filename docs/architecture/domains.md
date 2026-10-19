@@ -357,7 +357,7 @@ go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{e
 | `internal/grn` | 10 — every domain | earns its place |
 | `internal/pgxerr` | 9 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` `audit` | earns its place |
 | `internal/pgxtype` | 9 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` `audit` | earns its place |
-| `internal/listfilter` | 2 — `org` `agent` | under the threshold; placed by ADR-0052 and not by the count |
+| `internal/listfilter` | 5 — `org` `agent` `audit` `authz` `user` | earns its place; ADR-0052 placed it before the count did |
 | `internal/wire` | 1 — `authz` | permitted by the wire-format carve-out, not by the count |
 | `internal/keyfile` | 1 — `ca` | under the threshold; belongs with the domain that owns it |
 | `internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
@@ -392,7 +392,9 @@ nine.
 
 `internal/pgxtype` holds the timestamptz conversion the stores bind and
 scan: `Timestamptz` makes a present value of a `time.Time`, and `Time`
-reads one back as stored, nil where it is NULL. Every postgres-backed
+reads one back as stored, nil where it is NULL. It also holds
+`Contains`, the `ILIKE` pattern a search binds, in which `%`, `_` and
+the backslash match only themselves. Every postgres-backed
 store binds through it, which is the same nine domains and the watch
 boundary `internal/pgxerr` counts; each had declared its own copy
 (#1150). It is a wire format and chooses no behaviour, so it is a
@@ -401,12 +403,14 @@ package of its own rather than part of `pgxerr`, which is errors.
 `internal/listfilter` holds `Filter`, an offset and a limit where a
 limit of 0 means no limit, and `Parse`, which builds one from what a
 request carries and refuses a page the paging columns cannot hold. It
+also holds `Needle`, the text `searchOrg` matches names by, and
+`ParseNeedle`, which refuses a blank or overlong one (#1583). It
 depends on `errorx` only.
 
-Two domains page with it, which is under the threshold, so the count
-does not place it where it places `errorx`, `grn` and `pgxerr`. It
-stays below the domains because paging is the subject matter of
-neither domain that pages with it, and a concern is owned by the
+Five domains page or search with it, which the count places below
+them as it places `errorx`, `grn` and `pgxerr`. It sat below the
+domains before the count reached three, because paging is the subject
+matter of no domain that pages with it, and a concern is owned by the
 boundary whose subject it is rather than by the one it was extracted
 from
 ([ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)).

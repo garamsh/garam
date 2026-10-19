@@ -8,6 +8,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -101,6 +102,29 @@ func (s *PolicyGRPCServer) ListPolicies(ctx context.Context, req *authzv1.ListPo
 		out = append(out, policyToProto(p))
 	}
 	return &authzv1.ListPoliciesResponse{Policies: out}, nil
+}
+
+// SearchPolicies lists an org's policies whose name or identifier holds
+// the query. The query is parsed here as well as by the API server:
+// the engine is a boundary of its own.
+func (s *PolicyGRPCServer) SearchPolicies(ctx context.Context, req *authzv1.SearchPoliciesRequest) (*authzv1.SearchPoliciesResponse, error) {
+	orgGRN, err := grn.Parse(req.GetOrgGrn())
+	if err != nil {
+		return nil, grpcError(errorx.Wrap(err, "org_grn"))
+	}
+	needle, err := listfilter.ParseNeedle(req.GetQuery())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	policies, err := s.store.SearchPolicies(ctx, orgGRN, needle)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	out := make([]*authzv1.Policy, 0, len(policies))
+	for _, p := range policies {
+		out = append(out, policyToProto(p))
+	}
+	return &authzv1.SearchPoliciesResponse{Policies: out}, nil
 }
 
 // ListPolicyVersions lists a policy's stored versions, oldest first.

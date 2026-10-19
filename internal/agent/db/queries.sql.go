@@ -776,6 +776,81 @@ func (q *Queries) ResolveAgentToken(ctx context.Context, tokenHash string) (Reso
 	return i, err
 }
 
+const searchAgentDefinitionsByOrg = `-- name: SearchAgentDefinitionsByOrg :many
+SELECT agent_grn, name FROM agent_definitions
+WHERE org_grn = $1
+  AND (name ILIKE $2 OR split_part(agent_grn, ':', 5) ILIKE $2)
+ORDER BY agent_grn
+`
+
+type SearchAgentDefinitionsByOrgParams struct {
+	OrgGrn  string
+	Pattern string
+}
+
+type SearchAgentDefinitionsByOrgRow struct {
+	AgentGrn string
+	Name     string
+}
+
+// SearchAgentDefinitionsByOrg answers the org's definitions whose name
+// or agent identifier (the GRN's fifth segment) matches pattern, case
+// aside, ordered by agent GRN.
+func (q *Queries) SearchAgentDefinitionsByOrg(ctx context.Context, arg SearchAgentDefinitionsByOrgParams) ([]SearchAgentDefinitionsByOrgRow, error) {
+	rows, err := q.db.Query(ctx, searchAgentDefinitionsByOrg, arg.OrgGrn, arg.Pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchAgentDefinitionsByOrgRow
+	for rows.Next() {
+		var i SearchAgentDefinitionsByOrgRow
+		if err := rows.Scan(&i.AgentGrn, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchUndefinedAgentsByOrg = `-- name: SearchUndefinedAgentsByOrg :many
+SELECT a.grn FROM agents a
+WHERE a.org_grn = $1
+  AND split_part(a.grn, ':', 5) ILIKE $2
+  AND NOT EXISTS (SELECT 1 FROM agent_definitions d WHERE d.agent_grn = a.grn)
+ORDER BY a.grn
+`
+
+type SearchUndefinedAgentsByOrgParams struct {
+	OrgGrn  string
+	Pattern string
+}
+
+// SearchUndefinedAgentsByOrg answers the org's agents no definition
+// names whose identifier matches pattern, case aside, ordered by GRN.
+func (q *Queries) SearchUndefinedAgentsByOrg(ctx context.Context, arg SearchUndefinedAgentsByOrgParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, searchUndefinedAgentsByOrg, arg.OrgGrn, arg.Pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var grn string
+		if err := rows.Scan(&grn); err != nil {
+			return nil, err
+		}
+		items = append(items, grn)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const shareAgentExecution = `-- name: ShareAgentExecution :one
 SELECT mode FROM agent_executions WHERE agent_grn = $1 FOR SHARE
 `

@@ -511,6 +511,23 @@ and not in the same place on every surface.
   on the same `group:read` on the organization. The filter names the
   caller and nobody else, because who else belongs to a group is
   `listGroupMembers`', which is decided per group.
+- **A name search answers each kind as its list would.** `searchOrg`
+  takes `q`, 1 to 100 characters once trimmed, and finds the
+  organization's people, agents, teams, policies and projects whose
+  name or identifier holds it, case aside. It is the console palette's
+  read (ADR-0113). `%` and `_` in `q` match only themselves. Each kind
+  is authorized on its list's own check on the organization, and a
+  kind the caller fails is left out of the answer. Agents, teams,
+  policies and projects then drop each object whose own read is
+  denied, in one `CheckBatch` per kind, as the filtered lists above do
+  (ADR-0115). A person is found by nickname or identifier, and an agent
+  by its definition's name or its identifier. Each kind answers its
+  first `limit` objects (1 to 20, 5 by default) in its list's order,
+  and counts the readable matches past them. The match runs in each
+  store, so a search reads the rows that match and not the whole list.
+  People are the exception: the organization's memberships are read
+  whole, and the user store matches among them, since memberships and
+  nicknames are two domains'.
 - **A member may ask what it may do, and the answer decides nothing.**
   `checkPermissions` takes up to 50 pairs of an action and a resource
   of the caller's organization, the resource named by its kind and the

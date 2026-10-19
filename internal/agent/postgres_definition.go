@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/agent/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/pgxtype"
 )
@@ -64,6 +65,40 @@ func (s *PostgresStore) ListDefinitionsByOrg(ctx context.Context, orgGRN grn.GRN
 		definitions = append(definitions, d)
 	}
 	return definitions, nil
+}
+
+// SearchByOrg returns the organization's agents whose name or
+// identifier holds n: the defined ones by GRN, then the rest by GRN.
+func (s *PostgresStore) SearchByOrg(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]Found, error) {
+	pattern := pgxtype.Contains(n.Text())
+	defined, err := s.q.SearchAgentDefinitionsByOrg(ctx, db.SearchAgentDefinitionsByOrgParams{OrgGrn: orgGRN.String(), Pattern: pattern})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "search definitions", nil, nil)
+	}
+	undefined, err := s.q.SearchUndefinedAgentsByOrg(ctx, db.SearchUndefinedAgentsByOrgParams{OrgGrn: orgGRN.String(), Pattern: pattern})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "search agents", nil, nil)
+	}
+	found := make([]Found, 0, len(defined)+len(undefined))
+	for _, row := range defined {
+		g, err := grn.Parse(row.AgentGrn)
+		if err != nil {
+			return nil, errorx.Wrap(err, "definition agent grn", errorx.KindInternal)
+		}
+		name, err := ParseName(row.Name)
+		if err != nil {
+			return nil, errorx.Wrap(err, "definition name", errorx.KindInternal)
+		}
+		found = append(found, Found{GRN: g, Name: &name})
+	}
+	for _, row := range undefined {
+		g, err := grn.Parse(row)
+		if err != nil {
+			return nil, errorx.Wrap(err, "agent grn", errorx.KindInternal)
+		}
+		found = append(found, Found{GRN: g})
+	}
+	return found, nil
 }
 
 // ListDefinitionsByOperator returns the definitions naming the

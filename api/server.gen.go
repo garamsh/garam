@@ -277,6 +277,54 @@ func (e DelegatedOperation) Valid() bool {
 	}
 }
 
+// Defines values for DeviceCodeRequestClientId.
+const (
+	DeviceCodeRequestClientIdGaramCli DeviceCodeRequestClientId = "garam-cli"
+)
+
+// Valid indicates whether the value is a known member of the DeviceCodeRequestClientId enum.
+func (e DeviceCodeRequestClientId) Valid() bool {
+	switch e {
+	case DeviceCodeRequestClientIdGaramCli:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeviceTokenRequestClientId.
+const (
+	DeviceTokenRequestClientIdGaramCli DeviceTokenRequestClientId = "garam-cli"
+)
+
+// Valid indicates whether the value is a known member of the DeviceTokenRequestClientId enum.
+func (e DeviceTokenRequestClientId) Valid() bool {
+	switch e {
+	case DeviceTokenRequestClientIdGaramCli:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeviceTokenRequestGrantType.
+const (
+	RefreshToken                          DeviceTokenRequestGrantType = "refresh_token"
+	UrnIetfParamsOauthGrantTypeDeviceCode DeviceTokenRequestGrantType = "urn:ietf:params:oauth:grant-type:device_code"
+)
+
+// Valid indicates whether the value is a known member of the DeviceTokenRequestGrantType enum.
+func (e DeviceTokenRequestGrantType) Valid() bool {
+	switch e {
+	case RefreshToken:
+		return true
+	case UrnIetfParamsOauthGrantTypeDeviceCode:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ExplainedStatementAttachment.
 const (
 	AttachmentCaller       ExplainedStatementAttachment = "caller"
@@ -406,6 +454,42 @@ func (e InvitationPreviewState) Valid() bool {
 	case InvitationPreviewStateExpired:
 		return true
 	case InvitationPreviewStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OAuthErrorError.
+const (
+	AccessDenied         OAuthErrorError = "access_denied"
+	AuthorizationPending OAuthErrorError = "authorization_pending"
+	ExpiredToken         OAuthErrorError = "expired_token"
+	InvalidClient        OAuthErrorError = "invalid_client"
+	InvalidGrant         OAuthErrorError = "invalid_grant"
+	InvalidRequest       OAuthErrorError = "invalid_request"
+	SlowDown             OAuthErrorError = "slow_down"
+	UnsupportedGrantType OAuthErrorError = "unsupported_grant_type"
+)
+
+// Valid indicates whether the value is a known member of the OAuthErrorError enum.
+func (e OAuthErrorError) Valid() bool {
+	switch e {
+	case AccessDenied:
+		return true
+	case AuthorizationPending:
+		return true
+	case ExpiredToken:
+		return true
+	case InvalidClient:
+		return true
+	case InvalidGrant:
+		return true
+	case InvalidRequest:
+		return true
+	case SlowDown:
+		return true
+	case UnsupportedGrantType:
 		return true
 	default:
 		return false
@@ -622,6 +706,39 @@ func (e Role) Valid() bool {
 	case RoleMember:
 		return true
 	case RoleOwner:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SessionKind.
+const (
+	Browser SessionKind = "browser"
+	Cli     SessionKind = "cli"
+)
+
+// Valid indicates whether the value is a known member of the SessionKind enum.
+func (e SessionKind) Valid() bool {
+	switch e {
+	case Browser:
+		return true
+	case Cli:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SessionTokenTokenType.
+const (
+	Bearer SessionTokenTokenType = "Bearer"
+)
+
+// Valid indicates whether the value is a known member of the SessionTokenTokenType enum.
+func (e SessionTokenTokenType) Valid() bool {
+	switch e {
+	case Bearer:
 		return true
 	default:
 		return false
@@ -849,6 +966,65 @@ type DelegationWrite struct {
 	RequestId  RequestId            `json:"requestId"`
 }
 
+// DeviceCode RFC 8628's device authorization response (ADR-0120).
+type DeviceCode struct {
+	// DeviceCode What the CLI polls with. Shown once; garam stores only its hash.
+	DeviceCode string `json:"device_code"`
+
+	// ExpiresIn Seconds both codes live, 600.
+	ExpiresIn int `json:"expires_in"`
+
+	// Interval Seconds to wait between polls, 5.
+	Interval int `json:"interval"`
+
+	// UserCode What the person approves, eight consonants as `XXXX-XXXX`.
+	UserCode string `json:"user_code"`
+
+	// VerificationUri The console's approval page, as a path relative to the origin the console serves this API under.
+	VerificationUri string `json:"verification_uri"`
+
+	// VerificationUriComplete The same page with the user code filled in.
+	VerificationUriComplete string `json:"verification_uri_complete"`
+}
+
+// DeviceCodeRequest RFC 8628's device authorization request (ADR-0120).
+type DeviceCodeRequest struct {
+	ClientId DeviceCodeRequestClientId `json:"client_id"`
+
+	// ClientName What the CLI runs on, shown on the session it opens.
+	ClientName *string `json:"client_name,omitempty"`
+}
+
+// DeviceCodeRequestClientId defines model for DeviceCodeRequest.ClientId.
+type DeviceCodeRequestClientId string
+
+// DeviceDecision defines model for DeviceDecision.
+type DeviceDecision struct {
+	// Approve True signs the CLI in as the signed-in user; false denies it.
+	Approve bool `json:"approve"`
+
+	// UserCode The code the CLI printed, read without case or separator.
+	UserCode string `json:"userCode"`
+}
+
+// DeviceTokenRequest RFC 8628's device access token request, or RFC 6749's refresh (ADR-0120).
+type DeviceTokenRequest struct {
+	ClientId DeviceTokenRequestClientId `json:"client_id"`
+
+	// DeviceCode Required under the device code grant.
+	DeviceCode *string                     `json:"device_code,omitempty"`
+	GrantType  DeviceTokenRequestGrantType `json:"grant_type"`
+
+	// RefreshToken Required under the refresh grant.
+	RefreshToken *string `json:"refresh_token,omitempty"`
+}
+
+// DeviceTokenRequestClientId defines model for DeviceTokenRequest.ClientId.
+type DeviceTokenRequestClientId string
+
+// DeviceTokenRequestGrantType defines model for DeviceTokenRequest.GrantType.
+type DeviceTokenRequestGrantType string
+
 // Error defines model for Error.
 type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
@@ -1008,6 +1184,19 @@ type Member struct {
 type MemberRef struct {
 	MemberGrn string `json:"memberGrn"`
 }
+
+// OAuthError RFC 6749's error response, with RFC 8628's codes (ADR-0120).
+type OAuthError struct {
+	// Error `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+	Error            OAuthErrorError `json:"error"`
+	ErrorDescription *string         `json:"error_description,omitempty"`
+
+	// Interval With `slow_down`, the seconds to wait between polls from here.
+	Interval *int `json:"interval,omitempty"`
+}
+
+// OAuthErrorError `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+type OAuthErrorError string
 
 // OperationAuthority defines model for OperationAuthority.
 type OperationAuthority struct {
@@ -1403,6 +1592,44 @@ type Role string
 // ScopedRoles Roles a group or project grants its own members, scoped to that group or project alone. Omitting the field on a patch leaves the roles unchanged; an empty array clears them.
 type ScopedRoles = []Role
 
+// Session One of the user's sessions, browser or CLI (ADR-0120).
+type Session struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Current Whether the request was made on this session.
+	Current bool `json:"current"`
+
+	// ExpiresAt When nothing the session holds is live any more: its refresh token's lapse for a CLI session, its expiry for a browser's.
+	ExpiresAt time.Time   `json:"expiresAt"`
+	Id        string      `json:"id"`
+	Kind      SessionKind `json:"kind"`
+
+	// Name What a CLI said it runs on, absent where it said nothing.
+	Name *string `json:"name,omitempty"`
+}
+
+// SessionKind defines model for Session.Kind.
+type SessionKind string
+
+// SessionToken A CLI session's tokens, RFC 6749's successful token response (ADR-0120).
+type SessionToken struct {
+	// AccessToken Presented as `Authorization: Bearer <token>`. garam stores only its hash.
+	AccessToken string `json:"access_token"`
+
+	// ExpiresIn Seconds the access token is accepted for, 3600.
+	ExpiresIn int `json:"expires_in"`
+
+	// RefreshToken Spent once for the next pair. garam stores only its hash.
+	RefreshToken string `json:"refresh_token"`
+
+	// RefreshTokenExpiresIn Seconds the refresh token is accepted for.
+	RefreshTokenExpiresIn int                   `json:"refresh_token_expires_in"`
+	TokenType             SessionTokenTokenType `json:"token_type"`
+}
+
+// SessionTokenTokenType defines model for SessionToken.TokenType.
+type SessionTokenTokenType string
+
 // User defines model for User.
 type User struct {
 	Grn      string `json:"grn"`
@@ -1597,6 +1824,15 @@ type SearchOrgParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// RequestDeviceCodeFormdataRequestBody defines body for RequestDeviceCode for application/x-www-form-urlencoded ContentType.
+type RequestDeviceCodeFormdataRequestBody = DeviceCodeRequest
+
+// DecideDeviceCodeJSONRequestBody defines body for DecideDeviceCode for application/json ContentType.
+type DecideDeviceCodeJSONRequestBody = DeviceDecision
+
+// DeviceTokenFormdataRequestBody defines body for DeviceToken for application/x-www-form-urlencoded ContentType.
+type DeviceTokenFormdataRequestBody = DeviceTokenRequest
+
 // LoginWithReturnPathFormdataRequestBody defines body for LoginWithReturnPath for application/x-www-form-urlencoded ContentType.
 type LoginWithReturnPathFormdataRequestBody = LoginReturnPath
 
@@ -1677,6 +1913,15 @@ type ServerInterface interface {
 	// OauthCallback Complete the OAuth authorization code flow.
 	// (GET /auth/callback/{provider})
 	OauthCallback(w http.ResponseWriter, r *http.Request, provider Provider, params OauthCallbackParams)
+	// RequestDeviceCode Start a device sign-in for the CLI.
+	// (POST /auth/device)
+	RequestDeviceCode(w http.ResponseWriter, r *http.Request)
+	// DecideDeviceCode Approve or deny a device sign-in as the signed-in user.
+	// (POST /auth/device/approval)
+	DecideDeviceCode(w http.ResponseWriter, r *http.Request)
+	// DeviceToken Poll a device sign-in, or refresh a CLI session.
+	// (POST /auth/device/token)
+	DeviceToken(w http.ResponseWriter, r *http.Request)
 	// Login Start the OAuth authorization code flow.
 	// (GET /auth/login/{provider})
 	Login(w http.ResponseWriter, r *http.Request, provider Provider)
@@ -1704,6 +1949,12 @@ type ServerInterface interface {
 	// Me Return the signed-in user.
 	// (GET /me)
 	Me(w http.ResponseWriter, r *http.Request)
+	// ListMySessions List the signed-in user's sessions, browser and CLI.
+	// (GET /me/sessions)
+	ListMySessions(w http.ResponseWriter, r *http.Request)
+	// RevokeMySession Revoke one of the signed-in user's sessions.
+	// (DELETE /me/sessions/{session})
+	RevokeMySession(w http.ResponseWriter, r *http.Request, session string)
 	// ListOrgs List organizations the caller belongs to.
 	// (GET /orgs)
 	ListOrgs(w http.ResponseWriter, r *http.Request, params ListOrgsParams)
@@ -1962,6 +2213,48 @@ func (siw *ServerInterfaceWrapper) OauthCallback(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// RequestDeviceCode operation middleware
+func (siw *ServerInterfaceWrapper) RequestDeviceCode(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RequestDeviceCode(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DecideDeviceCode operation middleware
+func (siw *ServerInterfaceWrapper) DecideDeviceCode(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DecideDeviceCode(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeviceToken operation middleware
+func (siw *ServerInterfaceWrapper) DeviceToken(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeviceToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // Login operation middleware
 func (siw *ServerInterfaceWrapper) Login(w http.ResponseWriter, r *http.Request) {
 
@@ -2127,6 +2420,46 @@ func (siw *ServerInterfaceWrapper) Me(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Me(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMySessions operation middleware
+func (siw *ServerInterfaceWrapper) ListMySessions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMySessions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeMySession operation middleware
+func (siw *ServerInterfaceWrapper) RevokeMySession(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "session" -------------
+	var session string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "session", r.PathValue("session"), &session, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "session", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeMySession(w, r, session)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4811,6 +5144,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/providers", wrapper.ListProviders)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/password/register", wrapper.RegisterPassword)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/password/login", wrapper.LoginPassword)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/device", wrapper.RequestDeviceCode)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/device/token", wrapper.DeviceToken)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/device/approval", wrapper.DecideDeviceCode)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/sessions", wrapper.ListMySessions)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/sessions/{session}", wrapper.RevokeMySession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.Me)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs", wrapper.ListOrgs)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrg)

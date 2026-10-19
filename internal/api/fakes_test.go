@@ -154,6 +154,64 @@ func (s *fakeSessionStore) Delete(_ context.Context, token string) error {
 	return nil
 }
 
+// Refresh answers every refresh token not live: the double holds no
+// CLI session, which the integration tests exercise against Postgres.
+func (s *fakeSessionStore) Refresh(context.Context, string, authn.CLITokens) (*authn.Session, error) {
+	return nil, authn.ErrRefreshTokenNotLive
+}
+
+func (s *fakeSessionStore) List(_ context.Context, user grn.GRN) ([]*authn.Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []*authn.Session
+	for _, sess := range s.byID {
+		if sess.User() == user {
+			out = append(out, sess)
+		}
+	}
+	return out, nil
+}
+
+func (s *fakeSessionStore) Revoke(_ context.Context, user grn.GRN, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for token, sess := range s.byID {
+		if sess.User() == user && sess.ID() == id {
+			delete(s.byID, token)
+			return nil
+		}
+	}
+	return authn.ErrSessionNotFound
+}
+
+// fakeDeviceStore is an authn.DeviceStore double: it records what was
+// issued and answers every poll with poll.
+type fakeDeviceStore struct {
+	mu     sync.Mutex
+	issued []string
+	poll   authn.PollResult
+}
+
+func (s *fakeDeviceStore) Issue(_ context.Context, grant authn.DeviceGrant, clientName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.issued = append(s.issued, clientName)
+	return nil
+}
+
+func (s *fakeDeviceStore) Decide(context.Context, string, grn.GRN, bool) error {
+	return authn.ErrDeviceCodeNotPending
+}
+
+func (s *fakeDeviceStore) Poll(context.Context, string, authn.CLITokens) (authn.PollResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.poll.Outcome == "" {
+		return authn.PollResult{}, authn.ErrDeviceCodeUnknown
+	}
+	return s.poll, nil
+}
+
 // fakeOAuthStateStore is an in-memory authn.OAuthStateStore double. It
 // holds each live state's expiry, as the table holds a row's.
 type fakeOAuthStateStore struct {

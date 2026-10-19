@@ -367,7 +367,10 @@ garam's retired templates and the browser's `operatorGrn`
   every postgres-backed store binds and scans through, and the `ILIKE`
   pattern a search binds. Shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
-  | `serve machine` | `migrate` | `probe` | `adapter`).
+  | `serve machine` | `migrate` | `probe` | `adapter`), and the user
+  commands a person signs in and reads garam's objects with (`login` |
+  `logout` | `whoami` | `orgs` | `operators` | `agents`; ADR-0120,
+  [cli.md](./cli.md)).
 - `internal/health/` — what liveness and readiness mean, and the two
   probes every serve command mounts (ADR-0021).
 - `internal/operator/` — the record that an organization has an
@@ -504,6 +507,7 @@ it and imports no request surface and no domain.
 | Store interfaces live next to their domain | Implementation swap at the package boundary. | [domains.md](./domains.md) |
 | OpenAPI spec is the API source of truth | Handlers implement a generated interface; drift fails CI. | [adr/0004-openapi-first-api.md](./adr/0004-openapi-first-api.md) |
 | Sessions are server-side rows | Logout must revoke; opaque tokens, only hashes persisted. | [adr/0005-server-side-sessions.md](./adr/0005-server-side-sessions.md) |
+| The CLI signs in by the device grant and holds a session as a bearer | A terminal can drive neither a redirect provider nor the console's password form without seeing the password; a session row keeps one revocation for both. | [adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md) |
 | The development-only sign-in provider is removed | A password is a way in that ships (ADR-0041), and the provider forced `GARAM_COOKIE_SECURE=false` on any deployment that enabled it. | [adr/0044-the-development-only-sign-in-provider-is-removed.md](./adr/0044-the-development-only-sign-in-provider-is-removed.md) |
 | A password is garam's own credential, not a provider | Argon2id verifies it and the verifier carries its parameters, so they can be raised later; an invitation is what mints the account. | [adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md) |
 | Invitations are token-keyed, not GRN-addressed | The bearer token is the identifier; no new GRN service_type. | [adr/0006-invitation-tokens.md](./adr/0006-invitation-tokens.md) |

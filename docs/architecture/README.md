@@ -373,6 +373,8 @@ Responsibility documents:
   authoritative for
 - [adapter.md](./adapter.md) — what the adapter garam ships must do, and
   what it rests on
+- [cli.md](./cli.md) — the user commands of the `garam` binary: how a
+  person signs one in, what it keeps between runs, and what it calls
 - [deployment-contract.md](./deployment-contract.md) — what a deployment
   must plan for that no manifest carries: readiness, termination,
   migration failure, key-material enforcement, and what is not
@@ -938,3 +940,8 @@ ADRs:
   `serverRootPem` and the sealed authority rows; supersedes parts of
   0015, 0026, 0033, 0045, 0070, 0075, 0102 and 0117, and 0016, 0032
   and 0046 in what they decided of certificates
+- [0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)
+  — a person signs the CLI in by the device grant (RFC 8628), and the
+  CLI holds a server-side session of kind `cli` presented as a bearer
+  wherever the cookie is accepted, refreshed by a token spent once, and
+  kept in one owner-only file

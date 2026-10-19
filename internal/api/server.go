@@ -57,6 +57,9 @@ type Server struct {
 	// credentialAudit reads machine credential events (ADR-0114); nil
 	// answers that read unavailable.
 	credentialAudit CredentialAudit
+	// devices keeps device sign-ins (ADR-0120); nil answers the device
+	// grant unavailable.
+	devices authn.DeviceStore
 }
 
 // Compile-time check that Server satisfies the generated interface.

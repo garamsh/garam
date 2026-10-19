@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
+# The CLI's client of the browser API (ADR-0120). Its types are
+# server.gen.go's, so this config generates the client alone, and only
+# for the operations a command calls.
+package: api
+output: api/client.gen.go
+generate:
+  client: true
+output-options:
+  skip-prune: true
+  include-operation-ids:
+    - requestDeviceCode
+    - deviceToken
+    - logout
+    - me
+    - listMySessions
+    - revokeMySession
+    - listOrgs
+    - getOrg
+    - listOperators
+    - listAgents
+    - getAgent

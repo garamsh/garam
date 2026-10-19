@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -48,11 +49,72 @@ func (s *PostgresSessionStore) Get(ctx context.Context, token string) (*Session,
 	if err != nil {
 		return nil, pgxerr.Classify(err, "get session", ErrSessionNotFound, nil)
 	}
+	return rowToSession(row)
+}
+
+// rowToSession converts a stored session. A user GRN that no longer
+// parses is the database's fault, hence internal.
+func rowToSession(row db.Session) (*Session, error) {
 	g, err := grn.Parse(row.UserGrn)
 	if err != nil {
 		return nil, errorx.Wrap(err, "session row user grn", errorx.KindInternal)
 	}
-	return &Session{userGRN: g, createdAt: row.CreatedAt.Time, expiresAt: row.ExpiresAt.Time}, nil
+	return &Session{userGRN: g, createdAt: row.CreatedAt.Time, expiresAt: row.ExpiresAt.Time,
+		id: uuid.UUID(row.ID.Bytes).String(), kind: SessionKind(row.Kind), name: row.Name.String,
+		refreshExpiresAt: row.RefreshExpiresAt.Time}, nil
+}
+
+// Refresh spends a live CLI session's refresh token for next. The
+// update is the whole decision: two refreshes racing on one token, one
+// row updated, so only one of them is answered the session.
+func (s *PostgresSessionStore) Refresh(ctx context.Context, refresh string, next CLITokens) (*Session, error) {
+	row, err := s.q.RefreshCLISession(ctx, db.RefreshCLISessionParams{
+		TokenHash:        HashToken(next.Access),
+		ExpiresAt:        pgxtype.Timestamptz(next.AccessExpiresAt),
+		NextRefreshHash:  pgtype.Text{String: HashToken(next.Refresh), Valid: true},
+		RefreshExpiresAt: pgxtype.Timestamptz(next.RefreshExpiresAt),
+		RefreshHash:      pgtype.Text{String: HashToken(refresh), Valid: true},
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "refresh cli session", ErrRefreshTokenNotLive, nil)
+	}
+	return rowToSession(row)
+}
+
+// List answers the user's sessions anything is still live in.
+func (s *PostgresSessionStore) List(ctx context.Context, user grn.GRN) ([]*Session, error) {
+	rows, err := s.q.ListUserSessions(ctx, user.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "list sessions", nil, nil)
+	}
+	out := make([]*Session, 0, len(rows))
+	for _, row := range rows {
+		sess, err := rowToSession(row)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, sess)
+	}
+	return out, nil
+}
+
+// Revoke deletes the user's session id. An id that does not parse is
+// one the user holds no session by.
+func (s *PostgresSessionStore) Revoke(ctx context.Context, user grn.GRN, id string) error {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return ErrSessionNotFound
+	}
+	deleted, err := s.q.RevokeUserSession(ctx, db.RevokeUserSessionParams{
+		UserGrn: user.String(), ID: pgtype.UUID{Bytes: parsed, Valid: true},
+	})
+	if err != nil {
+		return pgxerr.Classify(err, "revoke session", nil, nil)
+	}
+	if deleted == 0 {
+		return ErrSessionNotFound
+	}
+	return nil
 }
 
 // Delete revokes the session for the raw token. Deleting an unknown
@@ -198,4 +260,141 @@ func (s *PostgresPasswordAttemptStore) Record(ctx context.Context, attempt strin
 // is not an error: the slot is gone either way.
 func (s *PostgresPasswordAttemptStore) Release(ctx context.Context, attempt string) error {
 	return pgxerr.Classify(s.q.ReleasePasswordAttempt(ctx, attempt), "release password attempt", nil, nil)
+}
+
+// PostgresDeviceStore implements DeviceStore against PostgreSQL. Only
+// the codes' hashes are persisted.
+type PostgresDeviceStore struct {
+	pool *pgxpool.Pool
+	q    *db.Queries
+}
+
+// Compile-time check that PostgresDeviceStore satisfies DeviceStore.
+var _ DeviceStore = (*PostgresDeviceStore)(nil)
+
+// NewPostgresDeviceStore constructs a Postgres-backed DeviceStore.
+func NewPostgresDeviceStore(pool *pgxpool.Pool) *PostgresDeviceStore {
+	return &PostgresDeviceStore{pool: pool, q: db.New(pool)}
+}
+
+// Issue records grant, or returns ErrDeviceRateLimited past the bound.
+// The statement decides, so the rows it reports are the whole answer.
+func (s *PostgresDeviceStore) Issue(ctx context.Context, grant DeviceGrant, clientName string) error {
+	code, ok := NormalizeUserCode(grant.UserCode)
+	if !ok {
+		return errorx.New(errorx.KindInternal, "a drawn user code does not normalize")
+	}
+	issued, err := s.q.IssueDeviceAuthorization(ctx, db.IssueDeviceAuthorizationParams{
+		DeviceCodeHash:  HashToken(grant.DeviceCode),
+		UserCodeHash:    HashToken(code),
+		IntervalSeconds: int32(DevicePollInterval / time.Second),
+		ClientName:      pgtype.Text{String: clientName, Valid: clientName != ""},
+		TtlSeconds:      DeviceCodeTTL.Seconds(),
+		MaxLive:         MaxLiveDeviceAuthorizations,
+	})
+	if err != nil {
+		return pgxerr.Classify(err, "issue device authorization", nil, nil)
+	}
+	if issued == 0 {
+		return ErrDeviceRateLimited
+	}
+	return nil
+}
+
+// Decide records user's decision on the live, undecided authorization
+// userCode names.
+func (s *PostgresDeviceStore) Decide(ctx context.Context, userCode string, user grn.GRN, approve bool) error {
+	code, ok := NormalizeUserCode(userCode)
+	if !ok {
+		return ErrDeviceCodeNotPending
+	}
+	decision := "denied"
+	if approve {
+		decision = "approved"
+	}
+	decided, err := s.q.DecideDeviceAuthorization(ctx, db.DecideDeviceAuthorizationParams{
+		UserCodeHash: HashToken(code),
+		Decision:     pgtype.Text{String: decision, Valid: true},
+		UserGrn:      pgtype.Text{String: user.String(), Valid: true},
+	})
+	if err != nil {
+		return pgxerr.Classify(err, "decide device authorization", nil, nil)
+	}
+	if decided == 0 {
+		return ErrDeviceCodeNotPending
+	}
+	return nil
+}
+
+// Poll reads the authorization deviceCode names under its row lock, so
+// two polls of one code are answered one after the other: only the
+// first to find it approved opens a session, and the second finds it
+// gone.
+func (s *PostgresDeviceStore) Poll(ctx context.Context, deviceCode string, tokens CLITokens) (PollResult, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return PollResult{}, pgxerr.Classify(err, "poll device authorization", nil, nil)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+	hash := HashToken(deviceCode)
+	row, err := q.LockDeviceAuthorization(ctx, hash)
+	if err != nil {
+		return PollResult{}, pgxerr.Classify(err, "poll device authorization", ErrDeviceCodeUnknown, nil)
+	}
+	interval := time.Duration(row.IntervalSeconds) * time.Second
+	result := PollResult{Interval: interval}
+	switch {
+	case row.Expired:
+		result.Outcome = PollExpired
+	case row.Decision.String == "denied":
+		result.Outcome = PollDenied
+	case row.Decision.String == "approved":
+		sess, err := s.redeem(ctx, q, row, tokens)
+		if err != nil {
+			return PollResult{}, err
+		}
+		result.Outcome, result.Session = PollIssued, sess
+	case row.TooEarly.Bool:
+		result.Outcome, result.Interval = PollSlowDown, interval+DeviceSlowDownStep
+	default:
+		result.Outcome = PollPending
+	}
+	if result.Outcome == PollPending || result.Outcome == PollSlowDown {
+		if err := q.TouchDeviceAuthorization(ctx, db.TouchDeviceAuthorizationParams{
+			DeviceCodeHash: hash, IntervalSeconds: int32(result.Interval / time.Second),
+		}); err != nil {
+			return PollResult{}, pgxerr.Classify(err, "poll device authorization", nil, nil)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return PollResult{}, pgxerr.Classify(err, "poll device authorization", nil, nil)
+	}
+	return result, nil
+}
+
+// redeem opens the CLI session an approved authorization grants and
+// spends the authorization, inside the poll's transaction.
+func (s *PostgresDeviceStore) redeem(ctx context.Context, q *db.Queries, row db.LockDeviceAuthorizationRow, tokens CLITokens) (*Session, error) {
+	user, err := grn.Parse(row.UserGrn.String)
+	if err != nil {
+		return nil, errorx.Wrap(err, "device authorization user grn", errorx.KindInternal)
+	}
+	now := time.Now().UTC()
+	if err := q.CreateCLISession(ctx, db.CreateCLISessionParams{
+		TokenHash:        HashToken(tokens.Access),
+		UserGrn:          user.String(),
+		CreatedAt:        pgxtype.Timestamptz(now),
+		ExpiresAt:        pgxtype.Timestamptz(tokens.AccessExpiresAt),
+		RefreshHash:      pgtype.Text{String: HashToken(tokens.Refresh), Valid: true},
+		RefreshExpiresAt: pgxtype.Timestamptz(tokens.RefreshExpiresAt),
+		Name:             row.ClientName,
+	}); err != nil {
+		return nil, pgxerr.Classify(err, "open cli session", nil, nil)
+	}
+	if err := q.DeleteDeviceAuthorization(ctx, row.DeviceCodeHash); err != nil {
+		return nil, pgxerr.Classify(err, "spend device authorization", nil, nil)
+	}
+	return &Session{userGRN: user, createdAt: now, expiresAt: tokens.AccessExpiresAt, kind: SessionCLI,
+		name: row.ClientName.String, refreshExpiresAt: tokens.RefreshExpiresAt}, nil
 }

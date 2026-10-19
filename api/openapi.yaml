@@ -4,8 +4,11 @@ info:
   version: 0.1.0
   description: >-
     Authentication and organization permission APIs for garam.
-    Authentication is cookie-based: the OAuth callback sets a
-    `garam_session` cookie that all other endpoints require.
+    Authentication is a session: the OAuth callback and the password
+    sign-in set a `garam_session` cookie, and a CLI signed in by the
+    device grant presents its session as `Authorization: Bearer
+    <token>`, accepted wherever the cookie is (ADR-0120). A request
+    presenting a bearer is read by it alone.
 
     This is what `garam serve api` serves, and a person's browser is
     what reaches it. `api/machine.yaml` describes a different listener,
@@ -245,6 +248,166 @@ paths:
         '401':
           $ref: '#/components/responses/Error'
         '429':
+          $ref: '#/components/responses/Error'
+  /auth/device:
+    post:
+      operationId: requestDeviceCode
+      tags: [auth]
+      summary: Start a device sign-in for the CLI.
+      description: >-
+        The device authorization request of RFC 8628 §3.1, which `garam
+        login` makes (ADR-0120). It carries no credential. `client_id`
+        is `garam-cli`, the one client garam knows; `client_name`, where
+        given, is what the CLI runs on, shown on the session it opens.
+
+        The answer is the device code the CLI polls with and the user
+        code the person approves on the console's `/device` page,
+        signed in there as they always are. `verification_uri` is that
+        page's path, relative to the origin the console serves this API
+        under, which the API is not told; the CLI joins it to the
+        endpoint it was pointed at. Both codes live ten minutes.
+
+        Issuing writes one row, and refuses with 429 once 1024 codes are
+        live, decided in the statement that writes, as a login state is
+        (ADR-0030).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeviceCodeRequest'
+      responses:
+        '200':
+          description: The codes, shown once.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceCode'
+        '400':
+          $ref: '#/components/responses/OAuthError'
+        '429':
+          $ref: '#/components/responses/Error'
+  /auth/device/token:
+    post:
+      operationId: deviceToken
+      tags: [auth]
+      summary: Poll a device sign-in, or refresh a CLI session.
+      description: >-
+        The token endpoint of RFC 8628 §3.4 and RFC 6749 §6 (ADR-0120).
+        It carries no credential beyond its form. `client_id` is
+        `garam-cli`.
+
+        Under `grant_type` `urn:ietf:params:oauth:grant-type:device_code`
+        it polls the `device_code` `requestDeviceCode` answered. Until
+        the person decides, it answers 400 `authorization_pending`; a
+        poll sooner than the code's interval answers `slow_down` and
+        moves the interval five seconds later; a denied code answers
+        `access_denied` and a lapsed one `expired_token`. An approved
+        code is redeemed once: the poll that finds it opens a CLI
+        session for the approving user and answers its tokens, and the
+        code buys nothing after. A code garam holds nothing for answers
+        `invalid_grant`.
+
+        Under `grant_type` `refresh_token` it spends a CLI session's
+        `refresh_token` for the next pair, both replaced in one write.
+        A refresh token unknown, lapsed or already spent answers
+        `invalid_grant`.
+
+        The access token lives one hour and is presented as
+        `Authorization: Bearer <token>`. The refresh token lives thirty
+        days from its issue.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeviceTokenRequest'
+      responses:
+        '200':
+          description: The CLI session's tokens, shown once.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionToken'
+        '400':
+          $ref: '#/components/responses/OAuthError'
+  /auth/device/approval:
+    post:
+      operationId: decideDeviceCode
+      tags: [auth]
+      summary: Approve or deny a device sign-in as the signed-in user.
+      description: >-
+        What the console's `/device` page sends once the person reads the
+        code their CLI printed (ADR-0120). Approving signs that CLI in as
+        this user, so the page says what is being approved: anyone who
+        gets a person to approve a code they did not start signs a CLI in
+        as them. A code no live, undecided authorization holds answers
+        404, whether it was never issued, has lapsed or is decided. The
+        code is read without case, separator or surrounding space.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceDecision'
+      responses:
+        '204':
+          description: Decided.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /me/sessions:
+    get:
+      operationId: listMySessions
+      tags: [auth]
+      summary: List the signed-in user's sessions, browser and CLI.
+      description: >-
+        Every session of this user anything is still live in, newest
+        first (ADR-0120). `current` marks the one the request was made
+        on. No token or hash is answered.
+      responses:
+        '200':
+          description: The user's sessions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+        '401':
+          $ref: '#/components/responses/Error'
+  /me/sessions/{session}:
+    delete:
+      operationId: revokeMySession
+      tags: [auth]
+      summary: Revoke one of the signed-in user's sessions.
+      description: >-
+        Deletes the session, so its tokens are refused from the next
+        request (ADR-0005, ADR-0120). A session this user does not hold
+        answers 404, as one that does not exist does.
+      parameters:
+        - name: session
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Revoked.
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
           $ref: '#/components/responses/Error'
   /me:
     get:
@@ -2601,6 +2764,145 @@ components:
         minimum: 0
         default: 0
   schemas:
+    DeviceCodeRequest:
+      type: object
+      description: RFC 8628's device authorization request (ADR-0120).
+      required: [client_id]
+      properties:
+        client_id:
+          type: string
+          enum: [garam-cli]
+        client_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: What the CLI runs on, shown on the session it opens.
+    DeviceCode:
+      type: object
+      description: RFC 8628's device authorization response (ADR-0120).
+      required: [device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval]
+      properties:
+        device_code:
+          type: string
+          description: What the CLI polls with. Shown once; garam stores only its hash.
+        user_code:
+          type: string
+          description: What the person approves, eight consonants as `XXXX-XXXX`.
+          example: BDFG-HJKL
+        verification_uri:
+          type: string
+          description: >-
+            The console's approval page, as a path relative to the
+            origin the console serves this API under.
+          example: /device
+        verification_uri_complete:
+          type: string
+          description: The same page with the user code filled in.
+          example: /device?code=BDFG-HJKL
+        expires_in:
+          type: integer
+          description: Seconds both codes live, 600.
+        interval:
+          type: integer
+          description: Seconds to wait between polls, 5.
+    DeviceTokenRequest:
+      type: object
+      description: >-
+        RFC 8628's device access token request, or RFC 6749's refresh
+        (ADR-0120).
+      required: [grant_type, client_id]
+      properties:
+        grant_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:grant-type:device_code', refresh_token]
+        client_id:
+          type: string
+          enum: [garam-cli]
+        device_code:
+          type: string
+          description: Required under the device code grant.
+        refresh_token:
+          type: string
+          description: Required under the refresh grant.
+    SessionToken:
+      type: object
+      description: >-
+        A CLI session's tokens, RFC 6749's successful token response
+        (ADR-0120).
+      required: [access_token, token_type, expires_in, refresh_token, refresh_token_expires_in]
+      properties:
+        access_token:
+          type: string
+          description: >-
+            Presented as `Authorization: Bearer <token>`. garam stores
+            only its hash.
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Seconds the access token is accepted for, 3600.
+        refresh_token:
+          type: string
+          description: Spent once for the next pair. garam stores only its hash.
+        refresh_token_expires_in:
+          type: integer
+          description: Seconds the refresh token is accepted for.
+    OAuthError:
+      type: object
+      description: RFC 6749's error response, with RFC 8628's codes (ADR-0120).
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, invalid_client, invalid_grant, unsupported_grant_type, authorization_pending, slow_down, access_denied, expired_token]
+          description: >-
+            `invalid_request` for a missing or malformed parameter;
+            `invalid_client` for a `client_id` other than `garam-cli`;
+            `invalid_grant` for a device code or refresh token garam
+            holds nothing live for; `unsupported_grant_type` for any
+            other grant; and RFC 8628 §3.5's four while a device code is
+            polled.
+        error_description:
+          type: string
+        interval:
+          type: integer
+          description: With `slow_down`, the seconds to wait between polls from here.
+    DeviceDecision:
+      type: object
+      required: [userCode, approve]
+      properties:
+        userCode:
+          type: string
+          description: The code the CLI printed, read without case or separator.
+        approve:
+          type: boolean
+          description: True signs the CLI in as the signed-in user; false denies it.
+    Session:
+      type: object
+      description: One of the user's sessions, browser or CLI (ADR-0120).
+      required: [id, kind, createdAt, expiresAt, current]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [browser, cli]
+        name:
+          type: string
+          description: What a CLI said it runs on, absent where it said nothing.
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          description: >-
+            When nothing the session holds is live any more: its refresh
+            token's lapse for a CLI session, its expiry for a browser's.
+        current:
+          type: boolean
+          description: Whether the request was made on this session.
     User:
       type: object
       required: [grn, nickname]
@@ -3874,11 +4176,22 @@ components:
             it was sent. Absent where the reason is about the document
             as a whole or about no document.
   headers:
+    NoStore:
+      description: An answer carrying a credential is never cached (RFC 6749 §5.1).
+      schema:
+        type: string
+        enum: [no-store]
     ContractVersion:
       description: The contract version this answer follows, `operation-authority.v1`.
       schema:
         type: string
   responses:
+    OAuthError:
+      description: RFC 6749's error response of the device grant's endpoints.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OAuthError'
     Error:
       description: Error response.
       content:
@@ -3899,5 +4212,12 @@ components:
       type: apiKey
       in: cookie
       name: garam_session
+    sessionBearer:
+      type: http
+      scheme: bearer
+      description: >-
+        A CLI session's access token (ADR-0120), accepted wherever the
+        cookie is. A request presenting one is read by it alone.
 security:
   - sessionCookie: []
+  - sessionBearer: []

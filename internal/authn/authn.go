@@ -16,6 +16,10 @@ import (
 // expired.
 var ErrSessionNotFound = errorx.New(errorx.KindNotFound, "session not found")
 
+// ErrRefreshTokenNotLive is returned when a CLI session's refresh token
+// is unknown, lapsed or already spent. One answer covers the three.
+var ErrRefreshTokenNotLive = errorx.New(errorx.KindUnauthenticated, "refresh token not live")
+
 // ErrOAuthStateNotLive is returned when a login state was never
 // issued, has expired, or has already been consumed. One answer covers
 // the three: whoever presented the state is told it buys nothing, and

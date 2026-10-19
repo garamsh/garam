@@ -45,8 +45,7 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 		operationAuthorities{service: authority},
 		provenLeaves{identities: identities},
 		agents,
-		requestSigner{issuer: issuer, serverRoot: serverRoot},
-		certificates{issuer: issuer, serverRoot: serverRoot})
+		requestSigner{issuer: issuer, serverRoot: serverRoot})
 }
 
 // newAdmissionService composes agent-enrollment.v1's approval and

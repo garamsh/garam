@@ -7,7 +7,6 @@ import {
   listGroupMembers,
   listPolicies,
   listPolicyAttachments,
-  lookupAgentDefinitions,
   lookupAgents,
   lookupGroups,
   lookupOrgMembers,
@@ -32,7 +31,6 @@ import {
   reachOf,
   subjectLabel,
   listSubjects,
-  partlyListedAgents,
   resolveSubjectQuery,
   subjectChoices,
   subjectQuery,
@@ -87,15 +85,13 @@ function policyChecks(
 export default async function AttachmentsPage({ params, searchParams }: Props) {
   const { org } = await params;
   const { subject: query } = await searchParams;
-  const [organization, policies, teams, people, agents, definitions] =
-    await Promise.all([
-      getOrg(org),
-      listPolicies(org),
-      lookupGroups(org),
-      lookupOrgMembers(org),
-      lookupAgents(org),
-      lookupAgentDefinitions(org),
-    ]);
+  const [organization, policies, teams, people, agents] = await Promise.all([
+    getOrg(org),
+    listPolicies(org),
+    lookupGroups(org),
+    lookupOrgMembers(org),
+    lookupAgents(org),
+  ]);
   const page = (children: React.ReactNode, count?: number) => (
     <ListPage
       title="Permissions"
@@ -112,16 +108,14 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
     policies.status === "unreachable" ||
     teams.status === "unreachable" ||
     people.status === "unreachable" ||
-    agents.status === "unreachable" ||
-    definitions.status === "unreachable"
+    agents.status === "unreachable"
   ) {
     return page(<ApiUnreachable subject="this organization's attachments" />);
   }
   if (policies.status === "forbidden")
     return page(<RefusedRead subject="this organization's policies" />);
 
-  const catalogs: Catalogs = { teams, people, agents, definitions };
-  const partlyListed = partlyListedAgents(catalogs);
+  const catalogs: Catalogs = { teams, people, agents };
   const lookup = resolveSubjectQuery(
     typeof query === "string" ? query : undefined,
     catalogs,
@@ -210,12 +204,6 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
 
   return page(
     <>
-      {partlyListed.length > 0 && (
-        <Banner tone="info" title="Some agents may be missing">
-          This organization&apos;s {partlyListed.join(" and ")} are not listed
-          to you.
-        </Banner>
-      )}
       <SubjectPicker
         action={`${base}/attachments`}
         groups={subjectChoices(listSubjects(catalogs), subjectQuery)}

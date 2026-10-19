@@ -16,9 +16,8 @@ type FileCredentials struct {
 	presented []Credential
 }
 
-// NewFileCredentials reads the placement token from tokenFile, empty
-// for a legacy adapter that holds none, and fingerprints presented:
-// garam's credential, and control's where the adapter is fenced.
+// NewFileCredentials reads the placement token from tokenFile and
+// fingerprints presented: garam's credential and control's.
 func NewFileCredentials(tokenFile string, presented ...Credential) *FileCredentials {
 	return &FileCredentials{tokenFile: tokenFile, presented: presented}
 }

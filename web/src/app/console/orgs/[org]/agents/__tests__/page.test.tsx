@@ -74,10 +74,10 @@ describe("agents", () => {
     await renderAgents();
 
     // The organization also holds Alice; she is People's to list.
-    expect(names()).toEqual(["Unnamed agent", "Scout"]);
-    expect(screen.getByRole("link", { name: "Scout" })).toHaveAttribute(
+    expect(names()).toEqual(["Unnamed agent"]);
+    expect(screen.getByRole("link", { name: "Unnamed agent" })).toHaveAttribute(
       "href",
-      "/console/orgs/acme/agents/9f2ac1b40d8e7a35",
+      "/console/orgs/acme/agents/1c3d5e7f90a2b4c6",
     );
     expect(screen.getByRole("columnheader", { name: /Runs on/ })).toBeVisible();
   });
@@ -90,15 +90,11 @@ describe("agents", () => {
       .closest("tr") as HTMLElement;
     expect(failing).toHaveTextContent("Failing");
     expect(failing).toHaveTextContent("Provisioning failed; disconnected");
-    const unplaced = screen
-      .getByRole("link", { name: "Scout" })
-      .closest("tr") as HTMLElement;
-    expect(unplaced).toHaveTextContent("Not placed");
-    expect(unplaced).toHaveTextContent("Nowhere yet");
+    expect(failing).toHaveTextContent("Nowhere yet");
   });
 
   it("filters by team from the team's members", async () => {
-    // Engineering holds Alice and the reported agent, not Scout.
+    // Engineering holds Alice and the reported agent.
     await renderAgents({ team: "eng" });
 
     expect(names()).toEqual(["Unnamed agent"]);
@@ -151,15 +147,16 @@ describe("agents", () => {
     );
   });
 
-  it("says refused definitions, and keeps the agents that reported", async () => {
-    server.use(refuse("agent-definitions"));
+  it("says a refused agents list is refused, never shown as empty", async () => {
+    server.use(refuse("agents"));
 
     await renderAgents();
 
     expect(
-      screen.getByText("You can't view this organization's agent definitions"),
+      screen.getByText("You can't view this organization's agents"),
     ).toBeInTheDocument();
-    expect(names()).toEqual(["Name not available"]);
+    expect(screen.queryByText("No agents yet.")).toBeNull();
+    expect(screen.queryByRole("table")).toBeNull();
   });
 
   it("keeps creating on the page, inactive with its reason, where the server denies it", async () => {
@@ -191,9 +188,6 @@ describe("agents", () => {
   it("says no agents in one line, with the action to create one", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/agents`, () => HttpResponse.json([])),
-      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
-        HttpResponse.json([]),
-      ),
     );
 
     await renderAgents();

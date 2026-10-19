@@ -60,10 +60,6 @@ func (s *Server) ActivateAgent(w http.ResponseWriter, r *http.Request, agentGRN 
 		return
 	}
 	res, err := s.executions.Activate(r.Context(), caller, in)
-	if errors.Is(err, agent.ErrCutoverRequired) {
-		writeErrorReason(w, http.StatusConflict, err, "cutover_required")
-		return
-	}
 	if err != nil {
 		writeExecutionError(w, r, err)
 		return
@@ -205,7 +201,6 @@ func (s *Server) IntrospectAgentExecution(w http.ResponseWriter, r *http.Request
 		Org:        in.Org.String(),
 		Assignee:   in.Assignee.String(),
 		Epoch:      strconv.Itoa(in.Epoch),
-		Mode:       machinegen.ExecutionIntrospectionMode(in.Mode),
 		Credential: machinegen.ExecutionIntrospectionCredential(in.Credential),
 		Generation: machinegen.ExecutionIntrospectionGeneration(in.Generation),
 	}

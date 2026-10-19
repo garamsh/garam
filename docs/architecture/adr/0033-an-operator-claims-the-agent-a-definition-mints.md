@@ -5,7 +5,9 @@
 > are superseded by
 > [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md);
 > the claim admitting the operator to a certificate route is superseded
-> by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+> by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md);
+> the definition read and the claim, in what was left of them, are
+> superseded by [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
 > Date: 2026-08-19
 
 ## Contents

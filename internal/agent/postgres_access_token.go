@@ -21,7 +21,7 @@ var (
 )
 
 // MintAccessToken holds the agent's execution row FOR SHARE, reads the
-// assignment and the cutover after it, decides, and records the token
+// assignment after it, decides, and records the token
 // with the epoch and lineage it read, in one transaction. A
 // reassignment or recovery committing after the read waits for the
 // mint; one committing before it is what the mint is decided on.
@@ -38,7 +38,7 @@ func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
-	execution, err := q.ShareAgentLineage(ctx, t.Agent.String())
+	lineage, err := q.ShareAgentLineage(ctx, t.Agent.String())
 	if err != nil {
 		return pgxerr.Classify(err, "agent execution", ErrNotAssigned, nil)
 	}
@@ -49,30 +49,14 @@ func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *
 	if assignment.AssigneeGrn != caller.String() {
 		return ErrNotAssigned
 	}
-	if !execution.Lineage.Valid {
-		mode, err := ParseMode(execution.Mode)
-		if err != nil {
-			return errorx.Wrap(err, "stored execution mode", errorx.KindInternal)
-		}
-		if mode == ModeFenced {
-			return ErrIssuedByLifecycle
-		}
-		cutOver, err := q.IsAgentCutOver(ctx, t.Agent.String())
-		if err != nil {
-			return pgxerr.Classify(err, "cutover", nil, nil)
-		}
-		if cutOver {
-			return ErrCutOver
-		}
+	if !lineage.Valid {
+		return ErrIssuedByLifecycle
 	}
 
 	t.Assignee = caller
 	t.Epoch = int(assignment.Epoch)
-	t.Lineage = nil
-	if execution.Lineage.Valid {
-		lineage := Lineage(uuid.UUID(execution.Lineage.Bytes))
-		t.Lineage = &lineage
-	}
+	current := Lineage(uuid.UUID(lineage.Bytes))
+	t.Lineage = &current
 	audience := pgtype.Text{}
 	if t.Audience != nil {
 		audience = pgtype.Text{String: t.Audience.String(), Valid: true}
@@ -83,7 +67,7 @@ func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *
 		AgentGrn:    t.Agent.String(),
 		AssigneeGrn: caller.String(),
 		Epoch:       assignment.Epoch,
-		Lineage:     execution.Lineage,
+		Lineage:     lineage,
 		AudienceGrn: audience,
 		IssuedAt:    pgxtype.Timestamptz(t.IssuedAt),
 		ExpiresAt:   pgxtype.Timestamptz(t.ExpiresAt),

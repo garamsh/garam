@@ -204,15 +204,14 @@ func (s *Server) GetOrgDeletionPreview(w http.ResponseWriter, r *http.Request, o
 	writeJSON(w, http.StatusOK, apigen.OrgDeletionPreview{
 		CertificateAuthority: authority,
 		Counts: apigen.OrgDeletionCounts{
-			Groups:           contents.Groups,
-			Projects:         contents.Projects,
-			Members:          contents.Members,
-			Invitations:      contents.Invitations,
-			Policies:         len(policies),
-			Agents:           agents.Agents,
-			AgentDefinitions: agents.Definitions,
-			Operators:        operators,
-			Consents:         consents,
+			Groups:      contents.Groups,
+			Projects:    contents.Projects,
+			Members:     contents.Members,
+			Invitations: contents.Invitations,
+			Policies:    len(policies),
+			Agents:      agents.Agents,
+			Operators:   operators,
+			Consents:    consents,
 		},
 	})
 }

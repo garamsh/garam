@@ -58,69 +58,63 @@ func adapterKeyMaterial(t *testing.T) (certFile, keyFile, serverRootFile string)
 	return certFile, keyFile, writeServerRoot(t, dir)
 }
 
-// legacyAdapter is a certificate-mode adapter with no control settings.
-func legacyAdapter(certFile, keyFile, serverRootFile string) adapterEnv {
+// certificateAdapter is a certificate-mode adapter beside its lifecycle
+// authority: the three control settings and an outbox.
+func certificateAdapter(t *testing.T, certFile, keyFile, serverRootFile string) adapterEnv {
+	t.Helper()
 	return adapterEnv{
-		"GARAM_ADAPTER_AGENT":            grn.New("acme", grn.DefaultProject, "agent", "bot-1").String(),
-		"GARAM_ADAPTER_MACHINE_URL":      "https://garam.example:8443",
-		"GARAM_ADAPTER_TLS_CERT_FILE":    certFile,
-		"GARAM_ADAPTER_TLS_KEY_FILE":     keyFile,
-		"GARAM_ADAPTER_SERVER_ROOT_FILE": serverRootFile,
+		"GARAM_ADAPTER_AGENT":                grn.New("acme", grn.DefaultProject, "agent", "bot-1").String(),
+		"GARAM_ADAPTER_MACHINE_URL":          "https://garam.example:8443",
+		"GARAM_ADAPTER_TLS_CERT_FILE":        certFile,
+		"GARAM_ADAPTER_TLS_KEY_FILE":         keyFile,
+		"GARAM_ADAPTER_SERVER_ROOT_FILE":     serverRootFile,
+		"GARAM_ADAPTER_CONTROL_URL":          "https://control.example:8443",
+		"GARAM_ADAPTER_CONTROL_ROOT_FILE":    serverRootFile,
+		"GARAM_ADAPTER_PLACEMENT_TOKEN_FILE": filepath.Join(t.TempDir(), "token"),
+		"GARAM_ADAPTER_OUTBOX_DIR":           t.TempDir(),
 	}
 }
 
 // TestAdapterLoop_RefusesWhatItCannotRunOn covers what the process will
-// not start without, in either mode ADR-0084 lets the deployment
-// choose and either credential mode ADR-0100 adds. The working sets are
-// the controls: each case below changes one value of one of them, so
-// what refuses is that value rather than anything beside it.
+// not start without, in either credential mode ADR-0100 lets the
+// deployment choose; every adapter runs beside its lifecycle authority
+// (ADR-0084, ADR-0118). The working sets are the controls: each case
+// below changes one value of one of them, so what refuses is that value
+// rather than anything beside it.
 func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
-	legacy := legacyAdapter(certFile, keyFile, serverRootFile)
-	require.NoError(t, legacy.start(t), "the legacy control: no control settings")
-	withOutbox := legacy.with("GARAM_ADAPTER_OUTBOX_DIR", t.TempDir())
-	require.NoError(t, withOutbox.start(t), "a legacy adapter forwards an outbox where one is named")
-	fenced := withOutbox.
-		with("GARAM_ADAPTER_CONTROL_URL", "https://control.example:8443").
-		with("GARAM_ADAPTER_CONTROL_ROOT_FILE", serverRootFile).
-		with("GARAM_ADAPTER_PLACEMENT_TOKEN_FILE", filepath.Join(t.TempDir(), "token"))
-	require.NoError(t, fenced.start(t), "the fenced control: all three control settings and an outbox")
-	onSocket := fenced.with("GARAM_ADAPTER_CONTROL_SOCKET", filepath.Join(t.TempDir(), "control.sock"))
-	require.NoError(t, onSocket.start(t), "a fenced adapter dials control on a socket where one is named")
+	certificates := certificateAdapter(t, certFile, keyFile, serverRootFile)
+	require.NoError(t, certificates.start(t), "the certificate control: all three control settings and an outbox")
+	onSocket := certificates.with("GARAM_ADAPTER_CONTROL_SOCKET", filepath.Join(t.TempDir(), "control.sock"))
+	require.NoError(t, onSocket.start(t), "an adapter dials control on a socket where one is named")
 	tokenFile := filepath.Join(t.TempDir(), "agent-token")
-	tokens := legacy.with("GARAM_ADAPTER_TLS_CERT_FILE", "").with("GARAM_ADAPTER_TLS_KEY_FILE", "").
-		with("GARAM_ADAPTER_TOKEN_FILE", tokenFile)
-	require.NoError(t, tokens.start(t), "the unfenced token control: a garam token alone, read per request")
 	controlToken := filepath.Join(t.TempDir(), "control-token")
-	fencedTokens := fenced.with("GARAM_ADAPTER_TLS_CERT_FILE", "").with("GARAM_ADAPTER_TLS_KEY_FILE", "").
+	tokens := certificates.with("GARAM_ADAPTER_TLS_CERT_FILE", "").with("GARAM_ADAPTER_TLS_KEY_FILE", "").
 		with("GARAM_ADAPTER_TOKEN_FILE", tokenFile).with("GARAM_ADAPTER_CONTROL_TOKEN_FILE", controlToken)
-	require.NoError(t, fencedTokens.start(t), "the fenced token control: both token files beside the control settings")
+	require.NoError(t, tokens.start(t), "the token control: both token files beside the control settings")
 
 	tests := map[string]adapterEnv{
-		"no agent":                             legacy.with("GARAM_ADAPTER_AGENT", ""),
-		"an agent that is not a GRN":           legacy.with("GARAM_ADAPTER_AGENT", "bot-1"),
-		"no machine listener":                  legacy.with("GARAM_ADAPTER_MACHINE_URL", ""),
-		"a machine listener that is not a URL": legacy.with("GARAM_ADAPTER_MACHINE_URL", "garam.example"),
-		"no certificate":                       legacy.with("GARAM_ADAPTER_TLS_CERT_FILE", ""),
-		"no private key":                       legacy.with("GARAM_ADAPTER_TLS_KEY_FILE", ""),
-		"no server root":                       legacy.with("GARAM_ADAPTER_SERVER_ROOT_FILE", ""),
-		"a server root that is not one":        legacy.with("GARAM_ADAPTER_SERVER_ROOT_FILE", keyFile),
-		"a control address alone":              legacy.with("GARAM_ADAPTER_CONTROL_URL", fenced["GARAM_ADAPTER_CONTROL_URL"]),
-		"a control socket without the control settings": withOutbox.with("GARAM_ADAPTER_CONTROL_SOCKET",
-			onSocket["GARAM_ADAPTER_CONTROL_SOCKET"]),
-		"no control address":                     fenced.with("GARAM_ADAPTER_CONTROL_URL", ""),
-		"no control root":                        fenced.with("GARAM_ADAPTER_CONTROL_ROOT_FILE", ""),
-		"no placement token":                     fenced.with("GARAM_ADAPTER_PLACEMENT_TOKEN_FILE", ""),
-		"no outbox beside the control settings":  fenced.with("GARAM_ADAPTER_OUTBOX_DIR", ""),
-		"a control address that is not https":    fenced.with("GARAM_ADAPTER_CONTROL_URL", "http://control.example"),
-		"a control root that is not one":         fenced.with("GARAM_ADAPTER_CONTROL_ROOT_FILE", keyFile),
-		"a token file beside the certificate":    legacy.with("GARAM_ADAPTER_TOKEN_FILE", tokenFile),
+		"no agent":                             certificates.with("GARAM_ADAPTER_AGENT", ""),
+		"an agent that is not a GRN":           certificates.with("GARAM_ADAPTER_AGENT", "bot-1"),
+		"no machine listener":                  certificates.with("GARAM_ADAPTER_MACHINE_URL", ""),
+		"a machine listener that is not a URL": certificates.with("GARAM_ADAPTER_MACHINE_URL", "garam.example"),
+		"no certificate":                       certificates.with("GARAM_ADAPTER_TLS_CERT_FILE", ""),
+		"no private key":                       certificates.with("GARAM_ADAPTER_TLS_KEY_FILE", ""),
+		"no server root":                       certificates.with("GARAM_ADAPTER_SERVER_ROOT_FILE", ""),
+		"a server root that is not one":        certificates.with("GARAM_ADAPTER_SERVER_ROOT_FILE", keyFile),
+		"no control settings at all": certificates.with("GARAM_ADAPTER_CONTROL_URL", "").
+			with("GARAM_ADAPTER_CONTROL_ROOT_FILE", "").with("GARAM_ADAPTER_PLACEMENT_TOKEN_FILE", ""),
+		"no control address":                     certificates.with("GARAM_ADAPTER_CONTROL_URL", ""),
+		"no control root":                        certificates.with("GARAM_ADAPTER_CONTROL_ROOT_FILE", ""),
+		"no placement token":                     certificates.with("GARAM_ADAPTER_PLACEMENT_TOKEN_FILE", ""),
+		"no outbox beside the control settings":  certificates.with("GARAM_ADAPTER_OUTBOX_DIR", ""),
+		"a control address that is not https":    certificates.with("GARAM_ADAPTER_CONTROL_URL", "http://control.example"),
+		"a control root that is not one":         certificates.with("GARAM_ADAPTER_CONTROL_ROOT_FILE", keyFile),
+		"a token file beside the certificate":    certificates.with("GARAM_ADAPTER_TOKEN_FILE", tokenFile),
 		"a token file beside the key alone":      tokens.with("GARAM_ADAPTER_TLS_KEY_FILE", keyFile),
-		"a control token beside the certificate": fenced.with("GARAM_ADAPTER_CONTROL_TOKEN_FILE", controlToken),
-		"a control token without the control settings": tokens.with("GARAM_ADAPTER_CONTROL_TOKEN_FILE",
-			controlToken),
-		"no control token beside the control settings": fencedTokens.with("GARAM_ADAPTER_CONTROL_TOKEN_FILE", ""),
-		"no credential at all":                         tokens.with("GARAM_ADAPTER_TOKEN_FILE", ""),
+		"a control token beside the certificate": certificates.with("GARAM_ADAPTER_CONTROL_TOKEN_FILE", controlToken),
+		"no control token beside the token file": tokens.with("GARAM_ADAPTER_CONTROL_TOKEN_FILE", ""),
+		"no credential at all":                   tokens.with("GARAM_ADAPTER_TOKEN_FILE", "").with("GARAM_ADAPTER_CONTROL_TOKEN_FILE", ""),
 	}
 	for name, env := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -137,7 +131,7 @@ func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 // refuses is the mode rather than anything around it.
 func TestAdapterClient_RefusesAGroupReadableKey(t *testing.T) {
 	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
-	adapter := legacyAdapter(certFile, keyFile, serverRootFile)
+	adapter := certificateAdapter(t, certFile, keyFile, serverRootFile)
 
 	require.NoError(t, adapter.start(t), "owner-only key")
 
@@ -156,7 +150,7 @@ func TestAdapterClient_RefusesAGroupReadableKey(t *testing.T) {
 func TestAdapterClient_RefusesKeyMaterialThatIsNotThere(t *testing.T) {
 	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
 	absent := filepath.Join(t.TempDir(), "absent.pem")
-	adapter := legacyAdapter(certFile, keyFile, serverRootFile)
+	adapter := certificateAdapter(t, certFile, keyFile, serverRootFile)
 
 	require.NoError(t, adapter.start(t), "every file where it was configured")
 

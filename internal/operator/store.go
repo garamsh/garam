@@ -41,8 +41,8 @@ type Store interface {
 	// description and answers the operator as stored, or
 	// ErrOperatorNotFound where the organization holds no record under
 	// that GRN. It writes neither the GRN nor anything keyed on it, so
-	// the certificate lineage, its keys and the definitions naming the
-	// operator stand as they were (ADR-0074).
+	// the certificate lineage and its keys stand as they were
+	// (ADR-0074).
 	UpdateDetails(ctx context.Context, g grn.GRN, patch DetailsPatch) (*Operator, error)
 	// SetControlEndpoint writes the operator's control endpoint, nil
 	// clearing it, and answers the operator as stored, or
@@ -51,9 +51,7 @@ type Store interface {
 	// Delete removes the record, and with it the record of the
 	// certificate garam last issued the operator, its keys and its
 	// tokens. It answers ErrOperatorNotFound where the organization
-	// holds no record under that GRN, and
-	// ErrOperatorNamedByDefinition where an agent definition names the
-	// operator — nothing is deleted in that case.
+	// holds no record under that GRN.
 	Delete(ctx context.Context, g grn.GRN) error
 	Get(ctx context.Context, g grn.GRN) (*Operator, error)
 	// ListByOrg returns the organization's operators, ordered by GRN.

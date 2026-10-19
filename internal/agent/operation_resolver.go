@@ -15,7 +15,6 @@ const (
 	OperationKindCreate    OperationKind = "agent:create"
 	OperationKindConfigure OperationKind = "agent:configure"
 	OperationKindRecover   OperationKind = "agent:recover"
-	OperationKindCutover   OperationKind = "agent:cutover"
 	OperationKindReplace   OperationKind = "agent:replace"
 )
 

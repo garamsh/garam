@@ -36,10 +36,6 @@ type ExecutionStore interface {
 	// GetRecovery answers the recovery recorded under requestID, or
 	// nil, so a retry is answered before anything is signed again.
 	GetRecovery(ctx context.Context, agentGRN grn.GRN, requestID RequestID) (*Recovery, error)
-	// RecordRenewal admits fence as the agent's own write, then records
-	// successor in the lineage the fenced certificate belongs to. The
-	// legacy cohort records nothing.
-	RecordRenewal(ctx context.Context, fence Fencing, successor Credential) error
 	// GetExecution answers the agent's execution as it stands.
 	GetExecution(ctx context.Context, agentGRN grn.GRN) (*Execution, error)
 	// Introspect answers the agent's assignment, its execution and
@@ -78,27 +74,4 @@ type ExecutionStore interface {
 	// issuance, or nil, so a retry is answered before anything is
 	// signed again.
 	GetInitialCertificate(ctx context.Context, agentGRN grn.GRN) (*InitialCertificate, error)
-	// GetCutover answers the agent's assignment, execution, source and
-	// most recent cutover attempt from one snapshot, or ErrNotAssigned
-	// for an agent nothing holds.
-	GetCutover(ctx context.Context, agentGRN grn.GRN) (*Cutover, error)
-	// Freeze records req's attempt as frozen once the digest of the
-	// agent's source, read under the execution and definition locks,
-	// equals req.SourceDigest, and answers it with created true. A
-	// retry answers the recorded attempt with created false. It
-	// refuses with ErrStaleEpoch, ErrNotAssigned, ErrAuthorityExpired,
-	// ErrCutoverDigestMismatch, ErrCutoverAttemptOpen,
-	// ErrCutoverAttemptEnded or ErrCutoverNotEligible.
-	Freeze(ctx context.Context, req FreezeRequest) (*CutoverAttempt, bool, error)
-	// Switch records req's frozen attempt as switched; a retry answers
-	// it again. It refuses an attempt rolled back with
-	// ErrCutoverAttemptEnded, an import other than the open one with
-	// ErrCutoverAttemptOpen and one never frozen with
-	// ErrCutoverAttemptNotFound.
-	Switch(ctx context.Context, req CutoverRequest) (*CutoverAttempt, error)
-	// RollBack ends req's frozen attempt. It refuses a switched attempt
-	// with ErrReverseMigrationRequired, and an ended, stale or unknown
-	// import as Switch does, a retry of itself included: no request
-	// reaches an ended attempt.
-	RollBack(ctx context.Context, req CutoverRequest) (*CutoverAttempt, error)
 }

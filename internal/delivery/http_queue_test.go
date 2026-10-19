@@ -21,13 +21,13 @@ import (
 
 // garamAnswering is garam's machine listener answering one way to
 // everything, so a test can hold the client to what one answer means.
-// The execution is a legacy one, which presents nothing and is refused
-// as garam's answers say.
+// The execution holds an activation already, so it presents that
+// activation's token and is refused as garam's answers say.
 func garamAnswering(t *testing.T, answer http.HandlerFunc) (*delivery.HTTPQueue, *delivery.Execution) {
 	t.Helper()
 	server := httptest.NewServer(answer)
 	t.Cleanup(server.Close)
-	execution := delivery.NewLegacyExecution()
+	execution := delivery.HeldExecution("held-token")
 	queue, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution, certificateMode())
 	require.NoError(t, err)
 	return queue, execution
@@ -59,7 +59,7 @@ func TestHTTPQueue_ClaimReadsTheHoldGaramAnsweredWith(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.MethodPost, method)
 	assert.Equal(t, "/agents/"+agentGRN().String()+"/claims", route)
-	assert.Empty(t, authorization, "a legacy execution presents no token")
+	assert.Equal(t, "Garam-Execution held-token", authorization, "the claim carries the activation's token")
 	assert.Equal(t, delivery.ClaimID("claim-1"), claim.ID)
 	assert.Equal(t, delivery.MessageID("message-1"), claim.Message)
 	assert.Equal(t, senderGRN(), claim.Sender)
@@ -272,7 +272,7 @@ func TestStored_AcknowledgesOnlyTheReplyItWasOfferedAs(t *testing.T) {
 func TestNewHTTPQueue_RefusesWhatItCannotCall(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(server.Close)
-	execution := delivery.NewLegacyExecution()
+	execution := delivery.HeldExecution("held-token")
 
 	_, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution, certificateMode())
 	require.NoError(t, err, "an address and an agent that work")

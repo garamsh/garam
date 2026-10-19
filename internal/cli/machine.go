@@ -231,7 +231,6 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// organization registered (ADR-0100).
 	agentStore := agent.NewPostgresStore(pool)
 	agents, err := agent.NewService(agentStore, agentStore, registeredOperators{operators: operatorStore},
-		certificates{issuer: issuer, serverRoot: cfg.ServerRoot},
 		agent.Config{TokenLifetime: cfg.AgentTokenLifetime, Backdate: ca.ClockSkew, ServerRootPEM: cfg.ServerRoot, Now: cfg.Now})
 	if err != nil {
 		return nil, err
@@ -446,32 +445,6 @@ type memberGroups struct{ store org.Store }
 
 func (m memberGroups) List(ctx context.Context, subject grn.GRN) ([]grn.GRN, error) {
 	return m.store.ListGroupsByMember(ctx, grn.Org(subject.Organization), subject)
-}
-
-// certificates is the certificate authority as the agent domain signs
-// through it (agent.Issuer), and the garam server root travelling
-// beside what it signs. The two cooperate through grn.GRN alone, so the
-// composition root is where what one issues becomes what the other
-// hands back — and it is the only place that holds both the authority
-// that signs an agent and the root that agent verifies garam against
-// (ADR-0040).
-type certificates struct {
-	issuer     ca.Service
-	serverRoot []byte
-}
-
-func (c certificates) Issue(ctx context.Context, subject grn.GRN) (*agent.Certificate, error) {
-	issued, err := c.issuer.Issue(ctx, subject)
-	if err != nil {
-		return nil, err
-	}
-	return &agent.Certificate{
-		CertificatePEM: issued.CertificatePEM(),
-		PrivateKeyPEM:  issued.PrivateKeyPEM(),
-		IssuerPEM:      issued.IssuerPEM(),
-		ServerRootPEM:  c.serverRoot,
-		NotAfter:       issued.NotAfter(),
-	}, nil
 }
 
 // operatorCertificates is that same authority in the shape the operator

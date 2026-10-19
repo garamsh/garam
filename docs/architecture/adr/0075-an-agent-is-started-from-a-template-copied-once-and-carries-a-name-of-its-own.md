@@ -9,7 +9,9 @@
 > copying values into a new definition is superseded by
 > [ADR-0090](./0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md);
 > the read of garam's own templates is superseded by
-> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
+> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md);
+> the agent's own name and its rename are superseded by
+> [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
 > Date: 2026-09-28
 
 ## Context

@@ -81,25 +81,17 @@ func (q *Queries) AssignAgent(ctx context.Context, arg AssignAgentParams) (Agent
 }
 
 const countAgentsByOrg = `-- name: CountAgentsByOrg :one
-SELECT
-    (SELECT count(*) FROM agents            a WHERE a.org_grn = $1) AS agent_count,
-    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count
+SELECT count(*) AS agent_count FROM agents WHERE org_grn = $1
 `
 
-type CountAgentsByOrgRow struct {
-	AgentCount      int64
-	DefinitionCount int64
-}
-
-// The agents and the definitions the organization holds, which
-// deleting the organization removes with it. One row, so the two
-// numbers describe one moment. An agent's assignment goes with the
-// agent and is not counted apart from it.
-func (q *Queries) CountAgentsByOrg(ctx context.Context, orgGrn string) (CountAgentsByOrgRow, error) {
+// The agents the organization holds, which deleting the organization
+// removes with it. An agent's assignment goes with the agent and is
+// not counted apart from it.
+func (q *Queries) CountAgentsByOrg(ctx context.Context, orgGrn string) (int64, error) {
 	row := q.db.QueryRow(ctx, countAgentsByOrg, orgGrn)
-	var i CountAgentsByOrgRow
-	err := row.Scan(&i.AgentCount, &i.DefinitionCount)
-	return i, err
+	var agent_count int64
+	err := row.Scan(&agent_count)
+	return agent_count, err
 }
 
 const createAgent = `-- name: CreateAgent :exec
@@ -201,46 +193,6 @@ func (q *Queries) GetAgentAssignment(ctx context.Context, agentGrn string) (Agen
 	return i, err
 }
 
-const getAgentDefinition = `-- name: GetAgentDefinition :one
-SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.name, c.stage AS cutover_stage
-FROM agent_definitions d
-LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
-WHERE d.agent_grn = $1
-`
-
-type GetAgentDefinitionRow struct {
-	AgentGrn     string
-	OrgGrn       string
-	OperatorGrn  string
-	AgentValues  []byte
-	DefinedBy    string
-	CreatedAt    pgtype.Timestamptz
-	Name         string
-	CutoverStage pgtype.Text
-}
-
-// A definition is read with the stage of its GRN's open cutover
-// attempt, if any: a frozen or switched definition is archival, its
-// values preserved and no longer the source (ADR-0086). Nothing here
-// writes one: garam accepts no new definition, and an existing one
-// keeps its operator and values (ADR-0090, migration 000035); its
-// name is what RenameAgentDefinition changes alone.
-func (q *Queries) GetAgentDefinition(ctx context.Context, agentGrn string) (GetAgentDefinitionRow, error) {
-	row := q.db.QueryRow(ctx, getAgentDefinition, agentGrn)
-	var i GetAgentDefinitionRow
-	err := row.Scan(
-		&i.AgentGrn,
-		&i.OrgGrn,
-		&i.OperatorGrn,
-		&i.AgentValues,
-		&i.DefinedBy,
-		&i.CreatedAt,
-		&i.Name,
-		&i.CutoverStage,
-	)
-	return i, err
-}
-
 const getAgentTokenShownTo = `-- name: GetAgentTokenShownTo :one
 SELECT agent_grn, serial, audience_grn, issued_at, expires_at
 FROM agent_tokens
@@ -300,36 +252,6 @@ func (q *Queries) GetLatestGeneration(ctx context.Context, agentGrn string) (str
 	return generation, err
 }
 
-const holdAgentOrg = `-- name: HoldAgentOrg :one
-SELECT grn FROM orgs WHERE grn = $1 FOR KEY SHARE
-`
-
-// A claim holds its organization's row before the definition's, with
-// the KEY SHARE lock the agent insert's foreign key takes anyway: an
-// organization's deletion holds that row before its cascade reaches
-// the definition, so the two take them in one order (#1441).
-func (q *Queries) HoldAgentOrg(ctx context.Context, grn string) (string, error) {
-	row := q.db.QueryRow(ctx, holdAgentOrg, grn)
-	var grn_2 string
-	err := row.Scan(&grn_2)
-	return grn_2, err
-}
-
-const isAgentCutOver = `-- name: IsAgentCutOver :one
-SELECT EXISTS (
-    SELECT 1 FROM agent_cutovers WHERE agent_grn = $1 AND stage = 'switched'
-)
-`
-
-// IsAgentCutOver is a statement of its own after ShareAgentExecution,
-// so its snapshot is taken once that lock is granted.
-func (q *Queries) IsAgentCutOver(ctx context.Context, agentGrn string) (bool, error) {
-	row := q.db.QueryRow(ctx, isAgentCutOver, agentGrn)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const listAgentAssignmentsByOrg = `-- name: ListAgentAssignmentsByOrg :many
 SELECT a.agent_grn, a.assignee_grn, a.epoch, a.created_at, a.updated_at FROM agent_assignments a
 JOIN agents g ON g.grn = a.agent_grn
@@ -352,117 +274,6 @@ func (q *Queries) ListAgentAssignmentsByOrg(ctx context.Context, orgGrn string) 
 			&i.Epoch,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listAgentDefinitionsByOperator = `-- name: ListAgentDefinitionsByOperator :many
-SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.name, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
-FROM agent_definitions d
-LEFT JOIN agent_assignments a ON a.agent_grn = d.agent_grn
-LEFT JOIN agent_executions e ON e.agent_grn = d.agent_grn
-WHERE d.operator_grn = $1 AND (e.mode IS NULL OR e.mode = 'legacy')
-  AND NOT EXISTS (
-      SELECT 1 FROM agent_cutovers c
-      WHERE c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
-  )
-ORDER BY d.agent_grn
-`
-
-type ListAgentDefinitionsByOperatorRow struct {
-	AgentGrn       string
-	OrgGrn         string
-	OperatorGrn    string
-	AgentValues    []byte
-	DefinedBy      string
-	CreatedAt      pgtype.Timestamptz
-	Name           string
-	ClaimEpoch     pgtype.Int4
-	ClaimCreatedAt pgtype.Timestamptz
-	ClaimUpdatedAt pgtype.Timestamptz
-}
-
-// The claim state is the assignment the claim wrote: an unclaimed
-// definition has none, and a claimed one binds the operator it names.
-// An agent whose execution is fenced, or whose cutover is frozen or
-// switched, is moving or has moved to the Operator control service,
-// and its definition is no longer the operator's source (ADR-0077,
-// ADR-0086), so it is not listed.
-func (q *Queries) ListAgentDefinitionsByOperator(ctx context.Context, operatorGrn string) ([]ListAgentDefinitionsByOperatorRow, error) {
-	rows, err := q.db.Query(ctx, listAgentDefinitionsByOperator, operatorGrn)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListAgentDefinitionsByOperatorRow
-	for rows.Next() {
-		var i ListAgentDefinitionsByOperatorRow
-		if err := rows.Scan(
-			&i.AgentGrn,
-			&i.OrgGrn,
-			&i.OperatorGrn,
-			&i.AgentValues,
-			&i.DefinedBy,
-			&i.CreatedAt,
-			&i.Name,
-			&i.ClaimEpoch,
-			&i.ClaimCreatedAt,
-			&i.ClaimUpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listAgentDefinitionsByOrg = `-- name: ListAgentDefinitionsByOrg :many
-SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.name, c.stage AS cutover_stage
-FROM agent_definitions d
-LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
-WHERE d.org_grn = $1
-ORDER BY d.agent_grn
-`
-
-type ListAgentDefinitionsByOrgRow struct {
-	AgentGrn     string
-	OrgGrn       string
-	OperatorGrn  string
-	AgentValues  []byte
-	DefinedBy    string
-	CreatedAt    pgtype.Timestamptz
-	Name         string
-	CutoverStage pgtype.Text
-}
-
-func (q *Queries) ListAgentDefinitionsByOrg(ctx context.Context, orgGrn string) ([]ListAgentDefinitionsByOrgRow, error) {
-	rows, err := q.db.Query(ctx, listAgentDefinitionsByOrg, orgGrn)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []ListAgentDefinitionsByOrgRow
-	for rows.Next() {
-		var i ListAgentDefinitionsByOrgRow
-		if err := rows.Scan(
-			&i.AgentGrn,
-			&i.OrgGrn,
-			&i.OperatorGrn,
-			&i.AgentValues,
-			&i.DefinedBy,
-			&i.CreatedAt,
-			&i.Name,
-			&i.CutoverStage,
 		); err != nil {
 			return nil, err
 		}
@@ -549,28 +360,6 @@ func (q *Queries) ListLatestGenerationsByOrg(ctx context.Context, orgGrn string)
 	return items, nil
 }
 
-const lockAgentDefinition = `-- name: LockAgentDefinition :one
-SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE
-`
-
-// LockAgentDefinition is the lock a claim serializes on: two claims of
-// one definition take the row lock in turn, and the second reads the
-// assignment the first wrote.
-func (q *Queries) LockAgentDefinition(ctx context.Context, agentGrn string) (AgentDefinition, error) {
-	row := q.db.QueryRow(ctx, lockAgentDefinition, agentGrn)
-	var i AgentDefinition
-	err := row.Scan(
-		&i.AgentGrn,
-		&i.OrgGrn,
-		&i.OperatorGrn,
-		&i.AgentValues,
-		&i.DefinedBy,
-		&i.CreatedAt,
-		&i.Name,
-	)
-	return i, err
-}
-
 const lockAgentExecution = `-- name: LockAgentExecution :one
 SELECT agent_grn FROM agent_executions WHERE agent_grn = $1 FOR UPDATE
 `
@@ -617,49 +406,6 @@ func (q *Queries) RecordAgentToken(ctx context.Context, arg RecordAgentTokenPara
 		arg.ExpiresAt,
 	)
 	return err
-}
-
-const renameAgentDefinition = `-- name: RenameAgentDefinition :one
-WITH renamed AS (
-    UPDATE agent_definitions SET name = $1
-    WHERE agent_definitions.agent_grn = $2
-    RETURNING agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name
-)
-SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.name, c.stage AS cutover_stage
-FROM renamed d
-LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
-`
-
-type RenameAgentDefinitionParams struct {
-	Name     string
-	AgentGrn string
-}
-
-type RenameAgentDefinitionRow struct {
-	AgentGrn     string
-	OrgGrn       string
-	OperatorGrn  string
-	AgentValues  []byte
-	DefinedBy    string
-	CreatedAt    pgtype.Timestamptz
-	Name         string
-	CutoverStage pgtype.Text
-}
-
-func (q *Queries) RenameAgentDefinition(ctx context.Context, arg RenameAgentDefinitionParams) (RenameAgentDefinitionRow, error) {
-	row := q.db.QueryRow(ctx, renameAgentDefinition, arg.Name, arg.AgentGrn)
-	var i RenameAgentDefinitionRow
-	err := row.Scan(
-		&i.AgentGrn,
-		&i.OrgGrn,
-		&i.OperatorGrn,
-		&i.AgentValues,
-		&i.DefinedBy,
-		&i.CreatedAt,
-		&i.Name,
-		&i.CutoverStage,
-	)
-	return i, err
 }
 
 const reportAgentProvisioningState = `-- name: ReportAgentProvisioningState :one
@@ -776,63 +522,22 @@ func (q *Queries) ResolveAgentToken(ctx context.Context, tokenHash string) (Reso
 	return i, err
 }
 
-const searchAgentDefinitionsByOrg = `-- name: SearchAgentDefinitionsByOrg :many
-SELECT agent_grn, name FROM agent_definitions
+const searchAgentsByOrg = `-- name: SearchAgentsByOrg :many
+SELECT grn FROM agents
 WHERE org_grn = $1
-  AND (name ILIKE $2 OR split_part(agent_grn, ':', 5) ILIKE $2)
-ORDER BY agent_grn
+  AND split_part(grn, ':', 5) ILIKE $2
+ORDER BY grn
 `
 
-type SearchAgentDefinitionsByOrgParams struct {
+type SearchAgentsByOrgParams struct {
 	OrgGrn  string
 	Pattern string
 }
 
-type SearchAgentDefinitionsByOrgRow struct {
-	AgentGrn string
-	Name     string
-}
-
-// SearchAgentDefinitionsByOrg answers the org's definitions whose name
-// or agent identifier (the GRN's fifth segment) matches pattern, case
-// aside, ordered by agent GRN.
-func (q *Queries) SearchAgentDefinitionsByOrg(ctx context.Context, arg SearchAgentDefinitionsByOrgParams) ([]SearchAgentDefinitionsByOrgRow, error) {
-	rows, err := q.db.Query(ctx, searchAgentDefinitionsByOrg, arg.OrgGrn, arg.Pattern)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []SearchAgentDefinitionsByOrgRow
-	for rows.Next() {
-		var i SearchAgentDefinitionsByOrgRow
-		if err := rows.Scan(&i.AgentGrn, &i.Name); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const searchUndefinedAgentsByOrg = `-- name: SearchUndefinedAgentsByOrg :many
-SELECT a.grn FROM agents a
-WHERE a.org_grn = $1
-  AND split_part(a.grn, ':', 5) ILIKE $2
-  AND NOT EXISTS (SELECT 1 FROM agent_definitions d WHERE d.agent_grn = a.grn)
-ORDER BY a.grn
-`
-
-type SearchUndefinedAgentsByOrgParams struct {
-	OrgGrn  string
-	Pattern string
-}
-
-// SearchUndefinedAgentsByOrg answers the org's agents no definition
-// names whose identifier matches pattern, case aside, ordered by GRN.
-func (q *Queries) SearchUndefinedAgentsByOrg(ctx context.Context, arg SearchUndefinedAgentsByOrgParams) ([]string, error) {
-	rows, err := q.db.Query(ctx, searchUndefinedAgentsByOrg, arg.OrgGrn, arg.Pattern)
+// SearchAgentsByOrg answers the org's agents whose identifier (the
+// GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+func (q *Queries) SearchAgentsByOrg(ctx context.Context, arg SearchAgentsByOrgParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, searchAgentsByOrg, arg.OrgGrn, arg.Pattern)
 	if err != nil {
 		return nil, err
 	}
@@ -851,39 +556,20 @@ func (q *Queries) SearchUndefinedAgentsByOrg(ctx context.Context, arg SearchUnde
 	return items, nil
 }
 
-const shareAgentExecution = `-- name: ShareAgentExecution :one
-SELECT mode FROM agent_executions WHERE agent_grn = $1 FOR SHARE
-`
-
-// ShareAgentExecution holds the agent's execution row FOR SHARE until
-// the transaction ends: a cutover switch, which takes it FOR UPDATE,
-// either commits before it or waits for the transaction to end.
-func (q *Queries) ShareAgentExecution(ctx context.Context, agentGrn string) (string, error) {
-	row := q.db.QueryRow(ctx, shareAgentExecution, agentGrn)
-	var mode string
-	err := row.Scan(&mode)
-	return mode, err
-}
-
 const shareAgentLineage = `-- name: ShareAgentLineage :one
-SELECT mode, lineage FROM agent_executions WHERE agent_grn = $1 FOR SHARE
+SELECT lineage FROM agent_executions WHERE agent_grn = $1 FOR SHARE
 `
-
-type ShareAgentLineageRow struct {
-	Mode    string
-	Lineage pgtype.UUID
-}
 
 // The execution a token is minted against, held FOR SHARE so a
-// recovery or a cutover switch committing first is seen and one
-// committing after waits for the mint (ADR-0100). The assignment and
-// the cutover are read by statements of their own after it, so their
-// snapshot is taken once this lock is granted.
-func (q *Queries) ShareAgentLineage(ctx context.Context, agentGrn string) (ShareAgentLineageRow, error) {
+// recovery committing first is seen and one committing after waits
+// for the mint (ADR-0100). The assignment is read by a statement of
+// its own after it, so its snapshot is taken once this lock is
+// granted.
+func (q *Queries) ShareAgentLineage(ctx context.Context, agentGrn string) (pgtype.UUID, error) {
 	row := q.db.QueryRow(ctx, shareAgentLineage, agentGrn)
-	var i ShareAgentLineageRow
-	err := row.Scan(&i.Mode, &i.Lineage)
-	return i, err
+	var lineage pgtype.UUID
+	err := row.Scan(&lineage)
+	return lineage, err
 }
 
 const trimAgentTokens = `-- name: TrimAgentTokens :exec

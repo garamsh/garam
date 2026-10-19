@@ -379,29 +379,6 @@ func TestRun_ReportsRuntimeStatusAfterActivationAndOnChange(t *testing.T) {
 	assert.Equal(t, delivery.RuntimeDraining, c.reported()[1].status.State)
 }
 
-// TestRun_LegacyResumesAFencedAgentOnlyOnARenewedCertificate is the
-// legacy mode meeting garam's fence, which it cannot clear by
-// activating: it stops, waits on no timer, and tries again only once
-// the certificate changes.
-func TestRun_LegacyResumesAFencedAgentOnlyOnARenewedCertificate(t *testing.T) {
-	queue := newGaramQueue(t, time.Second)
-	gateway := newAgentGateway(t)
-	m := newMounted()
-	e := legacyEnds(t, queue, gateway, nil)
-	e.Credentials = m
-	start(t, e, brief())
-
-	eventually(t, func() bool { return queue.claimsAttempted() > 1 }, "the control: a legacy agent claims")
-	queue.admit("a token the agent was never given")
-	eventually(t, func() bool { return queue.claimsFenced() == 1 }, "garam requires a token the legacy adapter does not hold")
-	refusedAt := queue.claimsAttempted()
-	quietFor()
-	assert.Equal(t, refusedAt, queue.claimsAttempted(), "nothing is claimed again on a timer")
-
-	m.replace("", "1002")
-	eventually(t, func() bool { return queue.claimsAttempted() > refusedAt }, "a renewed certificate tries again")
-}
-
 // TestRun_ActivatesOnlyAServingRuntime holds activation to a runtime
 // that reports serving (ADR-0085): one already draining is not asked
 // for, and the same runtime reporting serving is, which is the

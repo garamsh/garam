@@ -7,7 +7,9 @@
 > the runtime values, by
 > [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md);
 > the console's define route is superseded, for new definitions, by
-> [ADR-0090](./0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)
+> [ADR-0090](./0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md);
+> the definition garam holds is superseded by
+> [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
 > Date: 2026-08-17
 
 ## Contents

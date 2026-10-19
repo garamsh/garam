@@ -14,11 +14,7 @@ import (
 // the plan's later steps add them as each accepts a token.
 var tokenRoutes = map[string]bool{
 	http.MethodGet + " /identity":                           true,
-	http.MethodPost + " /agents":                            true,
-	http.MethodPost + " /agents/{agent}/certificate":        true,
 	http.MethodPost + " /agents/{agent}/provisioning-state": true,
-	http.MethodGet + " /definitions":                        true,
-	http.MethodPost + " /definitions/{agent}/claim":         true,
 	http.MethodPost + " /agents/{agent}/tokens":             true,
 	// An agent's own routes (ADR-0100 G1b): what its adapter calls.
 	http.MethodPost + " /agents/{agent}/runtime-state":             true,
@@ -39,10 +35,6 @@ var tokenRoutes = map[string]bool{
 	http.MethodPost + " /agents/{agent}/activations/{activation}/deactivation": true,
 	http.MethodPost + " /agents/{agent}/execution/introspection":               true,
 	http.MethodPost + " /agents/{agent}/credential-recovery":                   true,
-	http.MethodGet + " /agents/{agent}/cutover":                                true,
-	http.MethodPost + " /agents/{agent}/cutover/freeze":                        true,
-	http.MethodPost + " /agents/{agent}/cutover/switch":                        true,
-	http.MethodPost + " /agents/{agent}/cutover/rollback":                      true,
 	http.MethodPost + " /operators/{controller}/managed-agents":                true,
 	// agent-enrollment.v1, which takes a token alone (ADR-0102).
 	http.MethodPost + " /agent-enrollment-approvals":                      true,

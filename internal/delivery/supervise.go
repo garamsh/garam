@@ -45,38 +45,16 @@ type supervision struct {
 	backoff time.Duration
 }
 
-// supervise keeps the execution matched to the runtime beside it: for
-// a fenced agent it activates the generation the runtime reports and
-// reports that runtime's status, and for a legacy one it reopens the
-// gate when the credential a refusal was met under is renewed or
-// rewritten.
+// supervise keeps the execution matched to the runtime beside it: it
+// activates the generation the runtime reports and reports that
+// runtime's status.
 func (s *service) supervise(ctx context.Context) {
 	var sup supervision
 	for ctx.Err() == nil {
 		sup.delay = s.cfg.StatusInterval
-		if s.ends.Execution.fenced {
-			s.superviseFenced(ctx, &sup)
-		} else {
-			s.superviseLegacy(ctx, &sup)
-		}
+		s.superviseFenced(ctx, &sup)
 		s.wait(ctx, sup.delay)
 	}
-}
-
-// superviseLegacy reopens a refused legacy execution once what the
-// adapter presents has changed, and never on a timer.
-func (s *service) superviseLegacy(ctx context.Context, sup *supervision) {
-	credential, err := s.ends.Credentials.Fingerprint()
-	if err != nil {
-		slog.WarnContext(ctx, "agent credential not read", slog.String("error", err.Error()))
-		return
-	}
-	gate, _ := s.ends.Execution.state()
-	if gate == gateRefused && credential != sup.at.credential {
-		slog.InfoContext(ctx, "protected work resumed on a changed credential")
-		s.ends.Execution.open()
-	}
-	sup.at.credential = credential
 }
 
 // superviseFenced reads the runtime and the credentials once and acts

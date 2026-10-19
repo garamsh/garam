@@ -1,11 +1,13 @@
 import { axeViolations, expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
-import { seedDefinition, type Seed } from "./seed";
+import type { Seed } from "./seed";
 
 /** What the area's routes read, seeded into the test's organization. */
 async function seedArea(signedIn: Seed) {
-  const defined = await seedDefinition(signedIn, "Moving");
-  return { agents: `/console/orgs/${signedIn.orgSlug}/agents`, defined };
+  return {
+    agents: `/console/orgs/${signedIn.orgSlug}/agents`,
+    agent: signedIn.agentIdentifier,
+  };
 }
 
 // The Agents routes at 390px: a table scrolls inside its
@@ -22,8 +24,8 @@ const routes: {
   },
   {
     name: "an agent",
-    href: (a) => `${a.agents}/${a.defined}`,
-    heading: "Moving",
+    href: (a) => `${a.agents}/${a.agent}`,
+    heading: "Unnamed agent",
   },
   {
     name: "the new agent wizard",

@@ -70,7 +70,6 @@ func TestAdmission_ErrNamesEachRefusal(t *testing.T) {
 	assert.NoError(t, agent.AdmissionAdmitted.Err())
 	refusals := map[agent.Admission]error{
 		agent.AdmissionUnknownAgent:     agent.ErrAgentNotFound,
-		agent.AdmissionNotCutOver:       agent.ErrExecutionNotCutOver,
 		agent.AdmissionTokenRequired:    agent.ErrExecutionTokenRequired,
 		agent.AdmissionTokenStale:       agent.ErrExecutionTokenStale,
 		agent.AdmissionCredentialFenced: agent.ErrCredentialFenced,

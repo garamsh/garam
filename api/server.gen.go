@@ -16,24 +16,6 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
-// Defines values for AgentDefinitionCutoverStage.
-const (
-	Frozen   AgentDefinitionCutoverStage = "frozen"
-	Switched AgentDefinitionCutoverStage = "switched"
-)
-
-// Valid indicates whether the value is a known member of the AgentDefinitionCutoverStage enum.
-func (e AgentDefinitionCutoverStage) Valid() bool {
-	switch e {
-	case Frozen:
-		return true
-	case Switched:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for AgentEnrollmentPlacement.
 const (
 	AgentEnrollmentPlacementDirect     AgentEnrollmentPlacement = "direct"
@@ -258,7 +240,6 @@ const (
 	DelegatedOperationAgentActivate        DelegatedOperation = "agent:activate"
 	DelegatedOperationAgentConfigure       DelegatedOperation = "agent:configure"
 	DelegatedOperationAgentCreate          DelegatedOperation = "agent:create"
-	DelegatedOperationAgentCutover         DelegatedOperation = "agent:cutover"
 	DelegatedOperationAgentExecutionRead   DelegatedOperation = "agent:execution-read"
 	DelegatedOperationAgentRecover         DelegatedOperation = "agent:recover"
 	DelegatedOperationAgentReplace         DelegatedOperation = "agent:replace"
@@ -276,8 +257,6 @@ func (e DelegatedOperation) Valid() bool {
 	case DelegatedOperationAgentConfigure:
 		return true
 	case DelegatedOperationAgentCreate:
-		return true
-	case DelegatedOperationAgentCutover:
 		return true
 	case DelegatedOperationAgentExecutionRead:
 		return true
@@ -437,7 +416,6 @@ func (e InvitationPreviewState) Valid() bool {
 const (
 	OperationAuthorityRequestOperationAgentConfigure       OperationAuthorityRequestOperation = "agent:configure"
 	OperationAuthorityRequestOperationAgentCreate          OperationAuthorityRequestOperation = "agent:create"
-	OperationAuthorityRequestOperationAgentCutover         OperationAuthorityRequestOperation = "agent:cutover"
 	OperationAuthorityRequestOperationAgentExecutionRead   OperationAuthorityRequestOperation = "agent:execution-read"
 	OperationAuthorityRequestOperationAgentRecover         OperationAuthorityRequestOperation = "agent:recover"
 	OperationAuthorityRequestOperationAgentReplace         OperationAuthorityRequestOperation = "agent:replace"
@@ -453,8 +431,6 @@ func (e OperationAuthorityRequestOperation) Valid() bool {
 	case OperationAuthorityRequestOperationAgentConfigure:
 		return true
 	case OperationAuthorityRequestOperationAgentCreate:
-		return true
-	case OperationAuthorityRequestOperationAgentCutover:
 		return true
 	case OperationAuthorityRequestOperationAgentExecutionRead:
 		return true
@@ -673,7 +649,7 @@ type Agent struct {
 	Assignment *AgentAssignment `json:"assignment,omitempty"`
 	CreatedAt  time.Time        `json:"createdAt"`
 
-	// Generation The runtime generation garam last activated for the agent: the most recent activation's, whether it still admits the agent's writes or has since ended — deactivated, superseded, recovered or reassigned. Absent for an agent never activated, which includes every legacy agent that has not cut over (ADR-0078).
+	// Generation The runtime generation garam last activated for the agent: the most recent activation's, whether it still admits the agent's writes or has since ended — deactivated, superseded, recovered or reassigned. Absent for an agent never activated (ADR-0078).
 	Generation *string `json:"generation,omitempty"`
 	Grn        string  `json:"grn"`
 	OrgGrn     string  `json:"orgGrn"`
@@ -693,40 +669,6 @@ type AgentAssignment struct {
 
 	// Since When the current binding was written.
 	Since time.Time `json:"since"`
-}
-
-// AgentDefinition What an organization said an agent should be (ADR-0026), written before garam stopped accepting definitions (ADR-0090). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim.
-type AgentDefinition struct {
-	AgentGrn  string    `json:"agentGrn"`
-	CreatedAt time.Time `json:"createdAt"`
-
-	// Cutover The agent's open cutover attempt (ADR-0086), null where none is open. A `frozen` or `switched` definition is archival: its values stay preserved here and are no longer what its operator reads, and only its name still changes.
-	Cutover *AgentDefinitionCutover `json:"cutover"`
-
-	// DefinedBy The member that defined the agent.
-	DefinedBy string `json:"definedBy"`
-
-	// Name What the organization calls an agent: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
-	Name        AgentName `json:"name"`
-	OperatorGrn string    `json:"operatorGrn"`
-	OrgGrn      string    `json:"orgGrn"`
-
-	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. garam accepts no new one (ADR-0090); what it answers was stored before then. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
-	Values AgentValues `json:"values"`
-}
-
-// AgentDefinitionCutover defines model for AgentDefinitionCutover.
-type AgentDefinitionCutover struct {
-	Stage AgentDefinitionCutoverStage `json:"stage"`
-}
-
-// AgentDefinitionCutoverStage defines model for AgentDefinitionCutover.Stage.
-type AgentDefinitionCutoverStage string
-
-// AgentDefinitionPatch A change to what the organization calls a defined agent.
-type AgentDefinitionPatch struct {
-	// Name What the organization calls an agent: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
-	Name AgentName `json:"name"`
 }
 
 // AgentEnrollment defines model for AgentEnrollment.
@@ -813,9 +755,6 @@ type AgentEnrollmentReplacement struct {
 	Epoch       int    `json:"epoch"`
 }
 
-// AgentName What the organization calls an agent: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
-type AgentName = string
-
 // AgentProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is an agent an operator observed cannot start, which is a stricter observation than an absent ready replica: an operator with only a replica count reports `provisioned`, so a state other than `failed` is not evidence the pod can start. What an operator may report, and when, is `api/machine.yaml`'s — the specification the reporting party holds, not this one.
 type AgentProvisioningState string
 
@@ -845,9 +784,6 @@ type AgentSupervisorPlacement string
 
 // AgentSupervisorState defines model for AgentSupervisor.State.
 type AgentSupervisorState string
-
-// AgentValues What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. garam accepts no new one (ADR-0090); what it answers was stored before then. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
-type AgentValues map[string]string
 
 // ControlEndpointWrite defines model for ControlEndpointWrite.
 type ControlEndpointWrite struct {
@@ -976,7 +912,7 @@ type FoundKindKind string
 type FoundObject struct {
 	Grn string `json:"grn"`
 
-	// Name Its name: a person's nickname, or an agent's definition's name. Absent for an agent no definition names.
+	// Name A person's nickname. Absent for an agent, which garam holds no name for.
 	Name *string `json:"name,omitempty"`
 }
 
@@ -1103,10 +1039,10 @@ type OperationAuthorityRequest struct {
 	Operation   OperationAuthorityRequestOperation `json:"operation"`
 	RequestId   RequestId                          `json:"requestId"`
 
-	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read`, `agent:cutover` and `operator:read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. For `agent:cutover` it is the machine listener's cutover route of the agent, such as `/agents/{agent}/cutover/switch`, and garam compares it with the target that route receives. garam binds it as given and decodes nothing.
+	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `operator:read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read`, `agent:cutover` and `agent:replace`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
+	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
 	Target string `json:"target"`
 }
 
@@ -1219,9 +1155,6 @@ type OrgConsent struct {
 //
 // A zero means the organization holds none of that kind. It never means the caller may not see them: no count here is filtered by what the caller could list, because the deletion is not filtered either — the cascade takes every row whatever the caller may read. A count narrowed to what one caller can see would under-report what the deletion destroys, which is the failure this operation exists to prevent. The one permission is on the operation itself.
 type OrgDeletionCounts struct {
-	// AgentDefinitions Agent definitions, which are records of what the organization said an agent should be (ADR-0026).
-	AgentDefinitions int `json:"agentDefinitions"`
-
 	// Agents Agents, each taking its operator assignment with it.
 	Agents int `json:"agents"`
 
@@ -1688,9 +1621,6 @@ type CreateOrgJSONRequestBody = OrganizationCreate
 // UpdateOrgJSONRequestBody defines body for UpdateOrg for application/json ContentType.
 type UpdateOrgJSONRequestBody = OrganizationPatch
 
-// RenameAgentDefinitionJSONRequestBody defines body for RenameAgentDefinition for application/json ContentType.
-type RenameAgentDefinitionJSONRequestBody = AgentDefinitionPatch
-
 // ApproveAgentEnrollmentJSONRequestBody defines body for ApproveAgentEnrollment for application/json ContentType.
 type ApproveAgentEnrollmentJSONRequestBody = AgentEnrollmentApproval
 
@@ -1798,15 +1728,6 @@ type ServerInterface interface {
 	// UpdateOrg Update an organization. Requires the `admin` role.
 	// (PATCH /orgs/{org})
 	UpdateOrg(w http.ResponseWriter, r *http.Request, org Org)
-	// ListAgentDefinitions List an organization's agent definitions. Requires the `member` role.
-	// (GET /orgs/{org}/agent-definitions)
-	ListAgentDefinitions(w http.ResponseWriter, r *http.Request, org Org)
-	// GetAgentDefinition Read one of an organization's agent definitions. Requires the `member` role.
-	// (GET /orgs/{org}/agent-definitions/{agent})
-	GetAgentDefinition(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
-	// RenameAgentDefinition Rename a defined agent. Requires the `member` role.
-	// (PATCH /orgs/{org}/agent-definitions/{agent})
-	RenameAgentDefinition(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
 	// ListAgentEnrollments List the organization's standalone approvals. Requires `agent:read`.
 	// (GET /orgs/{org}/agent-enrollments)
 	ListAgentEnrollments(w http.ResponseWriter, r *http.Request, org Org, params ListAgentEnrollmentsParams)
@@ -2353,102 +2274,6 @@ func (siw *ServerInterfaceWrapper) UpdateOrg(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateOrg(w, r, org)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListAgentDefinitions operation middleware
-func (siw *ServerInterfaceWrapper) ListAgentDefinitions(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListAgentDefinitions(w, r, org)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetAgentDefinition operation middleware
-func (siw *ServerInterfaceWrapper) GetAgentDefinition(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "agent" -------------
-	var agentSlug AgentSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetAgentDefinition(w, r, org, agentSlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RenameAgentDefinition operation middleware
-func (siw *ServerInterfaceWrapper) RenameAgentDefinition(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "agent" -------------
-	var agentSlug AgentSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RenameAgentDefinition(w, r, org, agentSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5026,9 +4851,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.GetAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/watch", wrapper.WatchAgent)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.ListAgentDefinitions)
-	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-definitions/{agent}", wrapper.GetAgentDefinition)
-	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agent-definitions/{agent}", wrapper.RenameAgentDefinition)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-enrollments", wrapper.ListAgentEnrollments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-enrollments", wrapper.ApproveAgentEnrollment)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-enrollments/{enrollment}", wrapper.WithdrawAgentEnrollment)

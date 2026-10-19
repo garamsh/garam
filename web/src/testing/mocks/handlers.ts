@@ -8,7 +8,6 @@ import type {
   Agent,
   AgentEnrollmentListing,
   AgentSupervisor,
-  AgentDefinition,
   Group,
   GroupMember,
   InvitationPreview,
@@ -87,11 +86,7 @@ export const fieldOneKey: OperatorKey = {
   lastExchangedAt: "2026-10-14T08:30:00Z",
 };
 
-/**
- * The single agent Acme holds. It is not the agent `fieldAgent`
- * describes: a definition's GRN is answered here only once an operator
- * claims it, and nothing joins the two lists.
- */
+/** The single agent Acme holds. */
 export const reportedAgent: Agent = {
   grn: "grn:acme:default:agent:1c3d5e7f90a2b4c6",
   orgGrn: acme.grn,
@@ -99,18 +94,6 @@ export const reportedAgent: Agent = {
   runtimeState: "disconnected",
   createdAt: "2026-01-02T03:04:05Z",
   updatedAt: "2026-01-03T04:05:06Z",
-};
-
-/** The single agent Acme says it should have. */
-export const fieldAgent: AgentDefinition = {
-  agentGrn: "grn:acme:default:agent:9f2ac1b40d8e7a35",
-  orgGrn: acme.grn,
-  name: "Scout",
-  operatorGrn: "grn:acme:default:operator:field-one",
-  values: { model: "haiku" },
-  definedBy: alice.grn,
-  createdAt: "2026-01-02T03:04:05Z",
-  cutover: null,
 };
 
 /**
@@ -222,7 +205,6 @@ export const acmeDeletionPreview: OrgDeletionPreview = {
     invitations: 0,
     policies: 2,
     agents: 1,
-    agentDefinitions: 1,
     operators: 1,
     consents: 1,
   },
@@ -299,12 +281,6 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
     body: { keys: [fieldOneKey] },
   },
   { path: "/orgs/acme/agents", guarded: true, body: [reportedAgent] },
-  { path: "/orgs/acme/agent-definitions", guarded: true, body: [fieldAgent] },
-  {
-    path: "/orgs/acme/agent-definitions/9f2ac1b40d8e7a35",
-    guarded: true,
-    body: fieldAgent,
-  },
   { path: "/orgs/acme/consents", guarded: true, body: [globexConsent] },
   {
     path: "/orgs/acme/agent-enrollments",
@@ -407,15 +383,7 @@ function searchFixtures(org: string, q: string, limit: number): OrgSearch {
       "person",
       [{ grn: aliceMembership.userGrn, name: aliceMembership.nickname }],
     ],
-    [
-      "agent",
-      [
-        { grn: fieldAgent.agentGrn, name: fieldAgent.name },
-        ...(reportedAgent.grn === fieldAgent.agentGrn
-          ? []
-          : [{ grn: reportedAgent.grn }]),
-      ],
-    ],
+    ["agent", [{ grn: reportedAgent.grn }]],
     ["team", [engineering]],
     ["policy", [denyDeletes, baselineRead]],
     ["project", [frontend]],

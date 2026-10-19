@@ -258,22 +258,6 @@ func TestOperatorDelete_AnswersTheStateTheOperatorIsIn(t *testing.T) {
 	// An operator the org holds no record of is a missing resource.
 	rec = f.do(t, "DELETE", "/orgs/"+slug+"/operators/never-registered", "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
-
-	// An operator a definition names is refused, with the sentence that
-	// says what to do rather than a bare conflict, and nothing is
-	// deleted: the same operator is still there to delete once the
-	// definition is not naming it.
-	rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"named"}`, owner)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	f.operators.markNamedByDefinition(operatorGRNOf(slug, "named"))
-	rec = f.do(t, "DELETE", "/orgs/"+slug+"/operators/named", "", owner)
-	require.Equal(t, http.StatusConflict, rec.Code)
-	assert.Contains(t, rec.Body.String(), `"kind":"failed_precondition"`)
-	assert.Contains(t, rec.Body.String(), "agent definition names this operator")
-	rec = f.do(t, "GET", "/orgs/"+slug+"/operators", "", owner)
-	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, rec.Body.String(), operatorGRNOf(slug, "named").String(),
-		"a refused delete removes nothing")
 }
 
 // TestOperatorRegister_NamesTheOperatorOrCallsItByItsIdentifier covers

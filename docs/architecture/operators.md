@@ -64,14 +64,11 @@ so an operator authenticates only while its organization still holds
 the record, and withdrawing the record stops it (ADR-0070, ADR-0102).
 garam still never dials an operator, so nothing an operator says
 reaches this domain and no state here is a report of one. The record is
-read for three questions — whether this organization has the operator a
-definition names, which the browser surface asks there; the list of
-what the organization has registered, which the console shows and
-`ListByOrg` exists for; and whether a presented certificate or token
-still names an operator this organization holds, which the machine
-listener asks through a seam of its own. The `agent_definitions`
-foreign key is the copy of the definition's check no call path routes
-around, and it is what refuses a delete as well.
+read for two questions — the list of what the organization has
+registered, which the console shows and `ListByOrg` exists for; and
+whether a presented certificate or token still names an operator this
+organization holds, which the machine listener asks through a seam of
+its own.
 
 That list also answers when garam last issued each operator a
 certificate, read from `operator_certificates` beside the record and
@@ -90,8 +87,8 @@ The record's one update is to its name and description
 Both are what the organization says about the operator and neither is
 an identity: a name is not unique, one left out of a registration is
 the identifier, and the update writes those two columns and nothing
-keyed on the GRN, so the certificate lineage, its keys and the
-definitions naming the operator stand as they were. It is authorized on
+keyed on the GRN, so the certificate lineage and its keys stand as
+they were. It is authorized on
 `operator:update`, which grants nothing and withdraws nothing. The
 bounds are `api/openapi.yaml` §OperatorName and §OperatorDescription,
 which is authoritative for them, and 000025 holds the same ones.
@@ -101,9 +98,7 @@ and their tokens go by `migrations/000043`'s foreign keys, and the
 record of the certificate garam last issued has no such key and is
 removed by name in the same transaction. That second removal is load
 bearing rather than tidy: left standing, the row would answer a
-certificate against the next registration of the same identifier. An
-operator an agent definition names is refused, and nothing is deleted;
-the definitions move or go first.
+certificate against the next registration of the same identifier.
 
 The certificate half still reads no record above it. An operator renews
 with what it holds, and the renewal rule is measured against the
@@ -178,9 +173,9 @@ registering grants nothing and this withdraws what an operator runs on
 (ADR-0070). The record is read on the machine listener too, through
 the seams that admit a certificate and a token, which are the one place
 either listener reads it to decide whether a caller is admitted. The
-agent's certificate is not this domain's: an agent is admitted to its
-own by the claim its operator made (ADR-0033) and renews on the route
-ADR-0040 gave it.
+agent's certificate is not this domain's: a managed agent's first is
+issued on the enrollment route ([agents.md](./agents.md) §Separated
+execution).
 
 ## Issued PEM identity
 
@@ -320,11 +315,7 @@ records where the agent runs now.
 Recovery targets the agent, is decided on `agent:recover` against it,
 and records where the agent runs now; the recovery it authorizes is
 answered once, and a second recovery under it is refused
-([agents.md](./agents.md) §Separated execution). Cutover targets the
-agent, is decided on `agent:cutover` against it, records where the
-agent runs now and binds the request target of one of garam's cutover
-routes, so each stage of a legacy agent's cutover takes a reference of
-its own, rechecked when it is presented (ADR-0086). Replacement
+([agents.md](./agents.md) §Separated execution). Replacement
 targets the agent, is decided on `agent:replace` against it, records
 where the agent runs now and binds the controller a managed
 replacement moves it to; the grant must cover both controllers at the
@@ -332,10 +323,9 @@ mint and at every read, and the reference stays current at the
 assignment the replacement writes
 ([ADR-0107](./adr/0107-a-managed-replacement-is-authorized-by-an-agent-replace-reference-naming-the-agent-its-assignment-and-the-controller-it-moves-to.md)).
 Every role holds `agent:create`; only owner and admin hold
-`agent:configure`, `agent:recover`, `agent:cutover` and
-`agent:replace`, because execution settings choose what runs on a
-host, a recovery fences every certificate the agent held, a cutover
-moves which service owns the agent's settings, and a replacement
+`agent:configure`, `agent:recover` and `agent:replace`, because
+execution settings choose what runs on a host, a recovery fences every
+certificate the agent held, and a replacement
 moves the agent to another controller and fences its lineage.
 `agent:activate` is a grant operation only, bounding the hosted
 operator's own lifecycle authority; no member mints it.

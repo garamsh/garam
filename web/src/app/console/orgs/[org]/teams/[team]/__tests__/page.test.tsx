@@ -11,7 +11,6 @@ import {
   alice,
   answerPermissionChecks,
   aliceMembership,
-  fieldAgent,
   reportedAgent,
   signedOut,
 } from "@/testing/mocks/handlers";
@@ -101,23 +100,22 @@ describe("team page", () => {
     const user = userEvent.setup();
     await renderTeam();
 
-    // A defined agent is offered by name before any operator claims
-    // it, with its identifier and its state beside the name (ADR-0075).
+    // An agent is offered with its identifier beside what stands in
+    // its name's place, since garam holds no name for one (ADR-0118).
     expect(await offered(user)).toEqual([
       "Bob bob",
-      "Scout 9f2ac1b40d8e7a35 · awaiting operator",
       `Unnamed agent ${slugFromGrn(reportedAgent.grn)}`,
     ]);
   });
 
-  it("tells two agents of one name apart by their rows and removes the one chosen", async () => {
-    const first = fieldAgent.agentGrn;
+  it("tells two unnamed agents apart by their rows and removes the one chosen", async () => {
+    const first = reportedAgent.grn;
     const second = "grn:acme:default:agent:0a1b2c3d4e5f6071";
     const removed: string[] = [];
     server.use(
       membersAre(first, second),
-      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
-        HttpResponse.json([fieldAgent, { ...fieldAgent, agentGrn: second }]),
+      http.get(`${API_URL}/orgs/acme/agents`, () =>
+        HttpResponse.json([reportedAgent, { ...reportedAgent, grn: second }]),
       ),
       http.delete(`${MEMBERS}/:member`, ({ params }) => {
         removed.push(decodeURIComponent(String(params.member)));
@@ -128,23 +126,19 @@ describe("team page", () => {
 
     await renderTeam();
 
-    // Both are called Scout; each row carries its own identifier.
-    const rows = screen.getAllByRole("row", { name: /Scout/ });
+    // Neither has a name; each row carries its own identifier.
+    // Presence: a row's accessible name is all of its cells.
+    const rows = screen.getAllByRole("row", { name: /Unnamed agent/ });
     expect(rows).toHaveLength(2);
-    expect(within(rows[0]).getByText("9f2ac1b40d8e7a35")).toBeInTheDocument();
+    expect(within(rows[0]).getByText("1c3d5e7f90a2b4c6")).toBeInTheDocument();
     expect(within(rows[1]).getByText("0a1b2c3d4e5f6071")).toBeInTheDocument();
 
-    // The sentences name the agent and never its identifier: the row
-    // the control stands in is what tells the two apart, so the second
-    // agent is the one removed and the first stays.
-    await user.click(
-      within(rows[1]).getByRole("button", {
-        name: "Remove Scout from Engineering",
-      }),
-    );
-    const dialog = screen.getByRole("alertdialog", {
-      name: "Remove Scout from Engineering?",
-    });
+    // The sentences never name the identifier: the row the control
+    // stands in is what tells the two apart, so the second agent is the
+    // one removed and the first stays. Presence: the button's name goes
+    // on to name the member and the team.
+    await user.click(within(rows[1]).getByRole("button", { name: /^Remove / }));
+    const dialog = screen.getByRole("alertdialog");
     expect(within(dialog).queryByText(/0a1b2c3d4e5f6071/)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Remove from team" }));
 
@@ -154,61 +148,17 @@ describe("team page", () => {
     await vi.waitFor(() =>
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(),
     );
+    // Presence, for the same two reasons.
     expect(
-      within(screen.getByRole("row", { name: /9f2ac1b40d8e7a35/ })).getByRole(
+      within(screen.getByRole("row", { name: /1c3d5e7f90a2b4c6/ })).getByRole(
         "button",
-        { name: "Remove Scout from Engineering" },
+        { name: /^Remove / },
       ),
     ).toBeInTheDocument();
   });
 
-  it("names a defined agent member by the name its definition gives it", async () => {
-    server.use(membersAre(fieldAgent.agentGrn));
-
-    await renderTeam();
-
-    // Presence: a row's accessible name is all of its cells.
-    const row = screen.getByRole("row", { name: /Scout/ });
-    expect(within(row).getByText("Agent")).toBeInTheDocument();
-    expect(
-      within(row).queryByText("Not found in this organization"),
-    ).not.toBeInTheDocument();
-  });
-
-  it("says agents may be missing, not that none can be chosen, when one agent list is refused", async () => {
-    // The control: with both agent lists read, nothing is said missing.
-    server.use(membersAre(alice.grn));
-    const user = userEvent.setup();
-    const allowed = await renderTeam();
-    expect(screen.queryByText(/may be missing here/)).not.toBeInTheDocument();
-    allowed.unmount();
-
-    server.use(
-      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
-        HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
-      ),
-    );
-
-    await renderTeam();
-
-    expect(
-      screen.getByText(
-        "This organization's agent definitions are not listed to you, so some agents may be missing here.",
-      ),
-    ).toBeInTheDocument();
-    // The reported list still offers its agent, so "none can be chosen"
-    // would be false.
-    expect(await offered(user)).toContain(
-      `Unnamed agent ${slugFromGrn(reportedAgent.grn)}`,
-    );
-    expect(
-      screen.queryByText(/none of them can be chosen/),
-    ).not.toBeInTheDocument();
-  });
-
-  it("says no agent can be chosen when both agent lists are refused", async () => {
-    // The control: with both agent lists read, no agent list is said
-    // refused.
+  it("says no agent can be chosen when the agents list is refused", async () => {
+    // The control: with the agents list read, it is not said refused.
     server.use(membersAre(alice.grn));
     const allowed = await renderTeam();
     expect(
@@ -217,10 +167,8 @@ describe("team page", () => {
     allowed.unmount();
 
     server.use(
-      ...["agent-definitions", "agents"].map((segment) =>
-        http.get(`${API_URL}/orgs/acme/${segment}`, () =>
-          HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
-        ),
+      http.get(`${API_URL}/orgs/acme/agents`, () =>
+        HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
       ),
     );
 
@@ -425,6 +373,8 @@ describe("team page", () => {
   });
 
   it("leaves out each write the server denies and keeps the rest", async () => {
+    // The team holds Alice alone, so the agent is someone to add.
+    server.use(membersAre(alice.grn));
     // The control: every write allowed, every control is there.
     const user = userEvent.setup();
     const allowed = await renderTeam();
@@ -480,7 +430,10 @@ describe("team page", () => {
   });
 
   it("shows every control when the server cannot say", async () => {
-    server.use(answerPermissionChecks(() => "unknown"));
+    server.use(
+      membersAre(alice.grn),
+      answerPermissionChecks(() => "unknown"),
+    );
     const user = userEvent.setup();
 
     await renderTeam();
@@ -569,12 +522,15 @@ describe("team page", () => {
     expect(screen.getByLabelText("Team name")).toBeInTheDocument();
   });
   it("keeps an unsaved rename and the add choice across a tab switch", async () => {
+    server.use(membersAre(alice.grn));
     const user = userEvent.setup();
     await renderTeam();
 
     await user.click(screen.getByRole("combobox", { name: "Person or agent" }));
     // Presence: an option's name goes on to carry the identifier.
-    await user.click(await screen.findByRole("option", { name: /^Scout / }));
+    await user.click(
+      await screen.findByRole("option", { name: /^Unnamed agent / }),
+    );
     await user.click(screen.getByRole("tab", { name: "Settings" }));
     const name = screen.getByLabelText("Team name");
     await user.clear(name);
@@ -584,7 +540,7 @@ describe("team page", () => {
     // Presence: the trigger shows the option's name and identifier.
     expect(
       screen.getByRole("combobox", { name: "Person or agent" }),
-    ).toHaveTextContent(/^Scout/);
+    ).toHaveTextContent(/^Unnamed agent/);
     await user.click(screen.getByRole("tab", { name: "Settings" }));
     expect(screen.getByLabelText("Team name")).toHaveValue("Platform");
   });

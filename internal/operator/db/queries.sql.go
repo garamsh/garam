@@ -107,9 +107,7 @@ DELETE FROM operators WHERE grn = $1
 `
 
 // Deleting the record is what stops the operator authenticating
-// (ADR-0070). A definition naming the operator refuses it, through the
-// foreign key 000018 declared NO ACTION, which is the copy no call
-// path routes around.
+// (ADR-0070).
 func (q *Queries) DeleteOperator(ctx context.Context, grn string) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteOperator, grn)
 	if err != nil {

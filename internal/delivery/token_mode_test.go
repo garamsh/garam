@@ -139,7 +139,7 @@ func TestHTTPQueue_TokenModePresentsTheTokenFileOnEveryCall(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(g.serve))
 	t.Cleanup(server.Close)
 	f, path := tokenFile(t, agentTokenOf("a"))
-	queue, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), delivery.NewLegacyExecution(), f)
+	queue, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), delivery.HeldExecution("held-token"), f)
 	require.NoError(t, err)
 
 	_, err = queue.Claim(context.Background())
@@ -158,7 +158,7 @@ func TestHTTPQueue_TokenModePresentsTheTokenFileOnEveryCall(t *testing.T) {
 	assert.Equal(t, "Garam-Token "+agentTokenOf("b"), calls[1].Get("Authorization"), "the rewritten file is the next call's")
 	assert.Equal(t, "Garam-Token "+agentTokenOf("b"), calls[2].Get("Authorization"))
 	assert.Equal(t, delivery.TokenDeliveryContract, calls[2].Get("Garam-Contract-Version"))
-	assert.Empty(t, calls[0].Get("Garam-Execution"), "a legacy execution presents none")
+	assert.Equal(t, "held-token", calls[0].Get("Garam-Execution"), "beside the activation's token")
 
 	writeToken(t, path, "garam_at_")
 	_, err = queue.Claim(context.Background())
@@ -177,7 +177,7 @@ func TestHTTPQueue_TokenModeReadsARefusedTokenAsUndecided(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	f, _ := tokenFile(t, agentTokenOf("a"))
-	tokenExecution := delivery.NewLegacyExecution()
+	tokenExecution := delivery.HeldExecution("held-token")
 	tokens, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), tokenExecution, f)
 	require.NoError(t, err)
 	_, err = tokens.Claim(context.Background())
@@ -186,7 +186,7 @@ func TestHTTPQueue_TokenModeReadsARefusedTokenAsUndecided(t *testing.T) {
 	_, err = tokenExecution.Present()
 	assert.NoError(t, err, "the execution stays open")
 
-	certificateExecution := delivery.NewLegacyExecution()
+	certificateExecution := delivery.HeldExecution("held-token")
 	certificates, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), certificateExecution, certificateMode())
 	require.NoError(t, err)
 	_, err = certificates.Claim(context.Background())
@@ -206,7 +206,7 @@ func TestHTTPQueue_TokenModeReadsAForbiddenCallAsTheFence(t *testing.T) {
 		g := &recordingGaram{answer: status}
 		server := httptest.NewServer(http.HandlerFunc(g.serve))
 		t.Cleanup(server.Close)
-		execution := delivery.NewLegacyExecution()
+		execution := delivery.HeldExecution("held-token")
 		queue, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution, f)
 		require.NoError(t, err)
 		_, err = queue.Claim(context.Background())
@@ -288,33 +288,28 @@ type tokenLoop struct {
 	placement      string
 }
 
-// startTokenMode starts a token-mode loop over the fakes, fenced where
-// c is not nil, and answers where its files are.
-func startTokenMode(t *testing.T, queue *garamQueue, gateway *agentGateway, c *control, outbox *delivery.Outbox) tokenLoop {
+// startTokenMode starts a token-mode loop over the fakes and c, its
+// garam token file holding garamToken at the start, and answers where
+// its files are.
+func startTokenMode(t *testing.T, queue *garamQueue, gateway *agentGateway, c *control, outbox *delivery.Outbox, garamToken string) tokenLoop {
 	t.Helper()
 	dir := t.TempDir()
 	files := tokenLoop{garam: filepath.Join(dir, "garam-token")}
-	writeToken(t, files.garam, agentTokenOf("a"))
+	writeToken(t, files.garam, garamToken)
 	garam, err := delivery.NewTokenFile(files.garam)
 	require.NoError(t, err)
-	execution := delivery.NewLegacyExecution()
-	credentials := delivery.NewFileCredentials("", garam)
-	var authority delivery.Authority
-	if c != nil {
-		c.contract = delivery.TokenExecutionContract
-		files.control = filepath.Join(dir, "control-token")
-		writeToken(t, files.control, agentTokenOf("c"))
-		files.placement = filepath.Join(dir, "placement-token")
-		writeToken(t, files.placement, "placement-1")
-		control, err := delivery.NewTokenFile(files.control)
+	c.contract = delivery.TokenExecutionContract
+	files.control = filepath.Join(dir, "control-token")
+	writeToken(t, files.control, agentTokenOf("c"))
+	files.placement = filepath.Join(dir, "placement-token")
+	writeToken(t, files.placement, "placement-1")
+	control, err := delivery.NewTokenFile(files.control)
+	require.NoError(t, err)
+	execution := delivery.NewFencedExecution()
+	credentials := delivery.NewFileCredentials(files.placement, garam, control)
+	if outbox == nil {
+		outbox, err = delivery.NewOutbox(t.TempDir())
 		require.NoError(t, err)
-		execution = delivery.NewFencedExecution()
-		credentials = delivery.NewFileCredentials(files.placement, garam, control)
-		authority = c
-		if outbox == nil {
-			outbox, err = delivery.NewOutbox(t.TempDir())
-			require.NoError(t, err)
-		}
 	}
 	q, err := delivery.NewHTTPQueue(queue.server.Client(), queue.server.URL, agentGRN(), execution, garam)
 	require.NoError(t, err)
@@ -322,7 +317,7 @@ func startTokenMode(t *testing.T, queue *garamQueue, gateway *agentGateway, c *c
 	require.NoError(t, err)
 	start(t, delivery.Ends{
 		Agent: agentGRN(), Queue: q, Gateway: ingress, Execution: execution,
-		Credentials: credentials, Authority: authority, Outbox: outbox,
+		Credentials: credentials, Authority: c, Outbox: outbox,
 	}, brief())
 	return files
 }
@@ -336,21 +331,6 @@ func carry(t *testing.T, queue *garamQueue, gateway *agentGateway) {
 	holding(t, queue, 0, 0)
 	gateway.endTurn(delivery.TurnFinished, "message-0")
 	eventually(t, func() bool { return queue.delivered() == 1 }, "the turn that named it completes it")
-}
-
-// TestRun_UnfencedTokenModeCarriesMessagesOnTheGaramTokenAlone is the
-// Operator's Garam-source agent: no control settings, so no activation,
-// and its garam token is the whole of what it presents.
-func TestRun_UnfencedTokenModeCarriesMessagesOnTheGaramTokenAlone(t *testing.T) {
-	queue := newGaramQueue(t, time.Second, "what the sender said")
-	queue.accept(agentTokenOf("a"))
-	gateway := newAgentGateway(t)
-	startTokenMode(t, queue, gateway, nil, nil)
-
-	carry(t, queue, gateway)
-	for _, presented := range queue.claimsPresenting() {
-		assert.Equal(t, "Garam-Token "+agentTokenOf("a"), presented)
-	}
 }
 
 // TestRun_TokenModeRetriesARefusedTokenAndKeepsTheOutbox holds a
@@ -367,7 +347,7 @@ func TestRun_TokenModeRetriesARefusedTokenAndKeepsTheOutbox(t *testing.T) {
 	outbox, err := delivery.NewOutbox(dir)
 	require.NoError(t, err)
 	writeEntry(t, dir, entryFor("entry-1", "the reply"))
-	files := startTokenMode(t, queue, gateway, nil, outbox)
+	files := startTokenMode(t, queue, gateway, newControl(queue), outbox, agentTokenOf("a"))
 
 	eventually(t, func() bool { return queue.claimsAttempted() >= 3 }, "a refused token is retried, not paused")
 	retried := queue.claimsAttempted()
@@ -396,24 +376,11 @@ func TestRun_TokenModeWaitsOutATokenFileThatIsNotWhole(t *testing.T) {
 	queue := newGaramQueue(t, time.Second, "what the sender said")
 	queue.accept(agentTokenOf("a"))
 	gateway := newAgentGateway(t)
-	dir := t.TempDir()
-	path := filepath.Join(dir, "garam-token")
-	writeToken(t, path, "garam_at_aaaa")
-	garam, err := delivery.NewTokenFile(path)
-	require.NoError(t, err)
-	execution := delivery.NewLegacyExecution()
-	q, err := delivery.NewHTTPQueue(queue.server.Client(), queue.server.URL, agentGRN(), execution, garam)
-	require.NoError(t, err)
-	ingress, err := delivery.NewHTTPGateway(gateway.server.Client(), gateway.server.URL, agentGRN())
-	require.NoError(t, err)
-	start(t, delivery.Ends{
-		Agent: agentGRN(), Queue: q, Gateway: ingress, Execution: execution,
-		Credentials: delivery.NewFileCredentials("", garam),
-	}, brief())
+	files := startTokenMode(t, queue, gateway, newControl(queue), nil, "garam_at_aaaa")
 
 	quietFor()
 	assert.Zero(t, queue.claimsAttempted(), "nothing is presented from a file that is not whole")
-	writeToken(t, path, agentTokenOf("a"))
+	writeToken(t, files.garam, agentTokenOf("a"))
 	eventually(t, func() bool { return len(gateway.posted()) == 1 }, "the control: the whole token carries the message")
 }
 
@@ -427,7 +394,7 @@ func TestRun_FencedTokenModeKeepsItsTwoTokensApart(t *testing.T) {
 	queue.accept(agentTokenOf("a"))
 	gateway := newAgentGateway(t)
 	c := newControl(queue)
-	startTokenMode(t, queue, gateway, c, nil)
+	startTokenMode(t, queue, gateway, c, nil, agentTokenOf("a"))
 
 	carry(t, queue, gateway)
 	require.NotEmpty(t, c.requests())
@@ -464,7 +431,7 @@ func TestRun_ARewrittenTokenReasksAPausedActivation(t *testing.T) {
 			gateway := newAgentGateway(t)
 			c := newControl(queue)
 			c.answer(errorx.New(errorx.KindFailedPrecondition, "control refused 409 epoch_superseded"))
-			files := startTokenMode(t, queue, gateway, c, nil)
+			files := startTokenMode(t, queue, gateway, c, nil, agentTokenOf("a"))
 
 			eventually(t, func() bool { return len(c.requests()) == 1 }, "the activation is asked and refused")
 			quietFor()

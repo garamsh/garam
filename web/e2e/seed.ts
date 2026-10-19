@@ -13,7 +13,7 @@ export type Seed = {
   nickname: string;
   groupName: string;
   projectName: string;
-  /** The operator the org has registered, which a definition may name. */
+  /** The operator the org has registered. */
   operatorIdentifier: string;
   /** What the org calls that operator (ADR-0074). */
   operatorName: string;
@@ -132,8 +132,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
         seed.projectName,
       ],
     );
-    // An agent definition may only name an operator the organization
-    // has registered (ADR-0045), so the record comes with the org.
+    // The operator the organization has registered comes with the org.
     await client.query(
       `INSERT INTO operators (grn, org_grn, registered_by, created_at, name)
        VALUES ($1, $2, $3, now(), $4)`,
@@ -436,141 +435,6 @@ export async function seedMemberDeniedOperatorRead(
     await client.end();
   }
   return member;
-}
-
-/**
- * Writes a definition of the seeded organization naming the operator
- * `operatorIdentifier`, as one written before garam stopped accepting
- * them (ADR-0090). Migration 000035 refuses a new one, so its trigger
- * alone is off for this statement, inside the caller's transaction;
- * the foreign keys stay on, so the operator must be registered.
- * Nothing in garam writes one any more.
- */
-async function insertDefinition(
-  client: Client,
-  seed: Seed,
-  agentGrn: string,
-  operatorIdentifier: string,
-  name: string,
-): Promise<void> {
-  await client.query(
-    "ALTER TABLE agent_definitions DISABLE TRIGGER agent_definitions_closed",
-  );
-  await client.query(
-    `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name)
-     VALUES ($1, $2, $3, $4, $5, now(), $6)`,
-    [
-      agentGrn,
-      `grn:root:default:org:${seed.orgSlug}`,
-      `grn:${seed.orgSlug}:default:operator:${operatorIdentifier}`,
-      JSON.stringify({ model: "haiku" }),
-      seed.userGrn,
-      name,
-    ],
-  );
-  await client.query(
-    "ALTER TABLE agent_definitions ENABLE TRIGGER agent_definitions_closed",
-  );
-}
-
-/**
- * Keeps a definition named `name` for the operator
- * `operatorIdentifier` that no operator has claimed, as the console's
- * define form wrote one before ADR-0090, and answers its identifier.
- */
-export async function seedDefinition(
-  seed: Seed,
-  name: string,
-  operatorIdentifier: string = seed.operatorIdentifier,
-): Promise<string> {
-  const identifier = randomBytes(8).toString("hex");
-  const client = new Client({ connectionString: DATABASE_URL });
-  await client.connect();
-  try {
-    await client.query("BEGIN");
-    await insertDefinition(
-      client,
-      seed,
-      `grn:${seed.orgSlug}:default:agent:${identifier}`,
-      operatorIdentifier,
-      name,
-    );
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    await client.end();
-  }
-  return identifier;
-}
-
-/** Where a seeded definition's cutover attempt stands, null for none. */
-export type CutoverStage = "frozen" | "switched" | "rolled_back" | null;
-
-/**
- * Defines an agent named `name` for the seeded operator, with its
- * execution row and, where `stage` names one, a cutover attempt in that
- * stage, and answers its identifier. An attempt is opened, switched and
- * rolled back by the Operator on the machine listener under an
- * `agent:cutover` authority (ADR-0086) — no route a browser reaches —
- * so the rows are seeded as that route writes them.
- */
-export async function seedCutoverDefinition(
-  seed: Seed,
-  name: string,
-  stage: CutoverStage,
-): Promise<string> {
-  const identifier = randomBytes(8).toString("hex");
-  const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
-  const agentGrn = `grn:${seed.orgSlug}:default:agent:${identifier}`;
-  const client = new Client({ connectionString: DATABASE_URL });
-  await client.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(
-      `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
-       VALUES ($1, $2, 'ready', 'connected', now(), now())`,
-      [agentGrn, orgGrn],
-    );
-    await client.query(
-      `INSERT INTO agent_executions (agent_grn, updated_at) VALUES ($1, now())`,
-      [agentGrn],
-    );
-    await insertDefinition(
-      client,
-      seed,
-      agentGrn,
-      seed.operatorIdentifier,
-      name,
-    );
-    if (stage !== null) {
-      await client.query(
-        `INSERT INTO agent_cutovers
-           (agent_grn, import_id, stage, frozen_digest, audience_grn, grant_id,
-            operation_ref, created_at, switched_at, ended_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, now(),
-                 CASE WHEN $3 = 'switched' THEN now() END,
-                 CASE WHEN $3 = 'rolled_back' THEN now() END)`,
-        [
-          agentGrn,
-          `import-${identifier}`,
-          stage,
-          randomBytes(32),
-          `grn:${seed.orgSlug}:default:operator:hosted`,
-          randomBytes(16).toString("hex"),
-          randomBytes(16).toString("hex"),
-        ],
-      );
-    }
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    await client.end();
-  }
-  return identifier;
 }
 
 /**

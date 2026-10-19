@@ -229,8 +229,6 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 		version = agent.EnrollmentContractVersion
 	case standalonePath(req.URL.Path):
 		version = agent.StandaloneContractVersion
-	case cutoverPath(req.URL.Path):
-		version = agent.CutoverContractVersion
 	case strings.HasPrefix(req.URL.Path, "/agent-enrollment-approvals"):
 		version = agent.AdmissionContractVersion
 	case strings.HasSuffix(req.URL.Path, "/outbox-messages"):
@@ -251,17 +249,6 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 // which serve execution-fence.v1.
 func executionPath(path string) bool {
 	for _, suffix := range []string{"/activations", "/deactivation", "/execution/introspection", "/credential-recovery"} {
-		if strings.HasSuffix(path, suffix) {
-			return true
-		}
-	}
-	return false
-}
-
-// cutoverPath reports whether path is one of the cutover routes, which
-// serve agent-cutover.v1.
-func cutoverPath(path string) bool {
-	for _, suffix := range []string{"/cutover", "/cutover/freeze", "/cutover/switch", "/cutover/rollback"} {
 		if strings.HasSuffix(path, suffix) {
 			return true
 		}

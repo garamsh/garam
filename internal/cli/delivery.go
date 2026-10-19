@@ -107,38 +107,26 @@ type adapterSettings struct {
 	sign bool
 }
 
-// fenced reports which mode the settings choose (ADR-0084): all three
-// control settings select the fenced one, none the legacy one, and
-// anything between is refused rather than read as either.
-func (s adapterSettings) fenced() (bool, error) {
-	set := 0
-	for _, v := range []string{s.controlURL, s.controlRoot, s.placementToken} {
-		if v != "" {
-			set++
-		}
+// controlled refuses settings that do not name the adapter's lifecycle
+// authority. Every agent's writes are fenced by an activation, which
+// the authority answers, so the three control settings are required
+// together, and the outbox beside them (ADR-0084, ADR-0118).
+func (s adapterSettings) controlled() error {
+	if s.controlURL == "" || s.controlRoot == "" || s.placementToken == "" {
+		return errorx.New(errorx.KindInvalidArgument,
+			"GARAM_ADAPTER_CONTROL_URL, GARAM_ADAPTER_CONTROL_ROOT_FILE and GARAM_ADAPTER_PLACEMENT_TOKEN_FILE are required")
 	}
-	switch set {
-	case 0:
-		if s.controlSocket != "" {
-			return false, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_CONTROL_SOCKET is set only beside the control settings")
-		}
-		return false, nil
-	case 3:
-		if s.outboxDir == "" {
-			return false, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_OUTBOX_DIR is required beside the control settings")
-		}
-		return true, nil
+	if s.outboxDir == "" {
+		return errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_OUTBOX_DIR is required beside the control settings")
 	}
-	return false, errorx.New(errorx.KindInvalidArgument,
-		"GARAM_ADAPTER_CONTROL_URL, GARAM_ADAPTER_CONTROL_ROOT_FILE and GARAM_ADAPTER_PLACEMENT_TOKEN_FILE are set together or not at all")
+	return nil
 }
 
 // credentials answers what the adapter's calls present to garam and to
 // its lifecycle authority: the agent's certificate to both, or a token
 // file to each (ADR-0100). Exactly one of the two modes is named, and
-// neither falls back to the other. The control credential is nil for
-// a legacy adapter; the pair is nil in the token mode.
-func (s adapterSettings) credentials(fenced bool) (garam, control delivery.Credential, pair *keyfile.Pair, err error) {
+// neither falls back to the other. The pair is nil in the token mode.
+func (s adapterSettings) credentials() (garam, control delivery.Credential, pair *keyfile.Pair, err error) {
 	if s.tokenFile == "" {
 		if s.controlToken != "" {
 			return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
@@ -148,31 +136,22 @@ func (s adapterSettings) credentials(fenced bool) (garam, control delivery.Crede
 			return nil, nil, nil, err
 		}
 		garam = delivery.NewCertificate(pair.Get)
-		if fenced {
-			control = garam
-		}
-		return garam, control, pair, nil
+		return garam, garam, pair, nil
 	}
 	if s.certFile != "" || s.keyFile != "" {
 		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
 			"GARAM_ADAPTER_TOKEN_FILE and the GARAM_ADAPTER_TLS_* files are two modes, and only one is set")
 	}
-	switch {
-	case fenced && s.controlToken == "":
+	if s.controlToken == "" {
 		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
 			"GARAM_ADAPTER_CONTROL_TOKEN_FILE is required beside the control settings and GARAM_ADAPTER_TOKEN_FILE")
-	case !fenced && s.controlToken != "":
-		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
-			"GARAM_ADAPTER_CONTROL_TOKEN_FILE is set only beside the control settings")
 	}
 	tokens, err := delivery.NewTokenFile(s.tokenFile)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	if fenced {
-		if control, err = delivery.NewTokenFile(s.controlToken); err != nil {
-			return nil, nil, nil, err
-		}
+	if control, err = delivery.NewTokenFile(s.controlToken); err != nil {
+		return nil, nil, nil, err
 	}
 	return tokens, control, nil, nil
 }
@@ -180,9 +159,9 @@ func (s adapterSettings) credentials(fenced bool) (garam, control delivery.Crede
 // adapterLoop builds the loop from what the environment named, or
 // refuses what it cannot run on. One GRN names the agent to garam and
 // to the runtime beside it, which serves the agent under that GRN. The
-// control settings choose the fenced or legacy mode, the credential
-// files the certificate or token mode, and the outbox is forwarded from
-// wherever it is named.
+// control settings name its lifecycle authority, the credential files
+// choose the certificate or token mode, and the outbox is forwarded
+// from where it is named.
 func adapterLoop(s adapterSettings) (delivery.Service, error) {
 	if s.agent == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_AGENT is required")
@@ -194,11 +173,10 @@ func adapterLoop(s adapterSettings) (delivery.Service, error) {
 	if s.machineURL == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_MACHINE_URL is required")
 	}
-	fenced, err := s.fenced()
-	if err != nil {
+	if err := s.controlled(); err != nil {
 		return nil, err
 	}
-	garam, control, pair, err := s.credentials(fenced)
+	garam, control, pair, err := s.credentials()
 	if err != nil {
 		return nil, err
 	}
@@ -208,24 +186,18 @@ func adapterLoop(s adapterSettings) (delivery.Service, error) {
 	}
 	ends := delivery.Ends{
 		Agent:       agent,
-		Execution:   delivery.NewLegacyExecution(),
-		Credentials: delivery.NewFileCredentials(s.placementToken, garam),
+		Execution:   delivery.NewFencedExecution(),
+		Credentials: delivery.NewFileCredentials(s.placementToken, garam, control),
 	}
-	if fenced {
-		ends.Execution = delivery.NewFencedExecution()
-		ends.Credentials = delivery.NewFileCredentials(s.placementToken, garam, control)
-		controlClient, err := adapterClient(pair, s.controlRoot, string(envAdapterControlRoot), s.controlSocket)
-		if err != nil {
-			return nil, err
-		}
-		if ends.Authority, err = delivery.NewHTTPAuthority(controlClient, s.controlURL, agent, control); err != nil {
-			return nil, err
-		}
+	controlClient, err := adapterClient(pair, s.controlRoot, string(envAdapterControlRoot), s.controlSocket)
+	if err != nil {
+		return nil, err
 	}
-	if s.outboxDir != "" {
-		if ends.Outbox, err = delivery.NewOutbox(s.outboxDir); err != nil {
-			return nil, err
-		}
+	if ends.Authority, err = delivery.NewHTTPAuthority(controlClient, s.controlURL, agent, control); err != nil {
+		return nil, err
+	}
+	if ends.Outbox, err = delivery.NewOutbox(s.outboxDir); err != nil {
+		return nil, err
 	}
 	if ends.Queue, err = delivery.NewHTTPQueue(client, s.machineURL, agent, ends.Execution, garam); err != nil {
 		return nil, err

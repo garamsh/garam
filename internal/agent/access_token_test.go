@@ -55,7 +55,7 @@ var hosted = grn.New("acme", grn.DefaultProject, ServiceTypeOperator, "control")
 func minting(t *testing.T, store *minted, lifetime time.Duration) (Service, time.Time) {
 	t.Helper()
 	at := time.Date(2026, time.October, 9, 12, 0, 0, 0, time.UTC)
-	svc, err := NewService(nil, store, registered{hosted: true}, nil, Config{TokenLifetime: lifetime,
+	svc, err := NewService(nil, store, registered{hosted: true}, Config{TokenLifetime: lifetime,
 		Backdate: time.Minute, ServerRootPEM: []byte("root"), Now: func() time.Time { return at }})
 	require.NoError(t, err)
 	return svc, at
@@ -119,11 +119,11 @@ func TestService_MintAccessTokenRefusesWhatTheStoreIsNotAsked(t *testing.T) {
 
 func TestNewService_BoundsTheTokenLifetime(t *testing.T) {
 	for _, lifetime := range []time.Duration{0, MinAccessTokenLifetime, MaxAccessTokenLifetime} {
-		_, err := NewService(nil, &minted{}, nil, nil, Config{TokenLifetime: lifetime})
+		_, err := NewService(nil, &minted{}, nil, Config{TokenLifetime: lifetime})
 		assert.NoError(t, err, lifetime)
 	}
 	for _, lifetime := range []time.Duration{MinAccessTokenLifetime - time.Second, MaxAccessTokenLifetime + time.Second} {
-		_, err := NewService(nil, &minted{}, nil, nil, Config{TokenLifetime: lifetime})
+		_, err := NewService(nil, &minted{}, nil, Config{TokenLifetime: lifetime})
 		assert.ErrorIs(t, err, ErrAccessTokenLifetime, lifetime)
 		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 	}

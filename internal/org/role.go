@@ -112,11 +112,6 @@ const (
 	// organization may withhold from someone it lets read. No role
 	// grants it: a policy carries it or nothing does.
 	ActionAgentWatch = "agent:watch"
-	// ActionAgentRename is changing what the org calls an agent it
-	// defined (ADR-0075). It moves no value an operator reads. No
-	// action defines an agent: garam accepts no desired value
-	// (ADR-0090).
-	ActionAgentRename = "agent:rename"
 	// ActionAgentCreate is asking a delegated operator to create an agent
 	// from an immutable template or profile it already allows
 	// (ADR-0078). It chooses no execution setting.
@@ -136,11 +131,6 @@ const (
 	// certificate that agent held, so membership alone does not grant
 	// it.
 	ActionAgentEnroll = "agent:enroll"
-	// ActionAgentCutover is asking a delegated operator to take over a
-	// legacy agent's source under its existing GRN (ADR-0086). It
-	// decides which service an agent's settings come from, so
-	// membership alone does not grant it.
-	ActionAgentCutover = "agent:cutover"
 	// ActionAgentReplace is asking a delegated operator to move an
 	// existing agent to another controller under its GRN (ADR-0107).
 	// It ends the agent's activation and fences every token and
@@ -180,8 +170,8 @@ var actions = []string{
 	ActionConsentRead, ActionConsentGrant, ActionConsentWithdraw,
 	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,
-	ActionAgentRead, ActionAgentWatch, ActionAgentRename, ActionAgentCreate,
-	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentCutover, ActionAgentReplace,
+	ActionAgentRead, ActionAgentWatch, ActionAgentCreate,
+	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentReplace,
 	ActionAgentTemplateRead, ActionAgentTemplatePublish,
 	ActionExecutionProfileRead, ActionAgentExecutionRead,
 }
@@ -226,7 +216,6 @@ var machineActions = []struct {
 	{ActionOperatorReissue, false},
 	{ActionOperatorDelegate, false},
 	{ActionAgentRead, true},
-	{ActionAgentRename, true},
 	{ActionAgentCreate, true},
 	{ActionAgentConfigure, false},
 	{ActionAgentRecover, false},
@@ -235,7 +224,6 @@ var machineActions = []struct {
 	{ActionAgentTemplatePublish, false},
 	{ActionExecutionProfileRead, true},
 	{ActionAgentExecutionRead, false},
-	{ActionAgentCutover, false},
 	{ActionAgentReplace, false},
 }
 

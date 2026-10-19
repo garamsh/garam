@@ -5,12 +5,15 @@ Who is calling on the listener a machine identity authenticates on
 authenticated (ADR-0109). Implemented by `internal/machine`.
 
 Pending removal
-([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
-the legacy cohort of an agent's generation and lineage goes in the
-fifth pull request of #1593, after #1594, and what this document says
-of it holds until then. An operator's shared-secret credential, its
-exchange and its enrollment token are gone; the supervisor's
-shared-secret exchange and `machine-token.v1` stay.
+([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)):
+the certificate path goes in G4 (#1494), the certificates of an agent
+whose execution holds no lineage among them, and what this document
+says of it holds until then. An agent's generation has no legacy
+cohort: every agent's protected call waits for an activation
+(ADR-0118). An operator's shared-secret credential, its exchange and
+its enrollment token are gone
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md));
+the supervisor's shared-secret exchange and `machine-token.v1` stay.
 
 | Type | Responsibility |
 |------|----------------|
@@ -374,7 +377,7 @@ a record and not a sampling: one row per answer, none coalesced.
 
 ## Generation and lineage
 
-**garam's half is built, and so is the adapter's.** A fenced adapter
+**garam's half is built, and so is the adapter's.** The adapter
 carries the execution token its lifecycle authority obtained
 ([adapter.md](./adapter.md) §Activation and runtime status). A
 standalone host's supervisor serves that adapter-facing contract
@@ -384,32 +387,28 @@ standalone host's supervisor serves that adapter-facing contract
 Acceptance with each, joined to garam and Sherlock, is recorded as
 verified on #1157 and #1180; #1157 left scenario 5's managed move to
 `garamsh/garam-agent-operator#296`. Until a
-GRN's first activation it is in the legacy cohort: its calls carry no
-token, and the certificate check below still applies to each of them.
-A legacy GRN's first activation waits for its cutover's switch
-([agents.md](./agents.md) §Separated execution).
-An agent created managed is never in it: it is fenced from birth
-([agents.md](./agents.md) §Separated execution).
+GRN's first activation its protected calls are refused, since it holds
+no token for them to carry (ADR-0118).
 
 ADR-0078 adds two questions an agent's state-changing call answers per
 request rather than per connection, so an open connection loses them
 the moment they change:
 
-- **Is this the active generation?** Once a GRN is fenced, the call
-  carries `Authorization: Garam-Execution <token>` from the activation
-  of its current generation. A missing token is refused, and so is one
-  an activation, a deactivation, a recovery or a reassignment ended. A
-  token offered for a legacy GRN is refused rather than read as a
-  cutover: the mode is the server's (ADR-0080).
+- **Is this the active generation?** The call carries the token of the
+  activation of its current generation, in `Authorization:
+  Garam-Execution <token>` beside a certificate and in `Garam-Execution`
+  beside an agent token. A missing token is refused, and so is one an
+  activation, a deactivation, a recovery or a reassignment ended, or
+  one the agent was never activated with (ADR-0080).
 - **Is this certificate current?** It must be inside its validity by
   the database's clock and, once a recovery or a managed creation has
   started a lineage, in that lineage. The certificate is the one the
   connection's handshake verified; nothing in a body names it.
 
 Claiming, renewing and completing a message, posting one, reporting
-runtime state, forwarding a turn event and renewing the agent's own
-certificate each ask both inside the transaction of their own write,
-so the answer holds when that write commits (ADR-0080). Reading a sent
+runtime state and forwarding a turn event each ask both inside the
+transaction of their own write, so the answer holds when that write
+commits (ADR-0080). Reading a sent
 message's state writes nothing; it asks both in the transaction of its
 read, so a refused caller reads nothing. `getIdentity` asks neither.
 The routes and their schemes are `api/machine.yaml`'s, under the
@@ -418,9 +417,7 @@ The routes and their schemes are `api/machine.yaml`'s, under the
 The hosted control service is a lifecycle caller. It activates,
 deactivates, inspects and recovers an agent's execution on the routes
 tagged `execution` in `api/machine.yaml`, which is authoritative for
-their wire and their `execution-fence.v1` and `.v2` contract values,
-and cuts a legacy agent over on the routes tagged `cutover`,
-authoritative for theirs and `agent-cutover.v1` and `.v2`. A
+their wire and their `execution-fence.v1` and `.v2` contract values. A
 standalone host's supervisor is the other: on the same routes it
 activates, deactivates and inspects the one agent it is registered
 for and holds, and recovers nothing; its certificate reaches no

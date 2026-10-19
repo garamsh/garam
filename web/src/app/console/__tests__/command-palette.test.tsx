@@ -233,7 +233,7 @@ describe("command palette", () => {
     expect(document.documentElement).toHaveClass("dark");
   });
 
-  it("searches the organization's objects by name once something is typed, and reads none before", async () => {
+  it("searches the organization's objects once something is typed, and reads none before", async () => {
     const asked: string[] = [];
     server.events.on("request:start", ({ request }) => {
       asked.push(new URL(request.url).pathname);
@@ -248,19 +248,22 @@ describe("command palette", () => {
     // Found, not browsed: nothing typed reads and lists no object.
     expect(asked).toEqual([]);
     expect(
-      screen.queryByRole("option", { name: /Scout/ }),
+      screen.queryByRole("option", { name: /1c3d5e7f90a2b4c6/ }),
     ).not.toBeInTheDocument();
 
-    await user.type(screen.getByRole("combobox"), "sco");
-    // Presence: the option's name is the object's and its identifier.
-    expect(await screen.findByRole("option", { name: /Scout/ })).toBeVisible();
+    // An agent is found by its identifier: garam holds no name for one.
+    await user.type(screen.getByRole("combobox"), "1c3d");
+    // Presence: the option's name goes on to carry the identifier.
+    expect(
+      await screen.findByRole("option", { name: /1c3d5e7f90a2b4c6/ }),
+    ).toBeVisible();
     expect(
       screen.queryByRole("option", { name: /Engineering/ }),
     ).not.toBeInTheDocument();
     await user.keyboard("{Enter}");
 
     expect(route.push).toHaveBeenCalledWith(
-      "/console/orgs/acme/agents/9f2ac1b40d8e7a35",
+      "/console/orgs/acme/agents/1c3d5e7f90a2b4c6",
     );
   });
 

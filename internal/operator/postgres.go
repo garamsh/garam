@@ -145,18 +145,9 @@ func (s *PostgresStore) SetControlEndpoint(ctx context.Context, g grn.GRN, endpo
 // audience's reaches tokens of other operators whose registrations it
 // does not hold (#1424).
 //
-// The foreign-key reading is made here because only here is the
-// statement known: [pgxerr.Classify] maps 23503 to not found, which is
-// what it means for an insert, and on this delete it means the
-// opposite — the row is present and an agent definition still names
-// it (000018).
-//
-// The statements are one transaction, which is what leaves every row
-// standing when the foreign key refuses the last: without it the
-// tokens and the certificate row would already be gone by the time
-// the refusal arrived, costing an operator its lineage on a call that
-// deleted nothing. Their order is the one above: the registration,
-// then the tokens, then the rest.
+// The statements are one transaction, so a failure part way deletes
+// nothing. Their order is the one above: the registration, then the
+// tokens, then the rest.
 func (s *PostgresStore) Delete(ctx context.Context, g grn.GRN) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -177,9 +168,6 @@ func (s *PostgresStore) Delete(ctx context.Context, g grn.GRN) error {
 	// The registration is held FOR UPDATE, so the row is there to
 	// delete; an absent one was refused by the hold.
 	if _, err := q.DeleteOperator(ctx, g.String()); err != nil {
-		if pgxerr.IsForeignKeyViolation(err) {
-			return ErrOperatorNamedByDefinition
-		}
 		return pgxerr.Classify(err, "delete operator", nil, nil)
 	}
 	if err := tx.Commit(ctx); err != nil {

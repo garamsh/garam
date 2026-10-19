@@ -33,15 +33,6 @@ var (
 	ErrAgentNotFound      = errorx.New(errorx.KindNotFound, "agent not found")
 	ErrAgentAlreadyExists = errorx.New(errorx.KindAlreadyExists, "agent already exists")
 	ErrAssignmentNotFound = errorx.New(errorx.KindNotFound, "agent assignment not found")
-	// ErrDefinitionNotFound is what a claim of a definition that names
-	// another operator answers as well: the read an operator makes can
-	// name nothing it is not named in (ADR-0033), and the claim keeps
-	// that scoping rather than naming the definition it refuses.
-	ErrDefinitionNotFound = errorx.New(errorx.KindNotFound, "agent definition not found")
-	// ErrDefinitionClaimed refuses a second claim of the agent a
-	// definition minted. A definition is claimed once (ADR-0033):
-	// re-aiming it is a new definition, not another claim of this one.
-	ErrDefinitionClaimed = errorx.New(errorx.KindAlreadyExists, "agent definition is already claimed")
 	// ErrStaleEpoch is returned when a state report does not carry the
 	// epoch the agent is currently assigned at. An agent with no
 	// assignment has no current epoch, so every report about it is
@@ -106,31 +97,12 @@ func ParseRuntimeState(s string) (RuntimeState, error) {
 	return "", errorx.New(errorx.KindInvalidArgument, "agent: unknown runtime state")
 }
 
-// Certificate is what an agent authenticates with and what it verifies
-// garam by: the client certificate, the private key it was issued with,
-// the authority that signed it, and the garam server root, each in PEM
-// form (ADR-0014, ADR-0040). garam stores no private key, so this value
-// carries the only copy and a holder that loses it asks for another
-// certificate rather than recovering this one.
-//
-// IssuerPEM names the authority this certificate chains to and is not
-// what garam is verified against: the two directions rest on different
-// roots, and ServerRootPEM is the one a holder pins garam by.
-type Certificate struct {
-	CertificatePEM []byte
-	PrivateKeyPEM  []byte
-	IssuerPEM      []byte
-	ServerRootPEM  []byte
-	NotAfter       time.Time
-}
-
 // OrgCounts counts what this domain holds for one organization that
 // deleting that organization removes. It is a count and not a listing
 // because the caller is stating a consequence rather than reading the
 // rows, and a list that pages would answer for one page.
 type OrgCounts struct {
-	Agents      int
-	Definitions int
+	Agents int
 }
 
 // Agent is an autonomous actor owned by an organization. Which operator

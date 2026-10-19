@@ -25,8 +25,8 @@ const Schema = z.object({
  * connection, so its certificate is refused from the moment this
  * returns (ADR-0070).
  *
- * garam refuses it while an agent definition names the operator, and
- * that refusal is rendered beside the control rather than thrown.
+ * A refusal garam answers is rendered beside the control rather than
+ * thrown.
  */
 export async function deleteOperator(
   _state: DeleteOperatorState,

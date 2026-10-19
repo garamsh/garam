@@ -35,12 +35,6 @@ export type Invitation = components["schemas"]["Invitation"];
  */
 export type Agent = components["schemas"]["Agent"];
 /**
- * What an organization says an agent should be, as the API returns one.
- * It is a record and not an agent (ADR-0026): no operator has
- * necessarily acted on it, and nothing here reports whether one has.
- */
-export type AgentDefinition = components["schemas"]["AgentDefinition"];
-/**
  * An operator an organization has registered, as the API returns one,
  * and where it stands in obtaining a certificate. The record says garam
  * holds one; neither it nor the state says whether the operator is
@@ -169,19 +163,6 @@ export const AgentParser = parserFor<Agent>()(
   }),
 );
 
-export const AgentDefinitionParser = parserFor<AgentDefinition>()(
-  z.object({
-    agentGrn: GrnParser,
-    orgGrn: GrnParser,
-    name: z.string(),
-    operatorGrn: GrnParser,
-    values: z.record(z.string(), z.string()),
-    definedBy: GrnParser,
-    createdAt: z.string(),
-    cutover: z.object({ stage: z.enum(["frozen", "switched"]) }).nullable(),
-  }),
-);
-
 export const OperatorParser = parserFor<Operator>()(
   z.object({
     grn: GrnParser,
@@ -216,7 +197,6 @@ const OrgDeletionPreviewParser = parserFor<OrgDeletionPreview>()(
       invitations: CountParser,
       policies: CountParser,
       agents: CountParser,
-      agentDefinitions: CountParser,
       operators: CountParser,
       consents: CountParser,
     }),
@@ -445,58 +425,6 @@ export function listAgents(org: string): Promise<OrgRead<Agent[]>> {
       z.array(AgentParser),
     ),
   );
-}
-
-/** The agents an organization says it should have. */
-export function listAgentDefinitions(
-  org: string,
-): Promise<OrgRead<AgentDefinition[]>> {
-  return orgRead(
-    garamFetchAuthenticated(
-      `/orgs/${orgPath(org)}/agent-definitions`,
-      z.array(AgentDefinitionParser),
-    ),
-  );
-}
-
-/**
- * The agent definitions of an organization, for a page that only looks
- * in them: a refusal is returned rather than answered with not-found.
- */
-export function lookupAgentDefinitions(
-  org: string,
-): Promise<RefusableRead<AgentDefinition[]>> {
-  return refusableRead(
-    garamFetchAuthenticated(
-      `/orgs/${orgPath(org)}/agent-definitions`,
-      z.array(AgentDefinitionParser),
-    ),
-  );
-}
-
-/**
- * One agent definition of an organization, by its agent's identifier,
- * or null where none names it: an agent a control service created has
- * no definition in garam (#1170).
- */
-export async function getAgentDefinition(
-  org: string,
-  agent: string,
-): Promise<RefusableRead<AgentDefinition | null>> {
-  try {
-    return {
-      status: "ok",
-      data: await garamFetchAuthenticated(
-        `/orgs/${orgPath(org)}/agent-definitions/${orgPath(agent)}`,
-        AgentDefinitionParser,
-      ),
-    };
-  } catch (error) {
-    if (error instanceof GaramApiError && error.status === 404) {
-      return { status: "ok", data: null };
-    }
-    return refusableRead(Promise.reject(error));
-  }
 }
 
 /**

@@ -3,7 +3,9 @@
 > Status: accepted — the out-of-band bootstrap is named by [ADR-0032](./0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md);
 > mTLS for operators, the out-of-band first certificate and the shared
 > expiry are superseded by
-> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md);
+> an operator obtaining an agent's certificate from garam is superseded
+> by [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
 > Date: 2026-08-16
 
 ## Contents

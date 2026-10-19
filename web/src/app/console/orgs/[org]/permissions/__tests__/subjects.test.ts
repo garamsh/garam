@@ -4,7 +4,6 @@ import {
   describeSubject,
   inspectSubject,
   listSubjects,
-  partlyListedAgents,
   reachOf,
   resolveSubjectQuery,
   type Catalogs,
@@ -17,7 +16,6 @@ import {
   baselineRead,
   denyDeletes,
   engineering,
-  fieldAgent,
   reportedAgent,
 } from "@/testing/mocks/handlers";
 
@@ -25,7 +23,6 @@ const catalogs: Catalogs = {
   teams: { status: "ok", data: [engineering] },
   people: { status: "ok", data: [aliceMembership] },
   agents: { status: "ok", data: [reportedAgent] },
-  definitions: { status: "ok", data: [fieldAgent] },
 };
 
 const alice: Subject = {
@@ -238,47 +235,36 @@ describe("reachOf", () => {
 });
 
 describe("agent subjects", () => {
-  it("offers a defined agent by name before any operator claims it", () => {
+  it("offers each agent by its identifier, since garam holds no name for one", () => {
     const agents = listSubjects(catalogs).filter(
       (subject) => subject.kind === "agent",
     );
 
     expect(agents.map((subject) => subject.label)).toEqual([
-      "Scout (9f2ac1b40d8e7a35) · awaiting operator",
       "Unnamed agent (1c3d5e7f90a2b4c6)",
     ]);
-    expect(describeSubject(fieldAgent.agentGrn, catalogs)).toMatchObject({
+    expect(describeSubject(reportedAgent.grn, catalogs)).toMatchObject({
       kind: "agent",
-      label: "Scout (9f2ac1b40d8e7a35) · awaiting operator",
+      label: "Unnamed agent (1c3d5e7f90a2b4c6)",
       lookup: "found",
     });
   });
 
-  it("says an agent is unchecked, not missing, where one agent list was refused", () => {
-    const partly: Catalogs = {
-      ...catalogs,
-      definitions: { status: "forbidden" },
-    };
+  it("says an agent is unchecked where the agents list was refused, and missing where it was read", () => {
+    const refused: Catalogs = { ...catalogs, agents: { status: "forbidden" } };
 
-    // The reported agent is still offered and found.
-    expect(describeSubject(reportedAgent.grn, partly).lookup).toBe("found");
-    // The defined one could be in the refused list, so it is not called
-    // missing.
-    expect(describeSubject(fieldAgent.agentGrn, partly)).toMatchObject({
+    expect(describeSubject(reportedAgent.grn, refused)).toMatchObject({
       lookup: "refused",
     });
-    expect(resolveSubjectQuery("agent:9f2ac1b40d8e7a35", partly)).toEqual({
+    expect(resolveSubjectQuery("agent:1c3d5e7f90a2b4c6", refused)).toEqual({
       status: "refused",
       kind: "agent",
     });
-    expect(partlyListedAgents(partly)).toEqual(["agent definitions"]);
-
-    // The control: with both lists read, an agent neither holds is
+    // The control: with the list read, an agent it does not hold is
     // missing.
     expect(
       describeSubject("grn:acme:default:agent:0000000000000000", catalogs)
         .lookup,
     ).toBe("missing");
-    expect(partlyListedAgents(catalogs)).toEqual([]);
   });
 });

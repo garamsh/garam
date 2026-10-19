@@ -2,12 +2,13 @@
 
 What garam serves to a caller outside it: which listeners exist, what admits a caller to each, and what the file describing each one is authoritative for.
 
-Pending removals
-([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
-the fifth pull request of #1593 removes the cut-over operations, the
-legacy definition operations and legacy execution mode, after #1594
-moves aurora's agent off them, and what this document says of them
-holds until it lands.
+Pending removal
+([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)):
+G4 (#1494) removes client certificates on the machine listener and
+every route that issues or renews one, and what this document says of
+them holds until it lands. The cut-over operations, the definition
+operations, legacy execution mode, `createAgent` and
+`issueAgentCertificate` are gone (ADR-0118).
 
 ## Contents
 - What it is
@@ -256,19 +257,15 @@ path references
 its name and description**, on `operator:read` and `operator:update`
 ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)).
 The identifier is the path's and not a field, so the update moves no
-certificate, key or definition.
+certificate or key.
 
 **`getAgent` and `listAgents` answer the generation garam last
 activated for each agent**, on `agent:read`, beside the assignment that
 holds it; [agents.md](./agents.md) §Separated execution states what the
 field does and does not say.
 
-**`getAgentDefinition` and `renameAgentDefinition` read one definition
-and change what the organization calls its agent**, on `agent:read`
-and `agent:rename`. No operation writes a definition: `defineAgent`
-is removed, and the schema refuses a new definition, a changed value
-or a direct delete from any release
-([ADR-0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)).
+**No operation serves an agent definition or names an agent**: garam
+holds neither ([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)).
 **No operation serves a template of garam's own**: they are gone
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)). `agent-template:read` authorizes reading the templates the
 control service publishes, on the organization.
@@ -280,11 +277,9 @@ operator's certificate is refused from its next connection
 ([ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)).
 It is authorized on `operator:delete` rather than on the action the
 other two take, because registering grants nothing and this withdraws
-what an operator runs on. It answers 204, and refuses with a reason
-while an agent definition names the operator — nothing is deleted in
-that case. No operation on `api/machine.yaml` deletes an operator: an
-operator does not delete itself, and the one that would meet the
-refusal is the one being deleted.
+what an operator runs on. It answers 204. No operation on
+`api/machine.yaml` deletes an operator: an operator does not delete
+itself.
 
 **Delegation and operation authority are versioned routes on both
 listeners** (ADR-0078). The browser-facing listener grants, reads and
@@ -311,8 +306,8 @@ and recovery each require and answer `Garam-Contract-Version:
 execution-fence.v1` beside a certificate and `execution-fence.v2`
 beside a token, and a request naming none or another is refused naming
 the one its credential takes, not the operation authority's. An agent's
-own protected calls carry `Authorization: Garam-Execution <token>` once
-its GRN has cut over, under the `executionToken` scheme each declares.
+own protected calls carry its activation's token, under the
+`executionToken` scheme each declares.
 `api/machine.yaml` is authoritative for both, and
 [machine-identity.md](./machine-identity.md) §Generation and lineage
 for what they decide. No route adds a 5xx of its own (ADR-0050): an
@@ -345,9 +340,8 @@ its first certificate each require and answer `Garam-Contract-Version:
 managed-enrollment.v1`, and creation answers `managed-enrollment.v2`
 to a token; a request naming none or another is refused naming the one
 its credential takes. Initial issuance takes no token. Neither carries a
-private key. The operator's bodyless `createAgent` and its
-`issueAgentCertificate` stay as they were for legacy agents and reach no
-managed one. `api/machine.yaml` is authoritative for the wire, and
+private key, and no other route creates an agent or issues its
+certificate. `api/machine.yaml` is authoritative for the wire, and
 [agents.md](./agents.md) §Separated execution for what they decide.
 
 **Durable submission is a fourth versioned contract on the machine
@@ -373,28 +367,13 @@ branches on these answers, each carrying the header:
 `api/machine.yaml` is authoritative for the wire, and
 [messaging.md](./messaging.md) for what the budget decides.
 
-**Cutover is a fifth versioned contract on the machine listener**
-([ADR-0086](./adr/0086-a-legacy-agent-cuts-over-through-stages-garam-records-under-its-execution-lock.md)).
-Reading a legacy agent's cutover and its freeze, switch and rollback
-each require and answer `Garam-Contract-Version: agent-cutover.v1`
-beside a certificate and `agent-cutover.v2` beside a token, and carry
-an `agent:cutover` reference minted for that route's request target —
-in `Authorization: Garam-Operation` beside a certificate, and in a
-`Garam-Operation` header beside a token. A refusal there keeps `kind`
-the errorx kind and names which one it is in the machine `Error`'s
-`reason`, from the set the contract lists; `activateAgent` sets `reason`
-only to `cutover_required`, and every other route and refusal leaves it
-out. `api/machine.yaml` §cutover is authoritative for the wire, and
-[agents.md](./agents.md) §Separated execution for what it decides.
-
 Every certificate after the first is replaced over the connection the
 previous one authenticated: an operator's on the machine listener
 ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)),
-an agent's on the route its claim admits it to (ADR-0040). A managed
-agent's first is signed over its controller's key on the enrollment
-route, and a supervisor renews its own on
-`renewSupervisorCertificate`. The one exception is an agent's
-recovery, which the hosted control service asks for under an
+and a supervisor's on `renewSupervisorCertificate`. An agent's
+certificate is not renewed: a managed agent's first is signed over its
+controller's key on the enrollment route. The one exception is an
+agent's recovery, which the hosted control service asks for under an
 administrator's handoff and which replaces the agent's credential
 lineage instead
 ([machine-identity.md](./machine-identity.md) §Generation and lineage).
@@ -489,16 +468,13 @@ and not in the same place on every surface.
   No event carries a key, token, credential or certificate
   ([machine-identity.md](./machine-identity.md) §Credential events).
 - **A list answers only the objects its caller may read.**
-  `listGroups`, `listProjects`, `listAgents`, `listAgentDefinitions`
-  and `listPolicies` are authorized on their read action on the
-  organization, and then drop each object whose own read the caller is
-  denied: the read `getGroup`, `getProject`, `getAgent`,
-  `getAgentDefinition` and `listPolicyVersions` each make on the
-  object. A definition's is `agent:read` on the agent it names, so a
-  Deny that hides an agent hides its definition too (#1602).
-  A Deny on one object therefore hides it from the list as it refuses
-  its read. Every object of a page is asked in one `CheckBatch` call
-  to the engine
+  `listGroups`, `listProjects`, `listAgents` and `listPolicies` are
+  authorized on their read action on the organization, and then drop
+  each object whose own read the caller is denied: the read
+  `getGroup`, `getProject`, `getAgent` and `listPolicyVersions` each
+  make on the object. A Deny on one object therefore hides it from the
+  list as it refuses its read. Every object of a page is asked in one
+  `CheckBatch` call to the engine
   ([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md),
   [authz.md](./authz.md)). **A short page does not mean the end.** The
   page is filtered as read, so `limit` and `offset` count the stored
@@ -523,7 +499,7 @@ and not in the same place on every surface.
   policies and projects then drop each object whose own read is
   denied, in one `CheckBatch` per kind, as the filtered lists above do
   (ADR-0115). A person is found by nickname or identifier, and an agent
-  by its definition's name or its identifier. Each kind answers its
+  by its identifier alone. Each kind answers its
   first `limit` objects (1 to 20, 5 by default) in its list's order,
   and counts the readable matches past them. The match runs in each
   store, so a search reads the rows that match and not the whole list.
@@ -544,7 +520,7 @@ and not in the same place on every surface.
     answers as a denied one, so the answer tells no one what exists.
   - **deny or unknown** for an action a mint decides together with a
     delegation grant: `agent:create`, `agent:configure`,
-    `agent:recover`, `agent:cutover`, `agent:replace`,
+    `agent:recover`, `agent:replace`,
     `agent-template:publish`,
     `execution-profile:read` and `agent:execution-read`
     ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
@@ -930,4 +906,8 @@ document owes an update.
   with no certificate reaches
 - [ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
   — garam keeps no legacy path no live deployment uses: an operator
-  enters by a key alone, and the paths still to go are named above
+  enters by a key alone
+- [ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
+  — every legacy path goes now with nothing migrated: the browser
+  surface serves no definition and names no agent, and the machine
+  listener's certificate path goes in G4

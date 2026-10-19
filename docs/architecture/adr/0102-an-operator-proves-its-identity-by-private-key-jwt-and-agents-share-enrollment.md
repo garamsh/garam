@@ -2,7 +2,9 @@
 
 > Status: accepted — the Operator shared-secret cohort kept under
 > `machine-token.v1`, and the gate for removing it, are superseded by
-> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
+> [ADR-0117](./0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md);
+> the gate for removing the certificate path is superseded by
+> [ADR-0118](./0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
 > Date: 2026-10-13
 
 Operator authentication and agent enrollment direction for #1353,

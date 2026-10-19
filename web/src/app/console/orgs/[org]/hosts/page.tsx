@@ -32,11 +32,9 @@ export const metadata: Metadata = { title: "Hosts — garam" };
 type Params = { params: Promise<{ org: string }> };
 
 const TITLE = "Hosts";
-const DESCRIPTION =
-  "Standalone and direct hosts: each runs one agent under a supervisor this organization approved.";
+const DESCRIPTION = "Each runs one agent under a supervisor you approve.";
 
-const DENIED =
-  "No policy lets you manage hosts.";
+const DENIED = "No policy lets you manage hosts.";
 
 const PLACEMENT = {
   standalone: "Runs its agent in containers it starts",

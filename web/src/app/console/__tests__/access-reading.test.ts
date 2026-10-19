@@ -28,7 +28,7 @@ describe("reading access from the root down", () => {
       "Policy base, statement read, applied to the whole organization",
       "Team eng's role admin",
       "Policy ops, attached to you",
-      "A policy you can't read, by a path garam doesn't show you",
+      "A policy you can't read",
     ]);
   });
 

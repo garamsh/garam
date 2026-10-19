@@ -57,7 +57,14 @@ const COLUMNS: ColumnDef<PolicyRow, unknown>[] = [
  * The organization's policies by name, each opening its own page, with
  * where each stands and the version it evaluates while active.
  */
-export function PolicyTable({ rows }: { rows: PolicyRow[] }) {
+export function PolicyTable({
+  rows,
+  emptyAction,
+}: {
+  rows: PolicyRow[];
+  /** The page's create action, offered by the empty state. */
+  emptyAction?: React.ReactNode;
+}) {
   return (
     <DataTable
       label="Policies"
@@ -65,7 +72,13 @@ export function PolicyTable({ rows }: { rows: PolicyRow[] }) {
       data={rows}
       getRowId={(row) => row.identifier}
       search={{ placeholder: "Search policies" }}
-      empty={<EmptyState icon={ShieldCheck} title="No policies" />}
+      empty={
+        <EmptyState
+          icon={ShieldCheck}
+          title="No policies"
+          action={emptyAction}
+        />
+      }
     />
   );
 }

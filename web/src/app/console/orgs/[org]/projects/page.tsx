@@ -14,8 +14,6 @@ export const metadata: Metadata = { title: "Projects — garam" };
 
 type Params = { params: Promise<{ org: string }> };
 
-const DESCRIPTION = "The units of work this organization owns.";
-
 /**
  * The organization's projects as a list, and the dialog that creates
  * one more. The page asks the server once whether the caller may
@@ -44,7 +42,7 @@ export default async function ProjectsPage({ params }: Params) {
     projects.status === "unreachable"
   ) {
     return (
-      <ListPage title="Projects" description={DESCRIPTION}>
+      <ListPage title="Projects">
         <ApiUnreachable subject="this organization's projects" />
       </ListPage>
     );
@@ -53,7 +51,6 @@ export default async function ProjectsPage({ params }: Params) {
   return (
     <ListPage
       title="Projects"
-      description={DESCRIPTION}
       count={projects.status === "ok" ? projects.data.length : undefined}
       primaryAction={create}
     >
@@ -62,6 +59,7 @@ export default async function ProjectsPage({ params }: Params) {
       ) : (
         <ProjectTable
           org={org}
+          emptyAction={create}
           rows={projects.data.map((project) => ({
             name: project.name,
             identifier: slugFromGrn(project.grn),

@@ -1,5 +1,4 @@
 import { act, render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { ConsoleNav } from "@/app/console/_components/console-nav";
@@ -48,11 +47,12 @@ describe("console navigation", () => {
   });
 
   it("marks the section the caller is on", () => {
-    renderNav("/console/orgs/acme/members");
+    renderNav("/console/orgs/acme/people");
 
-    expect(
-      screen.getByRole("link", { name: "People and agents" }),
-    ).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "People" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
     expect(screen.getByRole("link", { name: "Teams" })).not.toHaveAttribute(
       "aria-current",
     );
@@ -67,7 +67,7 @@ describe("console navigation", () => {
     );
   });
 
-  it("lists Home, the members, Projects, then the organization (ADR-0113)", () => {
+  it("lists Home, Projects, then the organization (ADR-0116)", () => {
     renderNav("/console/orgs/acme");
 
     const nav = screen.getByRole("navigation", {
@@ -79,45 +79,38 @@ describe("console navigation", () => {
         .map((link) => link.textContent),
     ).toEqual([
       "Home",
-      "People and agents",
-      "Teams",
       "Projects",
+      "People",
+      "Agents",
+      "Teams",
       "Permissions",
       "Operators",
       "Hosts",
-      "Templates",
-      "Consents",
       "Settings",
     ]);
-    for (const [group, sections] of Object.entries({
-      Members: ["People and agents", "Teams"],
-      Organization: [
-        "Permissions",
-        "Operators",
-        "Hosts",
-        "Templates",
-        "Consents",
-        "Settings",
-      ],
-    })) {
-      const list = screen.getByRole("list", { name: group });
-      expect(
-        within(list)
-          .getAllByRole("link")
-          .map((link) => link.textContent),
-      ).toEqual(sections);
-    }
+    expect(
+      within(screen.getByRole("list", { name: "Organization" }))
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual([
+      "People",
+      "Agents",
+      "Teams",
+      "Permissions",
+      "Operators",
+      "Hosts",
+      "Settings",
+    ]);
   });
 
   it("leaves out for a reader who can see little what the server denies them, and says so once", async () => {
     await act(async () => {
       renderNav("/console/orgs/acme", ORGS, [
+        "agents",
         "teams",
-        "agents/templates",
         "operators",
         "hosts",
         "permissions",
-        "consents",
         "settings",
       ]);
     });
@@ -129,34 +122,21 @@ describe("console navigation", () => {
       within(nav)
         .getAllByRole("link")
         .map((link) => link.textContent),
-    ).toEqual(["Home", "People and agents", "Projects"]);
-    // A group with nothing left to list goes with its label.
-    expect(
-      screen.queryByRole("list", { name: "Organization" }),
-    ).not.toBeInTheDocument();
+    ).toEqual(["Home", "Projects", "People"]);
     expect(
       screen.getByText(
-        /^Teams, Permissions, Operators, Hosts, Templates, Consents and Settings are not shown: no policy lets you read them\./,
+        "Agents, Teams, Permissions, Operators, Hosts and Settings hidden: no policy lets you read them.",
       ),
     ).toBeInTheDocument();
   });
 
-  it("explains in place why a section is not shown", async () => {
+  it("says one hidden section in the singular", async () => {
     await act(async () => {
       renderNav("/console/orgs/acme", ORGS, ["permissions"]);
     });
 
     expect(
-      screen.getByText(/^Permissions is not shown: no policy lets you read/),
-    ).toBeInTheDocument();
-    const why = screen.getByRole("button", { name: "Why" });
-    expect(why).toHaveAttribute("aria-expanded", "false");
-
-    await userEvent.click(why);
-
-    expect(why).toHaveAttribute("aria-expanded", "true");
-    expect(
-      screen.getByText(/roles and policies let you read what it holds/),
+      screen.getByText("Permissions hidden: no policy lets you read it."),
     ).toBeInTheDocument();
   });
 
@@ -167,48 +147,29 @@ describe("console navigation", () => {
     expect(
       screen.getByRole("link", { name: "Permissions" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Why" }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/hidden: no policy/)).not.toBeInTheDocument();
   });
 
-  it("links Templates to the view inside Agents and marks it there", () => {
-    renderNav("/console/orgs/acme/agents/templates");
-
-    expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/agents/templates",
-    );
-    expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
-    // Control: the entry that holds agents' pages is not current on a
-    // view the sidebar lists in its own right.
-    expect(
-      screen.getByRole("link", { name: "People and agents" }),
-    ).not.toHaveAttribute("aria-current");
-  });
-
-  it("marks People and agents, not Templates, on one agent's page", () => {
-    // An agent is a member (ADR-0113); its page stays under agents/.
+  it("marks Agents as the location on one agent's page", () => {
     renderNav("/console/orgs/acme/agents/a1");
 
-    expect(
-      screen.getByRole("link", { name: "People and agents" }),
-    ).toHaveAttribute("aria-current", "location");
-    expect(screen.getByRole("link", { name: "Templates" })).not.toHaveAttribute(
-      "aria-current",
-    );
-  });
-
-  it("marks Templates as the location on one template's page", () => {
-    renderNav("/console/orgs/acme/agents/templates/t1");
-
-    expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Agents" })).toHaveAttribute(
       "aria-current",
       "location",
     );
+    expect(screen.getByRole("link", { name: "People" })).not.toHaveAttribute(
+      "aria-current",
+    );
+  });
+
+  it("lists no Consents entry, though the section stays (ADR-0116)", () => {
+    renderNav("/console/orgs/acme/consents");
+
+    expect(
+      screen.queryByRole("link", { name: "Consents" }),
+    ).not.toBeInTheDocument();
+    // The control: the sidebar rendered, with the listed sections.
+    expect(screen.getByRole("link", { name: "Settings" })).toBeInTheDocument();
   });
 
   it("offers no sections for an organization the caller does not hold", () => {

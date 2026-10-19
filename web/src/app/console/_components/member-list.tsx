@@ -164,10 +164,10 @@ function columns(
 }
 
 /** "Scout", "Scout and Ada", "3 members". */
-function whom(rows: readonly MemberRow[]): string {
+function whom(rows: readonly MemberRow[], kind: MemberRow["kind"]): string {
   if (rows.length === 1) return rows[0].name;
   if (rows.length === 2) return `${rows[0].name} and ${rows[1].name}`;
-  return `${rows.length} ${rows[0].kind === "person" ? "people" : "agents"}`;
+  return `${rows.length} ${kind === "person" ? "people" : "agents"}`;
 }
 
 /** A choice made inside a dialog, carried as a form field. */
@@ -350,7 +350,7 @@ export function MemberList({
       <ActionDialog<AddMembersToTeamState>
         open={dialog?.kind === "team"}
         onOpenChange={(open) => !open && setDialog(null)}
-        title={`Add ${whom(target)} to a team?`}
+        title={`Add ${whom(target, kind)} to a team?`}
         description={<p>Each gains what the team&apos;s policies grant.</p>}
         action={addMembersToTeam}
         initialState={{ status: "idle" }}
@@ -377,7 +377,7 @@ export function MemberList({
       <ActionDialog<AttachPolicyToMembersState>
         open={dialog?.kind === "policy"}
         onOpenChange={(open) => !open && setDialog(null)}
-        title={`Attach a policy to ${whom(target)}?`}
+        title={`Attach a policy to ${whom(target, kind)}?`}
         description={
           <p>
             A policy attached to no one applies to everyone, so a first

@@ -29,7 +29,7 @@ describe("control endpoint form", () => {
   it("says no control service is reached while none is registered", () => {
     renderForm();
 
-    expect(screen.getByText(/No endpoint is registered/)).toBeInTheDocument();
+    expect(screen.getByText("No endpoint.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Clear endpoint" })).toBeNull();
   });
 

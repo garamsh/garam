@@ -75,9 +75,7 @@ describe("SecretReveal", () => {
     await user.click(screen.getByRole("button", { name: "Copy" }));
 
     // Presence: the sentence goes on to say how to copy it by hand.
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      /Could not copy the key/,
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Copy failed/);
     expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
   });
 
@@ -136,9 +134,7 @@ describe("SecretReveal", () => {
     await user.click(screen.getByRole("button", { name: "Download" }));
 
     // Presence: the sentence goes on to offer copying instead.
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      /Could not download the key/,
-    );
+    expect(screen.getByRole("alert")).toHaveTextContent(/Download failed/);
     expect(screen.getByRole("button", { name: "Done" })).toBeDisabled();
   });
 

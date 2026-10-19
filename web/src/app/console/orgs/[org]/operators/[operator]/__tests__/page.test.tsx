@@ -126,9 +126,9 @@ describe("operator page", () => {
 
     await renderOperator();
 
-    expect(
-      screen.getByText("Not checked: agent definitions are not listed to you."),
-    ).toBeInTheDocument();
+    const agents = screen.getByRole("region", { name: "Agents it runs" });
+    expect(agents).toHaveTextContent("Not checked.");
+    expect(agents).not.toHaveTextContent("None.");
   });
 
   it("lists its keys with their state and last sign-in, and offers rotating and revoking", async () => {
@@ -323,8 +323,7 @@ describe("operator page", () => {
 
       const button = screen.getByRole("button", { name: LABEL });
       expect(button).toHaveAttribute("aria-disabled", "true");
-      // Presence: the reason goes on to name the out-of-band recovery.
-      expect(button).toHaveAccessibleDescription(/^It has enrolled/);
+      expect(button).toHaveAccessibleDescription("It has already enrolled.");
     });
 
     it("stays inactive, saying why, where the server denies registering", async () => {
@@ -346,7 +345,7 @@ describe("operator page", () => {
       const button = screen.getByRole("button", { name: LABEL });
       expect(button).toHaveAttribute("aria-disabled", "true");
       expect(button).toHaveAccessibleDescription(
-        /^Issuing one needs operator:register/,
+        "No policy lets you issue enrollment tokens.",
       );
     });
   });

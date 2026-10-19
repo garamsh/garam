@@ -34,22 +34,20 @@ export default async function PermissionsPage({ params }: Params) {
     checkPermissions(org, { create: { action: "policy:create" } }),
   ]);
   const listed = policies.status === "ok" ? policies.data : null;
+  const create = permissions.get("create") !== "denied" && (
+    <Button asChild>
+      <Link href={`${base}/${NEW_ITEM}`}>
+        <Plus aria-hidden />
+        Create policy
+      </Link>
+    </Button>
+  );
 
   return (
     <ListPage
       title="Permissions"
-      description="Policies decide what teams, people and agents may do."
       count={listed?.length}
-      primaryAction={
-        permissions.get("create") !== "denied" && (
-          <Button asChild>
-            <Link href={`${base}/${NEW_ITEM}`}>
-              <Plus aria-hidden />
-              Create policy
-            </Link>
-          </Button>
-        )
-      }
+      primaryAction={create}
       filters={<PermissionsViews org={org} current="policies" />}
     >
       {organization.status === "unreachable" ||
@@ -59,6 +57,7 @@ export default async function PermissionsPage({ params }: Params) {
         <RefusedRead subject="this organization's policies" />
       ) : (
         <PolicyTable
+          emptyAction={create}
           rows={listed.map((policy) => {
             const identifier = slugFromGrn(policy.grn);
             return { policy, identifier, href: `${base}/${identifier}` };

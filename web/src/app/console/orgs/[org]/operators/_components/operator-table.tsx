@@ -132,12 +132,7 @@ export function OperatorTable({
         data={operators}
         getRowId={(row) => row.identifier}
         search={{ placeholder: "Search operators" }}
-        empty={
-          <EmptyState
-            icon={ServerIcon}
-            title="No operators registered"
-          />
-        }
+        empty={<EmptyState icon={ServerIcon} title="No operators registered" />}
       />
     </div>
   );

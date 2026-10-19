@@ -149,12 +149,11 @@ describe("command palette", () => {
     renderPalette();
 
     await openPalette(user);
-    await user.type(screen.getByRole("combobox"), "templates");
+    await user.type(screen.getByRole("combobox"), "consents");
     await user.keyboard("{Enter}");
 
-    expect(route.push).toHaveBeenCalledWith(
-      "/console/orgs/acme/agents/templates",
-    );
+    // Consents has no sidebar entry (ADR-0116); the palette reaches it.
+    expect(route.push).toHaveBeenCalledWith("/console/orgs/acme/consents");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
@@ -163,13 +162,13 @@ describe("command palette", () => {
     renderPalette();
 
     await openPalette(user);
-    await user.type(screen.getByRole("combobox"), "temp");
-    expect(screen.getByRole("option", { name: "Templates" })).toBeVisible();
+    await user.type(screen.getByRole("combobox"), "cons");
+    expect(screen.getByRole("option", { name: "Consents" })).toBeVisible();
 
     await user.clear(screen.getByRole("combobox"));
-    await user.type(screen.getByRole("combobox"), "tmpl");
+    await user.type(screen.getByRole("combobox"), "cnsts");
     expect(
-      screen.queryByRole("option", { name: "Templates" }),
+      screen.queryByRole("option", { name: "Consents" }),
     ).not.toBeInTheDocument();
     // The organization's objects are searched too, so the answer waits
     // on that search.
@@ -287,9 +286,7 @@ describe("command palette", () => {
     expect(screen.getAllByRole("option", { name: /^Sam \d/ })).toHaveLength(5);
     await user.click(screen.getByRole("option", { name: "2 more in people…" }));
 
-    expect(route.push).toHaveBeenCalledWith(
-      "/console/orgs/acme/members?kind=person",
-    );
+    expect(route.push).toHaveBeenCalledWith("/console/orgs/acme/people");
   });
 
   it("offers no section the server denies the caller", async () => {

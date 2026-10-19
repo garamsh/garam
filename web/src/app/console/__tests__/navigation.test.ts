@@ -4,8 +4,8 @@ import {
   CONSOLE_NAV,
   CONSOLE_SECTIONS,
   consoleCrumbs,
+  navSection,
   parseConsolePath,
-  resolveNavEntry,
 } from "@/app/console/_components/navigation";
 
 const orgs = [{ slug: "acme", name: "Acme" }];
@@ -29,7 +29,7 @@ describe("parseConsolePath", () => {
 
   it.each([
     "teams",
-    "members",
+    "people",
     "agents",
     "projects",
     "operators",
@@ -68,20 +68,18 @@ describe("parseConsolePath", () => {
     });
   });
 
-  it("reads an agent's page and a template's page inside Agents", () => {
+  it("reads an agent's page, and no retired template page below Agents", () => {
     expect(
       parseConsolePath("/console/orgs/acme/agents/9f2ac1b40d8e7a35"),
     ).toMatchObject({
       section: { segment: "agents" },
       item: "9f2ac1b40d8e7a35",
     });
+    // garam's templates left the console (ADR-0116), so nothing sits
+    // below `agents/templates`.
     expect(
       parseConsolePath("/console/orgs/acme/agents/templates/7c1e2a9b"),
-    ).toMatchObject({
-      section: { segment: "agents" },
-      item: "templates",
-      viewItem: "7c1e2a9b",
-    });
+    ).toEqual({ kind: "unknown" });
     // A section's entry has no pages below it, so the extra segment is
     // not read as a view's item.
     expect(parseConsolePath("/console/orgs/acme/teams/eng/members")).toEqual({
@@ -111,14 +109,14 @@ describe("parseConsolePath", () => {
 describe("consoleCrumbs", () => {
   it("names the organization and the section", () => {
     const crumbs = consoleCrumbs(
-      parseConsolePath("/console/orgs/acme/members"),
+      parseConsolePath("/console/orgs/acme/people"),
       orgs,
     );
 
     expect(crumbs).toEqual([
       { label: "Organizations", href: "/console/orgs" },
       { label: "Acme", href: "/console/orgs/acme" },
-      { label: "People and agents" },
+      { label: "People" },
     ]);
   });
 
@@ -168,35 +166,16 @@ describe("consoleCrumbs", () => {
     ]);
   });
 
-  it("links Agents and Templates above a template and names it", () => {
-    const template = parseConsolePath(
-      "/console/orgs/acme/agents/templates/7c1e2a9b",
-    );
-
-    expect(consoleCrumbs(template, orgs, "Researcher").slice(2)).toEqual([
-      { label: "Agents", href: "/console/orgs/acme/agents" },
-      { label: "Templates", href: "/console/orgs/acme/agents/templates" },
-      { label: "Researcher" },
-    ]);
-    expect(consoleCrumbs(template, orgs).at(-1)).toEqual({
-      label: "Template",
-    });
-    // Garam's templates are retired read-only, so `new` names no create
-    // page and reads as an identifier (ADR-0088).
+  it("links Agents above an agent and names the page that creates one", () => {
     expect(
       consoleCrumbs(
-        parseConsolePath("/console/orgs/acme/agents/templates/new"),
+        parseConsolePath("/console/orgs/acme/agents/9f2ac1b4"),
         orgs,
-      ).at(-1),
-    ).toEqual({ label: "Template" });
-    expect(
-      consoleCrumbs(
-        parseConsolePath("/console/orgs/acme/agents/templates"),
-        orgs,
+        "Scout",
       ).slice(2),
     ).toEqual([
       { label: "Agents", href: "/console/orgs/acme/agents" },
-      { label: "Templates" },
+      { label: "Scout" },
     ]);
     expect(
       consoleCrumbs(parseConsolePath("/console/orgs/acme/agents/new"), orgs).at(
@@ -277,45 +256,44 @@ describe("consoleCrumbs", () => {
 });
 
 describe("CONSOLE_NAV", () => {
-  it("lists every section once, Agents through its Templates view", () => {
-    // An agent's pages sit under Agents, but the list of agents is
-    // Members' (ADR-0113), so Agents is listed by its view alone.
-    const listed = CONSOLE_NAV.flatMap((group) =>
-      group.entries.map((entry) => entry.section),
-    );
+  it("lists every section once but Consents, under Organization (ADR-0116)", () => {
+    const listed = CONSOLE_NAV.flatMap((group) => group.sections);
 
-    expect([...new Set(listed)].sort()).toEqual(
-      CONSOLE_SECTIONS.map((section) => section.segment).sort(),
-    );
-    expect(listed.filter((segment) => segment === "agents")).toHaveLength(1);
+    expect(new Set(listed).size).toBe(listed.length);
+    expect(
+      CONSOLE_SECTIONS.map((section) => section.segment).filter(
+        (segment) => !listed.includes(segment),
+      ),
+    ).toEqual(["consents"]);
+    expect(
+      CONSOLE_NAV.find((group) => group.label === "Organization")?.sections,
+    ).toEqual([
+      "people",
+      "agents",
+      "teams",
+      "permissions",
+      "operators",
+      "hosts",
+      "settings",
+    ]);
   });
 
-  it("gates every entry but Home on a read", () => {
-    const ungated = CONSOLE_NAV.flatMap((group) => group.entries)
-      .map(resolveNavEntry)
-      .filter((entry) => entry !== undefined && entry.read === undefined)
-      .map((entry) => entry?.label);
+  it("gates every section but Home on a read", () => {
+    const ungated = CONSOLE_SECTIONS.filter(
+      (section) => section.read === undefined,
+    ).map((section) => section.label);
 
     expect(ungated).toEqual(["Home"]);
   });
 
-  it("resolves every entry to a section or a listed view", () => {
+  it("resolves every entry to a section", () => {
     for (const group of CONSOLE_NAV) {
-      for (const entry of group.entries) {
-        expect(resolveNavEntry(entry)).toBeDefined();
+      for (const segment of group.sections) {
+        expect(navSection(segment)).toBeDefined();
       }
     }
-  });
-
-  it("resolves no view the sidebar does not list", () => {
-    // Attachments is a view of Permissions with no sidebar entry; the
-    // control is Templates, which has one.
-    expect(
-      resolveNavEntry({ section: "permissions", view: "attachments" }),
-    ).toBeUndefined();
-    expect(
-      resolveNavEntry({ section: "agents", view: "templates" })?.segment,
-    ).toBe("agents/templates");
+    // The control: a segment no section declares resolves to none.
+    expect(navSection("templates")).toBeUndefined();
   });
 });
 

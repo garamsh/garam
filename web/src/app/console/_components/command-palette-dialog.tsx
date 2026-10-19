@@ -46,13 +46,13 @@ const OBJECT_KIND: Record<
 > = {
   person: {
     heading: "People",
-    open: (id) => `members/${id}`,
-    list: "members?kind=person",
+    open: (id) => `people/${id}`,
+    list: "people",
   },
   agent: {
     heading: "Agents",
     open: (id) => `agents/${id}`,
-    list: "members?kind=agent",
+    list: "agents",
   },
   team: { heading: "Teams", open: (id) => `teams/${id}`, list: "teams" },
   policy: {

@@ -7,16 +7,11 @@ import {
   MemberList,
   type MemberFilters,
   type MemberRow,
-} from "@/app/console/orgs/[org]/members/_components/member-list";
-import MembersPage from "@/app/console/orgs/[org]/members/page";
+} from "@/app/console/_components/member-list";
+import PeoplePage from "@/app/console/orgs/[org]/people/page";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
-import {
-  API_URL,
-  answerPermissionChecks,
-  fieldAgent,
-  reportedAgent,
-} from "@/testing/mocks/handlers";
+import { API_URL, answerPermissionChecks } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 const route = vi.hoisted(() => ({ push: vi.fn() }));
@@ -28,7 +23,7 @@ vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   },
-  usePathname: () => "/console/orgs/acme/members",
+  usePathname: () => "/console/orgs/acme/people",
   useRouter: () => ({ push: route.push, refresh: () => {} }),
 }));
 
@@ -44,40 +39,31 @@ vi.stubGlobal(
   },
 );
 
-/** The two members the list test acts on, as the page decides them. */
+/** The two people the list test acts on, as the page decides them. */
 const ALICE_ROW: MemberRow = {
   kind: "person",
   grn: "grn:root:default:user:alice",
   identifier: "alice",
   name: "Alice",
-  href: "/console/orgs/acme/members/alice",
+  href: "/console/orgs/acme/people/alice",
   status: { tone: "neutral", label: "Owner" },
-  marker: null,
   detail: null,
   runsOn: null,
   lastSeen: null,
 };
-const SCOUT_ROW: MemberRow = {
+const BOB_ROW: MemberRow = {
   ...ALICE_ROW,
-  kind: "agent",
-  grn: fieldAgent.agentGrn,
-  identifier: "9f2ac1b40d8e7a35",
-  name: "Scout",
-  href: "/console/orgs/acme/agents/9f2ac1b40d8e7a35",
-  status: { tone: "neutral", label: "Not placed" },
+  grn: "grn:root:default:user:bob",
+  identifier: "bob",
+  name: "Bob",
+  href: "/console/orgs/acme/people/bob",
+  status: { tone: "neutral", label: "Member" },
 };
-const FILTERS: MemberFilters = {
-  kind: "all",
-  team: "",
-  runs: "",
-  counts: { all: 2, person: 1, agent: 1 },
-  teams: [],
-  runsOn: [],
-};
+const FILTERS: MemberFilters = { team: "", runs: "", teams: [], runsOn: null };
 
-function renderMembers(query: Record<string, string> = {}) {
+function renderPeople(query: Record<string, string> = {}) {
   return renderServerComponent(
-    MembersPage({
+    PeoplePage({
       params: Promise.resolve({ org: "acme" }),
       searchParams: Promise.resolve(query),
     }),
@@ -96,7 +82,7 @@ function refuse(path: string) {
 
 /** The table's rows' member names, in order. */
 function names(): string[] {
-  const table = screen.getByRole("table", { name: "People and agents" });
+  const table = screen.getByRole("table", { name: "People" });
   return within(table)
     .getAllByRole("row")
     .slice(1)
@@ -109,132 +95,42 @@ function names(): string[] {
     );
 }
 
-describe("people and agents", () => {
-  it("lists people and agents together, each linked to its own page", async () => {
-    await renderMembers();
+describe("people", () => {
+  it("lists the organization's people alone, each linked to their page (ADR-0116)", async () => {
+    await renderPeople();
 
-    // The failing reported agent leads the agents.
-    expect(names()).toEqual(["Alice", "Unnamed agent", "Scout"]);
+    // The organization also holds agents; they are Agents' to list.
+    expect(names()).toEqual(["Alice"]);
     expect(screen.getByRole("link", { name: "Alice" })).toHaveAttribute(
       "href",
-      "/console/orgs/acme/members/alice",
+      "/console/orgs/acme/people/alice",
     );
-    expect(screen.getByRole("link", { name: "Scout" })).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/agents/9f2ac1b40d8e7a35",
-    );
-  });
-
-  it("gives each agent one state, saying what makes it so", async () => {
-    await renderMembers();
-
-    const failing = screen
-      .getByRole("link", { name: "Unnamed agent" })
-      .closest("tr") as HTMLElement;
-    expect(failing).toHaveTextContent("Failing");
-    expect(failing).toHaveTextContent("Provisioning failed; disconnected");
-    const unplaced = screen
-      .getByRole("link", { name: "Scout" })
-      .closest("tr") as HTMLElement;
-    expect(unplaced).toHaveTextContent("Not placed");
-    expect(unplaced).toHaveTextContent("Nowhere yet");
-  });
-
-  it("marks a definition that is cutting over", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
-        HttpResponse.json([{ ...fieldAgent, cutover: { stage: "frozen" } }]),
-      ),
-    );
-
-    await renderMembers();
-
-    const scout = screen
-      .getByRole("link", { name: "Scout" })
-      .closest("tr") as HTMLElement;
-    expect(scout).toHaveTextContent("Cut-over in progress");
-    // Control: an agent no cutover touches carries no marker.
+    expect(screen.getByRole("columnheader", { name: /Role/ })).toBeVisible();
     expect(
-      screen.getByRole("link", { name: "Unnamed agent" }).closest("tr"),
-    ).not.toHaveTextContent("Cut-over");
+      screen.queryByRole("columnheader", { name: /Runs on/ }),
+    ).not.toBeInTheDocument();
   });
 
-  it("marks a definition past frozen as cut over, beside one still cutting over (#1171)", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
-        HttpResponse.json([
-          { ...fieldAgent, cutover: { stage: "frozen" } },
-          {
-            ...fieldAgent,
-            agentGrn: "grn:acme:default:agent:7e6d5c4b3a291807",
-            name: "Moved",
-            cutover: { stage: "switched" },
-          },
-        ]),
-      ),
-    );
-
-    await renderMembers();
-
-    expect(
-      screen.getByRole("link", { name: "Moved" }).closest("tr"),
-    ).toHaveTextContent("Managed by the Operator");
-    expect(
-      screen.getByRole("link", { name: "Scout" }).closest("tr"),
-    ).toHaveTextContent("Cut-over in progress");
-  });
-
-  it("filters by kind", async () => {
-    await renderMembers({ kind: "agent" });
-
-    expect(names()).toEqual(["Unnamed agent", "Scout"]);
-    expect(screen.getByRole("button", { name: /^Agents/ })).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
-  });
-
-  it("filters by team from the team's members", async () => {
-    // Engineering holds Alice and the reported agent.
-    await renderMembers({ team: "eng" });
-
-    expect(names()).toEqual(["Alice", "Unnamed agent"]);
-  });
-
-  it("filters by what an agent runs on", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/agents`, () =>
-        HttpResponse.json([
-          {
-            ...reportedAgent,
-            assignment: {
-              assigneeGrn: "grn:acme:default:operator:field-one",
-              operatorGrn: "grn:acme:default:operator:field-one",
-              epoch: 3,
-              since: "2026-10-01T00:00:00Z",
-            },
-          },
-        ]),
-      ),
-    );
-
-    await renderMembers({ runs: "field-one" });
-
-    expect(names()).toEqual(["Unnamed agent"]);
-    expect(screen.getByRole("table")).toHaveTextContent(
-      "Field cluster one, operator, epoch 3",
-    );
-  });
-
-  it("says a refused list of people, and keeps the agents", async () => {
+  it("says a refused list of people, never an empty one", async () => {
     server.use(refuse("members"));
 
-    await renderMembers();
+    await renderPeople();
 
     expect(
       screen.getByText("You can't view this organization's people"),
     ).toBeInTheDocument();
-    expect(names()).toEqual(["Unnamed agent", "Scout"]);
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("says where a team filter could not be read, and lists everyone", async () => {
+    server.use(refuse("groups/eng/members"));
+
+    await renderPeople({ team: "eng" });
+
+    expect(
+      screen.getByText("You can't view this team's members"),
+    ).toBeInTheDocument();
+    expect(names()).toEqual(["Alice"]);
   });
 
   it("keeps inviting on the page, inactive with its reason, where the server denies it", async () => {
@@ -244,18 +140,25 @@ describe("people and agents", () => {
       ),
     );
 
-    await renderMembers();
+    await renderPeople();
 
     const invite = screen.getByRole("button", { name: "Invite people" });
     expect(invite).toHaveAttribute("aria-disabled", "true");
     expect(invite).toHaveAccessibleDescription(
-      "Inviting people needs org:invite, and no policy grants it to you.",
+      "No policy lets you invite people.",
     );
-    // Control: creating an agent, which the server allows, is a link.
-    expect(screen.getByRole("link", { name: "New agent" })).toBeInTheDocument();
   });
 
-  it("adds the chosen members to a team, one request each", async () => {
+  it("offers inviting as a working button where the server allows it", async () => {
+    // The control for the case above.
+    await renderPeople();
+
+    expect(
+      screen.getByRole("button", { name: "Invite people" }),
+    ).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("adds the chosen people to a team, one request each", async () => {
     const added: string[] = [];
     server.use(
       http.post(
@@ -277,7 +180,8 @@ describe("people and agents", () => {
       <TooltipProvider>
         <MemberList
           org="acme"
-          rows={[ALICE_ROW, SCOUT_ROW]}
+          kind="person"
+          rows={[ALICE_ROW, BOB_ROW]}
           filters={FILTERS}
           teamChoices={[{ value: "eng", label: "Engineering" }]}
           policyChoices={[]}
@@ -287,11 +191,11 @@ describe("people and agents", () => {
     );
 
     await user.click(screen.getByRole("checkbox", { name: "Select Alice" }));
-    await user.click(screen.getByRole("checkbox", { name: "Select Scout" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select Bob" }));
     expect(screen.getByText("2 selected")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Add to team" }));
     const dialog = screen.getByRole("alertdialog", {
-      name: "Add Alice and Scout to a team?",
+      name: "Add Alice and Bob to a team?",
     });
     await user.click(within(dialog).getByRole("combobox", { name: "Team" }));
     await user.click(screen.getByRole("option", { name: "Engineering" }));
@@ -302,7 +206,7 @@ describe("people and agents", () => {
     expect(await screen.findByText("Added 2 members")).toBeInTheDocument();
     expect(added).toEqual([
       "eng grn:root:default:user:alice",
-      `eng ${fieldAgent.agentGrn}`,
+      "eng grn:root:default:user:bob",
     ]);
   });
 
@@ -313,7 +217,7 @@ describe("people and agents", () => {
       ),
     );
 
-    await renderMembers();
+    await renderPeople();
 
     // Engineering is the only team, so adding is kept, inactive.
     expect(screen.getByRole("button", { name: "Add to team" })).toHaveAttribute(

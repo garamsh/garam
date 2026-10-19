@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
 import {
-  ControlNotice,
   NO_FIX,
   controlReach,
   type ControlReach,
@@ -16,7 +15,6 @@ import { checkPermissions } from "@/lib/permission-check";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
-import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
 import { Section } from "../../../../_components/section";
 import { OperatorTemplates } from "../_components/operator-templates";
@@ -72,6 +70,13 @@ export default async function NewAgentPage({ params }: Params) {
             "agent-template:read",
           );
 
+  // The wizard already says why no control service is reachable, so
+  // the templates show only where one can be read.
+  const templates =
+    hosted.status === "ok"
+      ? hostedFor(hosted.data, "agent-template:read")
+      : null;
+
   return (
     <div className="flex flex-col gap-10">
       <NewAgentWizard
@@ -84,22 +89,16 @@ export default async function NewAgentPage({ params }: Params) {
             : {}
         }
       />
-      <Section region title="Templates">
-        {hosted.status === "ok" ? (
+      {templates !== null && (
+        <Section region title="Templates">
           <OperatorTemplates
             org={org}
             orgGrn={organization.data.grn}
-            hosted={hostedFor(hosted.data, "agent-template:read")}
+            hosted={templates}
             publishDenied={permissions.get("publish") === "denied"}
           />
-        ) : (
-          <ControlNotice
-            operatorsHref={orgHref(org, "operators")}
-            reason={hosted.reason}
-            fix={NO_FIX}
-          />
-        )}
-      </Section>
+        </Section>
+      )}
     </div>
   );
 }

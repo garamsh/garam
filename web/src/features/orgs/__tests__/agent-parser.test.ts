@@ -12,7 +12,7 @@ const agent = {
 };
 
 describe("AgentParser", () => {
-  it("loads an agent a standalone host's supervisor holds", () => {
+  it("loads an assignment by its assignee alone, and reads no legacy operatorGrn", () => {
     const held = {
       ...agent,
       assignment: {
@@ -21,9 +21,9 @@ describe("AgentParser", () => {
         since: "2026-01-02T03:04:05Z",
       },
     };
-    // The control: an operator-held agent, which also names its
-    // operator on the legacy field, loads through the same parser, so
-    // the refusal below is the missing assignee and not the shape.
+    // An operator-held agent may still name its operator on the legacy
+    // field; the console reads the assignee instead, so the backend can
+    // drop it (#1592).
     const operated = {
       ...agent,
       assignment: {
@@ -33,16 +33,29 @@ describe("AgentParser", () => {
         since: "2026-01-02T03:04:05Z",
       },
     };
-    expect(AgentParser.parse(held).assignment?.operatorGrn).toBeUndefined();
-    expect(AgentParser.parse(operated).assignment?.operatorGrn).toBe(
-      "grn:acme:default:operator:field-one",
+    expect(AgentParser.parse(held).assignment?.assigneeGrn).toBe(
+      "grn:acme:default:supervisor:0a1b2c3d4e5f6071",
     );
+    expect(AgentParser.parse(operated).assignment).toEqual({
+      assigneeGrn: "grn:acme:default:operator:field-one",
+      epoch: 2,
+      since: "2026-01-02T03:04:05Z",
+    });
+    // The control: the same shape without an assignee is refused, so
+    // the loads above are the assignee and not a lax parser.
     expect(() =>
       AgentParser.parse({
         ...agent,
         assignment: { epoch: 1, since: "2026-01-02T03:04:05Z" },
       }),
     ).toThrow();
+  });
+
+  it("keeps the generation garam last activated, where it answers one", () => {
+    expect(AgentParser.parse({ ...agent, generation: "7" }).generation).toBe(
+      "7",
+    );
+    expect(AgentParser.parse(agent).generation).toBeUndefined();
   });
 });
 

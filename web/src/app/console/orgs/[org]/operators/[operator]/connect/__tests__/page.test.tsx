@@ -105,7 +105,7 @@ describe("connect operator page", () => {
     await renderPage();
 
     expect(
-      screen.getByText("You cannot issue keys for this operator"),
+      screen.getByText("No policy lets you issue this operator a key"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Issue key" })).toBeNull();
   });

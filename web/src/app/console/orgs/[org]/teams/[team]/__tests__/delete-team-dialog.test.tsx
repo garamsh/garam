@@ -65,7 +65,7 @@ describe("delete team dialog", () => {
     expect(
       screen.getByRole("alertdialog", { name: "Delete Engineering?" }),
     ).toHaveAccessibleDescription(
-      "This removes the team and its 2 memberships. The people and agents in it stay in this organization. garam cannot bring the team back.",
+      "Removes its 2 memberships. Its members stay.",
     );
     // The act is named on the button that does it, not "Confirm".
     expect(screen.getByRole("button", { name: "Delete team" })).toHaveAttribute(

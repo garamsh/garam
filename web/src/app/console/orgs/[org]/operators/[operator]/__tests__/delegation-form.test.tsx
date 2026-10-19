@@ -120,7 +120,7 @@ describe("delegation form", () => {
   it("says no delegation is held, and offers granting one", () => {
     renderForm(null);
 
-    expect(screen.getByText(/holds no delegation/)).toBeInTheDocument();
+    expect(screen.getByText("No delegation.")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Grant delegation" }),
     ).toBeInTheDocument();

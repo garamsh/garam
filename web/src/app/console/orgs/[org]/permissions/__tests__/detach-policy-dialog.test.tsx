@@ -56,11 +56,9 @@ describe("detach policy dialog", () => {
     );
 
     const refusal = await within(dialog).findByRole("alert");
+    expect(refusal).toHaveTextContent("This is its last attachment");
     expect(refusal).toHaveTextContent(
-      "Not detached: this is its last attachment",
-    );
-    expect(refusal).toHaveTextContent(
-      "Attach it to another team, person or agent first, or archive the policy.",
+      "Without it, it applies to everyone. Attach it elsewhere first.",
     );
     expect(
       within(dialog).getByRole("link", { name: "Open Deny project deletion" }),

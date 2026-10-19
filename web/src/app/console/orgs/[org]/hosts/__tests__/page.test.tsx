@@ -230,7 +230,9 @@ describe("hosts", () => {
     for (const name of ["Approve a host", "Withdraw", "Revoke"]) {
       const button = screen.getByRole("button", { name });
       expect(button).toHaveAttribute("aria-disabled", "true");
-      expect(button).toHaveAccessibleDescription(/needs agent:enroll/);
+      expect(button).toHaveAccessibleDescription(
+        "No policy lets you manage hosts.",
+      );
     }
   });
 

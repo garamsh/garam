@@ -58,7 +58,7 @@ export default async function OperatorsPage({ params, searchParams }: Params) {
   return (
     <ListPage
       title="Operators"
-      description="The Operators that run this organization's agents in its clusters. Each connects two identities: its manager and its control service."
+      description="Each connects two identities: its manager and its control service."
       count={operators.status === "ok" ? operators.data.length : undefined}
       primaryAction={
         permissions.get("register") !== "denied" && (

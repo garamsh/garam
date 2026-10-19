@@ -14,15 +14,13 @@ import { ListPage } from "../_components/templates/list-page";
 export const metadata: Metadata = { title: "Organizations — garam" };
 
 const TITLE = "Organizations";
-const DESCRIPTION = "The organizations you belong to.";
-
 /** The console's first screen: every organization the caller belongs to. */
 export default async function OrgsPage() {
   const orgs = await listConsoleOrgs();
 
   if (orgs.status === "unreachable") {
     return (
-      <ListPage title={TITLE} description={DESCRIPTION}>
+      <ListPage title={TITLE}>
         <ApiUnreachable subject="your organizations" />
       </ListPage>
     );
@@ -31,7 +29,7 @@ export default async function OrgsPage() {
   return (
     <ListPage
       title={TITLE}
-      description={DESCRIPTION}
+
       primaryAction={
         <Button asChild>
           <Link href="/console/orgs/new">New organization</Link>
@@ -39,10 +37,7 @@ export default async function OrgsPage() {
       }
     >
       {orgs.orgs.length === 0 ? (
-        <EmptyState
-          icon={Building2}
-          title="No organizations yet"
-        />
+        <EmptyState icon={Building2} title="No organizations yet" />
       ) : (
         <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {orgs.orgs.map((org) => (

@@ -65,9 +65,7 @@ describe("permissions page", () => {
 
     await renderPolicies();
 
-    expect(
-      screen.getByText("This organization has no policies."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("No policies")).toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
@@ -86,9 +84,7 @@ describe("permissions page", () => {
     expect(
       screen.getByText("You can't view this organization's policies"),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("This organization has no policies."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No policies")).not.toBeInTheDocument();
   });
 
   it("renders not-found when the organization is not the caller's", async () => {
@@ -124,9 +120,7 @@ describe("permissions page", () => {
     expect(
       screen.getByRole("heading", { name: "Cannot reach the API" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText("This organization has no policies."),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No policies")).not.toBeInTheDocument();
   });
 
   it("withdraws Create policy only where the server denies it", async () => {

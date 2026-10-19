@@ -96,7 +96,8 @@ export default async function OrgSettingsPage({ params }: Params) {
         {
           id: "consents",
           title: "Consents",
-          description: "Organizations whose agents may exchange messages with yours.",
+          description:
+            "Organizations whose agents may exchange messages with yours.",
           content: (
             <Button asChild variant="outline">
               <Link href={orgHref(org, "consents")}>Open consents</Link>

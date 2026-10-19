@@ -65,10 +65,7 @@ export default async function ConsentsPage({ params }: Params) {
       {consents.status === "forbidden" ? (
         <RefusedRead subject="this organization's consent relations" />
       ) : consents.data.length === 0 ? (
-        <EmptyState
-          icon={Handshake}
-          title="No consent relations"
-        />
+        <EmptyState icon={Handshake} title="No consent relations" />
       ) : (
         <ul className="grid gap-4 lg:grid-cols-2">
           {consents.data.map((consent) => (

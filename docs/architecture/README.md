@@ -243,7 +243,15 @@ on hosted runners.
   with `IMAGE_BUILD_CACHE=gha` (`Makefile`), on the runner's Docker
   switched to the containerd image store by
   `scripts/enable-containerd-image-store.sh`, so a run reuses the
-  `go mod download` and `go build` layers an earlier run wrote (#1519).
+  `go mod download` and `go build` layers an earlier run of the same
+  pull request wrote (#1519). GitHub restores a cache only from the
+  run's own ref and the default branch, and every cache here is written
+  on a `refs/pull/N/merge` ref, since both workflows run on pull
+  requests alone. A new promotion pull request therefore starts cold,
+  and `release.yml`'s tag run reads no cache (#1622). The server
+  image's `go mod download` is tried three times, 10 and 20 seconds
+  apart, so a transient proxy error costs a retry rather than the run
+  (#1622).
   A cache does not remove the base's pull: every build reads its base's
   manifest from the registry at `load metadata`, which probe #1521
   measured. The bases come from Google's mirror of Docker's official

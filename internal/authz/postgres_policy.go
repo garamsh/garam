@@ -116,6 +116,18 @@ func (s *PostgresStore) ListPolicyVersions(ctx context.Context, g grn.GRN) ([]*P
 	return versions, nil
 }
 
+// DeletePolicy removes the policy in one statement, which holds the
+// policy's row lock as DetachPolicy's does, so the two serialize. Its
+// versions and attachments cascade with it, which the append-only
+// trigger admits only once the policy row is gone (migration 000002).
+func (s *PostgresStore) DeletePolicy(ctx context.Context, g grn.GRN) (*Policy, error) {
+	row, err := s.q.DeletePolicy(ctx, g.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "delete policy", ErrPolicyNotFound, nil)
+	}
+	return rowToPolicy(row)
+}
+
 // SetPolicyStatus moves the policy through its lifecycle.
 func (s *PostgresStore) SetPolicyStatus(ctx context.Context, g grn.GRN, status wire.PolicyStatus) (*Policy, error) {
 	row, err := s.q.SetPolicyStatus(ctx, db.SetPolicyStatusParams{

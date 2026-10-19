@@ -534,7 +534,7 @@ func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status, body)
 
 	// The policy out of every check is what puts the refused recipient
-	// back in reach — over the lifecycle that is an archive, a last
+	// back in reach — over the lifecycle that is a delete, a last
 	// detach being refused — so the refusal above was the policy and
 	// nothing else.
 	delete(policies.attached, sender)

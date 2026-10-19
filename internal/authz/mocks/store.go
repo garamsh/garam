@@ -351,6 +351,74 @@ func (_c *MockStore_CreatePolicy_Call) RunAndReturn(run func(ctx context.Context
 	return _c
 }
 
+// DeletePolicy provides a mock function for the type MockStore
+func (_mock *MockStore) DeletePolicy(ctx context.Context, g grn.GRN) (*authz.Policy, error) {
+	ret := _mock.Called(ctx, g)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeletePolicy")
+	}
+
+	var r0 *authz.Policy
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) (*authz.Policy, error)); ok {
+		return returnFunc(ctx, g)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) *authz.Policy); ok {
+		r0 = returnFunc(ctx, g)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*authz.Policy)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN) error); ok {
+		r1 = returnFunc(ctx, g)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_DeletePolicy_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeletePolicy'
+type MockStore_DeletePolicy_Call struct {
+	*mock.Call
+}
+
+// DeletePolicy is a helper method to define mock.On call
+//   - ctx context.Context
+//   - g grn.GRN
+func (_e *MockStore_Expecter) DeletePolicy(ctx any, g any) *MockStore_DeletePolicy_Call {
+	return &MockStore_DeletePolicy_Call{Call: _e.mock.On("DeletePolicy", ctx, g)}
+}
+
+func (_c *MockStore_DeletePolicy_Call) Run(run func(ctx context.Context, g grn.GRN)) *MockStore_DeletePolicy_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_DeletePolicy_Call) Return(policy *authz.Policy, err error) *MockStore_DeletePolicy_Call {
+	_c.Call.Return(policy, err)
+	return _c
+}
+
+func (_c *MockStore_DeletePolicy_Call) RunAndReturn(run func(ctx context.Context, g grn.GRN) (*authz.Policy, error)) *MockStore_DeletePolicy_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DetachPolicy provides a mock function for the type MockStore
 func (_mock *MockStore) DetachPolicy(ctx context.Context, policyGRN grn.GRN, subjectGRN grn.GRN) error {
 	ret := _mock.Called(ctx, policyGRN, subjectGRN)

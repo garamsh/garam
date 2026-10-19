@@ -239,7 +239,7 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 	require.Len(t, warm, 1)
 	require.Equal(t, "before", warm[0].Sid)
 
-	_, err = s.SetPolicyStatus(ctx, before, wire.PolicyStatusArchived)
+	_, err = s.DeletePolicy(ctx, before)
 	require.NoError(t, err)
 	after, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)

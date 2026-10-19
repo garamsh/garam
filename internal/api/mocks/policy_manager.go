@@ -197,74 +197,6 @@ func (_c *MockPolicyManager_AddPolicyVersion_Call) RunAndReturn(run func(ctx con
 	return _c
 }
 
-// ArchivePolicy provides a mock function for the type MockPolicyManager
-func (_mock *MockPolicyManager) ArchivePolicy(ctx context.Context, policyGRN grn.GRN) (*api.Policy, error) {
-	ret := _mock.Called(ctx, policyGRN)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ArchivePolicy")
-	}
-
-	var r0 *api.Policy
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) (*api.Policy, error)); ok {
-		return returnFunc(ctx, policyGRN)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) *api.Policy); ok {
-		r0 = returnFunc(ctx, policyGRN)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*api.Policy)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN) error); ok {
-		r1 = returnFunc(ctx, policyGRN)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockPolicyManager_ArchivePolicy_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ArchivePolicy'
-type MockPolicyManager_ArchivePolicy_Call struct {
-	*mock.Call
-}
-
-// ArchivePolicy is a helper method to define mock.On call
-//   - ctx context.Context
-//   - policyGRN grn.GRN
-func (_e *MockPolicyManager_Expecter) ArchivePolicy(ctx any, policyGRN any) *MockPolicyManager_ArchivePolicy_Call {
-	return &MockPolicyManager_ArchivePolicy_Call{Call: _e.mock.On("ArchivePolicy", ctx, policyGRN)}
-}
-
-func (_c *MockPolicyManager_ArchivePolicy_Call) Run(run func(ctx context.Context, policyGRN grn.GRN)) *MockPolicyManager_ArchivePolicy_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 grn.GRN
-		if args[1] != nil {
-			arg1 = args[1].(grn.GRN)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockPolicyManager_ArchivePolicy_Call) Return(policy *api.Policy, err error) *MockPolicyManager_ArchivePolicy_Call {
-	_c.Call.Return(policy, err)
-	return _c
-}
-
-func (_c *MockPolicyManager_ArchivePolicy_Call) RunAndReturn(run func(ctx context.Context, policyGRN grn.GRN) (*api.Policy, error)) *MockPolicyManager_ArchivePolicy_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // AttachPolicy provides a mock function for the type MockPolicyManager
 func (_mock *MockPolicyManager) AttachPolicy(ctx context.Context, policyGRN grn.GRN, subjectGRN grn.GRN) (*api.PolicyAttachment, error) {
 	ret := _mock.Called(ctx, policyGRN, subjectGRN)
@@ -421,6 +353,63 @@ func (_c *MockPolicyManager_CreatePolicy_Call) Return(policy *api.Policy, err er
 }
 
 func (_c *MockPolicyManager_CreatePolicy_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN, name string, document json.RawMessage, createdBy grn.GRN) (*api.Policy, error)) *MockPolicyManager_CreatePolicy_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeletePolicy provides a mock function for the type MockPolicyManager
+func (_mock *MockPolicyManager) DeletePolicy(ctx context.Context, policyGRN grn.GRN) error {
+	ret := _mock.Called(ctx, policyGRN)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeletePolicy")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) error); ok {
+		r0 = returnFunc(ctx, policyGRN)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockPolicyManager_DeletePolicy_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeletePolicy'
+type MockPolicyManager_DeletePolicy_Call struct {
+	*mock.Call
+}
+
+// DeletePolicy is a helper method to define mock.On call
+//   - ctx context.Context
+//   - policyGRN grn.GRN
+func (_e *MockPolicyManager_Expecter) DeletePolicy(ctx any, policyGRN any) *MockPolicyManager_DeletePolicy_Call {
+	return &MockPolicyManager_DeletePolicy_Call{Call: _e.mock.On("DeletePolicy", ctx, policyGRN)}
+}
+
+func (_c *MockPolicyManager_DeletePolicy_Call) Run(run func(ctx context.Context, policyGRN grn.GRN)) *MockPolicyManager_DeletePolicy_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockPolicyManager_DeletePolicy_Call) Return(err error) *MockPolicyManager_DeletePolicy_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockPolicyManager_DeletePolicy_Call) RunAndReturn(run func(ctx context.Context, policyGRN grn.GRN) error) *MockPolicyManager_DeletePolicy_Call {
 	_c.Call.Return(run)
 	return _c
 }

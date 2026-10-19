@@ -139,6 +139,17 @@ func (s *fakeStore) SetPolicyStatus(_ context.Context, g grn.GRN, status wire.Po
 	return p.policy, nil
 }
 
+func (s *fakeStore) DeletePolicy(_ context.Context, g grn.GRN) (*authz.Policy, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, err := s.find(g)
+	if err != nil {
+		return nil, err
+	}
+	s.policies = slices.DeleteFunc(s.policies, func(q *fakePolicy) bool { return q == p })
+	return p.policy, nil
+}
+
 func (s *fakeStore) SetPolicyDefaultVersion(_ context.Context, g grn.GRN, version int) (*authz.Policy, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

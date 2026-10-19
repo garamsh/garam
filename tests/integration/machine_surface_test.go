@@ -52,11 +52,11 @@ func detachRefused(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string, 
 	require.Equal(t, codes.FailedPrecondition, status.Code(err))
 }
 
-// archivePolicy retires policyGRN through the lifecycle service, which
+// deletePolicy removes policyGRN through the lifecycle service, which
 // takes it out of every check.
-func archivePolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string) {
+func deletePolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string) {
 	t.Helper()
-	_, err := srv.ArchivePolicy(context.Background(), &authzv1.ArchivePolicyRequest{PolicyGrn: policyGRN})
+	_, err := srv.DeletePolicy(context.Background(), &authzv1.DeletePolicyRequest{PolicyGrn: policyGRN})
 	require.NoError(t, err)
 }
 
@@ -406,7 +406,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 // readily for a surface that refuses everything: the same sender
 // reaching a recipient the Deny does not name, the agent beside it that
 // holds no policy reaching the one it does, and the same call once the
-// policy is archived. The queue is drained at the end, so what was
+// policy is deleted. The queue is drained at the end, so what was
 // refused is shown to be absent rather than merely unanswered.
 //
 // The detach step in the middle is the one an operator runs to stop
@@ -473,9 +473,9 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-6"))
 	require.Equal(t, http.StatusForbidden, status, string(body))
 
-	// Archiving is what takes the policy out of every check, so the
+	// Deleting is what takes the policy out of every check, so the
 	// refusals above were this policy and nothing beside it.
-	archivePolicy(t, policies, denied)
+	deletePolicy(t, policies, denied)
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-7"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
@@ -580,9 +580,9 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 	status, body = machineSend(t, outsider, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-6"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
-	// Archiving is what takes the policy out of every check, so both
+	// Deleting is what takes the policy out of every check, so both
 	// refusals were this document and nothing beside it.
-	archivePolicy(t, policies, denied)
+	deletePolicy(t, policies, denied)
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-7"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
@@ -748,10 +748,10 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	status, body = machineSend(t, neighbour, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-4"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
-	// Archiving the policy changes nothing about the foreign sender: it
+	// Deleting the policy changes nothing about the foreign sender: it
 	// came back before the policy existed and comes back after, so the
 	// refusal never depended on what beta wrote.
-	archivePolicy(t, policies, openDoor)
+	deletePolicy(t, policies, openDoor)
 	status, body = machineSend(t, foreign, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-5"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 	require.NoError(t, json.Unmarshal(body, &refusal))

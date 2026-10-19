@@ -25,7 +25,7 @@ const (
 	PolicyService_ListPolicies_FullMethodName          = "/garam.authz.v1.PolicyService/ListPolicies"
 	PolicyService_ListPolicyVersions_FullMethodName    = "/garam.authz.v1.PolicyService/ListPolicyVersions"
 	PolicyService_ActivatePolicy_FullMethodName        = "/garam.authz.v1.PolicyService/ActivatePolicy"
-	PolicyService_ArchivePolicy_FullMethodName         = "/garam.authz.v1.PolicyService/ArchivePolicy"
+	PolicyService_DeletePolicy_FullMethodName          = "/garam.authz.v1.PolicyService/DeletePolicy"
 	PolicyService_RollbackPolicy_FullMethodName        = "/garam.authz.v1.PolicyService/RollbackPolicy"
 	PolicyService_AttachPolicy_FullMethodName          = "/garam.authz.v1.PolicyService/AttachPolicy"
 	PolicyService_DetachPolicy_FullMethodName          = "/garam.authz.v1.PolicyService/DetachPolicy"
@@ -38,8 +38,8 @@ const (
 //
 // PolicyService manages the org-scoped policy documents the engine
 // owns (ADR-0002). Versions are append-only; rollback moves the
-// default-version pointer, and activation and archiving change only
-// the status.
+// default-version pointer, activation changes only the status, and
+// deleting a policy removes it with its versions (ADR-0117).
 type PolicyServiceClient interface {
 	// CreatePolicy stores a new draft policy with its first version.
 	CreatePolicy(ctx context.Context, in *CreatePolicyRequest, opts ...grpc.CallOption) (*CreatePolicyResponse, error)
@@ -52,9 +52,9 @@ type PolicyServiceClient interface {
 	ListPolicyVersions(ctx context.Context, in *ListPolicyVersionsRequest, opts ...grpc.CallOption) (*ListPolicyVersionsResponse, error)
 	// ActivatePolicy makes a draft policy count in evaluation.
 	ActivatePolicy(ctx context.Context, in *ActivatePolicyRequest, opts ...grpc.CallOption) (*ActivatePolicyResponse, error)
-	// ArchivePolicy retires a policy: it is retained with its versions
-	// and stops contributing statements to checks.
-	ArchivePolicy(ctx context.Context, in *ArchivePolicyRequest, opts ...grpc.CallOption) (*ArchivePolicyResponse, error)
+	// DeletePolicy removes a policy together with its versions and
+	// attachments, so it stops contributing statements to checks.
+	DeletePolicy(ctx context.Context, in *DeletePolicyRequest, opts ...grpc.CallOption) (*DeletePolicyResponse, error)
 	// RollbackPolicy points the policy at any stored version, older or
 	// newer than its current default.
 	RollbackPolicy(ctx context.Context, in *RollbackPolicyRequest, opts ...grpc.CallOption) (*RollbackPolicyResponse, error)
@@ -63,7 +63,7 @@ type PolicyServiceClient interface {
 	AttachPolicy(ctx context.Context, in *AttachPolicyRequest, opts ...grpc.CallOption) (*AttachPolicyResponse, error)
 	// DetachPolicy removes one attachment. Removing an active policy's
 	// last attachment is refused with FAILED_PRECONDITION rather than
-	// widening the policy to the whole org; archive the policy or attach
+	// widening the policy to the whole org; delete the policy or attach
 	// another subject first. An active policy created without
 	// attachments still applies org-wide (ADR-0008).
 	DetachPolicy(ctx context.Context, in *DetachPolicyRequest, opts ...grpc.CallOption) (*DetachPolicyResponse, error)
@@ -130,10 +130,10 @@ func (c *policyServiceClient) ActivatePolicy(ctx context.Context, in *ActivatePo
 	return out, nil
 }
 
-func (c *policyServiceClient) ArchivePolicy(ctx context.Context, in *ArchivePolicyRequest, opts ...grpc.CallOption) (*ArchivePolicyResponse, error) {
+func (c *policyServiceClient) DeletePolicy(ctx context.Context, in *DeletePolicyRequest, opts ...grpc.CallOption) (*DeletePolicyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ArchivePolicyResponse)
-	err := c.cc.Invoke(ctx, PolicyService_ArchivePolicy_FullMethodName, in, out, cOpts...)
+	out := new(DeletePolicyResponse)
+	err := c.cc.Invoke(ctx, PolicyService_DeletePolicy_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -186,8 +186,8 @@ func (c *policyServiceClient) ListPolicyAttachments(ctx context.Context, in *Lis
 //
 // PolicyService manages the org-scoped policy documents the engine
 // owns (ADR-0002). Versions are append-only; rollback moves the
-// default-version pointer, and activation and archiving change only
-// the status.
+// default-version pointer, activation changes only the status, and
+// deleting a policy removes it with its versions (ADR-0117).
 type PolicyServiceServer interface {
 	// CreatePolicy stores a new draft policy with its first version.
 	CreatePolicy(context.Context, *CreatePolicyRequest) (*CreatePolicyResponse, error)
@@ -200,9 +200,9 @@ type PolicyServiceServer interface {
 	ListPolicyVersions(context.Context, *ListPolicyVersionsRequest) (*ListPolicyVersionsResponse, error)
 	// ActivatePolicy makes a draft policy count in evaluation.
 	ActivatePolicy(context.Context, *ActivatePolicyRequest) (*ActivatePolicyResponse, error)
-	// ArchivePolicy retires a policy: it is retained with its versions
-	// and stops contributing statements to checks.
-	ArchivePolicy(context.Context, *ArchivePolicyRequest) (*ArchivePolicyResponse, error)
+	// DeletePolicy removes a policy together with its versions and
+	// attachments, so it stops contributing statements to checks.
+	DeletePolicy(context.Context, *DeletePolicyRequest) (*DeletePolicyResponse, error)
 	// RollbackPolicy points the policy at any stored version, older or
 	// newer than its current default.
 	RollbackPolicy(context.Context, *RollbackPolicyRequest) (*RollbackPolicyResponse, error)
@@ -211,7 +211,7 @@ type PolicyServiceServer interface {
 	AttachPolicy(context.Context, *AttachPolicyRequest) (*AttachPolicyResponse, error)
 	// DetachPolicy removes one attachment. Removing an active policy's
 	// last attachment is refused with FAILED_PRECONDITION rather than
-	// widening the policy to the whole org; archive the policy or attach
+	// widening the policy to the whole org; delete the policy or attach
 	// another subject first. An active policy created without
 	// attachments still applies org-wide (ADR-0008).
 	DetachPolicy(context.Context, *DetachPolicyRequest) (*DetachPolicyResponse, error)
@@ -243,8 +243,8 @@ func (UnimplementedPolicyServiceServer) ListPolicyVersions(context.Context, *Lis
 func (UnimplementedPolicyServiceServer) ActivatePolicy(context.Context, *ActivatePolicyRequest) (*ActivatePolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ActivatePolicy not implemented")
 }
-func (UnimplementedPolicyServiceServer) ArchivePolicy(context.Context, *ArchivePolicyRequest) (*ArchivePolicyResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ArchivePolicy not implemented")
+func (UnimplementedPolicyServiceServer) DeletePolicy(context.Context, *DeletePolicyRequest) (*DeletePolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeletePolicy not implemented")
 }
 func (UnimplementedPolicyServiceServer) RollbackPolicy(context.Context, *RollbackPolicyRequest) (*RollbackPolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RollbackPolicy not implemented")
@@ -369,20 +369,20 @@ func _PolicyService_ActivatePolicy_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PolicyService_ArchivePolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ArchivePolicyRequest)
+func _PolicyService_DeletePolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeletePolicyRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PolicyServiceServer).ArchivePolicy(ctx, in)
+		return srv.(PolicyServiceServer).DeletePolicy(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PolicyService_ArchivePolicy_FullMethodName,
+		FullMethod: PolicyService_DeletePolicy_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PolicyServiceServer).ArchivePolicy(ctx, req.(*ArchivePolicyRequest))
+		return srv.(PolicyServiceServer).DeletePolicy(ctx, req.(*DeletePolicyRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -487,8 +487,8 @@ var PolicyService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PolicyService_ActivatePolicy_Handler,
 		},
 		{
-			MethodName: "ArchivePolicy",
-			Handler:    _PolicyService_ArchivePolicy_Handler,
+			MethodName: "DeletePolicy",
+			Handler:    _PolicyService_DeletePolicy_Handler,
 		},
 		{
 			MethodName: "RollbackPolicy",

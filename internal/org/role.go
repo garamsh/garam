@@ -58,6 +58,7 @@ const (
 	ActionPolicyUpdate = "policy:update"
 	ActionPolicyAttach = "policy:attach"
 	ActionPolicyDetach = "policy:detach"
+	ActionPolicyDelete = "policy:delete"
 
 	// Cross-organization consent management (ADR-0035). The org owns
 	// the constants for the reason it owns the policy ones: the
@@ -176,7 +177,7 @@ var actions = []string{
 	ActionGroupMemberList, ActionGroupMemberAdd, ActionGroupMemberRemove,
 	ActionProjectCreate, ActionProjectRead, ActionProjectUpdate, ActionProjectDelete,
 	ActionProjectMemberList, ActionProjectMemberAdd, ActionProjectMemberRemove,
-	ActionPolicyCreate, ActionPolicyRead, ActionPolicyUpdate, ActionPolicyAttach, ActionPolicyDetach,
+	ActionPolicyCreate, ActionPolicyRead, ActionPolicyUpdate, ActionPolicyAttach, ActionPolicyDetach, ActionPolicyDelete,
 	ActionConsentRead, ActionConsentGrant, ActionConsentWithdraw,
 	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,

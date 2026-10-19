@@ -48,9 +48,9 @@ type PolicyManager interface {
 	AddPolicyVersion(ctx context.Context, policyGRN grn.GRN, document json.RawMessage, createdBy grn.GRN) (*PolicyVersion, error)
 	ListPolicyVersions(ctx context.Context, policyGRN grn.GRN) ([]*PolicyVersion, error)
 	ActivatePolicy(ctx context.Context, policyGRN grn.GRN) (*Policy, error)
-	ArchivePolicy(ctx context.Context, policyGRN grn.GRN) (*Policy, error)
 	RollbackPolicy(ctx context.Context, policyGRN grn.GRN, version int32) (*Policy, error)
 	AttachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) (*PolicyAttachment, error)
 	DetachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) error
+	DeletePolicy(ctx context.Context, policyGRN grn.GRN) error
 	ListPolicyAttachments(ctx context.Context, policyGRN grn.GRN) ([]*PolicyAttachment, error)
 }

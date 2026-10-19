@@ -31,7 +31,6 @@ const (
 	PolicyStatus_POLICY_STATUS_UNSPECIFIED PolicyStatus = 0
 	PolicyStatus_POLICY_STATUS_DRAFT       PolicyStatus = 1
 	PolicyStatus_POLICY_STATUS_ACTIVE      PolicyStatus = 2
-	PolicyStatus_POLICY_STATUS_ARCHIVED    PolicyStatus = 3
 )
 
 // Enum value maps for PolicyStatus.
@@ -40,13 +39,11 @@ var (
 		0: "POLICY_STATUS_UNSPECIFIED",
 		1: "POLICY_STATUS_DRAFT",
 		2: "POLICY_STATUS_ACTIVE",
-		3: "POLICY_STATUS_ARCHIVED",
 	}
 	PolicyStatus_value = map[string]int32{
 		"POLICY_STATUS_UNSPECIFIED": 0,
 		"POLICY_STATUS_DRAFT":       1,
 		"POLICY_STATUS_ACTIVE":      2,
-		"POLICY_STATUS_ARCHIVED":    3,
 	}
 )
 
@@ -731,27 +728,27 @@ func (x *ActivatePolicyResponse) GetPolicy() *Policy {
 	return nil
 }
 
-type ArchivePolicyRequest struct {
+type DeletePolicyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PolicyGrn     string                 `protobuf:"bytes,1,opt,name=policy_grn,json=policyGrn,proto3" json:"policy_grn,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ArchivePolicyRequest) Reset() {
-	*x = ArchivePolicyRequest{}
+func (x *DeletePolicyRequest) Reset() {
+	*x = DeletePolicyRequest{}
 	mi := &file_garam_authz_v1_policy_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ArchivePolicyRequest) String() string {
+func (x *DeletePolicyRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ArchivePolicyRequest) ProtoMessage() {}
+func (*DeletePolicyRequest) ProtoMessage() {}
 
-func (x *ArchivePolicyRequest) ProtoReflect() protoreflect.Message {
+func (x *DeletePolicyRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_garam_authz_v1_policy_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -763,39 +760,38 @@ func (x *ArchivePolicyRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ArchivePolicyRequest.ProtoReflect.Descriptor instead.
-func (*ArchivePolicyRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeletePolicyRequest.ProtoReflect.Descriptor instead.
+func (*DeletePolicyRequest) Descriptor() ([]byte, []int) {
 	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *ArchivePolicyRequest) GetPolicyGrn() string {
+func (x *DeletePolicyRequest) GetPolicyGrn() string {
 	if x != nil {
 		return x.PolicyGrn
 	}
 	return ""
 }
 
-type ArchivePolicyResponse struct {
+type DeletePolicyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Policy        *Policy                `protobuf:"bytes,1,opt,name=policy,proto3" json:"policy,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ArchivePolicyResponse) Reset() {
-	*x = ArchivePolicyResponse{}
+func (x *DeletePolicyResponse) Reset() {
+	*x = DeletePolicyResponse{}
 	mi := &file_garam_authz_v1_policy_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ArchivePolicyResponse) String() string {
+func (x *DeletePolicyResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ArchivePolicyResponse) ProtoMessage() {}
+func (*DeletePolicyResponse) ProtoMessage() {}
 
-func (x *ArchivePolicyResponse) ProtoReflect() protoreflect.Message {
+func (x *DeletePolicyResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_garam_authz_v1_policy_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -807,16 +803,9 @@ func (x *ArchivePolicyResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ArchivePolicyResponse.ProtoReflect.Descriptor instead.
-func (*ArchivePolicyResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeletePolicyResponse.ProtoReflect.Descriptor instead.
+func (*DeletePolicyResponse) Descriptor() ([]byte, []int) {
 	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *ArchivePolicyResponse) GetPolicy() *Policy {
-	if x != nil {
-		return x.Policy
-	}
-	return nil
 }
 
 type RollbackPolicyRequest struct {
@@ -1303,12 +1292,11 @@ const file_garam_authz_v1_policy_proto_rawDesc = "" +
 	"\n" +
 	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"H\n" +
 	"\x16ActivatePolicyResponse\x12.\n" +
-	"\x06policy\x18\x01 \x01(\v2\x16.garam.authz.v1.PolicyR\x06policy\"5\n" +
-	"\x14ArchivePolicyRequest\x12\x1d\n" +
+	"\x06policy\x18\x01 \x01(\v2\x16.garam.authz.v1.PolicyR\x06policy\"4\n" +
+	"\x13DeletePolicyRequest\x12\x1d\n" +
 	"\n" +
-	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"G\n" +
-	"\x15ArchivePolicyResponse\x12.\n" +
-	"\x06policy\x18\x01 \x01(\v2\x16.garam.authz.v1.PolicyR\x06policy\"P\n" +
+	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"\x16\n" +
+	"\x14DeletePolicyResponse\"P\n" +
 	"\x15RollbackPolicyRequest\x12\x1d\n" +
 	"\n" +
 	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\x12\x18\n" +
@@ -1341,19 +1329,18 @@ const file_garam_authz_v1_policy_proto_rawDesc = "" +
 	"\n" +
 	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"c\n" +
 	"\x1dListPolicyAttachmentsResponse\x12B\n" +
-	"\vattachments\x18\x01 \x03(\v2 .garam.authz.v1.PolicyAttachmentR\vattachments*|\n" +
+	"\vattachments\x18\x01 \x03(\v2 .garam.authz.v1.PolicyAttachmentR\vattachments*~\n" +
 	"\fPolicyStatus\x12\x1d\n" +
 	"\x19POLICY_STATUS_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13POLICY_STATUS_DRAFT\x10\x01\x12\x18\n" +
-	"\x14POLICY_STATUS_ACTIVE\x10\x02\x12\x1a\n" +
-	"\x16POLICY_STATUS_ARCHIVED\x10\x032\xe5\a\n" +
+	"\x14POLICY_STATUS_ACTIVE\x10\x02\"\x04\b\x03\x10\x03*\x16POLICY_STATUS_ARCHIVED2\xe2\a\n" +
 	"\rPolicyService\x12Y\n" +
 	"\fCreatePolicy\x12#.garam.authz.v1.CreatePolicyRequest\x1a$.garam.authz.v1.CreatePolicyResponse\x12e\n" +
 	"\x10AddPolicyVersion\x12'.garam.authz.v1.AddPolicyVersionRequest\x1a(.garam.authz.v1.AddPolicyVersionResponse\x12Y\n" +
 	"\fListPolicies\x12#.garam.authz.v1.ListPoliciesRequest\x1a$.garam.authz.v1.ListPoliciesResponse\x12k\n" +
 	"\x12ListPolicyVersions\x12).garam.authz.v1.ListPolicyVersionsRequest\x1a*.garam.authz.v1.ListPolicyVersionsResponse\x12_\n" +
-	"\x0eActivatePolicy\x12%.garam.authz.v1.ActivatePolicyRequest\x1a&.garam.authz.v1.ActivatePolicyResponse\x12\\\n" +
-	"\rArchivePolicy\x12$.garam.authz.v1.ArchivePolicyRequest\x1a%.garam.authz.v1.ArchivePolicyResponse\x12_\n" +
+	"\x0eActivatePolicy\x12%.garam.authz.v1.ActivatePolicyRequest\x1a&.garam.authz.v1.ActivatePolicyResponse\x12Y\n" +
+	"\fDeletePolicy\x12#.garam.authz.v1.DeletePolicyRequest\x1a$.garam.authz.v1.DeletePolicyResponse\x12_\n" +
 	"\x0eRollbackPolicy\x12%.garam.authz.v1.RollbackPolicyRequest\x1a&.garam.authz.v1.RollbackPolicyResponse\x12Y\n" +
 	"\fAttachPolicy\x12#.garam.authz.v1.AttachPolicyRequest\x1a$.garam.authz.v1.AttachPolicyResponse\x12Y\n" +
 	"\fDetachPolicy\x12#.garam.authz.v1.DetachPolicyRequest\x1a$.garam.authz.v1.DetachPolicyResponse\x12t\n" +
@@ -1388,8 +1375,8 @@ var file_garam_authz_v1_policy_proto_goTypes = []any{
 	(*ListPolicyVersionsResponse)(nil),    // 10: garam.authz.v1.ListPolicyVersionsResponse
 	(*ActivatePolicyRequest)(nil),         // 11: garam.authz.v1.ActivatePolicyRequest
 	(*ActivatePolicyResponse)(nil),        // 12: garam.authz.v1.ActivatePolicyResponse
-	(*ArchivePolicyRequest)(nil),          // 13: garam.authz.v1.ArchivePolicyRequest
-	(*ArchivePolicyResponse)(nil),         // 14: garam.authz.v1.ArchivePolicyResponse
+	(*DeletePolicyRequest)(nil),           // 13: garam.authz.v1.DeletePolicyRequest
+	(*DeletePolicyResponse)(nil),          // 14: garam.authz.v1.DeletePolicyResponse
 	(*RollbackPolicyRequest)(nil),         // 15: garam.authz.v1.RollbackPolicyRequest
 	(*RollbackPolicyResponse)(nil),        // 16: garam.authz.v1.RollbackPolicyResponse
 	(*PolicyAttachment)(nil),              // 17: garam.authz.v1.PolicyAttachment
@@ -1411,36 +1398,35 @@ var file_garam_authz_v1_policy_proto_depIdxs = []int32{
 	1,  // 6: garam.authz.v1.ListPoliciesResponse.policies:type_name -> garam.authz.v1.Policy
 	2,  // 7: garam.authz.v1.ListPolicyVersionsResponse.versions:type_name -> garam.authz.v1.PolicyVersion
 	1,  // 8: garam.authz.v1.ActivatePolicyResponse.policy:type_name -> garam.authz.v1.Policy
-	1,  // 9: garam.authz.v1.ArchivePolicyResponse.policy:type_name -> garam.authz.v1.Policy
-	1,  // 10: garam.authz.v1.RollbackPolicyResponse.policy:type_name -> garam.authz.v1.Policy
-	24, // 11: garam.authz.v1.PolicyAttachment.created_at:type_name -> google.protobuf.Timestamp
-	17, // 12: garam.authz.v1.AttachPolicyResponse.attachment:type_name -> garam.authz.v1.PolicyAttachment
-	17, // 13: garam.authz.v1.ListPolicyAttachmentsResponse.attachments:type_name -> garam.authz.v1.PolicyAttachment
-	3,  // 14: garam.authz.v1.PolicyService.CreatePolicy:input_type -> garam.authz.v1.CreatePolicyRequest
-	5,  // 15: garam.authz.v1.PolicyService.AddPolicyVersion:input_type -> garam.authz.v1.AddPolicyVersionRequest
-	7,  // 16: garam.authz.v1.PolicyService.ListPolicies:input_type -> garam.authz.v1.ListPoliciesRequest
-	9,  // 17: garam.authz.v1.PolicyService.ListPolicyVersions:input_type -> garam.authz.v1.ListPolicyVersionsRequest
-	11, // 18: garam.authz.v1.PolicyService.ActivatePolicy:input_type -> garam.authz.v1.ActivatePolicyRequest
-	13, // 19: garam.authz.v1.PolicyService.ArchivePolicy:input_type -> garam.authz.v1.ArchivePolicyRequest
-	15, // 20: garam.authz.v1.PolicyService.RollbackPolicy:input_type -> garam.authz.v1.RollbackPolicyRequest
-	18, // 21: garam.authz.v1.PolicyService.AttachPolicy:input_type -> garam.authz.v1.AttachPolicyRequest
-	20, // 22: garam.authz.v1.PolicyService.DetachPolicy:input_type -> garam.authz.v1.DetachPolicyRequest
-	22, // 23: garam.authz.v1.PolicyService.ListPolicyAttachments:input_type -> garam.authz.v1.ListPolicyAttachmentsRequest
-	4,  // 24: garam.authz.v1.PolicyService.CreatePolicy:output_type -> garam.authz.v1.CreatePolicyResponse
-	6,  // 25: garam.authz.v1.PolicyService.AddPolicyVersion:output_type -> garam.authz.v1.AddPolicyVersionResponse
-	8,  // 26: garam.authz.v1.PolicyService.ListPolicies:output_type -> garam.authz.v1.ListPoliciesResponse
-	10, // 27: garam.authz.v1.PolicyService.ListPolicyVersions:output_type -> garam.authz.v1.ListPolicyVersionsResponse
-	12, // 28: garam.authz.v1.PolicyService.ActivatePolicy:output_type -> garam.authz.v1.ActivatePolicyResponse
-	14, // 29: garam.authz.v1.PolicyService.ArchivePolicy:output_type -> garam.authz.v1.ArchivePolicyResponse
-	16, // 30: garam.authz.v1.PolicyService.RollbackPolicy:output_type -> garam.authz.v1.RollbackPolicyResponse
-	19, // 31: garam.authz.v1.PolicyService.AttachPolicy:output_type -> garam.authz.v1.AttachPolicyResponse
-	21, // 32: garam.authz.v1.PolicyService.DetachPolicy:output_type -> garam.authz.v1.DetachPolicyResponse
-	23, // 33: garam.authz.v1.PolicyService.ListPolicyAttachments:output_type -> garam.authz.v1.ListPolicyAttachmentsResponse
-	24, // [24:34] is the sub-list for method output_type
-	14, // [14:24] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	1,  // 9: garam.authz.v1.RollbackPolicyResponse.policy:type_name -> garam.authz.v1.Policy
+	24, // 10: garam.authz.v1.PolicyAttachment.created_at:type_name -> google.protobuf.Timestamp
+	17, // 11: garam.authz.v1.AttachPolicyResponse.attachment:type_name -> garam.authz.v1.PolicyAttachment
+	17, // 12: garam.authz.v1.ListPolicyAttachmentsResponse.attachments:type_name -> garam.authz.v1.PolicyAttachment
+	3,  // 13: garam.authz.v1.PolicyService.CreatePolicy:input_type -> garam.authz.v1.CreatePolicyRequest
+	5,  // 14: garam.authz.v1.PolicyService.AddPolicyVersion:input_type -> garam.authz.v1.AddPolicyVersionRequest
+	7,  // 15: garam.authz.v1.PolicyService.ListPolicies:input_type -> garam.authz.v1.ListPoliciesRequest
+	9,  // 16: garam.authz.v1.PolicyService.ListPolicyVersions:input_type -> garam.authz.v1.ListPolicyVersionsRequest
+	11, // 17: garam.authz.v1.PolicyService.ActivatePolicy:input_type -> garam.authz.v1.ActivatePolicyRequest
+	13, // 18: garam.authz.v1.PolicyService.DeletePolicy:input_type -> garam.authz.v1.DeletePolicyRequest
+	15, // 19: garam.authz.v1.PolicyService.RollbackPolicy:input_type -> garam.authz.v1.RollbackPolicyRequest
+	18, // 20: garam.authz.v1.PolicyService.AttachPolicy:input_type -> garam.authz.v1.AttachPolicyRequest
+	20, // 21: garam.authz.v1.PolicyService.DetachPolicy:input_type -> garam.authz.v1.DetachPolicyRequest
+	22, // 22: garam.authz.v1.PolicyService.ListPolicyAttachments:input_type -> garam.authz.v1.ListPolicyAttachmentsRequest
+	4,  // 23: garam.authz.v1.PolicyService.CreatePolicy:output_type -> garam.authz.v1.CreatePolicyResponse
+	6,  // 24: garam.authz.v1.PolicyService.AddPolicyVersion:output_type -> garam.authz.v1.AddPolicyVersionResponse
+	8,  // 25: garam.authz.v1.PolicyService.ListPolicies:output_type -> garam.authz.v1.ListPoliciesResponse
+	10, // 26: garam.authz.v1.PolicyService.ListPolicyVersions:output_type -> garam.authz.v1.ListPolicyVersionsResponse
+	12, // 27: garam.authz.v1.PolicyService.ActivatePolicy:output_type -> garam.authz.v1.ActivatePolicyResponse
+	14, // 28: garam.authz.v1.PolicyService.DeletePolicy:output_type -> garam.authz.v1.DeletePolicyResponse
+	16, // 29: garam.authz.v1.PolicyService.RollbackPolicy:output_type -> garam.authz.v1.RollbackPolicyResponse
+	19, // 30: garam.authz.v1.PolicyService.AttachPolicy:output_type -> garam.authz.v1.AttachPolicyResponse
+	21, // 31: garam.authz.v1.PolicyService.DetachPolicy:output_type -> garam.authz.v1.DetachPolicyResponse
+	23, // 32: garam.authz.v1.PolicyService.ListPolicyAttachments:output_type -> garam.authz.v1.ListPolicyAttachmentsResponse
+	23, // [23:33] is the sub-list for method output_type
+	13, // [13:23] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_garam_authz_v1_policy_proto_init() }

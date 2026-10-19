@@ -9,8 +9,8 @@ import (
 
 // Store persists policies and their append-only versions (ADR-0002).
 // A stored version is never rewritten: rollback moves the policy's
-// default-version pointer instead, and activation and archiving change
-// only its status.
+// default-version pointer instead, activation changes only its status,
+// and a version goes only with the policy that owns it.
 type Store interface {
 	// CreatePolicy stores a draft policy together with its first
 	// version, atomically.
@@ -22,6 +22,11 @@ type Store interface {
 	// pointer where it is.
 	AddPolicyVersion(ctx context.Context, g grn.GRN, doc PolicyDocument, createdBy grn.GRN) (*PolicyVersion, error)
 	ListPolicyVersions(ctx context.Context, g grn.GRN) ([]*PolicyVersion, error)
+
+	// DeletePolicy removes the policy with its versions and
+	// attachments and answers what it removed, or fails with
+	// ErrPolicyNotFound.
+	DeletePolicy(ctx context.Context, g grn.GRN) (*Policy, error)
 
 	SetPolicyStatus(ctx context.Context, g grn.GRN, status wire.PolicyStatus) (*Policy, error)
 	// SetPolicyDefaultVersion points the policy at an existing

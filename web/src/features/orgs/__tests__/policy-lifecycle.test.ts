@@ -4,8 +4,8 @@ import { z } from "zod";
 
 import { activatePolicy } from "@/features/orgs/api/activate-policy";
 import { addPolicyVersion } from "@/features/orgs/api/add-policy-version";
-import { archivePolicy } from "@/features/orgs/api/archive-policy";
 import { createPolicy } from "@/features/orgs/api/create-policy";
+import { deletePolicy } from "@/features/orgs/api/delete-policy";
 import { publishPolicyVersion } from "@/features/orgs/api/publish-policy-version";
 import { rollbackPolicy } from "@/features/orgs/api/rollback-policy";
 import {
@@ -307,32 +307,37 @@ describe("rollbackPolicy", () => {
   });
 });
 
-describe("archivePolicy", () => {
-  it("renders a refusal in garam's words and archives once allowed", async () => {
+describe("deletePolicy", () => {
+  it("renders a refusal in garam's words, and once allowed deletes the policy and opens the list", async () => {
     let refusing = true;
+    let deleted = 0;
     server.use(
-      http.post(`${DENY}/archive`, () =>
-        refusing
-          ? HttpResponse.json(
-              { kind: "permission_denied", message: "permission denied" },
-              { status: 403 },
-            )
-          : HttpResponse.json({ ...denyDeletes, status: "archived" }),
-      ),
+      http.delete(DENY, () => {
+        if (refusing) {
+          return HttpResponse.json(
+            { kind: "permission_denied", message: "permission denied" },
+            { status: 403 },
+          );
+        }
+        deleted += 1;
+        return new HttpResponse(null, { status: 204 });
+      }),
     );
 
     await expect(
-      archivePolicy({ status: "idle" }, form({ policy: "d1e2f3a4b5c6d7e8" })),
+      deletePolicy({ status: "idle" }, form({ policy: "d1e2f3a4b5c6d7e8" })),
     ).resolves.toEqual({
       status: "error",
       message: REFUSAL_COPY.permissionDenied,
     });
+    expect(deleted).toBe(0);
 
-    // The control: the same archive, allowed, succeeds.
+    // The control: the same delete, allowed, succeeds.
     refusing = false;
     await expect(
-      archivePolicy({ status: "idle" }, form({ policy: "d1e2f3a4b5c6d7e8" })),
-    ).resolves.toEqual({ status: "idle" });
+      deletePolicy({ status: "idle" }, form({ policy: "d1e2f3a4b5c6d7e8" })),
+    ).rejects.toThrow("NEXT_REDIRECT:/console/orgs/acme/permissions");
+    expect(deleted).toBe(1);
   });
 });
 

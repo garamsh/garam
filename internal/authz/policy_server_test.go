@@ -161,7 +161,9 @@ func TestPolicyGRPCServer_ActivateInvalidatesTheOrgCache(t *testing.T) {
 	assert.Equal(t, "activated", after[0].Sid)
 }
 
-func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
+// TestPolicyGRPCServer_DeleteInvalidatesTheOrgCache holds that a
+// deleted policy leaves the org's cached statements on the delete.
+func TestPolicyGRPCServer_DeleteInvalidatesTheOrgCache(t *testing.T) {
 	acme := orgGRN("acme")
 	store := newFakeStore()
 	g := store.seed(t, acme, wire.PolicyStatusActive, policyDocument("active", wire.EffectAllow))
@@ -171,7 +173,7 @@ func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, before, 1)
 
-	_, err = srv.ArchivePolicy(context.Background(), &authzv1.ArchivePolicyRequest{PolicyGrn: g.String()})
+	_, err = srv.DeletePolicy(context.Background(), &authzv1.DeletePolicyRequest{PolicyGrn: g.String()})
 	require.NoError(t, err)
 
 	after, err := cache.Statements(context.Background(), acme, nil)
@@ -179,11 +181,12 @@ func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
 	assert.Empty(t, after)
 }
 
-// TestPolicyGRPCServer_ArchiveRejectsBadGRN reads the GRN that parses
-// against the one that does not: the same call over the same server,
-// differing only in the string. An archive that refuses whatever it is
-// given stops satisfying the first row.
-func TestPolicyGRPCServer_ArchiveRejectsBadGRN(t *testing.T) {
+// TestPolicyGRPCServer_DeleteRejectsBadGRN reads the GRN that parses
+// against the one that does not, and against one naming no policy: the
+// same call over the same server, differing only in the string. A
+// delete that refuses whatever it is given stops satisfying the first
+// row.
+func TestPolicyGRPCServer_DeleteRejectsBadGRN(t *testing.T) {
 	store := newFakeStore()
 	g := store.seed(t, orgGRN("acme"), wire.PolicyStatusActive, policyDocument("active", wire.EffectAllow))
 	srv, _ := newPolicyServer(store)
@@ -194,10 +197,11 @@ func TestPolicyGRPCServer_ArchiveRejectsBadGRN(t *testing.T) {
 	}{
 		"a policy grn that parses": {g.String(), codes.OK},
 		"one that does not":        {"nope", codes.InvalidArgument},
+		"one naming no policy":     {policyGRN(t, orgGRN("acme")).String(), codes.NotFound},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := srv.ArchivePolicy(context.Background(), &authzv1.ArchivePolicyRequest{PolicyGrn: c.policy})
+			_, err := srv.DeletePolicy(context.Background(), &authzv1.DeletePolicyRequest{PolicyGrn: c.policy})
 			assert.Equal(t, c.want, status.Code(err))
 		})
 	}

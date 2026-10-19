@@ -618,17 +618,14 @@ func (e PermissionResourceType) Valid() bool {
 
 // Defines values for PolicyStatus.
 const (
-	Active   PolicyStatus = "active"
-	Archived PolicyStatus = "archived"
-	Draft    PolicyStatus = "draft"
+	Active PolicyStatus = "active"
+	Draft  PolicyStatus = "draft"
 )
 
 // Valid indicates whether the value is a known member of the PolicyStatus enum.
 func (e PolicyStatus) Valid() bool {
 	switch e {
 	case Active:
-		return true
-	case Archived:
 		return true
 	case Draft:
 		return true
@@ -1977,12 +1974,12 @@ type ServerInterface interface {
 	// CreatePolicy Create a policy in an organization. Requires the `admin` role.
 	// (POST /orgs/{org}/policies)
 	CreatePolicy(w http.ResponseWriter, r *http.Request, org Org)
+	// DeletePolicy Delete a policy. Requires the `admin` role.
+	// (DELETE /orgs/{org}/policies/{policy})
+	DeletePolicy(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
 	// ActivatePolicy Activate a policy. Requires the `admin` role.
 	// (POST /orgs/{org}/policies/{policy}/activate)
 	ActivatePolicy(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
-	// ArchivePolicy Archive a policy. Requires the `admin` role.
-	// (POST /orgs/{org}/policies/{policy}/archive)
-	ArchivePolicy(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
 	// ListPolicyAttachments List a policy's attachments. Requires the `admin` role.
 	// (GET /orgs/{org}/policies/{policy}/attachments)
 	ListPolicyAttachments(w http.ResponseWriter, r *http.Request, org Org, policySlug PolicySlug)
@@ -4396,6 +4393,41 @@ func (siw *ServerInterfaceWrapper) CreatePolicy(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// DeletePolicy operation middleware
+func (siw *ServerInterfaceWrapper) DeletePolicy(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "policy" -------------
+	var policySlug PolicySlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "policy", r.PathValue("policy"), &policySlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "policy", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeletePolicy(w, r, org, policySlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ActivatePolicy operation middleware
 func (siw *ServerInterfaceWrapper) ActivatePolicy(w http.ResponseWriter, r *http.Request) {
 
@@ -4422,41 +4454,6 @@ func (siw *ServerInterfaceWrapper) ActivatePolicy(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ActivatePolicy(w, r, org, policySlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ArchivePolicy operation middleware
-func (siw *ServerInterfaceWrapper) ArchivePolicy(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "policy" -------------
-	var policySlug PolicySlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "policy", r.PathValue("policy"), &policySlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "policy", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ArchivePolicy(w, r, org, policySlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5174,7 +5171,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/versions", wrapper.ListPolicyVersions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/versions", wrapper.AddPolicyVersion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/activate", wrapper.ActivatePolicy)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/archive", wrapper.ArchivePolicy)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/policies/{policy}", wrapper.DeletePolicy)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/rollback", wrapper.RollbackPolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/attachments", wrapper.ListPolicyAttachments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/attachments", wrapper.AttachPolicy)

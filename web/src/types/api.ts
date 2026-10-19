@@ -1022,7 +1022,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/orgs/{org}/policies/{policy}/archive": {
+    "/orgs/{org}/policies/{policy}": {
         parameters: {
             query?: never;
             header?: never;
@@ -1031,12 +1031,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post?: never;
         /**
-         * Archive a policy. Requires the `admin` role.
-         * @description The policy and its versions are retained; it stops contributing statements to checks.
+         * Delete a policy. Requires the `admin` role.
+         * @description Removes the policy together with its versions and its attachments, so it contributes to no check from then on. An attached policy is deleted as readily as an unattached one: nothing is left that could apply to the whole organization. Authorized on `policy:delete`.
          */
-        post: operations["archivePolicy"];
-        delete?: never;
+        delete: operations["deletePolicy"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1053,7 +1053,7 @@ export interface paths {
         put?: never;
         /**
          * Point a policy at a stored version. Requires the `admin` role.
-         * @description Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft or archived one evaluates nothing until it is activated.
+         * @description Makes any stored version of the policy its default, whether it is older or newer than the current default; an appended version becomes the default this way. The policy's status and versions are unchanged: an active policy evaluates the new default from then on, and a draft one evaluates nothing until it is activated.
          */
         post: operations["rollbackPolicy"];
         delete?: never;
@@ -1095,7 +1095,7 @@ export interface paths {
         post?: never;
         /**
          * Detach a policy from a subject. Requires the `admin` role.
-         * @description Detaching an active policy's last attachment is refused with 409, because a policy left with none would apply org-wide. Archive the policy, or attach another subject first.
+         * @description Detaching an active policy's last attachment is refused with 409, because a policy left with none would apply org-wide. Delete the policy, or attach another subject first.
          */
         delete: operations["detachPolicy"];
         options?: never;
@@ -1474,7 +1474,7 @@ export interface components {
          * @description A policy's lifecycle state. Only an `active` policy contributes statements to a check.
          * @enum {string}
          */
-        PolicyStatus: "draft" | "active" | "archived";
+        PolicyStatus: "draft" | "active";
         Policy: {
             /** @example grn:acme:default:policy:9f2ac1b40d8e7a35 */
             grn: string;
@@ -4058,7 +4058,7 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    archivePolicy: {
+    deletePolicy: {
         parameters: {
             query?: never;
             header?: never;
@@ -4072,14 +4072,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The archived policy. */
-            200: {
+            /** @description Policy deleted. */
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["Policy"];
-                };
+                content?: never;
             };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];

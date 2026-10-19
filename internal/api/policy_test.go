@@ -45,6 +45,7 @@ var policyActions = []string{
 	org.ActionPolicyUpdate,
 	org.ActionPolicyAttach,
 	org.ActionPolicyDetach,
+	org.ActionPolicyDelete,
 }
 
 func TestPolicyFlow_AdminManagesLifecycle(t *testing.T) {
@@ -80,10 +81,10 @@ func TestPolicyFlow_AdminManagesLifecycle(t *testing.T) {
 	f.policies.EXPECT().ListPolicyVersions(mock.Anything, g).Return([]*api.PolicyVersion{version}, nil)
 	f.policies.EXPECT().ActivatePolicy(mock.Anything, g).Return(p, nil)
 	f.policies.EXPECT().RollbackPolicy(mock.Anything, g, int32(1)).Return(p, nil)
-	f.policies.EXPECT().ArchivePolicy(mock.Anything, g).Return(p, nil)
 	f.policies.EXPECT().AttachPolicy(mock.Anything, g, subject).Return(attachment, nil)
 	f.policies.EXPECT().ListPolicyAttachments(mock.Anything, g).Return([]*api.PolicyAttachment{attachment}, nil)
 	f.policies.EXPECT().DetachPolicy(mock.Anything, g, subject).Return(nil)
+	f.policies.EXPECT().DeletePolicy(mock.Anything, g).Return(nil)
 
 	base := "/orgs/" + slug + "/policies"
 	rec := f.do(t, "POST", base, `{"name":"read-only","document":`+policyDocument+`}`, owner)
@@ -114,9 +115,6 @@ func TestPolicyFlow_AdminManagesLifecycle(t *testing.T) {
 	rec = f.do(t, "POST", policyPath+"/rollback", `{"version":1}`, owner)
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	rec = f.do(t, "POST", policyPath+"/archive", "", owner)
-	assert.Equal(t, http.StatusOK, rec.Code)
-
 	rec = f.do(t, "POST", policyPath+"/attachments", `{"subjectGrn":"`+subject.String()+`"}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
 	assert.Equal(t, subject.String(), decodeBody[apigen.PolicyAttachment](t, rec).SubjectGrn)
@@ -126,6 +124,9 @@ func TestPolicyFlow_AdminManagesLifecycle(t *testing.T) {
 	assert.Len(t, decodeBody[[]apigen.PolicyAttachment](t, rec), 1)
 
 	rec = f.do(t, "DELETE", policyPath+"/attachments/"+subject.String(), "", owner)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+
+	rec = f.do(t, "DELETE", policyPath, "", owner)
 	assert.Equal(t, http.StatusNoContent, rec.Code)
 }
 
@@ -161,7 +162,7 @@ func TestPolicies_MemberIsDenied(t *testing.T) {
 		{"GET", policyPath + "/versions", ""},
 		{"POST", policyPath + "/versions", `{"document":` + policyDocument + `}`},
 		{"POST", policyPath + "/activate", ""},
-		{"POST", policyPath + "/archive", ""},
+		{"DELETE", policyPath, ""},
 		{"POST", policyPath + "/rollback", `{"version":1}`},
 		{"GET", policyPath + "/attachments", ""},
 		{"POST", policyPath + "/attachments", `{"subjectGrn":"grn:acme:default:group:eng"}`},

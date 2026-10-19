@@ -100,15 +100,6 @@ func (m *GRPCPolicyManager) ActivatePolicy(ctx context.Context, policyGRN grn.GR
 	return policyFromProto(resp.GetPolicy())
 }
 
-// ArchivePolicy retires the policy without deleting it.
-func (m *GRPCPolicyManager) ArchivePolicy(ctx context.Context, policyGRN grn.GRN) (*Policy, error) {
-	resp, err := m.client.ArchivePolicy(ctx, &authzv1.ArchivePolicyRequest{PolicyGrn: policyGRN.String()})
-	if err != nil {
-		return nil, wire.ErrorOf(err)
-	}
-	return policyFromProto(resp.GetPolicy())
-}
-
 // RollbackPolicy points the policy at any stored version, older or
 // newer than its current default. The version is the width the request
 // carried it in, so nothing here narrows it.
@@ -142,6 +133,14 @@ func (m *GRPCPolicyManager) DetachPolicy(ctx context.Context, policyGRN, subject
 		SubjectGrn: subjectGRN.String(),
 	})
 	if err != nil {
+		return wire.ErrorOf(err)
+	}
+	return nil
+}
+
+// DeletePolicy removes the policy with its versions and attachments.
+func (m *GRPCPolicyManager) DeletePolicy(ctx context.Context, policyGRN grn.GRN) error {
+	if _, err := m.client.DeletePolicy(ctx, &authzv1.DeletePolicyRequest{PolicyGrn: policyGRN.String()}); err != nil {
 		return wire.ErrorOf(err)
 	}
 	return nil

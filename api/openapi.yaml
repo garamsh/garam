@@ -2424,24 +2424,23 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/policies/{policy}/archive:
-    post:
-      operationId: archivePolicy
+  /orgs/{org}/policies/{policy}:
+    delete:
+      operationId: deletePolicy
       tags: [policy]
-      summary: Archive a policy. Requires the `admin` role.
+      summary: Delete a policy. Requires the `admin` role.
       description: >-
-        The policy and its versions are retained; it stops contributing
-        statements to checks.
+        Removes the policy together with its versions and its
+        attachments, so it contributes to no check from then on. An
+        attached policy is deleted as readily as an unattached one:
+        nothing is left that could apply to the whole organization.
+        Authorized on `policy:delete`.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/policy'
       responses:
-        '200':
-          description: The archived policy.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Policy'
+        '204':
+          description: Policy deleted.
         '401':
           $ref: '#/components/responses/Error'
         '403':
@@ -2458,8 +2457,8 @@ paths:
         is older or newer than the current default; an appended version
         becomes the default this way. The policy's status and versions
         are unchanged: an active policy evaluates the new default from
-        then on, and a draft or archived one evaluates nothing until it
-        is activated.
+        then on, and a draft one evaluates nothing until it is
+        activated.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/policy'
@@ -2549,7 +2548,7 @@ paths:
       description: >-
         Detaching an active policy's last attachment is refused with
         409, because a policy left with none would apply org-wide.
-        Archive the policy, or attach another subject first.
+        Delete the policy, or attach another subject first.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/policy'
@@ -3416,7 +3415,7 @@ components:
       description: >-
         A policy's lifecycle state. Only an `active` policy contributes
         statements to a check.
-      enum: [draft, active, archived]
+      enum: [draft, active]
     Policy:
       type: object
       required: [grn, orgGrn, name, status, defaultVersion, createdAt, updatedAt]

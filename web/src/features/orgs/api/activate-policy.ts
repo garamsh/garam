@@ -26,7 +26,7 @@ const Schema = z.object({
 });
 
 /**
- * Activates a draft or archived policy, so its default version takes
+ * Activates a draft policy, so its default version takes
  * part in every check its scope reaches. With no attachment that scope
  * is the whole organization, and with attachments garam will not list
  * it may be; either way the activation waits until the form confirms.

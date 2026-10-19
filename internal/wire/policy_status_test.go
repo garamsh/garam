@@ -19,7 +19,6 @@ func TestPolicyStatusRoundTrip(t *testing.T) {
 	}{
 		{wire.PolicyStatusDraft, authzv1.PolicyStatus_POLICY_STATUS_DRAFT},
 		{wire.PolicyStatusActive, authzv1.PolicyStatus_POLICY_STATUS_ACTIVE},
-		{wire.PolicyStatusArchived, authzv1.PolicyStatus_POLICY_STATUS_ARCHIVED},
 	}
 	for _, c := range statuses {
 		t.Run(string(c.status), func(t *testing.T) {

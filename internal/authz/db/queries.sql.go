@@ -189,6 +189,25 @@ func (q *Queries) CreatePolicy(ctx context.Context, arg CreatePolicyParams) (Pol
 	return i, err
 }
 
+const deletePolicy = `-- name: DeletePolicy :one
+DELETE FROM policies WHERE grn = $1 RETURNING grn, org_grn, name, status, default_version, created_at, updated_at
+`
+
+func (q *Queries) DeletePolicy(ctx context.Context, grn string) (Policy, error) {
+	row := q.db.QueryRow(ctx, deletePolicy, grn)
+	var i Policy
+	err := row.Scan(
+		&i.Grn,
+		&i.OrgGrn,
+		&i.Name,
+		&i.Status,
+		&i.DefaultVersion,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const detachPolicy = `-- name: DetachPolicy :execrows
 DELETE FROM policy_attachments WHERE policy_grn = $1 AND subject_grn = $2
 `

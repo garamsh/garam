@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
@@ -238,6 +240,14 @@ func bodyKeys(t *testing.T, rec *httptest.ResponseRecorder) []string {
 func TestAgentDefine_NoRoleWritesADefinition(t *testing.T) {
 	f := newFixture(t)
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).Return(true, nil)
+	f.evaluator.EXPECT().EvaluateBatch(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.BatchInput) ([]bool, error) {
+			allowed := make([]bool, len(in.Objects))
+			for i := range allowed {
+				allowed[i] = true
+			}
+			return allowed, nil
+		})
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	member := f.sessionCookieFor(t, "member-sub", "Member")

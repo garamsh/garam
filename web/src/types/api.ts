@@ -559,7 +559,7 @@ export interface paths {
         };
         /**
          * List an organization's agent definitions. Requires the `member` role.
-         * @description The agents the organization said it should have. No route writes a new one: garam accepts no desired runtime value, and an agent is created through its operator's control service (ADR-0090). An entry here is not an agent, and an agent under `/orgs/{org}/agents` is not a definition. No response joins them; a consumer can. A claim writes the agent under the GRN its definition minted (ADR-0033), so `agentGrn` here and that agent's `grn` are one identity, and a definition no operator has claimed has no agent to match.
+         * @description The agents the organization said it should have. No route writes a new one: garam accepts no desired runtime value, and an agent is created through its operator's control service (ADR-0090). An entry here is not an agent, and an agent under `/orgs/{org}/agents` is not a definition. No response joins them; a consumer can. A claim writes the agent under the GRN its definition minted (ADR-0033), so `agentGrn` here and that agent's `grn` are one identity, and a definition no operator has claimed has no agent to match. Leaves out each definition whose agent's own `agent:read` the caller is denied, as `listAgents` leaves out the agent.
          */
         get: operations["listAgentDefinitions"];
         put?: never;

@@ -17,17 +17,19 @@ const NameMaxLength = 100
 // does neither. A Name is what [ParseName] returns.
 type Name string
 
-// ParseName trims s and returns it as a Name, refusing one left empty
-// or longer than NameMaxLength characters.
+// ParseName trims s and returns it as a Name, refusing text a Postgres
+// column cannot hold, then one left empty, then one longer than
+// NameMaxLength characters: the order, and the wording, an operator's
+// name is refused in (operator.NewDetailsPatch).
 func ParseName(s string) (Name, error) {
 	n := strings.TrimSpace(s)
 	switch {
-	case n == "":
-		return "", errorx.New(errorx.KindInvalidArgument, "agent: a name must not be empty")
-	case utf8.RuneCountInString(n) > NameMaxLength:
-		return "", errorx.New(errorx.KindInvalidArgument, "agent: a name is at most 100 characters")
 	case !isStorableText(n):
-		return "", errorx.New(errorx.KindInvalidArgument, "agent: a name must be utf-8 without nul bytes")
+		return "", errorx.New(errorx.KindInvalidArgument, "an agent's name must be UTF-8 text without NUL characters")
+	case n == "":
+		return "", errorx.New(errorx.KindInvalidArgument, "an agent's name must not be empty")
+	case utf8.RuneCountInString(n) > NameMaxLength:
+		return "", errorx.New(errorx.KindInvalidArgument, "an agent's name is at most 100 characters")
 	}
 	return Name(n), nil
 }

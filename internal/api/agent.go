@@ -93,18 +93,26 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen
 
 // ListAgentDefinitions lists the agents the org says it should have.
 // Requires the member role. An entry is a definition and not an agent:
-// nothing here reads the agent rows an operator reports.
+// nothing here reads the agent rows an operator reports. It leaves out
+// each definition whose agent the caller is denied agent:read on, as
+// ListAgents leaves out the agent (ADR-0115).
 func (s *Server) ListAgentDefinitions(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionAgentRead); err != nil {
+	c, err := s.authorizedCaller(r, orgGRN(orgSlug), orgGRN(orgSlug), u, org.ActionAgentRead)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
 	definitions, err := s.agents.ListDefinitionsByOrg(r.Context(), orgGRN(orgSlug))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	definitions, err = visible(s, r, c, org.ActionAgentRead, definitions, func(d *agent.Definition) BatchObject { return onItself(d.Agent()) })
 	if err != nil {
 		writeError(w, err)
 		return

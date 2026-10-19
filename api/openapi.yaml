@@ -1228,6 +1228,8 @@ paths:
         (ADR-0033), so `agentGrn` here and that agent's `grn` are one
         identity, and a definition no operator has claimed has no agent
         to match.
+        Leaves out each definition whose agent's own `agent:read` the
+        caller is denied, as `listAgents` leaves out the agent.
       parameters:
         - $ref: '#/components/parameters/org'
       responses:

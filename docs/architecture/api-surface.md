@@ -489,11 +489,13 @@ and not in the same place on every surface.
   No event carries a key, token, credential or certificate
   ([machine-identity.md](./machine-identity.md) §Credential events).
 - **A list answers only the objects its caller may read.**
-  `listGroups`, `listProjects`, `listAgents` and `listPolicies` are
-  authorized on their read action on the organization, and then drop
-  each object whose own read the caller is denied: the read
-  `getGroup`, `getProject`, `getAgent` and `listPolicyVersions` each
-  make on the object.
+  `listGroups`, `listProjects`, `listAgents`, `listAgentDefinitions`
+  and `listPolicies` are authorized on their read action on the
+  organization, and then drop each object whose own read the caller is
+  denied: the read `getGroup`, `getProject`, `getAgent`,
+  `getAgentDefinition` and `listPolicyVersions` each make on the
+  object. A definition's is `agent:read` on the agent it names, so a
+  Deny that hides an agent hides its definition too (#1602).
   A Deny on one object therefore hides it from the list as it refuses
   its read. Every object of a page is asked in one `CheckBatch` call
   to the engine

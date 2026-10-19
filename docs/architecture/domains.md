@@ -78,14 +78,14 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**Three of the nine have this shape today: `internal/user`,
-`internal/watch` and `internal/org`.** `internal/machine`
-persists through `internal/machine/postgres` and had no driver import
-to move. The other five — `agent`, `message`, `authz`, `operator` and
-`authn` — keep a store that imports `jackc/pgx` inside the domain
+**Four of the nine have this shape today: `internal/user`,
+`internal/watch`, `internal/org` and `internal/operator`.**
+`internal/machine` persists through `internal/machine/postgres` and had
+no driver import to move. The other four — `agent`, `message`, `authz`
+and `authn` — keep a store that imports `jackc/pgx` inside the domain
 package, and each moves in its own pull request following #1083. Until
 then `go list -deps` on a domain package names `jackc/pgx` exactly for
-those five, and the shape above describes three of nine.
+those four, and the shape above describes four of nine.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,
 inside the same package, when one Postgres type carries the methods of
@@ -93,10 +93,11 @@ more than one aggregate (`org`, `agent`, `authz`) or of more than one
 `Store` interface (`operator`, `message`). What splits is a receiver's
 methods and not a package's stores: `internal/authn` implements four
 `Store` interfaces on four Postgres types and keeps them in one
-`postgres.go`. `ls internal/*/postgres_*.go` names the four packages
-that split beside their aggregates and no others; `org`'s split moved
-with its store into `internal/org/postgres/`. Those four stay under the
-domain because their aggregates' fields are still unexported, so
+`postgres.go`. `ls internal/*/postgres_*.go` names the three packages
+that split beside their aggregates and no others; `org`'s and
+`operator`'s splits moved with their stores into
+`internal/<domain>/postgres/`. Those three stay under the domain
+because their aggregates' fields are still unexported, so
 whatever rehydrates
 one shares its package — and that is now a state the nine are passing
 through rather than a position the project holds.

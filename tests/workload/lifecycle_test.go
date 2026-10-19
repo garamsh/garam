@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -265,12 +266,72 @@ func (e losingEngine) CreateContainer(ctx context.Context, spec workload.Contain
 	return id, err
 }
 
+// inFlightEngine is the real engine with the run ended as it first
+// creates role's container: the create goes on in the daemon, as one
+// whose client went away does, and the run is answered that its client
+// went. landed answers what that create made.
+type inFlightEngine struct {
+	workload.Engine
+	role   workload.Role
+	landed chan landedCreate
+	once   sync.Once
+}
+
+type landedCreate struct {
+	id  string
+	err error
+}
+
+func (e *inFlightEngine) CreateContainer(ctx context.Context, spec workload.ContainerSpec) (string, error) {
+	cut := false
+	if strings.Contains(spec.Name, string(e.role)+"-") {
+		e.once.Do(func() { cut = true })
+	}
+	if !cut {
+		return e.Engine.CreateContainer(ctx, spec)
+	}
+	go func() {
+		id, err := e.Engine.CreateContainer(context.Background(), spec)
+		e.landed <- landedCreate{id, err}
+	}()
+	return "", errorx.New(errorx.KindUnavailable, "the run's client went away")
+}
+
 // TestRealEngine_AdoptsOnlyWhatItCreated holds intent recovery by name
 // and nonce on the real engine (T7, T8): a runtime whose create answer
-// was lost is adopted and started, not duplicated; a container under
-// the same name without the intent's nonce is left untouched and the
-// run stays pending.
+// was lost is adopted and started, not duplicated; a create a stopped
+// run left in flight is waited for by the next run, which adopts what
+// it made and activates without another start (#1604); a container
+// under the same name without the intent's nonce is left untouched and
+// the run stays pending.
 func TestRealEngine_AdoptsOnlyWhatItCreated(t *testing.T) {
+	for _, role := range []workload.Role{workload.RoleWorkspace, workload.RoleAdapter} {
+		t.Run("a create left in flight is waited for: "+string(role), func(t *testing.T) {
+			h := newHost(t)
+			engine := &inFlightEngine{Engine: h.engine, role: role, landed: make(chan landedCreate, 1)}
+			require.Error(t, h.startOn(engine).result(t), "the first run ends as it creates")
+
+			next := h.start()
+			made := <-engine.landed
+			eventually(t, "the next run activating or returning", func() bool {
+				return len(h.garam.generations()) > 0 || next.returned()
+			})
+			require.False(t, next.returned(), "the run that met it waits and runs on: %v", next.err)
+			h.activated(1)
+			running := h.inspect(h.container(role), "{{.Id}}")
+			// The cut-off create almost always reaches the daemon first,
+			// and the next run then adopts what it made. Where the next
+			// run's own create got there first, the cut-off one is refused
+			// the name, and the next run's is the one container.
+			if made.err == nil {
+				t.Log("the next run adopted the cut-off create")
+				assert.Equal(t, made.id, running, "the container the cut-off create made is the one running")
+			} else {
+				t.Log("the next run's own create took the name first")
+				assert.ErrorIs(t, made.err, workload.ErrNameInUse, "the cut-off create lost the name to the next run's")
+			}
+		})
+	}
 	t.Run("a lost create is adopted", func(t *testing.T) {
 		h := newHost(t)
 		require.Error(t, h.startOn(losingEngine{h.engine}).result(t))

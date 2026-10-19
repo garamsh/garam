@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
 )
@@ -171,11 +172,7 @@ func (s *Supervisor) create(ctx context.Context, in *intent, r Role, genDir stri
 	spec := s.spec(in, r, genDir)
 	id, err := s.engine.CreateContainer(ctx, spec)
 	if errors.Is(err, ErrNameInUse) {
-		c, err := s.adopt(ctx, in, r)
-		if err == nil && c == nil {
-			err = errorx.New(errorx.KindUnavailable, "workload: "+spec.Name+" was taken and is gone")
-		}
-		return c, err
+		return s.adoptInFlight(ctx, in, r, spec.Name)
 	}
 	if err != nil {
 		return nil, err
@@ -189,6 +186,39 @@ func (s *Supervisor) create(ctx context.Context, in *intent, r Role, genDir stri
 		}
 	}
 	return s.engine.InspectContainer(ctx, id)
+}
+
+// inFlightCreateWait bounds how long a create refused for its name
+// waits for the container under that name to answer. The name is taken
+// by a create a stopped run left in flight, which the engine finishes
+// after its client went away: on a two-CPU host such a create took
+// 55-76 ms, and the run that met it lost the race in 80 of 80 cases
+// without a wait (#1604).
+const inFlightCreateWait = 10 * time.Second
+
+// inFlightCreatePoll is how often that wait asks the engine again.
+const inFlightCreatePoll = 100 * time.Millisecond
+
+// adoptInFlight adopts the intent's container in role that a create
+// refused for its name found taken, asking the engine again until it
+// answers one, ctx ends or inFlightCreateWait passes. A name still
+// answering nothing then is unavailable, and the next run takes it up.
+func (s *Supervisor) adoptInFlight(ctx context.Context, in *intent, r Role, name string) (*ContainerState, error) {
+	deadline := time.Now().Add(inFlightCreateWait)
+	for {
+		c, err := s.adopt(ctx, in, r)
+		if err != nil || c != nil {
+			return c, err
+		}
+		if !time.Now().Before(deadline) {
+			return nil, errorx.New(errorx.KindUnavailable, "workload: "+name+" was taken and is gone")
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(inFlightCreatePoll):
+		}
+	}
 }
 
 // start copies the container's files in and starts it. A start that

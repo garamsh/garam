@@ -124,7 +124,6 @@ export function ScopeTable({ rows }: { rows: ScopeRow[] }) {
         <EmptyState
           icon={ShieldCheck}
           title="No policies"
-          description="This organization has no policies to attach."
         />
       }
     />

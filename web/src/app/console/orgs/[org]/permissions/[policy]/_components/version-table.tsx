@@ -175,7 +175,6 @@ export function VersionTable({
         <EmptyState
           icon={History}
           title="No versions"
-          description="This policy has no stored versions."
         />
       }
     />

@@ -84,7 +84,6 @@ export function TeamTable({
         <EmptyState
           icon={UsersRound}
           title="No teams"
-          description="This organization has no teams."
         />
       }
     />

@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 
 import {
   SidebarGroup,
@@ -17,12 +17,12 @@ import {
   CONSOLE_NAV,
   isUnknownOrg,
   navEntryCurrent,
+  navSection,
   orgHref,
   parseConsolePath,
-  resolveNavEntry,
   type ConsoleLocation,
   type ConsoleOrg,
-  type ResolvedNavEntry,
+  type ConsoleSection,
 } from "./navigation";
 import { useOrgShell } from "./org-shell";
 
@@ -32,7 +32,7 @@ function NavItems({
   location,
   label,
 }: {
-  entries: readonly ResolvedNavEntry[];
+  entries: readonly ConsoleSection[];
   org: string;
   location: ConsoleLocation;
   label?: string;
@@ -42,7 +42,7 @@ function NavItems({
       {entries.map((resolved) => {
         const current = navEntryCurrent(resolved, location);
         return (
-          <SidebarMenuItem key={resolved.key}>
+          <SidebarMenuItem key={resolved.segment}>
             <SidebarMenuButton
               asChild
               isActive={current !== undefined}
@@ -70,40 +70,19 @@ function listed(labels: readonly string[]): string {
     : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
 }
 
-/**
- * Says once which sections were left out and, on request, why. The
- * collapsed rail has no room for a sentence, so it carries none.
- */
+/** Says once which sections were left out. The collapsed rail has no room. */
 function HiddenNote({ labels }: { labels: readonly string[] }) {
-  const [open, setOpen] = useState(false);
   return (
-    <div className="px-4 pt-4 text-[length:var(--text-caption)] text-muted-foreground group-data-[collapsible=icon]:hidden">
-      <p>
-        {listed(labels)} {labels.length === 1 ? "is" : "are"} not shown: no
-        policy lets you read them.{" "}
-        <button
-          type="button"
-          aria-expanded={open}
-          onClick={() => setOpen(!open)}
-          className="rounded-sm text-foreground underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          Why
-        </button>
-      </p>
-      {open && (
-        <p className="pt-1.5">
-          The sidebar lists a section where this organization&apos;s roles and
-          policies let you read what it holds. Whoever manages those policies
-          can grant you a read.
-        </p>
-      )}
-    </div>
+    <p className="px-4 pt-4 text-[length:var(--text-caption)] text-muted-foreground group-data-[collapsible=icon]:hidden">
+      {listed(labels)} hidden: no policy lets you read{" "}
+      {labels.length === 1 ? "it" : "them"}.
+    </p>
   );
 }
 
 /**
  * The sections of the selected organization, in the groups
- * `CONSOLE_NAV` declares (ADR-0113). A section whose read the server
+ * `CONSOLE_NAV` declares (ADR-0116). A section whose read the server
  * denies the caller is left out, and the sidebar says so once; until
  * the answer arrives, or where it never does, every section stays.
  * Nothing is offered for an organization the caller's list does not
@@ -116,14 +95,14 @@ export function ConsoleNav({ orgs }: { orgs: readonly ConsoleOrg[] | null }) {
   if (location.kind !== "org" || isUnknownOrg(location, orgs)) return null;
 
   const groups = CONSOLE_NAV.map((group) => {
-    const resolved = group.entries
-      .map(resolveNavEntry)
+    const resolved = group.sections
+      .map(navSection)
       .filter((entry) => entry !== undefined);
     return {
       label: group.label,
-      key: resolved[0]?.key ?? "",
-      entries: resolved.filter((entry) => !hidden.has(entry.key)),
-      left: resolved.filter((entry) => hidden.has(entry.key)),
+      key: resolved[0]?.segment ?? "",
+      entries: resolved.filter((entry) => !hidden.has(entry.segment)),
+      left: resolved.filter((entry) => hidden.has(entry.segment)),
     };
   });
   const left = groups.flatMap((group) => group.left.map((e) => e.label));

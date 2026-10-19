@@ -4,7 +4,6 @@ import {
   Handshake,
   HardDrive,
   House,
-  LayoutTemplate,
   Server,
   Settings,
   ShieldCheck,
@@ -29,11 +28,6 @@ export type ConsoleSection = {
    */
   read?: string;
   /**
-   * Sections no sidebar entry lists whose pages sit inside this one,
-   * so the sidebar marks this entry as the location on them.
-   */
-  holds?: readonly string[];
-  /**
    * Present on a section whose entries each have a page of their own
    * below it: what the breadcrumb calls the create page, and what it
    * calls an entry's page before that page has named the entry. A
@@ -48,22 +42,13 @@ export type ConsoleSection = {
   };
   /**
    * Named pages below the section beside its entries, each a view of
-   * the section rather than an entry of it. A view may have item pages
-   * of its own, described as a section's are.
+   * the section rather than an entry of it.
    */
   views?: readonly ConsoleView[];
 };
 
 /** A named view below a section. */
-export type ConsoleView = {
-  segment: string;
-  label: string;
-  /** Present on a view the sidebar lists as an entry of its own. */
-  icon?: LucideIcon;
-  /** As a section's, for a view the sidebar lists. */
-  read?: string;
-  items?: { create?: string; fallback: string };
-};
+export type ConsoleView = { segment: string; label: string };
 
 /** A page below one entry's page, such as an operator's setup. */
 export type ConsoleItemPage = { segment: string; label: string };
@@ -75,21 +60,11 @@ export const NEW_ITEM = "new";
 export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
   { segment: "", label: "Home", icon: House },
   {
-    segment: "teams",
-    label: "Teams",
-    icon: UsersRound,
-    read: "group:read",
-    items: { create: "New team", fallback: "Team" },
-  },
-  {
-    // People and agents in one list (ADR-0113). A person's page sits
-    // here; an agent's stays under Agents.
-    segment: "members",
-    label: "People and agents",
+    segment: "people",
+    label: "People",
     icon: UserRound,
     read: "org:member-list",
     items: { fallback: "Person" },
-    holds: ["agents"],
   },
   {
     segment: "agents",
@@ -97,18 +72,13 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     icon: Bot,
     read: "agent:read",
     items: { create: "New agent", fallback: "Agent" },
-    // Templates live inside Agents rather than as a section (ADR-0075).
-    // garam's are retired read-only, so the view creates none
-    // (ADR-0088).
-    views: [
-      {
-        segment: "templates",
-        label: "Templates",
-        icon: LayoutTemplate,
-        read: "agent-template:read",
-        items: { fallback: "Template" },
-      },
-    ],
+  },
+  {
+    segment: "teams",
+    label: "Teams",
+    icon: UsersRound,
+    read: "group:read",
+    items: { create: "New team", fallback: "Team" },
   },
   {
     segment: "projects",
@@ -141,6 +111,8 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     read: "agent:read",
   },
   {
+    // Listed in no sidebar group (ADR-0116): Settings and the palette
+    // reach it.
     segment: "consents",
     label: "Consents",
     icon: Handshake,
@@ -157,115 +129,47 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
   { segment: "settings", label: "Settings", icon: Settings, read: "org:read" },
 ];
 
-/**
- * One sidebar entry: a section, or a view of one the sidebar lists in
- * its own right. Its label and icon are the section's or the view's.
- */
-export type NavEntry = { section: string; view?: string };
-
-/** A group of sidebar entries; one without a label stands alone. */
-export type NavGroup = { label?: string; entries: readonly NavEntry[] };
+/** A group of sidebar entries, by section segment; one without a label stands alone. */
+export type NavGroup = { label?: string; sections: readonly string[] };
 
 /**
- * Roster's sidebar (ADR-0113): Home, the organization's members, its
- * projects, and what configures it. Every section appears in exactly
- * one group. A link is listed only for a route that exists: a group
- * gains an entry with the route that serves it.
+ * The sidebar (ADR-0116): Home, Projects, and what the organization
+ * holds. A section in no group, such as Consents, is still reached
+ * from the palette and by its links.
  */
 export const CONSOLE_NAV: readonly NavGroup[] = [
-  { entries: [{ section: "" }] },
-  {
-    label: "Members",
-    entries: [{ section: "members" }, { section: "teams" }],
-  },
-  { entries: [{ section: "projects" }] },
+  { sections: [""] },
+  { sections: ["projects"] },
   {
     label: "Organization",
-    entries: [
-      { section: "permissions" },
-      { section: "operators" },
-      { section: "hosts" },
-      { section: "agents", view: "templates" },
-      { section: "consents" },
-      { section: "settings" },
+    sections: [
+      "people",
+      "agents",
+      "teams",
+      "permissions",
+      "operators",
+      "hosts",
+      "settings",
     ],
   },
 ];
 
-/** Every sidebar entry, in sidebar order. */
-export const CONSOLE_NAV_ENTRIES: readonly ResolvedNavEntry[] =
-  CONSOLE_NAV.flatMap((group) => group.entries)
-    .map(resolveNavEntry)
-    .filter((entry) => entry !== undefined);
-
-/** A sidebar entry with what it shows and where it leads. */
-export type ResolvedNavEntry = {
-  key: string;
-  label: string;
-  icon: LucideIcon;
-  segment: string;
-  read?: string;
-  section: ConsoleSection;
-  view?: ConsoleView;
-};
-
-/** Looks up a sidebar entry's section and view; undefined when unknown. */
-export function resolveNavEntry(entry: NavEntry): ResolvedNavEntry | undefined {
-  const section = CONSOLE_SECTIONS.find(
-    (item) => item.segment === entry.section,
-  );
-  if (!section) return undefined;
-  if (entry.view === undefined) {
-    return {
-      key: section.segment,
-      label: section.label,
-      icon: section.icon,
-      segment: section.segment,
-      read: section.read,
-      section,
-    };
-  }
-  const view = section.views?.find((item) => item.segment === entry.view);
-  if (!view?.icon) return undefined;
-  return {
-    key: `${section.segment}/${view.segment}`,
-    label: view.label,
-    icon: view.icon,
-    segment: `${section.segment}/${view.segment}`,
-    read: view.read,
-    section,
-    view,
-  };
+/** A sidebar entry: the section it leads to, found by its segment. */
+export function navSection(segment: string): ConsoleSection | undefined {
+  return CONSOLE_SECTIONS.find((section) => section.segment === segment);
 }
 
 /**
- * Whether a sidebar entry is where the visitor is: `page` on the entry's
- * own page, `location` below it, and undefined elsewhere. A view the
- * sidebar lists is its own entry, so its pages are not its section's.
+ * Whether a section's entry is where the visitor is: `page` on the
+ * section's own page, `location` below it, and undefined elsewhere.
  */
 export function navEntryCurrent(
-  entry: ResolvedNavEntry,
+  section: ConsoleSection,
   location: ConsoleLocation,
 ): "page" | "location" | undefined {
-  if (location.kind !== "org") return undefined;
-  if (
-    entry.view === undefined &&
-    entry.section.holds?.includes(location.section.segment)
-  ) {
-    const listed = location.section.views?.some(
-      (view) => view.icon !== undefined && view.segment === location.item,
-    );
-    return listed ? undefined : "location";
+  if (location.kind !== "org" || location.section !== section) {
+    return undefined;
   }
-  if (location.section !== entry.section) return undefined;
-  const listedView = entry.section.views?.find(
-    (view) => view.icon !== undefined && view.segment === location.item,
-  );
-  if (entry.view) {
-    if (listedView !== entry.view) return undefined;
-    return location.viewItem === undefined ? "page" : "location";
-  }
-  if (listedView) return undefined;
   return location.item === undefined ? "page" : "location";
 }
 
@@ -273,7 +177,6 @@ export function navEntryCurrent(
  * Where a console pathname sits in the console's structure. `item` is
  * the segment below a section that has item pages: `NEW_ITEM` for its
  * create page, a named view's segment, or an entry's identifier.
- * `viewItem` is the segment below a view that has item pages.
  */
 export type ConsoleLocation =
   | { kind: "orgs" }
@@ -283,7 +186,6 @@ export type ConsoleLocation =
       org: string;
       section: ConsoleSection;
       item?: string;
-      viewItem?: string;
       itemPage?: ConsoleItemPage;
     }
   | { kind: "invitation" }
@@ -316,26 +218,19 @@ export function parseConsolePath(pathname: string): ConsoleLocation {
   const section = CONSOLE_SECTIONS.find((item) => item.segment === segment);
   if (!section) return { kind: "unknown" };
   if (segments.length === 6) {
-    const view = section.views?.find((entry) => entry.segment === segments[4]);
+    const isView = section.views?.some(
+      (entry) => entry.segment === segments[4],
+    );
     const itemPage = section.items?.pages?.find(
       (page) => page.segment === segments[5],
     );
-    if (!view && itemPage) {
-      return {
-        kind: "org",
-        org: segments[2],
-        section,
-        item: segments[4],
-        itemPage,
-      };
-    }
-    if (!view?.items) return { kind: "unknown" };
+    if (isView || !itemPage) return { kind: "unknown" };
     return {
       kind: "org",
       org: segments[2],
       section,
       item: segments[4],
-      viewItem: segments[5],
+      itemPage,
     };
   }
   if (segments.length === 5) {
@@ -372,7 +267,7 @@ export function consoleCrumbs(
         organizations,
         { label: org?.name ?? location.org, href: orgHref(location.org, "") },
       ];
-      const { section, item, viewItem, itemPage } = location;
+      const { section, item, itemPage } = location;
       if (item === undefined || !section.items) {
         return [...trail, { label: section.label }];
       }
@@ -390,22 +285,6 @@ export function consoleCrumbs(
             href: orgHref(location.org, `${section.segment}/${item}`),
           },
           { label: itemPage.label },
-        ];
-      }
-      if (view?.items && viewItem !== undefined) {
-        return [
-          ...trail,
-          sectionCrumb,
-          {
-            label: view.label,
-            href: orgHref(location.org, `${section.segment}/${view.segment}`),
-          },
-          {
-            label:
-              viewItem === NEW_ITEM && view.items.create !== undefined
-                ? view.items.create
-                : (itemName ?? view.items.fallback),
-          },
         ];
       }
       return [

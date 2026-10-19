@@ -110,8 +110,7 @@ export function AttachmentTable({
       empty={
         <EmptyState
           icon={Link2Off}
-          title="No attachments"
-          description={empty}
+          title={empty}
         />
       }
     />

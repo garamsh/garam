@@ -32,8 +32,8 @@ import {
   type AttachPolicyToMembersState,
 } from "@/features/orgs/actions";
 
-import { ActionDialog } from "../../../../_components/action-dialog";
-import { InactiveButton } from "../../../../_components/inactive-button";
+import { ActionDialog } from "./action-dialog";
+import { InactiveButton } from "./inactive-button";
 
 /** One person or agent as the list shows it, decided on the server. */
 export type MemberRow = {
@@ -44,8 +44,6 @@ export type MemberRow = {
   href: string;
   /** A person's role, or an agent's one derived state. */
   status: { tone: StatusTone; label: string };
-  /** Where an agent's definition stands in a cutover, if it is in one. */
-  marker: { tone: StatusTone; label: string } | null;
   /** What makes an agent's state so; none for a person. */
   detail: string | null;
   /** What holds an agent, keyed for the filter; none for a person. */
@@ -57,66 +55,58 @@ export type MemberRow = {
 /** A value a filter or a dialog offers, and how it is named. */
 export type Choice = { value: string; label: string };
 
-/** The filters as the URL holds them, and what each can be set to. */
+/**
+ * The filters as the URL holds them, and what each can be set to.
+ * `runsOn` is null on the people list, which has no such filter.
+ */
 export type MemberFilters = {
-  kind: "all" | "person" | "agent";
   team: string;
   runs: string;
-  counts: Record<"all" | "person" | "agent", number>;
   teams: Choice[];
-  runsOn: Choice[];
+  runsOn: Choice[] | null;
 };
 
 /** The filter value meaning "no filter", since an option cannot be "". */
 const ANY = "any";
 
-const KINDS = [
-  { value: "all", label: "All" },
-  { value: "person", label: "People" },
-  { value: "agent", label: "Agents" },
-] as const;
-
 function columns(
+  kind: MemberRow["kind"],
   act: (dialog: "team" | "policy", rows: MemberRow[]) => void,
 ): ColumnDef<MemberRow, unknown>[] {
-  return [
-    {
-      id: "member",
-      header: "Member",
-      // The identifier is searched too: names repeat and it does not.
-      accessorFn: (row) => `${row.name} ${row.identifier}`,
-      cell: ({ row: { original: row } }) => (
-        <div className="flex min-w-0 items-start gap-2.5">
-          <MemberMark kind={row.kind} name={row.name} className="mt-0.5" />
-          <div className="flex min-w-0 flex-col items-start gap-1">
-            <Link
-              href={row.href}
-              className="font-medium wrap-anywhere underline-offset-4 hover:underline focus-visible:underline"
-            >
-              {row.name}
-            </Link>
-            <span className="flex items-center gap-2 text-xs text-muted-foreground">
-              {row.kind === "person" ? "person" : "agent"}
-              <CopyId value={row.identifier} label={row.name} />
-            </span>
-            {row.marker && <StatusDot {...row.marker} />}
-          </div>
+  const name: ColumnDef<MemberRow, unknown> = {
+    id: "member",
+    header: "Name",
+    // The identifier is searched too: names repeat and it does not.
+    accessorFn: (row) => `${row.name} ${row.identifier}`,
+    cell: ({ row: { original: row } }) => (
+      <div className="flex min-w-0 items-start gap-2.5">
+        <MemberMark kind={row.kind} name={row.name} className="mt-0.5" />
+        <div className="flex min-w-0 flex-col items-start gap-1">
+          <Link
+            href={row.href}
+            className="font-medium wrap-anywhere underline-offset-4 hover:underline focus-visible:underline"
+          >
+            {row.name}
+          </Link>
+          <CopyId value={row.identifier} label={row.name} />
         </div>
-      ),
-    },
-    {
-      id: "status",
-      header: "Status",
-      accessorFn: (row) => row.status.label,
-      cell: ({ row: { original: row } }) => (
-        <div className="flex flex-col gap-0.5">
-          <StatusDot {...row.status} />
-          {row.detail && (
-            <span className="text-xs text-muted-foreground">{row.detail}</span>
-          )}
-        </div>
-      ),
-    },
+      </div>
+    ),
+  };
+  const status: ColumnDef<MemberRow, unknown> = {
+    id: "status",
+    header: kind === "person" ? "Role" : "Status",
+    accessorFn: (row) => row.status.label,
+    cell: ({ row: { original: row } }) => (
+      <div className="flex flex-col gap-0.5">
+        <StatusDot {...row.status} />
+        {row.detail && (
+          <span className="text-xs text-muted-foreground">{row.detail}</span>
+        )}
+      </div>
+    ),
+  };
+  const agentColumns: ColumnDef<MemberRow, unknown>[] = [
     {
       id: "runs",
       header: "Runs on",
@@ -136,49 +126,48 @@ function columns(
         row.lastSeen ? (
           <Time value={row.lastSeen} />
         ) : (
-          <span className="text-muted-foreground">
-            {row.kind === "agent" ? "Never" : "—"}
-          </span>
+          <span className="text-muted-foreground">Never</span>
         ),
     },
-    {
-      id: "actions",
-      header: () => <span className="sr-only">Actions</span>,
-      enableSorting: false,
-      cell: ({ row: { original: row } }) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={`Actions for ${row.name}`}
-            >
-              <MoreHorizontal aria-hidden />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild>
-              <Link href={row.href}>Open</Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => act("team", [row])}>
-              Add to a team…
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => act("policy", [row])}>
-              Attach a policy…
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      ),
-    },
   ];
+  const actions: ColumnDef<MemberRow, unknown> = {
+    id: "actions",
+    header: () => <span className="sr-only">Actions</span>,
+    enableSorting: false,
+    cell: ({ row: { original: row } }) => (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`Actions for ${row.name}`}
+          >
+            <MoreHorizontal aria-hidden />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem asChild>
+            <Link href={row.href}>Open</Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => act("team", [row])}>
+            Add to a team…
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => act("policy", [row])}>
+            Attach a policy…
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ),
+  };
+  return [name, status, ...(kind === "agent" ? agentColumns : []), actions];
 }
 
 /** "Scout", "Scout and Ada", "3 members". */
 function whom(rows: readonly MemberRow[]): string {
   if (rows.length === 1) return rows[0].name;
   if (rows.length === 2) return `${rows[0].name} and ${rows[1].name}`;
-  return `${rows.length} members`;
+  return `${rows.length} ${rows[0].kind === "person" ? "people" : "agents"}`;
 }
 
 /** A choice made inside a dialog, carried as a form field. */
@@ -245,13 +234,14 @@ function Refused({
 }
 
 /**
- * The organization's people and agents as one table, with filters
- * kept in the URL so a filtered list can be shared, and the two writes
- * that act on members: adding them to a team and attaching a policy,
- * for the rows chosen or from one row's menu.
+ * The organization's people, or its agents, as a table (ADR-0116), with
+ * filters kept in the URL so a filtered list can be shared, and the two
+ * writes that act on members: adding them to a team and attaching a
+ * policy, for the rows chosen or from one row's menu.
  */
 export function MemberList({
   org,
+  kind,
   rows,
   filters,
   teamChoices,
@@ -259,6 +249,7 @@ export function MemberList({
   empty,
 }: {
   org: string;
+  kind: MemberRow["kind"];
   rows: MemberRow[];
   filters: MemberFilters;
   /** The teams the server does not deny the caller adding to. */
@@ -274,15 +265,11 @@ export function MemberList({
     rows: MemberRow[];
   } | null>(null);
 
-  function setFilter(name: "kind" | "team" | "runs", value: string) {
+  function setFilter(name: "team" | "runs", value: string) {
     const next = new URLSearchParams();
-    const current = {
-      kind: filters.kind,
-      team: filters.team,
-      runs: filters.runs,
-    };
+    const current = { team: filters.team, runs: filters.runs };
     for (const [key, held] of Object.entries({ ...current, [name]: value })) {
-      if (held && held !== ANY && held !== "all") next.set(key, held);
+      if (held && held !== ANY) next.set(key, held);
     }
     const query = next.toString();
     router.push(query ? `${pathname}?${query}` : pathname);
@@ -334,39 +321,26 @@ export function MemberList({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
-        <nav aria-label="Kind" className="flex gap-1">
-          {KINDS.map((kind) => (
-            <Button
-              key={kind.value}
-              type="button"
-              size="sm"
-              variant={filters.kind === kind.value ? "secondary" : "ghost"}
-              aria-current={filters.kind === kind.value ? "true" : undefined}
-              onClick={() => setFilter("kind", kind.value)}
-            >
-              {kind.label}
-              <span className="text-muted-foreground tabular-nums">
-                {filters.counts[kind.value]}
-              </span>
-            </Button>
-          ))}
-        </nav>
         <FilterSelect
           label="Team"
           value={filters.team}
           choices={filters.teams}
           onChange={(value) => setFilter("team", value)}
         />
-        <FilterSelect
-          label="Runs on"
-          value={filters.runs}
-          choices={filters.runsOn}
-          onChange={(value) => setFilter("runs", value)}
-        />
+        {filters.runsOn && (
+          <FilterSelect
+            label="Runs on"
+            value={filters.runs}
+            choices={filters.runsOn}
+            onChange={(value) => setFilter("runs", value)}
+          />
+        )}
       </div>
       <DataTable
-        label="People and agents"
-        columns={columns((kind, chosen) => setDialog({ kind, rows: chosen }))}
+        label={kind === "person" ? "People" : "Agents"}
+        columns={columns(kind, (dialog, chosen) =>
+          setDialog({ kind: dialog, rows: chosen }),
+        )}
         data={rows}
         getRowId={(row) => row.grn}
         empty={empty}
@@ -377,12 +351,7 @@ export function MemberList({
         open={dialog?.kind === "team"}
         onOpenChange={(open) => !open && setDialog(null)}
         title={`Add ${whom(target)} to a team?`}
-        description={
-          <p>
-            Each joins the team you choose, and gains what the team&apos;s roles
-            and policies grant. Nothing else about them changes.
-          </p>
-        }
+        description={<p>Each gains what the team&apos;s policies grant.</p>}
         action={addMembersToTeam}
         initialState={{ status: "idle" }}
         fields={{ org }}
@@ -411,9 +380,8 @@ export function MemberList({
         title={`Attach a policy to ${whom(target)}?`}
         description={
           <p>
-            The policy applies to each of them. A policy attached to no one
-            applies to the whole organization, so attaching one of those narrows
-            it to what it is attached to.
+            A policy attached to no one applies to everyone, so a first
+            attachment narrows it.
           </p>
         }
         action={attachPolicyToMembers}

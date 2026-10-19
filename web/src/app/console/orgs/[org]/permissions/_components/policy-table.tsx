@@ -77,7 +77,6 @@ export function PolicyTable({ rows }: { rows: PolicyRow[] }) {
         <EmptyState
           icon={ShieldCheck}
           title="No policies"
-          description="This organization has no policies."
         />
       }
     />

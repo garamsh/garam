@@ -1,8 +1,6 @@
 import type { StatusTone } from "@/components/status-dot";
-import type { Agent, AgentDefinition, Reported } from "@/features/orgs";
-import { slugFromGrn } from "@/lib/grn";
-
-import { CUTOVER_STAGE_LABEL } from "./cutover-marker";
+import type { Agent, Reported } from "@/features/orgs";
+import { parseGrn, slugFromGrn } from "@/lib/grn";
 
 /** A state as a status dot draws it: what it means and what it says. */
 export type AgentDot = { tone: StatusTone; label: string };
@@ -56,27 +54,6 @@ export function reportedDots(
   };
 }
 
-/**
- * What the organization asked for: a definition, one cutting over or
- * cut over to the Operator (ADR-0086), or none — said as not checked
- * where the definitions were refused, since one may exist unread.
- */
-export function requestedDot(
-  definition: Pick<AgentDefinition, "cutover"> | undefined,
-  definitionsRead: boolean,
-): AgentDot {
-  if (definition === undefined) {
-    return definitionsRead
-      ? { tone: "neutral", label: "No definition" }
-      : NOT_CHECKED;
-  }
-  if (definition.cutover === null) return { tone: "ok", label: "Defined" };
-  return {
-    tone: definition.cutover.stage === "frozen" ? "warn" : "info",
-    label: CUTOVER_STAGE_LABEL[definition.cutover.stage],
-  };
-}
-
 /** An agent's one derived state, and the line saying what makes it so. */
 export type AgentHealth = AgentDot & { detail: string };
 
@@ -127,9 +104,10 @@ export type Holder = {
 };
 
 /**
- * What holds the agent at its current epoch: an operator, named as the
- * organization calls it where its list was read, or a standalone
- * host's supervisor (ADR-0082). Null where nothing holds it.
+ * What holds the agent at its current epoch, read from the assignee's
+ * GRN: an operator, named as the organization calls it where its list
+ * was read, or a standalone host's supervisor (ADR-0082). Null where
+ * nothing holds it.
  */
 export function holderOf(
   agent: Agent | undefined,
@@ -137,15 +115,15 @@ export function holderOf(
 ): Holder | null {
   const assignment = agent?.assignment;
   if (assignment === undefined) return null;
-  const { operatorGrn, assigneeGrn, epoch, since } = assignment;
-  return operatorGrn === undefined
-    ? { kind: "host", name: slugFromGrn(assigneeGrn), epoch, since }
-    : {
+  const { assigneeGrn, epoch, since } = assignment;
+  return parseGrn(assigneeGrn)?.serviceType === "operator"
+    ? {
         kind: "operator",
-        name: operatorNames.get(operatorGrn) ?? slugFromGrn(operatorGrn),
+        name: operatorNames.get(assigneeGrn) ?? slugFromGrn(assigneeGrn),
         epoch,
         since,
-      };
+      }
+    : { kind: "host", name: slugFromGrn(assigneeGrn), epoch, since };
 }
 
 /** Whether a derived state is one a reader has to act on. */

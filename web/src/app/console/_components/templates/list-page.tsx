@@ -14,7 +14,7 @@ export function ListPage({
   children,
 }: {
   title: string;
-  description: string;
+  description?: string;
   /** Omitted when the list could not be read, so no count is guessed. */
   count?: number;
   primaryAction?: React.ReactNode;

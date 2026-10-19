@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
 import { Banner } from "@/components/banner";
@@ -107,19 +106,8 @@ export function CreateFromTemplate({
   const published = templates.data.templates;
   if (published.length === 0) {
     return (
-      <Banner
-        tone="info"
-        title="No template is published yet"
-        action={
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/console/orgs/${org}/agents/templates`}>
-              Open templates
-            </Link>
-          </Button>
-        }
-      >
-        An agent starts from a template version {hosted.name} published. Publish
-        one under Templates, then come back here.
+      <Banner tone="info" title="No template is published yet">
+        Publish one under Templates below.
       </Banner>
     );
   }

@@ -196,7 +196,6 @@ export function KeysPanel({
           <EmptyState
             icon={KeyRound}
             title="No keys issued"
-            description="This operator has never been issued a key."
           />
         }
       />

@@ -6,7 +6,7 @@ import { getSession } from "@/features/auth";
 import { lookupOrgMembers } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
-import { CONSOLE_NAV_ENTRIES } from "./navigation";
+import { CONSOLE_SECTIONS } from "./navigation";
 import { ReportOrgShell } from "./org-shell";
 
 /** What a read answered, or null where it failed in any way. */
@@ -21,8 +21,8 @@ async function settle<T>(read: Promise<T>): Promise<T | null> {
 
 /**
  * Reads what the shell above the organization's pages needs and
- * reports it: the caller's role for the switcher, and which sidebar
- * entries the server denies, asked in one check. The palette searches
+ * reports it: the caller's role for the switcher, and which sections
+ * the server denies, asked in one check. The palette searches
  * by name when something is typed (`searchOrgObjects`), so no object
  * list is read here. Nothing here is a page's, so no failure reaches an
  * error or not-found boundary: a read that fails leaves its part empty,
@@ -32,7 +32,7 @@ async function settle<T>(read: Promise<T>): Promise<T | null> {
  */
 export async function OrgShellRead({ org }: { org: Promise<string> }) {
   const slug = await org;
-  const gated = CONSOLE_NAV_ENTRIES.filter((entry) => entry.read);
+  const gated = CONSOLE_SECTIONS.filter((entry) => entry.read);
   const [session, members, may] = await Promise.all([
     settle(getSession()),
     settle(lookupOrgMembers(slug)),
@@ -40,7 +40,7 @@ export async function OrgShellRead({ org }: { org: Promise<string> }) {
       checkPermissions(
         slug,
         Object.fromEntries(
-          gated.map((entry) => [entry.key, { action: entry.read ?? "" }]),
+          gated.map((entry) => [entry.segment, { action: entry.read ?? "" }]),
         ),
       ),
     ),
@@ -51,8 +51,8 @@ export async function OrgShellRead({ org }: { org: Promise<string> }) {
       ? members.data.find((member) => member.userGrn === session.user.grn)
       : undefined;
   const hidden = gated
-    .filter((entry) => may?.get(entry.key) === "denied")
-    .map((entry) => entry.key);
+    .filter((entry) => may?.get(entry.segment) === "denied")
+    .map((entry) => entry.segment);
 
   return <ReportOrgShell org={slug} role={me?.role ?? null} hidden={hidden} />;
 }

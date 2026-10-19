@@ -143,7 +143,6 @@ export function OperatorTable({
           <EmptyState
             icon={ServerIcon}
             title="No operators registered"
-            description="This organization has registered no operators."
           />
         }
       />

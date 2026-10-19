@@ -80,7 +80,6 @@ export function ProjectTable({
         <EmptyState
           icon={FolderGit2}
           title="No projects"
-          description="This organization has no projects."
         />
       }
     />

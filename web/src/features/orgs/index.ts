@@ -18,11 +18,6 @@ export {
   type Reported,
 } from "./agent-directory";
 export {
-  getAgentTemplate,
-  listAgentTemplates,
-  type AgentTemplate,
-} from "./api/agent-templates";
-export {
   getInvitationPreview,
   joinedOrgPath,
   type InvitationPreview,

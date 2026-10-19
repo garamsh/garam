@@ -68,7 +68,6 @@ export default async function ConsentsPage({ params }: Params) {
         <EmptyState
           icon={Handshake}
           title="No consent relations"
-          description="This organization holds no relation with another, so a message between one of its agents and an agent outside it is refused back to the sender."
         />
       ) : (
         <ul className="grid gap-4 lg:grid-cols-2">

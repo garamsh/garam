@@ -265,7 +265,6 @@ export function HostLists({
               <EmptyState
                 icon={HardDrive}
                 title="No supervisors"
-                description="No host has enrolled in this organization."
               />
             }
           />
@@ -285,7 +284,6 @@ export function HostLists({
               <EmptyState
                 icon={HardDrive}
                 title="No approvals"
-                description="No host has been approved in this organization."
               />
             }
           />

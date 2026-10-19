@@ -1,4 +1,8 @@
-/** The title block every console page opens with. */
+/**
+ * The title block every console page opens with: the title, a sentence
+ * only where the page's action is not self-evident (ADR-0116), and the
+ * page's primary action at the end of the row.
+ */
 export function PageHeader({
   title,
   description,
@@ -6,7 +10,7 @@ export function PageHeader({
   children,
 }: {
   title: string;
-  description: React.ReactNode;
+  description?: React.ReactNode;
   /** How many entries a list page holds, shown beside its title. */
   count?: number;
   children?: React.ReactNode;
@@ -22,7 +26,7 @@ export function PageHeader({
             </span>
           )}
         </h1>
-        <p className="text-muted-foreground">{description}</p>
+        {description && <p className="text-muted-foreground">{description}</p>}
       </div>
       {children && (
         <div className="flex shrink-0 items-center gap-2">{children}</div>

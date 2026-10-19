@@ -9,7 +9,7 @@ import type { Lookup } from "@/features/orgs";
 
 import { EmptyState } from "../empty-state";
 import { RemoveMemberDialog } from "./remove-member-dialog";
-import { SCOPE_KIND, type MembershipScope } from "./scope";
+import type { MembershipScope } from "./scope";
 
 /** One membership as its row shows it, every phrase already chosen. */
 export type MemberRow = {
@@ -130,13 +130,7 @@ export function MemberTable({
       data={[...members]}
       getRowId={(member) => member.grn}
       search={{ placeholder: "Search members" }}
-      empty={
-        <EmptyState
-          icon={UsersRound}
-          title="No members"
-          description={`This ${SCOPE_KIND[scope.kind].noun} has no members.`}
-        />
-      }
+      empty={<EmptyState icon={UsersRound} title="No members" />}
     />
   );
 }

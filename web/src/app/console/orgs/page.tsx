@@ -42,7 +42,6 @@ export default async function OrgsPage() {
         <EmptyState
           icon={Building2}
           title="No organizations yet"
-          description="You are not a member of any organization yet. Create one to get started."
         />
       ) : (
         <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

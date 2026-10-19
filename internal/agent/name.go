@@ -32,6 +32,12 @@ func ParseName(s string) (Name, error) {
 	return Name(n), nil
 }
 
+// sameName reports whether two optional names are the same request:
+// both absent, or both present and equal.
+func sameName(a, b *Name) bool {
+	return a == nil && b == nil || a != nil && b != nil && *a == *b
+}
+
 // isStorableText reports whether a Postgres text column accepts s: it
 // takes valid utf-8 and refuses a nul byte.
 func isStorableText(s string) bool {

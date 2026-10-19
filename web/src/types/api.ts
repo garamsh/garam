@@ -628,7 +628,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Rename an agent. Requires `agent:rename`.
+         * @description Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+         */
+        patch: operations["renameAgent"];
         trace?: never;
     };
     "/orgs/{org}/agents/{agent}/watch": {
@@ -1464,7 +1468,7 @@ export interface components {
         };
         FoundObject: {
             grn: string;
-            /** @description A person's nickname. Absent for an agent, which garam holds no name for. */
+            /** @description A person's nickname, or an agent's name (ADR-0119). Absent for an agent the organization calls nothing. */
             name?: string;
         };
         PermissionHolders: {
@@ -1729,10 +1733,16 @@ export interface components {
              */
             since: string;
         };
+        AgentPatch: {
+            /** @description The new name, trimmed, 1 to 100 characters, or `null` to clear it. */
+            name: string | null;
+        };
         /** @description An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent, and `updatedAt` is when a state report last landed — either party's report moves it. */
         Agent: {
             /** @example grn:acme:default:agent:9f2ac1b40d8e7a35 */
             grn: string;
+            /** @description What the organization calls the agent (ADR-0119). Absent where it calls it nothing, and a client shows the identifier, the GRN's last segment, instead. */
+            name?: string;
             orgGrn: string;
             provisioningState: components["schemas"]["AgentProvisioningState"];
             runtimeState: components["schemas"]["AgentRuntimeState"];
@@ -3180,6 +3190,39 @@ export interface operations {
                     "application/json": components["schemas"]["Agent"];
                 };
             };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    renameAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Agent identifier (the last GRN segment). */
+                agent: components["parameters"]["agent"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentPatch"];
+            };
+        };
+        responses: {
+            /** @description The agent as stored after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];

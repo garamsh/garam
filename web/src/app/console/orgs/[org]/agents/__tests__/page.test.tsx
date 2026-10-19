@@ -74,19 +74,29 @@ describe("agents", () => {
     await renderAgents();
 
     // The organization also holds Alice; she is People's to list.
-    expect(names()).toEqual(["Unnamed agent"]);
-    expect(screen.getByRole("link", { name: "Unnamed agent" })).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/agents/1c3d5e7f90a2b4c6",
-    );
+    expect(names()).toEqual(["1c3d5e7f90a2b4c6"]);
+    expect(
+      screen.getByRole("link", { name: "1c3d5e7f90a2b4c6" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/agents/1c3d5e7f90a2b4c6");
     expect(screen.getByRole("columnheader", { name: /Runs on/ })).toBeVisible();
+  });
+
+  it("shows an agent by its name where it has one (ADR-0119)", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agents`, () =>
+        HttpResponse.json([{ ...reportedAgent, name: "Sherlock" }]),
+      ),
+    );
+    await renderAgents();
+
+    expect(names()).toEqual(["Sherlock"]);
   });
 
   it("gives each agent one state, saying what makes it so", async () => {
     await renderAgents();
 
     const failing = screen
-      .getByRole("link", { name: "Unnamed agent" })
+      .getByRole("link", { name: "1c3d5e7f90a2b4c6" })
       .closest("tr") as HTMLElement;
     expect(failing).toHaveTextContent("Failing");
     expect(failing).toHaveTextContent("Provisioning failed; disconnected");
@@ -97,7 +107,7 @@ describe("agents", () => {
     // Engineering holds Alice and the reported agent.
     await renderAgents({ team: "eng" });
 
-    expect(names()).toEqual(["Unnamed agent"]);
+    expect(names()).toEqual(["1c3d5e7f90a2b4c6"]);
   });
 
   it("filters by what runs an agent, read from its assignee alone", async () => {
@@ -119,7 +129,7 @@ describe("agents", () => {
 
     await renderAgents({ runs: "field-one" });
 
-    expect(names()).toEqual(["Unnamed agent"]);
+    expect(names()).toEqual(["1c3d5e7f90a2b4c6"]);
     expect(screen.getByRole("table")).toHaveTextContent("Field cluster one");
   });
 
@@ -141,7 +151,7 @@ describe("agents", () => {
 
     await renderAgents({ runs: "standalone" });
 
-    expect(names()).toEqual(["Unnamed agent"]);
+    expect(names()).toEqual(["1c3d5e7f90a2b4c6"]);
     expect(screen.getByRole("table")).toHaveTextContent(
       "build-07 (standalone)",
     );

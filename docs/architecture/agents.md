@@ -56,10 +56,27 @@ the execution fence first, so the call carries its activation's token
 A lost credential is replaced by the control service's recovery
 (§Separated execution).
 
-garam holds no definition of an agent and no name for one
+garam holds no definition of an agent
 ([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)):
-what an agent runs is its control service's or its standalone host's,
-and the console tells two agents apart by their identifiers.
+what an agent runs is its control service's or its standalone host's.
+
+An agent may carry a name, which is the organization's word for it
+and nothing an operator reads
+([ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)):
+
+- **On the record.** `agents.name` is optional, trimmed and 1 to 100
+  characters (`NameMaxLength`).
+- **At creation.** The hosted control service may give one on
+  `managed-enrollment.v2`'s creation or `agent-enrollment.v1`'s
+  managed binding. Each keeps the name it was asked for beside the
+  request, so a retry asking for another name, or for none where the
+  first asked for one, is a conflict. A replacement binding carries no
+  name, since the agent it moves keeps its own.
+- **Renamed.** `Store.Rename` sets or clears it under `agent:rename`,
+  checked on the agent's own GRN, and moves nothing else, the agent's
+  `updatedAt` included.
+- **Shown.** Where an agent has no name, the console shows its
+  identifier in its place.
 
 `Store` answers `Service` and, org by org, the read the browser-facing
 listener serves people: an organization's agents and the assignments

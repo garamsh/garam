@@ -4,6 +4,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -180,6 +181,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/agents/{agent} (the `GetAgent` operationId).
 	GetAgent(ctx context.Context, org Org, agentSlug AgentSlug, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RenameAgentWithBody Rename an agent. Requires `agent:rename`.
+	//
+	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
+	RenameAgentWithBody(ctx context.Context, org Org, agentSlug AgentSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RenameAgent Rename an agent. Requires `agent:rename`.
+	//
+	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
+	RenameAgent(ctx context.Context, org Org, agentSlug AgentSlug, body RenameAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOperators List an organization's operators. Requires the `member` role.
 	//
@@ -391,6 +410,44 @@ func (c *Client) ListAgents(ctx context.Context, org Org, params *ListAgentsPara
 // Corresponds with GET /orgs/{org}/agents/{agent} (the `GetAgent` operationId).
 func (c *Client) GetAgent(ctx context.Context, org Org, agentSlug AgentSlug, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAgentRequest(c.Server, org, agentSlug)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RenameAgentWithBody Rename an agent. Requires `agent:rename`.
+//
+// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
+func (c *Client) RenameAgentWithBody(ctx context.Context, org Org, agentSlug AgentSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRenameAgentRequestWithBody(c.Server, org, agentSlug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RenameAgent Rename an agent. Requires `agent:rename`.
+//
+// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
+func (c *Client) RenameAgent(ctx context.Context, org Org, agentSlug AgentSlug, body RenameAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRenameAgentRequest(c.Server, org, agentSlug, body)
 	if err != nil {
 		return nil, err
 	}
@@ -827,6 +884,60 @@ func NewGetAgentRequest(server string, org Org, agentSlug AgentSlug) (*http.Requ
 	return req, nil
 }
 
+// NewRenameAgentRequest calls the generic RenameAgent builder with application/json body
+func NewRenameAgentRequest(server string, org Org, agentSlug AgentSlug, body RenameAgentJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRenameAgentRequestWithBody(server, org, agentSlug, "application/json", bodyReader)
+}
+
+// NewRenameAgentRequestWithBody constructs an http.Request for the RenameAgent method, with any body, and a specified content type
+func NewRenameAgentRequestWithBody(server string, org Org, agentSlug AgentSlug, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "agent", agentSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/agents/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListOperatorsRequest constructs an http.Request for the ListOperators method
 func NewListOperatorsRequest(server string, org Org) (*http.Request, error) {
 	var err error
@@ -1012,6 +1123,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/agents/{agent} (the `GetAgent` operationId).
 	GetAgentWithResponse(ctx context.Context, org Org, agentSlug AgentSlug, reqEditors ...RequestEditorFn) (*GetAgentResponse, error)
+
+	// RenameAgentWithBodyWithResponse Rename an agent. Requires `agent:rename`.
+	//
+	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
+	RenameAgentWithBodyWithResponse(ctx context.Context, org Org, agentSlug AgentSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RenameAgentResponse, error)
+
+	// RenameAgentWithResponse Rename an agent. Requires `agent:rename`.
+	//
+	// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
+	RenameAgentWithResponse(ctx context.Context, org Org, agentSlug AgentSlug, body RenameAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*RenameAgentResponse, error)
 
 	// ListOperatorsWithResponse List an organization's operators. Requires the `member` role.
 	//
@@ -1573,6 +1702,75 @@ func (r GetAgentResponse) ContentType() string {
 	return ""
 }
 
+type RenameAgentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Agent
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r RenameAgentResponse) GetJSON200() *Agent {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RenameAgentResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RenameAgentResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RenameAgentResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RenameAgentResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r RenameAgentResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RenameAgentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RenameAgentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RenameAgentResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ListOperatorsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1813,6 +2011,36 @@ func (c *ClientWithResponses) GetAgentWithResponse(ctx context.Context, org Org,
 		return nil, err
 	}
 	return ParseGetAgentResponse(rsp)
+}
+
+// RenameAgentWithBodyWithResponse Rename an agent. Requires `agent:rename`.
+//
+// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
+func (c *ClientWithResponses) RenameAgentWithBodyWithResponse(ctx context.Context, org Org, agentSlug AgentSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RenameAgentResponse, error) {
+	rsp, err := c.RenameAgentWithBody(ctx, org, agentSlug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRenameAgentResponse(rsp)
+}
+
+// RenameAgentWithResponse Rename an agent. Requires `agent:rename`.
+//
+// Sets what the organization calls the agent, or clears it with `null`, and nothing else (ADR-0119). Its GRN, assignment, lineage and tokens stand as they were, and no operator is told: a name is not configuration. It is authorized on the agent's own GRN, so a policy denying `agent:rename` on that agent refuses it (ADR-0115).
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/agents/{agent} (the `RenameAgent` operationId).
+func (c *ClientWithResponses) RenameAgentWithResponse(ctx context.Context, org Org, agentSlug AgentSlug, body RenameAgentJSONRequestBody, reqEditors ...RequestEditorFn) (*RenameAgentResponse, error) {
+	rsp, err := c.RenameAgent(ctx, org, agentSlug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRenameAgentResponse(rsp)
 }
 
 // ListOperatorsWithResponse List an organization's operators. Requires the `member` role.
@@ -2221,6 +2449,60 @@ func ParseGetAgentResponse(rsp *http.Response) (*GetAgentResponse, error) {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRenameAgentResponse parses an HTTP response from a RenameAgentWithResponse call
+func ParseRenameAgentResponse(rsp *http.Response) (*RenameAgentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RenameAgentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Agent
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest Error

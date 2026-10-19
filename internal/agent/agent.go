@@ -114,6 +114,9 @@ type Agent struct {
 	runtime      RuntimeState
 	createdAt    time.Time
 	updatedAt    time.Time
+	// name is what the organization calls the agent, "" where it calls
+	// it nothing (ADR-0119).
+	name Name
 }
 
 // New constructs an Agent owned by orgGRN, before an operator has
@@ -153,6 +156,10 @@ func (a *Agent) ProvisioningState() ProvisioningState { return a.provisioning }
 func (a *Agent) RuntimeState() RuntimeState           { return a.runtime }
 func (a *Agent) CreatedAt() time.Time                 { return a.createdAt }
 func (a *Agent) UpdatedAt() time.Time                 { return a.updatedAt }
+
+// Name answers what the organization calls the agent, and false where
+// it calls it nothing and the agent is known by its identifier.
+func (a *Agent) Name() (Name, bool) { return a.name, a.name != "" }
 
 // NewGRN mints the GRN of an agent owned by orgGRN from eight random
 // bytes. Agents belong to the org, not to a project (ADR-0001), and the

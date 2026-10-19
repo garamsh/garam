@@ -83,7 +83,7 @@ describe("hosts", () => {
       .getAllByText(buildHost.hostName)[0]
       .closest("tr");
     expect(row).toHaveTextContent("Active");
-    expect(row).toHaveTextContent("Unnamed agent, epoch 2");
+    expect(row).toHaveTextContent("9f2ac1b40d8e7a35, epoch 2");
     const approvals = screen.getByRole("table", { name: "Approvals" });
     expect(
       within(approvals).getByText(pendingApproval.hostName).closest("tr"),
@@ -211,7 +211,7 @@ describe("hosts", () => {
       screen.getByRole("button", { name: "Revoke build-07's supervisor" }),
     );
     expect(screen.getByRole("alertdialog")).toHaveTextContent(
-      /Unnamed agent stops running on build-07/,
+      /9f2ac1b40d8e7a35 stops running on build-07/,
     );
     await user.click(screen.getByRole("button", { name: "Revoke supervisor" }));
 

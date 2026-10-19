@@ -769,7 +769,10 @@ type Agent struct {
 	// Generation The runtime generation garam last activated for the agent: the most recent activation's, whether it still admits the agent's writes or has since ended — deactivated, superseded, recovered or reassigned. Absent for an agent never activated (ADR-0078).
 	Generation *string `json:"generation,omitempty"`
 	Grn        string  `json:"grn"`
-	OrgGrn     string  `json:"orgGrn"`
+
+	// Name What the organization calls the agent (ADR-0119). Absent where it calls it nothing, and a client shows the identifier, the GRN's last segment, instead.
+	Name   *string `json:"name,omitempty"`
+	OrgGrn string  `json:"orgGrn"`
 
 	// ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is an agent an operator observed cannot start, which is a stricter observation than an absent ready replica: an operator with only a replica count reports `provisioned`, so a state other than `failed` is not evidence the pod can start. What an operator may report, and when, is `api/machine.yaml`'s — the specification the reporting party holds, not this one.
 	ProvisioningState AgentProvisioningState `json:"provisioningState"`
@@ -864,6 +867,12 @@ type AgentEnrollmentReplacement struct {
 	// AssigneeGrn The supervisor holding the agent now.
 	AssigneeGrn string `json:"assigneeGrn"`
 	Epoch       int    `json:"epoch"`
+}
+
+// AgentPatch defines model for AgentPatch.
+type AgentPatch struct {
+	// Name The new name, trimmed, 1 to 100 characters, or `null` to clear it.
+	Name *string `json:"name"`
 }
 
 // AgentProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is an agent an operator observed cannot start, which is a stricter observation than an absent ready replica: an operator with only a replica count reports `provisioned`, so a state other than `failed` is not evidence the pod can start. What an operator may report, and when, is `api/machine.yaml`'s — the specification the reporting party holds, not this one.
@@ -1082,7 +1091,7 @@ type FoundKindKind string
 type FoundObject struct {
 	Grn string `json:"grn"`
 
-	// Name A person's nickname. Absent for an agent, which garam holds no name for.
+	// Name A person's nickname, or an agent's name (ADR-0119). Absent for an agent the organization calls nothing.
 	Name *string `json:"name,omitempty"`
 }
 
@@ -1851,6 +1860,9 @@ type UpdateOrgJSONRequestBody = OrganizationPatch
 // ApproveAgentEnrollmentJSONRequestBody defines body for ApproveAgentEnrollment for application/json ContentType.
 type ApproveAgentEnrollmentJSONRequestBody = AgentEnrollmentApproval
 
+// RenameAgentJSONRequestBody defines body for RenameAgent for application/json ContentType.
+type RenameAgentJSONRequestBody = AgentPatch
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = GroupCreate
 
@@ -1991,6 +2003,9 @@ type ServerInterface interface {
 	// GetAgent Get an agent. Requires the `member` role.
 	// (GET /orgs/{org}/agents/{agent})
 	GetAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
+	// RenameAgent Rename an agent. Requires `agent:rename`.
+	// (PATCH /orgs/{org}/agents/{agent})
+	RenameAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
 	// WatchAgent Watch an agent work. Requires the `agent:watch` action.
 	// (GET /orgs/{org}/agents/{agent}/watch)
 	WatchAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
@@ -2894,6 +2909,41 @@ func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetAgent(w, r, org, agentSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RenameAgent operation middleware
+func (siw *ServerInterfaceWrapper) RenameAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentSlug AgentSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenameAgent(w, r, org, agentSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5179,6 +5229,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/projects/{project}/members/{member}", wrapper.RemoveProjectMember)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.GetAgent)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.RenameAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/watch", wrapper.WatchAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-enrollments", wrapper.ListAgentEnrollments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-enrollments", wrapper.ApproveAgentEnrollment)

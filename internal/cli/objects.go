@@ -127,14 +127,18 @@ func newOperatorsCommand() *cobra.Command {
 	return operators
 }
 
-// newAgentsCommand lists and reads an organization's agents.
+// newAgentsCommand lists, reads and renames an organization's agents.
 func newAgentsCommand() *cobra.Command {
 	flags := &userFlags{}
 	agents := &cobra.Command{Use: "agents", Short: "An organization's agents"}
 	flags.bind(agents)
-	header := []string{"AGENT", "PROVISIONING", "RUNTIME", "CREATED"}
+	header := []string{"AGENT", "NAME", "PROVISIONING", "RUNTIME", "CREATED"}
 	row := func(a apigen.Agent) []string {
-		return []string{lastSegment(a.Grn), string(a.ProvisioningState), string(a.RuntimeState), stamp(a.CreatedAt)}
+		name := "-"
+		if a.Name != nil {
+			name = *a.Name
+		}
+		return []string{lastSegment(a.Grn), name, string(a.ProvisioningState), string(a.RuntimeState), stamp(a.CreatedAt)}
 	}
 	agents.AddCommand(&cobra.Command{
 		Use:   "list",
@@ -197,8 +201,54 @@ func newAgentsCommand() *cobra.Command {
 				return [][]string{row(*resp.JSON200)}
 			})
 		},
-	})
+	}, newAgentsRenameCommand(flags, header, row))
 	return agents
+}
+
+// newAgentsRenameCommand names an agent, or clears its name with
+// --clear (ADR-0119).
+func newAgentsRenameCommand(flags *userFlags, header []string, row func(apigen.Agent) []string) *cobra.Command {
+	var clear bool
+	cmd := &cobra.Command{
+		Use:   "rename <agent> [name]",
+		Short: "Name an agent, or clear its name with --clear",
+		Args: func(cmd *cobra.Command, args []string) error {
+			if clear {
+				return cobra.ExactArgs(1)(cmd, args)
+			}
+			return cobra.ExactArgs(2)(cmd, args)
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := newUserCommand(cmd, flags)
+			if err != nil {
+				return err
+			}
+			org, err := c.org()
+			if err != nil {
+				return err
+			}
+			client, err := c.signedIn(cmd.Context())
+			if err != nil {
+				return err
+			}
+			var name *string
+			if !clear {
+				name = &args[1]
+			}
+			resp, err := client.RenameAgentWithResponse(cmd.Context(), org, args[0], apigen.AgentPatch{Name: name})
+			if err != nil {
+				return errorx.Wrap(err, "rename agent", errorx.KindUnavailable)
+			}
+			if resp.JSON200 == nil {
+				return apiFailure(resp.HTTPResponse, resp.Body)
+			}
+			return c.render(resp.JSON200, header, func() [][]string {
+				return [][]string{row(*resp.JSON200)}
+			})
+		},
+	}
+	cmd.Flags().BoolVar(&clear, "clear", false, "clear the name, so the agent is shown by its identifier")
+	return cmd
 }
 
 // stamp is a time as a table shows it: UTC, to the second.

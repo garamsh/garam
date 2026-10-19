@@ -85,6 +85,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 
 		{org.ActionAgentRead, "agent:read"},
 		{org.ActionAgentWatch, "agent:watch"},
+		{org.ActionAgentRename, "agent:rename"},
 		{org.ActionAgentCreate, "agent:create"},
 		{org.ActionAgentConfigure, "agent:configure"},
 		{org.ActionAgentRecover, "agent:recover"},
@@ -120,7 +121,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
-			org.ActionAgentCreate,
+			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
 			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead,
@@ -133,7 +134,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
-			org.ActionAgentCreate,
+			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
 			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead,
@@ -146,7 +147,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
 			org.ActionOperatorRead, org.ActionAgentRead,
-			org.ActionAgentCreate, org.ActionAgentTemplateRead,
+			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
 		},
 		org.RoleMember.Actions())
@@ -160,14 +161,15 @@ func TestRoleActions_GrantSets(t *testing.T) {
 // withhold the other, and ADR-0012 keeps provisioning out of a
 // wildcard; both make an agent action a role grants a deliberate one.
 //
-// The read is the control. Without it the two refusals hold for a
-// role that grants nothing at all, which is a different state and the
-// one most likely to arrive by accident.
+// The read and the rename are the control. Without them the two
+// refusals hold for a role that grants nothing at all, which is a
+// different state and the one most likely to arrive by accident.
 func TestRoleActions_NoRoleReachesAgentWatch(t *testing.T) {
 	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
 		assert.NotContains(t, r.Actions(), org.ActionAgentWatch, string(r))
 		assert.NotContains(t, r.Actions(), "agent:*", string(r))
 		assert.Contains(t, r.Actions(), org.ActionAgentRead, string(r))
+		assert.Contains(t, r.Actions(), org.ActionAgentRename, string(r))
 	}
 }
 
@@ -245,7 +247,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
 			org.ActionOperatorRead, org.ActionAgentRead,
-			org.ActionAgentCreate, org.ActionAgentTemplateRead,
+			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",

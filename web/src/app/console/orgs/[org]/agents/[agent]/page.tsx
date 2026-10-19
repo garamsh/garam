@@ -8,7 +8,7 @@ import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
 import {
-  UNNAMED_AGENT,
+  agentDisplayName,
   getOrg,
   hostedFor,
   listHostedOperators,
@@ -40,6 +40,7 @@ import {
   readAccess,
 } from "../../../../_components/your-access";
 import { ExecutionPanel } from "../_components/execution-panel";
+import { RenameAgentForm } from "./_components/rename-agent-form";
 
 /** Head metadata for an agent's route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Agent — garam" };
@@ -66,6 +67,11 @@ export default async function AgentPage({ params }: Params) {
       key: "enroll",
       label: "Replace its standalone host",
       check: { action: "agent:enroll", resource: self },
+    },
+    {
+      key: "rename",
+      label: "Rename it",
+      check: { action: "agent:rename", resource: self },
     },
   ]);
   const [organization, agents, operators, hosted, readings] = await Promise.all(
@@ -105,10 +111,13 @@ export default async function AgentPage({ params }: Params) {
   );
   if (reported === undefined) notFound();
   const agentGrn = reported.grn;
-  // garam holds no name for an agent, and its identifier is never put
-  // in a name's place: the header offers it to copy beside the name
-  // instead.
-  const name = UNNAMED_AGENT;
+  // What the organization calls it, or its identifier where it calls
+  // it nothing (ADR-0119).
+  const name = agentDisplayName({
+    name: reported.name ?? null,
+    identifier: agent,
+  });
+  const decisions = accessDecisions(readings);
   const dots = reportedDots("reported", reported);
   const holder = holderOf(
     reported,
@@ -124,7 +133,24 @@ export default async function AgentPage({ params }: Params) {
     {
       value: "overview",
       label: "Overview",
-      content: <p className="text-muted-foreground">{origin(holder)}</p>,
+      content: (
+        <div className="flex flex-col gap-6">
+          <p className="text-muted-foreground">{origin(holder)}</p>
+          <Section title="Name">
+            {decisions.get("rename") === "denied" ? (
+              <p className="text-muted-foreground">
+                No policy lets you rename this agent.
+              </p>
+            ) : (
+              <RenameAgentForm
+                org={org}
+                agent={agent}
+                name={reported.name ?? null}
+              />
+            )}
+          </Section>
+        </div>
+      ),
     },
     {
       value: "execution",
@@ -192,7 +218,7 @@ export default async function AgentPage({ params }: Params) {
               agentName={name}
               holder={holder}
               assigneeGrn={reported.assignment?.assigneeGrn}
-              denied={accessDecisions(readings).get("enroll") === "denied"}
+              denied={decisions.get("enroll") === "denied"}
             />
             <Button asChild variant="outline">
               <Link

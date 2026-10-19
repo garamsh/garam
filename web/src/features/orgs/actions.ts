@@ -80,6 +80,7 @@ export {
   removeProjectMember,
   type RemoveProjectMemberState,
 } from "./api/remove-project-member";
+export { renameAgent, type RenameAgentState } from "./api/rename-agent";
 export {
   revokeAgentSupervisor,
   type RevokeAgentSupervisorState,

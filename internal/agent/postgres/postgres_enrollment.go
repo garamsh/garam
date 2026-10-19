@@ -85,5 +85,6 @@ func creationOf(row db.AgentManagedCreation) (*agent.ManagedCreation, error) {
 		OperationRef: row.OperationRef,
 		Epoch:        int(row.Epoch),
 		Lineage:      agent.Lineage(row.Lineage.Bytes),
+		Name:         storedName(row.Name),
 	}, nil
 }

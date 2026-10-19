@@ -5,7 +5,8 @@ import type { Catalog, Lookup } from "./subject";
 /**
  * The list an agent is known by: the agents the organization holds.
  * garam keeps no agent definition (ADR-0118), so every agent it knows
- * is one an operator or a supervisor stood up.
+ * is one an operator or a supervisor stood up, carrying the name the
+ * organization gave it, if any (ADR-0119).
  */
 export type AgentDirectory = {
   agents: Catalog<Agent>;
@@ -21,7 +22,7 @@ export type Reported = "reported" | "unchecked";
 export type DirectoryAgent = {
   grn: string;
   identifier: string;
-  /** What the organization calls it: garam holds no name for an agent. */
+  /** What the organization calls it, null where it calls it nothing. */
   name: string | null;
   reported: Reported;
 };
@@ -32,7 +33,7 @@ export function directoryAgents(directory: AgentDirectory): DirectoryAgent[] {
     (agent) => ({
       grn: agent.grn,
       identifier: slugFromGrn(agent.grn),
-      name: null,
+      name: agent.name ?? null,
       reported: "reported" as const,
     }),
   );
@@ -56,18 +57,25 @@ export function lookUpAgent(
 }
 
 /**
- * What an agent is called, since garam holds no name for one: its
- * identifier never stands in a name's place.
+ * What an agent is shown as: its name, or its identifier where the
+ * organization calls it nothing (ADR-0119).
  */
-export const UNNAMED_AGENT = "Unnamed agent";
+export function agentDisplayName(agent: {
+  name: string | null;
+  identifier: string;
+}): string {
+  return agent.name ?? agent.identifier;
+}
 
 /**
  * How an agent is offered in a selector: its name with the identifier
  * beside it, since names repeat and a selector offers nothing else to
- * tell two apart.
+ * tell two apart, or the identifier alone where it has no name.
  */
 export function agentChoiceLabel(agent: DirectoryAgent): string {
-  return `${agent.name ?? UNNAMED_AGENT} (${agent.identifier})`;
+  return agent.name === null
+    ? agent.identifier
+    : `${agent.name} (${agent.identifier})`;
 }
 
 /** Whether what was reported needs someone's attention. */

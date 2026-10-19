@@ -9,7 +9,6 @@ import { garamFetchAuthenticated, parserFor } from "@/lib/garam";
 import { slugFromGrn } from "@/lib/grn";
 import type { components } from "@/types/api";
 
-import { UNNAMED_AGENT } from "../agent-directory";
 import { GrnParser, orgPath } from "./orgs";
 
 /** What the palette finds by name. */
@@ -79,9 +78,11 @@ export async function searchOrgObjects(
       found: answer.found.map(({ kind, objects, more }) => ({
         kind,
         objects: objects.map((object) => ({
+          // An agent the organization calls nothing is shown by its
+          // identifier (ADR-0119).
           name:
             object.name ??
-            (kind === "agent" ? UNNAMED_AGENT : "No name on record"),
+            (kind === "agent" ? slugFromGrn(object.grn) : "No name on record"),
           identifier: slugFromGrn(object.grn),
         })),
         more,

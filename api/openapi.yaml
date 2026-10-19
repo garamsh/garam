@@ -1318,6 +1318,41 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+    patch:
+      operationId: renameAgent
+      tags: [agent]
+      summary: Rename an agent. Requires `agent:rename`.
+      description: >-
+        Sets what the organization calls the agent, or clears it with
+        `null`, and nothing else (ADR-0119). Its GRN, assignment,
+        lineage and tokens stand as they were, and no operator is told:
+        a name is not configuration. It is authorized on the agent's own
+        GRN, so a policy denying `agent:rename` on that agent refuses
+        it (ADR-0115).
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/agent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentPatch'
+      responses:
+        '200':
+          description: The agent as stored after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/agents/{agent}/watch:
     get:
       operationId: watchAgent
@@ -3264,8 +3299,8 @@ components:
         name:
           type: string
           description: >-
-            A person's nickname. Absent for an agent, which garam
-            holds no name for.
+            A person's nickname, or an agent's name (ADR-0119). Absent
+            for an agent the organization calls nothing.
     PermissionHolders:
       type: object
       required: [holders]
@@ -3746,6 +3781,13 @@ components:
           type: string
           format: date-time
           description: When the current binding was written.
+    AgentPatch:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: [string, 'null']
+          description: The new name, trimmed, 1 to 100 characters, or `null` to clear it.
     Agent:
       type: object
       description: >-
@@ -3759,6 +3801,12 @@ components:
         grn:
           type: string
           example: grn:acme:default:agent:9f2ac1b40d8e7a35
+        name:
+          type: string
+          description: >-
+            What the organization calls the agent (ADR-0119). Absent
+            where it calls it nothing, and a client shows the
+            identifier, the GRN's last segment, instead.
         orgGrn:
           type: string
         provisioningState:

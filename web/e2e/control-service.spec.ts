@@ -659,10 +659,11 @@ test.describe("control service, as contract tests against the agreed Operator wi
     const execution = page.getByRole("tab", { name: "Execution", exact: true });
     await page.goto(agentPage);
     await expect(
-      // A control service's agent has no definition, so no name.
+      // A control service's agent created with no name is titled by
+      // its identifier (ADR-0119).
       page.getByRole("heading", {
         level: 1,
-        name: "Unnamed agent",
+        name: signedIn.agentIdentifier,
         exact: true,
       }),
     ).toBeVisible();
@@ -698,10 +699,11 @@ test.describe("control service, as contract tests against the agreed Operator wi
       });
     }).toPass({ timeout: 15_000 });
     await expect(
-      // A control service's agent has no definition, so no name.
+      // A control service's agent created with no name is titled by
+      // its identifier (ADR-0119).
       page.getByRole("heading", {
         level: 1,
-        name: "Unnamed agent",
+        name: signedIn.agentIdentifier,
         exact: true,
       }),
     ).toBeVisible();
@@ -745,10 +747,11 @@ test.describe("control service, as contract tests against the agreed Operator wi
       `/console/orgs/${signedIn.orgSlug}/agents/${signedIn.agentIdentifier}`,
     );
     await expect(
-      // A control service's agent has no definition, so no name.
+      // A control service's agent created with no name is titled by
+      // its identifier (ADR-0119).
       page.getByRole("heading", {
         level: 1,
-        name: "Unnamed agent",
+        name: signedIn.agentIdentifier,
         exact: true,
       }),
     ).toBeVisible();

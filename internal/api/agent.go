@@ -91,6 +91,52 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen
 	writeJSON(w, http.StatusOK, agentToAPI(a, assignment, generation))
 }
 
+// RenameAgent sets or clears what the org calls an agent, and nothing
+// else (ADR-0119). It is authorized on the agent's own GRN, so a
+// policy denying agent:rename on that agent refuses it.
+func (s *Server) RenameAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, agentSlug apigen.AgentSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	g := agentGRN(orgSlug, agentSlug)
+	if err := s.authorizeOn(r, orgGRN(orgSlug), g, u, org.ActionAgentRename); err != nil {
+		writeError(w, err)
+		return
+	}
+	var body apigen.AgentPatch
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	var name *agent.Name
+	if body.Name != nil {
+		n, err := agent.ParseName(*body.Name)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		name = &n
+	}
+	a, err := s.agents.Rename(r.Context(), g, name)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	assignment, err := s.assignmentOf(r.Context(), g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	generation, err := s.agents.LatestGeneration(r.Context(), g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, agentToAPI(a, assignment, generation))
+}
+
 // assignmentsOf resolves the org's assignments in one query, keyed by
 // agent GRN. An agent assigned between the two reads is absent from the
 // map: the reads are not atomic, and the next request carries it.
@@ -139,6 +185,10 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment, generation *agent.
 		RuntimeState:      apigen.AgentRuntimeState(a.RuntimeState()),
 		CreatedAt:         a.CreatedAt(),
 		UpdatedAt:         a.UpdatedAt(),
+	}
+	if name, ok := a.Name(); ok {
+		n := string(name)
+		out.Name = &n
 	}
 	if generation != nil {
 		g := string(*generation)

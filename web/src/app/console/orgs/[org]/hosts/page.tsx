@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 
 import { Button } from "@/components/ui/button";
 import {
-  UNNAMED_AGENT,
   getOrg,
   lookupAgentEnrollments,
   lookupAgentSupervisors,
@@ -115,7 +114,9 @@ export default async function HostsPage({ params }: Params) {
   }
 
   const agentOf = (grn: string): HostAgent => ({
-    name: UNNAMED_AGENT,
+    // The host listing carries no agent record, so the agent is shown
+    // by its identifier (ADR-0119).
+    name: slugFromGrn(grn),
     href: orgHref(org, `agents/${slugFromGrn(grn)}`),
   });
   const hostOf = new Map(

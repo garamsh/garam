@@ -112,6 +112,9 @@ const (
 	// organization may withhold from someone it lets read. No role
 	// grants it: a policy carries it or nothing does.
 	ActionAgentWatch = "agent:watch"
+	// ActionAgentRename is changing what the org calls an agent
+	// (ADR-0119). It moves no value an operator reads.
+	ActionAgentRename = "agent:rename"
 	// ActionAgentCreate is asking a delegated operator to create an agent
 	// from an immutable template or profile it already allows
 	// (ADR-0078). It chooses no execution setting.
@@ -170,7 +173,7 @@ var actions = []string{
 	ActionConsentRead, ActionConsentGrant, ActionConsentWithdraw,
 	ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
 	ActionOperatorReissue, ActionOperatorUpdate, ActionOperatorDelegate,
-	ActionAgentRead, ActionAgentWatch, ActionAgentCreate,
+	ActionAgentRead, ActionAgentWatch, ActionAgentRename, ActionAgentCreate,
 	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentReplace,
 	ActionAgentTemplateRead, ActionAgentTemplatePublish,
 	ActionExecutionProfileRead, ActionAgentExecutionRead,
@@ -216,6 +219,7 @@ var machineActions = []struct {
 	{ActionOperatorReissue, false},
 	{ActionOperatorDelegate, false},
 	{ActionAgentRead, true},
+	{ActionAgentRename, true},
 	{ActionAgentCreate, true},
 	{ActionAgentConfigure, false},
 	{ActionAgentRecover, false},

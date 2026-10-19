@@ -159,7 +159,7 @@ func (q *Queries) EndReassignedActivation(ctx context.Context, arg EndReassigned
 }
 
 const getAgent = `-- name: GetAgent :one
-SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at FROM agents WHERE grn = $1
+SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name FROM agents WHERE grn = $1
 `
 
 func (q *Queries) GetAgent(ctx context.Context, grn string) (Agent, error) {
@@ -172,6 +172,7 @@ func (q *Queries) GetAgent(ctx context.Context, grn string) (Agent, error) {
 		&i.RuntimeState,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Name,
 	)
 	return i, err
 }
@@ -286,7 +287,7 @@ func (q *Queries) ListAgentAssignmentsByOrg(ctx context.Context, orgGrn string) 
 }
 
 const listAgentsByOrg = `-- name: ListAgentsByOrg :many
-SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at FROM agents
+SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name FROM agents
 WHERE org_grn = $1
 ORDER BY grn
 LIMIT $3 OFFSET $2
@@ -314,6 +315,7 @@ func (q *Queries) ListAgentsByOrg(ctx context.Context, arg ListAgentsByOrgParams
 			&i.RuntimeState,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Name,
 		); err != nil {
 			return nil, err
 		}
@@ -408,6 +410,35 @@ func (q *Queries) RecordAgentToken(ctx context.Context, arg RecordAgentTokenPara
 	return err
 }
 
+const renameAgent = `-- name: RenameAgent :one
+UPDATE agents SET name = $1
+WHERE grn = $2
+RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name
+`
+
+type RenameAgentParams struct {
+	Name pgtype.Text
+	Grn  string
+}
+
+// Renaming changes what the organization calls the agent and nothing
+// else (ADR-0119): no assignment, lineage or token moves, and
+// updated_at, which a state report moves, stays.
+func (q *Queries) RenameAgent(ctx context.Context, arg RenameAgentParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, renameAgent, arg.Name, arg.Grn)
+	var i Agent
+	err := row.Scan(
+		&i.Grn,
+		&i.OrgGrn,
+		&i.ProvisioningState,
+		&i.RuntimeState,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+	)
+	return i, err
+}
+
 const reportAgentProvisioningState = `-- name: ReportAgentProvisioningState :one
 UPDATE agents SET
     provisioning_state = $1,
@@ -417,7 +448,7 @@ WHERE grn = $3
       SELECT 1 FROM agent_assignments a
       WHERE a.agent_grn = agents.grn AND a.epoch = $4
   )
-RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at
+RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name
 `
 
 type ReportAgentProvisioningStateParams struct {
@@ -445,6 +476,7 @@ func (q *Queries) ReportAgentProvisioningState(ctx context.Context, arg ReportAg
 		&i.RuntimeState,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Name,
 	)
 	return i, err
 }
@@ -458,7 +490,7 @@ WHERE grn = $3
       SELECT 1 FROM agent_assignments a
       WHERE a.agent_grn = agents.grn AND a.epoch = $4
   )
-RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at
+RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name
 `
 
 type ReportAgentRuntimeStateParams struct {
@@ -483,6 +515,7 @@ func (q *Queries) ReportAgentRuntimeState(ctx context.Context, arg ReportAgentRu
 		&i.RuntimeState,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Name,
 	)
 	return i, err
 }
@@ -523,9 +556,9 @@ func (q *Queries) ResolveAgentToken(ctx context.Context, tokenHash string) (Reso
 }
 
 const searchAgentsByOrg = `-- name: SearchAgentsByOrg :many
-SELECT grn FROM agents
+SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name FROM agents
 WHERE org_grn = $1
-  AND split_part(grn, ':', 5) ILIKE $2
+  AND (split_part(grn, ':', 5) ILIKE $2 OR name ILIKE $2)
 ORDER BY grn
 `
 
@@ -536,19 +569,27 @@ type SearchAgentsByOrgParams struct {
 
 // SearchAgentsByOrg answers the org's agents whose identifier (the
 // GRN's fifth segment) matches pattern, case aside, ordered by GRN.
-func (q *Queries) SearchAgentsByOrg(ctx context.Context, arg SearchAgentsByOrgParams) ([]string, error) {
+func (q *Queries) SearchAgentsByOrg(ctx context.Context, arg SearchAgentsByOrgParams) ([]Agent, error) {
 	rows, err := q.db.Query(ctx, searchAgentsByOrg, arg.OrgGrn, arg.Pattern)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []Agent
 	for rows.Next() {
-		var grn string
-		if err := rows.Scan(&grn); err != nil {
+		var i Agent
+		if err := rows.Scan(
+			&i.Grn,
+			&i.OrgGrn,
+			&i.ProvisioningState,
+			&i.RuntimeState,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Name,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, grn)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

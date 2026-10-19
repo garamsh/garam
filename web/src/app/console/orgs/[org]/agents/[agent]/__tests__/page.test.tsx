@@ -6,7 +6,12 @@ import { describe, expect, it, vi } from "vitest";
 import AgentPage from "@/app/console/orgs/[org]/agents/[agent]/page";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, fieldOne, reportedAgent } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  answerPermissionChecks,
+  fieldOne,
+  reportedAgent,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -44,17 +49,44 @@ async function openTab(name: string) {
 }
 
 describe("agent page", () => {
-  it("calls the agent unnamed, never by its identifier, and states its reports once in the header", async () => {
+  it("titles a named agent by its name, and offers that name to change (ADR-0119)", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agents`, () =>
+        HttpResponse.json([{ ...reportedAgent, name: "Sherlock" }]),
+      ),
+    );
+    await renderAgent();
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Sherlock" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue(
+      "Sherlock",
+    );
+  });
+
+  it("offers no rename where agent:rename is denied on the agent", async () => {
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "agent:rename" ? "deny" : "allow",
+      ),
+    );
+    await renderAgent();
+
+    expect(
+      await screen.findByText("No policy lets you rename this agent."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Name" })).toBeNull();
+  });
+
+  it("calls an agent the organization calls nothing by its identifier, and states its reports once in the header", async () => {
     const { container } = await renderAgent();
 
-    // garam holds no name for an agent (ADR-0118).
+    // No name on the record, so the identifier is the title (ADR-0119).
     expect(
-      screen.getByRole("heading", { level: 1, name: "Unnamed agent" }),
+      screen.getByRole("heading", { level: 1, name: "1c3d5e7f90a2b4c6" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "1c3d5e7f90a2b4c6" }),
-    ).toBeNull();
-    // The identifier is offered to copy, in mono, and is not the title.
+    // The identifier is offered to copy as well, in mono.
     expect(screen.getByRole("group", { name: "Identifier" })).toHaveTextContent(
       "1c3d5e7f90a2b4c6",
     );
@@ -72,7 +104,6 @@ describe("agent page", () => {
       "href",
       "/console/orgs/acme/permissions/attachments?subject=agent%3A1c3d5e7f90a2b4c6",
     );
-    // Nothing of it is garam's to rename.
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "Overview",
       "Execution",
@@ -295,9 +326,11 @@ describe("agent page", () => {
 
       await user.click(screen.getByRole("button", { name: "Replace host" }));
       const dialog = screen.getByRole("alertdialog", {
-        name: "Replace Unnamed agent's host?",
+        name: "Replace 1c3d5e7f90a2b4c6's host?",
       });
-      expect(dialog).toHaveTextContent(/build-07 stops running Unnamed agent/);
+      expect(dialog).toHaveTextContent(
+        /build-07 stops running 1c3d5e7f90a2b4c6/,
+      );
       await user.click(
         within(dialog).getByRole("textbox", {
           name: "What garam standalone prepare printed",

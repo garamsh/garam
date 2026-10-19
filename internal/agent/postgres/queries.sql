@@ -393,11 +393,6 @@ SELECT d.* FROM agent_definitions d
 WHERE d.org_grn = $1 AND NOT EXISTS (SELECT 1 FROM agents a WHERE a.grn = d.agent_grn)
 ORDER BY d.agent_grn;
 
--- name: InventoryTemplates :many
-SELECT t.grn, t.name, t.agent_values FROM agent_templates t
-WHERE t.org_grn = $1
-ORDER BY t.grn;
-
 -- An agent-enrollment.v1 approval (ADR-0102), with the agent and
 -- assignment a replacement expects (ADR-0107). Either unique key
 -- refusing the row writes nothing, and the caller reads what holds it.

@@ -229,11 +229,6 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment, generation *agent.
 			Epoch:       assignment.Epoch(),
 			Since:       assignment.UpdatedAt(),
 		}
-		// The legacy field names an operator and never a supervisor.
-		if assignment.Assignee().ServiceType == agent.ServiceTypeOperator {
-			operatorGRN := assignment.Assignee().String()
-			out.Assignment.OperatorGrn = &operatorGRN
-		}
 	}
 	return out
 }

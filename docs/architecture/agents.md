@@ -5,19 +5,18 @@ by `internal/agent`.
 
 Pending removals
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
-each goes in its own pull request of #1593, and what this document says
-of it holds until then. `Template` and its reads go in the third, after
-#1588, and the browser's `operatorGrn` in the fourth. Legacy execution
-mode, the staged cut-over, `garam cutover-inventory` and every
-`Definition` go together in the fifth, after #1594 moves aurora's one
-agent, which runs in legacy mode, to a managed agent.
+legacy execution mode, the staged cut-over, `garam cutover-inventory`
+and every `Definition` go together in the fifth pull request of #1593,
+after #1594 moves aurora's one agent, which runs in legacy mode, to a
+managed agent, and what this document says of them holds until then.
+garam's own templates and the browser's legacy `operatorGrn` are
+gone.
 
 | Type | Responsibility |
 |------|----------------|
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
 | `Definition` | what an organization said an agent should be: which operator runs it and with what values (ADR-0026), and not what it is built from — it names no image. It names its subject where an `Agent` names itself, and carries none of the state an `Agent` carries, so a reader cannot take one for the other; it writes no `agents` row until the operator it names claims it (ADR-0033). garam accepts no new one: each is read, claimed and cut over as written, and nothing writes one (ADR-0090) |
-| `Template` | a starting point an organization kept for defining agents: a name, a description and values a definition copied once (ADR-0075). It names no operator and no agent, and no definition records the template it came from. Templates are retired read-only: each is read as the record of what it said, and nothing writes one (ADR-0088) |
-| `Name` | what an organization calls a defined agent or a template, separate from the GRN: trimmed, one to 100 characters, and not unique |
+| `Name` | what an organization calls a defined agent, separate from the GRN: trimmed, one to 100 characters, and not unique |
 | `Assignment` | what holds an agent — an operator, or a standalone host's supervisor (ADR-0082) — and the epoch that binding holds |
 | `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
 | `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it while its execution is legacy and its cutover is not switched (ADR-0086), answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
@@ -99,8 +98,7 @@ operator holds contributes no assignment, so the two lists are not one
 length. Both aggregates are rehydrated inside this package — their
 fields are unexported and no exported constructor restores a stored
 row's state or timestamps — which is why the store that reads them back
-lives here rather than below. A `Template` is a data carrier with
-exported fields (ADR-0069), and a `Definition`'s name is an exported
+lives here rather than below. A `Definition`'s name is an exported
 field beside its accessors; the stores stay beside the others until
 #1083 moves this domain's store out of the package.
 
@@ -355,8 +353,8 @@ it did until G3.
 initial issuance (below), the controller proof
 ([operators.md](./operators.md) §Controller proof), the generation fence
 ([machine-identity.md](./machine-identity.md) §Generation and lineage)
-and a legacy agent's cutover (below); closing new definitions and
-retiring garam's templates (below) are garam's alone and built.** The
+and a legacy agent's cutover (below); closing new definitions (below)
+is garam's alone and built.** The
 adapter this repository ships reaches the fence through the lifecycle
 authority, never directly: it asks that authority to activate the
 generation beside it and carries the token it is answered with
@@ -378,8 +376,10 @@ in #1157.
 - **garam accepts no new definition** (ADR-0090). `defineAgent` and
   `agent:define` are gone, and migration 000035's trigger refuses an
   insert into `agent_definitions`, an update changing anything but
-  the name and a direct delete, from whichever release sends it; it
-  orders itself against a write in flight as 000034 does. A rename is
+  the name and a direct delete, from whichever release sends it;
+  creating it waited for a write already holding the table, which
+  committed first, and a write reaching the table after it is refused.
+  A rename is
   admitted, and a delete reached through the organization's own
   deletion is too, so a definition still goes with its organization.
   Every definition held stays readable, claimable by the operator it
@@ -390,15 +390,10 @@ in #1157.
   the organization's deletion takes the two in, so a claim racing it
   waits holding nothing and finds the definition gone (#1441;
   `internal/agent` `PostgresStore.Claim`).
-- **garam's templates are retired read-only and not imported**
-  (ADR-0088). Migration 000034's trigger refuses every insert, update
-  and delete on `agent_templates`, from whichever release sends it:
-  creating it waits for a write already holding the table, which
-  commits first, and a write reaching the table after it is refused. A
-  delete reached through the organization's own deletion is admitted.
-  No route or action writes a template; `listAgentTemplates` and
-  `getAgentTemplate` read them as records on `agent-template:read`, and
-  no definition or revision changes.
+- **garam keeps no template of its own** ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)). The templates
+  ADR-0088 retired read-only and did not import are dropped with their
+  table by migration 000057, which refuses to run while one is held; a
+  new agent starts from a template the control service published.
 - **A legacy agent cuts over in stages garam records under its
   execution lock** (ADR-0086). The Operator reads the agent's source —
   its definition, or empty values where none describes it — and the

@@ -151,10 +151,6 @@ func listKinds() []listKind {
 		{name: "projects", path: "/orgs/acme/projects", action: org.ActionProjectRead, seed: seedListProject},
 		{name: "agents", path: "/orgs/acme/agents", action: org.ActionAgentRead,
 			seed: func(t *testing.T, s *listStack, _ string) grn.GRN { return seedAgent(t, s.agents, s.acme) }},
-		{name: "agent templates", path: "/orgs/acme/agent-templates", action: org.ActionAgentTemplateRead,
-			seed: func(t *testing.T, s *listStack, name string) grn.GRN {
-				return keepTemplate(t, s.pool, "acme", name, nil)
-			}},
 		// A policy is read by its versions, the one read policy:read
 		// gates on the policy itself.
 		{name: "policies", path: "/orgs/acme/policies", action: org.ActionPolicyRead, readSuffix: "/versions",

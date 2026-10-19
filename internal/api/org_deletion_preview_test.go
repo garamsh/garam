@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -72,11 +71,6 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// 9 agent templates, kept from before they were retired.
-	for i := range 9 {
-		f.agents.keepTemplate(retiredTemplate(slug, fmt.Sprintf("%016x", i), "Researcher"))
-	}
-
 	// 8 policies. The engine owns them and returns the whole list.
 	f.policies.EXPECT().ListPolicies(mock.Anything, orgGRN).
 		Return(make([]*api.Policy, 8), nil).Once()
@@ -92,7 +86,6 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 	assert.Equal(t, 8, body.Counts.Policies)
 	assert.Equal(t, 4, body.Counts.Agents)
 	assert.Equal(t, 5, body.Counts.AgentDefinitions)
-	assert.Equal(t, 9, body.Counts.AgentTemplates)
 	assert.Equal(t, 6, body.Counts.Operators)
 	assert.Equal(t, 7, body.Counts.Consents)
 }

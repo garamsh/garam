@@ -5,12 +5,11 @@ import (
 	"slices"
 )
 
-// Inventory record kinds: an agent garam holds a row for, a definition
-// no operator claimed, and a template.
+// Inventory record kinds: an agent garam holds a row for, and a
+// definition no operator claimed.
 const (
 	InventoryAgent      = "agent"
 	InventoryDefinition = "definition"
-	InventoryTemplate   = "template"
 )
 
 // Dispositions an inventory record states for its source.
@@ -21,8 +20,8 @@ const (
 	// whose cutover it refuses until it parses.
 	DispositionPreserveAndBlock = "preserve-and-block"
 	// DispositionRetain is a record that stays in garam and is not
-	// imported: an unclaimed definition, a template, or the source of
-	// an agent already fenced.
+	// imported: an unclaimed definition, or the source of an agent
+	// already fenced.
 	DispositionRetain = "retain"
 )
 
@@ -69,7 +68,6 @@ type InventorySummary struct {
 	Org         string `json:"org"`
 	Agents      int    `json:"agents"`
 	Definitions int    `json:"definitions"`
-	Templates   int    `json:"templates"`
 }
 
 // StoredValues is a values payload as stored, read without trusting

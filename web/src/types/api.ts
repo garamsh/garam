@@ -571,43 +571,6 @@ export interface paths {
         patch: operations["renameAgentDefinition"];
         trace?: never;
     };
-    "/orgs/{org}/agent-templates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List an organization's agent templates. Requires the `member` role.
-         * @description The organization's templates, ordered by name. Authorized on `agent-template:read`. Templates are retired read-only (ADR-0088): no operation creates, changes or deletes one, and each is listed as the record of what it said. Leaves out each template whose own `agent-template:read` the caller is denied.
-         */
-        get: operations["listAgentTemplates"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/orgs/{org}/agent-templates/{template}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read one agent template. Requires the `member` role. */
-        get: operations["getAgentTemplate"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/orgs/{org}/agent-enrollments": {
         parameters: {
             query?: never;
@@ -1273,7 +1236,7 @@ export interface components {
             id: string;
         };
         /** @enum {string} */
-        PermissionResourceType: "group" | "project" | "agent" | "agent-template" | "policy";
+        PermissionResourceType: "group" | "project" | "agent" | "policy";
         PermissionCheckAnswer: {
             results: components["schemas"]["PermissionCheckResult"][];
         };
@@ -1352,8 +1315,6 @@ export interface components {
             agents: number;
             /** @description Agent definitions, which are records of what the organization said an agent should be (ADR-0026). */
             agentDefinitions: number;
-            /** @description Agent templates (ADR-0075). No agent references one, so the count says nothing about the agents defined from them. */
-            agentTemplates: number;
             /** @description Registered operators, each taking its keys with it. A certificate an operator already holds is not counted and outlives the record (ADR-0045). */
             operators: number;
             /** @description Cross-organization consent relations this organization is a side of (ADR-0035). Each is a pair, so deleting this organization removes it for the other organization too, which loses the relation without acting. */
@@ -1583,11 +1544,6 @@ export interface components {
         AgentAssignment: {
             /** @example grn:acme:default:operator:field-one */
             assigneeGrn: string;
-            /**
-             * @description The assignee when it is an operator, and absent when it is a supervisor; it never names a supervisor.
-             * @example grn:acme:default:operator:field-one
-             */
-            operatorGrn?: string;
             epoch: number;
             /**
              * Format: date-time
@@ -1751,28 +1707,13 @@ export interface components {
             [key: string]: string;
         };
         /**
-         * @description What the organization calls an agent or a template: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
+         * @description What the organization calls an agent: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
          * @example Research assistant
          */
         AgentName: string;
         /** @description A change to what the organization calls a defined agent. */
         AgentDefinitionPatch: {
             name: components["schemas"]["AgentName"];
-        };
-        /** @description A starting point an organization kept for defining agents (ADR-0075), retired read-only (ADR-0088). It names no operator and no agent, and no definition records which template it copied. Agents are created from the Operator control service's templates; this is the record of what one said. */
-        AgentTemplate: {
-            /** @example grn:acme:default:agent-template:7c1e2a9b3d4f5a60 */
-            grn: string;
-            orgGrn: string;
-            name: components["schemas"]["AgentName"];
-            description: string;
-            values: components["schemas"]["AgentValues"];
-            /** @description The member that created the template. */
-            createdBy: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
         };
         /** @description What an organization said an agent should be (ADR-0026), written before garam stopped accepting definitions (ADR-0090). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim. */
         AgentDefinition: {
@@ -1909,8 +1850,6 @@ export interface components {
         policy: string;
         /** @description Agent identifier (the last GRN segment). */
         agent: string;
-        /** @description Agent template identifier (the last GRN segment). */
-        template: string;
         /** @description A key's fingerprint, its base64url SHA-256 RFC 7638 thumbprint. */
         kid: string;
         /** @description Operator identifier (the last GRN segment). */
@@ -3062,60 +3001,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    listAgentTemplates: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The organization's templates. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTemplate"][];
-                };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    getAgentTemplate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-                /** @description Agent template identifier (the last GRN segment). */
-                template: components["parameters"]["template"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The template. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTemplate"];
-                };
-            };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];

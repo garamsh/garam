@@ -1,39 +1,16 @@
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
-import {
-  seedArchivedTemplate,
-  seedCutoverDefinition,
-  seedDefinition,
-  type Seed,
-} from "./seed";
+import { seedCutoverDefinition, seedDefinition, type Seed } from "./seed";
 
-test.describe("garam's retired templates", () => {
-  test("the console shows none of them, and the new agent page offers no garam form", async ({
+test.describe("no garam form", () => {
+  test("the new agent page offers no garam form, and garam accepts no definition", async ({
     page,
     signedIn,
   }) => {
-    const agents = `/console/orgs/${signedIn.orgSlug}/agents`;
-    const kept = await seedArchivedTemplate(signedIn, "Researcher", {
-      workspace: "papers",
-    });
-
-    // Their pages left the console (ADR-0116).
-    for (const href of [
-      `${agents}/templates`,
-      `${agents}/templates/${kept.identifier}`,
-    ]) {
-      // A streamed notFound() answers 200, so the page says it instead.
-      await page.goto(href);
-      await expect(
-        page.getByRole("heading", { level: 1, name: "Page not found" }),
-      ).toBeVisible();
-      await expect(page.getByText("Researcher")).toHaveCount(0);
-    }
-
-    // The new agent page offers the control service alone: no garam
-    // template and no form to define an agent in garam (ADR-0090). Its
-    // control service step is the control that the page rendered.
-    await page.goto(`${agents}/new?template=${kept.identifier}`);
+    // The new agent page offers the control service alone: no form to
+    // define an agent in garam (ADR-0090). Its control service step is
+    // the control that the page rendered.
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     await expect(
       page.getByRole("heading", {
         level: 2,
@@ -41,17 +18,10 @@ test.describe("garam's retired templates", () => {
         exact: true,
       }),
     ).toBeVisible();
-    await expect(page.getByText("Researcher")).toHaveCount(0);
     await expect(page.getByLabel("Operator", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("textbox")).toHaveCount(0);
 
-    // The template's write routes and the define route are closed at
-    // garam itself.
-    const replaced = await page.request.put(
-      `/api/orgs/${signedIn.orgSlug}/agent-templates/${kept.identifier}`,
-      { data: { name: "Analyst", values: {} } },
-    );
-    expect(replaced.status()).toBe(405);
+    // The define route is closed at garam itself.
     const defined = await page.request.post(
       `/api/orgs/${signedIn.orgSlug}/agent-definitions`,
       {

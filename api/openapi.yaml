@@ -1252,55 +1252,6 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
-  /orgs/{org}/agent-templates:
-    get:
-      operationId: listAgentTemplates
-      tags: [agent]
-      summary: List an organization's agent templates. Requires the `member` role.
-      description: >-
-        The organization's templates, ordered by name. Authorized on
-        `agent-template:read`. Templates are retired read-only
-        (ADR-0088): no operation creates, changes or deletes one, and
-        each is listed as the record of what it said. Leaves out each
-        template whose own `agent-template:read` the caller is denied.
-      parameters:
-        - $ref: '#/components/parameters/org'
-      responses:
-        '200':
-          description: The organization's templates.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/AgentTemplate'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-  /orgs/{org}/agent-templates/{template}:
-    get:
-      operationId: getAgentTemplate
-      tags: [agent]
-      summary: Read one agent template. Requires the `member` role.
-      parameters:
-        - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/template'
-      responses:
-        '200':
-          description: The template.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentTemplate'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
   /orgs/{org}/agent-enrollments:
     get:
       operationId: listAgentEnrollments
@@ -2679,14 +2630,6 @@ components:
       x-go-name: AgentSlug
       schema:
         type: string
-    template:
-      name: template
-      in: path
-      required: true
-      description: Agent template identifier (the last GRN segment).
-      x-go-name: TemplateSlug
-      schema:
-        type: string
     kid:
       name: kid
       in: path
@@ -2978,7 +2921,7 @@ components:
           example: eng
     PermissionResourceType:
       type: string
-      enum: [group, project, agent, agent-template, policy]
+      enum: [group, project, agent, policy]
     PermissionCheckAnswer:
       type: object
       required: [results]
@@ -3126,7 +3069,6 @@ components:
         - policies
         - agents
         - agentDefinitions
-        - agentTemplates
         - operators
         - consents
       properties:
@@ -3166,12 +3108,6 @@ components:
           description: >-
             Agent definitions, which are records of what the
             organization said an agent should be (ADR-0026).
-        agentTemplates:
-          type: integer
-          minimum: 0
-          description: >-
-            Agent templates (ADR-0075). No agent references one, so the
-            count says nothing about the agents defined from them.
         operators:
           type: integer
           minimum: 0
@@ -3585,12 +3521,6 @@ components:
         assigneeGrn:
           type: string
           example: grn:acme:default:operator:field-one
-        operatorGrn:
-          type: string
-          description: >-
-            The assignee when it is an operator, and absent when it is
-            a supervisor; it never names a supervisor.
-          example: grn:acme:default:operator:field-one
         epoch:
           type: integer
           minimum: 1
@@ -3878,7 +3808,7 @@ components:
     AgentName:
       type: string
       description: >-
-        What the organization calls an agent or a template: at most 100
+        What the organization calls an agent: at most 100
         characters once surrounding space is trimmed, and at least one.
         It identifies nothing — two may share one — so a consumer that
         must tell them apart reads the GRN beside it (ADR-0075).
@@ -3890,36 +3820,6 @@ components:
       properties:
         name:
           $ref: '#/components/schemas/AgentName'
-    AgentTemplate:
-      type: object
-      description: >-
-        A starting point an organization kept for defining agents
-        (ADR-0075), retired read-only (ADR-0088). It names no operator
-        and no agent, and no definition records which template it
-        copied. Agents are created from the Operator control service's
-        templates; this is the record of what one said.
-      required: [grn, orgGrn, name, description, values, createdBy, createdAt, updatedAt]
-      properties:
-        grn:
-          type: string
-          example: grn:acme:default:agent-template:7c1e2a9b3d4f5a60
-        orgGrn:
-          type: string
-        name:
-          $ref: '#/components/schemas/AgentName'
-        description:
-          type: string
-        values:
-          $ref: '#/components/schemas/AgentValues'
-        createdBy:
-          type: string
-          description: The member that created the template.
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
     AgentDefinition:
       type: object
       description: >-

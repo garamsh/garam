@@ -1438,38 +1438,6 @@ func (q *Queries) InventoryAttempts(ctx context.Context, orgGrn string) ([]Inven
 	return items, nil
 }
 
-const inventoryTemplates = `-- name: InventoryTemplates :many
-SELECT t.grn, t.name, t.agent_values FROM agent_templates t
-WHERE t.org_grn = $1
-ORDER BY t.grn
-`
-
-type InventoryTemplatesRow struct {
-	Grn         string
-	Name        string
-	AgentValues []byte
-}
-
-func (q *Queries) InventoryTemplates(ctx context.Context, orgGrn string) ([]InventoryTemplatesRow, error) {
-	rows, err := q.db.Query(ctx, inventoryTemplates, orgGrn)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []InventoryTemplatesRow
-	for rows.Next() {
-		var i InventoryTemplatesRow
-		if err := rows.Scan(&i.Grn, &i.Name, &i.AgentValues); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const inventoryUnclaimedDefinitions = `-- name: InventoryUnclaimedDefinitions :many
 SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.name FROM agent_definitions d
 WHERE d.org_grn = $1 AND NOT EXISTS (SELECT 1 FROM agents a WHERE a.grn = d.agent_grn)

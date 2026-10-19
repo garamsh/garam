@@ -228,8 +228,8 @@ func rowToAgent(row db.Agent) (*Agent, error) {
 	}, nil
 }
 
-// CountByOrg counts the organization's agents, definitions and
-// templates, which deleting the organization removes with it. One
+// CountByOrg counts the organization's agents and definitions, which
+// deleting the organization removes with it. One
 // query, so the numbers describe one moment rather than several.
 func (s *PostgresStore) CountByOrg(ctx context.Context, orgGRN grn.GRN) (OrgCounts, error) {
 	row, err := s.q.CountAgentsByOrg(ctx, orgGRN.String())
@@ -239,6 +239,5 @@ func (s *PostgresStore) CountByOrg(ctx context.Context, orgGRN grn.GRN) (OrgCoun
 	return OrgCounts{
 		Agents:      int(row.AgentCount),
 		Definitions: int(row.DefinitionCount),
-		Templates:   int(row.TemplateCount),
 	}, nil
 }

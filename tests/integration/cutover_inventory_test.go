@@ -43,8 +43,8 @@ func runInventory(t *testing.T, slug string) ([]map[string]any, string, error) {
 // TestCutoverInventory_AccountsForEverySourceRecordWithoutAValue lays
 // out one organization holding each kind of record the cutover meets:
 // a claimed definition, one whose stored values no longer parse, one
-// no operator claimed, an agent no definition describes, one already
-// activated, and a template. The inventory answers one line each,
+// no operator claimed, an agent no definition describes, and one
+// already activated. The inventory answers one line each,
 // closed by counts equal to the organization's own, and prints a
 // digest of every value and no value.
 func TestCutoverInventory_AccountsForEverySourceRecordWithoutAValue(t *testing.T) {
@@ -73,8 +73,6 @@ func TestCutoverInventory_AccountsForEverySourceRecordWithoutAValue(t *testing.T
 	_, _, err = f.exec.Activate(ctx, first(t, activated))
 	require.NoError(t, err)
 
-	template := keepTemplate(t, f.p, "acme", "Starter", agent.Values{"model": "inventory-secret-four"})
-
 	lines, printed, err := runInventory(t, "acme")
 	require.NoError(t, err)
 	byGRN := map[string]map[string]any{}
@@ -94,8 +92,6 @@ func TestCutoverInventory_AccountsForEverySourceRecordWithoutAValue(t *testing.T
 		assert.Equal(t, want[0], got["record"], "%s", g)
 		assert.Equal(t, want[1], got["class"], "%s", g)
 	}
-	require.Contains(t, byGRN, template.String())
-	assert.Equal(t, "template", byGRN[template.String()]["record"])
 
 	eligible := byGRN[f.agent.String()]
 	assert.Equal(t, "import", eligible["disposition"])
@@ -114,10 +110,10 @@ func TestCutoverInventory_AccountsForEverySourceRecordWithoutAValue(t *testing.T
 	assert.Equal(t, "summary", summary["record"])
 	assert.EqualValues(t, counts.Agents, summary["agents"])
 	assert.EqualValues(t, counts.Definitions, summary["definitions"])
-	assert.EqualValues(t, counts.Templates, summary["templates"])
-	assert.Len(t, lines, counts.Agents+1+counts.Templates+1, "one line per agent, unclaimed definition and template")
+	assert.NotContains(t, summary, "templates", "garam keeps no template to count (ADR-0117)")
+	assert.Len(t, lines, counts.Agents+1+1, "one line per agent and unclaimed definition")
 
-	for _, secret := range []string{"inventory-secret-one", "inventory-secret-two", "inventory-secret-three", "inventory-secret-four"} {
+	for _, secret := range []string{"inventory-secret-one", "inventory-secret-two", "inventory-secret-three"} {
 		assert.NotContains(t, printed, secret)
 	}
 	assert.Contains(t, printed, agent.ValueDigest("inventory-secret-three").String(),

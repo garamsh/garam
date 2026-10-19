@@ -12,7 +12,7 @@ const agent = {
 };
 
 describe("AgentParser", () => {
-  it("loads an assignment by its assignee alone, and reads no legacy operatorGrn", () => {
+  it("loads an assignment by its assignee alone", () => {
     const held = {
       ...agent,
       assignment: {
@@ -21,26 +21,9 @@ describe("AgentParser", () => {
         since: "2026-01-02T03:04:05Z",
       },
     };
-    // An operator-held agent may still name its operator on the legacy
-    // field; the console reads the assignee instead, so the backend can
-    // drop it (#1592).
-    const operated = {
-      ...agent,
-      assignment: {
-        assigneeGrn: "grn:acme:default:operator:field-one",
-        operatorGrn: "grn:acme:default:operator:field-one",
-        epoch: 2,
-        since: "2026-01-02T03:04:05Z",
-      },
-    };
     expect(AgentParser.parse(held).assignment?.assigneeGrn).toBe(
       "grn:acme:default:supervisor:0a1b2c3d4e5f6071",
     );
-    expect(AgentParser.parse(operated).assignment).toEqual({
-      assigneeGrn: "grn:acme:default:operator:field-one",
-      epoch: 2,
-      since: "2026-01-02T03:04:05Z",
-    });
     // The control: the same shape without an assignee is refused, so
     // the loads above are the assignee and not a lax parser.
     expect(() =>

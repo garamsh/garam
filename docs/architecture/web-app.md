@@ -169,8 +169,7 @@ A section may also declare named views beside its entries, which the
 breadcrumb names by label: Permissions declares Attachments, at
 `…/permissions/attachments`
 ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)).
-garam's retired templates have no page: the console shows none of
-them (ADR-0116, #1593).
+garam keeps no template of its own, so none has a page (ADR-0117).
 
 The shell's links prefetch on intent, not on sight. The sidebar's
 sections and the breadcrumb are `IntentLink`s

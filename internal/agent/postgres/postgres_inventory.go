@@ -11,7 +11,7 @@ import (
 
 // Inventory reads every source record of the organization from one
 // snapshot and answers one record each, in the order agents,
-// unclaimed definitions, templates, then the summary that counts them.
+// unclaimed definitions, then the summary that counts them.
 // It writes nothing and answers no value, only a digest of each.
 func (s *Store) Inventory(ctx context.Context, orgGRN grn.GRN) ([]agent.InventoryRecord, agent.InventorySummary, error) {
 	var records []agent.InventoryRecord
@@ -56,19 +56,6 @@ func (s *Store) Inventory(ctx context.Context, orgGRN grn.GRN) ([]agent.Inventor
 			})
 		}
 		summary.Definitions += len(unclaimed)
-
-		templates, err := q.InventoryTemplates(ctx, orgGRN.String())
-		if err != nil {
-			return storageError(err, "inventory templates", nil, nil)
-		}
-		for _, row := range templates {
-			stored := agent.ReadStoredValues(row.AgentValues)
-			records = append(records, agent.InventoryRecord{
-				Record: agent.InventoryTemplate, GRN: row.Grn, Name: row.Name,
-				Keys: stored.Keys, ValueSHA256: stored.ValueSHA256, Disposition: agent.DispositionRetain,
-			})
-		}
-		summary.Templates = len(templates)
 		return nil
 	})
 	if err != nil {

@@ -21,8 +21,8 @@ import (
 // (ADR-0033). A state report is fenced as Postgres fences it: at the
 // epoch the agent is assigned at and at no other.
 //
-// The service reads no template and renames no definition, so those
-// methods come from the nil Store embedded here and panic if called.
+// The service renames no definition, so that method comes from the
+// nil Store embedded here and panics if called.
 type memoryStore struct {
 	Store
 

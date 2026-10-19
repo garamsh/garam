@@ -58,9 +58,8 @@ responsible for and where its boundary falls.** Five artifacts already
 own things a reader might come here for, and none of them is restated:
 
 - `api/openapi.yaml` is the source of truth for every operation the
-  application calls
-  ([ADR-0004](./adr/0004-openapi-first-api.md)), and `web/src/types/api.ts`
-  is generated from it rather than written
+  application calls ([ADR-0004](./adr/0004-openapi-first-api.md)), and
+  `web/src/types/api.ts` is generated from it rather than written
   ([ADR-0019](./adr/0019-machine-openapi-spec.md)).
 - [api-surface.md](./api-surface.md) describes the browser-facing
   listener as a **surface**: what admits a caller to it and what
@@ -326,18 +325,18 @@ It is reached over two paths, and only one of them is the rewrite:
   data.
 
 The two take that address at different times, and that is what binds a
-published image to one deployment. A server-side render reads it when the
-process starts, so a deployment sets it; the browser's rewrite is
-resolved when the image is built, so what is in it is whatever that build
-was given and no environment moves it
-([ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)). Every image
-`.github/workflows/release.yml` publishes is built with
+published image to one deployment. A server-side render reads it when
+the process starts, so a deployment sets it; the browser's rewrite is
+resolved when the image is built, so what is in it is whatever that
+build was given and no environment moves it
+([ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)).
+Every image `.github/workflows/release.yml` publishes is built with
 `http://garam-api:8080` — the api Service a release named `garam`
-renders and no other — so a deployment running a published image installs
-under that release name or makes the name resolve.
-`deploy/charts/garam/README.md` §Choosing a release name is authoritative
-for what a deployment does about it, and `make ci` compares the value the
-release bakes against what the chart renders.
+renders and no other — so a deployment running a published image
+installs under that release name or makes the name resolve.
+`deploy/charts/garam/README.md` §Choosing a release name is
+authoritative for what a deployment does about it, and `make ci`
+compares the value the release bakes against what the chart renders.
 
 The address is server-side only and never reaches a browser. It is
 declared once, as a typed schema in `web/src/env.ts`, parsed at import
@@ -748,8 +747,9 @@ The rest bear on it without being about it:
   — an operator and an agent each report a state elsewhere, and the two
   are what the Agents section reads and shows
 - [ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)
-  — the browser's `/api/*` address is fixed when the image is built, so a
-  published image reaches the api Service a release named `garam` renders
+  — the browser's `/api/*` address is fixed when the image is built, so
+  a published image reaches the api Service a release named `garam`
+  renders
 - [ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
   — a development build of this image bakes the same address, since it
   is built from what the release builds, and is told apart by its tag

@@ -61,11 +61,12 @@ test.describe("signed out", () => {
   }) => {
     await page.goto("/login");
 
-    // This stack sets no GOOGLE_CLIENT_ID (`deploy/local/.env.example`),
-    // so `serve api` registers no provider and `/auth/login/google`
-    // answers 404. The page asks `/auth/providers` and offers what the
-    // backend answers with (ADR-0010), so the button is absent here and
-    // the password form is the way in.
+    // This stack sets no GOOGLE_CLIENT_ID
+    // (`deploy/local/.env.example`), so `serve api` registers no
+    // provider and `/auth/login/google` answers 404. The page asks
+    // `/auth/providers` and offers what the backend answers with
+    // (ADR-0010), so the button is absent here and the password form is
+    // the way in.
     await expect(
       page.getByRole("heading", { name: "Sign in to garam", exact: true }),
     ).toBeVisible();

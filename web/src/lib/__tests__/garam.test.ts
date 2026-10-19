@@ -149,8 +149,8 @@ describe("garamFetch", () => {
 });
 
 // The expected failures a Server Action returns rather than throws
-// (stack-nextjs.md §Errors — returned, thrown, or caught): a refusal and
-// an outage come back as the state a form renders, in a sentence
+// (stack-nextjs.md §Errors — returned, thrown, or caught): a refusal
+// and an outage come back as the state a form renders, in a sentence
 // written for a person, and anything else — a contract garam broke, a
 // bug in this application — is thrown on as the very error it was.
 describe("refusal", () => {

@@ -37,8 +37,8 @@ describe("organization switcher", () => {
   it("names the organization the caller is inside", () => {
     renderSwitcher("/console/orgs/globex/projects");
 
-    // Presence: the trigger's name is the sr-only "Switch organization",
-    // then the org's name and its slug.
+    // Presence: the trigger's name is the sr-only "Switch
+    // organization", then the org's name and its slug.
     expect(screen.getByRole("button", { name: /Globex/ })).toBeInTheDocument();
   });
 
@@ -114,7 +114,8 @@ describe("organization switcher", () => {
     const user = userEvent.setup();
     renderSwitcher("/console/orgs");
 
-    // Presence, as above: the neutral heading follows the sr-only label.
+    // Presence, as above: the neutral heading follows the sr-only
+    // label.
     await user.click(screen.getByRole("button", { name: /Organizations/ }));
 
     expect(
@@ -126,7 +127,8 @@ describe("organization switcher", () => {
     const user = userEvent.setup();
     renderSwitcher("/console/orgs", []);
 
-    // Presence, as above: the neutral heading follows the sr-only label.
+    // Presence, as above: the neutral heading follows the sr-only
+    // label.
     await user.click(screen.getByRole("button", { name: /Organizations/ }));
 
     expect(await screen.findByText("No organizations yet")).toBeInTheDocument();

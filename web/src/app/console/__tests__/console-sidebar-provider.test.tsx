@@ -6,8 +6,8 @@ import { renderServerComponent } from "@/testing/render";
 
 const stored = vi.hoisted(() => ({ value: undefined as string | undefined }));
 
-// The setup file answers every cookie with the session token; the sidebar
-// needs one that carries its own value, or none at all.
+// The setup file answers every cookie with the session token; the
+// sidebar needs one that carries its own value, or none at all.
 vi.mock("next/headers", () => ({
   cookies: () =>
     Promise.resolve({

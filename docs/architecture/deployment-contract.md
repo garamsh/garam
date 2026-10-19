@@ -1,6 +1,8 @@
 # Deployment Contract
 
-What a garam deployment must plan for that no manifest can carry: what readiness reports, what bounds termination, how the migration fails, what the binary enforces about key material, and what is not known.
+What a garam deployment must plan for that no manifest can carry: what
+readiness reports, what bounds termination, how the migration fails,
+what the binary enforces about key material, and what is not known.
 
 ## Contents
 - What it is
@@ -522,14 +524,14 @@ leases lapse, and garam hands those messages out again
 ([ADR-0018](./adr/0018-delivery-acknowledgement.md)). That is why it has
 to outlive the agent beside it — a native sidecar rather than an
 ordinary container — and why its own termination grace period is budget
-on top of the agent's drain rather than shared with it. When it fires, the listener closes at once,
-in-flight requests and RPCs finish within a ten-second bound, and past
-it they are abandoned deliberately by the process rather than by the
-kubelet's SIGKILL. The process then exits 0: a requested shutdown is not
-an error, so a pod a rollout or a delete terminates records `Completed`,
-not `Error` (#338 settled this; the assertion is
-`tests/e2e/shutdown_test.go`, which SIGTERMs the built binary as each of
-the three serve processes and requires exit 0).
+on top of the agent's drain rather than shared with it. When it fires,
+the listener closes at once, in-flight requests and RPCs finish within a
+ten-second bound, and past it they are abandoned deliberately by the
+process rather than by the kubelet's SIGKILL. The process then exits 0:
+a requested shutdown is not an error, so a pod a rollout or a delete
+terminates records `Completed`, not `Error` (#338 settled this; the
+assertion is `tests/e2e/shutdown_test.go`, which SIGTERMs the built
+binary as each of the three serve processes and requires exit 0).
 
 Both terminations exit 0, so which of the two happened is in the log and
 nowhere else: one that reached the bound and dropped what was still in
@@ -567,11 +569,11 @@ alive.
 ## The PodSecurity level is the deployment's
 
 The workloads the chart renders are written to satisfy PodSecurity
-`restricted`, and the chart renders no namespace — so the level itself is
-set where the namespace is created, which is the deployment's. A cluster
-enforcing `baseline`, or enforcing nothing, admits them equally: the
-fields the level reads narrow what a pod asks for and require nothing of
-the cluster in return.
+`restricted`, and the chart renders no namespace — so the level itself
+is set where the namespace is created, which is the deployment's. A
+cluster enforcing `baseline`, or enforcing nothing, admits them equally:
+the fields the level reads narrow what a pod asks for and require
+nothing of the cluster in return.
 
 Nothing in this repository asks an apiserver whether that holds. The
 render is checked here and the admission is not, so a deployment

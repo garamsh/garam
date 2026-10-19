@@ -3,8 +3,8 @@ import type { ReactNode } from "react";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
 
-// `SidebarProvider` writes this cookie on every toggle without exporting
-// its name.
+// `SidebarProvider` writes this cookie on every toggle without
+// exporting its name.
 const SIDEBAR_COOKIE = "sidebar_state";
 
 /**

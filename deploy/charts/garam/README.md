@@ -1,6 +1,8 @@
 # garam Helm Chart
 
-The description of how garam is deployed: the five workloads it runs, the ports they answer on, and every configuration value a deployment supplies.
+The description of how garam is deployed: the five workloads it runs,
+the ports they answer on, and every configuration value a deployment
+supplies.
 
 ## Contents
 - What this is
@@ -68,8 +70,8 @@ a node failure.
 Every object here is named after the release, and the name is a
 deployment's to choose — with one exception no render shows. **A
 published web image reaches the api Service a release named `garam`
-renders.** The browser's `/api/*` calls are rewritten to an address baked
-into the image when it is built, and every image
+renders.** The browser's `/api/*` calls are rewritten to an address
+baked into the image when it is built, and every image
 `.github/workflows/release.yml` publishes is built with
 `http://garam-api:8080`
 ([ADR-0056](../../../docs/architecture/adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)).
@@ -81,8 +83,8 @@ nothing.
 
 So a deployment pinning `image.web.tag` to a published version installs
 under the release name `garam`, or makes `garam-api` resolve to its own
-api Service — a Service of that name over the same selector labels is one
-shape, and rendering it and checking it are that deployment's. A
+api Service — a Service of that name over the same selector labels is
+one shape, and rendering it and checking it are that deployment's. A
 deployment that builds its own web image bakes its own address and is
 bound to that one instead.
 
@@ -505,14 +507,14 @@ count is zero:
   under the release name `garam` (§Choosing a release name). It renders
   again under `chart-names`' release name as the control: that render
   must name something else, so the equality is read rather than assumed.
-- `chart-guards` — each value file under `ci/refused/` rendered on top of
-  `minimal-values.yaml`, and refused by the guard it is named after: the
-  failure must be an `execution error` from a template, opening with the
-  value the file is named for. A refusal for any other reason — a values
-  file helm cannot parse, a template that stopped somewhere else — is
-  not that guard firing. `minimal-values.yaml` must still render, so a
-  chart that refused everything fails here instead of passing every case
-  above.
+- `chart-guards` — each value file under `ci/refused/` rendered on top
+  of `minimal-values.yaml`, and refused by the guard it is named after:
+  the failure must be an `execution error` from a template, opening with
+  the value the file is named for. A refusal for any other reason — a
+  values file helm cannot parse, a template that stopped somewhere else
+  — is not that guard firing. `minimal-values.yaml` must still render,
+  so a chart that refused everything fails here instead of passing every
+  case above.
 - `chart-security` — the PodSecurity `restricted` comparison against
   every workload §Workload identities declares. The pod spec sets
   `runAsNonRoot: true` and a `seccompProfile` type, every container
@@ -522,11 +524,11 @@ count is zero:
   containers here rely on. The line it prints counts how many took the
   pod's.
 - `chart-package` — `helm package`, then a search of the unpacked
-  artifact for `cpu` and `memory` as keys. Every file not excluded ships,
-  `ci/` included, so a value file reaches a consumer without passing the
-  seven above, each of which reads the source tree instead. This file
-  ships in the artifact too, so it names the two as words rather than as
-  keys.
+  artifact for `cpu` and `memory` as keys. Every file not excluded
+  ships, `ci/` included, so a value file reaches a consumer without
+  passing the seven above, each of which reads the source tree instead.
+  This file ships in the artifact too, so it names the two as words
+  rather than as keys.
 
 The comparisons are what an executable artefact buys over prose: a
 variable added to the source and not to the chart, or an account name
@@ -562,14 +564,14 @@ print.
   platform binds a role through passes.
 - `chart-names` is complete over **rendered object names against the
   63-character limit**, under the longest release name Helm accepts. It
-  reads the name and nothing else: a name inside the limit but wrong,
-  or any other field an apiserver would refuse, passes. It asks no
+  reads the name and nothing else: a name inside the limit but wrong, or
+  any other field an apiserver would refuse, passes. It asks no
   apiserver either — it holds one rule that an apply enforces, which is
   why the rule is written here rather than discovered there. It reads no
-  image either, and the release name it renders under is one no published
-  web image serves: the object names survive it and the `/api/*` rewrite
-  does not, which §Choosing a release name states and `chart-rewrite`
-  reads.
+  image either, and the release name it renders under is one no
+  published web image serves: the object names survive it and the
+  `/api/*` rewrite does not, which §Choosing a release name states and
+  `chart-rewrite` reads.
 - `chart-rewrite` is complete over **one URL against one rendered
   Service**: the `GARAM_API_URL` build argument in
   `.github/workflows/release.yml` against the api Service and port a
@@ -602,12 +604,11 @@ print.
   deployment sets in its own values is that deployment's and reaches no
   file this opens.
 
-`chart-package` reaches one thing
-§Not established in `docs/architecture/deployment-contract.md` says
-garam does not publish: a
-resource figure. Nothing stops the chart from publishing an answer to the
-rest — a read-only root filesystem, replica safety above one, a bound on
-startup — and each of those stays reviewed rather than checked.
+`chart-package` reaches one thing §Not established in
+`docs/architecture/deployment-contract.md` says garam does not publish:
+a resource figure. Nothing stops the chart from publishing an answer to
+the rest — a read-only root filesystem, replica safety above one, a
+bound on startup — and each of those stays reviewed rather than checked.
 
 Nothing checks the rest of what a pod carries — volumes and mounts,
 probe paths and ports, the security-context fields `chart-security` does

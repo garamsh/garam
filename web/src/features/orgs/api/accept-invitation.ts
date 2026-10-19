@@ -38,9 +38,10 @@ export async function acceptInvitation(
     );
   } catch (error) {
     // An unreachable API is a state the form renders, not a throw: the
-    // token is in the URL and no boundary covers this route, so throwing
-    // replaces the console with `global-error.tsx` and the only retry
-    // path the visitor holds is a page that no longer renders.
+    // token is in the URL and no boundary covers this route, so
+    // throwing replaces the console with `global-error.tsx` and the
+    // only retry path the visitor holds is a page that no longer
+    // renders.
     return refusal(error, "acceptInvitation");
   }
 

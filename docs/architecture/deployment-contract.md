@@ -135,16 +135,24 @@ it on neither while that value is empty, its default
 (`deploy/charts/garam/README.md` §Values a deployment must supply); no
 deployment has adopted the workflow below.
 
-- Set `machine.tokenUrl` to the absolute https URL of the machine
-  listener's `/oauth/token` as a caller outside the cluster names it,
-  with no user information, query or fragment — the render refuses any
-  other shape, as the binary does at startup — and keep it for the
-  deployment's life: every assertion names it as its audience byte for
-  byte, and changing it refuses every Operator until each is given the
-  new value. Unset, `serve api` issues no key, refusing with 409 and
-  the reason `key_issuance_unconfigured`, and `serve machine` answers
-  the exchange 503. It is not `machine.issuer`
-  (`GARAM_MACHINE_ISSUER`), the message issuer.
+- Set `machine.tokenUrl` to the one absolute https URL of the machine
+  listener's `/oauth/token` that every operator and control service
+  reaches it by, directly or by TCP passthrough, so the TLS each meets
+  is the listener's own. The URL carries no user information, query or
+  fragment; the render refuses any other shape, as the binary does at
+  startup. Keep it for the deployment's life. Every assertion names it
+  as its audience byte for byte, so changing it refuses every Operator
+  until each is re-keyed with the new value. Unset, `serve api` issues
+  no key, refusing with 409 and the reason
+  `key_issuance_unconfigured`, and `serve machine` answers the
+  exchange 503. It is not `machine.issuer` (`GARAM_MACHINE_ISSUER`),
+  the message issuer.
+  - Which name that is follows from where the callers run. A
+    deployment whose operators and control services all run in its
+    cluster may use the machine Service's cluster name. One that
+    expects a caller outside the cluster needs a name reachable from
+    there, such as a TLS-passthrough route, and every caller then uses
+    that name, the in-cluster ones included.
 
 - Place each controller/control-service private key in its own
   owner-only file via the deployment's secret mechanism, never in

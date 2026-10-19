@@ -254,14 +254,21 @@ and is empty by default. It renders `GARAM_MACHINE_TOKEN_URL` on both
 the key `serve api` issues and the audience `serve machine` compares
 cannot disagree. Empty renders the variable on neither: `serve api`
 then refuses key issuance with 409 `key_issuance_unconfigured` and
-`serve machine` answers the exchange 503. The value is the machine
-listener's `/oauth/token` as a caller outside the cluster names it; it
-is kept for the deployment's life, because every assertion names it as
-its audience byte for byte; and it is not `machine.issuer`, the message
-issuer. Set, the render refuses what the binary refuses at startup —
-anything but an https URL with a host and no user information, query
-or fragment — and names the value. No private key passes through it:
-an operator's key stays the owner-only file
+`serve machine` answers the exchange 503. The value is the one URL of
+the machine listener's `/oauth/token` that every operator and control
+service reaches it by, directly or by TCP passthrough as §Exposure is
+the cluster owner's requires. It is kept for the deployment's life,
+because every assertion names it as its audience byte for byte:
+changing it refuses every operator until each is re-keyed with the new
+value. It is not `machine.issuer`, the message issuer. Which name it is
+follows from where the callers run. A deployment whose operators and
+control services all run in its cluster may use the machine Service's
+cluster name; one that expects a caller outside the cluster needs a
+name reachable from there, such as a TLS-passthrough route, which every
+caller then uses. Set, the render refuses what the binary refuses at
+startup — anything but an https URL with a host and no user
+information, query or fragment — and names the value. No private key
+passes through it: an operator's key stays the owner-only file
 `deployment-contract.md` §Operator key and enrollment rollout names.
 
 `resources` is empty on every workload. No figure has been measured for

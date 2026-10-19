@@ -172,12 +172,10 @@ func TestCheckPermissions_RefusesANonMember(t *testing.T) {
 }
 
 // TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision holds
-// that an action enforcement decides on more than the engine's Check is
-// answered unknown where everything this operation reads allows it:
-// one case for a delegation grant, whose mint's check allows here, and
-// one for current policy, which this operation does not read. The
-// engine here allows everything, and the plainly checked action is the
-// control.
+// that an action a delegation grant also decides is answered unknown
+// where everything this operation reads allows it: the mint's check
+// allows here, and the grant is not read. The engine here allows
+// everything, and the plainly checked action is the control.
 func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -188,16 +186,48 @@ func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T)
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
 		apigen.PermissionCheck{Action: org.ActionAgentCreate},
-		apigen.PermissionCheck{Action: org.ActionAgentEnroll},
 		apigen.PermissionCheck{Action: org.ActionOperatorRegister},
 	), owner)
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
-	require.Len(t, results, 3)
+	require.Len(t, results, 2)
 	assert.Equal(t, apigen.DecisionUnknown, results[0].Decision, "a delegation grant decides agent:create")
-	assert.Equal(t, apigen.DecisionUnknown, results[1].Decision, "current policy decides agent:enroll")
-	assert.Equal(t, apigen.DecisionAllow, results[2].Decision, "Check alone decides operator:register")
+	assert.Equal(t, apigen.DecisionAllow, results[1].Decision, "Check alone decides operator:register")
+}
+
+// TestCheckPermissions_AnswersAgentEnrollAsItsWritesDecide holds that
+// agent:enroll is put to the check every approval, withdrawal and
+// revoke runs, with the caller, the organization and the object the
+// pair names. That check allows the organization and refuses the
+// agent here, so the two answers differ by the object alone; a check
+// that cannot decide fails the request rather than answering it.
+func TestCheckPermissions_AnswersAgentEnrollAsItsWritesDecide(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	agentGRN := grn.New(slug, grn.DefaultProject, "agent", "a1")
+	f.standalone.EXPECT().AuthorizeEnroll(mock.Anything, userGRNOf("owner-sub"), orgGRNOf(slug), orgGRNOf(slug)).
+		Return(nil).Once()
+	f.standalone.EXPECT().AuthorizeEnroll(mock.Anything, userGRNOf("owner-sub"), orgGRNOf(slug), agentGRN).
+		Return(errorx.New(errorx.KindPermissionDenied, "insufficient role")).Once()
+
+	path := "/orgs/" + slug + "/permission-checks"
+	rec := f.do(t, "POST", path, checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionAgentEnroll},
+		apigen.PermissionCheck{Action: org.ActionAgentEnroll,
+			Resource: &apigen.PermissionResource{Type: apigen.PermissionResourceTypeAgent, Id: agentGRN.Identifier}},
+	), owner)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
+	require.Len(t, results, 2)
+	assert.Equal(t, apigen.DecisionAllow, results[0].Decision, "the check allows the organization")
+	assert.Equal(t, apigen.DecisionDeny, results[1].Decision, "the check refuses the agent")
+
+	f.standalone.EXPECT().AuthorizeEnroll(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(errorx.New(errorx.KindUnavailable, "current authorization")).Once()
+	rec = f.do(t, "POST", path, checksBody(t, apigen.PermissionCheck{Action: org.ActionAgentEnroll}), owner)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code, rec.Body.String())
 }
 
 // TestCheckPermissions_AsksAGrantActionAsItsMintDoes holds that every
@@ -349,6 +379,7 @@ func TestCheckPermissions_EveryActionPairsWithSomething(t *testing.T) {
 	f.authority.EXPECT().AuthorizeOperation(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil).Maybe()
 	f.authority.EXPECT().AuthorizeDelegation(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	f.standalone.EXPECT().AuthorizeEnroll(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	actions := org.Actions()
 	require.NotEmpty(t, actions)
 

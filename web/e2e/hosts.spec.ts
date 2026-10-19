@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
-import { seedMember } from "./seed";
+import { seedHosts, seedMember } from "./seed";
 
 /** What `garam standalone prepare` prints for a host, made up here. */
 function prepared(): string {
@@ -44,12 +44,13 @@ test.describe("hosts", () => {
     await expect(row).toContainText("Withdrawn");
   });
 
-  test("offers a member approving, which garam decides on current policy and refuses", async ({
+  test("keeps a member's approve, withdraw and revoke on the page, inactive, and sends garam nothing", async ({
     page,
     context,
     baseURL,
     signedIn,
   }) => {
+    const hosts = await seedHosts(signedIn);
     const member = await seedMember(signedIn);
     await context.clearCookies();
     await context.addCookies([
@@ -64,21 +65,37 @@ test.describe("hosts", () => {
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/hosts`);
     await expectHydrated(page);
+    const approvals = page.getByRole("table", { name: "Approvals" });
+    const pending = approvals.getByRole("row", {
+      name: new RegExp(hosts.pending),
+    });
+    const supervisor = page
+      .getByRole("table", { name: "Supervisors" })
+      .getByRole("row", { name: new RegExp(hosts.active) });
+    await expect(pending).toContainText("Waiting for the host");
+    await expect(supervisor).toContainText("Active");
 
-    // The permission check answers agent:enroll as unknown, since the
-    // current policy decides it, so the control is offered and the
-    // write refused (ADR-0103).
-    await page.getByRole("button", { name: "Approve a host" }).click();
-    const dialog = page.getByRole("alertdialog", { name: "Approve a host" });
-    await dialog
-      .getByRole("textbox", { name: "What garam standalone prepare printed" })
-      .fill(prepared());
-    await dialog.getByRole("textbox", { name: "Host name" }).fill("build-10");
-    await dialog.getByRole("button", { name: "Approve host" }).click();
-
-    await expect(dialog.getByRole("alert")).toContainText(
-      "You don't have permission to do this.",
-    );
+    // The permission check answers agent:enroll from the check every
+    // approval, withdrawal and revoke runs, which denies a member.
+    const writes: string[] = [];
+    page.on("request", (request) => {
+      if (request.method() !== "GET") writes.push(request.url());
+    });
+    for (const control of [
+      page.getByRole("button", { name: "Approve a host" }),
+      pending.getByRole("button", { name: "Withdraw" }),
+      supervisor.getByRole("button", { name: "Revoke" }),
+    ]) {
+      await expect(control).toHaveAttribute("aria-disabled", "true");
+      await expect(control).toHaveAccessibleDescription(
+        "Approving, withdrawing and revoking hosts needs agent:enroll, and no policy grants it to you.",
+      );
+      // Playwright refuses an aria-disabled control unless forced, so
+      // forcing is what shows its click does nothing.
+      await control.click({ force: true });
+    }
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    expect(writes).toEqual([]);
   });
 
   for (const theme of ["light", "dark"] as const) {

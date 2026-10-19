@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { Client } from "pg";
 
@@ -642,4 +642,81 @@ export async function seedKeyExchange(
   } finally {
     await client.end();
   }
+}
+
+/** The hosts `seedHosts` wrote, by the name each was approved under. */
+export type SeededHosts = { pending: string; active: string };
+
+/**
+ * Writes two approvals by the seeded owner: one the host has not spent,
+ * and one spent under standalone-enrollment.v2, whose supervisor runs a
+ * new agent. Only a host on the machine listener spends an approval
+ * (ADR-0082), and no route a browser reaches does, so the spending is
+ * seeded as that route writes it.
+ */
+export async function seedHosts(seed: Seed): Promise<SeededHosts> {
+  const suffix = randomBytes(4).toString("hex");
+  const hosts: SeededHosts = {
+    pending: `pending-${suffix}`,
+    active: `active-${suffix}`,
+  };
+  const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
+  const grnOf = (type: string) =>
+    `grn:${seed.orgSlug}:default:${type}:${randomBytes(8).toString("hex")}`;
+  const approve = (client: Client, host: string, agentGrn: string) =>
+    client.query<{ id: string; supervisor_grn: string }>(
+      `INSERT INTO agent_enrollments
+         (id, org_grn, agent_grn, supervisor_grn, host_name, request_id,
+          approved_by, secret_sha256, expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now() + interval '1 hour', now())
+       RETURNING id, supervisor_grn`,
+      [
+        randomUUID(),
+        orgGrn,
+        agentGrn,
+        grnOf("supervisor"),
+        host,
+        `e2e-${randomBytes(6).toString("hex")}`,
+        seed.userGrn,
+        randomBytes(32),
+      ],
+    );
+  const client = new Client({ connectionString: DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query("BEGIN");
+    await approve(client, hosts.pending, grnOf("agent"));
+
+    const agentGrn = grnOf("agent");
+    await client.query(
+      `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
+       VALUES ($1, $2, 'ready', 'connected', now(), now())`,
+      [agentGrn, orgGrn],
+    );
+    await client.query(
+      `INSERT INTO agent_executions (agent_grn, updated_at) VALUES ($1, now())`,
+      [agentGrn],
+    );
+    const {
+      rows: [spent],
+    } = await approve(client, hosts.active, agentGrn);
+    await client.query(
+      `UPDATE agent_enrollments
+          SET consumed_at = now(), request_sha256 = $2, epoch = 1, lineage = $3
+        WHERE id = $1`,
+      [spent!.id, randomBytes(32), randomUUID()],
+    );
+    await client.query(
+      `INSERT INTO agent_supervisors (grn, agent_grn, enrollment_id, host_name, registered_at)
+       VALUES ($1, $2, $3, $4, now())`,
+      [spent!.supervisor_grn, agentGrn, spent!.id, hosts.active],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    await client.end();
+  }
+  return hosts;
 }

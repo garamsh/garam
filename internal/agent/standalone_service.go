@@ -42,6 +42,11 @@ type StandaloneService interface {
 	// ListSupervisors pages the organization's supervisor
 	// registrations.
 	ListSupervisors(ctx context.Context, actor, org grn.GRN, f listfilter.Filter) ([]SupervisorSummary, error)
+	// AuthorizeEnroll decides whether the actor currently holds
+	// agent:enroll on object: the organization a new host's agent
+	// joins, or the agent a replacement, a withdrawal or a revoke acts
+	// on. Approve, Withdraw and Revoke ask exactly this.
+	AuthorizeEnroll(ctx context.Context, actor, org, object grn.GRN) error
 }
 
 type standaloneService struct {
@@ -84,7 +89,7 @@ func (s *standaloneService) Approve(ctx context.Context, in ApprovalInput) (*Enr
 		}
 		object = r.Agent
 	}
-	if err := authorizeEnroll(ctx, s.authorizer, in.Actor, in.Org, object); err != nil {
+	if err := s.AuthorizeEnroll(ctx, in.Actor, in.Org, object); err != nil {
 		return nil, false, err
 	}
 	agentGRN := object
@@ -139,7 +144,7 @@ func (s *standaloneService) Withdraw(ctx context.Context, actor, org grn.GRN, id
 	if err != nil {
 		return err
 	}
-	if err := authorizeEnroll(ctx, s.authorizer, actor, org, e.object()); err != nil {
+	if err := s.AuthorizeEnroll(ctx, actor, org, e.object()); err != nil {
 		return err
 	}
 	return s.store.Withdraw(ctx, org, id)
@@ -153,7 +158,7 @@ func (s *standaloneService) Revoke(ctx context.Context, actor, org, supervisor g
 	if err != nil {
 		return err
 	}
-	if err := authorizeEnroll(ctx, s.authorizer, actor, org, registered.Agent); err != nil {
+	if err := s.AuthorizeEnroll(ctx, actor, org, registered.Agent); err != nil {
 		return err
 	}
 	return s.store.Revoke(ctx, org, supervisor)
@@ -189,6 +194,10 @@ func (e *Enrollment) object() grn.GRN {
 		return e.Agent
 	}
 	return e.Org
+}
+
+func (s *standaloneService) AuthorizeEnroll(ctx context.Context, actor, org, object grn.GRN) error {
+	return authorizeEnroll(ctx, s.authorizer, actor, org, object)
 }
 
 // authorizeEnroll asks authorizer for agent:enroll.

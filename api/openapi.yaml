@@ -453,9 +453,14 @@ paths:
         `setOperatorControlEndpoint` and `clearOperatorControlEndpoint`
         run, on the same current policy, and that check is all of their
         authority, so it is answered `allow` or `deny`. `agent:enroll`
-        is decided on the organization's current policy and answered
-        `unknown`. A caller renders the control for `unknown` and lets
-        the operation decide.
+        is put to the check `approveAgentEnrollment`,
+        `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on
+        the same current policy, on the organization for a new host and
+        on the agent for one acting on an agent; that check is all of
+        their authority, so it is answered `allow` or `deny`. `unknown`
+        is answered only where a delegation grant is left to decide. A
+        caller renders the control for `unknown` and lets the operation
+        decide.
 
 
         A pair without `resource` asks about the organization itself.
@@ -524,8 +529,8 @@ paths:
 
 
         The actions `checkPermissions` puts to more than the engine's
-        `Check` — a delegation grant, the organization's current policy,
-        or the check delegation writes run — are explained no further
+        `Check` — a delegation grant, or the check delegation writes or
+        standalone host approvals run — are explained no further
         than its answer: `basis` is `operation`, `statements` is empty,
         and the operation decides. An action garam does not define is
         answered `deny` with `basis` `undefined-action`.

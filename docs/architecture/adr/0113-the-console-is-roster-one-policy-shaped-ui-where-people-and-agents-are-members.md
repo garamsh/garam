@@ -1,6 +1,6 @@
 # ADR 0113: The console is Roster, one policy-shaped UI where people and agents are members
 
-> Status: accepted
+> Status: superseded in part by ADR-0116 (Members and the sidebar)
 > Date: 2026-10-18
 
 Drafted for #1547, which reserved this number. It supersedes

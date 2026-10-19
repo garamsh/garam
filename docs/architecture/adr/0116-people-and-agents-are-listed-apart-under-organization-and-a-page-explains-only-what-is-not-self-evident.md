@@ -46,7 +46,7 @@ on.
 
 **The console's navigation is Home, Projects and Organization.**
 Organization holds People, Agents, Teams, Permissions, Operators,
-Hosts, Templates and Settings, in that order. People and Agents are
+Hosts and Settings, in that order. People and Agents are
 two lists, each with its own filters and columns. A person's page
 and an agent's page stay as ADR-0113 made them.
 
@@ -72,8 +72,11 @@ Agents filters by team and by what an agent runs on. The kind switch
 goes. Adding several members of both kinds to a team now takes one
 pass per list.
 
-**Templates is a sidebar entry of its own.** It stays a view of
-Agents in the address, so its pages keep their paths.
+**garam's templates leave the console.** They are retired, and
+their backend goes under ADR-0117 (#1593), so Templates is not in the
+navigation and the console no longer shows them. Consents keeps its
+page and leaves the sidebar; Settings and the command palette reach
+it.
 
 **Pages say less.** A reader who wants what a removed sentence said
 finds it in the dialog for that action, or in Your access's
@@ -96,7 +99,7 @@ names it.
 - **The primary action is not the one used.** Readers mostly use a
   secondary action, so the place kept for the primary one serves the
   wrong control.
-- **Organization outgrows a group.** Its eight entries hide one
+- **Organization outgrows a group.** Its seven entries hide one
   another, or a new kind of object has no place in it.
 
 ## Declined

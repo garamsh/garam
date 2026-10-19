@@ -50,6 +50,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/wire"
@@ -162,7 +163,7 @@ func countRows(t *testing.T, p *pgxpool.Pool, query string, args ...any) int {
 // the subject.
 func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
 	t.Helper()
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	if _, err := store.Get(context.Background(), g); err == nil {
 		return g
 	}
@@ -170,7 +171,7 @@ func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
 	require.NoError(t, err)
 	_, err = store.Register(context.Background(), o)
 	require.NoError(t, err)
-	return o.GRN()
+	return o.GRN
 }
 
 func grnOf(serviceType, id string) grn.GRN {
@@ -488,7 +489,7 @@ func withLineage(t *testing.T, p *pgxpool.Pool, g grn.GRN) int64 {
 func operatorClient(t *testing.T, p *pgxpool.Pool, url string, subject grn.GRN) *http.Client {
 	t.Helper()
 	registerOperator(t, p, subject)
-	private, _ := issueKey(t, operator.NewPostgresStore(p), subject, operator.KeyRotationFirst)
+	private, _ := issueKey(t, operatorpg.New(p), subject, operator.KeyRotationFirst)
 	client, _ := tokenClient(t)
 	return tokenPresenting(t, exchangeKey(t, client, url, subject, private, nil))
 }
@@ -619,23 +620,23 @@ func keyEncryptionKey(t *testing.T) (string, ca.Sealer) {
 }
 
 // register records an operator of acme and answers its GRN.
-func register(t *testing.T, s *operator.PostgresStore, id string) grn.GRN {
+func register(t *testing.T, s *operatorpg.Store, id string) grn.GRN {
 	t.Helper()
 	o, err := operator.New(orgRootGRN("acme"), id, scopedGRN("acme", "user", "ada"), operator.DetailsPatch{})
 	require.NoError(t, err)
 	_, err = s.Register(context.Background(), o)
 	require.NoError(t, err)
-	return o.GRN()
+	return o.GRN
 }
 
 // stateOf reads one operator out of the organization's listing, which
 // is the read the console makes.
-func stateOf(t *testing.T, s *operator.PostgresStore, g grn.GRN) *operator.Operator {
+func stateOf(t *testing.T, s *operatorpg.Store, g grn.GRN) *operator.Operator {
 	t.Helper()
 	listed, err := s.ListByOrg(context.Background(), orgRootGRN("acme"))
 	require.NoError(t, err)
 	for _, o := range listed {
-		if o.GRN() == g {
+		if o.GRN == g {
 			return o
 		}
 	}

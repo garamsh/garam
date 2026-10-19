@@ -18,6 +18,7 @@ import (
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -85,7 +86,7 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	operators := operator.NewPostgresStore(p)
+	operators := operatorpg.New(p)
 	first, firstKey := keyed(t, operators, "first")
 	second, secondKey := keyed(t, operators, "second")
 
@@ -148,7 +149,7 @@ func TestAgentToken_AnAgentHoldsItsNewestFiveTokens(t *testing.T) {
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	one, key := keyed(t, operator.NewPostgresStore(p), "one")
+	one, key := keyed(t, operatorpg.New(p), "one")
 	client, _ := tokenClient(t)
 	operatorToken := exchangeKey(t, client, url, one, key, nil)
 	f, _, execution := lineaged(t, p, one)
@@ -180,7 +181,7 @@ func TestAgentToken_AnAudienceTokenReachesNoGaramRoute(t *testing.T) {
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	operators := operator.NewPostgresStore(p)
+	operators := operatorpg.New(p)
 	controller, key := keyed(t, operators, "controller")
 	hosted := register(t, operators, "control")
 	client, _ := tokenClient(t)
@@ -218,7 +219,7 @@ func TestAgentToken_AnAgentHoldsTenTokensAcrossItsAudiences(t *testing.T) {
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	operators := operator.NewPostgresStore(p)
+	operators := operatorpg.New(p)
 	controller, key := keyed(t, operators, "controller")
 	first := register(t, operators, "first")
 	second := register(t, operators, "second")
@@ -268,7 +269,7 @@ func TestAgentToken_TheMintAnswersTheServerRootTheListenerWasGiven(t *testing.T)
 	t.Cleanup(func() { _ = srv.Close() })
 	url := "https://" + lis.Addr().String()
 
-	controller, key := keyed(t, operator.NewPostgresStore(p), "controller")
+	controller, key := keyed(t, operatorpg.New(p), "controller")
 	client, _ := tokenClient(t)
 	token := exchangeKey(t, client, url, controller, key, nil)
 	f, _, _ := lineaged(t, p, controller)

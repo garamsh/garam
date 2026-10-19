@@ -13,7 +13,7 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
@@ -110,7 +110,7 @@ func TestAgentTokenLockOrder_AnAudiencesDeletionAndAMintSweepingTokensNamingItBo
 		[]string{"park-deletion", "park-mint"})
 	require.NoError(t, err)
 	deleted := make(chan error, 1)
-	go func() { deleted <- operator.NewPostgresStore(p).Delete(ctx, audience) }()
+	go func() { deleted <- operatorpg.New(p).Delete(ctx, audience) }()
 	awaitSettled(t, f.p, 1, returned(deleted))
 	mints := make(chan minted, 1)
 	go func() {
@@ -155,7 +155,7 @@ func TestAgentTokenLockOrder_AnAudiencesDeletionAndAMintNamingItBothComplete(t *
 	_, err = parked.Exec(ctx, `SELECT 1 FROM agent_tokens WHERE token_hash = 'a-park' FOR UPDATE`)
 	require.NoError(t, err)
 	deleted := make(chan error, 1)
-	go func() { deleted <- operator.NewPostgresStore(f.p).Delete(ctx, audience) }()
+	go func() { deleted <- operatorpg.New(f.p).Delete(ctx, audience) }()
 	awaitSettled(t, f.p, 1, returned(deleted))
 	mints := make(chan minted, 1)
 	go func() {
@@ -239,7 +239,7 @@ func TestAgentTokenLockOrder_AnAudiencesDeletionAndAMintTrimmingTokensNamingItBo
 		[]string{"b-park", "park-mint"})
 	require.NoError(t, err)
 	deleted := make(chan error, 1)
-	go func() { deleted <- operator.NewPostgresStore(f.p).Delete(ctx, audience) }()
+	go func() { deleted <- operatorpg.New(f.p).Delete(ctx, audience) }()
 	awaitSettled(t, f.p, 1, returned(deleted))
 	mints := make(chan minted, 1)
 	go func() {

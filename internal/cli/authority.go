@@ -27,7 +27,7 @@ import (
 // is composed here once.
 func NewAuthorityService(pool *pgxpool.Pool, engine grpc.ClientConnInterface) operator.AuthorityService {
 	delegations := operatorpg.New(pool)
-	return operator.NewAuthorityService(delegations, delegations, operator.NewPostgresStore(pool),
+	return operator.NewAuthorityService(delegations, delegations, operatorpg.New(pool),
 		agentPlacements{store: agent.NewPostgresStore(pool)},
 		currentAuthorization{orgs: orgpg.New(pool), users: userpg.New(pool),
 			engine: authzv1.NewAuthzServiceClient(engine)},

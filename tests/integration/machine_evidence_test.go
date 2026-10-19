@@ -17,6 +17,7 @@ import (
 	"github.com/garamsh/garam/internal/machine"
 	machinepg "github.com/garamsh/garam/internal/machine/postgres"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -116,7 +117,7 @@ func TestMachineEvidence_GoesWithTheTenantAndOutlivesTheCaller(t *testing.T) {
 		require.NoError(t, store.Record(ctx, machine.Sighting{Caller: caller, Path: machine.PathToken}))
 	}
 
-	require.NoError(t, operator.NewPostgresStore(p).Delete(ctx, deleted))
+	require.NoError(t, operatorpg.New(p).Delete(ctx, deleted))
 	_, ok := evidenceOf(t, p, deleted, machine.PathToken)
 	assert.True(t, ok, "a deleted caller keeps its evidence while its organization remains")
 
@@ -173,7 +174,7 @@ func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 
 	// The certificate path is one an earlier release recorded; garam
 	// writes no such row since ADR-0118, and the inventory still reads

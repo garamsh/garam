@@ -474,8 +474,7 @@ composition root does.
 | authn.PasswordCredentialStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.PasswordAttemptStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authz (policies) | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
-| operator.Store | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
-| operator.CertificateStore | yes (`store.go`) | yes (`postgres_certificate.go`) | not planned | — |
+| operator | yes (`store.go`, `token_store.go`, `grant_store.go`, `authority_store.go`) | yes (`postgres/postgres.go` + `postgres/postgres_<concept>.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres/postgres.go`) | not planned | — |
 | message.Store | yes (`store.go`) | yes (`postgres.go`) | not planned | — |

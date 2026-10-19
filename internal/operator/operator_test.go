@@ -25,10 +25,10 @@ func TestNew_BuildsAnOrgLevelOperatorGRN(t *testing.T) {
 	o, err := operator.New(acmeGRN(), "field-one", aliceGRN(), operator.DetailsPatch{})
 	require.NoError(t, err)
 
-	assert.Equal(t, "grn:acme:default:operator:field-one", o.GRN().String())
-	assert.Equal(t, acmeGRN(), o.Organization())
-	assert.Equal(t, aliceGRN(), o.RegisteredBy())
-	assert.False(t, o.CreatedAt().IsZero())
+	assert.Equal(t, "grn:acme:default:operator:field-one", o.GRN.String())
+	assert.Equal(t, acmeGRN(), o.Organization)
+	assert.Equal(t, aliceGRN(), o.RegisteredBy)
+	assert.False(t, o.CreatedAt.IsZero())
 }
 
 // TestNew_RefusesAnIdentifierThatIsNotASegment holds the character rule
@@ -79,7 +79,7 @@ func TestNew_CallsAnOperatorItsIdentifierUntilItIsNamed(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Field cluster one", named.Name)
 	assert.Equal(t, "Runs the batch agents.", named.Description)
-	assert.Equal(t, unnamed.GRN(), named.GRN(), "a name is not part of the identity")
+	assert.Equal(t, unnamed.GRN, named.GRN, "a name is not part of the identity")
 }
 
 // TestNewDetailsPatch_RefusesWhatItCannotStore holds the bounds

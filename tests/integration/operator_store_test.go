@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -22,7 +23,7 @@ import (
 func TestOperatorStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := operator.NewPostgresStore(p)
+	s := operatorpg.New(p)
 	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
@@ -33,12 +34,12 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	_, err = s.Register(ctx, one)
 	require.NoError(t, err)
 
-	stored, err := s.Get(ctx, one.GRN())
+	stored, err := s.Get(ctx, one.GRN)
 	require.NoError(t, err)
-	assert.Equal(t, one.GRN(), stored.GRN())
-	assert.Equal(t, orgRootGRN("acme"), stored.Organization())
-	assert.Equal(t, registeredBy, stored.RegisteredBy())
-	assert.False(t, stored.CreatedAt().IsZero())
+	assert.Equal(t, one.GRN, stored.GRN)
+	assert.Equal(t, orgRootGRN("acme"), stored.Organization)
+	assert.Equal(t, registeredBy, stored.RegisteredBy)
+	assert.False(t, stored.CreatedAt.IsZero())
 
 	// Registering the same GRN twice is a conflict, not a second row.
 	_, err = s.Register(ctx, one)
@@ -52,7 +53,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	listed, err := s.ListByOrg(ctx, orgRootGRN("acme"))
 	require.NoError(t, err)
 	require.Len(t, listed, 1, "this org's operators and no other org's")
-	assert.Equal(t, one.GRN(), listed[0].GRN())
+	assert.Equal(t, one.GRN, listed[0].GRN)
 
 	// An operator nobody registered is a miss rather than an empty
 	// record, and the registered one is the control for it.
@@ -61,10 +62,10 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 
 	// Deleting the org takes its operators with it.
 	require.NoError(t, orgs.DeleteOrg(ctx, orgRootGRN("acme")))
-	_, err = s.Get(ctx, one.GRN())
+	_, err = s.Get(ctx, one.GRN)
 	assert.ErrorIs(t, err, operator.ErrOperatorNotFound)
 	// The other org is untouched, so the cascade removed a row rather
 	// than every row.
-	_, err = s.Get(ctx, elsewhere.GRN())
+	_, err = s.Get(ctx, elsewhere.GRN)
 	assert.NoError(t, err)
 }

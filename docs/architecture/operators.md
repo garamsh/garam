@@ -13,8 +13,9 @@ enrollment token and the shared-secret credential are gone
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)),
 and garam issues an operator no certificate
 ([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)).
-Implemented by `internal/operator`, whose grants and authorities
-persist through `internal/operator/postgres`.
+Implemented by `internal/operator`, which persists through
+`internal/operator/postgres` (ADR-0069): its records, keys, tokens,
+grants and authorities.
 
 | Type | Responsibility |
 |------|----------------|

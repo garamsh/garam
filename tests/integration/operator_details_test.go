@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -42,7 +43,7 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesBy(t *testing
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 
 	keyed := register(t, store, "keyed")
 	private, key := issueKey(t, store, keyed, operator.KeyRotationFirst)
@@ -75,7 +76,7 @@ func TestOperatorUpdateDetails_ReachesOneOrganizationsRecord(t *testing.T) {
 	orgs := orgpg.New(p)
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 
 	mine := register(t, store, "one")
 	theirs, err := operator.New(orgRootGRN("globex"), "one", scopedGRN("globex", "user", "ada"), operator.DetailsPatch{})
@@ -100,7 +101,7 @@ func TestOperatorUpdateDetails_ReachesOneOrganizationsRecord(t *testing.T) {
 	assert.Equal(t, name, got.Name)
 	assert.Equal(t, description, got.Description, "a field left out keeps its value")
 
-	other, err := store.Get(ctx, theirs.GRN())
+	other, err := store.Get(ctx, theirs.GRN)
 	require.NoError(t, err)
 	assert.Equal(t, "one", other.Name, "another organization's record of the same identifier is untouched")
 	assert.Empty(t, other.Description)
@@ -118,7 +119,7 @@ func TestOperatorDetails_TheSchemaRefusesWhatTheDomainRefuses(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	g := register(t, operator.NewPostgresStore(p), "one")
+	g := register(t, operatorpg.New(p), "one")
 
 	for name, update := range map[string]string{
 		"a blank name":            `UPDATE operators SET name = '  ' WHERE grn = $1`,

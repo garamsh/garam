@@ -15,6 +15,7 @@ import (
 
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -125,7 +126,7 @@ func TestOperatorLockOrder_AKeyWithdrawalAndAnExchangeSweepingItsTokensBothCompl
 	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := register(t, store, "controller")
 	_, key := issueKey(t, store, subject, operator.KeyRotationFirst)
@@ -223,7 +224,7 @@ func TestOperatorLockOrder_AnAudiencesDeletionAndAnExchangeSweepingTokensNamingI
 	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := register(t, store, "controller")
 	audience := register(t, store, "hosted")
@@ -275,7 +276,7 @@ func TestOperatorLockOrder_TheDeletionsOfAClientAndOfItsAudienceBothComplete(t *
 	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	subject := register(t, store, "controller")
 	audience := register(t, store, "hosted")
 	_, key := issueKey(t, store, subject, operator.KeyRotationFirst)
@@ -324,7 +325,7 @@ func TestOperatorLockOrder_TwoExchangesOfOneOperatorTrimmingAndSweepingTheSameTo
 	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := register(t, store, "controller")
 	trimmingPrivate, trimming := issueKey(t, store, subject, operator.KeyRotationFirst)
@@ -447,7 +448,7 @@ func TestOperatorLockOrder_AnOrganizationDeletionAndAnExchangeNamingAnAudienceBo
 			p := pool(t)
 			orgs := orgpg.New(p)
 			require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-			store := operator.NewPostgresStore(p)
+			store := operatorpg.New(p)
 			svc := keyService(store)
 			// Registered first, the audience sits first in the heap, the
 			// order the cascade deletes the operators in.
@@ -493,7 +494,7 @@ func TestOperatorLockOrder_AnOrganizationDeletionAndAnExchangeNamingAnAudienceBo
 // them would hold the one the deletion needs next.
 func TestOperatorLockOrder_AnAudiencesDeletionAndAWriterOfTheClientsTokensBothComplete(t *testing.T) {
 	type subject struct {
-		store   *operator.PostgresStore
+		store   *operatorpg.Store
 		client  grn.GRN
 		private *rsa.PrivateKey
 		key     operator.Key
@@ -512,7 +513,7 @@ func TestOperatorLockOrder_AnAudiencesDeletionAndAWriterOfTheClientsTokensBothCo
 			pool(t) // migrates and truncates the database; the store runs on p
 			p := indexScanPool(t)
 			require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-			store := operator.NewPostgresStore(p)
+			store := operatorpg.New(p)
 			client := register(t, store, "controller")
 			audience := register(t, store, "hosted")
 			peer := register(t, store, "peer")
@@ -596,7 +597,7 @@ func TestOperatorLockOrder_AnAudiencesDeletionAndAnExchangeHoldingNoTokenItWaits
 			pool(t) // migrates and truncates the database; the store runs on p
 			p := indexScanPool(t)
 			require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-			store := operator.NewPostgresStore(p)
+			store := operatorpg.New(p)
 			client := register(t, store, "controller")
 			audience := register(t, store, "hosted")
 			peer := register(t, store, "peer")

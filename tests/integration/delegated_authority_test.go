@@ -26,6 +26,7 @@ import (
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
@@ -74,7 +75,7 @@ func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *
 	owner, _ := session("ada", org.RoleOwner)
 	member, memberGRN := session("bob", org.RoleMember)
 
-	srv := api.NewServer(users, orgs, nil, operator.NewPostgresStore(p), nil, nil,
+	srv := api.NewServer(users, orgs, nil, operatorpg.New(p), nil, nil,
 		authn.NewPostgresSessionStore(p), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))

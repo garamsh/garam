@@ -34,6 +34,7 @@ import (
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
@@ -110,7 +111,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 		return &http.Cookie{Name: "garam_session", Value: token}
 	}
 
-	browserSrv := api.NewServer(users, orgs, nil, operator.NewPostgresStore(p), nil, nil,
+	browserSrv := api.NewServer(users, orgs, nil, operatorpg.New(p), nil, nil,
 		authn.NewPostgresSessionStore(p), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), cli.NewStandaloneService(p, engine),
 		api.Config{SessionTTL: time.Hour})
@@ -135,7 +136,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 	registerOperator(t, p, s.hosted)
 	registerOperator(t, p, s.controller)
 	s.hostedToken = s.keyedToken(t, s.hosted)
-	s.controllerKey, _ = issueKey(t, operator.NewPostgresStore(p), s.controller, operator.KeyRotationFirst)
+	s.controllerKey, _ = issueKey(t, operatorpg.New(p), s.controller, operator.KeyRotationFirst)
 	s.controllerToken = exchangeKey(t, s.client, s.machine, s.controller, s.controllerKey, nil)
 	s.hostedTLS = tokenPresenting(t, s.hostedToken)
 	s.controlTLS = tokenPresenting(t, s.controllerToken)
@@ -159,7 +160,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 // answers the token garam accepts for it.
 func (s *executionStack) keyedToken(t *testing.T, subject grn.GRN) string {
 	t.Helper()
-	private, _ := issueKey(t, operator.NewPostgresStore(s.pool), subject, operator.KeyRotationFirst)
+	private, _ := issueKey(t, operatorpg.New(s.pool), subject, operator.KeyRotationFirst)
 	return exchangeKey(t, s.client, s.machine, subject, private, nil)
 }
 

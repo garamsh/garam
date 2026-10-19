@@ -1,4 +1,4 @@
-package operator
+package postgres
 
 import (
 	"context"
@@ -9,7 +9,8 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator/db"
+	"github.com/garamsh/garam/internal/operator"
+	"github.com/garamsh/garam/internal/operator/postgres/db"
 	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/pgxtype"
 )
@@ -19,92 +20,92 @@ import (
 // the bound holds. An immediate rotation withdraws the live keys and
 // deletes their tokens before the insert, in the same transaction, so
 // no moment exists where the old key and the new one both verify.
-func (s *PostgresStore) IssueKey(ctx context.Context, k *IssuedKey, rotation KeyRotation) (Key, error) {
+func (s *Store) IssueKey(ctx context.Context, k *operator.IssuedKey, rotation operator.KeyRotation) (operator.Key, error) {
 	jwk, err := k.PublicJWK()
 	if err != nil {
-		return Key{}, err
+		return operator.Key{}, err
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return Key{}, errorx.Wrap(err, "begin", errorx.KindUnavailable)
+		return operator.Key{}, errorx.Wrap(err, "begin", errorx.KindUnavailable)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
-	operatorGRN := k.operator.String()
+	operatorGRN := k.Operator().String()
 	if _, err := q.LockOperatorRegistration(ctx, operatorGRN); err != nil {
-		return Key{}, pgxerr.Classify(err, "hold operator", ErrOperatorNotFound, nil)
+		return operator.Key{}, pgxerr.Classify(err, "hold operator", operator.ErrOperatorNotFound, nil)
 	}
 	live, err := q.ListLiveOperatorKeys(ctx, operatorGRN)
 	if err != nil {
-		return Key{}, pgxerr.Classify(err, "read operator keys", nil, nil)
+		return operator.Key{}, pgxerr.Classify(err, "read operator keys", nil, nil)
 	}
 	switch rotation {
-	case KeyRotationFirst:
+	case operator.KeyRotationFirst:
 		// Any row refuses, a withdrawn one included: re-keying after a
 		// revocation is operator:reissue (ADR-0102).
 		keyed, err := q.OperatorWasKeyed(ctx, operatorGRN)
 		if err != nil {
-			return Key{}, pgxerr.Classify(err, "read operator keys", nil, nil)
+			return operator.Key{}, pgxerr.Classify(err, "read operator keys", nil, nil)
 		}
 		if keyed {
-			return Key{}, ErrOperatorWasKeyed
+			return operator.Key{}, operator.ErrOperatorWasKeyed
 		}
-	case KeyRotationPlanned:
-		if len(live) >= LiveKeysPerOperator {
-			return Key{}, ErrKeyLimit
+	case operator.KeyRotationPlanned:
+		if len(live) >= operator.LiveKeysPerOperator {
+			return operator.Key{}, operator.ErrKeyLimit
 		}
 		for _, held := range live {
 			if err := q.RetireOperatorKey(ctx, db.RetireOperatorKeyParams{
-				WindowSeconds: int64(RolloverWindow / time.Second), ID: held.ID,
+				WindowSeconds: int64(operator.RolloverWindow / time.Second), ID: held.ID,
 			}); err != nil {
-				return Key{}, pgxerr.Classify(err, "retire operator key", nil, nil)
+				return operator.Key{}, pgxerr.Classify(err, "retire operator key", nil, nil)
 			}
 		}
-	case KeyRotationImmediate:
+	case operator.KeyRotationImmediate:
 		revoked, err := q.RevokeLiveOperatorKeys(ctx, operatorGRN)
 		if err != nil {
-			return Key{}, pgxerr.Classify(err, "revoke operator keys", nil, nil)
+			return operator.Key{}, pgxerr.Classify(err, "revoke operator keys", nil, nil)
 		}
 		if err := q.DeleteOperatorKeyTokens(ctx, revoked); err != nil {
-			return Key{}, pgxerr.Classify(err, "void operator key tokens", nil, nil)
+			return operator.Key{}, pgxerr.Classify(err, "void operator key tokens", nil, nil)
 		}
 	default:
-		return Key{}, errorx.New(errorx.KindInvalidArgument, "operator key: unknown rotation "+string(rotation))
+		return operator.Key{}, errorx.New(errorx.KindInvalidArgument, "operator key: unknown rotation "+string(rotation))
 	}
 	id, err := q.InsertOperatorKey(ctx, db.InsertOperatorKeyParams{
 		OperatorGrn: operatorGRN,
-		Kid:         k.kid,
-		Algorithm:   KeyAlgorithm,
+		Kid:         k.KID(),
+		Algorithm:   operator.KeyAlgorithm,
 		PublicJwk:   jwk,
-		IssuedBy:    k.issuedBy.String(),
-		IssuedAt:    pgxtype.Timestamptz(k.issuedAt),
+		IssuedBy:    k.IssuedBy().String(),
+		IssuedAt:    pgxtype.Timestamptz(k.IssuedAt()),
 	})
 	if err != nil {
-		return Key{}, pgxerr.Classify(err, "record operator key", nil, nil)
+		return operator.Key{}, pgxerr.Classify(err, "record operator key", nil, nil)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return Key{}, errorx.Wrap(err, "commit", errorx.KindUnavailable)
+		return operator.Key{}, errorx.Wrap(err, "commit", errorx.KindUnavailable)
 	}
-	return Key{
-		ID: id, Operator: k.operator, KID: k.kid, Algorithm: KeyAlgorithm, Public: k.public,
-		IssuedBy: k.issuedBy, IssuedAt: k.issuedAt, State: KeyStateActive,
+	return operator.Key{
+		ID: id, Operator: k.Operator(), KID: k.KID(), Algorithm: operator.KeyAlgorithm, Public: k.Public(),
+		IssuedBy: k.IssuedBy(), IssuedAt: k.IssuedAt(), State: operator.KeyStateActive,
 	}, nil
 }
 
 // ListKeys reads every key the operator was issued, with the state
 // the database's time puts each in.
-func (s *PostgresStore) ListKeys(ctx context.Context, g grn.GRN) ([]Key, error) {
+func (s *Store) ListKeys(ctx context.Context, g grn.GRN) ([]operator.Key, error) {
 	if _, err := s.q.GetOperator(ctx, g.String()); err != nil {
-		return nil, pgxerr.Classify(err, "read operator", ErrOperatorNotFound, nil)
+		return nil, pgxerr.Classify(err, "read operator", operator.ErrOperatorNotFound, nil)
 	}
 	rows, err := s.q.ListOperatorKeys(ctx, g.String())
 	if err != nil {
 		return nil, pgxerr.Classify(err, "list operator keys", nil, nil)
 	}
-	keys := make([]Key, 0, len(rows))
+	keys := make([]operator.Key, 0, len(rows))
 	for _, row := range rows {
-		state, err := ParseKeyState(row.State)
+		state, err := operator.ParseKeyState(row.State)
 		if err != nil {
 			return nil, err
 		}
@@ -124,7 +125,7 @@ func (s *PostgresStore) ListKeys(ctx context.Context, g grn.GRN) ([]Key, error) 
 // of the operator holds first too. The two serialize on it: an
 // exchange either commits first and its token is deleted here, or
 // rereads the key withdrawn and records nothing (#1418).
-func (s *PostgresStore) RevokeKey(ctx context.Context, g grn.GRN, kid string) error {
+func (s *Store) RevokeKey(ctx context.Context, g grn.GRN, kid string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
@@ -135,7 +136,7 @@ func (s *PostgresStore) RevokeKey(ctx context.Context, g grn.GRN, kid string) er
 	// An operator the organization holds no record of was never issued
 	// the key.
 	if _, err := q.LockOperatorRegistration(ctx, g.String()); err != nil {
-		return pgxerr.Classify(err, "hold operator", ErrKeyNotFound, nil)
+		return pgxerr.Classify(err, "hold operator", operator.ErrKeyNotFound, nil)
 	}
 	id, err := q.RevokeOperatorKey(ctx, db.RevokeOperatorKeyParams{OperatorGrn: g.String(), Kid: kid})
 	if err := pgxerr.Classify(err, "revoke operator key", errNoLiveKey, nil); err != nil {
@@ -147,7 +148,7 @@ func (s *PostgresStore) RevokeKey(ctx context.Context, g grn.GRN, kid string) er
 			return pgxerr.Classify(err, "read operator key", nil, nil)
 		}
 		if !exists {
-			return ErrKeyNotFound
+			return operator.ErrKeyNotFound
 		}
 		return nil
 	}
@@ -162,19 +163,19 @@ func (s *PostgresStore) RevokeKey(ctx context.Context, g grn.GRN, kid string) er
 
 // VerificationKey reads the live key kid names, within client's
 // registration and joined to it, so a deleted operator answers no key.
-func (s *PostgresStore) VerificationKey(ctx context.Context, client grn.GRN, kid string) (Key, error) {
+func (s *Store) VerificationKey(ctx context.Context, client grn.GRN, kid string) (operator.Key, error) {
 	row, err := s.q.GetLiveOperatorKey(ctx, db.GetLiveOperatorKeyParams{OperatorGrn: client.String(), Kid: kid})
 	if err != nil {
-		return Key{}, pgxerr.Classify(err, "read operator key", ErrClientInvalid, nil)
+		return operator.Key{}, pgxerr.Classify(err, "read operator key", operator.ErrClientInvalid, nil)
 	}
 	key, err := storedKey(row.ID, row.OperatorGrn, row.Kid, row.Algorithm, row.PublicJwk, row.IssuedBy,
 		row.IssuedAt, row.RetiresAt, row.RevokedAt, row.LastExchangedAt)
 	if err != nil {
-		return Key{}, err
+		return operator.Key{}, err
 	}
-	key.State = KeyStateActive
+	key.State = operator.KeyStateActive
 	if key.RetiresAt != nil {
-		key.State = KeyStateRetiring
+		key.State = operator.KeyStateRetiring
 	}
 	return key, nil
 }
@@ -186,7 +187,7 @@ func (s *PostgresStore) VerificationKey(ctx context.Context, client grn.GRN, kid
 // (client, jti) primary key is what refuses a replay on any replica: a
 // concurrent spend of the same pair waits on the first and conflicts
 // once it commits.
-func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAssertion, t *Token) error {
+func (s *Store) RecordAssertionToken(ctx context.Context, a operator.VerifiedAssertion, t *operator.Token) error {
 	audience := pgtype.Text{}
 	if t.Audience != nil {
 		audience = pgtype.Text{String: t.Audience.String(), Valid: true}
@@ -199,16 +200,16 @@ func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAsse
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
-	if err := holdRegistrations(ctx, q, client, t.Audience, ErrClientInvalid); err != nil {
+	if err := holdRegistrations(ctx, q, client, t.Audience, operator.ErrClientInvalid); err != nil {
 		return err
 	}
 	decided, err := q.HoldLiveOperatorKey(ctx, db.HoldLiveOperatorKeyParams{ID: a.KeyID, OperatorGrn: client})
 	if err != nil {
-		return pgxerr.Classify(err, "hold operator key", ErrClientInvalid, nil)
+		return pgxerr.Classify(err, "hold operator key", operator.ErrClientInvalid, nil)
 	}
 	now := decided.Time.UTC()
 	if !a.Timely(now) {
-		return ErrClientInvalid
+		return operator.ErrClientInvalid
 	}
 	if err := q.SweepOperatorAssertions(ctx, client); err != nil {
 		return pgxerr.Classify(err, "sweep operator assertions", nil, nil)
@@ -216,9 +217,9 @@ func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAsse
 	if _, err := q.SpendOperatorAssertion(ctx, db.SpendOperatorAssertionParams{
 		OperatorGrn: client, Jti: a.JTI, ExpiresAt: pgxtype.Timestamptz(a.ReplayUntil()),
 	}); err != nil {
-		return pgxerr.Classify(err, "spend operator assertion", ErrClientInvalid, nil)
+		return pgxerr.Classify(err, "spend operator assertion", operator.ErrClientInvalid, nil)
 	}
-	t.IssuedAt, t.ExpiresAt = now, now.Add(TokenTTL)
+	t.IssuedAt, t.ExpiresAt = now, now.Add(operator.TokenTTL)
 	err = recordTokens(ctx, q, client,
 		func() error {
 			return q.RecordOperatorKeyToken(ctx, db.RecordOperatorKeyTokenParams{
@@ -232,7 +233,7 @@ func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAsse
 		},
 		func() error {
 			return q.TrimOperatorKeyTokens(ctx, db.TrimOperatorKeyTokensParams{
-				KeyID: a.KeyID, Keep: LiveTokensPerKey,
+				KeyID: a.KeyID, Keep: operator.LiveTokensPerKey,
 			})
 		})
 	if err != nil {
@@ -254,23 +255,23 @@ var errNoLiveKey = errors.New("no live operator key")
 // storedKey parses a key row, which the schema and issuance already
 // constrained, so a failure is the database's fault.
 func storedKey(id int64, operatorGRN, kid, algorithm, jwk, issuedBy string,
-	issuedAt, retiresAt, revokedAt, lastExchangedAt pgtype.Timestamptz) (Key, error) {
+	issuedAt, retiresAt, revokedAt, lastExchangedAt pgtype.Timestamptz) (operator.Key, error) {
 	owner, err := storedOperatorGRN(operatorGRN)
 	if err != nil {
-		return Key{}, err
+		return operator.Key{}, err
 	}
 	by, err := grn.Parse(issuedBy)
 	if err != nil {
-		return Key{}, errorx.Wrap(err, "stored operator key issuer", errorx.KindInternal)
+		return operator.Key{}, errorx.Wrap(err, "stored operator key issuer", errorx.KindInternal)
 	}
-	if algorithm != KeyAlgorithm {
-		return Key{}, ErrKeyInvalid
+	if algorithm != operator.KeyAlgorithm {
+		return operator.Key{}, operator.ErrKeyInvalid
 	}
-	public, err := ParsePublicJWK(jwk, kid)
+	public, err := operator.ParsePublicJWK(jwk, kid)
 	if err != nil {
-		return Key{}, err
+		return operator.Key{}, err
 	}
-	return Key{
+	return operator.Key{
 		ID: id, Operator: owner, KID: kid, Algorithm: algorithm, Public: public, IssuedBy: by,
 		IssuedAt: issuedAt.Time.UTC(), RetiresAt: optionalTime(retiresAt), RevokedAt: optionalTime(revokedAt),
 		LastExchangedAt: optionalTime(lastExchangedAt),

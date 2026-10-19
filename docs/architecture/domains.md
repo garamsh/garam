@@ -126,7 +126,12 @@ The recorder's store is `internal/machine/postgres`.
 `queries.sql` and `db/` are a source and its output, not two copies. Every
 generated file says so in its first line, and `make check-gen` fails on any
 drift between them. `sqlc.yaml` names where each pair lives, so a domain
-that has moved its store is read there rather than assumed.
+that has moved its store is read there rather than assumed. Every entry
+reads the whole `migrations/` directory as its schema, so each domain
+sees the one schema the database has, and none keeps a list of the
+migrations it believes touch its tables. Each entry also sets
+`omit_unused_structs`, so its `db/` package holds only the models its
+own queries read (#1151).
 
 A change announcement reads no row, so it is not in `queries.sql`, and
 the two domains that use one do not raise it the same way.

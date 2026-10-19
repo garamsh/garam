@@ -8,15 +8,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-type Agent struct {
-	Grn               string
-	OrgGrn            string
-	ProvisioningState string
-	RuntimeState      string
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
-}
-
 type AgentActivation struct {
 	ID                   pgtype.UUID
 	AgentGrn             string
@@ -32,21 +23,6 @@ type AgentActivation struct {
 	EndedReason          pgtype.Text
 	CreatedAt            pgtype.Timestamptz
 	EndedAt              pgtype.Timestamptz
-}
-
-type AgentAssignment struct {
-	AgentGrn    string
-	AssigneeGrn string
-	Epoch       int32
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-}
-
-type AgentCredential struct {
-	AgentGrn string
-	Serial   string
-	Lineage  pgtype.UUID
-	NotAfter pgtype.Timestamptz
 }
 
 type AgentCutover struct {
@@ -174,138 +150,4 @@ type AgentSupervisor struct {
 	NotAfter     pgtype.Timestamptz
 	RegisteredAt pgtype.Timestamptz
 	EndedAt      pgtype.Timestamptz
-}
-
-type AgentSupervisorRenewal struct {
-	SupervisorGrn     string
-	PredecessorSerial string
-	RequestID         string
-	RequestSha256     []byte
-	Serial            string
-	CertificatePem    string
-	IssuerPem         string
-	ServerRootPem     string
-	NotAfter          pgtype.Timestamptz
-	CreatedAt         pgtype.Timestamptz
-}
-
-type Group struct {
-	Grn       string
-	OrgGrn    string
-	Name      string
-	Roles     []string
-	Policies  []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type GroupMember struct {
-	GroupGrn  string
-	MemberGrn string
-}
-
-type Invitation struct {
-	Token      string
-	OrgGrn     string
-	Role       string
-	CreatedBy  string
-	CreatedAt  pgtype.Timestamptz
-	ExpiresAt  pgtype.Timestamptz
-	AcceptedBy pgtype.Text
-	AcceptedAt pgtype.Timestamptz
-}
-
-type OperationAuthority struct {
-	Ref             string
-	OrgGrn          string
-	AudienceGrn     string
-	RequestID       string
-	DelegationID    string
-	ActorGrn        string
-	Operation       string
-	TargetGrn       string
-	AssigneeGrn     pgtype.Text
-	AssignmentEpoch pgtype.Text
-	BodySha256      string
-	TokenHash       string
-	TokenExpiresAt  pgtype.Timestamptz
-	CreatedAt       pgtype.Timestamptz
-	DestinationGrn  pgtype.Text
-}
-
-type OperatorDelegation struct {
-	ID          string
-	OrgGrn      string
-	OperatorGrn string
-	RequestID   string
-	Replaces    pgtype.Text
-	Operations  []string
-	ExpiresAt   pgtype.Timestamptz
-	GrantedBy   string
-	GrantedAt   pgtype.Timestamptz
-	EndedAt     pgtype.Timestamptz
-}
-
-type OperatorDelegationController struct {
-	DelegationID  string
-	ControllerGrn string
-}
-
-type Org struct {
-	Grn       string
-	Name      string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type OrgMember struct {
-	OrgGrn    string
-	UserGrn   string
-	Role      string
-	CreatedAt pgtype.Timestamptz
-}
-
-type Project struct {
-	Grn       string
-	OrgGrn    string
-	Name      string
-	Roles     []string
-	Policies  []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type ProjectMember struct {
-	ProjectGrn string
-	MemberGrn  string
-}
-
-type Session struct {
-	TokenHash string
-	UserGrn   string
-	CreatedAt pgtype.Timestamptz
-	ExpiresAt pgtype.Timestamptz
-}
-
-type SupervisorCredential struct {
-	ID             int64
-	SupervisorGrn  string
-	CredentialHash string
-	IssuedAt       pgtype.Timestamptz
-}
-
-type SupervisorToken struct {
-	TokenHash    string
-	CredentialID int64
-	IssuedAt     pgtype.Timestamptz
-	ExpiresAt    pgtype.Timestamptz
-}
-
-type User struct {
-	Grn       string
-	Nickname  string
-	Roles     []string
-	Policies  []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
 }

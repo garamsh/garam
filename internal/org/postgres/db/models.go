@@ -18,11 +18,6 @@ type Group struct {
 	UpdatedAt pgtype.Timestamptz
 }
 
-type GroupMember struct {
-	GroupGrn  string
-	MemberGrn string
-}
-
 type Invitation struct {
 	Token      string
 	OrgGrn     string
@@ -52,27 +47,6 @@ type Project struct {
 	Grn       string
 	OrgGrn    string
 	Name      string
-	Roles     []string
-	Policies  []string
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
-}
-
-type ProjectMember struct {
-	ProjectGrn string
-	MemberGrn  string
-}
-
-type Session struct {
-	TokenHash string
-	UserGrn   string
-	CreatedAt pgtype.Timestamptz
-	ExpiresAt pgtype.Timestamptz
-}
-
-type User struct {
-	Grn       string
-	Nickname  string
 	Roles     []string
 	Policies  []string
 	CreatedAt pgtype.Timestamptz

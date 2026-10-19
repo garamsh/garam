@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import type { PermissionExplanation } from "@/lib/permission-explanation";
 import type { components } from "@/types/api";
-import type { User } from "@/features/auth";
+import type { Session, User } from "@/features/auth";
 import type {
   Agent,
   AgentEnrollmentListing,
@@ -240,8 +240,32 @@ export const buildHost: AgentSupervisor = {
  * answers without a session — and the signed-out fixtures below
  * reproduce it.
  */
+/**
+ * Alice's sessions: the browser this request was made on, and a CLI
+ * she signed in from a laptop (ADR-0120). Newest first, as garam
+ * answers them.
+ */
+export const aliceSessions: Session[] = [
+  {
+    id: "s-cli",
+    kind: "cli",
+    name: "alice-laptop",
+    createdAt: "2026-10-20T09:00:00Z",
+    expiresAt: "2026-11-19T09:00:00Z",
+    current: false,
+  },
+  {
+    id: "s-browser",
+    kind: "browser",
+    createdAt: "2026-10-20T08:00:00Z",
+    expiresAt: "2026-10-27T08:00:00Z",
+    current: true,
+  },
+];
+
 const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/me", guarded: true, body: alice },
+  { path: "/me/sessions", guarded: true, body: aliceSessions },
   { path: "/auth/providers", guarded: false, body: ["google"] },
   {
     path: "/invitations/secret-token",

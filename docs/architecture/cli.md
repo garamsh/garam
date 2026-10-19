@@ -45,8 +45,9 @@ polls until the code is decided or lapses. It honours `slow_down` and
 the interval the answer carries, and keeps polling through a failed
 request until the code's expiry, as RFC 8628 §3.5 has a client do. The
 page is answered as the path `/device` and joined to the endpoint the
-command talks to. What the server does with each request is
-[sign-in.md](./sign-in.md) §The CLI's session.
+command talks to; the console serves it
+([web-app.md](./web-app.md) §What it serves). What the server does
+with each request is [sign-in.md](./sign-in.md) §The CLI's session.
 
 A command presents the access token as a bearer. Where it lapses within
 a minute, the command spends the refresh token for a new pair first,
@@ -96,8 +97,6 @@ API's message under its kind.
 
 - **Writes.** The CLI does not yet create, change or delete anything.
   `agents rename` waits for the agent name of #1610.
-- **The approval page.** The console's `/device` page is not built yet,
-  so a code is approved through the API alone until it lands.
 - **Other platforms.** The file lock is `flock(2)`, which builds where
   `syscall.Flock` does. No release publishes the binary for a platform
   without it.

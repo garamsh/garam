@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import {
   ChevronsUpDown,
+  KeyRound,
   LogOut,
   Monitor,
   Moon,
@@ -29,6 +31,8 @@ import {
 import { logOut } from "@/features/auth/actions";
 import { useTheme } from "@/hooks/use-theme";
 import { parseThemePreference } from "@/lib/theme";
+
+import { SESSIONS_LABEL } from "./navigation";
 
 const THEMES = [
   { value: "system", label: "System", icon: Monitor },
@@ -102,6 +106,12 @@ export function UserMenu({ nickname }: { nickname: string | null }) {
               ))}
             </DropdownMenuRadioGroup>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/console/sessions">
+                <KeyRound />
+                {SESSIONS_LABEL}
+              </Link>
+            </DropdownMenuItem>
             <form action={logOut}>
               <DropdownMenuItem asChild>
                 <button type="submit" className="w-full">

@@ -9,8 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -84,40 +82,4 @@ func TestOperatorDelete_StopsTheCertificateItAuthenticatesWith(t *testing.T) {
 	fresh, err := store.Get(ctx, reregistered)
 	require.NoError(t, err)
 	assert.True(t, fresh.CertificateIssuedAt().IsZero())
-}
-
-// TestOperatorDelete_RefusesAnOperatorADefinitionNames holds constraint
-// 4 of #1085 as a test rather than as the data: `agent_definitions` is
-// empty on the deployment, so what decides this is the foreign key
-// 000018 declares and not a row anybody has.
-//
-// The delete that succeeds is the control. The two operators are
-// registered the same way in the same organization, and only one is
-// named by a definition, so what refuses that one is the definition
-// rather than the route refusing every delete.
-func TestOperatorDelete_RefusesAnOperatorADefinitionNames(t *testing.T) {
-	ctx := context.Background()
-	p := pool(t)
-	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
-	agents := agent.NewPostgresStore(p)
-
-	named := scopedGRN("acme", operator.ServiceType, "named")
-	defineAgent(t, p, agents, named, agent.Values{"image": "ghcr.io/acme/bot:1"})
-	unnamed := register(t, store, "unnamed")
-
-	err := store.Delete(ctx, named)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, operator.ErrOperatorNamedByDefinition)
-	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition))
-	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM operators WHERE grn = $1`, named.String()),
-		"a refused delete removes nothing")
-
-	require.NoError(t, store.Delete(ctx, unnamed))
-
-	// A record the organization does not hold is a missing one, and it
-	// is told from the refusal above by kind: one says the operator is
-	// not there and the other says it is and something names it.
-	assert.ErrorIs(t, store.Delete(ctx, scopedGRN("acme", operator.ServiceType, "never")),
-		operator.ErrOperatorNotFound)
 }

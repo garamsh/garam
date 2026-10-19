@@ -168,7 +168,7 @@ func inventory(t *testing.T, p *pgxpool.Pool) map[string]inventoryRow {
 // that exchanged an assertion of its key and presented the token each
 // show the paths they took. A registered operator that did neither
 // shows as registered with every path empty — the idle caller G3 has to
-// name — and a legacy agent with no evidence shows in its own cohort.
+// name — and an agent with no evidence shows in the agents' cohort.
 func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T) {
 	p := pool(t)
 	createOrgs(t, p, "acme")
@@ -190,7 +190,7 @@ func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T
 	require.Equal(t, http.StatusOK, identifiesWith(t, client, url, token))
 
 	idle := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "idle"))
-	legacy := seedAgent(t, agent.NewPostgresStore(p), orgRootGRN("acme"))
+	quiet := seedAgent(t, agent.NewPostgresStore(p), orgRootGRN("acme"))
 
 	found := inventory(t, p)
 	require.Contains(t, found, certifiedGRN.String())
@@ -210,7 +210,7 @@ func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T
 	assert.Equal(t, inventoryRow{cohort: "operator", caller: idle.String(), registered: true}, found[idle.String()],
 		"a registered caller that never authenticated shows every path empty")
 
-	require.Contains(t, found, legacy.String())
-	assert.Equal(t, "legacy_agent", found[legacy.String()].cohort)
+	require.Contains(t, found, quiet.String())
+	assert.Equal(t, "agent", found[quiet.String()].cohort)
 	assert.NotContains(t, found, token, "no token reaches the inventory")
 }

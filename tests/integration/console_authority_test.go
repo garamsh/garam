@@ -418,9 +418,7 @@ func storedRows(t *testing.T, p *pgxpool.Pool, schema string) int {
 // over a read authority whose request target that rollback drops, and
 // applies it again; it must apply, delete nothing, and still refuse a
 // new row that breaks its checks. The rollback passes through 000033
-// on its way down, which holds no cutover here. A grant and an
-// authority naming agent:cutover, kept through 000033's own rollback,
-// are TestMigration000033_RollsBackAndReappliesAcross000032's.
+// on its way down, which holds no cutover here.
 //
 // A new row satisfying the checks, inserted beside the refused one, is
 // the control for the refusal.

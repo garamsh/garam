@@ -69,10 +69,10 @@ func (c *shiftedClock) shift(by time.Duration) {
 // executionStack is both listeners as the serve commands compose them,
 // over one database: acme's owner and member on the browser surface;
 // on the machine surface the hosted control service, whose grant
-// covers agent:activate, agent:recover, agent:configure and
-// agent:cutover for the controller, the controller itself, and an
-// agent the controller created with the certificate the legacy route
-// issued it. A second agent of the controller posts to the first.
+// covers agent:activate, agent:recover and agent:configure for the
+// controller, the controller itself, and an agent assigned to the
+// controller with a certificate garam issued it. A second agent of the
+// controller, activated and holding its token, posts to the first.
 type executionStack struct {
 	pool    *pgxpool.Pool
 	browser string
@@ -106,18 +106,8 @@ type executionStack struct {
 	grant *string
 }
 
-// newExecutionStack is the stack once its agent's cutover is switched
-// and before any activation: a legacy agent's first activation waits
-// for its switch (ADR-0086).
+// newExecutionStack is the stack before any activation of its agent.
 func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInterface) *executionStack {
-	t.Helper()
-	s := newLegacyStack(t, p, engine)
-	s.cutOver(t, s.agent)
-	return s
-}
-
-// newLegacyStack is the stack before its agent's cutover.
-func newLegacyStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInterface) *executionStack {
 	t.Helper()
 	ctx := context.Background()
 	orgs := orgpg.New(p)
@@ -171,18 +161,21 @@ func newLegacyStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInterfa
 	s.serve(t)
 	s.hostedTLS = machineClient(t, installed(t, p, issuer, s.hosted))
 	s.controlTLS = machineClient(t, installed(t, p, issuer, s.controller))
-	s.delegate(t, "agent:activate", "agent:recover", "agent:configure", "agent:cutover")
+	s.delegate(t, "agent:activate", "agent:recover", "agent:configure")
 
-	status, body := machineRequest(t, s.controlTLS, http.MethodPost, s.machine+"/agents")
-	require.Equal(t, http.StatusCreated, status, string(body))
-	var created machinegen.AgentAssignment
-	require.NoError(t, json.Unmarshal(body, &created))
-	s.agent, err = grn.Parse(created.Grn)
+	// The agent is the controller's, with a certificate of its own and no
+	// activation yet.
+	agents := agent.NewPostgresStore(p)
+	s.agent = seedAgent(t, agents, acme)
+	assignment, err := agents.Assign(ctx, s.agent, s.controller)
 	require.NoError(t, err)
-	s.epoch = created.Epoch
-	issued := issuedTo(t, s.controlTLS, s.machine, created.Grn)
-	s.leaf = issued.CertificatePem
-	s.agentTLS = machineClient(t, pairOf(t, issued))
+	s.epoch = assignment.Epoch()
+	issued, err := issuer.Issue(ctx, s.agent)
+	require.NoError(t, err)
+	s.leaf = string(issued.CertificatePEM())
+	pair, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
+	require.NoError(t, err)
+	s.agentTLS = machineClient(t, pair)
 	s.peer, s.peerTLS = provisioned(t, s.machine, s.controlTLS)
 	return s
 }
@@ -461,7 +454,6 @@ func (s *executionStack) protectedCalls(t *testing.T, client *http.Client, token
 	out["status"] = s.send(t, client, http.MethodGet, "/messages/"+posted, "", auth, "")
 	out["runtime-state"] = s.send(t, client, http.MethodPost, s.agentPath("/runtime-state"), "", auth, reportBody(s.epoch, "connected"))
 	out["turn-event"] = s.send(t, client, http.MethodPost, s.agentPath("/turn-events"), "", auth, `{"kind":"turn.start","body":"b"}`)
-	out["certificate"] = s.send(t, client, http.MethodPost, s.agentPath("/certificate"), "", auth, "")
 	return out
 }
 
@@ -471,7 +463,7 @@ func (s *executionStack) key() string { return "key-" + strconv.FormatInt(s.keys
 var admittedStatus = map[string]int{
 	"claim": http.StatusOK, "renewal": http.StatusOK, "completion": http.StatusNoContent,
 	"post": http.StatusCreated, "status": http.StatusOK, "runtime-state": http.StatusNoContent,
-	"turn-event": http.StatusAccepted, "certificate": http.StatusCreated,
+	"turn-event": http.StatusAccepted,
 }
 
 // allAdmitted asserts every protected call was admitted, over a
@@ -509,8 +501,8 @@ func generationOf(n int) agent.Generation {
 }
 
 // TestExecutionFence_AnActivationFencesEveryProtectedRouteOnAnOpenConnection
-// carries a GRN from the legacy cohort through cutover, a retried
-// activation, a replacement and a deactivation, with the agent on one
+// carries a GRN from before any activation through its first, a
+// retried activation, a replacement and a deactivation, with the agent on one
 // TLS connection throughout. Every protected route is refused the
 // token each step supersedes and admits the one it issues.
 func TestExecutionFence_AnActivationFencesEveryProtectedRouteOnAnOpenConnection(t *testing.T) {
@@ -519,12 +511,11 @@ func TestExecutionFence_AnActivationFencesEveryProtectedRouteOnAnOpenConnection(
 	s := newExecutionStack(t, p, engine)
 	s.open(t, s.agentTLS)
 
-	// The legacy cohort needs no token, and offering one is not how a
-	// GRN cuts over.
-	allAdmitted(t, s.protectedCalls(t, s.agentTLS, ""), "legacy")
-	allRefused(t, s.protectedCalls(t, s.agentTLS, strings.Repeat("A", 43)), http.StatusConflict, "a token on a legacy GRN")
+	// An agent never activated writes nothing: not without a token, and
+	// not with one it was never activated with (ADR-0118).
+	allRefused(t, s.protectedCalls(t, s.agentTLS, ""), http.StatusUnauthorized, "no token before any activation")
+	allRefused(t, s.protectedCalls(t, s.agentTLS, strings.Repeat("A", 43)), http.StatusForbidden, "a token never activated")
 	in := s.standing(t, s.leaf, nil)
-	assert.Equal(t, machinegen.ExecutionIntrospectionModeLegacy, in.Mode)
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, in.Credential)
 	assert.Equal(t, machinegen.ExecutionIntrospectionGenerationNone, in.Generation)
 	assert.Nil(t, in.ActivationId)
@@ -542,7 +533,7 @@ func TestExecutionFence_AnActivationFencesEveryProtectedRouteOnAnOpenConnection(
 	assert.Equal(t, s.agent.String(), first.Grn)
 	assert.Equal(t, strconv.Itoa(s.epoch), first.Epoch)
 	assert.Nil(t, first.Lineage, "the legacy cohort carries no lineage")
-	allRefused(t, s.protectedCalls(t, s.agentTLS, ""), http.StatusUnauthorized, "no token after cutover")
+	allRefused(t, s.protectedCalls(t, s.agentTLS, ""), http.StatusUnauthorized, "no token once activated")
 	allAdmitted(t, s.protectedCalls(t, s.agentTLS, first.Token), "the activation's token")
 
 	// A retry whose answer was lost gets the same activation and a new
@@ -556,16 +547,12 @@ func TestExecutionFence_AnActivationFencesEveryProtectedRouteOnAnOpenConnection(
 	allRefused(t, s.protectedCalls(t, s.agentTLS, first.Token), http.StatusForbidden, "the retried activation's earlier token")
 	allAdmitted(t, s.protectedCalls(t, s.agentTLS, again.Token), "the retry's token")
 
-	// The operator route no longer issues this agent's certificate.
-	got := s.send(t, s.controlTLS, http.MethodPost, s.agentPath("/certificate"), "", "", "")
-	assert.Equal(t, http.StatusConflict, got.status, got.body)
-
 	// A replacement fences the generation it replaces; a replay of the
 	// first activation's placement does not win.
 	second := s.activated(t, "r-2", generationOf(2), &first.ActivationId, s.leaf)
 	allRefused(t, s.protectedCalls(t, s.agentTLS, again.Token), http.StatusForbidden, "the replaced generation's token")
 	allAdmitted(t, s.protectedCalls(t, s.agentTLS, second.Token), "the replacement's token")
-	got = s.activate(t, s.hostedTLS, "r-3", generationOf(3), nil, s.leaf)
+	got := s.activate(t, s.hostedTLS, "r-3", generationOf(3), nil, s.leaf)
 	assert.Equal(t, http.StatusConflict, got.status, "a replay naming no predecessor: %s", got.body)
 	got = s.activate(t, s.hostedTLS, "r-3", generationOf(2), &second.ActivationId, s.leaf)
 	assert.Equal(t, http.StatusConflict, got.status, "a generation already active in this lineage: %s", got.body)
@@ -574,7 +561,6 @@ func TestExecutionFence_AnActivationFencesEveryProtectedRouteOnAnOpenConnection(
 	in = s.standing(t, s.leaf, ptr(generationOf(2)))
 	assert.Equal(t, machinegen.ExecutionIntrospectionGenerationCurrent, in.Generation)
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, in.Credential)
-	assert.Equal(t, machinegen.ExecutionIntrospectionModeFenced, in.Mode)
 	assert.Equal(t, s.controller.String(), in.Assignee)
 	assert.Equal(t, machinegen.ExecutionIntrospectionGenerationNotSupplied, s.standing(t, s.leaf, nil).Generation)
 
@@ -646,12 +632,7 @@ func TestExecutionFence_RecoveryFencesTheOldLineageOnAnOpenConnection(t *testing
 	assert.Equal(t, http.StatusConflict, got2.status, "a second recovery under a spent handoff: %s", got2.body)
 
 	// The recovery ended the activation, so its token admits nothing.
-	// Renewal reads the certificate's standing before it signs, so it
-	// answers that first; every other call answers the token.
-	ended := s.protectedCalls(t, s.agentTLS, first.Token)
-	assert.Equal(t, http.StatusConflict, ended["certificate"].status, ended["certificate"].body)
-	delete(ended, "certificate")
-	allRefused(t, ended, http.StatusForbidden, "the token the recovery ended")
+	allRefused(t, s.protectedCalls(t, s.agentTLS, first.Token), http.StatusForbidden, "the token the recovery ended")
 
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialFenced, s.standing(t, s.leaf, nil).Credential)
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, s.standing(t, recoveredLeaf, nil).Credential)
@@ -676,33 +657,27 @@ func TestExecutionFence_RecoveryFencesTheOldLineageOnAnOpenConnection(t *testing
 func TestExecutionFence_AMutationQueuedBehindItsReplacementCannotCommit(t *testing.T) {
 	type act struct {
 		name      string
-		cutOver   bool
 		do        func(t *testing.T, s *executionStack, current *machinegen.Activation, r recovery) (reply, error)
 		succeeded int
 		refused   int
 	}
 	acts := []act{
-		{name: "cutover", refused: http.StatusUnauthorized, succeeded: http.StatusCreated,
-			do: func(t *testing.T, s *executionStack, _ *machinegen.Activation, _ recovery) (reply, error) {
-				return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/activations"), agent.ExecutionContractVersion, "",
-					activationBody(t, "race", s.epoch, generationOf(9), nil, s.leaf))
-			}},
-		{name: "replacement", cutOver: true, refused: http.StatusForbidden, succeeded: http.StatusCreated,
+		{name: "replacement", refused: http.StatusForbidden, succeeded: http.StatusCreated,
 			do: func(t *testing.T, s *executionStack, current *machinegen.Activation, _ recovery) (reply, error) {
 				return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/activations"), agent.ExecutionContractVersion, "",
 					activationBody(t, "race", s.epoch, generationOf(9), &current.ActivationId, s.leaf))
 			}},
-		{name: "deactivation", cutOver: true, refused: http.StatusForbidden, succeeded: http.StatusOK,
+		{name: "deactivation", refused: http.StatusForbidden, succeeded: http.StatusOK,
 			do: func(_ *testing.T, s *executionStack, current *machinegen.Activation, _ recovery) (reply, error) {
 				return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/activations/"+current.ActivationId+"/deactivation"),
 					agent.ExecutionContractVersion, "", "")
 			}},
-		{name: "recovery", cutOver: true, refused: http.StatusForbidden, succeeded: http.StatusCreated,
+		{name: "recovery", refused: http.StatusForbidden, succeeded: http.StatusCreated,
 			do: func(_ *testing.T, s *executionStack, _ *machinegen.Activation, r recovery) (reply, error) {
 				return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/credential-recovery"), agent.ExecutionContractVersion,
 					"Garam-Operation "+r.authority, r.body)
 			}},
-		{name: "reassignment", cutOver: true, refused: http.StatusForbidden, succeeded: http.StatusOK,
+		{name: "reassignment", refused: http.StatusForbidden, succeeded: http.StatusOK,
 			do: func(_ *testing.T, s *executionStack, _ *machinegen.Activation, _ recovery) (reply, error) {
 				_, err := agent.NewPostgresStore(s.pool).Assign(context.Background(), s.agent, scopedGRN("acme", operator.ServiceType, "other"))
 				return reply{status: http.StatusOK}, err
@@ -718,12 +693,8 @@ func TestExecutionFence_AMutationQueuedBehindItsReplacementCannotCommit(t *testi
 				p := pool(t)
 				_, engine := policyEngine(t, p)
 				s := newExecutionStack(t, p, engine)
-				var current *machinegen.Activation
-				token := ""
-				if a.cutOver {
-					activated := s.activated(t, "r-1", generationOf(1), nil, s.leaf)
-					current, token = &activated, activated.Token
-				}
+				activated := s.activated(t, "r-1", generationOf(1), nil, s.leaf)
+				current, token := &activated, activated.Token
 				r := s.prepareRecovery(t, "rec-1")
 				s.open(t, s.agentTLS)
 				key := s.key()
@@ -837,9 +808,6 @@ func TestExecutionFence_ALeafPastItsValidityIsRefusedOnTheConnectionItOpened(t *
 	s.clock.shift(0)
 	s.open(t, s.agentTLS)
 
-	allRefused(t, s.protectedCalls(t, expiredTLS, ""), http.StatusConflict, "an expired certificate on its open connection")
-	allAdmitted(t, s.protectedCalls(t, s.agentTLS, ""), "control: the current certificate")
-
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialFenced, s.standing(t, expiredLeaf, nil).Credential)
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, s.standing(t, s.leaf, nil).Credential)
 	unproven := s.introspect(t, s.hostedTLS, selfSignedFor(t, s.agent), nil)
@@ -935,7 +903,7 @@ func TestExecutionFence_UnknownFreshnessRefusesAsUnavailable(t *testing.T) {
 func TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline(t *testing.T) {
 	acts := []struct {
 		name      string
-		cutOver   bool
+		activated bool
 		succeeded int
 		do        func(s *executionStack, current *machinegen.Activation, r recovery) (reply, error)
 		unwritten func(t *testing.T, s *executionStack, current *machinegen.Activation)
@@ -946,11 +914,9 @@ func TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline(t *testing.
 					activationBodyOf("r-1", s.epoch, generationOf(1), nil, s.leaf))
 			},
 			unwritten: func(t *testing.T, s *executionStack, _ *machinegen.Activation) {
-				in := s.standing(t, s.leaf, nil)
-				assert.Equal(t, machinegen.ExecutionIntrospectionModeLegacy, in.Mode)
-				assert.Nil(t, in.ActivationId)
+				assert.Nil(t, s.standing(t, s.leaf, nil).ActivationId)
 			}},
-		{name: "deactivation", cutOver: true, succeeded: http.StatusOK,
+		{name: "deactivation", activated: true, succeeded: http.StatusOK,
 			do: func(s *executionStack, current *machinegen.Activation, _ recovery) (reply, error) {
 				return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/activations/"+current.ActivationId+"/deactivation"),
 					agent.ExecutionContractVersion, "", "")
@@ -958,7 +924,7 @@ func TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline(t *testing.
 			unwritten: func(t *testing.T, s *executionStack, current *machinegen.Activation) {
 				assert.Equal(t, machinegen.ExecutionIntrospectionGenerationCurrent, s.standing(t, s.leaf, ptr(generationOf(1))).Generation)
 			}},
-		{name: "recovery", cutOver: true, succeeded: http.StatusCreated,
+		{name: "recovery", activated: true, succeeded: http.StatusCreated,
 			do: func(s *executionStack, _ *machinegen.Activation, r recovery) (reply, error) {
 				return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/credential-recovery"), agent.ExecutionContractVersion,
 					"Garam-Operation "+r.authority, r.body)
@@ -973,7 +939,7 @@ func TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline(t *testing.
 			_, engine := policyEngine(t, p)
 			s := newExecutionStack(t, p, engine)
 			var current *machinegen.Activation
-			if a.cutOver {
+			if a.activated {
 				activated := s.activated(t, "r-0", generationOf(1), nil, s.leaf)
 				current = &activated
 			}

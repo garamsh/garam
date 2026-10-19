@@ -86,16 +86,15 @@ func seedNamedMember(t *testing.T, s *listStack, id, nickname string) grn.GRN {
 	return g
 }
 
-// seedNamedAgent keeps a definition naming a new agent, whose
-// identifier garam draws.
-func seedNamedAgent(t *testing.T, s *listStack, _, name string) grn.GRN {
+// seedAgentAt creates an agent under the identifier id. garam holds no
+// name for an agent, so name is unused.
+func seedAgentAt(t *testing.T, s *listStack, id, _ string) grn.GRN {
 	t.Helper()
-	operatorGRN := registerOperator(t, s.pool, scopedGRN("acme", agent.ServiceTypeOperator, "controller"))
-	d, err := agent.NewDefinition(s.acme, operatorGRN, agent.Name(name), agent.Values{"model": "haiku"},
-		scopedGRN("acme", "user", "ada"))
+	g := grn.New("acme", grn.DefaultProject, agent.ServiceType, id)
+	a, err := agent.New(g, s.acme)
 	require.NoError(t, err)
-	keepDefinition(t, s.pool, d)
-	return d.Agent()
+	require.NoError(t, s.agents.Create(context.Background(), a))
+	return g
 }
 
 // seedNamedPolicy creates an active policy, whose identifier garam
@@ -109,28 +108,33 @@ func seedNamedPolicy(t *testing.T, s *listStack, _, name string) grn.GRN {
 }
 
 // TestSearch_FindsEachKindByNameOrIdentifierCaseAside seeds, for each
-// kind, one object whose name holds "ops" in another case, one whose
-// identifier holds it where the kind lets the caller choose one, and
-// one whose neither does. "ops" finds the first two and not the third,
-// and the third's own identifier is the control that it is findable
-// at all: what left it out was the needle.
+// kind, one object whose name holds "ops" in another case where the
+// kind has a name, one whose identifier holds it where the kind lets
+// the caller choose one, and one whose neither does. "ops" finds the
+// first two and not the third, and the third's own identifier is the
+// control that it is findable at all: what left it out was the needle.
+// An agent has no name garam holds, so it is found by its identifier
+// alone and answers none.
 func TestSearch_FindsEachKindByNameOrIdentifierCaseAside(t *testing.T) {
 	kinds := []struct {
-		kind       string
-		seed       searchSeed
-		choosesIDs bool
+		kind              string
+		seed              searchSeed
+		named, choosesIDs bool
 	}{
-		{"person", seedNamedMember, true},
-		{"agent", seedNamedAgent, false},
-		{"team", seedNamedGroup, true},
-		{"policy", seedNamedPolicy, false},
-		{"project", seedNamedProject, true},
+		{"person", seedNamedMember, true, true},
+		{"agent", seedAgentAt, false, true},
+		{"team", seedNamedGroup, true, true},
+		{"policy", seedNamedPolicy, true, false},
+		{"project", seedNamedProject, true, true},
 	}
 	for _, k := range kinds {
 		t.Run(k.kind, func(t *testing.T) {
 			s := newListStack(t)
 			byName := k.seed(t, s, "k-1", "DevOps One")
-			want := []string{byName.String()}
+			var want []string
+			if k.named {
+				want = append(want, byName.String())
+			}
 			if k.choosesIDs {
 				byID := k.seed(t, s, "ops-2", "Platform")
 				want = append(want, byID.String())
@@ -139,27 +143,17 @@ func TestSearch_FindsEachKindByNameOrIdentifierCaseAside(t *testing.T) {
 
 			found := s.search(t, "ops", nil, s.ada)
 			assert.ElementsMatch(t, want, found[k.kind].grns, "the name or the identifier holds the needle, case aside")
-			assert.Equal(t, "DevOps One", *found[k.kind].names[byName.String()], "an object answers its name")
+			if k.named {
+				assert.Equal(t, "DevOps One", *found[k.kind].names[byName.String()], "an object answers its name")
+			} else {
+				assert.Nil(t, found[k.kind].names[want[0]], "an agent answers no name")
+			}
 			assert.Zero(t, found[k.kind].more)
 
 			found = s.search(t, other.Identifier, nil, s.ada)
 			assert.Contains(t, found[k.kind].grns, other.String(), "control: the third is found by its own identifier")
 		})
 	}
-}
-
-// TestSearch_AnAgentNoDefinitionNamesIsFoundByIdentifierWithoutAName
-// reads an agent that reported but was never defined: it is found by
-// its identifier and answers no name, after the defined agents.
-func TestSearch_AnAgentNoDefinitionNamesIsFoundByIdentifierWithoutAName(t *testing.T) {
-	s := newListStack(t)
-	undefined := seedAgent(t, s.agents, s.acme)
-	defined := seedNamedAgent(t, s, "", "Agent "+undefined.Identifier)
-
-	found := s.search(t, undefined.Identifier, nil, s.ada)["agent"]
-	assert.Equal(t, []string{defined.String(), undefined.String()}, found.grns, "the defined agent first")
-	assert.Nil(t, found.names[undefined.String()], "no definition names it")
-	assert.Equal(t, "Agent "+undefined.Identifier, *found.names[defined.String()])
 }
 
 // TestSearch_AnswersLimitOfEachKindAndCountsTheRest seeds seven teams
@@ -221,7 +215,7 @@ func TestSearch_ADenyOnOneObjectHidesItFromTheSearchAndItsCount(t *testing.T) {
 		kind, action string
 		seed         searchSeed
 	}{
-		{"agent", org.ActionAgentRead, seedNamedAgent},
+		{"agent", org.ActionAgentRead, seedAgentAt},
 		{"team", org.ActionGroupRead, seedNamedGroup},
 		{"policy", org.ActionPolicyRead, seedNamedPolicy},
 		{"project", org.ActionProjectRead, seedNamedProject},
@@ -258,7 +252,7 @@ func TestSearch_LeavesOutAKindTheCallerMayNotList(t *testing.T) {
 		seed         searchSeed
 	}{
 		{"person", org.ActionOrgMemberList, seedNamedMember},
-		{"agent", org.ActionAgentRead, seedNamedAgent},
+		{"agent", org.ActionAgentRead, seedAgentAt},
 		{"team", org.ActionGroupRead, seedNamedGroup},
 		{"policy", org.ActionPolicyRead, seedNamedPolicy},
 		{"project", org.ActionProjectRead, seedNamedProject},

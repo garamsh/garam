@@ -84,7 +84,7 @@ type minted struct {
 // other held. Both now take them in token_hash order.
 func TestAgentTokenLockOrder_AnAudiencesDeletionAndAMintSweepingTokensNamingItBothComplete(t *testing.T) {
 	ctx := context.Background()
-	f := newLegacyFence(t)
+	f, _ := newLineageFence(t)
 	p := indexScanPool(t)
 	agents := agent.NewPostgresStore(p)
 	audience := registerOperator(t, f.p, scopedGRN("acme", agent.ServiceTypeOperator, "hosted"))
@@ -137,7 +137,7 @@ func TestAgentTokenLockOrder_AnAudiencesDeletionAndAMintSweepingTokensNamingItBo
 // registration holding none, and finds its audience gone.
 func TestAgentTokenLockOrder_AnAudiencesDeletionAndAMintNamingItBothComplete(t *testing.T) {
 	ctx := context.Background()
-	f := newLegacyFence(t)
+	f, _ := newLineageFence(t)
 	audience := registerOperator(t, f.p, scopedGRN("acme", agent.ServiceTypeOperator, "hosted"))
 	// a-park comes first in heap order and in token_hash order, so the
 	// deletion reaches it before b-swept either way.
@@ -181,7 +181,7 @@ func TestAgentTokenLockOrder_AnAudiencesDeletionAndAMintNamingItBothComplete(t *
 // waits for it holding nothing and finds its agent gone.
 func TestAgentTokenLockOrder_AnOrganizationDeletionAndAMintNamingAnAudienceBothComplete(t *testing.T) {
 	ctx := context.Background()
-	f := newLegacyFence(t)
+	f, _ := newLineageFence(t)
 	audience := registerOperator(t, f.p, scopedGRN("acme", agent.ServiceTypeOperator, "hosted"))
 
 	parked, err := f.p.Begin(ctx)
@@ -215,7 +215,7 @@ func TestAgentTokenLockOrder_AnOrganizationDeletionAndAMintNamingAnAudienceBothC
 // the index would hold the one the deletion needs next.
 func TestAgentTokenLockOrder_AnAudiencesDeletionAndAMintTrimmingTokensNamingItBothComplete(t *testing.T) {
 	ctx := context.Background()
-	f := newLegacyFence(t)
+	f, _ := newLineageFence(t)
 	p := indexScanPool(t)
 	agents := agent.NewPostgresStore(p)
 	audience := registerOperator(t, f.p, scopedGRN("acme", agent.ServiceTypeOperator, "hosted"))

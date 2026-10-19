@@ -316,13 +316,19 @@ func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
 	cfg := briefDelivery()
 	s, err := message.NewService(store, cfg)
 	require.NoError(t, err)
-	// The claim is an agent's write, so the agent exists: the execution
-	// fence admits it in its legacy mode (ADR-0080).
+	// The claim is an agent's write, so the agent exists and was
+	// activated: the execution fence admits it under that activation
+	// (ADR-0080).
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	bot, ada := seedAgent(t, agent.NewPostgresStore(p), orgRootGRN("acme")), grnOf("user", "ada")
-	legacy := legacyFence(bot)
-	fence := message.Fence{Agent: bot, Serial: legacy.Credential.Serial,
-		NotBefore: legacy.Credential.NotBefore, NotAfter: legacy.Credential.NotAfter}
+	agents := agent.NewPostgresStore(p)
+	bot, ada := seedAgent(t, agents, orgRootGRN("acme")), grnOf("user", "ada")
+	controller := scopedGRN("acme", agent.ServiceTypeOperator, "controller")
+	_, err = agents.Assign(ctx, bot, controller)
+	require.NoError(t, err)
+	activated, _ := activatedFence(t, p, bot, controller, "r1", 1, nil)
+	fence := message.Fence{Agent: bot, Serial: activated.Credential.Serial,
+		NotBefore: activated.Credential.NotBefore, NotAfter: activated.Credential.NotAfter,
+		TokenHash: activated.TokenBytes()}
 
 	type answer struct {
 		claim *message.Claim

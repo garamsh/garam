@@ -46,24 +46,26 @@ func presented(token *agent.AccessToken) agent.Credential {
 // its own transaction, with no listener read before it — the case of a
 // reassignment that commits between the listener's resolve and the
 // write. The token is admitted before the reassignment and fenced
-// after it. A certificate of the same legacy agent is admitted on both
-// sides, so what fences the token is the fence's token branch and not
-// the reassignment fencing everything.
+// after it. The agent is reassigned to the controller already holding
+// it, which raises the epoch and moves nothing else, and activated
+// again; a token minted at the new epoch is admitted under that
+// activation, so what fences the first is the epoch it was minted at
+// and not the reassignment fencing everything.
 func TestAgentToken_TheFenceRefusesAReassignedTokenOnItsOwn(t *testing.T) {
 	ctx := context.Background()
-	f := newLegacyFence(t)
+	f, ended := newLineageFence(t)
 	token := f.mintedIn(t)
+	a1, t1 := f.activate(t, "r1", generation(1), &ended, valid("1"))
+	require.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t1, presented(token)))
 
-	require.Equal(t, agent.AdmissionAdmitted, f.admit(t, nil, presented(token)))
-	require.Equal(t, agent.AdmissionAdmitted, f.admit(t, nil, valid("1")))
-
-	_, err := f.agents.Assign(ctx, f.agent, scopedGRN("acme", agent.ServiceTypeOperator, "elsewhere"))
+	_, err := f.agents.Assign(ctx, f.agent, f.controller)
 	require.NoError(t, err)
+	_, t2 := f.activate(t, "r2", generation(2), &a1.ID, valid("1"))
 
-	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, nil, presented(token)),
+	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t2, presented(token)),
 		"the fence refuses a token minted at the earlier assignment")
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, nil, valid("1")),
-		"control: the legacy agent's certificate is still admitted")
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, presented(f.mintedIn(t))),
+		"control: a token minted at the current assignment is admitted")
 }
 
 // TestAgentToken_ARecoveryFencesTheTokensOfTheLineageItReplaces is
@@ -110,7 +112,7 @@ func TestAgentToken_ARecoveryFencesTheTokensOfTheLineageItReplaces(t *testing.T)
 // control.
 func TestAgentToken_DeletingTheAgentTakesItsTokens(t *testing.T) {
 	ctx := context.Background()
-	f := newLegacyFence(t)
+	f, _ := newLineageFence(t)
 	token := f.mintedIn(t)
 	_, err := f.agents.ResolveAccessToken(ctx, token.Hash())
 	require.NoError(t, err)

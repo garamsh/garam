@@ -42,6 +42,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/cli"
@@ -131,7 +132,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 		group_members, project_members, org_members, invitations, sessions,
 		oauth_states, password_credentials, password_attempts,
 		policies, policy_versions, policy_attachments, agents,
-		agent_assignments, agent_definitions, operators, certificate_authorities,
+		agent_assignments, operators, certificate_authorities,
 		operator_certificates, operator_assertions,
 		messages, message_consents, message_signing_keys, agent_watches,
 		audit_send_events CASCADE`)
@@ -149,9 +150,8 @@ func countRows(t *testing.T, p *pgxpool.Pool, query string, args ...any) int {
 }
 
 // registerOperator records that the org owning g has an operator under
-// it, which a definition naming one requires (ADR-0045) and which the
-// machine listener reads per connection to admit its certificate
-// (ADR-0070).
+// it, which the machine listener reads per connection to admit its
+// certificate (ADR-0070).
 //
 // A GRN the org already holds is left as it is rather than refused.
 // Registering is what standing an operator up takes, and more than one
@@ -216,10 +216,22 @@ func assertUpdated(t *testing.T, was, now stamps) {
 		"an update moves updated_at past what it was")
 }
 
-// legacyFence is what an agent never activated presents to the
-// execution fence: a valid certificate and no token.
-func legacyFence(g grn.GRN) agent.Fencing {
+// tokenless is what an agent with no activation presents to the
+// execution fence: a valid certificate and no token, which the fence
+// refuses for an agent it holds (ADR-0118).
+func tokenless(g grn.GRN) agent.Fencing {
 	return agent.Fencing{Agent: g, Credential: valid("1")}
+}
+
+// activatedFence activates g for assignee through the store, replacing
+// replaces where one is given, and answers the fence its writes then
+// present: a valid certificate and the activation's token. It answers
+// the activation too, for the next one to replace.
+func activatedFence(t *testing.T, p *pgxpool.Pool, g, assignee grn.GRN, requestID string, gen int, replaces *agent.ActivationID) (agent.Fencing, agent.ActivationID) {
+	t.Helper()
+	f := fence{p: p, agents: agent.NewPostgresStore(p), exec: agentpg.New(p), agent: g, controller: assignee}
+	a, token := f.activate(t, requestID, generation(gen), replaces, valid("1"))
+	return fencing(g, &token, valid("1")), a.ID
 }
 
 // seedAgent mints an agent of the org and stores it.
@@ -505,26 +517,73 @@ func pairOf(t *testing.T, issued machinegen.MachineCertificate) tls.Certificate 
 	return pair
 }
 
-// provisioned creates an agent through the surface as the calling
-// operator and returns its GRN with a client presenting the certificate
-// the surface issued for it. It is the two calls
-// TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates covers
-// in full, as the tests that need an authenticated agent make them.
+// provisioned stands an agent up for the calling operator and returns
+// its GRN with a client that authenticates as it. The agent is
+// assigned to the operator, activated once, recovered into a lineage
+// and activated in it, and holds a token the operator minted there, so
+// the client presents that token and the activation's on every
+// request, as a fenced agent's adapter does (ADR-0100, ADR-0118). Its
+// lifecycle is written through the stores rather than through a
+// lifecycle authority, which the execution suites exercise; the
+// operator is read off the listener, as the identity it authenticates.
 func provisioned(t *testing.T, url string, operator *http.Client) (grn.GRN, *http.Client) {
 	t.Helper()
-	status, body := machineRequest(t, operator, http.MethodPost, url+"/agents")
-	require.Equal(t, http.StatusCreated, status, string(body))
-	var created machinegen.AgentAssignment
-	require.NoError(t, json.Unmarshal(body, &created))
-
-	status, body = machineRequest(t, operator, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
-	require.Equal(t, http.StatusCreated, status, string(body))
-	var issued machinegen.MachineCertificate
-	require.NoError(t, json.Unmarshal(body, &issued))
-
-	agentGRN, err := grn.Parse(created.Grn)
+	status, body := machineRequest(t, operator, http.MethodGet, url+"/identity")
+	require.Equal(t, http.StatusOK, status, string(body))
+	var identity machinegen.Identity
+	require.NoError(t, json.Unmarshal(body, &identity))
+	operatorGRN, err := grn.Parse(identity.Grn)
 	require.NoError(t, err)
-	return agentGRN, machineClient(t, pairOf(t, issued))
+
+	f, _, execution := lineaged(t, connect(t, os.Getenv("GARAM_TEST_DATABASE_URL"), nil), operatorGRN)
+	return f.agent, f.client(t, execution)
+}
+
+// client is a machine client for f's agent: it presents a token minted
+// for it now beside execution, the activation's token, as the agent's
+// adapter does on every call.
+func (f fence) client(t *testing.T, execution agent.Token) *http.Client {
+	t.Helper()
+	token := f.mintedIn(t)
+	client, _ := tokenClient(t)
+	client.Transport = withHeaders{base: client.Transport, headers: map[string]string{
+		"Authorization": "Garam-Token " + token.Value, "Garam-Execution": execution.String(),
+	}}
+	return client
+}
+
+// lineaged stands an agent up for operator through the stores:
+// assigned to it, activated once, recovered into a lineage and
+// activated in it, which is where an agent's tokens are minted. It
+// answers the agent's fence and the current activation with its token.
+func lineaged(t *testing.T, p *pgxpool.Pool, operator grn.GRN) (fence, *agent.Activation, agent.Token) {
+	t.Helper()
+	agents := agent.NewPostgresStore(p)
+	g := seedAgent(t, agents, grn.Org(operator.Organization))
+	_, err := agents.Assign(context.Background(), g, operator)
+	require.NoError(t, err)
+	f := fence{p: p, agents: agents, exec: agentpg.New(p), agent: g, controller: operator}
+	ended := f.openLineage(t)
+	current, token := f.activate(t, "lineaged", generation(1), &ended, valid("1"))
+	return f, current, token
+}
+
+// withHeaders is a transport that sets each of its headers on a request
+// that carries none of that name, as an agent's adapter sends its own
+// credentials beside whatever a call adds.
+type withHeaders struct {
+	base    http.RoundTripper
+	headers map[string]string
+}
+
+func (p withHeaders) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	for name, value := range p.headers {
+		if r.Header.Get(name) == "" {
+			r.Header.Set(name, value)
+		}
+	}
+	return p.base.RoundTrip(r)
 }
 
 // enrollmentRequest generates a key pair the way an operator does in

@@ -38,17 +38,20 @@ func tokenCall(t *testing.T, client *http.Client, method, url, token, contract, 
 	return resp.StatusCode, string(answered)
 }
 
-// createdBy creates an agent on the listener with the operator's token
-// and answers its GRN.
-func createdBy(t *testing.T, client *http.Client, url, operatorToken string) grn.GRN {
+// agentCall performs method on url as an agent: presenting token and
+// the activation's execution token beside it, as its adapter does.
+func agentCall(t *testing.T, client *http.Client, method, url, token string, execution agent.Token) int {
 	t.Helper()
-	status, body := tokenCall(t, client, http.MethodPost, url+"/agents", operatorToken, "", "")
-	require.Equal(t, http.StatusCreated, status, body)
-	var created machinegen.AgentAssignment
-	require.NoError(t, json.Unmarshal([]byte(body), &created))
-	g, err := grn.Parse(created.Grn)
+	req, err := http.NewRequest(method, url, nil)
 	require.NoError(t, err)
-	return g
+	req.Header.Set("Authorization", "Garam-Token "+token)
+	req.Header.Set("Garam-Execution", execution.String())
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	_, err = io.Copy(io.Discard, resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	return resp.StatusCode
 }
 
 // mintedFor mints the agent a token with the operator's token and
@@ -85,15 +88,16 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 
 	client, connections := tokenClient(t)
 	firstToken := exchangeKey(t, client, url, first, firstKey, nil)
-	bot := createdBy(t, client, url, firstToken)
+	f, a1, execution := lineaged(t, p, first)
+	bot := f.agent
 	minted := mintedFor(t, client, url, firstToken, bot)
 	assert.Equal(t, bot.String(), minted.Grn)
 	assert.True(t, agent.WellFormedAccessToken(minted.Token))
 	assert.NotEmpty(t, minted.ServerRootPem)
 
 	claims := url + "/agents/" + bot.String() + "/claims"
-	status, body := tokenCall(t, client, http.MethodPost, claims, minted.Token, "", "")
-	require.Equal(t, http.StatusNoContent, status, "the agent claims on its own queue with its token: %s", body)
+	status := agentCall(t, client, http.MethodPost, claims, minted.Token, execution)
+	require.Equal(t, http.StatusNoContent, status, "the agent claims on its own queue with its token")
 
 	// The second operator holds nothing yet, so it mints nothing.
 	secondToken := exchangeKey(t, client, url, second, secondKey, nil)
@@ -104,14 +108,18 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 	_, err := agent.NewPostgresStore(p).Assign(ctx, bot, second)
 	require.NoError(t, err)
 
-	status, _ = tokenCall(t, client, http.MethodPost, claims, minted.Token, "", "")
+	status = agentCall(t, client, http.MethodPost, claims, minted.Token, execution)
 	assert.Equal(t, http.StatusUnauthorized, status,
 		"the reassignment refuses the token on the next request over the open connection")
 
+	// The reassignment ended the activation, so the new assignee
+	// activates the agent again before its token is of use.
+	f.controller = second
+	_, execution = f.activate(t, "after-reassignment", generation(2), &a1.ID, valid("1"))
 	again := mintedFor(t, client, url, secondToken, bot)
 	assert.Equal(t, minted.Epoch+1, again.Epoch, "the new assignee mints at the new epoch")
-	status, body = tokenCall(t, client, http.MethodPost, claims, again.Token, "", "")
-	assert.Equal(t, http.StatusNoContent, status, "the new assignee's token claims: %s", body)
+	status = agentCall(t, client, http.MethodPost, claims, again.Token, execution)
+	assert.Equal(t, http.StatusNoContent, status, "the new assignee's token claims")
 
 	status, _ = tokenCall(t, client, http.MethodPost, url+"/agents/"+bot.String()+"/tokens",
 		firstToken, operator.TokenContractVersion, `{}`)
@@ -121,7 +129,7 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 	// that refuses the token minted at the earlier one.
 	_, err = agent.NewPostgresStore(p).Assign(ctx, bot, second)
 	require.NoError(t, err)
-	status, _ = tokenCall(t, client, http.MethodPost, claims, again.Token, "", "")
+	status = agentCall(t, client, http.MethodPost, claims, again.Token, execution)
 	assert.Equal(t, http.StatusUnauthorized, status, "a token minted at an earlier epoch is refused")
 	assert.Equal(t, 1, *connections, "every request travelled over one connection")
 }
@@ -140,7 +148,8 @@ func TestAgentToken_AnAgentHoldsItsNewestFiveTokens(t *testing.T) {
 	one, key := keyed(t, operator.NewPostgresStore(p), "one")
 	client, _ := tokenClient(t)
 	operatorToken := exchangeKey(t, client, url, one, key, nil)
-	bot := createdBy(t, client, url, operatorToken)
+	f, _, execution := lineaged(t, p, one)
+	bot := f.agent
 
 	var tokens []string
 	for range 7 {
@@ -150,9 +159,9 @@ func TestAgentToken_AnAgentHoldsItsNewestFiveTokens(t *testing.T) {
 	assert.Equal(t, agent.LiveAccessTokensPerAudience, countRows(t, p,
 		`SELECT count(*) FROM agent_tokens WHERE agent_grn = $1`, bot.String()))
 	claims := url + "/agents/" + bot.String() + "/claims"
-	status, _ := tokenCall(t, client, http.MethodPost, claims, tokens[0], "", "")
+	status := agentCall(t, client, http.MethodPost, claims, tokens[0], execution)
 	assert.Equal(t, http.StatusUnauthorized, status, "the oldest is past the bound")
-	status, _ = tokenCall(t, client, http.MethodPost, claims, tokens[6], "", "")
+	status = agentCall(t, client, http.MethodPost, claims, tokens[6], execution)
 	assert.Equal(t, http.StatusNoContent, status, "the newest claims")
 }
 
@@ -173,7 +182,8 @@ func TestAgentToken_AnAudienceTokenReachesNoGaramRoute(t *testing.T) {
 	hosted := register(t, operators, "control")
 	client, _ := tokenClient(t)
 	operatorToken := exchangeKey(t, client, url, controller, key, nil)
-	bot := createdBy(t, client, url, operatorToken)
+	f, _, execution := lineaged(t, p, controller)
+	bot := f.agent
 	mint := url + "/agents/" + bot.String() + "/tokens"
 	claims := url + "/agents/" + bot.String() + "/claims"
 
@@ -182,11 +192,11 @@ func TestAgentToken_AnAudienceTokenReachesNoGaramRoute(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status, body)
 	var audienced machinegen.AgentToken
 	require.NoError(t, json.Unmarshal([]byte(body), &audienced))
-	status, _ = tokenCall(t, client, http.MethodPost, claims, audienced.Token, "", "")
+	status = agentCall(t, client, http.MethodPost, claims, audienced.Token, execution)
 	assert.Equal(t, http.StatusUnauthorized, status, "a token minted for the control service claims nothing at garam")
 
 	garam := mintedFor(t, client, url, operatorToken, bot)
-	status, _ = tokenCall(t, client, http.MethodPost, claims, garam.Token, "", "")
+	status = agentCall(t, client, http.MethodPost, claims, garam.Token, execution)
 	assert.Equal(t, http.StatusNoContent, status, "control: the token minted for garam claims")
 
 	status, _ = tokenCall(t, client, http.MethodPost, mint, operatorToken, operator.TokenContractVersion,
@@ -211,7 +221,8 @@ func TestAgentToken_AnAgentHoldsTenTokensAcrossItsAudiences(t *testing.T) {
 	second := register(t, operators, "second")
 	client, _ := tokenClient(t)
 	operatorToken := exchangeKey(t, client, url, controller, key, nil)
-	bot := createdBy(t, client, url, operatorToken)
+	f, _, _ := lineaged(t, p, controller)
+	bot := f.agent
 	mint := url + "/agents/" + bot.String() + "/tokens"
 
 	for _, body := range []string{`{}`, `{"audience":"` + first.String() + `"}`, `{"audience":"` + second.String() + `"}`} {

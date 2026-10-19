@@ -290,7 +290,6 @@ func TestTokenContracts_EachCredentialIsServedUnderItsOwnValue(t *testing.T) {
 	}{
 		{"operation authority", http.MethodGet, "/operation-references/unknown", operator.ContractVersion, operator.TokenAuthorityContractVersion},
 		{"execution fence", http.MethodPost, agentPath + "/execution/introspection", agent.ExecutionContractVersion, agent.TokenExecutionContractVersion},
-		{"cutover", http.MethodGet, agentPath + "/cutover", agent.CutoverContractVersion, agent.TokenCutoverContractVersion},
 		{"managed enrollment", http.MethodPost, "/operators/" + s.controller.String() + "/managed-agents", agent.EnrollmentContractVersion, agent.TokenEnrollmentContractVersion},
 		{"durable delivery", http.MethodPost, "/outbox-messages", message.DeliveryContractVersion, message.TokenDeliveryContractVersion},
 	} {
@@ -371,35 +370,6 @@ func TestTokenContracts_EachValueTakesItsOwnCredentialField(t *testing.T) {
 		"Authorization": "Garam-Token " + s.hostedToken, operator.ContractVersionHeader: agent.TokenEnrollmentContractVersion,
 	}, `{}`)
 	assert.Equal(t, http.StatusUnauthorized, got.status, "initial issuance goes with the certificate path: %s", got.body)
-}
-
-// TestTokenContracts_ACutoverReferenceTravelsInItsOwnHeaderBesideAToken
-// holds agent-cutover.v2's one change: the agent:cutover reference
-// moves from Authorization, which the token takes, to a
-// Garam-Operation header. The read without it is the control: the
-// same request is refused for want of the reference alone.
-func TestTokenContracts_ACutoverReferenceTravelsInItsOwnHeaderBesideAToken(t *testing.T) {
-	s := &tokenStack{executionStack: newLegacyExecutionStack(t)}
-	s.delegate(t, "agent:activate", "agent:recover", "agent:configure", "agent:cutover")
-	s.client, _ = tokenClient(t)
-	s.hostedToken = s.keyedToken(t, s.hosted)
-	refs := s.cutoverRefs(t, s.agent)
-	path := "/agents/" + s.agent.String() + "/cutover"
-
-	got := s.v2(t, http.MethodGet, path, agent.TokenCutoverContractVersion, s.hostedToken, "", "")
-	assert.Equal(t, http.StatusUnauthorized, got.status, "no reference reads nothing: %s", got.body)
-	got = s.v2(t, http.MethodGet, path, agent.TokenCutoverContractVersion, s.hostedToken, refs[""], "")
-	require.Equal(t, http.StatusOK, got.status, got.body)
-	var c machinegen.Cutover
-	require.NoError(t, json.Unmarshal([]byte(got.body), &c))
-	require.NotNil(t, c.SourceDigest)
-
-	got = s.v2(t, http.MethodPost, path+"/freeze", agent.TokenCutoverContractVersion, s.hostedToken, refs["/freeze"],
-		freezeBody("import-1", *c.SourceDigest, c.Epoch))
-	require.Equal(t, http.StatusCreated, got.status, got.body)
-	got = s.v2(t, http.MethodPost, path+"/switch", agent.TokenCutoverContractVersion, s.hostedToken, refs["/switch"],
-		stageBody("import-1"))
-	assert.Equal(t, http.StatusOK, got.status, got.body)
 }
 
 // TestTokenContracts_ATokensAudienceIsAnOperatorTheOrganizationHolds

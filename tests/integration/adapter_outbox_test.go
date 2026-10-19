@@ -1,7 +1,6 @@
 package integration_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"os"
@@ -30,38 +29,6 @@ func writeOutboxEntry(t *testing.T, dir, id string, agentGRN, target grn.GRN, co
 	tmp := filepath.Join(dir, ".entry-"+id+".tmp")
 	require.NoError(t, os.WriteFile(tmp, raw, 0o600))
 	require.NoError(t, os.Rename(tmp, filepath.Join(dir, id+".json")))
-}
-
-// forwardingLegacy runs a legacy adapter for the stack's agent that
-// forwards dir, and nothing else of note: no message is waiting for it.
-func forwardingLegacy(t *testing.T, s *executionStack, dir string) func() {
-	t.Helper()
-	execution := delivery.NewLegacyExecution()
-	queue, err := delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, execution, delivery.NewCertificate(nil))
-	require.NoError(t, err)
-	rt := newRuntimeDouble(t, s.agent, s.epoch, generationOf(1))
-	gateway, err := delivery.NewHTTPGateway(rt.server.Client(), rt.server.URL, s.agent)
-	require.NoError(t, err)
-	outbox, err := delivery.NewOutbox(dir)
-	require.NoError(t, err)
-	loop, err := delivery.NewService(delivery.Ends{
-		Agent: s.agent, Queue: queue, Gateway: gateway, Execution: execution,
-		Credentials: delivery.NewFileCredentials("", delivery.NewCertificate((&heldPair{pair: s.agentPair(t)}).get)), Outbox: outbox,
-	}, delivery.Config{
-		RetryDelay: 10 * time.Millisecond, MaxRetryDelay: 50 * time.Millisecond, MinRenewInterval: 50 * time.Millisecond,
-		StatusInterval: 10 * time.Millisecond, OutboxInterval: 20 * time.Millisecond,
-		ClaimTimeout: 5 * time.Second, CallTimeout: 2 * time.Second,
-	})
-	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		assert.NoError(t, loop.Run(ctx))
-	}()
-	stop := func() { cancel(); <-done }
-	t.Cleanup(stop)
-	return stop
 }
 
 // keyRows counts the messages the agent's key stores.
@@ -100,7 +67,8 @@ func TestAdapterOutbox_ForwardsARepliesUnderDurableDeliveryAndRemovesItOnItsAckn
 		"createdAt": now.Add(-time.Hour).UTC().Format(time.RFC3339Nano),
 	})
 	require.NoError(t, err)
-	first := s.send(t, s.agentTLS, http.MethodPost, "/outbox-messages", delivery.DeliveryContract, "", string(lost))
+	earlier := s.activated(t, "earlier", generationOf(9), nil, s.leaf)
+	first := s.send(t, s.agentTLS, http.MethodPost, "/outbox-messages", delivery.DeliveryContract, bearer(earlier.Token), string(lost))
 	require.Equal(t, http.StatusCreated, first.status, first.body)
 
 	writeOutboxEntry(t, dir, "entry-lost", s.agent, s.peer, "the reply whose answer was lost", now.Add(-time.Hour))
@@ -108,7 +76,11 @@ func TestAdapterOutbox_ForwardsARepliesUnderDurableDeliveryAndRemovesItOnItsAckn
 	writeOutboxEntry(t, dir, "entry-refused", s.agent, scopedGRN("globex", "agent", "0f0e0d0c0b0a0908"), "across", now.Add(-time.Minute))
 	writeOutboxEntry(t, dir, "entry-expired", s.agent, s.peer, "too late", now.Add(-8*24*time.Hour))
 	writeOutboxEntry(t, dir, "entry-future", s.agent, s.peer, "too early", now.Add(time.Hour))
-	forwardingLegacy(t, s, dir)
+	// The control replaces that process's activation with the next one.
+	control := newControlStandIn(t, s)
+	control.latest = &earlier.ActivationId
+	startAdapterWith(t, s, control, newRuntimeDouble(t, s.agent, s.epoch, generationOf(1)),
+		&heldPair{pair: s.agentPair(t)}, placementToken(t, "placement-1"), dir)
 
 	require.Eventually(t, absent(filepath.Join(dir, "entry-reply.json")), 10*time.Second, 20*time.Millisecond,
 		"an acknowledged reply is removed")
@@ -129,24 +101,4 @@ func TestAdapterOutbox_ForwardsARepliesUnderDurableDeliveryAndRemovesItOnItsAckn
 	}
 	assert.Zero(t, s.keyRows(t, "entry-expired"), "an entry past its budget stores nothing")
 	assert.Zero(t, s.keyRows(t, "entry-future"), "nor one garam's clock has not reached")
-}
-
-// TestAdapterOutbox_AFencedAdapterForwardsUnderItsActivation is the
-// same forward from an agent cut over to activated execution: the reply
-// carries the token the activation issued, and a replaced generation's
-// process stops forwarding.
-func TestAdapterOutbox_AFencedAdapterForwardsUnderItsActivation(t *testing.T) {
-	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
-	c := newControlStandIn(t, s)
-	held := &heldPair{pair: s.agentPair(t)}
-	token := placementToken(t, "placement-1")
-	dir := t.TempDir()
-
-	writeOutboxEntry(t, dir, "entry-1", s.agent, s.peer, "a reply", time.Now().Add(-time.Minute))
-	startAdapterWith(t, s, c, newRuntimeDouble(t, s.agent, s.epoch, generationOf(1)), held, token, dir)
-	require.Eventually(t, absent(filepath.Join(dir, "entry-1.json")), 10*time.Second, 20*time.Millisecond,
-		"the fenced adapter forwards under its activation")
-	assert.Equal(t, 1, s.keyRows(t, "entry-1"))
 }

@@ -1,7 +1,6 @@
 package integration_test
 
 import (
-	"cmp"
 	"context"
 	"encoding/json"
 	"io"
@@ -115,20 +114,18 @@ func (s *listStack) get(t *testing.T, path string, query url.Values, cookie *htt
 }
 
 // listed lists path as cookie with query and answers the GRNs of the
-// objects answered, in order: an object's own, or for a definition the
-// agent's it names.
+// objects answered, in order.
 func (s *listStack) listed(t *testing.T, path string, query url.Values, cookie *http.Cookie) []string {
 	t.Helper()
 	status, body := s.get(t, path, query, cookie)
 	require.Equal(t, http.StatusOK, status, body)
 	var objects []struct {
-		Grn      string `json:"grn"`
-		AgentGrn string `json:"agentGrn"`
+		Grn string `json:"grn"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(body), &objects))
 	out := make([]string, 0, len(objects))
 	for _, o := range objects {
-		out = append(out, cmp.Or(o.Grn, o.AgentGrn))
+		out = append(out, o.Grn)
 	}
 	return out
 }
@@ -154,10 +151,6 @@ func listKinds() []listKind {
 		{name: "projects", path: "/orgs/acme/projects", action: org.ActionProjectRead, seed: seedListProject},
 		{name: "agents", path: "/orgs/acme/agents", action: org.ActionAgentRead,
 			seed: func(t *testing.T, s *listStack, _ string) grn.GRN { return seedAgent(t, s.agents, s.acme) }},
-		// A definition is read at its agent's identifier, on agent:read
-		// on the agent it names.
-		{name: "agent definitions", path: "/orgs/acme/agent-definitions", action: org.ActionAgentRead,
-			seed: func(t *testing.T, s *listStack, name string) grn.GRN { return seedNamedAgent(t, s, "", name) }},
 		// A policy is read by its versions, the one read policy:read
 		// gates on the policy itself.
 		{name: "policies", path: "/orgs/acme/policies", action: org.ActionPolicyRead, readSuffix: "/versions",

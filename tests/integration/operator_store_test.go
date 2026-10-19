@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -60,19 +59,10 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	_, err = s.Get(ctx, scopedGRN("acme", operator.ServiceType, "two"))
 	assert.ErrorIs(t, err, operator.ErrOperatorNotFound)
 
-	// Deleting the org takes its operators and the definitions naming
-	// them in one statement. The foreign key between the two is NO
-	// ACTION for exactly this: RESTRICT would refuse the cascade.
-	definitions := agent.NewPostgresStore(p)
-	d, err := agent.NewDefinition(orgRootGRN("acme"), one.GRN(), "Field agent", agent.Values{}, registeredBy)
-	require.NoError(t, err)
-	keepDefinition(t, p, d)
+	// Deleting the org takes its operators with it.
 	require.NoError(t, orgs.DeleteOrg(ctx, orgRootGRN("acme")))
 	_, err = s.Get(ctx, one.GRN())
 	assert.ErrorIs(t, err, operator.ErrOperatorNotFound)
-	remaining, err := definitions.ListDefinitionsByOrg(ctx, orgRootGRN("acme"))
-	require.NoError(t, err)
-	assert.Empty(t, remaining)
 	// The other org is untouched, so the cascade removed a row rather
 	// than every row.
 	_, err = s.Get(ctx, elsewhere.GRN())

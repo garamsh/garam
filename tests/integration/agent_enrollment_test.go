@@ -106,17 +106,15 @@ func TestAgentEnrollment_AdmitsAManagedAgentFencedAndActivatesItThroughTheShared
 	require.NoError(t, err)
 
 	var (
-		mode      string
 		lineage   string
 		activated bool
 		assignee  string
 		epoch     int
 	)
 	require.NoError(t, s.pool.QueryRow(context.Background(),
-		`SELECT e.mode, e.lineage::text, e.activation_id IS NOT NULL, a.assignee_grn, a.epoch
+		`SELECT e.lineage::text, e.activation_id IS NOT NULL, a.assignee_grn, a.epoch
 		   FROM agent_executions e JOIN agent_assignments a USING (agent_grn) WHERE agent_grn = $1`,
-		g.String()).Scan(&mode, &lineage, &activated, &assignee, &epoch))
-	assert.Equal(t, "fenced", mode, "admission starts the agent fenced")
+		g.String()).Scan(&lineage, &activated, &assignee, &epoch))
 	assert.False(t, activated, "admission activates no generation")
 	assert.Equal(t, admitted.Lineage.String(), lineage, "the answer names the lineage the execution holds")
 	assert.Equal(t, s.controller.String(), assignee)

@@ -1,6 +1,18 @@
 import type { Page } from "@playwright/test";
 
 import { axeViolations, expectHydrated } from "./axe";
+
+/**
+ * The budget of the two flows that walk a whole operator lifecycle,
+ * with six axe scans each and, in the first, up to one 5 s re-read of
+ * the setup page. Measured with the scans scoped as below: 10 to 21 s
+ * on one CPU, and at most 30.7 s on a host at load average 36, where
+ * the 30 s default failed them (#1511). Twice that worst run.
+ */
+const LIFECYCLE_BUDGET_MS = 60_000;
+
+/** The tab panel on show; inactive ones stay mounted, hidden. */
+const ACTIVE_PANEL = '[role="tabpanel"][data-state="active"]';
 import { expect, test } from "./fixtures";
 import {
   recordedAuthority,
@@ -77,6 +89,7 @@ test.describe("operators", () => {
     page,
     signedIn,
   }) => {
+    test.setTimeout(LIFECYCLE_BUDGET_MS);
     const operators = `/console/orgs/${signedIn.orgSlug}/operators`;
     await page.goto(operators);
     await expectHydrated(page);
@@ -135,7 +148,9 @@ test.describe("operators", () => {
     await expect(snippet).toContainText("kubectl apply --server-side");
     await expect(snippet).toContainText("private-key.pem=./field-two.pem");
     await expect(snippet).not.toContainText("PRIVATE KEY");
-    expect(await axeViolations(page)).toEqual([]);
+    // The setup page was read whole when it opened; each step changes
+    // its content alone (#1511).
+    expect(await axeViolations(page, ["main"])).toEqual([]);
 
     await page.getByRole("button", { name: /placed the key/ }).click();
     await expect(page.getByText("Waiting for its first sign-in")).toBeVisible();
@@ -146,7 +161,7 @@ test.describe("operators", () => {
     await expect(page.getByText("Field two is connected")).toBeVisible({
       timeout: 15_000,
     });
-    expect(await axeViolations(page)).toEqual([]);
+    expect(await axeViolations(page, ["main"])).toEqual([]);
 
     await page.getByRole("link", { name: /Go to Field two/ }).click();
     await expect(page).toHaveURL(`${operators}/field-two?tab=keys`);
@@ -203,15 +218,20 @@ test.describe("operators", () => {
     page,
     signedIn,
   }) => {
+    test.setTimeout(LIFECYCLE_BUDGET_MS);
     const operators = `/console/orgs/${signedIn.orgSlug}/operators`;
     const seeded = `${operators}/${signedIn.operatorIdentifier}`;
 
     await page.goto(seeded);
     await expectHydrated(page);
     expect(await axeViolations(page)).toEqual([]);
+    // The page was read whole above; a tab changes its own panel and
+    // nothing around it, so each is read alone. Reading the whole page
+    // again per tab was most of this test's time on a loaded host
+    // (#1511).
     for (const tab of ["Keys", "Control service", "Delegation", "Settings"]) {
       await page.getByRole("tab", { name: tab, exact: true }).click();
-      expect(await axeViolations(page)).toEqual([]);
+      expect(await axeViolations(page, [ACTIVE_PANEL])).toEqual([]);
     }
 
     // Renaming keeps the identifier the page is addressed by.

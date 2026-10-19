@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	"context"
-	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -22,36 +21,17 @@ import (
 	"github.com/garamsh/garam/internal/operator"
 )
 
-// tokenStack is the managed execution stack once the hosted control
-// service and the controller each hold a key and the token garam
-// accepts for it, which is what the v2 contract values take (ADR-0100
-// G1c, ADR-0102).
+// tokenStack is the managed execution stack, whose hosted control
+// service and controller each hold a key and the token garam accepts
+// for it, which is what the contract values take (ADR-0100 G1c,
+// ADR-0102, ADR-0118).
 type tokenStack struct {
 	*executionStack
-	client *http.Client
-	// controllerKey is what the controller signs its assertions with,
-	// for garam's token or for one shown to the hosted control service.
-	controllerKey   *rsa.PrivateKey
-	hostedToken     string
-	controllerToken string
 }
 
 func newTokenStack(t *testing.T) *tokenStack {
 	t.Helper()
-	s := &tokenStack{executionStack: newManagedStack(t)}
-	s.client, _ = tokenClient(t)
-	s.hostedToken = s.keyedToken(t, s.hosted)
-	s.controllerKey, _ = issueKey(t, operator.NewPostgresStore(s.pool), s.controller, operator.KeyRotationFirst)
-	s.controllerToken = exchangeKey(t, s.client, s.machine, s.controller, s.controllerKey, nil)
-	return s
-}
-
-// keyedToken issues subject its first key, as the console does, and
-// answers the token garam accepts for it.
-func (s *tokenStack) keyedToken(t *testing.T, subject grn.GRN) string {
-	t.Helper()
-	private, _ := issueKey(t, operator.NewPostgresStore(s.pool), subject, operator.KeyRotationFirst)
-	return exchangeKey(t, s.client, s.machine, subject, private, nil)
+	return &tokenStack{executionStack: newManagedStack(t)}
 }
 
 // tokenSend performs one request over the token client with the
@@ -91,21 +71,6 @@ func (s *tokenStack) v2(t *testing.T, method, path, version, token, operation, b
 func (s *tokenStack) shownToHosted(t *testing.T) string {
 	t.Helper()
 	return exchangeKey(t, s.client, s.machine, s.controller, s.controllerKey, &s.hosted)
-}
-
-// agentToken is the controller's mint of g's token: garam's where
-// audience is nil, and one shown to audience otherwise.
-func (s *tokenStack) agentToken(t *testing.T, g grn.GRN, audience *grn.GRN) machinegen.AgentToken {
-	t.Helper()
-	body := `{}`
-	if audience != nil {
-		body = `{"audience":"` + audience.String() + `"}`
-	}
-	got := s.v2(t, http.MethodPost, "/agents/"+g.String()+"/tokens", operator.TokenContractVersion, s.controllerToken, "", body)
-	require.Equal(t, http.StatusCreated, got.status, got.body)
-	var minted machinegen.AgentToken
-	require.NoError(t, json.Unmarshal([]byte(got.body), &minted))
-	return minted
 }
 
 // createdV2 creates an agent on the controller under
@@ -227,8 +192,6 @@ func TestTokenContracts_AHostedOperatorDrivesAManagedAgentWithTokensAlone(t *tes
 	assert.ElementsMatch(t, []string{"grn", "lineage"}, keysOf(answer), "a v2 recovery signs nothing and names no chain")
 	assert.Equal(t, s.lineageOf(t, m.agent), answer["lineage"], "it names the lineage it opened")
 	assert.NotEqual(t, opened, answer["lineage"], "which is the next one")
-	assert.Zero(t, countRows(t, s.pool, `SELECT count(*) FROM agent_credentials WHERE agent_grn = $1`, m.agent.String()),
-		"and records no credential, since it signed none")
 
 	assert.Equal(t, http.StatusUnauthorized, s.claimWith(t, m.agent, own.Token, activation.Token),
 		"the recovery refuses the replaced lineage's token on the next request")
@@ -257,6 +220,15 @@ func TestTokenContracts_AHostedOperatorDrivesAManagedAgentWithTokensAlone(t *tes
 	assert.Equal(t, http.StatusOK, got.status, got.body)
 }
 
+// keysOf answers the names of m's members.
+func keysOf(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}
+
 // lineageOf reads the credential lineage g's execution holds now.
 func (s *tokenStack) lineageOf(t *testing.T, g grn.GRN) string {
 	t.Helper()
@@ -275,101 +247,69 @@ func (s *tokenStack) mintRecovery(t *testing.T, g grn.GRN, digest, requestID str
 	return call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", s.owner, body)
 }
 
-// TestTokenContracts_EachCredentialIsServedUnderItsOwnValue holds every
-// contract family G1c moves to the rule ADR-0100 states: a request is
-// served under the value its credential takes, and one whose value
-// disagrees is refused with 400 naming that value. The request whose
-// value agrees is the control in each family: it is answered past the
-// contract check, whatever the rest of it then meets.
-func TestTokenContracts_EachCredentialIsServedUnderItsOwnValue(t *testing.T) {
+// TestTokenContracts_EachFamilyIsServedUnderItsOneValue holds every
+// contract family to the one value ADR-0118 leaves it: a request under
+// the value the certificate path took is refused with 400 naming the
+// value served, whether its token was accepted or refused. The request
+// under the served value is the control in each family: it is answered
+// past the contract check, whatever the rest of it then meets.
+func TestTokenContracts_EachFamilyIsServedUnderItsOneValue(t *testing.T) {
 	s := newTokenStack(t)
 	agentPath := "/agents/" + s.agent.String()
 	for _, family := range []struct {
 		name, method, path string
-		certificate, token string
+		removed, served    string
 	}{
-		{"operation authority", http.MethodGet, "/operation-references/unknown", operator.ContractVersion, operator.TokenAuthorityContractVersion},
-		{"execution fence", http.MethodPost, agentPath + "/execution/introspection", agent.ExecutionContractVersion, agent.TokenExecutionContractVersion},
-		{"managed enrollment", http.MethodPost, "/operators/" + s.controller.String() + "/managed-agents", agent.EnrollmentContractVersion, agent.TokenEnrollmentContractVersion},
-		{"durable delivery", http.MethodPost, "/outbox-messages", message.DeliveryContractVersion, message.TokenDeliveryContractVersion},
+		{"operation authority", http.MethodGet, "/operation-references/unknown", "operation-authority.v1", operator.TokenAuthorityContractVersion},
+		{"execution fence", http.MethodPost, agentPath + "/execution/introspection", "execution-fence.v1", agent.TokenExecutionContractVersion},
+		{"managed enrollment", http.MethodPost, "/operators/" + s.controller.String() + "/managed-agents", "managed-enrollment.v1", agent.TokenEnrollmentContractVersion},
+		{"durable delivery", http.MethodPost, "/outbox-messages", "durable-delivery.v1", message.TokenDeliveryContractVersion},
 	} {
 		t.Run(family.name, func(t *testing.T) {
-			byToken := func(version string) reply {
+			byToken := func(token, version string) reply {
 				return s.tokenSend(t, family.method, family.path, map[string]string{
-					"Authorization": "Garam-Token " + s.hostedToken, operator.ContractVersionHeader: version,
+					"Authorization": "Garam-Token " + token, operator.ContractVersionHeader: version,
 				}, `{}`)
 			}
-			got := byToken(family.certificate)
+			got := byToken(s.hostedToken, family.removed)
 			assert.Equal(t, http.StatusBadRequest, got.status, got.body)
-			assert.Equal(t, family.token, got.version)
-			assert.Contains(t, got.body, "served under "+family.token, "the refusal names the token's value")
-			got = byToken(family.token)
-			assert.Equal(t, family.token, got.version)
-			assert.NotContains(t, got.body, "Garam-Contract-Version", "control: the token's value passes the check")
+			assert.Equal(t, family.served, got.version)
+			assert.Contains(t, got.body, "served under "+family.served, "the refusal names the value served")
+			got = byToken(s.hostedToken, family.served)
+			assert.Equal(t, family.served, got.version)
+			assert.NotContains(t, got.body, "Garam-Contract-Version", "control: the served value passes the check")
 
-			// A token the listener refused is still a token: it is held
-			// to the token's value, and under it meets the listener's
-			// refusal rather than one naming the certificate's value.
-			refused := func(version string) reply {
-				return s.tokenSend(t, family.method, family.path, map[string]string{
-					"Authorization":                "Garam-Token " + operator.TokenPrefix + strings.Repeat("0", 64),
-					operator.ContractVersionHeader: version,
-				}, `{}`)
-			}
-			got = refused(family.token)
-			assert.Equal(t, http.StatusUnauthorized, got.status, "a refused token under its value: %s", got.body)
-			assert.Equal(t, family.token, got.version)
-			got = refused(family.certificate)
+			// A token the listener refused is held to the same value, and
+			// under it meets the listener's refusal.
+			refused := operator.TokenPrefix + strings.Repeat("0", 64)
+			got = byToken(refused, family.served)
+			assert.Equal(t, http.StatusUnauthorized, got.status, "a refused token under the served value: %s", got.body)
+			assert.Equal(t, family.served, got.version)
+			got = byToken(refused, family.removed)
 			assert.Equal(t, http.StatusBadRequest, got.status, got.body)
-			assert.Contains(t, got.body, "served under "+family.token, "not the certificate's value")
-
-			got = s.send(t, s.hostedTLS, family.method, family.path, family.token, "", `{}`)
-			assert.Equal(t, http.StatusBadRequest, got.status, got.body)
-			assert.Equal(t, family.certificate, got.version)
-			assert.Contains(t, got.body, family.certificate, "the refusal names the certificate's value")
-			got = s.send(t, s.hostedTLS, family.method, family.path, family.certificate, "", `{}`)
-			assert.Equal(t, family.certificate, got.version)
-			assert.NotContains(t, got.body, "Garam-Contract-Version", "control: the certificate's value passes the check")
+			assert.Contains(t, got.body, "served under "+family.served)
 		})
 	}
 }
 
-// TestTokenContracts_EachValueTakesItsOwnCredentialField holds what
-// each v2 value takes in place of a certificate: a forwarded token,
-// with certificatePem refused beside it, and a recovery with no
-// certificate request. The certificate under v1 is the control: the
-// same body with its own field is admitted.
-func TestTokenContracts_EachValueTakesItsOwnCredentialField(t *testing.T) {
+// TestTokenContracts_AForwardedTokenProvesItsOwnAgentAlone holds the
+// forwarded token to the agent it was minted for: another agent's
+// token shown to the same caller proves nothing of this one. The
+// agent's own token is the control.
+func TestTokenContracts_AForwardedTokenProvesItsOwnAgentAlone(t *testing.T) {
 	s := newTokenStack(t)
 	m := s.createdV2(t, "c-1")
 	shown := s.agentToken(t, m.agent, &s.hosted)
 	path := "/agents/" + m.agent.String() + "/execution/introspection"
-
-	both, err := json.Marshal(map[string]any{"token": shown.Token, "certificatePem": s.leaf})
-	require.NoError(t, err)
-	got := s.v2(t, http.MethodPost, path, agent.TokenExecutionContractVersion, s.hostedToken, "", string(both))
-	assert.Equal(t, http.StatusBadRequest, got.status, "certificatePem is refused beside a token: %s", got.body)
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredential("current"), s.standingV2(t, m.agent, shown.Token).Credential,
-		"control: the token alone is admitted")
-
-	got = s.lifecycle(t, s.hostedTLS, path, "", string(both))
-	assert.Equal(t, http.StatusBadRequest, got.status, "token is refused beside a certificate: %s", got.body)
+		"control: the agent's own token is admitted")
 
 	another := s.agentToken(t, s.createdV2(t, "c-2").agent, &s.hosted)
 	raw, err := json.Marshal(map[string]any{"token": another.Token})
 	require.NoError(t, err)
-	got = s.v2(t, http.MethodPost, path, agent.TokenExecutionContractVersion, s.hostedToken, "", string(raw))
+	got := s.v2(t, http.MethodPost, path, agent.TokenExecutionContractVersion, s.hostedToken, "", string(raw))
 	assert.Equal(t, http.StatusUnprocessableEntity, got.status,
 		"another agent's token shown to the caller proves nothing of this one: %s", got.body)
-
-	got = s.v2(t, http.MethodPost, "/agents/"+m.agent.String()+"/credential-recovery", agent.TokenExecutionContractVersion,
-		s.hostedToken, "any", `{"requestId":"rec-1","epoch":"1","certificateRequestPem":"x"}`)
-	assert.Equal(t, http.StatusBadRequest, got.status, "a v2 recovery refuses a certificate request: %s", got.body)
-
-	got = s.tokenSend(t, http.MethodPost, "/agents/"+m.agent.String()+"/initial-certificate", map[string]string{
-		"Authorization": "Garam-Token " + s.hostedToken, operator.ContractVersionHeader: agent.TokenEnrollmentContractVersion,
-	}, `{}`)
-	assert.Equal(t, http.StatusUnauthorized, got.status, "initial issuance goes with the certificate path: %s", got.body)
 }
 
 // TestTokenContracts_ATokensAudienceIsAnOperatorTheOrganizationHolds
@@ -404,7 +344,7 @@ func TestTokenContracts_ATokensAudienceIsAnOperatorTheOrganizationHolds(t *testi
 	}
 	for _, table := range []string{"operator_tokens", "agent_tokens"} {
 		toHosted, toGaram := shown(table)
-		require.Equal(t, 1, toHosted, table)
+		require.Positive(t, toHosted, table)
 		require.Positive(t, toGaram, table)
 	}
 

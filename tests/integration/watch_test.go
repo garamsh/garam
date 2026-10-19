@@ -16,7 +16,6 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
@@ -56,11 +55,9 @@ func TestWatchSurface_AWatchInOneProcessIsCountedAndFedByAnother(t *testing.T) {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	watched, adapter := provisioned(t, url, operator)
 
 	// The process serving browsers: its own watch service over the same

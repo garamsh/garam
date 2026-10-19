@@ -13,8 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	machinepg "github.com/garamsh/garam/internal/machine/postgres"
@@ -67,15 +65,15 @@ func TestMachineEvidence_RecordsTheFirstAndLastSightingAndARefresh(t *testing.T)
 	store := machinepg.New(p)
 	refreshing := scopedGRN("acme", operator.ServiceType, "refreshing")
 	lapsed := scopedGRN("acme", operator.ServiceType, "lapsed")
-	certified := scopedGRN("acme", "agent", "bot-1")
+	presenting := scopedGRN("acme", "agent", "bot-1")
 
-	require.NoError(t, store.Record(ctx, machine.Sighting{Caller: certified, Path: machine.PathCertificate}))
-	first, ok := evidenceOf(t, p, certified, machine.PathCertificate)
+	require.NoError(t, store.Record(ctx, machine.Sighting{Caller: presenting, Path: machine.PathToken}))
+	first, ok := evidenceOf(t, p, presenting, machine.PathToken)
 	require.True(t, ok)
 	assert.Equal(t, first.firstAt, first.lastAt)
 	assert.Nil(t, first.issuedUntil, "a listener sighting issued nothing")
-	require.NoError(t, store.Record(ctx, machine.Sighting{Caller: certified, Path: machine.PathCertificate}))
-	again, _ := evidenceOf(t, p, certified, machine.PathCertificate)
+	require.NoError(t, store.Record(ctx, machine.Sighting{Caller: presenting, Path: machine.PathToken}))
+	again, _ := evidenceOf(t, p, presenting, machine.PathToken)
 	assert.Equal(t, first.firstAt, again.firstAt, "the first sighting is kept")
 	assert.True(t, again.lastAt.After(first.lastAt), "the last sighting moves")
 
@@ -96,8 +94,8 @@ func TestMachineEvidence_RecordsTheFirstAndLastSightingAndARefresh(t *testing.T)
 	assert.Nil(t, after.lastRefreshAt, "an exchange after the last token expired is no refresh")
 
 	stranger := scopedGRN("ghost", operator.ServiceType, "one")
-	require.NoError(t, store.Record(ctx, machine.Sighting{Caller: stranger, Path: machine.PathCertificate}))
-	_, ok = evidenceOf(t, p, stranger, machine.PathCertificate)
+	require.NoError(t, store.Record(ctx, machine.Sighting{Caller: stranger, Path: machine.PathToken}))
+	_, ok = evidenceOf(t, p, stranger, machine.PathToken)
 	assert.False(t, ok, "an organization garam does not hold keeps no evidence")
 }
 
@@ -115,17 +113,17 @@ func TestMachineEvidence_GoesWithTheTenantAndOutlivesTheCaller(t *testing.T) {
 	deleted := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "deleted"))
 	other := registerOperator(t, p, scopedGRN("globex", operator.ServiceType, "other"))
 	for _, caller := range []grn.GRN{deleted, other} {
-		require.NoError(t, store.Record(ctx, machine.Sighting{Caller: caller, Path: machine.PathCertificate}))
+		require.NoError(t, store.Record(ctx, machine.Sighting{Caller: caller, Path: machine.PathToken}))
 	}
 
 	require.NoError(t, operator.NewPostgresStore(p).Delete(ctx, deleted))
-	_, ok := evidenceOf(t, p, deleted, machine.PathCertificate)
+	_, ok := evidenceOf(t, p, deleted, machine.PathToken)
 	assert.True(t, ok, "a deleted caller keeps its evidence while its organization remains")
 
 	require.NoError(t, orgpg.New(p).DeleteOrg(ctx, orgRootGRN("acme")))
-	_, ok = evidenceOf(t, p, deleted, machine.PathCertificate)
+	_, ok = evidenceOf(t, p, deleted, machine.PathToken)
 	assert.False(t, ok, "the organization's deletion takes its evidence")
-	_, ok = evidenceOf(t, p, other, machine.PathCertificate)
+	_, ok = evidenceOf(t, p, other, machine.PathToken)
 	assert.True(t, ok, "another organization's evidence stays")
 }
 
@@ -175,14 +173,16 @@ func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	issuer, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 	store := operator.NewPostgresStore(p)
 
-	certifiedGRN := scopedGRN("acme", operator.ServiceType, "certified")
-	certified := machineClient(t, installed(t, p, issuer, certifiedGRN))
-	status, body := machineRequest(t, certified, http.MethodGet, url+"/identity")
-	require.Equal(t, http.StatusOK, status, string(body))
+	// The certificate path is one an earlier release recorded; garam
+	// writes no such row since ADR-0118, and the inventory still reads
+	// one it finds.
+	certifiedGRN := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "certified"))
+	_, err := p.Exec(context.Background(), `INSERT INTO machine_authentication_evidence
+		(caller_grn, path, org_grn, first_at, last_at) VALUES ($1, 'certificate', $2, now(), now())`,
+		certifiedGRN.String(), orgRootGRN("acme").String())
+	require.NoError(t, err)
 
 	exchangedGRN, key := keyed(t, store, "exchanged")
 	client, _ := tokenClient(t)

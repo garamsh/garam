@@ -86,10 +86,8 @@ func TestStandaloneListing_ListsApprovalsInEveryStateWithoutWhatSpendsThem(t *te
 		secret := sha256.Sum256([]byte(h.secret))
 		assert.NotContains(t, raw, hex.EncodeToString(secret[:]), "a secret's hash")
 		assert.NotContains(t, raw, h.secret, "a secret")
-		assert.NotContains(t, raw, fingerprintOf(t, h.supervisorCSR), "a supervisor key fingerprint")
-		assert.NotContains(t, raw, fingerprintOf(t, h.agentCSR), "an agent key fingerprint")
 	}
-	assert.NotContains(t, raw, "CERTIFICATE")
+	assert.NotContains(t, raw, "KeySha256", "no key fingerprint field")
 }
 
 // TestStandaloneListing_ListsSupervisorsActiveAndRevoked enrolls two
@@ -101,7 +99,7 @@ func TestStandaloneListing_ListsSupervisorsActiveAndRevoked(t *testing.T) {
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	_, active := s.standaloneOf(t)
-	got := s.activate(t, active.supervisorTLS, "v-1", generationOf(1), nil, active.agentLeaf)
+	got := s.activate(t, active.supervisorTLS, "v-1", generationOf(1), nil, active.agentToken)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	_, revoked := s.standaloneOf(t)
 	status, body := s.browse(t, http.MethodDelete, "/orgs/acme/agent-supervisors/"+revoked.supervisor.Identifier, s.owner, "")
@@ -193,7 +191,7 @@ func TestStandaloneListing_ASupervisorsLastActivationIsAtItsOwnEpoch(t *testing.
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	_, former := s.standaloneOf(t)
-	got := s.activate(t, former.supervisorTLS, "r-1", generationOf(1), nil, former.agentLeaf)
+	got := s.activate(t, former.supervisorTLS, "r-1", generationOf(1), nil, former.agentToken)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	next := newStandaloneHost(t)
 	s.approved(t, next, map[string]any{"agentGrn": former.agent.String(), "assigneeGrn": former.supervisor.String(), "epoch": former.epoch})

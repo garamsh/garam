@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -25,7 +23,7 @@ import (
 // version: one activation exists.
 //
 // T10: after a replacement, the ended intent's own request, sent to
-// garam again by the test with the supervisor's certificate, is refused
+// garam again by the test with the supervisor's token, is refused
 // with 409 and garam's current activation does not move. That is
 // garam's refusal; the supervisor sends nothing for an ended intent,
 // whose socket is gone with its adapter. The control is the live
@@ -34,7 +32,7 @@ import (
 func TestStandalone_ReplaysALostActivationAndRefusesAnEndedOne(t *testing.T) {
 	s := newStack(t)
 	h := s.newHost("agent")
-	h.prepareV1()
+	h.prepare()
 	h.approve(time.Now().Add(time.Hour))
 	out, err := h.enroll()
 	require.NoError(t, err, out)
@@ -61,7 +59,10 @@ func TestStandalone_ReplaysALostActivationAndRefusesAnEndedOne(t *testing.T) {
 	asked := p.asked()
 	require.GreaterOrEqual(t, len(asked), 2, "the first request and its retry")
 	for _, a := range asked {
-		assert.Equal(t, asked[0], a, "every attempt is the first request, unchanged")
+		// The token forwarded is the one the supervisor holds when it
+		// asks, which a restarted supervisor minted afresh.
+		delete(a, "token")
+		assert.Equal(t, withoutToken(asked[0]), a, "every attempt is the first request, unchanged")
 	}
 	before := h.record()
 	assert.Equal(t, committed.RequestID, before.Intent.RequestID)
@@ -79,17 +80,16 @@ func TestStandalone_ReplaysALostActivationAndRefusesAnEndedOne(t *testing.T) {
 	assert.Equal(t, committed.ID, after.Intent.Replaces, "the successor names its predecessor's activation")
 	assert.Equal(t, "superseded", s.activations(agentGRN)[0].Ended)
 
-	leaf, err := os.ReadFile(filepath.Join(h.agent, "agent.crt"))
-	require.NoError(t, err)
+	forwarded := h.agentToken()
 	replay := func(r record) (int, map[string]any) {
 		var replaces any
 		if r.Intent.Replaces != "" {
 			replaces = r.Intent.Replaces
 		}
-		status, raw := h.call(h.supervisorClient(), "/agents/"+agentGRN+"/activations", "execution-fence.v1", "",
+		status, raw := h.call(h.supervisorClient(), "/agents/"+agentGRN+"/activations", "execution-fence.v2", "",
 			map[string]any{
 				"requestId": r.Intent.RequestID, "epoch": epoch, "generation": r.Intent.Generation,
-				"replacesActivationId": replaces, "operationRef": nil, "certificatePem": string(leaf),
+				"replacesActivationId": replaces, "operationRef": nil, "token": forwarded,
 			})
 		var answer map[string]any
 		_ = json.Unmarshal(raw, &answer)
@@ -107,4 +107,15 @@ func TestStandalone_ReplaysALostActivationAndRefusesAnEndedOne(t *testing.T) {
 	require.Equal(t, http.StatusOK, status, "the control: the live intent's request is answered again: %v", answer)
 	assert.Equal(t, current.ID, answer["activationId"])
 	assert.Greater(t, s.activations(agentGRN)[1].TokenVersion, current.TokenVersion)
+}
+
+// withoutToken is a copy of request without its forwarded token.
+func withoutToken(request map[string]any) map[string]any {
+	out := make(map[string]any, len(request))
+	for k, v := range request {
+		if k != "token" {
+			out[k] = v
+		}
+	}
+	return out
 }

@@ -79,13 +79,13 @@ func TestAgentRead_AnswersTheGenerationLastActivated(t *testing.T) {
 	require.Contains(t, all, s.agent.String())
 	assert.Nil(t, all[s.agent.String()].Generation)
 
-	first := s.activated(t, "g-1", generationOf(1), nil, s.leaf)
+	first := s.activated(t, "g-1", generationOf(1), nil, s.forwarded)
 	one, all = readAgents(t, url, s)
 	require.NotNil(t, one.Generation)
 	assert.Equal(t, string(generationOf(1)), *one.Generation)
 	assert.Equal(t, one.Generation, all[s.agent.String()].Generation, "the list answers what the read does")
 
-	second := s.activated(t, "g-2", generationOf(2), &first.ActivationId, s.leaf)
+	second := s.activated(t, "g-2", generationOf(2), &first.ActivationId, s.forwarded)
 	one, _ = readAgents(t, url, s)
 	require.NotNil(t, one.Generation)
 	assert.Equal(t, string(generationOf(2)), *one.Generation, "the latest activation's")

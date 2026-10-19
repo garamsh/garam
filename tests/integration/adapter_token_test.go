@@ -253,6 +253,13 @@ func serverTLSOnly(t *testing.T) *http.Client {
 // through c, forwarding the outbox in dir.
 func startTokenAdapter(t *testing.T, s *tokenStack, c *tokenControlStandIn, rt *runtimeDouble, g grn.GRN, files tokenFiles, dir string) *adapterProcess {
 	t.Helper()
+	return startTokenAdapterSigning(t, s.executionStack, c, rt, g, files, dir, false)
+}
+
+// startTokenAdapterSigning is startTokenAdapter with the adapter's
+// signing switch as sign says.
+func startTokenAdapterSigning(t *testing.T, s *executionStack, c *tokenControlStandIn, rt *runtimeDouble, g grn.GRN, files tokenFiles, dir string, sign bool) *adapterProcess {
+	t.Helper()
 	garam := tokenFileOf(t, files.garam)
 	control := tokenFileOf(t, files.control)
 	execution := delivery.NewFencedExecution()
@@ -272,6 +279,7 @@ func startTokenAdapter(t *testing.T, s *tokenStack, c *tokenControlStandIn, rt *
 		RetryDelay: 10 * time.Millisecond, MaxRetryDelay: 50 * time.Millisecond, MinRenewInterval: 50 * time.Millisecond,
 		StatusInterval: 10 * time.Millisecond, OutboxInterval: 20 * time.Millisecond,
 		ClaimTimeout: 5 * time.Second, CallTimeout: 2 * time.Second,
+		ForwardSignature: sign,
 	})
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())

@@ -11,11 +11,9 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -30,55 +28,33 @@ func detailsPatch(t *testing.T, name, description string) operator.DetailsPatch 
 	return p
 }
 
-// rowOf reads one text column of the row the query selects, so a test
-// can hold what a write left behind against what it left before.
-func rowOf(t *testing.T, p *pgxpool.Pool, query string, g grn.GRN) string {
-	t.Helper()
-	var out string
-	require.NoError(t, p.QueryRow(context.Background(), query, g.String()).Scan(&out))
-	return out
-}
-
 // TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesBy is
-// ADR-0074 against real Postgres and a real handshake: renaming and
+// ADR-0074 against real Postgres and the listener: renaming and
 // describing an operator changes what the organization calls it and
-// nothing it runs on.
-//
-// The operator holding a certificate keeps the certificate row a
-// renewal is measured against, keeps authenticating with the
-// certificate it holds. The operator holding a key keeps that key
-// live. Both answers carry the new details, so the update is shown to
-// have happened on the rows the rest is read from.
+// nothing it runs on. The operator keeps its key live and keeps
+// authenticating with the token that key was exchanged for, and the
+// answer carries the new details, so the update is shown to have
+// happened on the row the rest is read from.
 func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesBy(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	keyFile, sealer := keyEncryptionKey(t)
+	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
 	store := operator.NewPostgresStore(p)
 
-	enrolled := register(t, store, "enrolled")
-	certificate := mintedOutOfBand(t, keyFile, enrolled)
 	keyed := register(t, store, "keyed")
-	_, key := issueKey(t, store, keyed, operator.KeyRotationFirst)
+	private, key := issueKey(t, store, keyed, operator.KeyRotationFirst)
+	client, _ := tokenClient(t)
+	token := exchangeKey(t, client, url, keyed, private, nil)
+	require.Equal(t, http.StatusOK, identifiesWith(t, client, url, token), "the control: the token authenticates before")
 
-	serial := rowOf(t, p, `SELECT serial FROM operator_certificates WHERE operator_grn = $1`, enrolled)
-	before, err := store.Get(ctx, enrolled)
+	renamed, err := store.UpdateDetails(ctx, keyed, detailsPatch(t, "Field cluster", "Runs the batch agents."))
 	require.NoError(t, err)
-
-	updated, err := store.UpdateDetails(ctx, enrolled, detailsPatch(t, "Field cluster", "Runs the batch agents."))
-	require.NoError(t, err)
-	assert.Equal(t, "Field cluster", updated.Name)
-	assert.Equal(t, "Runs the batch agents.", updated.Description)
-	assert.Equal(t, before.CertificateIssuedAt(), updated.CertificateIssuedAt())
-	assert.Equal(t, serial, rowOf(t, p, `SELECT serial FROM operator_certificates WHERE operator_grn = $1`, enrolled),
-		"the lineage a renewal is measured against is where it was")
-	assert.Equal(t, http.StatusOK, identifies(t, url, certificate), "the certificate it holds still authenticates")
-
-	renamed, err := store.UpdateDetails(ctx, keyed, detailsPatch(t, "Staging", ""))
-	require.NoError(t, err)
-	assert.Equal(t, "Staging", renamed.Name)
+	assert.Equal(t, "Field cluster", renamed.Name)
+	assert.Equal(t, "Runs the batch agents.", renamed.Description)
+	assert.Equal(t, http.StatusOK, identifiesWith(t, client, url, token), "the token it holds still authenticates")
 	keys, err := store.ListKeys(ctx, keyed)
 	require.NoError(t, err)
 	require.Len(t, keys, 1)

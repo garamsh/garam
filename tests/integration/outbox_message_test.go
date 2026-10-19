@@ -17,7 +17,6 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
@@ -214,8 +213,8 @@ func TestOutbox_AKeyTheSweepEmptiedStoresNothingAgain(t *testing.T) {
 func TestOutbox_ARequestDelayedAtTheWriteBoundaryIsJudgedWhenItWrites(t *testing.T) {
 	ctx := context.Background()
 	f := newFence(t)
-	_, token := f.activate(t, "r1", generation(1), nil, valid("1"))
-	c := valid("1")
+	_, token := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
+	c := f.valid(t, "1")
 	hash := token.Hash()
 	fence := &message.Fence{Agent: f.agent, Serial: c.Serial, NotBefore: c.NotBefore, NotAfter: c.NotAfter, TokenHash: hash[:]}
 	o := newOutbox(t, f.p)
@@ -312,11 +311,9 @@ func TestOutbox_TheRouteRefusesWithoutItsContractOrCreationInstantBeforeAnyWrite
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, operator)
 	recipientGRN, _ := provisioned(t, url, operator)
 	o := newOutbox(t, p)
@@ -331,12 +328,11 @@ func TestOutbox_TheRouteRefusesWithoutItsContractOrCreationInstantBeforeAnyWrite
 	}
 
 	created := o.clock(t).Add(-time.Minute).UTC().Format(time.RFC3339Nano)
-	// The sender presents a token, so the value its route serves is the
-	// token's, and the certificate's is the one it does not.
+	// The route serves durable-delivery.v2 alone (ADR-0118).
 	const served = message.TokenDeliveryContractVersion
 	for _, tc := range []struct{ name, version, body string }{
 		{name: "no contract version", body: entryTo(recipientGRN, "entry-1", created)},
-		{name: "a version this route does not serve", version: message.DeliveryContractVersion, body: entryTo(recipientGRN, "entry-1", created)},
+		{name: "a version this route does not serve", version: "durable-delivery.v1", body: entryTo(recipientGRN, "entry-1", created)},
 		{name: "no creation instant", version: served, body: `{"recipient":"` + recipientGRN.String() + `","idempotencyKey":"entry-1","body":"hello"}`},
 		{name: "a creation instant that does not parse", version: served, body: entryTo(recipientGRN, "entry-1", "yesterday")},
 	} {

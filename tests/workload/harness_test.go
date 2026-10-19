@@ -17,7 +17,6 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
@@ -26,7 +25,6 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -149,17 +147,20 @@ type host struct {
 	dir    string
 	prefix string
 	images workload.Images
-	leaf   []byte
-	key    []byte
-	issuer []byte
+	// root is the garam server root the adapter verifies garam by, and
+	// signer the key that signs the stand-in garam's certificate.
+	root   []byte
 	signer *signer
+	// token is the agent's token the supervisor holds and hands the
+	// adapter, and forwards on activation.
+	token  string
 	daemon string
 	// machineURL is where the adapter reaches garam: nothing, unless
 	// the test stands garam in with garamOn.
 	machineURL string
 }
 
-// signer is the agent's issuer, which here also signs the stand-in
+// signer is the garam server root's key, which signs the stand-in
 // garam's serving certificate the adapter verifies garam by.
 type signer struct {
 	cert *x509.Certificate
@@ -186,7 +187,8 @@ func newHost(t *testing.T) *host {
 			Adapter:   required(t, "GARAM_TEST_ADAPTER_IMAGE"),
 		},
 	}
-	h.issuer, h.leaf, h.key, h.signer = agentCredential(t)
+	h.root, h.signer = serverRoot(t)
+	h.token = "garam_at_" + hex.EncodeToString(randomBytes(32))
 	t.Cleanup(h.cleanup)
 	return h
 }
@@ -239,13 +241,14 @@ func (h *host) config(edit ...func(*workload.Desired)) workload.Config {
 	return workload.Config{
 		Dir: h.dir, Prefix: h.prefix, Desired: d,
 		Adapter: workload.AdapterFiles{
-			CertificatePEM: h.leaf, KeyPEM: h.key, IssuerPEM: h.issuer, ServerRootPEM: h.issuer,
+			ServerRootPEM: h.root,
 			// Nothing answers there unless garamOn stood garam in: the
 			// adapter's claims then fail and are retried, as they are
 			// while garam is unreachable.
 			MachineURL: h.machineURL,
 		},
 		MessageIssuer: "https://garam.test",
+		Tokens:        fixedToken(h.token),
 	}
 }
 
@@ -374,40 +377,27 @@ type probeReport struct {
 	Write  map[string]string `json:"write"`
 }
 
-// agentCredential is an issuer and a leaf it signed for the test agent,
-// as garam signs one.
-func agentCredential(t *testing.T) (issuerPEM, leafPEM, keyPEM []byte, issuing *signer) {
+// fixedToken is the agent's token as the supervisor holds it: one,
+// never refreshed within a test.
+type fixedToken string
+
+func (f fixedToken) Current(context.Context) (string, error) { return string(f), nil }
+
+// serverRoot is a garam server root and the key that signs under it.
+func serverRoot(t *testing.T) ([]byte, *signer) {
 	t.Helper()
-	issuerKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	issuer := &x509.Certificate{
-		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "acme authority"},
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "garam server root"},
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(24 * time.Hour),
 		KeyUsage: x509.KeyUsageCertSign, BasicConstraintsValid: true, IsCA: true,
 	}
-	issuerDER, err := x509.CreateCertificate(rand.Reader, issuer, issuer, &issuerKey.PublicKey, issuerKey)
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	require.NoError(t, err)
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	parsed, err := x509.ParseCertificate(der)
 	require.NoError(t, err)
-	uri, err := url.Parse(testAgent.String())
-	require.NoError(t, err)
-	leaf := &x509.Certificate{
-		SerialNumber: big.NewInt(2), URIs: []*url.URL{uri},
-		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(24 * time.Hour),
-		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-	}
-	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, issuer, &key.PublicKey, issuerKey)
-	require.NoError(t, err)
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	require.NoError(t, err)
-	leafPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
-	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	_, err = tls.X509KeyPair(leafPEM, keyPEM)
-	require.NoError(t, err)
-	parsed, err := x509.ParseCertificate(issuerDER)
-	require.NoError(t, err)
-	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issuerDER}), leafPEM, keyPEM,
-		&signer{cert: parsed, key: issuerKey}
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), &signer{cert: parsed, key: key}
 }
 
 // garamOn stands garam's machine listener in, in a container of its
@@ -418,7 +408,7 @@ func (h *host) garamOn() string {
 	h.t.Helper()
 	name := h.prefix + "garam"
 	h.mustDocker("create", "--name", name, "--entrypoint", "/probe", h.images.Workspace,
-		"garam", ":8443", "/tmp/garam.crt", "/tmp/garam.key")
+		"garam", ":8443", "/tmp/garam.crt", "/tmp/garam.key", testAgent.String())
 	path, err := probeBinary()
 	require.NoError(h.t, err)
 	h.mustDocker("cp", path, name+":/probe")

@@ -15,7 +15,6 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
@@ -73,11 +72,9 @@ func newSendStack(t *testing.T) sendStack {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 	policies, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	return sendStack{p: p, url: url, policies: policies, operator: operator}
 }
 

@@ -164,52 +164,6 @@ func TestOperatorToken_RefusedOnTheNextRequestOverAnOpenConnection(t *testing.T)
 	assert.Equal(t, 1, *connections, "every request travelled over one connection")
 }
 
-// requestWith answers the status and body of method on path presenting
-// token over client.
-func requestWith(t *testing.T, client *http.Client, method, url, token string) (int, string) {
-	t.Helper()
-	req, err := http.NewRequest(method, url, nil)
-	require.NoError(t, err)
-	req.Header.Set("Authorization", "Garam-Token "+token)
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
-	return resp.StatusCode, string(body)
-}
-
-// TestOperatorToken_ReachesTheOperatorRoutesAloneOnTheShippedListener
-// is ConfineTokens as `serve machine` wires it (ADR-0100): a live token
-// is refused on a route outside the set that lists it — the signing
-// keys, whose handler reads nothing of the caller, so the confinement
-// is what refuses it — and on the renewal, which reads a certificate
-// the token does not carry. The same token on GET /identity is the
-// control.
-func TestOperatorToken_ReachesTheOperatorRoutesAloneOnTheShippedListener(t *testing.T) {
-	ctx := context.Background()
-	p := pool(t)
-	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	_, sealer := keyEncryptionKey(t)
-	_, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
-	subject, key := keyed(t, operator.NewPostgresStore(p), "one")
-	client, _ := tokenClient(t)
-	token := exchangeKey(t, client, url, subject, key, nil)
-
-	status, _ := requestWith(t, client, http.MethodGet, url+"/identity", token)
-	require.Equal(t, http.StatusOK, status, "the token authenticates where it is listed")
-
-	status, body := tokenCall(t, client, http.MethodGet, url+"/message-signing-keys", token, "", "")
-	assert.Equal(t, http.StatusUnauthorized, status)
-	assert.Contains(t, body, "this operation does not accept a token")
-
-	status, _ = requestWith(t, client, http.MethodPost, url+"/identity/certificate", token)
-	assert.Equal(t, http.StatusUnauthorized, status, "a token renews no certificate")
-	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_certificates`),
-		"nothing was issued")
-}
-
 // TestOperatorToken_AKeyHoldsItsNewestFiveTokens holds the bound on
 // what exchanging writes (ADR-0102): seven exchanges leave five live
 // tokens, the two oldest no longer resolve, and the newest five do —

@@ -30,12 +30,12 @@ func TestRealEngine_ActivatesItsGenerationAndIsolatesIt(t *testing.T) {
 	asked := h.garam.requests[0]
 	assert.Equal(t, "3", asked.Epoch)
 	assert.Empty(t, asked.Replaces, "the first activation names no anchor")
-	assert.Equal(t, string(h.leaf), asked.CertificatePEM, "the leaf the adapter presented is what garam is shown")
+	assert.Equal(t, h.token, asked.Token, "the agent's token the supervisor holds is what garam is shown")
 
 	runtime, space, adapter := h.container(workload.RoleRuntime), h.container(workload.RoleWorkspace), h.container(workload.RoleAdapter)
 	reachable := []string{
 		"--open", "/run/garam-control/control.sock",
-		"--open", "/etc/garam/agent.key",
+		"--open", "/etc/garam/agent-token",
 		"--open", "/etc/garam/placement-token",
 		"--open", "/var/run/docker.sock",
 		"--open", "/run/docker.sock",
@@ -70,11 +70,11 @@ func TestRealEngine_ActivatesItsGenerationAndIsolatesIt(t *testing.T) {
 	assert.Equal(t, map[string]string{"/var/lib/sherlock-workspace": "ok"}, ws.Write,
 		"the control: the workspace writes its own volume")
 
-	ad := h.report(adapter, "--open", "/run/garam-control/control.sock", "--open", "/etc/garam/agent.key",
+	ad := h.report(adapter, "--open", "/run/garam-control/control.sock", "--open", "/etc/garam/agent-token",
 		"--open", "/var/run/docker.sock", "--open", "/run/docker.sock", "--write", "/outbox")
 	assert.Equal(t, "0000000000000000", ad.Status["CapEff"])
 	assert.Equal(t, "ok", ad.Open["/run/garam-control/control.sock"], "the control: the adapter reaches its socket")
-	assert.Equal(t, "ok", ad.Open["/etc/garam/agent.key"], "and its own key")
+	assert.Equal(t, "ok", ad.Open["/etc/garam/agent-token"], "and its own token")
 	assert.NotEqual(t, "ok", ad.Open["/var/run/docker.sock"])
 	assert.NotEqual(t, "ok", ad.Open["/run/docker.sock"])
 	assert.Equal(t, "ok", ad.Write["/outbox"], "and the outbox")

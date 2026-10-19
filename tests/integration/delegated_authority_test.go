@@ -23,8 +23,6 @@ import (
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
-	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -38,7 +36,8 @@ import (
 
 // authorityStack is both listeners as the serve commands compose them,
 // over one database and one policy engine: the browser-facing surface
-// over HTTP and the machine surface over mTLS. The delegated authority
+// over HTTP and the machine surface over TLS, where each operator
+// presents its token. The delegated authority
 // on each is cli.NewAuthorityService, the composition both commands
 // run.
 type authorityStack struct {
@@ -82,15 +81,14 @@ func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *
 	t.Cleanup(browser.Close)
 
 	_, sealer := keyEncryptionKey(t)
-	issuer, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 	hosted := scopedGRN("acme", operator.ServiceType, "hosted")
 	controller := scopedGRN("acme", operator.ServiceType, "controller")
+	machine := machineListener(t, p, sealer, engine)
 	return &authorityStack{
-		pool: p, engine: engine, browser: browser.URL, machine: machineListener(t, p, sealer, engine),
+		pool: p, engine: engine, browser: browser.URL, machine: machine,
 		acme: acme, owner: owner, member: member, memberGRN: memberGRN, hosted: hosted, controller: controller,
-		hostedTLS:  machineClient(t, installed(t, p, issuer, hosted)),
-		controlTLS: machineClient(t, installed(t, p, issuer, controller)),
+		hostedTLS:  operatorClient(t, p, machine, hosted),
+		controlTLS: operatorClient(t, p, machine, controller),
 	}
 }
 
@@ -111,6 +109,24 @@ func call(t *testing.T, client *http.Client, method, url string, cookie *http.Co
 	got, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	assert.Equal(t, operator.ContractVersion, resp.Header.Get(operator.ContractVersionHeader), "every contract answer carries the version")
+	return resp.StatusCode, string(got)
+}
+
+// machineCall is call on the machine listener, which serves
+// operation-authority.v2 alone (ADR-0118); every answer names it.
+func machineCall(t *testing.T, client *http.Client, method, url, body string) (int, string) {
+	t.Helper()
+	req, err := http.NewRequest(method, url, strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(operator.ContractVersionHeader, operator.TokenAuthorityContractVersion)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	got, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	assert.Equal(t, operator.TokenAuthorityContractVersion, resp.Header.Get(operator.ContractVersionHeader),
+		"every contract answer carries the version")
 	return resp.StatusCode, string(got)
 }
 
@@ -155,7 +171,7 @@ func authorityOf(t *testing.T, body string) apigen.OperationAuthority {
 
 func (s *authorityStack) introspect(t *testing.T, client *http.Client, authority string) (int, string) {
 	t.Helper()
-	return call(t, client, http.MethodPost, s.machine+"/operation-authorities/introspection", nil,
+	return machineCall(t, client, http.MethodPost, s.machine+"/operation-authorities/introspection",
 		`{"authority":"`+authority+`"}`)
 }
 
@@ -189,9 +205,9 @@ func TestDelegatedAuthority_EndToEnd(t *testing.T) {
 
 	status, _ = s.introspect(t, s.controlTLS, minted.Authority)
 	assert.Equal(t, http.StatusNotFound, status, "another operator of the same organization learns nothing")
-	status, _ = call(t, s.controlTLS, http.MethodGet, s.machine+"/operation-references/"+minted.OperationRef, nil, "")
+	status, _ = machineCall(t, s.controlTLS, http.MethodGet, s.machine+"/operation-references/"+minted.OperationRef, "")
 	assert.Equal(t, http.StatusNotFound, status)
-	status, _ = call(t, s.hostedTLS, http.MethodGet, s.machine+"/operation-references/"+minted.OperationRef, nil, "")
+	status, _ = machineCall(t, s.hostedTLS, http.MethodGet, s.machine+"/operation-references/"+minted.OperationRef, "")
 	assert.Equal(t, http.StatusOK, status)
 
 	agentGRN := s.provisionAgent(t)

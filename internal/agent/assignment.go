@@ -11,12 +11,15 @@ import (
 // assignment and fences the assignee it replaced: a state report is
 // accepted only at the current epoch, so a pod left running by a
 // previous assignee writes nothing.
+//
+// Every field is persisted on the row and exported: the type holds no
+// invariant over them, so it is a data carrier (ADR-0069).
 type Assignment struct {
-	agentGRN    grn.GRN
-	assigneeGRN grn.GRN
-	epoch       int
-	createdAt   time.Time
-	updatedAt   time.Time
+	Agent     grn.GRN
+	Assignee  grn.GRN
+	Epoch     int
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // NewAssignment binds the agent to the assignee at epoch, as of now.
@@ -25,16 +28,10 @@ type Assignment struct {
 func NewAssignment(agentGRN, assigneeGRN grn.GRN, epoch int) *Assignment {
 	now := time.Now().UTC()
 	return &Assignment{
-		agentGRN:    agentGRN,
-		assigneeGRN: assigneeGRN,
-		epoch:       epoch,
-		createdAt:   now,
-		updatedAt:   now,
+		Agent:     agentGRN,
+		Assignee:  assigneeGRN,
+		Epoch:     epoch,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 }
-
-func (a *Assignment) Agent() grn.GRN       { return a.agentGRN }
-func (a *Assignment) Assignee() grn.GRN    { return a.assigneeGRN }
-func (a *Assignment) Epoch() int           { return a.epoch }
-func (a *Assignment) CreatedAt() time.Time { return a.createdAt }
-func (a *Assignment) UpdatedAt() time.Time { return a.updatedAt }

@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -28,7 +29,7 @@ import (
 func NewAuthorityService(pool *pgxpool.Pool, engine grpc.ClientConnInterface) operator.AuthorityService {
 	delegations := operatorpg.New(pool)
 	return operator.NewAuthorityService(delegations, delegations, operatorpg.New(pool),
-		agentPlacements{store: agent.NewPostgresStore(pool)},
+		agentPlacements{store: agentpg.New(pool)},
 		currentAuthorization{orgs: orgpg.New(pool), users: userpg.New(pool),
 			engine: authzv1.NewAuthzServiceClient(engine)},
 		operator.Config{})
@@ -99,5 +100,5 @@ func (p agentPlacements) CurrentAssignment(ctx context.Context, g grn.GRN) (oper
 	if err != nil {
 		return operator.Assignment{}, err
 	}
-	return operator.Assignment{Assignee: a.Assignee(), Epoch: strconv.Itoa(a.Epoch())}, nil
+	return operator.Assignment{Assignee: a.Assignee, Epoch: strconv.Itoa(a.Epoch)}, nil
 }

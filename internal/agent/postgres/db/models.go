@@ -8,6 +8,16 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Agent struct {
+	Grn               string
+	OrgGrn            string
+	ProvisioningState string
+	RuntimeState      string
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+	Name              pgtype.Text
+}
+
 type AgentActivation struct {
 	ID                   pgtype.UUID
 	AgentGrn             string
@@ -23,6 +33,14 @@ type AgentActivation struct {
 	EndedReason          pgtype.Text
 	CreatedAt            pgtype.Timestamptz
 	EndedAt              pgtype.Timestamptz
+}
+
+type AgentAssignment struct {
+	AgentGrn    string
+	AssigneeGrn string
+	Epoch       int32
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type AgentEnrollment struct {

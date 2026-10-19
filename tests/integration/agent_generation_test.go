@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 
 	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -26,7 +26,7 @@ import (
 // cookies sign in here too.
 func agentReader(t *testing.T, s *executionStack, engine grpc.ClientConnInterface) string {
 	t.Helper()
-	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agent.NewPostgresStore(s.pool), nil, nil, nil,
+	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agentpg.New(s.pool), nil, nil, nil,
 		authn.NewPostgresSessionStore(s.pool), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
@@ -96,7 +96,7 @@ func TestAgentRead_AnswersTheGenerationLastActivated(t *testing.T) {
 	require.NotNil(t, one.Generation)
 	assert.Equal(t, string(generationOf(2)), *one.Generation, "a deactivation leaves the generation last activated")
 
-	quiet := seedAgent(t, agent.NewPostgresStore(p), s.acme)
+	quiet := seedAgent(t, agentpg.New(p), s.acme)
 	_, all = readAgents(t, url, s)
 	require.Contains(t, all, quiet.String(), "the agent never activated is listed")
 	assert.Nil(t, all[quiet.String()].Generation, "control: an agent never activated carries none")

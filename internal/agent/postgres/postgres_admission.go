@@ -35,8 +35,8 @@ func admit(ctx context.Context, q *db.Queries, a agent.IdentityAdmission, exec *
 			return 0, err
 		}
 		if err := q.CreateManagedAgent(ctx, db.CreateManagedAgentParams{
-			Grn: a.Agent.String(), OrgGrn: a.Org.String(), ProvisioningState: string(identity.ProvisioningState()),
-			RuntimeState: string(identity.RuntimeState()), CreatedAt: now, Name: nameText(a.Name),
+			Grn: a.Agent.String(), OrgGrn: a.Org.String(), ProvisioningState: string(identity.ProvisioningState),
+			RuntimeState: string(identity.RuntimeState), CreatedAt: now, Name: nameText(a.Name),
 		}); err != nil {
 			return 0, storageError(err, "create agent", nil, agent.ErrAgentAlreadyExists)
 		}

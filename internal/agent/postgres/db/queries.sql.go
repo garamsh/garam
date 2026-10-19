@@ -39,6 +39,75 @@ func (q *Queries) Admit(ctx context.Context, arg AdmitParams) (string, error) {
 	return column_1, err
 }
 
+const admitExecution = `-- name: AdmitExecution :one
+SELECT agent_execution_admit(
+    $1, $2::bytea, $3,
+    $4::timestamptz, $5::timestamptz
+)::text
+`
+
+type AdmitExecutionParams struct {
+	AgentGrn  string
+	TokenHash []byte
+	Serial    string
+	NotBefore pgtype.Timestamptz
+	NotAfter  pgtype.Timestamptz
+}
+
+// AdmitExecution runs the agent execution fence (ADR-0080) as the
+// first statement of a protected write's transaction; the row it locks
+// is held until that transaction ends.
+func (q *Queries) AdmitExecution(ctx context.Context, arg AdmitExecutionParams) (string, error) {
+	row := q.db.QueryRow(ctx, admitExecution,
+		arg.AgentGrn,
+		arg.TokenHash,
+		arg.Serial,
+		arg.NotBefore,
+		arg.NotAfter,
+	)
+	var column_1 string
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const assignAgent = `-- name: AssignAgent :one
+INSERT INTO agent_assignments (agent_grn, assignee_grn, epoch, created_at, updated_at)
+VALUES ($1, $2, 1, $3, $4)
+ON CONFLICT (agent_grn) DO UPDATE SET
+    assignee_grn = excluded.assignee_grn,
+    epoch        = agent_assignments.epoch + 1,
+    updated_at   = excluded.updated_at
+RETURNING agent_grn, assignee_grn, epoch, created_at, updated_at
+`
+
+type AssignAgentParams struct {
+	AgentGrn    string
+	AssigneeGrn string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+// AssignAgent writes onto the assignment the agent already has, so a
+// reassignment moves the assignee and raises the epoch that fenced the
+// one it replaces.
+func (q *Queries) AssignAgent(ctx context.Context, arg AssignAgentParams) (AgentAssignment, error) {
+	row := q.db.QueryRow(ctx, assignAgent,
+		arg.AgentGrn,
+		arg.AssigneeGrn,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	var i AgentAssignment
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.AssigneeGrn,
+		&i.Epoch,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const assignFirst = `-- name: AssignFirst :one
 INSERT INTO agent_assignments (agent_grn, assignee_grn, epoch, created_at, updated_at)
 VALUES ($1, $2, 1, $3, $3)
@@ -70,6 +139,62 @@ type ClearActivationParams struct {
 
 func (q *Queries) ClearActivation(ctx context.Context, arg ClearActivationParams) error {
 	_, err := q.db.Exec(ctx, clearActivation, arg.AgentGrn, arg.UpdatedAt)
+	return err
+}
+
+const countAgentsByOrg = `-- name: CountAgentsByOrg :one
+SELECT count(*) AS agent_count FROM agents WHERE org_grn = $1
+`
+
+// The agents the organization holds, which deleting the organization
+// removes with it. An agent's assignment goes with the agent and is
+// not counted apart from it.
+func (q *Queries) CountAgentsByOrg(ctx context.Context, orgGrn string) (int64, error) {
+	row := q.db.QueryRow(ctx, countAgentsByOrg, orgGrn)
+	var agent_count int64
+	err := row.Scan(&agent_count)
+	return agent_count, err
+}
+
+const createAgent = `-- name: CreateAgent :exec
+INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type CreateAgentParams struct {
+	Grn               string
+	OrgGrn            string
+	ProvisioningState string
+	RuntimeState      string
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
+func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) error {
+	_, err := q.db.Exec(ctx, createAgent,
+		arg.Grn,
+		arg.OrgGrn,
+		arg.ProvisioningState,
+		arg.RuntimeState,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const createAgentExecution = `-- name: CreateAgentExecution :exec
+INSERT INTO agent_executions (agent_grn, updated_at) VALUES ($1, $2)
+`
+
+type CreateAgentExecutionParams struct {
+	AgentGrn  string
+	UpdatedAt pgtype.Timestamptz
+}
+
+// Every agent has an execution row from the transaction that creates
+// it, so the row the fence locks always exists (ADR-0080).
+func (q *Queries) CreateAgentExecution(ctx context.Context, arg CreateAgentExecutionParams) error {
+	_, err := q.db.Exec(ctx, createAgentExecution, arg.AgentGrn, arg.UpdatedAt)
 	return err
 }
 
@@ -193,6 +318,28 @@ func (q *Queries) EndCurrentSupervisor(ctx context.Context, arg EndCurrentSuperv
 	return err
 }
 
+const endReassignedActivation = `-- name: EndReassignedActivation :exec
+WITH ended AS (
+    UPDATE agent_activations a SET ended_reason = 'reassigned', ended_at = $2
+    FROM agent_executions e
+    WHERE e.agent_grn = $1 AND a.id = e.activation_id AND a.ended_reason IS NULL
+)
+UPDATE agent_executions x SET activation_id = NULL, token_hash = NULL, updated_at = $2
+WHERE x.agent_grn = $1 AND x.activation_id IS NOT NULL
+`
+
+type EndReassignedActivationParams struct {
+	AgentGrn  string
+	UpdatedAt pgtype.Timestamptz
+}
+
+// EndReassignedActivation ends the activation a reassignment leaves
+// behind: the new assignee's runtime activates its own.
+func (q *Queries) EndReassignedActivation(ctx context.Context, arg EndReassignedActivationParams) error {
+	_, err := q.db.Exec(ctx, endReassignedActivation, arg.AgentGrn, arg.UpdatedAt)
+	return err
+}
+
 const endSupervisor = `-- name: EndSupervisor :exec
 UPDATE agent_supervisors SET ended_at = $2 WHERE grn = $1 AND ended_at IS NULL
 `
@@ -296,6 +443,85 @@ func (q *Queries) GetAdmittedReplacementByReference(ctx context.Context, operati
 		&i.AdmittedEpoch,
 		&i.AdmittedLineage,
 		&i.Name,
+	)
+	return i, err
+}
+
+const getAgent = `-- name: GetAgent :one
+SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name FROM agents WHERE grn = $1
+`
+
+func (q *Queries) GetAgent(ctx context.Context, grn string) (Agent, error) {
+	row := q.db.QueryRow(ctx, getAgent, grn)
+	var i Agent
+	err := row.Scan(
+		&i.Grn,
+		&i.OrgGrn,
+		&i.ProvisioningState,
+		&i.RuntimeState,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+	)
+	return i, err
+}
+
+const getAgentAssignment = `-- name: GetAgentAssignment :one
+SELECT agent_grn, assignee_grn, epoch, created_at, updated_at FROM agent_assignments WHERE agent_grn = $1
+`
+
+func (q *Queries) GetAgentAssignment(ctx context.Context, agentGrn string) (AgentAssignment, error) {
+	row := q.db.QueryRow(ctx, getAgentAssignment, agentGrn)
+	var i AgentAssignment
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.AssigneeGrn,
+		&i.Epoch,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAgentTokenShownTo = `-- name: GetAgentTokenShownTo :one
+SELECT agent_grn, serial, audience_grn, issued_at, expires_at
+FROM agent_tokens
+WHERE token_hash = $1
+  AND (audience_grn = $2
+       OR (audience_grn IS NULL AND assignee_grn = $2))
+`
+
+type GetAgentTokenShownToParams struct {
+	TokenHash string
+	CallerGrn pgtype.Text
+}
+
+type GetAgentTokenShownToRow struct {
+	AgentGrn    string
+	Serial      string
+	AudienceGrn pgtype.Text
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
+// A token as it was minted to be shown to one audience, with no join to
+// the agent's current state: the execution fence judges that, so a
+// token of an earlier epoch or lineage is answered fenced while its row
+// is kept. A mint's sweep and trim delete rows, and a token whose row
+// is gone is not proven.
+//
+// A token the caller itself minted for garam proves the agent too: a
+// standalone host's supervisor is the assignee and the lifecycle
+// authority at once, and forwards the agent's own token (ADR-0100).
+func (q *Queries) GetAgentTokenShownTo(ctx context.Context, arg GetAgentTokenShownToParams) (GetAgentTokenShownToRow, error) {
+	row := q.db.QueryRow(ctx, getAgentTokenShownTo, arg.TokenHash, arg.CallerGrn)
+	var i GetAgentTokenShownToRow
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.Serial,
+		&i.AudienceGrn,
+		&i.IssuedAt,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
@@ -527,6 +753,22 @@ func (q *Queries) GetExecution(ctx context.Context, agentGrn string) (GetExecuti
 		&i.CurrentGeneration,
 	)
 	return i, err
+}
+
+const getLatestGeneration = `-- name: GetLatestGeneration :one
+SELECT a.generation FROM agent_executions e
+JOIN agent_activations a ON a.id = e.latest_activation_id
+WHERE e.agent_grn = $1
+`
+
+// GetLatestGeneration answers the generation of the agent's most
+// recent activation, current or ended; no row for an agent never
+// activated.
+func (q *Queries) GetLatestGeneration(ctx context.Context, agentGrn string) (string, error) {
+	row := q.db.QueryRow(ctx, getLatestGeneration, agentGrn)
+	var generation string
+	err := row.Scan(&generation)
+	return generation, err
 }
 
 const getManagedCreation = `-- name: GetManagedCreation :one
@@ -996,6 +1238,80 @@ func (q *Queries) IsManagedCreation(ctx context.Context, agentGrn string) (bool,
 	return exists, err
 }
 
+const listAgentAssignmentsByOrg = `-- name: ListAgentAssignmentsByOrg :many
+SELECT a.agent_grn, a.assignee_grn, a.epoch, a.created_at, a.updated_at FROM agent_assignments a
+JOIN agents g ON g.grn = a.agent_grn
+WHERE g.org_grn = $1
+ORDER BY a.agent_grn
+`
+
+func (q *Queries) ListAgentAssignmentsByOrg(ctx context.Context, orgGrn string) ([]AgentAssignment, error) {
+	rows, err := q.db.Query(ctx, listAgentAssignmentsByOrg, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentAssignment
+	for rows.Next() {
+		var i AgentAssignment
+		if err := rows.Scan(
+			&i.AgentGrn,
+			&i.AssigneeGrn,
+			&i.Epoch,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAgentsByOrg = `-- name: ListAgentsByOrg :many
+SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name FROM agents
+WHERE org_grn = $1
+ORDER BY grn
+LIMIT $3 OFFSET $2
+`
+
+type ListAgentsByOrgParams struct {
+	OrgGrn    string
+	RowOffset int32
+	RowLimit  pgtype.Int4
+}
+
+func (q *Queries) ListAgentsByOrg(ctx context.Context, arg ListAgentsByOrgParams) ([]Agent, error) {
+	rows, err := q.db.Query(ctx, listAgentsByOrg, arg.OrgGrn, arg.RowOffset, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Agent
+	for rows.Next() {
+		var i Agent
+		if err := rows.Scan(
+			&i.Grn,
+			&i.OrgGrn,
+			&i.ProvisioningState,
+			&i.RuntimeState,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listEnrollments = `-- name: ListEnrollments :many
 SELECT id, placement, agent_grn, supervisor_grn, host_name, expected_assignee_grn, expected_epoch,
        approved_by, expires_at, created_at, withdrawn_at, consumed_at, epoch
@@ -1054,6 +1370,41 @@ func (q *Queries) ListEnrollments(ctx context.Context, arg ListEnrollmentsParams
 			&i.ConsumedAt,
 			&i.Epoch,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestGenerationsByOrg = `-- name: ListLatestGenerationsByOrg :many
+SELECT e.agent_grn, a.generation FROM agent_executions e
+JOIN agent_activations a ON a.id = e.latest_activation_id
+JOIN agents g ON g.grn = e.agent_grn
+WHERE g.org_grn = $1
+ORDER BY e.agent_grn
+`
+
+type ListLatestGenerationsByOrgRow struct {
+	AgentGrn   string
+	Generation string
+}
+
+// ListLatestGenerationsByOrg answers GetLatestGeneration for each of
+// the organization's agents that was ever activated.
+func (q *Queries) ListLatestGenerationsByOrg(ctx context.Context, orgGrn string) ([]ListLatestGenerationsByOrgRow, error) {
+	rows, err := q.db.Query(ctx, listLatestGenerationsByOrg, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLatestGenerationsByOrgRow
+	for rows.Next() {
+		var i ListLatestGenerationsByOrgRow
+		if err := rows.Scan(&i.AgentGrn, &i.Generation); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1126,6 +1477,19 @@ func (q *Queries) ListSupervisors(ctx context.Context, arg ListSupervisorsParams
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockAgentExecution = `-- name: LockAgentExecution :one
+SELECT agent_grn FROM agent_executions WHERE agent_grn = $1 FOR UPDATE
+`
+
+// LockAgentExecution comes before any read or write of the assignment
+// in the same transaction: agent_executions, then agent_assignments.
+func (q *Queries) LockAgentExecution(ctx context.Context, agentGrn string) (string, error) {
+	row := q.db.QueryRow(ctx, lockAgentExecution, agentGrn)
+	var agent_grn string
+	err := row.Scan(&agent_grn)
+	return agent_grn, err
 }
 
 const lockEnrollment = `-- name: LockEnrollment :one
@@ -1308,6 +1672,41 @@ func (q *Queries) ReassignSupervisor(ctx context.Context, arg ReassignSupervisor
 	return epoch, err
 }
 
+const recordAgentToken = `-- name: RecordAgentToken :exec
+INSERT INTO agent_tokens (token_hash, serial, agent_grn, assignee_grn, epoch, lineage,
+                          audience_grn, issued_at, expires_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7,
+        $8, $9)
+`
+
+type RecordAgentTokenParams struct {
+	TokenHash   string
+	Serial      string
+	AgentGrn    string
+	AssigneeGrn string
+	Epoch       int32
+	Lineage     pgtype.UUID
+	AudienceGrn pgtype.Text
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
+func (q *Queries) RecordAgentToken(ctx context.Context, arg RecordAgentTokenParams) error {
+	_, err := q.db.Exec(ctx, recordAgentToken,
+		arg.TokenHash,
+		arg.Serial,
+		arg.AgentGrn,
+		arg.AssigneeGrn,
+		arg.Epoch,
+		arg.Lineage,
+		arg.AudienceGrn,
+		arg.IssuedAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
 const recordSupervisorToken = `-- name: RecordSupervisorToken :exec
 WITH swept AS (
     DELETE FROM supervisor_tokens
@@ -1362,6 +1761,35 @@ func (q *Queries) RemintActivation(ctx context.Context, id pgtype.UUID) (AgentAc
 	return i, err
 }
 
+const renameAgent = `-- name: RenameAgent :one
+UPDATE agents SET name = $1
+WHERE grn = $2
+RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name
+`
+
+type RenameAgentParams struct {
+	Name pgtype.Text
+	Grn  string
+}
+
+// Renaming changes what the organization calls the agent and nothing
+// else (ADR-0119): no assignment, lineage or token moves, and
+// updated_at, which a state report moves, stays.
+func (q *Queries) RenameAgent(ctx context.Context, arg RenameAgentParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, renameAgent, arg.Name, arg.Grn)
+	var i Agent
+	err := row.Scan(
+		&i.Grn,
+		&i.OrgGrn,
+		&i.ProvisioningState,
+		&i.RuntimeState,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+	)
+	return i, err
+}
+
 const replaceToken = `-- name: ReplaceToken :exec
 UPDATE agent_executions SET token_hash = $2, updated_at = $3
 WHERE agent_grn = $1
@@ -1376,6 +1804,122 @@ type ReplaceTokenParams struct {
 func (q *Queries) ReplaceToken(ctx context.Context, arg ReplaceTokenParams) error {
 	_, err := q.db.Exec(ctx, replaceToken, arg.AgentGrn, arg.TokenHash, arg.UpdatedAt)
 	return err
+}
+
+const reportAgentProvisioningState = `-- name: ReportAgentProvisioningState :one
+UPDATE agents SET
+    provisioning_state = $1,
+    updated_at         = $2
+WHERE grn = $3
+  AND EXISTS (
+      SELECT 1 FROM agent_assignments a
+      WHERE a.agent_grn = agents.grn AND a.epoch = $4
+  )
+RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name
+`
+
+type ReportAgentProvisioningStateParams struct {
+	ProvisioningState string
+	UpdatedAt         pgtype.Timestamptz
+	Grn               string
+	Epoch             int32
+}
+
+// ReportAgentProvisioningState and ReportAgentRuntimeState write at the
+// epoch the agent is currently assigned at; any other epoch matches no
+// row, and an agent with no assignment matches none either.
+func (q *Queries) ReportAgentProvisioningState(ctx context.Context, arg ReportAgentProvisioningStateParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, reportAgentProvisioningState,
+		arg.ProvisioningState,
+		arg.UpdatedAt,
+		arg.Grn,
+		arg.Epoch,
+	)
+	var i Agent
+	err := row.Scan(
+		&i.Grn,
+		&i.OrgGrn,
+		&i.ProvisioningState,
+		&i.RuntimeState,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+	)
+	return i, err
+}
+
+const reportAgentRuntimeState = `-- name: ReportAgentRuntimeState :one
+UPDATE agents SET
+    runtime_state = $1,
+    updated_at    = $2
+WHERE grn = $3
+  AND EXISTS (
+      SELECT 1 FROM agent_assignments a
+      WHERE a.agent_grn = agents.grn AND a.epoch = $4
+  )
+RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name
+`
+
+type ReportAgentRuntimeStateParams struct {
+	RuntimeState string
+	UpdatedAt    pgtype.Timestamptz
+	Grn          string
+	Epoch        int32
+}
+
+func (q *Queries) ReportAgentRuntimeState(ctx context.Context, arg ReportAgentRuntimeStateParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, reportAgentRuntimeState,
+		arg.RuntimeState,
+		arg.UpdatedAt,
+		arg.Grn,
+		arg.Epoch,
+	)
+	var i Agent
+	err := row.Scan(
+		&i.Grn,
+		&i.OrgGrn,
+		&i.ProvisioningState,
+		&i.RuntimeState,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Name,
+	)
+	return i, err
+}
+
+const resolveAgentToken = `-- name: ResolveAgentToken :one
+SELECT t.agent_grn, t.serial, t.audience_grn, t.issued_at, t.expires_at
+FROM agent_tokens t
+JOIN agent_assignments a
+  ON a.agent_grn = t.agent_grn AND a.assignee_grn = t.assignee_grn AND a.epoch = t.epoch
+JOIN agent_executions e
+  ON e.agent_grn = t.agent_grn AND t.lineage IS NOT DISTINCT FROM e.lineage
+WHERE t.token_hash = $1 AND t.expires_at > now()
+`
+
+type ResolveAgentTokenRow struct {
+	AgentGrn    string
+	Serial      string
+	AudienceGrn pgtype.Text
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
+// The read every request presenting an agent token takes (ADR-0100):
+// the token's row joined to the agent's assignment and execution as
+// they stand now, so a reassignment or a recovery refuses it from the
+// next request.
+func (q *Queries) ResolveAgentToken(ctx context.Context, tokenHash string) (ResolveAgentTokenRow, error) {
+	row := q.db.QueryRow(ctx, resolveAgentToken, tokenHash)
+	var i ResolveAgentTokenRow
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.Serial,
+		&i.AudienceGrn,
+		&i.IssuedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
 }
 
 const resolveSupervisorToken = `-- name: ResolveSupervisorToken :one
@@ -1397,6 +1941,64 @@ func (q *Queries) ResolveSupervisorToken(ctx context.Context, tokenHash string) 
 	var i ResolveSupervisorTokenRow
 	err := row.Scan(&i.SupervisorGrn, &i.IssuedAt, &i.ExpiresAt)
 	return i, err
+}
+
+const searchAgentsByOrg = `-- name: SearchAgentsByOrg :many
+SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name FROM agents
+WHERE org_grn = $1
+  AND (split_part(grn, ':', 5) ILIKE $2 OR name ILIKE $2)
+ORDER BY grn
+`
+
+type SearchAgentsByOrgParams struct {
+	OrgGrn  string
+	Pattern string
+}
+
+// SearchAgentsByOrg answers the org's agents whose identifier (the
+// GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+func (q *Queries) SearchAgentsByOrg(ctx context.Context, arg SearchAgentsByOrgParams) ([]Agent, error) {
+	rows, err := q.db.Query(ctx, searchAgentsByOrg, arg.OrgGrn, arg.Pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Agent
+	for rows.Next() {
+		var i Agent
+		if err := rows.Scan(
+			&i.Grn,
+			&i.OrgGrn,
+			&i.ProvisioningState,
+			&i.RuntimeState,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const shareAgentLineage = `-- name: ShareAgentLineage :one
+SELECT lineage FROM agent_executions WHERE agent_grn = $1 FOR SHARE
+`
+
+// The execution a token is minted against, held FOR SHARE so a
+// recovery committing first is seen and one committing after waits
+// for the mint (ADR-0100). The assignment is read by a statement of
+// its own after it, so its snapshot is taken once this lock is
+// granted.
+func (q *Queries) ShareAgentLineage(ctx context.Context, agentGrn string) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, shareAgentLineage, agentGrn)
+	var lineage pgtype.UUID
+	err := row.Scan(&lineage)
+	return lineage, err
 }
 
 const shareAssignment = `-- name: ShareAssignment :one
@@ -1490,6 +2092,55 @@ func (q *Queries) SpendReplacementApproval(ctx context.Context, arg SpendReplace
 		arg.AdmittedEpoch,
 		arg.AdmittedLineage,
 		arg.AdmittedAt,
+	)
+	return err
+}
+
+const trimAgentTokens = `-- name: TrimAgentTokens :exec
+WITH audience_kept AS (
+    SELECT k.token_hash FROM agent_tokens k
+    WHERE k.agent_grn = $1
+      AND k.audience_grn IS NOT DISTINCT FROM $2
+      AND k.expires_at > now()
+    ORDER BY k.issued_at DESC, k.token_hash DESC
+    LIMIT $3
+), kept AS (
+    SELECT k.token_hash FROM agent_tokens k
+    WHERE k.agent_grn = $1 AND k.expires_at > now()
+      AND (k.audience_grn IS DISTINCT FROM $2
+           OR k.token_hash IN (SELECT a.token_hash FROM audience_kept a))
+    ORDER BY k.issued_at DESC, k.token_hash DESC
+    LIMIT $4
+), doomed AS MATERIALIZED (
+    SELECT t.token_hash FROM agent_tokens t
+    WHERE t.agent_grn = $1
+      AND t.token_hash NOT IN (SELECT c.token_hash FROM kept c)
+    ORDER BY t.token_hash
+    FOR UPDATE OF t
+)
+DELETE FROM agent_tokens WHERE token_hash IN (SELECT d.token_hash FROM doomed d)
+`
+
+type TrimAgentTokensParams struct {
+	AgentGrn        string
+	AudienceGrn     pgtype.Text
+	KeepPerAudience int32
+	KeepInAll       int32
+}
+
+// Keeps an agent's newest live tokens for the audience just minted
+// for, and its newest live ones in all, which bounds what an
+// assignee's mints can write (ADR-0100), and deletes the rest, the
+// expired ones included, so it is the mint's sweep too. It takes them
+// in token_hash order, as an operator's deletion takes the tokens
+// naming it (000047), and is the one statement of a mint that waits
+// on a token (#1434).
+func (q *Queries) TrimAgentTokens(ctx context.Context, arg TrimAgentTokensParams) error {
+	_, err := q.db.Exec(ctx, trimAgentTokens,
+		arg.AgentGrn,
+		arg.AudienceGrn,
+		arg.KeepPerAudience,
+		arg.KeepInAll,
 	)
 	return err
 }

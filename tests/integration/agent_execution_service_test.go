@@ -119,7 +119,7 @@ func (l lifecycle) epochNow() int {
 	if err != nil {
 		return 0
 	}
-	return a.Epoch()
+	return a.Epoch
 }
 
 // configureRef binds a reference minted to configure this agent,

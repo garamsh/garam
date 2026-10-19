@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -58,7 +59,7 @@ func requireAgentTokenHeapOrder(t *testing.T, p *pgxpool.Pool, hashes ...string)
 
 // mintFor mints a token of f's agent by its controller through agents,
 // for audience, and answers it with the mint's error.
-func mintFor(ctx context.Context, agents *agent.PostgresStore, f fence, audience *grn.GRN) (*agent.AccessToken, error) {
+func mintFor(ctx context.Context, agents *agentpg.Store, f fence, audience *grn.GRN) (*agent.AccessToken, error) {
 	var b [32]byte
 	if _, err := rand.Read(b[:]); err != nil {
 		return nil, err
@@ -86,7 +87,7 @@ func TestAgentTokenLockOrder_AnAudiencesDeletionAndAMintSweepingTokensNamingItBo
 	ctx := context.Background()
 	f, _ := newLineageFence(t)
 	p := indexScanPool(t)
-	agents := agent.NewPostgresStore(p)
+	agents := agentpg.New(p)
 	audience := registerOperator(t, f.p, scopedGRN("acme", agent.ServiceTypeOperator, "hosted"))
 	// Heap order, which a scan for the audience's tokens takes, is late,
 	// park-deletion, early. Issue order, which the mint's sweep takes,
@@ -217,7 +218,7 @@ func TestAgentTokenLockOrder_AnAudiencesDeletionAndAMintTrimmingTokensNamingItBo
 	ctx := context.Background()
 	f, _ := newLineageFence(t)
 	p := indexScanPool(t)
-	agents := agent.NewPostgresStore(p)
+	agents := agentpg.New(p)
 	audience := registerOperator(t, f.p, scopedGRN("acme", agent.ServiceTypeOperator, "hosted"))
 	// Issue order, which the agent's index walks, is c-late, park-mint,
 	// a-early; token_hash order is a-early, b-park, c-late.

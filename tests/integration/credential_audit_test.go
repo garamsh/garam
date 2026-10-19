@@ -16,7 +16,7 @@ import (
 
 	apigen "github.com/garamsh/garam/api"
 	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	auditpg "github.com/garamsh/garam/internal/audit/postgres"
 	"github.com/garamsh/garam/internal/authn"
@@ -35,7 +35,7 @@ import (
 // `garam serve api` composes it. The stack's sessions sign in here too.
 func auditBrowser(t *testing.T, s *executionStack, engine grpc.ClientConnInterface) string {
 	t.Helper()
-	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agent.NewPostgresStore(s.pool), operatorpg.New(s.pool),
+	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agentpg.New(s.pool), operatorpg.New(s.pool),
 		nil, nil, authn.NewPostgresSessionStore(s.pool), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, nil, nil, api.Config{SessionTTL: time.Hour}).
 		WithCredentialAudit(auditpg.NewCredentialStore(s.pool))

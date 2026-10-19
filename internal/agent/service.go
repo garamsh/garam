@@ -136,7 +136,7 @@ func (s *service) holds(ctx context.Context, operator, agentGRN grn.GRN) error {
 		}
 		return err
 	}
-	if assignment.Assignee() != operator {
+	if assignment.Assignee != operator {
 		return ErrNotAssigned
 	}
 	return nil

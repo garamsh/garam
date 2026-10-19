@@ -19,7 +19,7 @@ import (
 
 	apigen "github.com/garamsh/garam/api"
 	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
@@ -245,7 +245,7 @@ func TestDelegatedAuthority_EndToEnd(t *testing.T) {
 // provisionAgent stands an agent up assigned to the controller.
 func (s *authorityStack) provisionAgent(t *testing.T) string {
 	t.Helper()
-	agents := agent.NewPostgresStore(s.pool)
+	agents := agentpg.New(s.pool)
 	g := seedAgent(t, agents, grn.Org(s.controller.Organization))
 	_, err := agents.Assign(context.Background(), g, s.controller)
 	require.NoError(t, err)

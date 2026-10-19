@@ -82,11 +82,10 @@ and nothing an operator reads
 listener serves people: an organization's agents and the assignments
 holding them, each a batch read rather than one per agent. An agent no
 operator holds contributes no assignment, so the two lists are not one
-length. Both aggregates are rehydrated inside this package — their
-fields are unexported and no exported constructor restores a stored
-row's state or timestamps — which is why the store that reads them back
-lives here rather than below, beside the others until #1083 moves this
-domain's store out of the package.
+length. Both aggregates are data carriers whose fields are exported, so
+the store that reads them back lives in `internal/agent/postgres`
+beside the execution, admission and standalone stores, and the domain
+package imports no driver (ADR-0069).
 
 Signing happens through the `RequestSigner` seam the composition root
 satisfies from `internal/ca`, so the two domains still cooperate
@@ -286,7 +285,7 @@ credential is §Standalone hosts'.
 - **A mint and an operator's deletion each wait on agent tokens in one
   statement, which takes them in `token_hash` order; an organization's
   deletion takes them in its cascade's order and waits on none** (#1434;
-  `internal/agent` `PostgresStore.MintAccessToken`,
+  `internal/agent/postgres` `Store.MintAccessToken`,
   `migrations/000047`).
   - A mint holds the agent's execution row `FOR SHARE`, records its
     token, whose foreign key holds the audience's registration, and

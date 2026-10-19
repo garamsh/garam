@@ -15,6 +15,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
@@ -157,7 +158,7 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 	stranded, err := message.NewPostgresStore(p).Claim(ctx, ghost, time.Minute, 1, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "nobody is home", stranded.Message().Body())
-	_, err = agent.NewPostgresStore(p).Get(ctx, ghost)
+	_, err = agentpg.New(p).Get(ctx, ghost)
 	assert.ErrorIs(t, err, agent.ErrAgentNotFound, "storing the message provisioned an agent")
 }
 

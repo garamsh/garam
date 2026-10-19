@@ -143,7 +143,7 @@ func authorizeReplacement(ctx context.Context, operations OperationResolver, cal
 		return nil, errorx.New(errorx.KindNotFound, "controller not found")
 	}
 	r := b.Replaces
-	if validateOwnership(r.Agent, grn.Org(caller.Organization)) != nil {
+	if ValidateOwnership(r.Agent, grn.Org(caller.Organization)) != nil {
 		return nil, ErrAgentNotFound
 	}
 	ref, err := operations.ResolveReference(ctx, caller, b.OperationRef)

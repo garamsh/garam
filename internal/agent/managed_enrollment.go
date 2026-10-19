@@ -121,5 +121,5 @@ func (s *executionService) creationOf(ctx context.Context, b *OperationBinding, 
 // placedOn reports whether the agent is still where its creation put
 // it: the same controller at the same epoch.
 func (c *ManagedCreation) placedOn(assignment *Assignment) bool {
-	return assignment.Assignee() == c.Controller && assignment.Epoch() == c.Epoch
+	return assignment.Assignee == c.Controller && assignment.Epoch == c.Epoch
 }

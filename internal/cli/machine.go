@@ -210,7 +210,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	operators := operator.NewService(operatorStore, operator.Config{TokenEndpoint: cfg.TokenURL})
 	// An agent token's start is backdated by tokenBackdate, and its
 	// audience is an operator the organization registered (ADR-0100).
-	agentStore := agent.NewPostgresStore(pool)
+	agentStore := agentpg.New(pool)
 	agents, err := agent.NewService(agentStore, agentStore, registeredOperators{operators: operatorStore},
 		agent.Config{TokenLifetime: cfg.AgentTokenLifetime, Backdate: tokenBackdate, ServerRootPEM: cfg.ServerRoot, Now: cfg.Now})
 	if err != nil {

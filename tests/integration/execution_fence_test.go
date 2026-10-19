@@ -28,6 +28,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
@@ -144,11 +145,11 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 
 	// The agent is the controller's, in a lineage of its own and with no
 	// activation yet.
-	agents := agent.NewPostgresStore(p)
+	agents := agentpg.New(p)
 	s.agent = seedAgent(t, agents, acme)
 	assignment, err := agents.Assign(ctx, s.agent, s.controller)
 	require.NoError(t, err)
-	s.epoch = assignment.Epoch()
+	s.epoch = assignment.Epoch
 	openedLineage(t, p, s.agent)
 	s.forwarded = s.agentToken(t, s.agent, &s.hosted).Token
 	s.agentTLS = tokenPresenting(t, s.agentToken(t, s.agent, nil).Token)
@@ -646,7 +647,7 @@ func TestExecutionFence_AMutationQueuedBehindItsReplacementCannotCommit(t *testi
 			}},
 		{name: "reassignment", refused: http.StatusForbidden, succeeded: http.StatusOK,
 			do: func(_ *testing.T, s *executionStack, _ *machinegen.Activation, _ recovery) (reply, error) {
-				_, err := agent.NewPostgresStore(s.pool).Assign(context.Background(), s.agent, scopedGRN("acme", operator.ServiceType, "other"))
+				_, err := agentpg.New(s.pool).Assign(context.Background(), s.agent, scopedGRN("acme", operator.ServiceType, "other"))
 				return reply{status: http.StatusOK}, err
 			}},
 	}

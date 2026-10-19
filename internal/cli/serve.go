@@ -16,7 +16,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 
 	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	auditpg "github.com/garamsh/garam/internal/audit/postgres"
 	"github.com/garamsh/garam/internal/authn"
@@ -114,7 +114,7 @@ func serveAPI(cmd *cobra.Command) error {
 	srv := api.NewServer(
 		userpg.New(pool),
 		orgpg.New(pool),
-		agent.NewPostgresStore(pool),
+		agentpg.New(pool),
 		operatorpg.New(pool),
 		message.NewPostgresStore(pool),
 		watches,

@@ -64,7 +64,7 @@ func TestAgentRead_MemberReadsWhereOthersAreRefused(t *testing.T) {
 	require.NoError(t, err)
 	reassigned, err := f.agents.Assign(testCtx(t), held, operator)
 	require.NoError(t, err)
-	require.Equal(t, 2, reassigned.Epoch())
+	require.Equal(t, 2, reassigned.Epoch)
 
 	rec := f.do(t, "GET", "/orgs/"+slug+"/agents", "", member)
 	require.Equal(t, http.StatusOK, rec.Code)

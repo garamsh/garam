@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
@@ -247,11 +247,11 @@ func (s *proofStack) provision(t *testing.T, client *http.Client) (string, int) 
 	require.NoError(t, json.Unmarshal(body, &identity))
 	controller, err := grn.Parse(identity.Grn)
 	require.NoError(t, err)
-	agents := agent.NewPostgresStore(s.pool)
+	agents := agentpg.New(s.pool)
 	g := seedAgent(t, agents, grn.Org(controller.Organization))
 	assignment, err := agents.Assign(context.Background(), g, controller)
 	require.NoError(t, err)
-	return g.String(), assignment.Epoch()
+	return g.String(), assignment.Epoch
 }
 
 // TestControllerProof_ProvesTheControllerItsTokenNames is the session
@@ -318,7 +318,7 @@ func TestControllerProof_BindsAnAgentToItsCurrentAssignment(t *testing.T) {
 
 	// Moving the agent away and back raises the epoch: the proof answers
 	// the current one, which is what the caller compares.
-	agents := agent.NewPostgresStore(p)
+	agents := agentpg.New(p)
 	placedGRN, err := grn.Parse(placed)
 	require.NoError(t, err)
 	_, err = agents.Assign(context.Background(), placedGRN, s.other)
@@ -328,8 +328,8 @@ func TestControllerProof_BindsAnAgentToItsCurrentAssignment(t *testing.T) {
 	require.NoError(t, err)
 	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, placed)
 	require.Equal(t, http.StatusOK, got.status, got.body)
-	assert.Contains(t, got.body, `"epoch":"`+strconv.Itoa(back.Epoch())+`"`)
-	assert.NotEqual(t, epoch, back.Epoch())
+	assert.Contains(t, got.body, `"epoch":"`+strconv.Itoa(back.Epoch)+`"`)
+	assert.NotEqual(t, epoch, back.Epoch)
 }
 
 // TestControllerProof_RefusesWithdrawalOnTheSameOpenConnection holds

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -45,6 +46,7 @@ type PolicyAttachment struct {
 type PolicyManager interface {
 	CreatePolicy(ctx context.Context, orgGRN grn.GRN, name string, document json.RawMessage, createdBy grn.GRN) (*Policy, error)
 	ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*Policy, error)
+	SearchPolicies(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*Policy, error)
 	AddPolicyVersion(ctx context.Context, policyGRN grn.GRN, document json.RawMessage, createdBy grn.GRN) (*PolicyVersion, error)
 	ListPolicyVersions(ctx context.Context, policyGRN grn.GRN) ([]*PolicyVersion, error)
 	ActivatePolicy(ctx context.Context, policyGRN grn.GRN) (*Policy, error)

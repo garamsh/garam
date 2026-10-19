@@ -288,6 +288,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find an organization's people, agents, teams, policies and projects by name. Requires the `member` role.
+         * @description Answers, for each kind the caller may list, the objects of that kind whose name or identifier holds `q`, case aside. `q` matches as typed: `%` and `_` match only themselves.
+         *
+         *     Each kind is authorized as its list is: people on `org:member-list`, as `listOrgMembers` is; agents on `agent:read`, teams on `group:read`, policies on `policy:read` and projects on `project:read`, each on the organization. A kind the caller may not list is left out of the answer. Agents, teams, policies and projects then leave out each object whose own read the caller is denied, as their lists do (ADR-0115).
+         *
+         *     A person is found by nickname or identifier, and an agent by its definition's name or its identifier. Each kind answers its first `limit` objects in the order its list gives them, the defined agents before the rest, and how many more it found past those.
+         */
+        get: operations["searchOrg"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/members": {
         parameters: {
             query?: never;
@@ -1282,6 +1306,22 @@ export interface components {
              * @enum {string}
              */
             attachment?: "organization" | "caller" | "group";
+        };
+        OrgSearch: {
+            /** @description One entry per kind the caller may list, in the order person, agent, team, policy, project. */
+            found: components["schemas"]["FoundKind"][];
+        };
+        FoundKind: {
+            /** @enum {string} */
+            kind: "person" | "agent" | "team" | "policy" | "project";
+            objects: components["schemas"]["FoundObject"][];
+            /** @description How many more of this kind matched past `limit`. */
+            more: number;
+        };
+        FoundObject: {
+            grn: string;
+            /** @description Its name: a person's nickname, or an agent's definition's name. Absent for an agent no definition names. */
+            name?: string;
         };
         PermissionHolders: {
             holders: components["schemas"]["PermissionHolder"][];
@@ -2321,6 +2361,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermissionHolders"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    searchOrg: {
+        parameters: {
+            query: {
+                /** @description What to find, 1 to 100 characters once trimmed. */
+                q: string;
+                /** @description How many objects of each kind to answer, from 1 to 20; 5 when absent. */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What was found, by kind. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgSearch"];
                 };
             };
             400: components["responses"]["Error"];

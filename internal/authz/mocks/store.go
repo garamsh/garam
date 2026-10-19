@@ -9,6 +9,7 @@ import (
 
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/wire"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -750,6 +751,80 @@ func (_c *MockStore_ListPolicyVersions_Call) Return(policyVersions []*authz.Poli
 }
 
 func (_c *MockStore_ListPolicyVersions_Call) RunAndReturn(run func(ctx context.Context, g grn.GRN) ([]*authz.PolicyVersion, error)) *MockStore_ListPolicyVersions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SearchPolicies provides a mock function for the type MockStore
+func (_mock *MockStore) SearchPolicies(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*authz.Policy, error) {
+	ret := _mock.Called(ctx, orgGRN, n)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SearchPolicies")
+	}
+
+	var r0 []*authz.Policy
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, listfilter.Needle) ([]*authz.Policy, error)); ok {
+		return returnFunc(ctx, orgGRN, n)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, listfilter.Needle) []*authz.Policy); ok {
+		r0 = returnFunc(ctx, orgGRN, n)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*authz.Policy)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, listfilter.Needle) error); ok {
+		r1 = returnFunc(ctx, orgGRN, n)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_SearchPolicies_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SearchPolicies'
+type MockStore_SearchPolicies_Call struct {
+	*mock.Call
+}
+
+// SearchPolicies is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgGRN grn.GRN
+//   - n listfilter.Needle
+func (_e *MockStore_Expecter) SearchPolicies(ctx any, orgGRN any, n any) *MockStore_SearchPolicies_Call {
+	return &MockStore_SearchPolicies_Call{Call: _e.mock.On("SearchPolicies", ctx, orgGRN, n)}
+}
+
+func (_c *MockStore_SearchPolicies_Call) Run(run func(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle)) *MockStore_SearchPolicies_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 listfilter.Needle
+		if args[2] != nil {
+			arg2 = args[2].(listfilter.Needle)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_SearchPolicies_Call) Return(policys []*authz.Policy, err error) *MockStore_SearchPolicies_Call {
+	_c.Call.Return(policys, err)
+	return _c
+}
+
+func (_c *MockStore_SearchPolicies_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*authz.Policy, error)) *MockStore_SearchPolicies_Call {
 	_c.Call.Return(run)
 	return _c
 }

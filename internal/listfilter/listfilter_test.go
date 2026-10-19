@@ -2,6 +2,7 @@ package listfilter_test
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,4 +65,34 @@ func TestParse_NamesTheParameterAndNotTheValue(t *testing.T) {
 
 	require.Error(t, err)
 	assert.NotContains(t, err.Error(), "4294967296")
+}
+
+// TestParseNeedle_IsTrimmedAndBounded counts the bound in characters,
+// not bytes: a hundred two-byte characters are accepted, which a
+// byte count would refuse. The accepted rows are the control.
+func TestParseNeedle_IsTrimmedAndBounded(t *testing.T) {
+	tests := []struct {
+		name, q, want string
+		refuses       bool
+	}{
+		{name: "an ordinary needle", q: "ops", want: "ops"},
+		{name: "trimmed", q: "  ops \t", want: "ops"},
+		{name: "a hundred characters", q: strings.Repeat("가", 100), want: strings.Repeat("가", 100)},
+		{name: "empty", q: "", refuses: true},
+		{name: "blank", q: " \t ", refuses: true},
+		{name: "a hundred and one characters", q: strings.Repeat("a", 101), refuses: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := listfilter.ParseNeedle(tt.q)
+
+			if !tt.refuses {
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got.Text())
+				return
+			}
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "the kind wire.StatusOf maps to 400")
+		})
+	}
 }

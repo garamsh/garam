@@ -7,7 +7,7 @@ import { ActionDialog } from "@/app/console/_components/action-dialog";
 import { CommandPalette } from "@/app/console/_components/command-palette";
 import { ReportOrgShell } from "@/app/console/_components/org-shell";
 import { Button } from "@/components/ui/button";
-import { API_URL, aliceMembership } from "@/testing/mocks/handlers";
+import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 import { stubLocalStorage } from "@/testing/storage";
 
@@ -266,14 +266,19 @@ describe("command palette", () => {
 
   it("answers a few of each kind and links the list for the rest", async () => {
     server.use(
-      http.get(`${API_URL}/orgs/acme/members`, () =>
-        HttpResponse.json(
-          Array.from({ length: 7 }, (_, index) => ({
-            ...aliceMembership,
-            userGrn: `grn:root:default:user:sam-${index}`,
-            nickname: `Sam ${index}`,
-          })),
-        ),
+      http.get(`${API_URL}/orgs/acme/search`, () =>
+        HttpResponse.json({
+          found: [
+            {
+              kind: "person",
+              objects: Array.from({ length: 5 }, (_, index) => ({
+                grn: `grn:root:default:user:sam-${index}`,
+                name: `Sam ${index}`,
+              })),
+              more: 2,
+            },
+          ],
+        }),
       ),
     );
     const user = userEvent.setup();

@@ -10,6 +10,7 @@ import (
 
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -751,6 +752,80 @@ func (_c *MockPolicyManager_RollbackPolicy_Call) Return(policy *api.Policy, err 
 }
 
 func (_c *MockPolicyManager_RollbackPolicy_Call) RunAndReturn(run func(ctx context.Context, policyGRN grn.GRN, version int32) (*api.Policy, error)) *MockPolicyManager_RollbackPolicy_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SearchPolicies provides a mock function for the type MockPolicyManager
+func (_mock *MockPolicyManager) SearchPolicies(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*api.Policy, error) {
+	ret := _mock.Called(ctx, orgGRN, n)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SearchPolicies")
+	}
+
+	var r0 []*api.Policy
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, listfilter.Needle) ([]*api.Policy, error)); ok {
+		return returnFunc(ctx, orgGRN, n)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, listfilter.Needle) []*api.Policy); ok {
+		r0 = returnFunc(ctx, orgGRN, n)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*api.Policy)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, listfilter.Needle) error); ok {
+		r1 = returnFunc(ctx, orgGRN, n)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockPolicyManager_SearchPolicies_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SearchPolicies'
+type MockPolicyManager_SearchPolicies_Call struct {
+	*mock.Call
+}
+
+// SearchPolicies is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgGRN grn.GRN
+//   - n listfilter.Needle
+func (_e *MockPolicyManager_Expecter) SearchPolicies(ctx any, orgGRN any, n any) *MockPolicyManager_SearchPolicies_Call {
+	return &MockPolicyManager_SearchPolicies_Call{Call: _e.mock.On("SearchPolicies", ctx, orgGRN, n)}
+}
+
+func (_c *MockPolicyManager_SearchPolicies_Call) Run(run func(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle)) *MockPolicyManager_SearchPolicies_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 listfilter.Needle
+		if args[2] != nil {
+			arg2 = args[2].(listfilter.Needle)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockPolicyManager_SearchPolicies_Call) Return(policys []*api.Policy, err error) *MockPolicyManager_SearchPolicies_Call {
+	_c.Call.Return(policys, err)
+	return _c
+}
+
+func (_c *MockPolicyManager_SearchPolicies_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*api.Policy, error)) *MockPolicyManager_SearchPolicies_Call {
 	_c.Call.Return(run)
 	return _c
 }

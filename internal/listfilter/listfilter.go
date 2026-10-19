@@ -1,10 +1,13 @@
 // Package listfilter holds the filter a list call is scoped by, and
-// parses the paging parameters a request carries into one.
+// parses the paging parameters a request carries into one, and the
+// text a search narrows a list by.
 package listfilter
 
 import (
 	"math"
 	"strconv"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/garamsh/garam/internal/errorx"
 )
@@ -48,4 +51,30 @@ func paging(name string, v *int) (int, error) {
 			name+" must be between 0 and "+strconv.Itoa(math.MaxInt32))
 	}
 	return *v, nil
+}
+
+// NeedleMaxLength bounds the text a search matches, in characters.
+const NeedleMaxLength = 100
+
+// Needle is the text a search finds names and identifiers by: trimmed,
+// and from 1 to NeedleMaxLength characters.
+type Needle struct {
+	text string
+}
+
+// ParseNeedle builds a Needle from the text a caller typed, refusing
+// one that is blank or longer than NeedleMaxLength once trimmed. Like
+// paging, the refusal never repeats what it was given.
+func ParseNeedle(q string) (Needle, error) {
+	text := strings.TrimSpace(q)
+	if text == "" || utf8.RuneCountInString(text) > NeedleMaxLength {
+		return Needle{}, errorx.New(errorx.KindInvalidArgument,
+			"q must hold 1 to "+strconv.Itoa(NeedleMaxLength)+" characters")
+	}
+	return Needle{text: text}, nil
+}
+
+// Text answers the needle as typed, trimmed.
+func (n Needle) Text() string {
+	return n.text
 }

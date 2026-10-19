@@ -46,6 +46,14 @@ WHERE org_grn = sqlc.arg('org_grn')
 ORDER BY grn
 LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 
+-- SearchGroups answers the org's groups whose name or identifier (the
+-- GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+-- name: SearchGroups :many
+SELECT * FROM groups
+WHERE org_grn = sqlc.arg('org_grn')
+  AND (name ILIKE sqlc.arg('pattern') OR split_part(grn, ':', 5) ILIKE sqlc.arg('pattern'))
+ORDER BY grn;
+
 -- name: UpdateGroup :one
 UPDATE groups SET
     name       = coalesce(sqlc.narg('name'), name),
@@ -94,6 +102,14 @@ SELECT * FROM projects
 WHERE org_grn = sqlc.arg('org_grn')
 ORDER BY grn
 LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
+
+-- SearchProjects answers the org's projects as SearchGroups answers
+-- its groups.
+-- name: SearchProjects :many
+SELECT * FROM projects
+WHERE org_grn = sqlc.arg('org_grn')
+  AND (name ILIKE sqlc.arg('pattern') OR split_part(grn, ':', 5) ILIKE sqlc.arg('pattern'))
+ORDER BY grn;
 
 -- name: UpdateProject :one
 UPDATE projects SET

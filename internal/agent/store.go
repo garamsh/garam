@@ -65,6 +65,10 @@ type Store interface {
 	// ListDefinitionsByOrg returns the organization's definitions,
 	// ordered by the agent GRN each one names.
 	ListDefinitionsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Definition, error)
+	// SearchByOrg answers the organization's agents whose name or
+	// identifier holds n, case aside: the defined ones ordered by GRN,
+	// then the ones no definition names, ordered by GRN.
+	SearchByOrg(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]Found, error)
 	// ListDefinitionsByOperator returns the definitions naming the
 	// operator, each with the assignment claiming it, ordered by the
 	// agent GRN each one names.

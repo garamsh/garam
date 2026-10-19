@@ -204,7 +204,8 @@ not know would be dropped unread and the call answered from its cache.
 `Check` and `Explain` keep the cached behaviour above.
 
 Lifecycle is served by `PolicyService` in `proto/garam/authz/v1`:
-create, append a version, list policies and versions, activate,
+create, append a version, list policies and versions, search policies
+by name or identifier for `searchOrg` (api-surface.md), activate,
 delete, roll back, attach, detach, and list attachments. Documents are
 validated at the write boundary, so a stored document always parses.
 

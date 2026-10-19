@@ -8,6 +8,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -46,6 +47,24 @@ func (m *GRPCPolicyManager) CreatePolicy(ctx context.Context, orgGRN grn.GRN, na
 // ListPolicies lists the org's policies in ascending GRN order.
 func (m *GRPCPolicyManager) ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*Policy, error) {
 	resp, err := m.client.ListPolicies(ctx, &authzv1.ListPoliciesRequest{OrgGrn: orgGRN.String()})
+	if err != nil {
+		return nil, wire.ErrorOf(err)
+	}
+	out := make([]*Policy, 0, len(resp.GetPolicies()))
+	for _, p := range resp.GetPolicies() {
+		policy, err := policyFromProto(p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, policy)
+	}
+	return out, nil
+}
+
+// SearchPolicies lists the org's policies whose name or identifier
+// holds n, in ascending GRN order.
+func (m *GRPCPolicyManager) SearchPolicies(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*Policy, error) {
+	resp, err := m.client.SearchPolicies(ctx, &authzv1.SearchPoliciesRequest{OrgGrn: orgGRN.String(), Query: n.Text()})
 	if err != nil {
 		return nil, wire.ErrorOf(err)
 	}

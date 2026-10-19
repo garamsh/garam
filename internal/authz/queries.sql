@@ -9,6 +9,14 @@ SELECT * FROM policies WHERE grn = $1;
 -- name: ListPolicies :many
 SELECT * FROM policies WHERE org_grn = $1 ORDER BY grn;
 
+-- SearchPolicies answers the org's policies whose name or identifier
+-- (the GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+-- name: SearchPolicies :many
+SELECT * FROM policies
+WHERE org_grn = sqlc.arg('org_grn')
+  AND (name ILIKE sqlc.arg('pattern') OR split_part(grn, ':', 5) ILIKE sqlc.arg('pattern'))
+ORDER BY grn;
+
 -- name: DeletePolicy :one
 DELETE FROM policies WHERE grn = $1 RETURNING *;
 

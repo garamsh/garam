@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -237,4 +238,72 @@ func TestCredentialEvents_RefuseTheRemovedKinds(t *testing.T) {
 	}
 	_, err := p.Exec(ctx, insert, subject.String(), orgRootGRN("acme").String(), "operator_certificate")
 	assert.NoError(t, err, "a kind the check admits is recorded")
+}
+
+// TestOperatorToken_AStalledResolutionIsBoundedByTheListenersDeadline
+// holds the operators table, which every operator token's resolution
+// reads, while a token is presented on a connection already open. The
+// listener answers 503 at machine.ResolveDeadline rather than holding
+// the request until the table is released (#1613), and the same token
+// on the same connection once the table is free is the control.
+//
+// A row lock blocks no plain read, so the table lock is what stalls it,
+// as a migration's DDL would.
+func TestOperatorToken_AStalledResolutionIsBoundedByTheListenersDeadline(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	_, sealer := keyEncryptionKey(t)
+	_, engine := policyEngine(t, p)
+	listener := machineListener(t, p, sealer, engine)
+	subject, key := keyed(t, operator.NewPostgresStore(p), "one")
+	client, connections := tokenClient(t)
+	token := exchangeKey(t, client, listener, subject, key, nil)
+	require.Equal(t, http.StatusOK, identifiesWith(t, client, listener, token), "the connection is open and the token live")
+
+	holder, err := p.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = holder.Rollback(ctx) }()
+	_, err = holder.Exec(ctx, `LOCK TABLE operators IN ACCESS EXCLUSIVE MODE`)
+	require.NoError(t, err)
+
+	type answer struct {
+		status int
+		err    error
+	}
+	done := make(chan answer, 1)
+	start := time.Now()
+	go func() {
+		req, err := http.NewRequest(http.MethodGet, listener+"/identity", nil)
+		if err != nil {
+			done <- answer{err: err}
+			return
+		}
+		req.Header.Set("Authorization", "Garam-Token "+token)
+		resp, err := client.Do(req)
+		if err != nil {
+			done <- answer{err: err}
+			return
+		}
+		_, _ = io.Copy(io.Discard, resp.Body)
+		_ = resp.Body.Close()
+		done <- answer{status: resp.StatusCode}
+	}()
+	var got answer
+	select {
+	case got = <-done:
+	case <-time.After(machine.ResolveDeadline + 10*time.Second):
+		_ = holder.Rollback(ctx)
+		got = <-done
+	}
+	elapsed := time.Since(start)
+	require.NoError(t, got.err)
+	status := got.status
+	assert.Equal(t, http.StatusServiceUnavailable, status, "a stalled resolution is answered unavailable")
+	assert.GreaterOrEqual(t, elapsed, machine.ResolveDeadline)
+	assert.Less(t, elapsed, machine.ResolveDeadline+5*time.Second, "answered at the listener's deadline")
+
+	require.NoError(t, holder.Rollback(ctx))
+	assert.Equal(t, http.StatusOK, identifiesWith(t, client, listener, token), "the control: the table released, the token resolves")
+	assert.Equal(t, 1, *connections, "every request travelled over one connection")
 }

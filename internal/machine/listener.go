@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
 )
@@ -42,11 +43,18 @@ func NewServer(tokens Tokens, evidence *Evidence, certificate ServerCertificate,
 	}
 }
 
-// identify hands next the identity the request's token proved, read
-// for this request (ADR-0100). A token that proves nothing leaves the
-// request without an identity, and the reason travels beside it for
-// the handler's refusal to carry. An identity it hands next is noted
-// in evidence first.
+// ResolveDeadline bounds the read that resolves a request's token. It
+// is the bound the lifecycle routes hold their own reads to
+// (agent.LifecycleDeadline): a read that has not answered by then is a
+// stalled store, and the request is answered unavailable rather than
+// held until the store lets it go (#1613).
+const ResolveDeadline = 10 * time.Second
+
+// identify hands next the identity the request's token proved, read for
+// this request (ADR-0100) within ResolveDeadline. A token that proves
+// nothing leaves the request without an identity, and the reason
+// travels beside it for the handler's refusal to carry. An identity it
+// hands next is noted in evidence first.
 func identify(tokens Tokens, evidence *Evidence, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, presented := PresentedToken(r)
@@ -55,7 +63,7 @@ func identify(tokens Tokens, evidence *Evidence, next http.Handler) http.Handler
 			refuse(w, r, next, errorx.New(errorx.KindUnauthenticated,
 				"machine: a request presenting a token carries one Authorization header"))
 		case presented:
-			bearer, err := tokens.Resolve(r.Context(), token)
+			bearer, err := resolve(r.Context(), tokens, token)
 			if err != nil {
 				// A token that proves nothing is the caller's to fix and
 				// is answered 401; only a read that could not be made is
@@ -76,6 +84,19 @@ func identify(tokens Tokens, evidence *Evidence, next http.Handler) http.Handler
 			next.ServeHTTP(w, r)
 		}
 	})
+}
+
+// resolve reads what token stands for within ResolveDeadline. A read
+// the deadline ended is unavailable, whatever the store made of it; one
+// the caller ended keeps its own error.
+func resolve(ctx context.Context, tokens Tokens, token string) (Bearer, error) {
+	bounded, cancel := context.WithTimeout(ctx, ResolveDeadline)
+	defer cancel()
+	bearer, err := tokens.Resolve(bounded, token)
+	if err != nil && bounded.Err() != nil && ctx.Err() == nil {
+		return Bearer{}, errorx.Wrap(err, "machine: token resolution deadline", errorx.KindUnavailable)
+	}
+	return bearer, err
 }
 
 // PresentedToken returns the token a request presents in any of its

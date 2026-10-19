@@ -261,3 +261,62 @@ func TestNewServer_RefusesATokenAmongSeveralAuthorizationHeaders(t *testing.T) {
 	}
 	assert.Equal(t, asked, known.asked, "no token among several was read")
 }
+
+// stalledTokens resolves its one token after release closes, as a store
+// whose read waits on a lock does, and gives up only when the context
+// it was handed ends.
+type stalledTokens struct {
+	release chan struct{}
+}
+
+func (s stalledTokens) Resolve(ctx context.Context, _ string) (machine.Bearer, error) {
+	select {
+	case <-s.release:
+		return machine.Bearer{Subject: liveSubject, Serial: "t1", IssuedAt: time.Now(),
+			ExpiresAt: time.Now().Add(time.Hour)}, nil
+	case <-ctx.Done():
+		return machine.Bearer{}, ctx.Err()
+	}
+}
+
+// refusalKind answers the kind of the refusal a request was handed, or
+// the GRN its token proved.
+func refusalKind() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if identity, ok := machine.IdentityOf(r); ok {
+			_, _ = io.WriteString(w, identity.GRN().String())
+			return
+		}
+		_, _ = io.WriteString(w, errorx.KindOf(machine.RefusalOf(r)).String())
+	})
+}
+
+// TestNewServer_BoundsTokenResolutionByItsDeadline holds the read that
+// resolves a token to ResolveDeadline (#1613): a resolver that never
+// answers hands the request an unavailable refusal at the deadline,
+// whatever error the ended read returned, rather than holding it until
+// the store lets go. The same resolver released before the deadline
+// is the control: it admits the token.
+func TestNewServer_BoundsTokenResolutionByItsDeadline(t *testing.T) {
+	stalled := stalledTokens{release: make(chan struct{})}
+	dir := t.TempDir()
+	roots := serverPair(t, dir, presented)
+	url := serveTokens(t, dir, stalled, refusalKind())
+	client := &http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS13},
+	}}
+	t.Cleanup(client.CloseIdleConnections)
+
+	start := time.Now()
+	status, body, _ := presenting(t, client, url, liveToken)
+	elapsed := time.Since(start)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, errorx.KindUnavailable.String(), body, "a read the deadline ended is unavailable")
+	assert.GreaterOrEqual(t, elapsed, machine.ResolveDeadline)
+	assert.Less(t, elapsed, machine.ResolveDeadline+5*time.Second, "answered at the deadline")
+
+	close(stalled.release)
+	status, body, _ = presenting(t, client, url, liveToken)
+	assert.Equal(t, http.StatusOK, status)
+	assert.Equal(t, liveSubject.String(), body, "the control: a read that answers admits the token")
+}

@@ -141,7 +141,9 @@ a token at `exchangeToken`, prefixed `garam_st_`. The token is read on
 every request, beside the registration, key or assignment it rests on,
 so a deleted operator, a withdrawn key, a reassignment or a recovery is
 refused from the next request on a connection already open
-([machine-identity.md](./machine-identity.md) §Tokens). A request
+([machine-identity.md](./machine-identity.md) §Tokens). The read is
+bounded by a ten-second deadline, past which the request is answered
+unavailable rather than held. A request
 presenting a token in more than one `Authorization` header is refused,
 and a token minted for another audience reaches none of garam's
 operations. No session and no user row exist on this listener. What an

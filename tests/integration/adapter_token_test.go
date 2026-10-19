@@ -354,7 +354,7 @@ func TestAdapterTokenMode_AnUnfencedAdapterRunsOnItsGaramTokenAlone(t *testing.T
 		return os.IsNotExist(err)
 	}, 10*time.Second, 20*time.Millisecond, "the reply is acknowledged under durable-delivery.v2 and removed")
 
-	second, secondCredential := registerCredentialed(t, operator.NewPostgresStore(s.pool), "second")
+	second, secondKey := keyed(t, operator.NewPostgresStore(s.pool), "second")
 	_, err := agent.NewPostgresStore(s.pool).Assign(context.Background(), g, second)
 	require.NoError(t, err)
 	refused := s.postToAgent(t, g, "after the reassignment")
@@ -363,7 +363,7 @@ func TestAdapterTokenMode_AnUnfencedAdapterRunsOnItsGaramTokenAlone(t *testing.T
 		assert.NotEqual(t, refused, got["id"], "the reassigned assignee's token carries nothing")
 	}
 
-	next := mintedFor(t, s.client, s.machine, exchangeOver(t, s.client, s.machine, secondCredential), g)
+	next := mintedFor(t, s.client, s.machine, exchangeKey(t, s.client, s.machine, second, secondKey, nil), g)
 	replaceToken(t, files.garam, next.Token)
 	carried(t, s.executionStack, rt, refused)
 }

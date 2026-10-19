@@ -32,7 +32,7 @@ const testSource = "192.0.2.10"
 // keyService is the operator service over the store alone, configured
 // with the token endpoint the listeners here are (ADR-0102).
 func keyService(s *operator.PostgresStore) operator.Service {
-	return operator.NewService(s, s, s, nil, operator.Config{TokenEndpoint: testTokenURL})
+	return operator.NewService(s, s, nil, operator.Config{TokenEndpoint: testTokenURL})
 }
 
 // issueKey issues subject a key under rotation and answers the private
@@ -332,7 +332,6 @@ func TestOperatorKey_PlannedRotationOverlapsForItsWindowAndRefusesAThirdKey(t *t
 // replacement and a withdrawal each refuse the old key's token on the
 // next request over the connection already open; the replacement's
 // own token, and an operator nothing was done to, are the controls.
-// A v1 shared-secret token of the same operator is untouched by either.
 func TestOperatorKey_WithdrawalRefusesTheNextRequestOnAnOpenConnection(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -341,9 +340,9 @@ func TestOperatorKey_WithdrawalRefusesTheNextRequestOnAnOpenConnection(t *testin
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
 	store := operator.NewPostgresStore(p)
-	replaced, credential := registerCredentialed(t, store, "replaced")
-	withdrawn, _ := registerCredentialed(t, store, "withdrawn")
-	kept, _ := registerCredentialed(t, store, "kept")
+	replaced := register(t, store, "replaced")
+	withdrawn := register(t, store, "withdrawn")
+	kept := register(t, store, "kept")
 	client, connections := tokenClient(t)
 	exchange := func(private *rsa.PrivateKey, subject grn.GRN) string {
 		token, err := oauthExchange(t, client, url, subject, freshAssertion(t, private, subject))
@@ -357,8 +356,7 @@ func TestOperatorKey_WithdrawalRefusesTheNextRequestOnAnOpenConnection(t *testin
 	replacedToken := exchange(replacedKey, replaced)
 	withdrawnToken := exchange(withdrawnKey, withdrawn)
 	keptToken := exchange(keptKey, kept)
-	sharedSecretToken := exchangeOver(t, client, url, credential)
-	for _, token := range []string{replacedToken, withdrawnToken, keptToken, sharedSecretToken} {
+	for _, token := range []string{replacedToken, withdrawnToken, keptToken} {
 		require.Equal(t, http.StatusOK, bearerIdentifies(t, client, url, token))
 	}
 
@@ -375,8 +373,6 @@ func TestOperatorKey_WithdrawalRefusesTheNextRequestOnAnOpenConnection(t *testin
 		"a withdrawal refuses the key's token on the next request")
 
 	assert.Equal(t, http.StatusOK, bearerIdentifies(t, client, url, keptToken), "the operator nothing was done to")
-	assert.Equal(t, http.StatusOK, identifiesWith(t, client, url, sharedSecretToken),
-		"the shared-secret cohort's token stands beside the key's")
 	assert.Equal(t, 1, *connections, "every request travelled over one connection")
 }
 
@@ -677,62 +673,6 @@ func TestOperatorKey_AnImmediateRotationWaitsForAnExchangeAlreadyHoldingTheKey(t
 	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE key_id = $1`, oldKey.ID))
 	_, err = store.ResolveToken(ctx, keptToken.Hash())
 	assert.NoError(t, err, "the control: another operator's token resolves throughout")
-}
-
-// TestOperatorKey_AnImmediateRotationAndACredentialExchangeSweepingItsKeyTokenBothComplete
-// is the shared-secret exchange's form of #1399. An operator holding a
-// credential and a key has a key token past expiry, which a credential
-// exchange's sweep deletes and the rotation deletes too. A held key row
-// parks the rotation after it took the registration; the exchange
-// arrives then. Taking the token before the registration, the exchange
-// waited on the rotation while holding the row it was about to delete.
-func TestOperatorKey_AnImmediateRotationAndACredentialExchangeSweepingItsKeyTokenBothComplete(t *testing.T) {
-	ctx := context.Background()
-	p := pool(t)
-	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
-	svc := keyService(store)
-	subject, credential := registerCredentialed(t, store, "controller")
-	_, oldKey := issueKey(t, store, subject, operator.KeyRotationFirst)
-	_, err := p.Exec(ctx, `INSERT INTO operator_tokens (token_hash, key_id, operator_grn, issued_at, expires_at)
-		VALUES ('expired-key-token', $1, $2, now() - interval '2 hours', now() - interval '1 hour')`,
-		oldKey.ID, subject.String())
-	require.NoError(t, err)
-	require.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE key_id = $1`, oldKey.ID),
-		"the old key holds a token past expiry")
-	successor, err := operator.NewIssuedKey(subject, scopedGRN("acme", "user", "ada"))
-	require.NoError(t, err)
-
-	holder, err := p.Begin(ctx)
-	require.NoError(t, err)
-	defer func() { _ = holder.Rollback(ctx) }()
-	_, err = holder.Exec(ctx, `SELECT id FROM operator_keys WHERE id = $1 FOR NO KEY UPDATE`, oldKey.ID)
-	require.NoError(t, err)
-
-	rotated := make(chan error, 1)
-	go func() {
-		_, err := store.IssueKey(ctx, successor, operator.KeyRotationImmediate)
-		rotated <- err
-	}()
-	awaitLockWaiters(t, p, 1)
-	type exchange struct {
-		token *operator.Token
-		err   error
-	}
-	exchanged := make(chan exchange, 1)
-	go func() {
-		token, err := svc.Exchange(ctx, testSource, credential, nil)
-		exchanged <- exchange{token, err}
-	}()
-	awaitLockWaiters(t, p, 2)
-	require.NoError(t, holder.Rollback(ctx))
-
-	require.NoError(t, receive(t, rotated), "the rotation completes")
-	done := receive(t, exchanged)
-	require.NoError(t, done.err, "the credential exchange waits for it rather than deadlocking")
-	_, err = store.ResolveToken(ctx, done.token.Hash())
-	assert.NoError(t, err, "the credential's token resolves: the rotation withdrew keys only")
-	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE key_id = $1`, oldKey.ID))
 }
 
 // receive answers what ch carries, and fails the test rather than

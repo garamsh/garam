@@ -22,8 +22,8 @@ import (
 // request that presents a token, so what it reads beside the token —
 // the operator's registration, the agent's assignment and lineage, or
 // the supervisor's registration — refuses a deleted operator, a
-// re-issued credential, a reassignment, a recovery or a revocation from
-// the next request.
+// withdrawn key, a re-issued supervisor credential, a reassignment, a
+// recovery or a revocation from the next request.
 type identityTokens struct {
 	operators   operator.TokenStore
 	agents      agent.AccessTokenStore
@@ -145,9 +145,9 @@ func countMachineRequests(counter *prometheus.CounterVec) func(http.Handler) htt
 
 // tokenExchangesMetric counts the token exchanges the machine listener
 // answered, by how the exchange authenticated and how it ended: what
-// tells the shared-secret cohort from the private_key_jwt one, which
-// garam_machine_requests_total cannot, since both present a token
-// afterwards (ADR-0102,
+// tells a supervisor's shared-secret exchange from an operator's
+// private_key_jwt one, which garam_machine_requests_total cannot,
+// since both present a token afterwards (ADR-0102,
 // docs/plans/2026-10-09-machine-identity-migration.md). Neither label
 // carries anything the caller sent beyond which prefix its credential
 // has.
@@ -155,7 +155,6 @@ const tokenExchangesMetric = "garam_machine_token_exchanges_total"
 
 // The exchange methods tokenExchangesMetric distinguishes.
 const (
-	exchangeOperatorSharedSecret   = "operator_shared_secret"
 	exchangeSupervisorSharedSecret = "supervisor_shared_secret"
 	exchangeOperatorPrivateKeyJWT  = "operator_private_key_jwt"
 	exchangeUnrecognised           = "unrecognised"
@@ -204,10 +203,7 @@ func exchangeMethod(r *http.Request) (string, bool) {
 		return exchangeOperatorPrivateKeyJWT, true
 	case http.MethodPost + " /tokens":
 		credential := r.Header.Get("Authorization")
-		switch {
-		case strings.HasPrefix(credential, operator.CredentialScheme+" "+operator.CredentialPrefix):
-			return exchangeOperatorSharedSecret, true
-		case strings.HasPrefix(credential, operator.CredentialScheme+" "+agent.SupervisorCredentialPrefix):
+		if strings.HasPrefix(credential, operator.CredentialScheme+" "+agent.SupervisorCredentialPrefix) {
 			return exchangeSupervisorSharedSecret, true
 		}
 		return exchangeUnrecognised, true
@@ -257,7 +253,7 @@ func issuancePath(r *http.Request) (machine.Path, bool) {
 	switch method, _ := exchangeMethod(r); method {
 	case exchangeOperatorPrivateKeyJWT:
 		return machine.PathPrivateKeyJWT, true
-	case exchangeOperatorSharedSecret, exchangeSupervisorSharedSecret:
+	case exchangeSupervisorSharedSecret:
 		return machine.PathSharedSecret, true
 	}
 	return "", false

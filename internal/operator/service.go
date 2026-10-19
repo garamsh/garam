@@ -29,9 +29,9 @@ type Config struct {
 	TokenEndpoint string
 }
 
-// Service is what an operator's own certificate goes through: the
+// Service is what an operator's own certificate goes through — the
 // out-of-band mint that starts a lineage, and the renewal that carries
-// it on.
+// it on — and the exchange of its key for tokens.
 //
 // Both record the certificate they issued, and that record is the whole
 // of the authorization here: a renewal is admitted for the certificate
@@ -50,22 +50,6 @@ type Service interface {
 	// authenticated with, and refuses one that has expired, one still
 	// outside its renewal window, and one garam has already replaced.
 	Renew(ctx context.Context, c Credential) (*IssuedCertificate, error)
-	// Enroll spends token and signs request for the operator the token
-	// names, adopting the certificate as that operator's current one.
-	// No key is generated and none is returned: the operator made the
-	// key where it will be used, and garam signs what it is sent
-	// (ADR-0064).
-	Enroll(ctx context.Context, token string, request CertificateRequest) (*Certificate, error)
-	// Exchange answers a token for the operator credential belongs to,
-	// accepted by garam where audience is nil and by that hosted
-	// operator where it names one, for [TokenTTL] (ADR-0100). It
-	// refuses a credential no registered operator holds with
-	// ErrCredentialInvalid, and an audience that is not another
-	// operator the organization registered with ErrAudienceInvalid.
-	// source is the client address the request arrived from; it and
-	// the operator share ExchangeAssertion's bounds, answering
-	// *Exceeded past either.
-	Exchange(ctx context.Context, source, credential string, audience *grn.GRN) (*Token, error)
 	// ExchangeAssertion answers a token for the operator client whose
 	// live key signed assertion, under machine-token.v2's profile
 	// (ADR-0102), accepted by garam where audience is nil and by that
@@ -77,11 +61,12 @@ type Service interface {
 	// the organization is ErrAudienceInvalid; no configured endpoint is
 	// ErrAssertionProfileUnavailable. source is the client address the
 	// request arrived from, which bounds how many unverified
-	// assertions one address may send.
+	// assertions one address may send; it and the operator each have
+	// a bound, answering *Exceeded past either.
 	ExchangeAssertion(ctx context.Context, source string, client grn.GRN, assertion string, audience *grn.GRN) (*Token, error)
 	// VerifyShown refuses a token presented on another operator's
-	// behalf unless it is a live token subject exchanged its credential
-	// for, to be shown to audience — the token-borne form of the
+	// behalf unless it is a live token subject exchanged its key for,
+	// to be shown to audience — the token-borne form of the
 	// certificate machine.Service.Verify proves (ADR-0100). One that
 	// does not prove subject is ErrTokenNotProven, and a read that
 	// could not be made is unavailable.
@@ -89,70 +74,35 @@ type Service interface {
 }
 
 type service struct {
-	store       CertificateStore
-	enrollments EnrollmentStore
-	tokens      TokenStore
-	issuer      Issuer
-	now         func() time.Time
-	endpoint    string
+	store    CertificateStore
+	tokens   TokenStore
+	issuer   Issuer
+	now      func() time.Time
+	endpoint string
 	// perSource bounds the exchanges each client address sends,
 	// checked before anything is read; perClient bounds each operator's
-	// authenticated ones (ADR-0102). Both forms of exchange share them:
-	// each holds the operator's registration, and the bound on those
-	// holds is what lets a write waiting on the registration through
-	// (#1418).
+	// authenticated ones (ADR-0102). Each exchange holds the operator's
+	// registration, and the bound on those holds is what lets a write
+	// waiting on the registration through (#1418).
 	perClient *Limiter
 	perSource *Limiter
 }
 
 // NewService constructs the service over the record it keeps of each
-// operator's certificate, the tokens an enrollment spends, the tokens
-// a credential is exchanged for, and the issuer it signs through.
-func NewService(store CertificateStore, enrollments EnrollmentStore, tokens TokenStore, issuer Issuer, cfg Config) Service {
+// operator's certificate, the tokens a key is exchanged for, and the
+// issuer it signs through.
+func NewService(store CertificateStore, tokens TokenStore, issuer Issuer, cfg Config) Service {
 	now := cfg.Now
 	if now == nil {
 		now = time.Now
 	}
-	return &service{store: store, enrollments: enrollments, tokens: tokens, issuer: issuer, now: now,
+	return &service{store: store, tokens: tokens, issuer: issuer, now: now,
 		endpoint: cfg.TokenEndpoint,
 		perClient: NewLimiter(LimiterConfig{Limit: ExchangesPerClient, Window: ExchangeWindow,
 			MaxKeys: TrackedClients, Now: now}),
 		perSource: NewLimiter(LimiterConfig{Limit: ExchangesPerSource, Window: ExchangeWindow,
 			MaxKeys: TrackedClients, Now: now}),
 	}
-}
-
-func (s *service) Exchange(ctx context.Context, source, credential string, audience *grn.GRN) (*Token, error) {
-	if err := s.perSource.Check(source); err != nil {
-		return nil, err
-	}
-	// A value no issuance could have produced reads nothing.
-	if !WellFormed(credential, CredentialPrefix) {
-		return nil, ErrCredentialInvalid
-	}
-	holder, err := s.tokens.CredentialHolder(ctx, HashToken(credential))
-	if err != nil {
-		return nil, err
-	}
-	// Counted once the credential resolved, so only its holder spends
-	// the operator's budget.
-	if err := s.perClient.Check(holder.Operator.String()); err != nil {
-		return nil, err
-	}
-	if err := validAudience(holder.Operator, audience); err != nil {
-		return nil, err
-	}
-	value, err := secret(TokenPrefix)
-	if err != nil {
-		return nil, errorx.Wrap(err, "operator token")
-	}
-	now := s.now().UTC()
-	token := &Token{Value: value, Operator: holder.Operator, Audience: audience,
-		IssuedAt: now, ExpiresAt: now.Add(TokenTTL)}
-	if err := s.tokens.RecordToken(ctx, holder, token); err != nil {
-		return nil, err
-	}
-	return token, nil
 }
 
 func (s *service) ExchangeAssertion(ctx context.Context, source string, client grn.GRN, assertion string, audience *grn.GRN) (*Token, error) {
@@ -240,29 +190,6 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*IssuedCertificat
 		return nil, err
 	}
 	return issued, nil
-}
-
-func (s *service) Enroll(ctx context.Context, token string, request CertificateRequest) (*Certificate, error) {
-	// Spent before anything is signed, so a token buys one attempt
-	// rather than one certificate: a request garam refuses costs the
-	// token, and the operator registers again. The other order would
-	// let a caller hold a token open across as many malformed requests
-	// as it liked.
-	subject, err := s.enrollments.Spend(ctx, HashToken(token))
-	if err != nil {
-		return nil, err
-	}
-	signed, err := s.issuer.Sign(ctx, subject, request)
-	if err != nil {
-		return nil, err
-	}
-	// Adopted as the out-of-band mint adopts, so an enrolled operator
-	// starts the lineage a renewal is measured against (ADR-0046) and
-	// takes it from whatever certificate already named it.
-	if err := s.store.Adopt(ctx, current(subject, signed.Serial, s.now())); err != nil {
-		return nil, err
-	}
-	return signed, nil
 }
 
 func (s *service) Renew(ctx context.Context, c Credential) (*IssuedCertificate, error) {

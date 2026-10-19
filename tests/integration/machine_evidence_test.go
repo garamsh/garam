@@ -165,10 +165,10 @@ func inventory(t *testing.T, p *pgxpool.Pool) map[string]inventoryRow {
 // TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes runs
 // the shipped listener over real Postgres and reads the result through
 // inventory.sql. An operator that authenticated by certificate and one
-// that exchanged its credential and presented the token each show the
-// paths they took. A registered operator that did neither shows as
-// registered with every path empty — the idle caller G3 has to name —
-// and a legacy agent with no evidence shows in its own cohort.
+// that exchanged an assertion of its key and presented the token each
+// show the paths they took. A registered operator that did neither
+// shows as registered with every path empty — the idle caller G3 has to
+// name — and a legacy agent with no evidence shows in its own cohort.
 func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T) {
 	p := pool(t)
 	createOrgs(t, p, "acme")
@@ -184,9 +184,9 @@ func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T
 	status, body := machineRequest(t, certified, http.MethodGet, url+"/identity")
 	require.Equal(t, http.StatusOK, status, string(body))
 
-	exchangedGRN, credential := registerCredentialed(t, store, "exchanged")
+	exchangedGRN, key := keyed(t, store, "exchanged")
 	client, _ := tokenClient(t)
-	token := exchangeOver(t, client, url, credential)
+	token := exchangeKey(t, client, url, exchangedGRN, key, nil)
 	require.Equal(t, http.StatusOK, identifiesWith(t, client, url, token))
 
 	idle := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "idle"))
@@ -200,10 +200,10 @@ func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T
 
 	require.Contains(t, found, exchangedGRN.String())
 	exchanged := found[exchangedGRN.String()]
-	assert.NotNil(t, exchanged.lastSharedEx, "the exchange is recorded under its method")
+	assert.NotNil(t, exchanged.lastAssertionEx, "the exchange is recorded under its method")
 	assert.NotNil(t, exchanged.lastToken, "the token's request is recorded")
 	assert.Nil(t, exchanged.lastCertificate)
-	assert.Nil(t, exchanged.lastAssertionEx)
+	assert.Nil(t, exchanged.lastSharedEx)
 
 	require.Contains(t, found, idle.String())
 	assert.True(t, found[idle.String()].registered)
@@ -212,5 +212,5 @@ func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T
 
 	require.Contains(t, found, legacy.String())
 	assert.Equal(t, "legacy_agent", found[legacy.String()].cohort)
-	assert.NotContains(t, found, credential, "no credential reaches the inventory")
+	assert.NotContains(t, found, token, "no token reaches the inventory")
 }

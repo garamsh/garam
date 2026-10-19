@@ -1,51 +1,36 @@
 # Operators
 
-What an organization records about an operator, where that operator
-stands in obtaining a certificate, and what it authenticates with: the
-record that the organization has it and that its certificate
-authenticates on (ADR-0045, ADR-0070), the one-time token registering
-it mints and a member mints again where it has not enrolled (ADR-0064,
-ADR-0067), which certificate garam last issued it, together with
-what it takes to replace that with the next (ADR-0046), the
-authority an organization delegates to a hosted operator and hands it
-one operation at a time, where that operator's control service answers
-the console, and the proof of a controller's current
-authority that hosted operator obtains before each lifecycle decision
-(ADR-0078), and the credential an operator exchanges for the
-short-lived tokens it authenticates with in place of a certificate
-(ADR-0100), and the keys whose signed assertions exchange for the
-same tokens (ADR-0102). Implemented by `internal/operator`,
-whose grants and authorities persist through
-`internal/operator/postgres`.
-
-Pending removal
-([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
-the one-time enrollment token, its re-mint and the shared-secret
-credential go in the second pull request of #1593, after which an
-operator enters by a key alone. What this document says of them holds
-until then; the certificate path stays.
+What an organization records about an operator and what it
+authenticates with: the record that the organization has it and that
+its key and its certificate authenticate on (ADR-0045, ADR-0070), the
+keys whose signed assertions it exchanges for the short-lived tokens
+it authenticates with (ADR-0102), which certificate garam last issued
+it, together with what it takes to replace that with the next
+(ADR-0046), the authority an organization delegates to a hosted
+operator and hands it one operation at a time, where that operator's
+control service answers the console, and the proof of a controller's
+current authority that hosted operator obtains before each lifecycle
+decision (ADR-0078). An operator enters by a key alone: the one-time
+enrollment token and the shared-secret credential are gone
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)).
+Implemented by `internal/operator`, whose grants and authorities
+persist through `internal/operator/postgres`.
 
 | Type | Responsibility |
 |------|----------------|
-| `Operator` | an organization's record that it has an operator under this GRN: what it calls the operator and says it is for, who registered it and when, where that operator stands in obtaining a certificate, and the control endpoint the console sends its operations to |
+| `Operator` | an organization's record that it has an operator under this GRN: what it calls the operator and says it is for, who registered it and when, when garam last issued it a certificate, and the control endpoint the console sends its operations to |
 | `ControlEndpoint` | a parsed `https` base URL a hosted operator's control service answers the console at |
 | `DetailsPatch` | a parsed name and description, each absent where the caller said nothing: what a registration starts with and what an update changes |
-| `EnrollmentState` | where an operator stands: holding a certificate, holding a token nobody has spent, or holding neither |
-| `Enrollment` | the one-time token an operator obtains its first certificate with: which operator it enrols, who minted it, and when it stops being spendable |
-| `Store` | registers one with the token it enrols with and the credential it exchanges, and answers what it stored, re-issues that credential, issues, lists and withdraws its keys, mints that token again for one that has not enrolled, changes its name and description, sets or clears its control endpoint, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
-| `EnrollmentStore` | spends a token, answering the operator it enrols |
+| `Store` | registers one and answers what it stored, issues, lists and withdraws its keys, changes its name and description, sets or clears its control endpoint, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
 | `Credential` | the certificate a connection authenticated with — the identity it names, which certificate it is, and how long it is good for |
-| `CertificateRequest` | a certificate signing request as it arrived, holding the public key an enrolling operator generated |
 | `Certificate` | what an operator authenticates with and the garam server root it verifies garam by, as this domain hands them back |
 | `IssuedCertificate` | a `Certificate` garam generated the key pair for, carrying the private key it returns once |
 | `Current` | the certificate garam last issued an operator: the record a renewal is measured against |
 | `CertificateStore` | records what garam last issued, and moves that record to the successor only where the presented certificate is still it |
-| `Service` | signs an enrolling operator's request, mints a certificate out of band and adopts it, renews the one an operator presents, and exchanges a credential, or a client assertion a live key signed, for a token |
-| `IssuedCredential` | a credential garam generated for an operator, carrying the value it answers once (ADR-0100) |
-| `Token` | a token an operator exchanged its credential for: the operator, the audience it is accepted by, and when it expires |
-| `TokenHolder` | what a live token's row names, read beside the registration it rests on |
-| `CredentialHolder` | the operator a presented credential belongs to, and which issuance of it that is |
-| `TokenStore` | answers the operator a credential belongs to, records a token under that issuance, answers the live key an assertion names, admits a verified assertion and records its token, and resolves a presented token |
+| `Service` | mints a certificate out of band and adopts it, renews the one an operator presents, and exchanges a client assertion a live key signed for a token |
+| `Token` | a token an operator exchanged a key's assertion for: the operator, the audience it is accepted by, and when it expires |
+| `TokenHolder` | what a live token's row names, read beside the registration and the key it rests on |
+| `TokenStore` | answers the live key an assertion names, admits a verified assertion and records its token, and resolves a presented token |
 | `IssuedKey` | an RSA key garam generated for an operator, carrying the private PEM it answers once (ADR-0102) |
 | `Key` | the public record of a key: its thumbprint, algorithm, verification key, state and when it last obtained a token |
 | `KeyRotation` | how an issued key stands beside the keys held: first, planned or immediate |
@@ -53,7 +38,7 @@ until then; the certificate path stays.
 | `ClientAssertion` | a compact JWT read far enough to name its key, verified by nothing yet |
 | `VerifiedAssertion` | an assertion whose signature and identity held, admitted under its time bounds and jti |
 | `Limiter` | bounds how often one client or operator exchanges or is issued a key in one process |
-| `Issuer` | signs a certificate for a subject GRN, over a key it generates or over one a request carries, and hands back the garam server root beside it |
+| `Issuer` | signs a certificate for a subject GRN over a key it generates, and hands back the garam server root beside it |
 | `Grant` | an immutable delegation to a hosted operator: its controllers, operations and expiry, and whether a replacement or withdrawal ended it |
 | `Binding` | what one operation authority binds: actor, organization, audience, operation, target, grant, request identifier, body digest, for an operation on an existing agent the placement, and for a read or publication the request target |
 | `RequestTarget` | a parsed origin-form request target: the escaped path and raw query the Operator receives |
@@ -73,142 +58,68 @@ run (ADR-0032), so a minted identifier would name something other than
 the operator that exists. What the domain applies is the GRN segment
 rule, and the schema applies it again where nothing routes around it.
 
-A record mints no certificate, and the token beside it grants no more
-than permission to ask for one certificate, once; the credential issued
-with it is §Credential and tokens'. What the record does is admit: the
-machine listener reads it per connection for a certificate and per
-request for a token, so an operator authenticates only while its
-organization still holds the record, and withdrawing the record stops
-it (ADR-0070, ADR-0100).
+A record mints nothing. What it does is admit: the machine listener
+reads it per connection for a certificate and per request for a token,
+so an operator authenticates only while its organization still holds
+the record, and withdrawing the record stops it (ADR-0070, ADR-0102).
 garam still never dials an operator, so nothing an operator says
 reaches this domain and no state here is a report of one. The record is
 read for three questions — whether this organization has the operator a
 definition names, which the browser surface asks there; the list of
 what the organization has registered, which the console shows and
-`ListByOrg` exists for; and whether a presented certificate still names
-an operator this organization holds, which the machine listener asks
-through a seam of its own. The `agent_definitions` foreign key is the
-copy of the definition's check no call path routes around, and it is
-what refuses a delete as well.
+`ListByOrg` exists for; and whether a presented certificate or token
+still names an operator this organization holds, which the machine
+listener asks through a seam of its own. The `agent_definitions`
+foreign key is the copy of the definition's check no call path routes
+around, and it is what refuses a delete as well.
 
-That list also answers where each operator stands in obtaining a
-certificate, derived from the two tables beside the record and stored in
-neither: a certificate garam issued is `enrolled`, a token still inside
-its window is `pending`, and neither is `expired`. The order is the
-whole of it. A certificate outranks a token, because it is the outcome
-the token exists to produce, so an operator holding one reads `enrolled`
-however much of its token is left — a case that is reachable rather than
-hypothetical, since `garam issue-certificate` records a certificate for
-a GRN nobody registered and registering that GRN afterwards mints a
-token beside it. What the three mean to a browser caller is
-`api/openapi.yaml` §OperatorEnrollmentState, which is authoritative for
-that (ADR-0059).
-
-Registering therefore answers the record as stored rather than the one
-it was handed: the state is read in the same transaction, so a GRN that
-already holds a certificate answers `enrolled` on the call that minted
-it a token it does not need.
-
-`enrolled` says a certificate was obtained and not that the operator is
-alive. garam records no expiry beside the row and asks the operator
-nothing, so an operator that enrolled and then died reads `enrolled` and
-that is correct. The timestamp beside the state is the current
-certificate's issue time, which a renewal moves (ADR-0046): it answers
-when garam last signed for the operator and never when the operator
-enrolled. Recording the latter would be a history nothing else reads,
-which is what `operator_certificates` declines by keeping the newest row
-alone.
+That list also answers when garam last issued each operator a
+certificate, read from `operator_certificates` beside the record and
+stored in neither. `garam issue-certificate` records a certificate for
+a GRN nobody registered, so registering that GRN afterwards answers
+when it was issued: the registration reads the record back in the same
+transaction rather than assuming none. The date says a certificate was
+obtained and not that the operator is alive. It is the current
+certificate's issue time, which a renewal moves (ADR-0046), so it
+answers when garam last signed for the operator; recording the first
+would be a history nothing else reads, which is what
+`operator_certificates` declines by keeping the newest row alone.
 
 The record's one update is to its name and description
 ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)).
 Both are what the organization says about the operator and neither is
 an identity: a name is not unique, one left out of a registration is
 the identifier, and the update writes those two columns and nothing
-keyed on the GRN, so the certificate lineage, an unspent token and the
-definitions naming the operator stand as they were. It is authorized
-on `operator:update`, which grants nothing and withdraws nothing. The
+keyed on the GRN, so the certificate lineage, its keys and the
+definitions naming the operator stand as they were. It is authorized on
+`operator:update`, which grants nothing and withdraws nothing. The
 bounds are `api/openapi.yaml` §OperatorName and §OperatorDescription,
 which is authoritative for them, and 000025 holds the same ones.
 There is a delete, and it is the one write here that takes something
-away (ADR-0070). It leaves the identifier holding nothing — the unspent
-token goes by the foreign key that was declared for this route ahead of
-it, the credential and its tokens go by `migrations/000038`'s, and the
-record of the certificate garam last issued has no such key
-and is removed by name in the same transaction. That second removal is
-load bearing rather than tidy: left standing, the row would answer
-`enrolled` against the next registration of the same identifier, and
-the re-mint refusal below would then deny that operator the token it
-needs. An operator an agent definition names is refused, and nothing is
-deleted; the definitions move or go first.
+away (ADR-0070). It leaves the identifier holding nothing — its keys
+and their tokens go by `migrations/000043`'s foreign keys, and the
+record of the certificate garam last issued has no such key and is
+removed by name in the same transaction. That second removal is load
+bearing rather than tidy: left standing, the row would answer a
+certificate against the next registration of the same identifier. An
+operator an agent definition names is refused, and nothing is deleted;
+the definitions move or go first.
 
 The certificate half still reads no record above it. An operator renews
 with what it holds, and the renewal rule is measured against the
 lineage rather than against the registration. What reads the record is
-the listener under both halves, before either is reached: a handshake
-that finds no record carries no identity, so an operator without one
-reaches neither the renewal nor anything else (ADR-0070). What crosses
-between the two halves goes the other way still — the record half's two
-queries join both tables under the certificate half to derive the state
-above, in the direction a renewal never takes.
+the listener, before the renewal is reached: a handshake that finds no
+record carries no identity, so an operator without one reaches neither
+the renewal nor anything else (ADR-0070). What crosses between the two
+halves goes the other way still — the record half's two queries join
+the certificate half's table for the date above, in the direction a
+renewal never takes.
 
-An operator's first certificate is obtained by enrolling (ADR-0064).
-Registering mints a token, the operator generates its key pair where the
-certificate will be used, and this domain spends the token and signs the
-request. **The subject is the token's and never the request's**, so a
-request naming another identity obtains a certificate for the operator
-the token named or nothing at all, and what comes back carries no
-private key because none was generated. Enrolling adopts the lineage
-exactly as the out-of-band mint does, so an enrolled operator renews on
-the same rule as any other.
-
-Three things bound what a token is worth. It stops being spendable ten
-minutes after it is minted. Spending it removes it, in the statement
-that reads it, so two callers presenting one token leave one
-certificate. And the attempt spends it whether or not the signing
-succeeds, so a caller cannot hold one open across malformed requests —
-what a refused enrollment costs is the token, and the recovery is to
-mint another.
-
-Minting another is a member's to do, for an operator that holds no
-certificate (ADR-0067). It grants nothing a registration does not:
-where nothing was ever issued, it is what deleting the record and
-registering the same identifier again would be, which is why it is
-authorized on the action that registers rather than on one of its own.
-That pair of calls is now one a member holding both actions can
-actually make, where ADR-0067 argued from an act nobody could perform;
-what the argument rested on is unchanged, because it is what the two
-calls would grant and not whether they existed.
-An operator holds at most one token whatever mints it — the schema
-carries a unique key on the operator and the minting statement upserts
-on it, so the newest token replaces what was there and one identity is
-never reachable by two.
-
-It is refused for an operator that already enrolled, and the refusal
-says why. That operator holds a certificate, which is the outcome the
-token exists to produce, so a second token would be a second credential
-path to one identity — closer to issuing another credential for an
-existing subject than to registering. Whether a member may do that is
-undecided: it has no forcing case, and garam cannot tell a member
-recovering from a compromise from the compromise itself. The message
-the refusal carries is where that stands, so a person meeting it learns
-a decision was taken rather than that something broke. Which half a
-request falls in is the certificate-outranks-token order above, read
-inside the same transaction as the write, by the derivation the
-registration reads it by and not a second one.
-
-Unknown, spent and expired are one refusal. A caller that spends nothing
-presented no credential either way, and telling the three apart would
-answer questions about tokens the caller does not hold. Only the hash
-reaches the database, as it does for a session, so a row read out of a
-dump enrols nothing.
-
-The command ADR-0032 ships still mints a first certificate out of band,
-and it is what recovers the operator that already holds one, for which
-no token is minted again. An operator with no certificate and no token
-is recovered by minting another instead. Every
-certificate after the first is issued here, over the connection the
-certificate being replaced authenticated, so neither bootstrap is a
-standing obligation.
+An operator authenticating by certificate obtained its first out of
+band, from the command ADR-0032 ships, which is also what recovers one
+whose certificate was lost or ran out. Every certificate after the
+first is issued here, over the connection the certificate being
+replaced authenticated, so the mint is not a standing obligation.
 
 Four things refuse a renewal, and each is a decision rather than a
 guard. A certificate whose subject is not an operator is refused before
@@ -216,21 +127,21 @@ any window is measured: what this domain renews is an operator's
 certificate. A certificate that has expired renews nothing: it
 authenticates nothing, so no identity reaches this route with it, and
 the rule states the same boundary as the empty end of its window — what
-follows expiry is a token to enrol with, or a mint out of band. A
-certificate with more than a third of its validity left is refused as
-too early, measured off the certificate rather than off a configured
-number, so the window holds whatever lifetime signed it. And
-only the certificate garam last issued an operator may renew it: garam
-records that certificate and moves the record to the successor in the
-statement that checks it, so every other copy of that identity stops
-being renewable at once. That last one is what bounds a stolen
-certificate belonging to an operator the organization still wants — the
-operator it was taken from renews, the copy loses the lineage, and it
-expires. It withdraws nothing: a certificate that can no longer renew
-keeps authenticating until it runs out, and a caller holding the one
-garam has just replaced authenticates on it meanwhile. What ends a
-theft rather than bounding it is deleting the operator, which stops
-every certificate naming it at once (ADR-0070).
+follows expiry is a mint out of band. A certificate with more than a
+third of its validity left is refused as too early, measured off the
+certificate rather than off a configured number, so the window holds
+whatever lifetime signed it. And only the certificate garam last
+issued an operator may renew it: garam records that certificate and
+moves the record to the successor in the statement that checks it, so
+every other copy of that identity stops being renewable at once. That
+last one is what bounds a stolen certificate belonging to an operator
+the organization still wants — the operator it was taken from renews,
+the copy loses the lineage, and it expires. It withdraws nothing: a
+certificate that can no longer renew keeps authenticating until it
+runs out, and a caller holding the one garam has just replaced
+authenticates on it meanwhile. What ends a theft rather than bounding
+it is deleting the operator, which stops every certificate naming it at
+once (ADR-0070).
 
 An operator with no record yet is the one case that comparison has
 nothing to make, and it is not a refusal: the write that moves the
@@ -240,11 +151,11 @@ needs, and it is why the fourth refusal bounds a copy only once a
 lineage exists to lose.
 
 The mint adopts whatever it issued, so re-running `garam
-issue-certificate` takes the lineage from every certificate that already
-names the operator, and so does an enrollment. That is the recovery from
-an answer nobody received. It is not the revocation: it narrows what a
-copy can do next and leaves it authenticating, where deleting the
-operator refuses every copy from its next connection.
+issue-certificate` takes the lineage from every certificate that
+already names the operator. That is the recovery from an answer nobody
+received. It is not the revocation: it narrows what a copy can do next
+and leaves it authenticating, where deleting the operator refuses every
+copy from its next connection.
 
 `CertificateStore` holds one row per operator and has no read: what the
 rule needs is not the current certificate but whether the presented one
@@ -252,43 +163,35 @@ is still it, and the write answers that itself. Its table is read by the
 record half, for whether a row is there and when it was written; that is
 not a read on this interface, and nothing the record half answers names
 which certificate the row holds — the serial is what decides a renewal
-and stays on the machine listener. `EnrollmentStore` has no
-read for the same shape of reason: nothing can answer a token without
-also spending it, which is what makes single use the store's rather than
-a check a caller performs. Signing happens through the `Issuer` seam the
-composition root satisfies from `internal/ca`, as the agents domain's
-does, so this one never holds key material; the successor is signed
-before the record moves, and a caller that lost the lineage receives
-nothing. The certificate half's HTTP surface is the
-machine listener — the renewal a certificate authenticates, and the
-enrollment reached without one — and `internal/cli` is its other caller,
-`garam issue-certificate`. The record half's surface is the
-browser-facing listener, on the organization's own paths, and that is
-also where a token is minted and where a record is deleted: registering
-writes the record and the token in one transaction, so a registration
-never exists without the token that enrols it; the same surface mints
-another where the operator has not enrolled — a route no console page
-reaches yet — reads and renames one, and deletes one, all three of
-which the console reaches on the operator's own page (ADR-0074).
-Deleting
-is authorized on `operator:delete` rather than on the action that
-registers, because registering grants nothing and this withdraws what
-an operator runs on (ADR-0070). The record is read on the machine
-listener too, through the seam that admits a certificate, which is the
-one place either listener reads it to decide whether a caller is
-admitted. The
-agent's certificate is not
-this domain's: an agent is admitted to its own by the claim its operator
-made (ADR-0033) and renews on the route ADR-0040 gave it.
+and stays on the machine listener. Signing happens through the `Issuer`
+seam the composition root satisfies from `internal/ca`, as the agents
+domain's does, so this one never holds key material; the successor is
+signed before the record moves, and a caller that lost the lineage
+receives nothing. The certificate half's HTTP surface is the machine
+listener's renewal, and `internal/cli` is its other caller, `garam
+issue-certificate`. The record half's surface is the browser-facing
+listener, on the organization's own paths: it registers, reads and
+renames one, and deletes one, which the console reaches on the
+operator's own page (ADR-0074). Deleting is authorized on
+`operator:delete` rather than on the action that registers, because
+registering grants nothing and this withdraws what an operator runs on
+(ADR-0070). The record is read on the machine listener too, through
+the seams that admit a certificate and a token, which are the one place
+either listener reads it to decide whether a caller is admitted. The
+agent's certificate is not this domain's: an agent is admitted to its
+own by the claim its operator made (ADR-0033) and renews on the route
+ADR-0040 gave it.
 
 ## Issued PEM identity
 
 **garam's half is built; no Operator release exchanges yet.**
 [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
-replaces the target for §Credential and tokens' shared-secret
-exchange. The registration, identifier, permissions and the
-shared-secret and certificate cohorts remain, and the Operator's
-single-mode cutover is its own repository's (Operator ADR-0068).
+is how an operator proves its identity, and
+[ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
+removed the shared-secret exchange beside it. The registration,
+identifier, permissions and the certificate cohort remain, and the
+Operator's single-mode cutover is its own repository's (Operator
+ADR-0068).
 `api/openapi.yaml` §issueOperatorKey, §listOperatorKeys and
 §revokeOperatorKey are authoritative for the key routes' wire.
 
@@ -296,9 +199,9 @@ single-mode cutover is its own repository's (Operator ADR-0068).
   The PM decided this on #1356, where the ADR leaves the issuing route
   open: the key route exists for rotation and lost-issuance
   replacement anyway, so one path serves the first key too, and no
-  answer carries two secrets while the shared-secret cohort lasts. The
-  cost is a second step for an administrator: register, issue a key,
-  place the PEM and `tokenUrl`, once per registered operator identity.
+  answer carries two secrets. The cost is a second step for an
+  administrator: register, issue a key, place the PEM and `tokenUrl`,
+  once per registered operator identity.
   An Operator has two, its manager and its control service, and each
   is issued its own key.
 - **The first key of an operator that has never been issued one is
@@ -337,8 +240,8 @@ single-mode cutover is its own repository's (Operator ADR-0068).
   and the row stays, listed `revoked`.
 - **A key proves identity and grants no organization permission.**
   Tokens it obtains are ordinary operator tokens: delegated authority,
-  controller proof and assignment checks apply as they do to a
-  shared-secret token. Replacing a key recovers no agent lineage.
+  controller proof and assignment checks apply to them. Replacing a
+  key recovers no agent lineage.
 - **One process issues at most 3 keys per registered operator identity
   and 30 in all per minute** (`internal/operator`
   `KeyIssuancesPerOperator`), and answers 429 with `Retry-After` past
@@ -354,49 +257,30 @@ single-mode cutover is its own repository's (Operator ADR-0068).
 `machine-identity.md` §Asymmetric Operator exchange owns the exchange
 and the token reads.
 
-## Credential and tokens
+## Tokens
 
-**What is built is the operator's half: its credential, its tokens and
-their revocation.** ADR-0100 replaces an operator's certificate with
-these, and the plan,
-`docs/plans/2026-10-09-machine-identity-migration.md`, says when the
-certificate path goes; until then an operator may present either.
+**An operator's tokens are what its key exchanges for.** Each is a
+one-hour token prefixed `garam_ot_`, which `exchangeClientAssertion`
+answers on the machine listener (§Issued PEM identity), stored as its
+hash beside the key it was exchanged under.
 
-- **Registering issues the credential, in the write that records the
-  operator**, and the console shows it once. garam stores its SHA-256
-  alone, so a dump authenticates nothing. It does not expire.
-- **An operator holds one credential, and re-issuing replaces it.**
-  `reissueOperatorCredential` deletes the row and inserts its successor
-  in one transaction; every token minted under the previous one goes
-  with it by `migrations/000038`'s foreign key, so the operator's next
-  request on any of them is refused. Re-issuing is `operator:reissue`,
-  which owner and admin hold, because it withdraws what an operator runs
-  on until the new credential is placed. An operator registered before
-  credentials existed holds none, and re-issuing issues its first.
-- **The credential exchanges for a one-hour token, and for nothing
-  else.** `exchangeToken` on the machine listener answers a token
-  prefixed `garam_ot_`, stored as its hash beside the credential
-  issuance it was minted under; the exchange sweeps the operator's
-  expired tokens and keeps the issuance's newest five, so a leaked
-  credential cannot grow the table. A value that is not a credential's
-  shape is refused before anything is read. A token never mints a
-  token. One may name an
-  audience — another operator the organization registered, a hosted
-  control service it is to be shown to — and garam accepts such a
-  token on no route; it reads one only when that audience forwards it
-  for a controller proof (§Controller proof).
-  `migrations/000041`'s foreign key refuses an audience nobody
-  registered, and deleting that operator takes the tokens minted to be
-  shown to it.
+- **An exchange bounds what it writes.** It sweeps the operator's
+  expired tokens and keeps the key's newest five, so a leaked key
+  cannot grow the table. A token never mints a token.
+- **A token may name an audience** — another operator the
+  organization registered, a hosted control service it is to be shown
+  to — and garam accepts such a token on no route; it reads one only
+  when that audience forwards it for a controller proof
+  (§Controller proof). `migrations/000041`'s foreign key refuses an
+  audience nobody registered, and deleting that operator takes the
+  tokens minted to be shown to it.
 - **Revocation is a read on every request.** The machine listener
-  resolves a presented token by its row joined to the registration, so
-  deleting the operator, which takes the credential and its tokens by
-  foreign key, and re-issuing are both refused from the next request
-  ([machine-identity.md](./machine-identity.md) §Tokens). A token
-  exchanged under a key rests on that key instead of a credential, so
-  re-issuing the credential leaves it standing and withdrawing the key
-  does not (§Issued PEM identity). A token's hour bounds one nobody
-  revoked.
+  resolves a presented token by its row joined to the registration and
+  to its key while that key is live, so deleting the operator, which
+  takes its keys and their tokens by foreign key, and withdrawing or
+  replacing the key are each refused from the next request
+  ([machine-identity.md](./machine-identity.md) §Tokens). A token's
+  hour bounds one nobody revoked.
 
 ## Delegated operation authority
 
@@ -558,7 +442,7 @@ lifecycle decision it makes for that controller (ADR-0078). It
 forwards the controller's credential exactly as the controller
 presented it: under `operation-authority.v1` its leaf certificate,
 and under `operation-authority.v2` the token the controller exchanged
-its credential for to be shown to that hosted operator (ADR-0100).
+its key for to be shown to that hosted operator (ADR-0100, ADR-0102).
 garam verifies that credential rather than any GRN the caller asserts.
 A proof is answered only when every check passes, each read on the
 request, because the caller's connection authenticated once when it

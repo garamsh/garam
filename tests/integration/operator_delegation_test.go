@@ -108,9 +108,9 @@ func newDelegationFixture(t *testing.T) *delegationFixture {
 	actor := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "ada")
 	require.NoError(t, userpg.New(p).Create(ctx, user.New(actor, "Ada")))
 	store := operator.NewPostgresStore(p)
-	hosted, _ := register(t, store, "hosted")
-	controller, _ := register(t, store, "controller")
-	other, _ := register(t, store, "other")
+	hosted := register(t, store, "hosted")
+	controller := register(t, store, "controller")
+	other := register(t, store, "other")
 	f := &delegationFixture{
 		pool: p, store: store, authority: &currentAuthority{},
 		placements: &placements{at: map[grn.GRN]operator.Assignment{}},

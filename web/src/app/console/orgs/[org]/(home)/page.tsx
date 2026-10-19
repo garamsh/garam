@@ -1,4 +1,3 @@
-import { Server } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -14,7 +13,6 @@ import {
   lookupAgentDefinitions,
   lookupAgents,
   lookupMyGroups,
-  lookupOperators,
   lookupOrgMembers,
   memberName,
   resolveTeamMembers,
@@ -24,7 +22,6 @@ import {
   type Catalog,
   type Group,
   type Member,
-  type Operator,
   type TeamMember,
 } from "@/features/orgs";
 
@@ -55,9 +52,8 @@ type Part<T> =
  */
 type MyTeam = { group: Group; slug: string; members: TeamMember[] | null };
 
-/** Something the caller can read that needs attention. */
+/** An agent the caller can read that needs attention. */
 type Attention = {
-  kind: "agent" | "operator";
   name: string;
   href: string;
   states: { tone: StatusTone; label: string }[];
@@ -111,24 +107,24 @@ function catalog<T>(read: Part<T[]>): Catalog<T> {
 /**
  * Home: the organization as the person signed in meets it (ADR-0113).
  * It opens with a sentence generated from what follows, then what is
- * waiting on them, their teams with who is in each, and what they can
- * read that is failing. Only what the browser API serves is shown:
+ * waiting on them, their teams with who is in each, and the agents they
+ * can read that are failing. Only what the browser API serves is shown:
  * nothing waits on anyone until garam has work items, and no activity
  * is invented where garam records none. The organization is read for
  * itself, so one the caller cannot read answers 404 (ADR-0011).
  */
 export default async function HomePage({ params }: Params) {
   const { org: slug } = await params;
-  const [org, session, groups, people, agents, definitions, operators] =
-    await Promise.all([
+  const [org, session, groups, people, agents, definitions] = await Promise.all(
+    [
       getOrg(slug),
       getSession(),
       lookupMyGroups(slug),
       lookupOrgMembers(slug),
       lookupAgents(slug),
       lookupAgentDefinitions(slug),
-      lookupOperators(slug),
-    ]);
+    ],
+  );
 
   if (org.status === "unreachable") {
     return (
@@ -167,30 +163,13 @@ export default async function HomePage({ params }: Params) {
         ])
       : [],
   );
-  const attention: Attention[] = [
-    ...(agents.status === "ok" ? agents.data : [])
-      .filter((agent) => isFailing(agent))
-      .map((agent) => ({
-        kind: "agent" as const,
-        name: named.get(agent.grn) ?? UNNAMED_AGENT,
-        href: href(`agents/${slugFromGrn(agent.grn)}`),
-        states: agentStates(agent),
-      })),
-    ...(operators.status === "ok" ? operators.data : [])
-      .filter((operator: Operator) => operator.enrollmentState === "expired")
-      .map((operator) => ({
-        kind: "operator" as const,
-        name: operator.name,
-        href: href(`operators/${slugFromGrn(operator.grn)}`),
-        states: [{ tone: "danger" as const, label: "Enrollment expired" }],
-      })),
-  ];
-  // What Worth a look could not include, said rather than read as
-  // healthy.
-  const unread = [
-    ...(agents.status === "ok" ? [] : ["Agents"]),
-    ...(operators.status === "ok" ? [] : ["Operators"]),
-  ];
+  const attention: Attention[] = (agents.status === "ok" ? agents.data : [])
+    .filter((agent) => isFailing(agent))
+    .map((agent) => ({
+      name: named.get(agent.grn) ?? UNNAMED_AGENT,
+      href: href(`agents/${slugFromGrn(agent.grn)}`),
+      states: agentStates(agent),
+    }));
 
   const lede = homeLede({
     teams:
@@ -201,9 +180,9 @@ export default async function HomePage({ params }: Params) {
           }))
         : null,
     attention:
-      unread.length === 2
-        ? null
-        : attention.map((item) => ({ text: item.name, href: item.href })),
+      agents.status === "ok"
+        ? attention.map((item) => ({ text: item.name, href: item.href }))
+        : null,
   });
 
   return (
@@ -244,54 +223,38 @@ export default async function HomePage({ params }: Params) {
       <Section
         title="Worth a look"
         description="What you can read in this organization that is failing."
-        count={unread.length === 2 ? undefined : attention.length}
+        count={agents.status === "ok" ? attention.length : undefined}
         region
       >
-        {unread.length === 2 ? (
-          <RefusedRead subject="this organization's agents or operators" />
+        {agents.status !== "ok" ? (
+          <RefusedRead subject="this organization's agents" />
+        ) : attention.length === 0 ? (
+          <p className="text-muted-foreground">
+            Nothing you can read is failing.
+          </p>
         ) : (
-          <>
-            {attention.length === 0 ? (
-              <p className="text-muted-foreground">
-                Nothing you can read is failing.
-              </p>
-            ) : (
-              <ul className="flex flex-col divide-y rounded-xl border">
-                {attention.map((item) => (
-                  <li
-                    key={item.href}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5"
-                  >
-                    {item.kind === "agent" ? (
-                      <MemberMark kind="agent" name={item.name} />
-                    ) : (
-                      <Server
-                        aria-hidden
-                        className="size-4 text-muted-foreground"
-                      />
-                    )}
-                    <Link
-                      href={item.href}
-                      className="font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
-                    >
-                      {item.name}
-                    </Link>
-                    <span className="text-muted-foreground">{item.kind}</span>
-                    <span className="flex flex-wrap gap-x-3 sm:ml-auto">
-                      {item.states.map((state) => (
-                        <StatusDot key={state.label} {...state} />
-                      ))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {unread.length === 1 && (
-              <p className="text-muted-foreground">
-                {unread[0]} are not included: you can&apos;t view them.
-              </p>
-            )}
-          </>
+          <ul className="flex flex-col divide-y rounded-xl border">
+            {attention.map((item) => (
+              <li
+                key={item.href}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5"
+              >
+                <MemberMark kind="agent" name={item.name} />
+                <Link
+                  href={item.href}
+                  className="font-medium underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                >
+                  {item.name}
+                </Link>
+                <span className="text-muted-foreground">agent</span>
+                <span className="flex flex-wrap gap-x-3 sm:ml-auto">
+                  {item.states.map((state) => (
+                    <StatusDot key={state.label} {...state} />
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </Section>
     </div>

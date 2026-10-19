@@ -296,60 +296,6 @@ describe("operator page", () => {
     ).not.toBeInTheDocument();
   });
 
-  describe("enrollment token", () => {
-    const LABEL = "Issue a new enrollment token";
-
-    it("is offered for an operator holding no certificate", async () => {
-      server.use(
-        http.get(OPERATOR, () =>
-          HttpResponse.json({
-            ...fieldOne,
-            enrollmentState: "expired",
-            certificateIssuedAt: undefined,
-          }),
-        ),
-      );
-
-      await renderOperator("settings");
-
-      expect(screen.getByRole("button", { name: LABEL })).not.toHaveAttribute(
-        "aria-disabled",
-      );
-    });
-
-    it("stays inactive, saying why, for an operator that has enrolled", async () => {
-      // fieldOne holds a certificate.
-      await renderOperator("settings");
-
-      const button = screen.getByRole("button", { name: LABEL });
-      expect(button).toHaveAttribute("aria-disabled", "true");
-      expect(button).toHaveAccessibleDescription("It has already enrolled.");
-    });
-
-    it("stays inactive, saying why, where the server denies registering", async () => {
-      server.use(
-        http.get(OPERATOR, () =>
-          HttpResponse.json({
-            ...fieldOne,
-            enrollmentState: "expired",
-            certificateIssuedAt: undefined,
-          }),
-        ),
-        answerPermissionChecks((action) =>
-          action === "operator:register" ? "deny" : "allow",
-        ),
-      );
-
-      await renderOperator("settings");
-
-      const button = screen.getByRole("button", { name: LABEL });
-      expect(button).toHaveAttribute("aria-disabled", "true");
-      expect(button).toHaveAccessibleDescription(
-        "No policy lets you issue enrollment tokens.",
-      );
-    });
-  });
-
   it("offers every action when the server cannot decide", async () => {
     server.use(answerPermissionChecks(() => "unknown"));
 
@@ -357,11 +303,17 @@ describe("operator page", () => {
 
     expect(screen.getByRole("textbox", { name: "Name" })).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Re-issue credential" }),
-    ).toBeInTheDocument();
-    expect(
       screen.getByRole("button", { name: "Delete operator" }),
     ).toBeInTheDocument();
+    // An operator enters by a key alone, so Settings offers no legacy
+    // credential and no enrollment token however much is allowed
+    // (ADR-0117).
+    expect(
+      screen.queryByRole("button", { name: "Re-issue credential" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Issue a new enrollment token" }),
+    ).not.toBeInTheDocument();
   });
 
   it("closes Settings with a danger zone, which a denied delete leaves out", async () => {

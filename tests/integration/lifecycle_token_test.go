@@ -2,11 +2,13 @@ package integration_test
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -21,37 +23,35 @@ import (
 )
 
 // tokenStack is the managed execution stack once the hosted control
-// service and the controller each hold a credential and the token
-// garam accepts for it, which is what the v2 contract values take
-// (ADR-0100 G1c).
+// service and the controller each hold a key and the token garam
+// accepts for it, which is what the v2 contract values take (ADR-0100
+// G1c, ADR-0102).
 type tokenStack struct {
 	*executionStack
 	client *http.Client
-	// controllerCredential is what the controller exchanges, for
-	// garam's token or for one shown to the hosted control service.
-	controllerCredential string
-	hostedToken          string
-	controllerToken      string
+	// controllerKey is what the controller signs its assertions with,
+	// for garam's token or for one shown to the hosted control service.
+	controllerKey   *rsa.PrivateKey
+	hostedToken     string
+	controllerToken string
 }
 
 func newTokenStack(t *testing.T) *tokenStack {
 	t.Helper()
 	s := &tokenStack{executionStack: newManagedStack(t)}
 	s.client, _ = tokenClient(t)
-	s.hostedToken = exchangeOver(t, s.client, s.machine, reissued(t, s.executionStack, s.hosted))
-	s.controllerCredential = reissued(t, s.executionStack, s.controller)
-	s.controllerToken = exchangeOver(t, s.client, s.machine, s.controllerCredential)
+	s.hostedToken = s.keyedToken(t, s.hosted)
+	s.controllerKey, _ = issueKey(t, operator.NewPostgresStore(s.pool), s.controller, operator.KeyRotationFirst)
+	s.controllerToken = exchangeKey(t, s.client, s.machine, s.controller, s.controllerKey, nil)
 	return s
 }
 
-// reissued re-issues subject's credential, as the console does, and
-// answers it.
-func reissued(t *testing.T, s *executionStack, subject grn.GRN) string {
+// keyedToken issues subject its first key, as the console does, and
+// answers the token garam accepts for it.
+func (s *tokenStack) keyedToken(t *testing.T, subject grn.GRN) string {
 	t.Helper()
-	c, err := operator.NewIssuedCredential(subject, scopedGRN(subject.Organization, "user", "ada"))
-	require.NoError(t, err)
-	require.NoError(t, operator.NewPostgresStore(s.pool).ReissueCredential(context.Background(), c))
-	return c.Value()
+	private, _ := issueKey(t, operator.NewPostgresStore(s.pool), subject, operator.KeyRotationFirst)
+	return exchangeKey(t, s.client, s.machine, subject, private, nil)
 }
 
 // tokenSend performs one request over the token client with the
@@ -86,17 +86,11 @@ func (s *tokenStack) v2(t *testing.T, method, path, version, token, operation, b
 	return got
 }
 
-// shownToHosted exchanges the controller's credential for a token
-// shown to the hosted control service.
+// shownToHosted exchanges the controller's key for a token shown to
+// the hosted control service.
 func (s *tokenStack) shownToHosted(t *testing.T) string {
 	t.Helper()
-	got := s.tokenSend(t, http.MethodPost, "/tokens", map[string]string{
-		"Authorization": "Garam-Credential " + s.controllerCredential, operator.ContractVersionHeader: operator.TokenContractVersion,
-	}, `{"audience":"`+s.hosted.String()+`"}`)
-	require.Equal(t, http.StatusCreated, got.status, got.body)
-	var token machinegen.MachineToken
-	require.NoError(t, json.Unmarshal([]byte(got.body), &token))
-	return token.Token
+	return exchangeKey(t, s.client, s.machine, s.controller, s.controllerKey, &s.hosted)
 }
 
 // agentToken is the controller's mint of g's token: garam's where
@@ -388,7 +382,7 @@ func TestTokenContracts_ACutoverReferenceTravelsInItsOwnHeaderBesideAToken(t *te
 	s := &tokenStack{executionStack: newLegacyExecutionStack(t)}
 	s.delegate(t, "agent:activate", "agent:recover", "agent:configure", "agent:cutover")
 	s.client, _ = tokenClient(t)
-	s.hostedToken = exchangeOver(t, s.client, s.machine, reissued(t, s.executionStack, s.hosted))
+	s.hostedToken = s.keyedToken(t, s.hosted)
 	refs := s.cutoverRefs(t, s.agent)
 	path := "/agents/" + s.agent.String() + "/cutover"
 
@@ -415,10 +409,17 @@ func TestTokenContracts_ACutoverReferenceTravelsInItsOwnHeaderBesideAToken(t *te
 // tokens minted for garam are the control: they stay.
 func TestTokenContracts_ATokensAudienceIsAnOperatorTheOrganizationHolds(t *testing.T) {
 	s := newTokenStack(t)
-	got := s.tokenSend(t, http.MethodPost, "/tokens", map[string]string{
-		"Authorization": "Garam-Credential " + s.controllerCredential, operator.ContractVersionHeader: operator.TokenContractVersion,
-	}, `{"audience":"`+scopedGRN("acme", operator.ServiceType, "nobody").String()+`"}`)
-	assert.Equal(t, http.StatusBadRequest, got.status, "an unregistered audience: %s", got.body)
+	nobody := scopedGRN("acme", operator.ServiceType, "nobody")
+	_, err := s.client.PostForm(s.machine+"/oauth/token", url.Values{
+		"grant_type":            {"client_credentials"},
+		"client_id":             {s.controller.String()},
+		"client_assertion_type": {operator.ClientAssertionTypeJWT},
+		"client_assertion":      {freshAssertion(t, s.controllerKey, s.controller)},
+		"audience":              {nobody.String()},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 0, countRows(t, s.pool, `SELECT count(*) FROM operator_tokens WHERE audience_grn = $1`, nobody.String()),
+		"an unregistered audience is refused and records nothing")
 
 	m := s.createdV2(t, "c-1")
 	s.shownToHosted(t)

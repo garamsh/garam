@@ -51,16 +51,6 @@ export type AgentDefinition = components["schemas"]["AgentDefinition"];
  */
 export type Operator = components["schemas"]["Operator"];
 /**
- * What registering an operator answered: the record, and the one-time
- * token that enrols it. garam stores the token's hash and no route
- * reads one back (ADR-0064), so this answer is the only place this
- * token exists — the operation that mints an operator another one
- * answers that one the same way (ADR-0067).
- */
-export type RegisteredOperator = components["schemas"]["RegisteredOperator"];
-/** An operator's credential as the API answers it, once (ADR-0100). */
-export type OperatorCredential = components["schemas"]["OperatorCredential"];
-/**
  * One cross-organization consent relation, from the side the path
  * named: `orgGrn` is the other organization, and each half says
  * whether that side's grant stands. A relation is a pair and not one
@@ -200,27 +190,8 @@ export const OperatorParser = parserFor<Operator>()(
     orgGrn: GrnParser,
     registeredBy: GrnParser,
     createdAt: z.string(),
-    enrollmentState: z.enum(["enrolled", "pending", "expired"]),
     controlEndpoint: z.string().optional(),
     certificateIssuedAt: z.string().optional(),
-  }),
-);
-
-export const OperatorCredentialParser = parserFor<OperatorCredential>()(
-  z.object({
-    credential: z.string().min(1),
-    issuedAt: z.string(),
-  }),
-);
-
-export const RegisteredOperatorParser = parserFor<RegisteredOperator>()(
-  z.object({
-    operator: OperatorParser,
-    enrollment: z.object({
-      token: z.string().min(1),
-      expiresAt: z.string(),
-    }),
-    credential: OperatorCredentialParser,
   }),
 );
 

@@ -40,7 +40,7 @@ import {
   ProvidedReportsNotice,
 } from "../_components/operator-reports";
 import {
-  CERTIFICATE_STATUS,
+  certificateStatus,
   keyConnection,
   liveKeys,
 } from "../_components/operator-status";
@@ -49,10 +49,8 @@ import { ControlEndpointForm } from "./_components/control-endpoint-form";
 import { DelegationForm } from "./_components/delegation-form";
 import { DeleteOperatorForm } from "./_components/delete-operator-form";
 import { KeysPanel } from "./_components/keys-panel";
-import { MintEnrollmentForm } from "./_components/mint-enrollment-form";
 import { NamingDefinitions } from "./_components/naming-definitions";
 import { OperatorDetailsForm } from "./_components/operator-details-form";
-import { ReissueCredentialForm } from "./_components/reissue-credential-form";
 
 /** Head metadata for an operator's route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Operator — garam" };
@@ -232,7 +230,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
             term: "Certificate",
             description: (
               <span className="flex flex-wrap items-center gap-x-1.5">
-                <StatusDot {...CERTIFICATE_STATUS[o.enrollmentState]} />
+                <StatusDot {...certificateStatus(o.certificateIssuedAt)} />
                 {o.certificateIssuedAt && (
                   <span className="text-muted-foreground">
                     · last issued <Time value={o.certificateIssuedAt} />
@@ -361,25 +359,6 @@ export default async function OperatorPage({ params, searchParams }: Params) {
           />
         </SettingsCard>
       )}
-      {allowed("reissue") && (
-        <SettingsCard title="Legacy credential">
-          <ReissueCredentialForm org={org} operator={operator} name={o.name} />
-        </SettingsCard>
-      )}
-      <SettingsCard title="Enrollment token">
-        <MintEnrollmentForm
-          org={org}
-          operator={operator}
-          name={o.name}
-          blocked={
-            o.enrollmentState === "enrolled"
-              ? "It has already enrolled."
-              : allowed("register")
-                ? null
-                : "No policy lets you issue enrollment tokens."
-          }
-        />
-      </SettingsCard>
     </div>
   );
 

@@ -191,11 +191,7 @@ func registerOperator(t *testing.T, f *fixture, orgSlug, id string) grn.GRN {
 	t.Helper()
 	o, err := operator.New(orgGRNOf(orgSlug), id, userGRNOf("owner-sub"), operator.DetailsPatch{})
 	require.NoError(t, err)
-	enrollment, err := operator.NewEnrollment(o.GRN(), userGRNOf("owner-sub"))
-	require.NoError(t, err)
-	credential, err := operator.NewIssuedCredential(o.GRN(), userGRNOf("owner-sub"))
-	require.NoError(t, err)
-	_, err = f.operators.Register(testCtx(t), o, enrollment, credential)
+	_, err = f.operators.Register(testCtx(t), o)
 	require.NoError(t, err)
 	return o.GRN()
 }

@@ -1194,16 +1194,8 @@ func (s *fakePasswordAttemptStore) releaseOne() {
 
 type fakeOperatorStore struct {
 	operator.Store
-	mu          sync.Mutex
-	operators   map[string]*operator.Operator
-	enrollments map[string]*operator.Enrollment
-	// The hash of each operator's credential, by operator GRN: one per
-	// operator, as the real store's unique key holds it (ADR-0100).
-	credentials map[string]string
-	// The operators a certificate has been recorded for. The real
-	// store derives this from a table beside the record; nothing here
-	// issues certificates, so a test says which operators hold one.
-	enrolled map[string]bool
+	mu        sync.Mutex
+	operators map[string]*operator.Operator
 	// The operators an agent definition names. The real store reads
 	// this off the foreign key the delete trips; nothing here writes
 	// definitions, so a test says which operators one names.
@@ -1216,11 +1208,7 @@ type fakeOperatorStore struct {
 
 func newFakeOperatorStore() *fakeOperatorStore {
 	return &fakeOperatorStore{
-		operators:   map[string]*operator.Operator{},
-		enrollments: map[string]*operator.Enrollment{},
-		credentials: map[string]string{},
-		enrolled:    map[string]bool{},
-
+		operators:         map[string]*operator.Operator{},
 		namedByDefinition: map[string]bool{},
 		keys:              map[string][]operator.Key{},
 	}
@@ -1299,90 +1287,18 @@ func (s *fakeOperatorStore) RevokeKey(_ context.Context, g grn.GRN, kid string) 
 	return operator.ErrKeyNotFound
 }
 
-// Register writes the record, the token and the credential together,
-// as the statement does: a refused registration mints nothing. It answers the operator
-// it stored, which is what the real store reads back inside the same
-// transaction; this one holds no certificates, so the state it answers
-// is the token's.
-func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator, e *operator.Enrollment, c *operator.IssuedCredential) (*operator.Operator, error) {
+// Register writes the record, as the statement does, and answers the
+// operator it stored. The real store reads that back inside the same
+// transaction; this one holds no certificates, so the operator it
+// answers holds none.
+func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator) (*operator.Operator, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.operators[o.GRN().String()]; ok {
 		return nil, operator.ErrOperatorAlreadyRegistered
 	}
 	s.operators[o.GRN().String()] = o
-	s.enrollments[e.TokenHash()] = e
-	s.credentials[o.GRN().String()] = c.Hash()
 	return o, nil
-}
-
-// ReissueCredential replaces the operator's credential hash, which is
-// what the real store's delete-and-insert leaves: the previous value
-// authenticates nothing afterwards.
-func (s *fakeOperatorStore) ReissueCredential(_ context.Context, c *operator.IssuedCredential) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	g := c.Operator().String()
-	if _, ok := s.operators[g]; !ok {
-		return operator.ErrOperatorNotFound
-	}
-	s.credentials[g] = c.Hash()
-	return nil
-}
-
-// credentialOf returns the hash of the operator's credential, which is
-// what the fake holds instead of the value the caller was answered.
-func (s *fakeOperatorStore) credentialOf(g grn.GRN) (string, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	hash, ok := s.credentials[g.String()]
-	return hash, ok
-}
-
-// Remint replaces the operator's token with the one minted, which is
-// what the statement's upsert does: the previous hash is dropped, so
-// the token it stood for stops enrolling anything. The refusal for an
-// operator holding a certificate is the real store's, derived inside
-// its own transaction; this one answers it off what markEnrolled
-// recorded, so what these tests cover is the handler's half — the
-// status and the sentence a refused caller reads.
-func (s *fakeOperatorStore) Remint(_ context.Context, e *operator.Enrollment) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	g := e.Operator().String()
-	if _, ok := s.operators[g]; !ok {
-		return operator.ErrOperatorNotFound
-	}
-	if s.enrolled[g] {
-		return operator.ErrOperatorAlreadyEnrolled
-	}
-	for hash, held := range s.enrollments {
-		if held.Operator() == e.Operator() {
-			delete(s.enrollments, hash)
-		}
-	}
-	s.enrollments[e.TokenHash()] = e
-	return nil
-}
-
-// markEnrolled records that garam issued the operator a certificate,
-// which is the state a re-mint is refused for.
-func (s *fakeOperatorStore) markEnrolled(g grn.GRN) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.enrolled[g.String()] = true
-}
-
-// enrolls returns the operator a token enrols, which is what the fake
-// holds instead of the secret the caller was answered with.
-func (s *fakeOperatorStore) enrolls(token string) (grn.GRN, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	e, ok := s.enrollments[operator.HashToken(token)]
-	if !ok {
-		return grn.GRN{}, false
-	}
-	return e.Operator(), true
 }
 
 // Delete removes the record and the certificate the fake holds beside
@@ -1401,13 +1317,6 @@ func (s *fakeOperatorStore) Delete(_ context.Context, g grn.GRN) error {
 		return operator.ErrOperatorNamedByDefinition
 	}
 	delete(s.operators, g.String())
-	delete(s.enrolled, g.String())
-	delete(s.credentials, g.String())
-	for hash, held := range s.enrollments {
-		if held.Operator() == g {
-			delete(s.enrollments, hash)
-		}
-	}
 	return nil
 }
 

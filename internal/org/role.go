@@ -83,11 +83,11 @@ const (
 	// member does here that takes a machine identity away: registering
 	// grants nothing and this withdraws what an operator runs on.
 	ActionOperatorDelete = "operator:delete"
-	// ActionOperatorReissue is issuing an operator a new credential,
-	// which voids the one it holds and every token exchanged for it
-	// (ADR-0100). It is an action of its own for the reason deleting
-	// is: it withdraws what an operator runs on until the new
-	// credential is placed, which registering does not.
+	// ActionOperatorReissue is issuing an operator a key beside or in
+	// place of the one it holds, and withdrawing one, which voids every
+	// token exchanged under it (ADR-0102). It is an action of its own
+	// for the reason deleting is: it withdraws what an operator runs on
+	// until the new key is placed, which registering does not.
 	ActionOperatorReissue = "operator:reissue"
 	// ActionOperatorUpdate is changing what the org says about an
 	// operator: its name and description (ADR-0074). It is an action of

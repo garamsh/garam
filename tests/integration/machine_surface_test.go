@@ -3,7 +3,6 @@ package integration_test
 import (
 	"context"
 	"crypto/rand"
-	"crypto/tls"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -23,7 +22,6 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/wire"
@@ -913,68 +911,4 @@ func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *test
 	require.Equal(t, http.StatusNoContent, status, string(body))
 	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
 	assert.Equal(t, http.StatusNoContent, status, string(body), "a refused message reached the queue")
-}
-
-// TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted
-// covers the whole of what a person's one action buys (ADR-0064).
-// Registering writes the record and mints the token; the operator
-// enrols with a key garam never sees; and the certificate that comes
-// back is what authenticates it afterwards. That last step is the
-// assertion the rest rests on — a signed certificate that does not
-// authenticate would pass every check above it.
-func TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted(t *testing.T) {
-	ctx := context.Background()
-	p := pool(t)
-	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-
-	key := make([]byte, ca.KeySize)
-	_, err := rand.Read(key)
-	require.NoError(t, err)
-	sealer, err := ca.NewAESGCMSealer(key)
-	require.NoError(t, err)
-	_, engine := policyEngine(t, p)
-	url := machineListener(t, p, sealer, engine)
-
-	registeredBy := scopedGRN("acme", "user", "ada")
-	o, err := operator.New(orgRootGRN("acme"), "one", registeredBy, operator.DetailsPatch{})
-	require.NoError(t, err)
-	enrollment, err := operator.NewEnrollment(o.GRN(), registeredBy)
-	require.NoError(t, err)
-	_, err = operator.NewPostgresStore(p).Register(ctx, o, enrollment, credentialFor(t, o))
-	require.NoError(t, err)
-
-	request, operatorKey := enrollmentRequest(t)
-	body, err := json.Marshal(machinegen.Enrollment{
-		Token:                 enrollment.Token(),
-		CertificateRequestPem: request,
-	})
-	require.NoError(t, err)
-
-	status, answered := machineSend(t, anonymousMachineClient(t), http.MethodPost, url+"/enrollment", string(body))
-	require.Equal(t, http.StatusCreated, status, string(answered))
-	var signed machinegen.EnrolledCertificate
-	require.NoError(t, json.Unmarshal(answered, &signed))
-	assert.Equal(t, o.GRN().String(), signed.Grn)
-	assert.NotContains(t, string(answered), "privateKeyPem",
-		"garam signed a key it never held and has none to answer with")
-
-	// The certificate authenticates on the same listener, which is what
-	// makes the enrollment worth anything. The key it is paired with is
-	// the one generated above and never sent.
-	pair, err := tls.X509KeyPair([]byte(signed.CertificatePem), pemKey(t, operatorKey))
-	require.NoError(t, err)
-	status, answered = machineRequest(t, machineClient(t, pair), http.MethodGet, url+"/identity")
-	require.Equal(t, http.StatusOK, status, string(answered))
-	assert.JSONEq(t, `{"grn":"`+o.GRN().String()+`"}`, string(answered))
-
-	// The token is spent. The accepted call above is what says this
-	// refusal is single use rather than a route that enrols nobody.
-	second, _ := enrollmentRequest(t)
-	body, err = json.Marshal(machinegen.Enrollment{
-		Token:                 enrollment.Token(),
-		CertificateRequestPem: second,
-	})
-	require.NoError(t, err)
-	status, answered = machineSend(t, anonymousMachineClient(t), http.MethodPost, url+"/enrollment", string(body))
-	assert.Equal(t, http.StatusUnauthorized, status, string(answered))
 }

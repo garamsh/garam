@@ -69,20 +69,15 @@ describe("operators list", () => {
     ]);
   });
 
-  it("says each certificate state in words and shows no ISO date", async () => {
+  it("says in words whether garam issued a certificate and shows no ISO date", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/operators`, () =>
         HttpResponse.json([
           fieldOne,
           {
             ...fieldOne,
-            grn: "grn:acme:default:operator:pending-one",
-            enrollmentState: "pending",
-          },
-          {
-            ...fieldOne,
             grn: "grn:acme:default:operator:none-one",
-            enrollmentState: "expired",
+            certificateIssuedAt: undefined,
           },
         ]),
       ),
@@ -93,7 +88,7 @@ describe("operators list", () => {
     const rows = screen.getAllByRole("row").slice(1);
     expect(
       rows.map((row) => within(row).getAllByRole("cell")[2]?.textContent),
-    ).toEqual(["Issued", "Awaiting enrollment", "None"]);
+    ).toEqual(["Issued", "None"]);
     expect(container.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
   });
 

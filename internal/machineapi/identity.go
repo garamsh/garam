@@ -9,7 +9,6 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/audit"
 	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 )
@@ -25,14 +24,14 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, machinegen.Identity{Grn: identity.String()})
 }
 
-// ExchangeToken answers a short-lived token for the operator or the
-// standalone host's supervisor the presented credential belongs to
-// (ADR-0100); the credential's prefix names which.
+// ExchangeToken answers a short-lived token for the standalone host's
+// supervisor the presented credential belongs to (ADR-0100). An
+// operator exchanges a key with ExchangeClientAssertion instead
+// (ADR-0102, ADR-0117).
 //
-// Like EnrollOperator it reads no identity off the connection: what
-// authenticates the request is the credential in its Authorization
-// header, which a member of the organization issued or an approved
-// enrollment answered.
+// It reads no identity off the connection: what authenticates the
+// request is the credential in its Authorization header, which an
+// approved enrollment answered.
 func (s *Server) ExchangeToken(w http.ResponseWriter, r *http.Request, params machinegen.ExchangeTokenParams) {
 	w.Header().Set("Garam-Contract-Version", operator.TokenContractVersion)
 	// The credential is read first, so a caller that presents none
@@ -52,85 +51,18 @@ func (s *Server) ExchangeToken(w http.ResponseWriter, r *http.Request, params ma
 		writeError(w, errorx.Wrap(err, "token exchange", errorx.KindInvalidArgument))
 		return
 	}
-	// A supervisor's credential, which its prefix names, exchanges for
-	// a token garam alone accepts (ADR-0100).
-	if strings.HasPrefix(credential, agent.SupervisorCredentialPrefix) {
-		if body.Audience != nil {
-			writeError(w, agent.ErrSupervisorAudience)
-			return
-		}
-		token, err := s.supervisors.Exchange(r.Context(), credential)
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		machine.ReportIssuance(r, machine.Issuance{Subject: token.Supervisor, Until: token.ExpiresAt})
-		writeJSON(w, http.StatusCreated, machinegen.MachineToken{
-			Token: token.Value, Grn: token.Supervisor.String(), ExpiresAt: token.ExpiresAt,
-		})
-		return
-	}
-	var audience *grn.GRN
 	if body.Audience != nil {
-		g, err := grn.Parse(*body.Audience)
-		if err != nil {
-			writeError(w, errorx.Wrap(err, "audience", errorx.KindInvalidArgument))
-			return
-		}
-		audience = &g
+		writeError(w, agent.ErrSupervisorAudience)
+		return
 	}
-	token, err := s.operators.Exchange(r.Context(), sourceOf(r), credential, audience)
+	token, err := s.supervisors.Exchange(r.Context(), credential)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	machine.ReportIssuance(r, machine.Issuance{Subject: token.Operator, Audience: token.Audience != nil, Until: token.ExpiresAt})
-	answer := machinegen.MachineToken{Token: token.Value, Grn: token.Operator.String(), ExpiresAt: token.ExpiresAt}
-	if token.Audience != nil {
-		named := token.Audience.String()
-		answer.Audience = &named
-	}
-	writeJSON(w, http.StatusCreated, answer)
-}
-
-// EnrollOperator answers with the certificate signed for the operator
-// the token names, and spends the token (ADR-0064).
-//
-// It is the one handler here that reads no identity off the
-// connection, because the caller has none yet: what authenticates the
-// request is the token, minted by a signed-in member of the
-// organization registering the operator. The subject is the token's
-// and never the request's, so a certificate signing request asking for
-// another identity obtains a certificate for the operator the token
-// named or nothing at all.
-//
-// No private key is generated and none is returned. The operator made
-// the key pair where the certificate will be used and sent the public
-// half over; garam has never held the private one and cannot answer
-// with it.
-func (s *Server) EnrollOperator(w http.ResponseWriter, r *http.Request) {
-	var body machinegen.Enrollment
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, errorx.Wrap(err, "enrollment", errorx.KindInvalidArgument))
-		return
-	}
-	certificate, err := s.operators.Enroll(r.Context(), body.Token,
-		operator.CertificateRequest(body.CertificateRequestPem))
-	if err != nil {
-		// A refused enrollment names no subject garam can attribute it
-		// to: the token is what names one, and it did not resolve to
-		// a certificate (ADR-0114).
-		writeError(w, err)
-		return
-	}
-	s.issuedCertificate(r, certificate.Subject, audit.CredentialOperatorCertificate, audit.ActionIssue,
-		string(certificate.CertificatePEM), false)
-	writeJSON(w, http.StatusCreated, machinegen.EnrolledCertificate{
-		Grn:            certificate.Subject.String(),
-		CertificatePem: string(certificate.CertificatePEM),
-		IssuerPem:      string(certificate.IssuerPEM),
-		ServerRootPem:  string(certificate.ServerRootPEM),
-		NotAfter:       certificate.NotAfter,
+	machine.ReportIssuance(r, machine.Issuance{Subject: token.Supervisor, Until: token.ExpiresAt})
+	writeJSON(w, http.StatusCreated, machinegen.MachineToken{
+		Token: token.Value, Grn: token.Supervisor.String(), ExpiresAt: token.ExpiresAt,
 	})
 }
 

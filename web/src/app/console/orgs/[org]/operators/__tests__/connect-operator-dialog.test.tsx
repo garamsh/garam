@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConnectOperatorDialog } from "@/app/console/orgs/[org]/operators/_components/connect-operator-dialog";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
 import { enter } from "@/testing/enter";
-import { API_URL, fieldOneRegistered } from "@/testing/mocks/handlers";
+import { API_URL, fieldOne } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -16,7 +16,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 // `revalidatePath` needs a request scope the test does not run in; the
-// action's own answer is what the dialog renders.
+// action's own answer is what the dialog renders. A registration that
+// lands redirects, which
+// features/orgs/__tests__/register-operator.test.ts holds.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 /** Records every registration the dialog posts, and answers as garam does. */
@@ -25,7 +27,7 @@ function recordRegistrations() {
   server.use(
     http.post(`${API_URL}/orgs/acme/operators`, async ({ request }) => {
       posted.push(await request.json());
-      return HttpResponse.json(fieldOneRegistered, { status: 201 });
+      return HttpResponse.json(fieldOne, { status: 201 });
     }),
   );
   return posted;
@@ -33,12 +35,7 @@ function recordRegistrations() {
 
 async function openDialog() {
   const user = userEvent.setup();
-  render(
-    <ConnectOperatorDialog
-      org="acme"
-      operatorsHref="/console/orgs/acme/operators"
-    />,
-  );
+  render(<ConnectOperatorDialog org="acme" />);
   await user.click(screen.getByRole("button", { name: "Connect an operator" }));
   const dialog = within(
     screen.getByRole("dialog", { name: "Connect an operator" }),
@@ -47,64 +44,6 @@ async function openDialog() {
 }
 
 describe("connect operator dialog", () => {
-  it("registers the identifier alone when no name is given, and continues to its setup", async () => {
-    const posted = recordRegistrations();
-    const { user, dialog } = await openDialog();
-
-    await enter(
-      user,
-      dialog.getByRole("textbox", { name: "Identifier" }),
-      "field-one",
-    );
-    await user.click(dialog.getByRole("button", { name: "Register" }));
-
-    expect(
-      await screen.findByRole("link", { name: /Continue: issue a key/ }),
-    ).toHaveAttribute("href", "/console/orgs/acme/operators/field-one/connect");
-    // No name is sent, so the API calls the operator by its identifier
-    // (ADR-0074).
-    expect(posted).toEqual([{ identifier: "field-one", description: "" }]);
-  });
-
-  it("keeps the legacy secrets closed until asked, and reveals each once", async () => {
-    recordRegistrations();
-    const { user, dialog } = await openDialog();
-    await enter(
-      user,
-      dialog.getByRole("textbox", { name: "Identifier" }),
-      "field-one",
-    );
-    await user.click(dialog.getByRole("button", { name: "Register" }));
-    const toggle = await screen.findByRole("button", {
-      name: "Legacy credential and enrollment token",
-    });
-
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(
-      screen.queryByText(fieldOneRegistered.credential.credential),
-    ).not.toBeInTheDocument();
-
-    await user.click(toggle);
-    await user.click(screen.getByRole("button", { name: "Show credential" }));
-
-    const reveal = screen.getByRole("alertdialog", {
-      name: "Save the legacy credential",
-    });
-    expect(reveal).toHaveTextContent(fieldOneRegistered.credential.credential);
-
-    await user.click(within(reveal).getByRole("checkbox"));
-    await user.click(within(reveal).getByRole("button", { name: "Done" }));
-
-    // Shown once: kept, it is not offered again, while the token that
-    // was not shown still is.
-    expect(
-      screen.getByRole("button", { name: "Credential shown" }),
-    ).toBeDisabled();
-    expect(
-      screen.getByRole("button", { name: "Show enrollment token" }),
-    ).toBeEnabled();
-  });
-
   it("refuses an identifier outside the character rule beside its field, without a round trip", async () => {
     const posted = recordRegistrations();
     const { user, dialog } = await openDialog();

@@ -80,11 +80,11 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
 	operators := operator.NewPostgresStore(p)
-	_, firstCredential := registerCredentialed(t, operators, "first")
-	second, secondCredential := registerCredentialed(t, operators, "second")
+	first, firstKey := keyed(t, operators, "first")
+	second, secondKey := keyed(t, operators, "second")
 
 	client, connections := tokenClient(t)
-	firstToken := exchangeOver(t, client, url, firstCredential)
+	firstToken := exchangeKey(t, client, url, first, firstKey, nil)
 	bot := createdBy(t, client, url, firstToken)
 	minted := mintedFor(t, client, url, firstToken, bot)
 	assert.Equal(t, bot.String(), minted.Grn)
@@ -96,7 +96,7 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 	require.Equal(t, http.StatusNoContent, status, "the agent claims on its own queue with its token: %s", body)
 
 	// The second operator holds nothing yet, so it mints nothing.
-	secondToken := exchangeOver(t, client, url, secondCredential)
+	secondToken := exchangeKey(t, client, url, second, secondKey, nil)
 	status, _ = tokenCall(t, client, http.MethodPost, url+"/agents/"+bot.String()+"/tokens",
 		secondToken, operator.TokenContractVersion, `{}`)
 	assert.Equal(t, http.StatusForbidden, status, "an operator mints only for an agent it holds")
@@ -137,9 +137,9 @@ func TestAgentToken_AnAgentHoldsItsNewestFiveTokens(t *testing.T) {
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	_, credential := registerCredentialed(t, operator.NewPostgresStore(p), "one")
+	one, key := keyed(t, operator.NewPostgresStore(p), "one")
 	client, _ := tokenClient(t)
-	operatorToken := exchangeOver(t, client, url, credential)
+	operatorToken := exchangeKey(t, client, url, one, key, nil)
 	bot := createdBy(t, client, url, operatorToken)
 
 	var tokens []string
@@ -169,10 +169,10 @@ func TestAgentToken_AnAudienceTokenReachesNoGaramRoute(t *testing.T) {
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
 	operators := operator.NewPostgresStore(p)
-	_, credential := registerCredentialed(t, operators, "controller")
-	hosted, _ := registerCredentialed(t, operators, "control")
+	controller, key := keyed(t, operators, "controller")
+	hosted := register(t, operators, "control")
 	client, _ := tokenClient(t)
-	operatorToken := exchangeOver(t, client, url, credential)
+	operatorToken := exchangeKey(t, client, url, controller, key, nil)
 	bot := createdBy(t, client, url, operatorToken)
 	mint := url + "/agents/" + bot.String() + "/tokens"
 	claims := url + "/agents/" + bot.String() + "/claims"
@@ -206,11 +206,11 @@ func TestAgentToken_AnAgentHoldsTenTokensAcrossItsAudiences(t *testing.T) {
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
 	operators := operator.NewPostgresStore(p)
-	_, credential := registerCredentialed(t, operators, "controller")
-	first, _ := registerCredentialed(t, operators, "first")
-	second, _ := registerCredentialed(t, operators, "second")
+	controller, key := keyed(t, operators, "controller")
+	first := register(t, operators, "first")
+	second := register(t, operators, "second")
 	client, _ := tokenClient(t)
-	operatorToken := exchangeOver(t, client, url, credential)
+	operatorToken := exchangeKey(t, client, url, controller, key, nil)
 	bot := createdBy(t, client, url, operatorToken)
 	mint := url + "/agents/" + bot.String() + "/tokens"
 

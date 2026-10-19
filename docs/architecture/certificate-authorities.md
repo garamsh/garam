@@ -65,9 +65,9 @@ band. It refuses any subject that is not an operator, and no serve path
 reaches it, which is why the command is a sibling of `serve` rather
 than a subcommand under it. That is as far as the refusal and the
 command tree reach: `garam serve machine` mints identities and issues
-certificates on the listener it serves, an operator's first among them
-— once per enrollment token, for the one operator that token names
-(ADR-0064).
+certificates on the listener it serves, an operator's renewals and a
+standalone host's first among them, and never an operator's first,
+which only the command mints (ADR-0117).
 
 That key is as availability-critical as the database — losing it loses
 every organization's CA with no recovery short of new authorities and a

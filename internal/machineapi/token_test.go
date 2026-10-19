@@ -1,6 +1,7 @@
 package machineapi_test
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -43,54 +44,70 @@ func exchange(t *testing.T, client *http.Client, url, header, version, body stri
 	return resp.StatusCode, resp.Header.Get("Garam-Contract-Version"), string(answered)
 }
 
-// TestServer_ExchangesACredentialForAToken is the exchange seen from
-// the wire: a caller with no certificate presents the credential and
-// the contract, and is answered the token the domain minted with the
-// contract named on the answer. The refusals beside it each lack one
-// thing the accepted call has, so what refuses each is that thing.
-func TestServer_ExchangesACredentialForAToken(t *testing.T) {
+// supervisorService is an agent.SupervisorService answering a token
+// for the one credential it was given. Approving, enrolling and
+// revoking reach it through the embedded interface and panic: no test
+// here drives them.
+type supervisorService struct {
+	agent.SupervisorService
+	supervisor grn.GRN
+	credential string
+}
+
+func (s *supervisorService) Exchange(_ context.Context, credential string) (*agent.SupervisorToken, error) {
+	if credential != s.credential {
+		return nil, agent.ErrSupervisorCredentialInvalid
+	}
+	return &agent.SupervisorToken{Value: "garam_st_answered", Supervisor: s.supervisor,
+		ExpiresAt: time.Date(2026, time.October, 9, 13, 0, 0, 0, time.UTC)}, nil
+}
+
+// TestServer_ExchangesASupervisorsCredentialForAToken is the exchange
+// seen from the wire: a caller with no certificate presents its
+// credential and the contract, and is answered the token the domain
+// minted with the contract named on the answer. The refusals beside it
+// each lack one thing the accepted call has, so what refuses each is
+// that thing. An operator's retired shared-secret credential is one a
+// supervisor does not hold, and is refused as any other (ADR-0117).
+func TestServer_ExchangesASupervisorsCredentialForAToken(t *testing.T) {
 	subject := operatorGRN("acme")
-	operators := &operatorService{certificate: &operator.Certificate{Subject: subject}, credential: "garam_oc_held"}
-	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, subject)
+	supervisor := grn.New("acme", grn.DefaultProject, agent.ServiceTypeSupervisor, "host-1")
+	supervisors := &supervisorService{supervisor: supervisor, credential: "garam_sc_held"}
+	url, _ := serveTLS(t, machineapi.NewServer(&agentService{}, &operatorService{}, &messageService{}, consenting(),
+		unwatched(t), &memberGroups{}, &engine{}, nil, nil, nil, nil, supervisors, nil, stubKeyring{}), subject)
 	client := anonymous(t)
 
-	status, version, body := exchange(t, client, url, "Garam-Credential garam_oc_held", operator.TokenContractVersion, `{}`)
+	status, version, body := exchange(t, client, url, "Garam-Credential garam_sc_held", operator.TokenContractVersion, `{}`)
 	require.Equal(t, http.StatusCreated, status, body)
 	assert.Equal(t, operator.TokenContractVersion, version)
 	var token machinegen.MachineToken
 	require.NoError(t, json.Unmarshal([]byte(body), &token))
-	assert.Equal(t, operator.TokenPrefix+"answered", token.Token)
-	assert.Equal(t, subject.String(), token.Grn)
+	assert.Equal(t, "garam_st_answered", token.Token)
+	assert.Equal(t, supervisor.String(), token.Grn)
 	assert.Nil(t, token.Audience)
 
-	hosted := grn.New("acme", grn.DefaultProject, operator.ServiceType, "control")
-	status, _, body = exchange(t, client, url, "Garam-Credential garam_oc_held", operator.TokenContractVersion,
-		`{"audience":"`+hosted.String()+`"}`)
-	require.Equal(t, http.StatusCreated, status, body)
-	require.NoError(t, json.Unmarshal([]byte(body), &token))
-	require.NotNil(t, token.Audience)
-	assert.Equal(t, hosted.String(), *token.Audience)
-	require.Len(t, operators.audiences, 2)
-	assert.Equal(t, &hosted, operators.audiences[1], "the audience reaches the domain parsed")
+	status, _, _ = exchange(t, client, url, "Garam-Credential garam_sc_held", operator.TokenContractVersion,
+		`{"audience":"grn:acme:default:operator:control"}`)
+	assert.Equal(t, http.StatusBadRequest, status, "a supervisor's token names no audience")
 
-	status, version, _ = exchange(t, client, url, "Garam-Credential garam_oc_held", "", `{}`)
+	status, version, _ = exchange(t, client, url, "Garam-Credential garam_sc_held", "", `{}`)
 	assert.Equal(t, http.StatusBadRequest, status, "a missing contract value is refused")
 	assert.Equal(t, operator.TokenContractVersion, version, "and the refusal names the one this route serves")
 
-	status, version, _ = exchange(t, client, url, "Garam-Credential garam_oc_held", "machine-token.v0", `{}`)
+	status, version, _ = exchange(t, client, url, "Garam-Credential garam_sc_held", "machine-token.v0", `{}`)
 	assert.Equal(t, http.StatusBadRequest, status, "another contract value is refused")
 	assert.Equal(t, operator.TokenContractVersion, version, "and the refusal names the one served")
 
-	status, _, _ = exchange(t, client, url, "Garam-Credential garam_oc_other", operator.TokenContractVersion, `{}`)
-	assert.Equal(t, http.StatusUnauthorized, status, "a credential no operator holds is refused")
+	status, _, _ = exchange(t, client, url, "Garam-Credential garam_sc_other", operator.TokenContractVersion, `{}`)
+	assert.Equal(t, http.StatusUnauthorized, status, "a credential no supervisor holds is refused")
+
+	status, _, _ = exchange(t, client, url, "Garam-Credential garam_oc_"+strings.Repeat("0", 64),
+		operator.TokenContractVersion, `{}`)
+	assert.Equal(t, http.StatusUnauthorized, status, "an operator's retired credential is refused")
 
 	status, _, body = exchange(t, client, url, "Garam-Token garam_ot_x", operator.TokenContractVersion, `{}`)
 	assert.Equal(t, http.StatusUnauthorized, status, "a token mints no token")
 	assert.Contains(t, body, "Garam-Credential")
-
-	status, _, _ = exchange(t, client, url, "Garam-Credential garam_oc_held", operator.TokenContractVersion,
-		`{"audience":"not a grn"}`)
-	assert.Equal(t, http.StatusBadRequest, status, "an audience that is no GRN is refused")
 }
 
 // TestConfineTokens_ATokenReachesTheRoutesThatListIt holds that a
@@ -427,40 +444,4 @@ func TestServer_ABearerTokenTakesWhatAGaramTokenTakes(t *testing.T) {
 		hash := execution.Hash()
 		assert.Equal(t, hash[:], messages.fences[before].TokenHash, "%s: the execution token is read from its own header", scheme)
 	}
-}
-
-// TestServer_AnExchangePastItsBoundIsAnswered429WithRetryAfter holds
-// the wire half of the exchange's bound (#1418): the domain's limiter
-// refusal is answered 429 with the seconds Retry-After names, and the
-// domain is handed the peer's address the bound is counted on. The
-// same exchange the domain serves is the control, answered 201 with no
-// Retry-After.
-func TestServer_AnExchangePastItsBoundIsAnswered429WithRetryAfter(t *testing.T) {
-	subject := operatorGRN("acme")
-	operators := &operatorService{certificate: &operator.Certificate{Subject: subject}, credential: "garam_oc_held"}
-	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, subject)
-	client := anonymous(t)
-	post := func() *http.Response {
-		req, err := http.NewRequest(http.MethodPost, url+"/tokens", strings.NewReader(`{}`))
-		require.NoError(t, err)
-		req.Header.Set("Authorization", "Garam-Credential garam_oc_held")
-		req.Header.Set("Garam-Contract-Version", operator.TokenContractVersion)
-		resp, err := client.Do(req)
-		require.NoError(t, err)
-		_ = resp.Body.Close()
-		return resp
-	}
-
-	served := post()
-	assert.Equal(t, http.StatusCreated, served.StatusCode)
-	assert.Empty(t, served.Header.Get("Retry-After"))
-
-	operators.exchangeErr = &operator.Exceeded{RetryAfter: 30 * time.Second}
-	refused := post()
-	assert.Equal(t, http.StatusTooManyRequests, refused.StatusCode)
-	assert.Equal(t, "30", refused.Header.Get("Retry-After"))
-	assert.Equal(t, operator.TokenContractVersion, refused.Header.Get("Garam-Contract-Version"))
-
-	require.Len(t, operators.sources, 2)
-	assert.Equal(t, "127.0.0.1", operators.sources[0], "the bound is counted on the peer's address")
 }

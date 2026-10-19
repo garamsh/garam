@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { garamFetchAuthenticated, refusal } from "@/lib/garam";
@@ -12,28 +13,12 @@ import {
 import type { components } from "@/types/api";
 
 import { slugFromGrn } from "@/lib/grn";
-import { RegisteredOperatorParser, type RegisteredOperator } from "./orgs";
+import { OperatorParser, type Operator } from "./orgs";
 
-/** What the register form has to show: nothing yet, a refusal, or the
- * operator the organization now holds a record of together with the
- * one-time token that enrols it and the credential it exchanges for
- * tokens.
- *
- * The token and the credential are carried in this state because the
- * answer that created them is the only place they exist: garam stores
- * their hashes, so nothing can fetch either again once this state is
- * replaced (ADR-0064, ADR-0100). */
+/** What the register form has to show: nothing yet, or a refusal. A
+ * registered operator is sent on to its setup page. */
 export type RegisterOperatorState =
-  | { status: "idle" }
-  | { status: "error"; message: string }
-  | {
-      status: "registered";
-      operator: string;
-      name: string;
-      token: string;
-      expiresAt: string;
-      credential: string;
-    };
+  { status: "idle" } | { status: "error"; message: string };
 
 const Schema = z.object({
   org: z.string().min(1),
@@ -43,14 +28,9 @@ const Schema = z.object({
 });
 
 /**
- * Registers an operator of the organization (ADR-0045) and returns the
- * one-time token it enrols with (ADR-0064) and the credential it
- * exchanges for tokens (ADR-0100).
- *
- * No private key passes through here. The operator generates its own
- * key pair in its own cluster and presents this token with a
- * certificate signing request; what garam signs is a public key, and
- * what this action holds is a token that is worthless once spent.
+ * Registers an operator of the organization (ADR-0045) and opens its
+ * setup page, where its key is issued: registering issues nothing, and
+ * an operator enters by a key alone (ADR-0102, ADR-0117).
  */
 export async function registerOperator(
   _state: RegisterOperatorState,
@@ -79,11 +59,11 @@ export async function registerOperator(
   if (description.status === "error") return description;
 
   const org = parsed.data.org;
-  let registered: RegisteredOperator;
+  let registered: Operator;
   try {
     registered = await garamFetchAuthenticated(
       `/orgs/${encodeURIComponent(org)}/operators`,
-      RegisteredOperatorParser,
+      OperatorParser,
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -102,12 +82,7 @@ export async function registerOperator(
 
   revalidatePath(`/console/orgs/${org}/operators`, "layout");
   revalidatePath(`/console/orgs/${org}/agents`);
-  return {
-    status: "registered",
-    operator: slugFromGrn(registered.operator.grn),
-    name: registered.operator.name,
-    token: registered.enrollment.token,
-    expiresAt: registered.enrollment.expiresAt,
-    credential: registered.credential.credential,
-  };
+  redirect(
+    `/console/orgs/${org}/operators/${slugFromGrn(registered.grn)}/connect`,
+  );
 }

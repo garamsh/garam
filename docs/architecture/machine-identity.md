@@ -4,13 +4,13 @@ Who is calling on the listener a machine identity authenticates on
 (ADR-0014, ADR-0015, ADR-0100), and the evidence of how each caller
 authenticated (ADR-0109). Implemented by `internal/machine`.
 
-Pending removals
+Pending removal
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
-the operator's shared-secret credential, its exchange and its enrollment
-token go in the second pull request of #1593, and the legacy cohort of
-an agent's generation and lineage in the fifth, after #1594. What this
-document says of each holds until then. The supervisor's shared-secret
-exchange and `machine-token.v1` stay.
+the legacy cohort of an agent's generation and lineage goes in the
+fifth pull request of #1593, after #1594, and what this document says
+of it holds until then. An operator's shared-secret credential, its
+exchange and its enrollment token are gone; the supervisor's
+shared-secret exchange and `machine-token.v1` stay.
 
 | Type | Responsibility |
 |------|----------------|
@@ -128,10 +128,11 @@ what compose lacks is the step, not something a container cannot do.
 
 **Built at garam; no Operator release exchanges yet.**
 [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
-adds signed client assertions beside the certificate and shared-secret
-cohorts §Tokens describes, which remain. `api/machine.yaml`
-§exchangeClientAssertion is authoritative for the exchange's wire and
-refusals, and §machineBearer for the alias.
+adds signed client assertions beside the certificate cohort §Tokens
+describes, which remains; they are how an operator obtains a token, the
+shared-secret exchange beside them being gone (ADR-0117).
+`api/machine.yaml` §exchangeClientAssertion is authoritative for the
+exchange's wire and refusals, and §machineBearer for the alias.
 
 - **`exchangeClientAssertion`, `POST /oauth/token`, is the client
   credentials grant authenticated by private_key_jwt under
@@ -158,11 +159,9 @@ refusals, and §machineBearer for the alias.
 - **A store write acting for an operator takes that operator's
   registration row first, and a transaction holding several takes them
   in GRN byte order** (`internal/operator` `PostgresStore`).
-  - An exchange, by shared secret or by key, holds it `FOR KEY SHARE`
-    for the client, and for the audience when the token names one.
-  - A re-mint of an enrollment token holds it `FOR KEY SHARE`.
-  - An issuance, a withdrawal, a credential re-issue and a deletion
-    hold it `FOR UPDATE`.
+  - An exchange holds it `FOR KEY SHARE` for the client, and for the
+    audience when the token names one.
+  - An issuance, a withdrawal and a deletion hold it `FOR UPDATE`.
   - Deleting an organization holds every one of its operators' `FOR
     UPDATE` before its cascade deletes them, by the trigger on `orgs`
     `migrations/000047` defines, after its agents' execution rows
@@ -171,20 +170,19 @@ refusals, and §machineBearer for the alias.
     is an operator of the client's organization, so the registrations
     an exchange holds are among them.
 
-  The `FOR KEY SHARE` holders hold it together. Every other pair
-  acting for one operator waits on the registration for the first to
-  commit, before either touches a credential, key, token or enrollment
-  row, and none waits on one registration while holding a later one
-  (#1418, #1424). One write reaches past the operator it acts for: a
-  deletion also deletes other operators' tokens that name it as
-  audience, holding only its own registration, and against those
-  operators' writers the order is the `token_hash` order below.
+  The `FOR KEY SHARE` holders hold it together. Every other pair acting
+  for one operator waits on the registration for the first to commit,
+  before either touches a key or a token, and none waits on one
+  registration while holding a later one (#1418, #1424). One write
+  reaches past the operator it acts for: a deletion also deletes other
+  operators' tokens that name it as audience, holding only its own
+  registration, and against those operators' writers the order is the
+  `token_hash` order below.
 
   A writer taking it `FOR UPDATE` waits for every exchange in flight,
   and Postgres does not queue it ahead of later shared holders. What
-  keeps that wait finite is the exchanges' per-process bound below,
-  which counts both forms, so a leaked credential cannot hold off the
-  re-issue that answers it.
+  keeps that wait finite is the exchanges' per-process bound below, so
+  a leaked key cannot hold off the withdrawal that answers it.
 - **A transaction waits on operator tokens in one statement at most,
   which takes them in `token_hash` order and holds none before it but a
   token the transaction just wrote** (#1424). An operator's deletion
@@ -193,28 +191,21 @@ refusals, and §machineBearer for the alias.
   that cannot cycle, since no holder of an agent token waits on an
   operator token.
   - A withdrawal's and an immediate rotation's deletion of a key's
-    tokens, a re-issue's of the credential's, and a deletion's of every
-    token the operator holds or is the audience of are each that
-    statement. The re-issue and the deletion run theirs before the
-    credential or the registration goes, so the cascades of
-    `migrations/000038` and `000041` find none; `000046` indexes
+    tokens, and a deletion's of every token the operator holds or is
+    the audience of, are each that statement. The deletion runs its
+    before the registration goes, so the cascades of
+    `migrations/000043` and `000041` find none; `000046` indexes
     `audience_grn` for the deletion's.
-  - An exchange records its token, trims its issuance to the newest
+  - An exchange records its token, trims its key's tokens to the newest
     five live ones, and then sweeps the operator's expired tokens. The
-    trim is that statement; the sweep skips a token another
-    transaction holds, which that transaction is deleting or a later
-    sweep takes, so it never waits.
+    trim is that statement; the sweep skips a token another transaction
+    holds, which that transaction is deleting or a later sweep takes, so
+    it never waits.
   - An organization's deletion takes its operators' tokens in its
     cascade's order and waits on none: every other writer of them
     holds a registration the deletion already holds.
-- **Minting an enrollment token sweeps other operators' expired ones
-  without their registrations, and skips any another transaction
-  holds** (#1424). A re-mint waits on its operator's registration,
-  held first, and on that operator's enrollment row, and on no other
-  operator's row; registering mints for an operator no other
-  transaction can see yet.
-- **Token reads join the live key.** A token exchanged under a key is
-  resolved with that key unwithdrawn and inside any rollover, so a
+- **Token reads join the live key.** A token is resolved with the key
+  it was exchanged under unwithdrawn and inside any rollover, so a
   withdrawal, an immediate replacement or a passed rollover refuses the
   next request on a connection already open
   ([operators.md](./operators.md) §Issued PEM identity). A read that
@@ -230,19 +221,18 @@ refusals, and §machineBearer for the alias.
 - **One process answers at most 60 exchanges per client address and 10
   authenticated ones per operator per minute** (`internal/operator`
   `ExchangesPerSource`, `ExchangesPerClient`), 429 with `Retry-After`
-  past either. The bounds count the shared-secret and the
-  private_key_jwt exchange together, since each holds the operator's
-  registration. The address's count is taken before anything is read,
-  so a flood from one address holds back no other; the operator's
-  starts once its key verified or its credential resolved, so a
+  past either. Each exchange holds the operator's registration, which is
+  what the bound keeps a writer from waiting on for long. The address's
+  count is taken before anything is read, so a flood from one address
+  holds back no other; the operator's starts once its key verified, so a
   stranger knowing the GRN cannot lock the operator out. The listener
   terminates TLS itself, so the address is the peer's, and clients
   behind one NAT share it. An unconfigured token endpoint answers 503
   and issues nothing.
 - **What tells the cohorts apart.**
   `garam_machine_token_exchanges_total` counts exchanges by method —
-  operator shared secret, supervisor shared secret, operator
-  private_key_jwt — and outcome, which `garam_machine_requests_total`
+  supervisor shared secret, operator private_key_jwt, or a credential
+  neither recognises — and outcome, which `garam_machine_requests_total`
   cannot, since both cohorts present a token afterwards. An idle
   operator shows in no metric; §Authentication evidence is what an
   inventory reads. Neither carries a key, assertion or token.
@@ -282,12 +272,12 @@ authenticates beside a token until G3.
   debug: it is the caller's to fix, and only a read that could not be
   made is the listener's anomaly. The composition root satisfies
   `Tokens` from the domain the token's prefix names. An operator's read
-  joins the token's row to the registration, so deleting the operator or
-  re-issuing its credential refuses the next request on a connection
-  already open; an agent's joins the agent's assignment and execution,
-  so a reassignment or a recovery does. A token minted for another
-  audience — a hosted operator it is to be shown to — answers as no
-  token here; that operator forwards it in a request body instead,
+  joins the token's row to the registration and its key, so deleting the
+  operator or withdrawing the key refuses the next request on a
+  connection already open; an agent's joins the agent's assignment and
+  execution, so a reassignment or a recovery does. A token minted for
+  another audience — a hosted operator it is to be shown to — answers as
+  no token here; that operator forwards it in a request body instead,
   for the lifecycle decision it is shown for
   ([operators.md](./operators.md) §Controller proof,
   [agents.md](./agents.md) §Tokens in place of certificates).
@@ -351,30 +341,31 @@ covers what records that.
 
 ## Credential events
 
-**Built** ([ADR-0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)).
+**Built**
+([ADR-0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)).
 Every issuance, renewal and refusal of an operator certificate,
-operator credential, operator enrollment token, supervisor certificate,
-supervisor credential or agent token is one row of
-`audit_credential_events` (`migrations/000054`), held by the audit
-domain ([audit.md](./audit.md)). Unlike the evidence above, it is a
-record and not a sampling: one row per answer, none coalesced.
+supervisor certificate, supervisor credential or agent token is one row
+of `audit_credential_events` (`migrations/000054`; `000056` dropped the
+operator credential and enrollment token kinds with them), held by the
+audit domain ([audit.md](./audit.md)). Unlike the evidence above, it is
+a record and not a sampling: one row per answer, none coalesced.
 
 - **What a row says.** The subject, the credential, `issue` or `renew`,
   issued or refused, whether an issued answer replayed an earlier
   identical one, a refusal's error kind, and for a certificate the
-  serial and validity read off the certificate answered; for a token
-  or enrollment token, when it was minted and until when it is
-  accepted. No column holds a key, token, credential or certificate.
-- **Where it is written.** `EnrollOperator`, `RenewIdentityCertificate`,
+  serial and validity read off the certificate answered; for a token,
+  when it was minted and until when it is accepted. No column holds a
+  key, token, credential or certificate.
+- **Where it is written.** `RenewIdentityCertificate`,
   `EnrollStandaloneAgent`, `RenewSupervisorCertificate` and
-  `MintAgentToken` on this listener, and `registerOperator`,
-  `mintOperatorEnrollment` and `reissueOperatorCredential` on the
-  browser-facing one, after the outcome and before the answer, through
-  the `CredentialAudit` port each declares (`WithCredentialAudit`). A
+  `MintAgentToken` on this listener, after the outcome and before the
+  answer, through the `CredentialAudit` port it declares
+  (`WithCredentialAudit`). The browser-facing listener issues no
+  machine credential and records none. A
   write that fails is logged with the event's fields and the answer
   stands.
 - **What it does not record.** A refusal no subject is attributable
-  to — an enrollment whose token or bootstrap secret did not resolve —
+  to — an enrollment whose bootstrap secret did not resolve —
   and a refusal of the member asking. Agent certificates and token
   exchanges are not recorded yet.
 - **The read is `listCredentialEvents`** on the browser-facing

@@ -213,12 +213,10 @@ func (e CredentialEventAction) Valid() bool {
 
 // Defines values for CredentialEventCredential.
 const (
-	EventAgentToken              CredentialEventCredential = "agent_token"
-	EventOperatorCertificate     CredentialEventCredential = "operator_certificate"
-	EventOperatorCredential      CredentialEventCredential = "operator_credential"
-	EventOperatorEnrollmentToken CredentialEventCredential = "operator_enrollment_token"
-	EventSupervisorCertificate   CredentialEventCredential = "supervisor_certificate"
-	EventSupervisorCredential    CredentialEventCredential = "supervisor_credential"
+	EventAgentToken            CredentialEventCredential = "agent_token"
+	EventOperatorCertificate   CredentialEventCredential = "operator_certificate"
+	EventSupervisorCertificate CredentialEventCredential = "supervisor_certificate"
+	EventSupervisorCredential  CredentialEventCredential = "supervisor_credential"
 )
 
 // Valid indicates whether the value is a known member of the CredentialEventCredential enum.
@@ -227,10 +225,6 @@ func (e CredentialEventCredential) Valid() bool {
 	case EventAgentToken:
 		return true
 	case EventOperatorCertificate:
-		return true
-	case EventOperatorCredential:
-		return true
-	case EventOperatorEnrollmentToken:
 		return true
 	case EventSupervisorCertificate:
 		return true
@@ -448,27 +442,6 @@ func (e OperationAuthorityRequestOperation) Valid() bool {
 	case OperationAuthorityRequestOperationExecutionProfileRead:
 		return true
 	case OperationAuthorityRequestOperationOperatorRead:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for OperatorEnrollmentState.
-const (
-	OperatorEnrollmentStateEnrolled OperatorEnrollmentState = "enrolled"
-	OperatorEnrollmentStateExpired  OperatorEnrollmentState = "expired"
-	OperatorEnrollmentStatePending  OperatorEnrollmentState = "pending"
-)
-
-// Valid indicates whether the value is a known member of the OperatorEnrollmentState enum.
-func (e OperatorEnrollmentState) Valid() bool {
-	switch e {
-	case OperatorEnrollmentStateEnrolled:
-		return true
-	case OperatorEnrollmentStateExpired:
-		return true
-	case OperatorEnrollmentStatePending:
 		return true
 	default:
 		return false
@@ -1117,7 +1090,7 @@ type OperationAuthorityRequest struct {
 // OperationAuthorityRequestOperation defines model for OperationAuthorityRequest.Operation.
 type OperationAuthorityRequestOperation string
 
-// Operator An operator this organization has registered, and where that operator stands in obtaining a certificate. The record grants nothing and admits nothing (ADR-0045); the enrollment state is what garam knows from its own tables and never a report from the operator.
+// Operator An operator this organization has registered. The record grants nothing and admits nothing (ADR-0045); `certificateIssuedAt` is what garam knows from its own tables and never a report from the operator.
 type Operator struct {
 	// CertificateIssuedAt When garam last issued this operator a certificate, absent where it has issued none. It is the certificate the operator holds now and not the one it enrolled with — a renewal moves the record this is read from — so it answers when garam last signed for the operator rather than when the operator enrolled. Which certificate that is decides a renewal and is the machine listener's alone (ADR-0046); no part of it is answered here.
 	CertificateIssuedAt *time.Time `json:"certificateIssuedAt,omitempty"`
@@ -1128,10 +1101,7 @@ type Operator struct {
 
 	// Description What the organization says the operator is for, empty where it says nothing.
 	Description string `json:"description"`
-
-	// EnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
-	EnrollmentState OperatorEnrollmentState `json:"enrollmentState"`
-	Grn             string                  `json:"grn"`
+	Grn         string `json:"grn"`
 
 	// Name What the organization calls the operator. It is not unique and not an identity: two operators may share one, and the GRN is what tells them apart. A registration that named none, including every one made before names existed, is called by its identifier.
 	Name   string `json:"name"`
@@ -1141,27 +1111,8 @@ type Operator struct {
 	RegisteredBy string `json:"registeredBy"`
 }
 
-// OperatorCredential The credential an operator exchanges for short-lived tokens on the machine listener (ADR-0100). It does not expire; a re-issue or deleting the operator is what ends it.
-type OperatorCredential struct {
-	// Credential The credential itself, answered once. Show it once and say it cannot be shown again; garam cannot answer it a second time. It is placed in the operator's cluster as a file only the operator's process reads.
-	Credential string    `json:"credential"`
-	IssuedAt   time.Time `json:"issuedAt"`
-}
-
 // OperatorDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
 type OperatorDescription = string
-
-// OperatorEnrollment The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else.
-type OperatorEnrollment struct {
-	// ExpiresAt When the token stops being spendable. A token nobody used by then is swept, and minting the operator another is what replaces it (ADR-0067).
-	ExpiresAt time.Time `json:"expiresAt"`
-
-	// Token The token itself, answered once. Show it once and say it cannot be shown again; garam cannot answer it a second time.
-	Token string `json:"token"`
-}
-
-// OperatorEnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
-type OperatorEnrollmentState string
 
 // OperatorKey The public record of one key an operator was issued (ADR-0102). It carries no private material.
 type OperatorKey struct {
@@ -1221,7 +1172,7 @@ type OperatorRegistration struct {
 	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
 	Description *OperatorDescription `json:"description,omitempty"`
 
-	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is what the enrollment token names and what the certificate signed for it holds in its SAN URI — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
+	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is what the certificate signed for it holds in its SAN URI — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
 	Identifier string `json:"identifier"`
 
 	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
@@ -1266,7 +1217,7 @@ type OrgDeletionCounts struct {
 	// Members Memberships of this organization. The user accounts themselves are not owned by the organization and stay.
 	Members int `json:"members"`
 
-	// Operators Registered operators, each taking its unspent enrollment tokens with it (ADR-0064). A certificate an operator already holds is not counted and outlives the record (ADR-0045).
+	// Operators Registered operators, each taking its keys with it. A certificate an operator already holds is not counted and outlives the record (ADR-0045).
 	Operators int `json:"operators"`
 
 	// Policies Policies, each taking its versions and its attachments with it (ADR-0008).
@@ -1491,18 +1442,6 @@ type ProjectPatch struct {
 
 	// Roles Roles a group or project grants its own members, scoped to that group or project alone. Omitting the field on a patch leaves the roles unchanged; an empty array clears them.
 	Roles *ScopedRoles `json:"roles,omitempty"`
-}
-
-// RegisteredOperator The record the registration wrote, the enrollment token it minted and the credential it issued. garam holds the hash of each and no route reads one back (ADR-0064, ADR-0100), so this answer, `mintOperatorEnrollment`'s and `reissueOperatorCredential`'s are the only places either exists in a form anyone can present.
-type RegisteredOperator struct {
-	// Credential The credential an operator exchanges for short-lived tokens on the machine listener (ADR-0100). It does not expire; a re-issue or deleting the operator is what ends it.
-	Credential OperatorCredential `json:"credential"`
-
-	// Enrollment The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else.
-	Enrollment OperatorEnrollment `json:"enrollment"`
-
-	// Operator An operator this organization has registered, and where that operator stands in obtaining a certificate. The record grants nothing and admits nothing (ADR-0045); the enrollment state is what garam knows from its own tables and never a report from the operator.
-	Operator Operator `json:"operator"`
 }
 
 // RequestId defines model for RequestId.
@@ -1935,9 +1874,6 @@ type ServerInterface interface {
 	// SetOperatorControlEndpoint Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
 	// (PUT /orgs/{org}/operators/{operator}/control-endpoint)
 	SetOperatorControlEndpoint(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params SetOperatorControlEndpointParams)
-	// ReissueOperatorCredential Re-issue a registered operator's credential, voiding the previous one. Requires the `admin` role.
-	// (POST /orgs/{org}/operators/{operator}/credential)
-	ReissueOperatorCredential(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
 	// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
 	// (DELETE /orgs/{org}/operators/{operator}/delegation)
 	EndOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params EndOperatorDelegationParams)
@@ -1947,9 +1883,6 @@ type ServerInterface interface {
 	// WriteOperatorDelegation Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
 	// (PUT /orgs/{org}/operators/{operator}/delegation)
 	WriteOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params WriteOperatorDelegationParams)
-	// MintOperatorEnrollment Mint a fresh enrollment token for a registered operator. Requires the `admin` role.
-	// (POST /orgs/{org}/operators/{operator}/enrollment)
-	MintOperatorEnrollment(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
 	// ListOperatorKeys List the keys an operator was issued, with where each stands.
 	// (GET /orgs/{org}/operators/{operator}/keys)
 	ListOperatorKeys(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
@@ -3780,41 +3713,6 @@ func (siw *ServerInterfaceWrapper) SetOperatorControlEndpoint(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
-// ReissueOperatorCredential operation middleware
-func (siw *ServerInterfaceWrapper) ReissueOperatorCredential(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "operator" -------------
-	var operatorSlug OperatorSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ReissueOperatorCredential(w, r, org, operatorSlug)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // EndOperatorDelegation operation middleware
 func (siw *ServerInterfaceWrapper) EndOperatorDelegation(w http.ResponseWriter, r *http.Request) {
 
@@ -3995,41 +3893,6 @@ func (siw *ServerInterfaceWrapper) WriteOperatorDelegation(w http.ResponseWriter
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.WriteOperatorDelegation(w, r, org, operatorSlug, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// MintOperatorEnrollment operation middleware
-func (siw *ServerInterfaceWrapper) MintOperatorEnrollment(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "operator" -------------
-	var operatorSlug OperatorSlug
-
-	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.MintOperatorEnrollment(w, r, org, operatorSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5155,11 +5018,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.GetOperator)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.UpdateOperator)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/credential", wrapper.ReissueOperatorCredential)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/keys", wrapper.ListOperatorKeys)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/keys", wrapper.IssueOperatorKey)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/keys/{kid}", wrapper.RevokeOperatorKey)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/enrollment", wrapper.MintOperatorEnrollment)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.EndOperatorDelegation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.GetOperatorDelegation)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.WriteOperatorDelegation)

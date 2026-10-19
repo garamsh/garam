@@ -74,14 +74,6 @@ type OperatorCertificate struct {
 	IssuedAt    pgtype.Timestamptz
 }
 
-type OperatorCredential struct {
-	ID             int64
-	OperatorGrn    string
-	CredentialHash string
-	IssuedBy       string
-	IssuedAt       pgtype.Timestamptz
-}
-
 type OperatorDelegation struct {
 	ID          string
 	OrgGrn      string
@@ -100,14 +92,6 @@ type OperatorDelegationController struct {
 	ControllerGrn string
 }
 
-type OperatorEnrollmentToken struct {
-	TokenHash   string
-	OperatorGrn string
-	MintedBy    string
-	MintedAt    pgtype.Timestamptz
-	ExpiresAt   pgtype.Timestamptz
-}
-
 type OperatorKey struct {
 	ID              int64
 	OperatorGrn     string
@@ -122,13 +106,12 @@ type OperatorKey struct {
 }
 
 type OperatorToken struct {
-	TokenHash    string
-	CredentialID pgtype.Int8
-	OperatorGrn  string
-	AudienceGrn  pgtype.Text
-	IssuedAt     pgtype.Timestamptz
-	ExpiresAt    pgtype.Timestamptz
-	KeyID        pgtype.Int8
+	TokenHash   string
+	OperatorGrn string
+	AudienceGrn pgtype.Text
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+	KeyID       int64
 }
 
 type Org struct {

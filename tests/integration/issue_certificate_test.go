@@ -13,6 +13,7 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/cli"
+	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -28,6 +29,23 @@ func runIssueCertificate(t *testing.T, keyFile, subjectGRN string) (string, erro
 	root := cli.NewRootCommand()
 	root.SetArgs([]string{"issue-certificate", subjectGRN, "--out-dir", outDir})
 	return outDir, root.Execute()
+}
+
+// mintedOutOfBand runs the shipped command for subject and answers the
+// pair it wrote, as the operator holding them presents it. It is how an
+// operator obtains a certificate out of band, and it records that
+// certificate as the operator's current one (ADR-0032, ADR-0046).
+func mintedOutOfBand(t *testing.T, keyFile string, subject grn.GRN) tls.Certificate {
+	t.Helper()
+	outDir, err := runIssueCertificate(t, keyFile, subject.String())
+	require.NoError(t, err)
+	certPEM, err := os.ReadFile(filepath.Join(outDir, "certificate.pem"))
+	require.NoError(t, err)
+	keyPEM, err := os.ReadFile(filepath.Join(outDir, "key.pem"))
+	require.NoError(t, err)
+	pair, err := tls.X509KeyPair(certPEM, keyPEM)
+	require.NoError(t, err)
+	return pair
 }
 
 // TestIssueCertificate_MintsAnOperatorsFirstCertificate carries the one

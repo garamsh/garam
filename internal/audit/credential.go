@@ -15,12 +15,6 @@ const (
 	// CredentialOperatorCertificate is an operator's client
 	// certificate.
 	CredentialOperatorCertificate CredentialKind = "operator_certificate"
-	// CredentialOperatorCredential is the credential an operator
-	// exchanges for tokens (ADR-0100).
-	CredentialOperatorCredential CredentialKind = "operator_credential"
-	// CredentialOperatorEnrollmentToken is the one-time token an
-	// operator enrolls with (ADR-0064).
-	CredentialOperatorEnrollmentToken CredentialKind = "operator_enrollment_token"
 	// CredentialSupervisorCertificate is a standalone host's
 	// supervisor certificate (ADR-0082).
 	CredentialSupervisorCertificate CredentialKind = "supervisor_certificate"
@@ -54,7 +48,7 @@ const (
 
 // Validity is when an issued credential is accepted. NotBefore is the
 // zero time for a credential that names none, a token among them, and
-// NotAfter for one that never expires, an operator's credential among
+// NotAfter for one that never expires, a supervisor's credential among
 // them.
 type Validity struct {
 	NotBefore time.Time

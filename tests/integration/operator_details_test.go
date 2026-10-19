@@ -40,44 +40,43 @@ func rowOf(t *testing.T, p *pgxpool.Pool, query string, g grn.GRN) string {
 	return out
 }
 
-// TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesOrEnrolsBy
-// is ADR-0074 against real Postgres and a real handshake: renaming and
+// TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesBy is
+// ADR-0074 against real Postgres and a real handshake: renaming and
 // describing an operator changes what the organization calls it and
 // nothing it runs on.
 //
-// The enrolled operator keeps the certificate row a renewal is measured
-// against, keeps authenticating with the certificate it holds, is still
-// named by its definition, and is still refused a delete for it. The
-// pending operator keeps the token it was minted, which still enrols
-// it after the update. Both answers carry the new details, so the
-// update is shown to have happened on the rows the rest is read from.
-func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesOrEnrolsBy(t *testing.T) {
+// The operator holding a certificate keeps the certificate row a
+// renewal is measured against, keeps authenticating with the
+// certificate it holds, is still named by its definition, and is still
+// refused a delete for it. The operator holding a key keeps that key
+// live. Both answers carry the new details, so the update is shown to
+// have happened on the rows the rest is read from.
+func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesBy(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	_, sealer := keyEncryptionKey(t)
+	keyFile, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
 	store := operator.NewPostgresStore(p)
 
-	enrolled, enrolledToken := register(t, store, "enrolled")
-	certificate := enrol(t, url, enrolledToken)
+	enrolled := register(t, store, "enrolled")
+	certificate := mintedOutOfBand(t, keyFile, enrolled)
 	d, err := agent.NewDefinition(orgRootGRN("acme"), enrolled, "Field agent", agent.Values{"image": "ghcr.io/acme/bot:1"},
 		scopedGRN("acme", "user", "ada"))
 	require.NoError(t, err)
 	keepDefinition(t, p, d)
-	pending, pendingToken := register(t, store, "pending")
+	keyed := register(t, store, "keyed")
+	_, key := issueKey(t, store, keyed, operator.KeyRotationFirst)
 
 	serial := rowOf(t, p, `SELECT serial FROM operator_certificates WHERE operator_grn = $1`, enrolled)
 	before, err := store.Get(ctx, enrolled)
 	require.NoError(t, err)
-	tokenHash := rowOf(t, p, `SELECT token_hash FROM operator_enrollment_tokens WHERE operator_grn = $1`, pending)
 
 	updated, err := store.UpdateDetails(ctx, enrolled, detailsPatch(t, "Field cluster", "Runs the batch agents."))
 	require.NoError(t, err)
 	assert.Equal(t, "Field cluster", updated.Name)
 	assert.Equal(t, "Runs the batch agents.", updated.Description)
-	assert.Equal(t, operator.EnrollmentStateEnrolled, updated.EnrollmentState())
 	assert.Equal(t, before.CertificateIssuedAt(), updated.CertificateIssuedAt())
 	assert.Equal(t, serial, rowOf(t, p, `SELECT serial FROM operator_certificates WHERE operator_grn = $1`, enrolled),
 		"the lineage a renewal is measured against is where it was")
@@ -86,18 +85,19 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesOrEnrolsBy(t 
 	assert.ErrorIs(t, store.Delete(ctx, enrolled), operator.ErrOperatorNamedByDefinition,
 		"the definition still refuses the delete")
 
-	renamed, err := store.UpdateDetails(ctx, pending, detailsPatch(t, "Staging", ""))
+	renamed, err := store.UpdateDetails(ctx, keyed, detailsPatch(t, "Staging", ""))
 	require.NoError(t, err)
 	assert.Equal(t, "Staging", renamed.Name)
-	assert.Equal(t, operator.EnrollmentStatePending, renamed.EnrollmentState())
-	assert.Equal(t, tokenHash,
-		rowOf(t, p, `SELECT token_hash FROM operator_enrollment_tokens WHERE operator_grn = $1`, pending))
-	enrol(t, url, pendingToken)
+	keys, err := store.ListKeys(ctx, keyed)
+	require.NoError(t, err)
+	require.Len(t, keys, 1)
+	assert.Equal(t, key.KID, keys[0].KID)
+	assert.Equal(t, operator.KeyStateActive, keys[0].State, "the key it holds is still live")
 
 	// The control for the refusal above: the other operator, which no
 	// definition names, is deleted by the same store, so what refused
 	// the first is its definition and not a delete refused for all.
-	require.NoError(t, store.Delete(ctx, pending))
+	require.NoError(t, store.Delete(ctx, keyed))
 }
 
 // TestOperatorUpdateDetails_ReachesOneOrganizationsRecord covers the
@@ -115,12 +115,10 @@ func TestOperatorUpdateDetails_ReachesOneOrganizationsRecord(t *testing.T) {
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
 	store := operator.NewPostgresStore(p)
 
-	mine, _ := register(t, store, "one")
+	mine := register(t, store, "one")
 	theirs, err := operator.New(orgRootGRN("globex"), "one", scopedGRN("globex", "user", "ada"), operator.DetailsPatch{})
 	require.NoError(t, err)
-	e, err := operator.NewEnrollment(theirs.GRN(), scopedGRN("globex", "user", "ada"))
-	require.NoError(t, err)
-	_, err = store.Register(ctx, theirs, e, credentialFor(t, theirs))
+	_, err = store.Register(ctx, theirs)
 	require.NoError(t, err)
 
 	_, err = store.UpdateDetails(ctx, mine, detailsPatch(t, "Acme one", "Acme's."))
@@ -158,7 +156,7 @@ func TestOperatorDetails_TheSchemaRefusesWhatTheDomainRefuses(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	g, _ := register(t, operator.NewPostgresStore(p), "one")
+	g := register(t, operator.NewPostgresStore(p), "one")
 
 	for name, update := range map[string]string{
 		"a blank name":            `UPDATE operators SET name = '  ' WHERE grn = $1`,

@@ -356,8 +356,8 @@ export function reachSentence(reach: Reach): string {
         )
         .join(", ")}.`;
     case "org-wide":
-      return "No attachments: applies to everyone in this organization.";
+      return "Applies to everyone: it has no attachments.";
     case "unknown":
-      return "Its attachments are not listed to you, so it may apply to everyone in this organization.";
+      return "May apply to everyone: its attachments are not listed to you.";
   }
 }

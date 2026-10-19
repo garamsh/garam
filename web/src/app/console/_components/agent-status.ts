@@ -67,13 +67,13 @@ export function agentHealth(
   agent: Agent | undefined,
 ): AgentHealth {
   if (reported === "unchecked") {
-    return { ...NOT_CHECKED, detail: "Reported agents were not shown to you." };
+    return { ...NOT_CHECKED, detail: "Reports are not shown to you." };
   }
   if (reported === "awaiting" || agent === undefined) {
     return {
       tone: "neutral",
       label: "Not placed",
-      detail: "Defined, and no operator or host holds it yet.",
+      detail: "Nothing runs it yet.",
     };
   }
   const provisioning = PROVISIONING[agent.provisioningState].label;

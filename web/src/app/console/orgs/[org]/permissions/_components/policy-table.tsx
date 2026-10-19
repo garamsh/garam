@@ -5,7 +5,6 @@ import { ShieldCheck } from "lucide-react";
 
 import { CopyId } from "@/components/copy-id";
 import { DataTable, type ColumnDef } from "@/components/data-table";
-import { Time } from "@/components/time";
 import type { Policy } from "@/features/orgs";
 
 import { EmptyState } from "../../../../_components/empty-state";
@@ -52,13 +51,6 @@ const COLUMNS: ColumnDef<PolicyRow, unknown>[] = [
       </span>
     ),
   },
-  {
-    id: "updated",
-    header: "Updated",
-    accessorFn: (row) => row.policy.updatedAt,
-    enableGlobalFilter: false,
-    cell: ({ row }) => <Time value={row.original.policy.updatedAt} />,
-  },
 ];
 
 /**
@@ -73,12 +65,7 @@ export function PolicyTable({ rows }: { rows: PolicyRow[] }) {
       data={rows}
       getRowId={(row) => row.identifier}
       search={{ placeholder: "Search policies" }}
-      empty={
-        <EmptyState
-          icon={ShieldCheck}
-          title="No policies"
-        />
-      }
+      empty={<EmptyState icon={ShieldCheck} title="No policies" />}
     />
   );
 }

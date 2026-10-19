@@ -8,9 +8,9 @@ import { Banner } from "@/components/banner";
  */
 export function ConditionNotice() {
   return (
-    <Banner tone="warn" title="Conditions are not evaluated">
-      This document has a Condition. garam stores it but does not evaluate it,
-      so the statement applies as if it had none.
-    </Banner>
+    <Banner
+      tone="warn"
+      title="Conditions are ignored: the statement applies as if it had none"
+    />
   );
 }

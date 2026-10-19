@@ -5,7 +5,6 @@ import Link from "next/link";
 
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { StatusDot } from "@/components/status-dot";
-import { Time } from "@/components/time";
 import type { Operator } from "@/features/orgs";
 
 import { EmptyState } from "../../../../_components/empty-state";
@@ -26,7 +25,6 @@ export type OperatorRow = {
   name: string;
   enrollmentState: Operator["enrollmentState"];
   controlEndpoint?: string;
-  createdAt: string;
 };
 
 /** The control service's host, which is what tells two endpoints apart. */
@@ -121,11 +119,6 @@ export function OperatorTable({
             ),
           },
         ] satisfies ColumnDef<OperatorRow, unknown>[])),
-    {
-      accessorKey: "createdAt",
-      header: "Registered",
-      cell: ({ row }) => <Time value={row.original.createdAt} />,
-    },
   ];
 
   return (

@@ -283,7 +283,7 @@ export function MemberList({
     return (
       <>
         {teamChoices.length === 0 ? (
-          <InactiveButton reason="There is no team you may add members to.">
+          <InactiveButton reason="No team you may add to.">
             Add to team
           </InactiveButton>
         ) : (
@@ -298,7 +298,7 @@ export function MemberList({
           </Button>
         )}
         {policyChoices.length === 0 ? (
-          <InactiveButton reason="There is no policy you may attach.">
+          <InactiveButton reason="No policy you may attach.">
             Attach policy
           </InactiveButton>
         ) : (

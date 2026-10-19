@@ -67,14 +67,7 @@ export function MakeDefaultDialog({
       title={
         rollback ? `Roll back to v${target}?` : `Make v${target} the default?`
       }
-      description={
-        <p>
-          The policy evaluates v{target} instead of v{current}.{" "}
-          {active
-            ? `This applies at once. ${reach}`
-            : "Nothing changes until the policy is activated."}
-        </p>
-      }
+      description={<p>{active ? reach : "Nothing applies until activated."}</p>}
       action={rollbackPolicy}
       initialState={initialState}
       fields={{ org, policy, version: target }}

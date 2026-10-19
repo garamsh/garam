@@ -173,6 +173,7 @@ export const AgentParser = parserFor<Agent>()(
         since: z.string(),
       })
       .optional(),
+    generation: z.string().optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
   }),

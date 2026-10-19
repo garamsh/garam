@@ -19,7 +19,7 @@ export function OrgWideConfirmation({ id }: { id: string }) {
         className="mt-0.5 size-4 shrink-0 accent-primary"
       />
       <Label htmlFor={id} className="leading-snug font-normal">
-        Apply it to everyone in this organization
+        Apply it to everyone
       </Label>
     </div>
   );
@@ -39,15 +39,13 @@ export function ScopeConfirmationNotice({
     case "confirm-org-wide":
       return (
         <Banner tone="danger" title="This reaches everyone">
-          It has no attachments now, so it applies to everyone in this
-          organization.
+          It has no attachments.
         </Banner>
       );
     case "confirm-unknown-scope":
       return (
         <Banner tone="danger" title="This may reach everyone">
-          Its attachments are not listed to you, so it may apply to everyone in
-          this organization.
+          Its attachments are not listed to you.
         </Banner>
       );
     default:

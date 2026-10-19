@@ -90,7 +90,6 @@ export default async function OperatorsPage({ params, searchParams }: Params) {
             name: operator.name,
             enrollmentState: operator.enrollmentState,
             controlEndpoint: operator.controlEndpoint,
-            createdAt: operator.createdAt,
           }))}
         />
       )}

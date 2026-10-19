@@ -65,8 +65,8 @@ function CompareDialog({
           <DialogDescription>
             Saved by {row.author}.{" "}
             {isDefault
-              ? "This is the version the policy evaluates."
-              : `Shown against v${context.defaultVersion}, the default.`}
+              ? "The default."
+              : `Against v${context.defaultVersion}, the default.`}
           </DialogDescription>
         </DialogHeader>
         {isDefault || context.defaultText === null ? (
@@ -102,7 +102,7 @@ function columns(
           {row.original.version === context.defaultVersion && (
             <StatusDot
               tone={context.active ? "ok" : "neutral"}
-              label={context.active ? "Default · in use" : "Default"}
+              label={context.active ? "In use" : "Default"}
             />
           )}
           {row.original.conditioned && (
@@ -171,12 +171,7 @@ export function VersionTable({
       columns={columns(context)}
       data={[...rows].sort((a, b) => b.version - a.version)}
       getRowId={(row) => String(row.version)}
-      empty={
-        <EmptyState
-          icon={History}
-          title="No versions"
-        />
-      }
+      empty={<EmptyState icon={History} title="No versions" />}
     />
   );
 }

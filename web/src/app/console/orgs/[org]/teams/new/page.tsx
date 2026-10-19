@@ -26,18 +26,14 @@ export default async function NewTeamPage({ params }: Params) {
   return (
     <SettingsPage
       title="New team"
-      description="Name the team. You add its people and agents on the next page."
+      description="You add its members on the next page."
       sections={[
         {
           id: "name",
           title: "Name",
-          description: "What this organization calls the team.",
           content:
             permissions.get("create") === "denied" ? (
-              <Banner tone="info" title="You cannot create teams here">
-                Creating a team is granted by this organization&apos;s roles and
-                policies. Ask someone who can create teams to make it.
-              </Banner>
+              <Banner tone="info" title="No policy lets you create teams" />
             ) : (
               <CreateTeamForm org={org} />
             ),

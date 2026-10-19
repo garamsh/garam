@@ -36,12 +36,7 @@ export function DeleteProjectDialog({
         </Button>
       }
       title={`Delete ${projectName}?`}
-      description={
-        <p>
-          This removes the project and its {memberships}. The people and agents
-          in it stay in this organization. garam cannot bring the project back.
-        </p>
-      }
+      description={<p>Removes its {memberships}. Its members stay.</p>}
       action={deleteProject}
       initialState={initialState}
       fields={{ org, project }}

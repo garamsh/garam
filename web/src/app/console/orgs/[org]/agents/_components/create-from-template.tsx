@@ -82,7 +82,7 @@ export function CreateFromTemplate({
     return (
       <ControlNotice
         operatorsHref={orgHref(org, "operators")}
-        reason={`${hosted.name}'s delegation names no controller, so there is no operator to place an agent on.`}
+        reason={`${hosted.name}'s delegation names no controller.`}
         fix={{ at: "operator", identifier: hosted.identifier }}
       />
     );
@@ -90,7 +90,7 @@ export function CreateFromTemplate({
   if (templates === null || templates.status === "loading") {
     return (
       <p role="status" className="text-muted-foreground">
-        Reading {hosted.name}&apos;s templates…
+        Loading…
       </p>
     );
   }
@@ -165,11 +165,7 @@ export function CreateFromTemplate({
     <form action={create} className="flex max-w-md flex-col gap-4">
       <input type="hidden" name="template" value={template} />
       <input type="hidden" name="controller" value={controller} />
-      <FormField
-        label="Template"
-        hint="The version is copied once; a later version never changes the agent."
-        error={errors.template}
-      >
+      <FormField label="Template" error={errors.template}>
         {(control) => (
           <Select
             value={template}
@@ -194,11 +190,7 @@ export function CreateFromTemplate({
           </Select>
         )}
       </FormField>
-      <FormField
-        label="Controller"
-        hint={`The operators ${hosted.name}'s delegation lets it place an agent on.`}
-        error={errors.controller}
-      >
+      <FormField label="Controller" error={errors.controller}>
         {(control) => (
           <Select
             value={controller}

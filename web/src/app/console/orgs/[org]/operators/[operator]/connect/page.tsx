@@ -46,12 +46,7 @@ export default async function ConnectOperatorPage({
     }),
   ]);
 
-  const header = (
-    <PageHeader
-      title="Connect an operator"
-      description="Issue its key, place it, and see it sign in."
-    />
-  );
+  const header = <PageHeader title="Connect an operator" />;
 
   // A read that fails is shown inside the wizard rather than in its
   // place: the issuing action's re-render runs this page again, and
@@ -89,10 +84,10 @@ export default async function ConnectOperatorPage({
       <>
         <ItemCrumb label={name} />
         {header}
-        <Banner tone="info" title="You cannot issue keys for this operator">
-          garam does not let you issue this operator a key. Access to it is
-          granted by this organization&apos;s roles and policies.
-        </Banner>
+        <Banner
+          tone="info"
+          title="No policy lets you issue this operator a key"
+        />
       </>
     );
   }
@@ -109,7 +104,6 @@ export default async function ConnectOperatorPage({
         keys={keyList}
         problem={problem}
         initialStep={initialStep}
-        rotate={replacing}
         canReplace={!denied("reissue")}
         operatorHref={operatorHref}
         operatorsHref={orgHref(org, "operators")}

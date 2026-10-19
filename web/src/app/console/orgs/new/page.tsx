@@ -16,7 +16,6 @@ export default function NewOrgPage() {
         {
           id: "organization",
           title: "Organization",
-          description: "What the organization is called.",
           content: <CreateOrgForm />,
         },
       ]}

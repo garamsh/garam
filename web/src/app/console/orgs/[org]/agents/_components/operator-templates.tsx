@@ -116,7 +116,7 @@ export function OperatorTemplates({
   if (templates === null || templates.status === "loading") {
     return (
       <p role="status" className="text-muted-foreground">
-        Reading {read.hosted.name}&apos;s templates…
+        Loading…
       </p>
     );
   }
@@ -175,9 +175,7 @@ export function OperatorTemplates({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-muted-foreground">
-          Published by {read.hosted.name}. Each version is immutable: an agent
-          copies the version it is created from once, and a later version never
-          changes it.
+          Published by {read.hosted.name}.
         </p>
         {canPublish && (
           <Button type="button" onClick={() => setPublishing(true)}>
@@ -188,8 +186,7 @@ export function OperatorTemplates({
       </div>
       {published !== null && (
         <p role="status" className="text-muted-foreground">
-          Published {published.name} version {published.version}. Agents created
-          from earlier versions keep what they copied.
+          Published {published.name} version {published.version}.
         </p>
       )}
       {publish.status === "blocked" && (
@@ -224,9 +221,6 @@ export function OperatorTemplates({
               : `Published: ${profiles.data.profiles
                   .map((p) => `${p.name} version ${p.version}`)
                   .join(", ")}.`}{" "}
-            <span className="text-muted-foreground">
-              Profiles are published by the deployment, not from the console.
-            </span>
           </p>
         ) : (
           <ControlNotice
@@ -248,13 +242,10 @@ export function OperatorTemplates({
             <DialogTitle>
               {selected?.name} version {selected?.version}
             </DialogTitle>
-            <DialogDescription>
-              What this version configures. It cannot change.
-            </DialogDescription>
           </DialogHeader>
           {detail === null || detail.status === "loading" ? (
             <p role="status" className="text-muted-foreground">
-              Reading the version…
+              Loading…
             </p>
           ) : detail.status === "ok" ? (
             <>
@@ -289,8 +280,7 @@ export function OperatorTemplates({
             <DialogHeader>
               <DialogTitle>Publish a template version</DialogTitle>
               <DialogDescription>
-                The control service numbers the version. A secret is named by
-                reference, never typed here.
+                Secrets are named by reference.
               </DialogDescription>
             </DialogHeader>
             <PublishTemplateForm

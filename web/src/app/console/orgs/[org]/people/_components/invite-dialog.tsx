@@ -53,10 +53,7 @@ export function InviteDialog({ org }: { org: string }) {
       <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Invite a person</DialogTitle>
-          <DialogDescription>
-            Choose the role they join as. The link that admits them is shown
-            once.
-          </DialogDescription>
+          <DialogDescription>The link is shown once.</DialogDescription>
         </DialogHeader>
         <InviteForm org={org} onDone={() => setOpen(false)} />
       </DialogContent>
@@ -125,8 +122,7 @@ function InviteForm({ org, onDone }: { org: string; onDone: () => void }) {
         open={issued !== null}
         title="Invitation link"
         description={
-          issued &&
-          `It admits one person as ${ROLE_LABEL[issued.role]} and works once. Send it to them now: it is not shown again.`
+          issued && `Admits one person as ${ROLE_LABEL[issued.role]}, once.`
         }
         secret={
           issued

@@ -48,13 +48,6 @@ export function DeleteOperatorForm({
         </Button>
       }
       title={`Delete ${name}?`}
-      description={
-        <p>
-          garam refuses its keys, its credential and its certificate from the
-          next request. Work already running in its cluster does not stop, and
-          agents it provisioned keep their own credentials.
-        </p>
-      }
       action={deleteOperator}
       initialState={initialState}
       fields={{ org, operator }}

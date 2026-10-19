@@ -56,24 +56,20 @@ export function ActivatePolicyDialog({
     <ActionDialog
       trigger={<Button type="button">Activate</Button>}
       title={`Activate ${policyName}?`}
-      description={
-        <p>
-          Version {version} takes part in every check it reaches. {reach}
-        </p>
-      }
+      description={<p>{reach}</p>}
       action={activatePolicy}
       initialState={initialState}
       fields={{ org, policy }}
       command={{
         label: "Activate policy",
-        consequence: `Version ${version} takes part in every check it reaches.`,
+        consequence: `v${version} applies from now on.`,
       }}
       confirmLabel={(state) =>
         everyone(state) ? "Activate for everyone" : "Activate policy"
       }
       pendingLabel="Activating…"
       done={(state) => state.status === "idle"}
-      outcome={() => `Activated: v${version} takes part in checks.`}
+      outcome={() => `Activated v${version}`}
       area="lifecycle"
     >
       {(state) => (

@@ -62,22 +62,17 @@ type Params = {
   searchParams: Promise<{ tab?: string }>;
 };
 
-/** A settings card inside a tab: a title, what it is for, and its form. */
+/** A settings card inside a tab: a title and its form. */
 function SettingsCard({
   title,
-  description,
   children,
 }: {
   title: string;
-  description: string;
   children: React.ReactNode;
 }) {
   return (
     <section className="rounded-xl border bg-card">
-      <div className="flex flex-col gap-1 border-b px-4 py-3">
-        <h2 className="text-base">{title}</h2>
-        <p className="text-muted-foreground">{description}</p>
-      </div>
+      <h2 className="border-b px-4 py-3 text-base">{title}</h2>
       <div className="p-4">{children}</div>
     </section>
   );
@@ -87,10 +82,7 @@ function SettingsCard({
 function Unavailable({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <PageHeader
-        title="Operator"
-        description="An operator of this organization."
-      />
+      <PageHeader title="Operator" />
       {children}
     </>
   );
@@ -120,27 +112,27 @@ export default async function OperatorPage({ params, searchParams }: Params) {
   const access = readAccess(org, [
     {
       key: "readReports",
-      label: "Read what it reports running",
+      label: "Read its reports",
       check: { action: "operator:read" },
     },
     {
       key: "update",
-      label: "Change its name and description",
+      label: "Rename it",
       check: { action: "operator:update" },
     },
     {
       key: "register",
-      label: "Register operators and issue a first key",
+      label: "Issue its first key",
       check: { action: "operator:register" },
     },
     {
       key: "reissue",
-      label: "Re-issue its credential and keys",
+      label: "Re-issue its keys",
       check: { action: "operator:reissue" },
     },
     {
       key: "delegate",
-      label: "Delegate operations to it",
+      label: "Delegate to it",
       check: { action: "operator:delegate" },
     },
     { key: "delete", label: "Delete it", check: { action: "operator:delete" } },
@@ -311,11 +303,6 @@ export default async function OperatorPage({ params, searchParams }: Params) {
 
   const controlTab = (
     <div className="flex flex-col gap-4">
-      <p className="max-w-xl text-muted-foreground">
-        A hosted operator&apos;s control service holds agent templates,
-        execution profiles and execution. The console hands it one operation at
-        a time, only at the endpoint registered here.
-      </p>
       {allowed("delegate") ? (
         <ControlEndpointForm
           org={org}
@@ -328,7 +315,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
             {
               term: "Endpoint",
               description: o.controlEndpoint ?? (
-                <span className="text-muted-foreground">None registered</span>
+                <span className="text-muted-foreground">None</span>
               ),
             },
           ]}
@@ -339,9 +326,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
 
   const delegationTab =
     delegation.status === "unreachable" ? (
-      <Banner tone="warn" title="The delegation could not be read">
-        garam did not answer for this operator&apos;s delegation.
-      </Banner>
+      <Banner tone="warn" title="Delegation not read" />
     ) : delegation.status === "forbidden" ? (
       <RefusedRead subject="this operator's delegation" />
     ) : (
@@ -367,10 +352,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
   const settingsTab = (
     <div className="flex flex-col gap-6">
       {allowed("update") && (
-        <SettingsCard
-          title="Name and description"
-          description="What this organization calls the operator. Its identifier cannot change."
-        >
+        <SettingsCard title="Name">
           <OperatorDetailsForm
             org={org}
             operator={operator}
@@ -380,35 +362,24 @@ export default async function OperatorPage({ params, searchParams }: Params) {
         </SettingsCard>
       )}
       {allowed("reissue") && (
-        <SettingsCard
-          title="Legacy credential"
-          description="For an operator not yet on keys. Re-issuing voids the current credential and its tokens."
-        >
+        <SettingsCard title="Legacy credential">
           <ReissueCredentialForm org={org} operator={operator} name={o.name} />
         </SettingsCard>
       )}
-      <SettingsCard
-        title="Enrollment token"
-        description="For an operator that never obtained a certificate, or whose token was lost or ran out before it enrolled."
-      >
+      <SettingsCard title="Enrollment token">
         <MintEnrollmentForm
           org={org}
           operator={operator}
           name={o.name}
           blocked={
             o.enrollmentState === "enrolled"
-              ? "It has enrolled, so garam issues it no token: that would be a second way into an identity that has one. An operator whose certificate was lost or ran out is recovered with garam's out-of-band certificate command."
+              ? "It has already enrolled."
               : allowed("register")
                 ? null
-                : "Issuing one needs operator:register, and the server answered that no policy grants it to you."
+                : "No policy lets you issue enrollment tokens."
           }
         />
       </SettingsCard>
-      {!allowed("update") && !allowed("reissue") && (
-        <p className="text-muted-foreground">
-          You can view this operator but not change it.
-        </p>
-      )}
     </div>
   );
 
@@ -443,8 +414,6 @@ export default async function OperatorPage({ params, searchParams }: Params) {
             ? [
                 {
                   title: "Delete this operator",
-                  description:
-                    "Stops it authenticating to garam. Work already running in its cluster does not stop.",
                   control: (
                     <DeleteOperatorForm
                       org={org}

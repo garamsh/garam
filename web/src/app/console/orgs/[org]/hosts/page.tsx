@@ -36,7 +36,7 @@ const DESCRIPTION =
   "Standalone and direct hosts: each runs one agent under a supervisor this organization approved.";
 
 const DENIED =
-  "Approving, withdrawing and revoking hosts needs agent:enroll, and no policy grants it to you.";
+  "No policy lets you manage hosts.";
 
 const PLACEMENT = {
   standalone: "Runs its agent in containers it starts",

@@ -46,8 +46,7 @@ export function DetachPolicyDialog({
       title={`Detach ${policyName}?`}
       description={
         <p>
-          {policyName} stops applying to {subjectLabel} through this attachment.
-          Its other attachments are kept.
+          {policyName} stops applying to {subjectLabel}.
         </p>
       }
       action={detachPolicy}
@@ -62,14 +61,9 @@ export function DetachPolicyDialog({
     >
       {(state) =>
         state.status === "last-attachment" && (
-          <Banner
-            tone="danger"
-            title="Not detached: this is its last attachment"
-          >
+          <Banner tone="danger" title="This is its last attachment">
             <p>
-              Without it, this active policy would apply to everyone in this
-              organization. Attach it to another team, person or agent first, or
-              archive the policy.
+              Without it, it applies to everyone. Attach it elsewhere first.
             </p>
             {policyHref !== undefined && (
               <Link

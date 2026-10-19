@@ -86,10 +86,7 @@ export function DelegationForm({
   return (
     <div className="flex max-w-2xl flex-col gap-6">
       {delegation === null ? (
-        <p className="text-muted-foreground">
-          This operator holds no delegation, so the console hands it no
-          operation.
-        </p>
+        <p className="text-muted-foreground">No delegation.</p>
       ) : (
         <DescriptionList
           items={[
@@ -141,9 +138,7 @@ export function DelegationForm({
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 font-medium">Controllers</legend>
               {controllers.length === 0 ? (
-                <p className="text-muted-foreground">
-                  Register another operator to name it as a controller.
-                </p>
+                <p className="text-muted-foreground">No other operator.</p>
               ) : (
                 controllers.map((c) => (
                   <label key={c.grn} className="flex items-center gap-2">
@@ -237,12 +232,6 @@ export function DelegationForm({
                   </Button>
                 }
                 title="Withdraw this delegation?"
-                description={
-                  <p>
-                    The grant ends when you confirm, and the console hands this
-                    operator no further operations under it.
-                  </p>
-                }
                 action={withdrawDelegation}
                 initialState={initialState}
                 fields={{ org, operator, grantId: delegation.grantId }}

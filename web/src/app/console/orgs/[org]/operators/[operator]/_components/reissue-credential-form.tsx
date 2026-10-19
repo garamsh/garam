@@ -43,13 +43,6 @@ export function ReissueCredentialForm({
           </Button>
         }
         title={`Re-issue ${name}'s credential?`}
-        description={
-          <p>
-            The current credential, and every token exchanged for it, stop
-            working the moment you confirm. An operator still on it is refused
-            until the new one is placed in its cluster.
-          </p>
-        }
         action={reissueOperatorCredential}
         initialState={initialState}
         fields={{ org, operator }}

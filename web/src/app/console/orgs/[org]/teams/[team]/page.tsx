@@ -213,7 +213,6 @@ export default async function TeamPage({ params }: Params) {
             ? [
                 {
                   title: "Delete team",
-                  description: `Removes the team and its ${memberships}. The people and agents in it stay in this organization.`,
                   control: (
                     <DeleteTeamDialog
                       org={org}

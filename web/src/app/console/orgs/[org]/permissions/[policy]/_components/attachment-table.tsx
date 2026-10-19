@@ -107,12 +107,7 @@ export function AttachmentTable({
       columns={columns}
       data={subjects}
       getRowId={(subject) => subject.grn}
-      empty={
-        <EmptyState
-          icon={Link2Off}
-          title={empty}
-        />
-      }
+      empty={<EmptyState icon={Link2Off} title={empty} />}
     />
   );
 }

@@ -88,7 +88,7 @@ test.describe("hosts", () => {
     ]) {
       await expect(control).toHaveAttribute("aria-disabled", "true");
       await expect(control).toHaveAccessibleDescription(
-        "Approving, withdrawing and revoking hosts needs agent:enroll, and no policy grants it to you.",
+        "No policy lets you manage hosts.",
       );
       // Playwright refuses an aria-disabled control unless forced, so
       // forcing is what shows its click does nothing.

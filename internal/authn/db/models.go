@@ -9,8 +9,13 @@ import (
 )
 
 type Session struct {
-	TokenHash string
-	UserGrn   string
-	CreatedAt pgtype.Timestamptz
-	ExpiresAt pgtype.Timestamptz
+	TokenHash        string
+	UserGrn          string
+	CreatedAt        pgtype.Timestamptz
+	ExpiresAt        pgtype.Timestamptz
+	ID               pgtype.UUID
+	Kind             string
+	Name             pgtype.Text
+	RefreshHash      pgtype.Text
+	RefreshExpiresAt pgtype.Timestamptz
 }

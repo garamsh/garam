@@ -7,8 +7,10 @@ proof afterwards. Implemented by `internal/authn`.
 |------|----------------|
 | `Provider` | OIDC authorization-code flow with PKCE; `google.go` implements it (ADR-0044 removed the development-only second implementation) |
 | `Identity` | subject + nickname asserted by a provider |
-| `Session` | browser session for a user, expiring |
-| `SessionStore` | persists sessions keyed by token hash |
+| `Session` | a user's session, expiring: a browser's, or a CLI's of kind `cli` (ADR-0120) |
+| `SessionStore` | persists sessions keyed by token hash; spends a CLI session's refresh token, and lists and revokes a user's sessions by id |
+| `DeviceGrant` | the device code and user code one device sign-in is answered with (RFC 8628) |
+| `DeviceStore` | persists device authorizations by their codes' hashes until an approved one is redeemed once for a CLI session; issuing refuses past `MaxLiveDeviceAuthorizations` (ADR-0120) |
 | `OAuthStateStore` | persists the state a login issued, until the callback spends it or its lifetime runs out (ADR-0028); issuing refuses past `MaxLiveOAuthStates` live states (ADR-0030) |
 | `Password` | a password as typed; renders as a redaction marker in every form, so it cannot reach a log line, a response, or a message (ADR-0041) |
 | `Verifier` | the stored Argon2id form of a password, carrying the parameters it was computed under |
@@ -16,8 +18,10 @@ proof afterwards. Implemented by `internal/authn`.
 | `PasswordAttemptStore` | bounds the verifications live at once; recording refuses past `MaxLivePasswordAttempts` (ADR-0041) |
 
 A second provider is a new file implementing `Provider`; call sites
-depend only on the interface. Raw session tokens live in cookies; only
-SHA-256 hashes reach the database, the state a login issues included.
+depend only on the interface. Raw session tokens live in cookies, or
+with the CLI that holds them; only SHA-256 hashes reach the database,
+the state a login issues, a CLI's refresh token and both device grant
+codes included.
 
 A password is not a `Provider` and never becomes one: that interface is
 an authorization-code flow, and satisfying it would mean inventing a
@@ -55,3 +59,46 @@ deployment. The test image published from `dev` carries it beside
 against its own local Postgres (ADR-0092).
 `tests/testprincipal/README.md` is its contract and invocation, the
 test image's included.
+
+## The CLI's session
+
+The CLI signs a person in by the device grant (RFC 8628) and holds a
+session presented as a bearer (ADR-0120). `garam login` asks
+`POST /auth/device` for a device code and a user code, and the person
+approves the user code on the console's `/device` page, signed in there
+as they always are (`POST /auth/device/approval`). The CLI polls
+`POST /auth/device/token` meanwhile, answered RFC 8628's errors until
+the approved code is redeemed. The redemption opens the session and
+deletes the authorization in one transaction, so a code opens one
+session.
+
+- **Lifetimes.** A code lives `DeviceCodeTTL`, ten minutes, and is
+  polled every `DevicePollInterval`, five seconds. A poll earlier than
+  that answers `slow_down` and moves the code's interval
+  `DeviceSlowDownStep` later. A lapsed row is kept an hour, so a late
+  poll reads `expired_token` rather than an unknown code.
+- **The session.** It is a row of `sessions` of kind `cli`, naming the
+  approving user and carrying the name the CLI sent (`client_name`). Its
+  access token lives `CLIAccessTTL`, an hour, and its refresh token
+  `CLIRefreshTTL`, thirty days. A refresh at the same token endpoint
+  replaces both in one statement, so a refresh token is spent once. The
+  prune that every browser sign-in runs spares a CLI row whose refresh
+  token is live.
+- **Presentation.** `Authorization: Bearer` is accepted wherever the
+  `garam_session` cookie is, and a request carrying an `Authorization`
+  header is read by it alone. A malformed header or a dead token is
+  refused even beside a live cookie. `POST /auth/logout` revokes the
+  session either presents, and expires the cookie only when the cookie
+  presented it.
+- **Listing and revoking.** `GET /me/sessions` lists a person's live
+  sessions of both kinds by an id that is not the token's hash, marking
+  the one the request came on. `DELETE /me/sessions/{session}` revokes
+  one, and answers 404 for an id the person holds no session by.
+- **Bounds.** Issuing refuses once `MaxLiveDeviceAuthorizations`, 1024,
+  are live, decided in the statement that writes, as ADR-0030 bounds a
+  login state.
+
+Open question: the `/device` page is the console's, and its owner
+builds it after the API above. Until it lands a code is approved
+through the API alone, and nothing yet answers the page a reader of a
+code with the client name it is approving (ADR-0120 §Consequences).

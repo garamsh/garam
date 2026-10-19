@@ -23,6 +23,38 @@ func (q *Queries) ConsumeOAuthState(ctx context.Context, stateHash string) (pgty
 	return return_path, err
 }
 
+const createCLISession = `-- name: CreateCLISession :exec
+WITH pruned AS (
+    DELETE FROM sessions WHERE expires_at <= now()
+        AND (refresh_expires_at IS NULL OR refresh_expires_at <= now())
+)
+INSERT INTO sessions (token_hash, user_grn, created_at, expires_at, kind, name, refresh_hash, refresh_expires_at)
+VALUES ($1, $2, $3, $4, 'cli', $7, $5, $6)
+`
+
+type CreateCLISessionParams struct {
+	TokenHash        string
+	UserGrn          string
+	CreatedAt        pgtype.Timestamptz
+	ExpiresAt        pgtype.Timestamptz
+	RefreshHash      pgtype.Text
+	RefreshExpiresAt pgtype.Timestamptz
+	Name             pgtype.Text
+}
+
+func (q *Queries) CreateCLISession(ctx context.Context, arg CreateCLISessionParams) error {
+	_, err := q.db.Exec(ctx, createCLISession,
+		arg.TokenHash,
+		arg.UserGrn,
+		arg.CreatedAt,
+		arg.ExpiresAt,
+		arg.RefreshHash,
+		arg.RefreshExpiresAt,
+		arg.Name,
+	)
+	return err
+}
+
 const createPasswordCredential = `-- name: CreatePasswordCredential :exec
 INSERT INTO password_credentials (user_grn, verifier, created_at, updated_at)
 VALUES ($1, $2, $3, $4)
@@ -48,6 +80,7 @@ func (q *Queries) CreatePasswordCredential(ctx context.Context, arg CreatePasswo
 const createSession = `-- name: CreateSession :exec
 WITH pruned AS (
     DELETE FROM sessions WHERE expires_at <= now()
+        AND (refresh_expires_at IS NULL OR refresh_expires_at <= now())
 )
 INSERT INTO sessions (token_hash, user_grn, created_at, expires_at)
 VALUES ($1, $2, $3, $4)
@@ -60,6 +93,8 @@ type CreateSessionParams struct {
 	ExpiresAt pgtype.Timestamptz
 }
 
+// A session is pruned once nothing it holds is live: its token, and a
+// CLI session's refresh token too (ADR-0120).
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
 	_, err := q.db.Exec(ctx, createSession,
 		arg.TokenHash,
@@ -67,6 +102,36 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 		arg.CreatedAt,
 		arg.ExpiresAt,
 	)
+	return err
+}
+
+const decideDeviceAuthorization = `-- name: DecideDeviceAuthorization :execrows
+UPDATE device_authorizations
+SET decision = $2, user_grn = $3, decided_at = now()
+WHERE user_code_hash = $1 AND decision IS NULL AND expires_at > now()
+`
+
+type DecideDeviceAuthorizationParams struct {
+	UserCodeHash string
+	Decision     pgtype.Text
+	UserGrn      pgtype.Text
+}
+
+// A code is decided once, while it is live.
+func (q *Queries) DecideDeviceAuthorization(ctx context.Context, arg DecideDeviceAuthorizationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, decideDeviceAuthorization, arg.UserCodeHash, arg.Decision, arg.UserGrn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteDeviceAuthorization = `-- name: DeleteDeviceAuthorization :exec
+DELETE FROM device_authorizations WHERE device_code_hash = $1
+`
+
+func (q *Queries) DeleteDeviceAuthorization(ctx context.Context, deviceCodeHash string) error {
+	_, err := q.db.Exec(ctx, deleteDeviceAuthorization, deviceCodeHash)
 	return err
 }
 
@@ -91,7 +156,7 @@ func (q *Queries) GetPasswordCredential(ctx context.Context, userGrn string) (st
 }
 
 const getSession = `-- name: GetSession :one
-SELECT token_hash, user_grn, created_at, expires_at FROM sessions WHERE token_hash = $1 AND expires_at > now()
+SELECT token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at FROM sessions WHERE token_hash = $1 AND expires_at > now()
 `
 
 func (q *Queries) GetSession(ctx context.Context, tokenHash string) (Session, error) {
@@ -102,8 +167,51 @@ func (q *Queries) GetSession(ctx context.Context, tokenHash string) (Session, er
 		&i.UserGrn,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.ID,
+		&i.Kind,
+		&i.Name,
+		&i.RefreshHash,
+		&i.RefreshExpiresAt,
 	)
 	return i, err
+}
+
+const issueDeviceAuthorization = `-- name: IssueDeviceAuthorization :execrows
+WITH pruned AS (
+    DELETE FROM device_authorizations WHERE expires_at <= now() - interval '1 hour'
+)
+INSERT INTO device_authorizations
+    (device_code_hash, user_code_hash, client_name, interval_seconds, created_at, expires_at)
+SELECT $1, $2, $4, $3, now(), now() + make_interval(secs => $5::double precision)
+WHERE (SELECT count(*) FROM device_authorizations live WHERE live.expires_at > now()) < $6::bigint
+`
+
+type IssueDeviceAuthorizationParams struct {
+	DeviceCodeHash  string
+	UserCodeHash    string
+	IntervalSeconds int32
+	ClientName      pgtype.Text
+	TtlSeconds      float64
+	MaxLive         int64
+}
+
+// Issuing writes nothing once max_live authorizations are live, which
+// bounds the write rate an unauthenticated caller can drive on
+// /auth/device as ADR-0030 bounds /auth/login (ADR-0120). The prune
+// keeps a lapsed row an hour, so a late poll still reads expired_token.
+func (q *Queries) IssueDeviceAuthorization(ctx context.Context, arg IssueDeviceAuthorizationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, issueDeviceAuthorization,
+		arg.DeviceCodeHash,
+		arg.UserCodeHash,
+		arg.IntervalSeconds,
+		arg.ClientName,
+		arg.TtlSeconds,
+		arg.MaxLive,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const issueOAuthState = `-- name: IssueOAuthState :execrows
@@ -143,6 +251,76 @@ func (q *Queries) IssueOAuthState(ctx context.Context, arg IssueOAuthStateParams
 	return result.RowsAffected(), nil
 }
 
+const listUserSessions = `-- name: ListUserSessions :many
+SELECT token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at FROM sessions
+WHERE user_grn = $1 AND (expires_at > now() OR refresh_expires_at > now())
+ORDER BY created_at DESC, id
+`
+
+func (q *Queries) ListUserSessions(ctx context.Context, userGrn string) ([]Session, error) {
+	rows, err := q.db.Query(ctx, listUserSessions, userGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Session
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.TokenHash,
+			&i.UserGrn,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.ID,
+			&i.Kind,
+			&i.Name,
+			&i.RefreshHash,
+			&i.RefreshExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockDeviceAuthorization = `-- name: LockDeviceAuthorization :one
+SELECT device_code_hash, client_name, interval_seconds, decision, user_grn,
+       expires_at <= clock_timestamp() AS expired,
+       (last_polled_at IS NOT NULL
+        AND clock_timestamp() < last_polled_at + make_interval(secs => interval_seconds::double precision)) AS too_early
+FROM device_authorizations WHERE device_code_hash = $1
+FOR UPDATE
+`
+
+type LockDeviceAuthorizationRow struct {
+	DeviceCodeHash  string
+	ClientName      pgtype.Text
+	IntervalSeconds int32
+	Decision        pgtype.Text
+	UserGrn         pgtype.Text
+	Expired         bool
+	TooEarly        pgtype.Bool
+}
+
+func (q *Queries) LockDeviceAuthorization(ctx context.Context, deviceCodeHash string) (LockDeviceAuthorizationRow, error) {
+	row := q.db.QueryRow(ctx, lockDeviceAuthorization, deviceCodeHash)
+	var i LockDeviceAuthorizationRow
+	err := row.Scan(
+		&i.DeviceCodeHash,
+		&i.ClientName,
+		&i.IntervalSeconds,
+		&i.Decision,
+		&i.UserGrn,
+		&i.Expired,
+		&i.TooEarly,
+	)
+	return i, err
+}
+
 const recordPasswordAttempt = `-- name: RecordPasswordAttempt :execrows
 WITH pruned AS (
     DELETE FROM password_attempts WHERE expires_at <= now()
@@ -175,6 +353,47 @@ func (q *Queries) RecordPasswordAttempt(ctx context.Context, arg RecordPasswordA
 	return result.RowsAffected(), nil
 }
 
+const refreshCLISession = `-- name: RefreshCLISession :one
+UPDATE sessions
+SET token_hash = $1, expires_at = $2,
+    refresh_hash = $3, refresh_expires_at = $4
+WHERE refresh_hash = $5 AND refresh_expires_at > now() AND kind = 'cli'
+RETURNING token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at
+`
+
+type RefreshCLISessionParams struct {
+	TokenHash        string
+	ExpiresAt        pgtype.Timestamptz
+	NextRefreshHash  pgtype.Text
+	RefreshExpiresAt pgtype.Timestamptz
+	RefreshHash      pgtype.Text
+}
+
+// Refreshing replaces both tokens of a live CLI session in one write,
+// so the refresh token it spent buys nothing again.
+func (q *Queries) RefreshCLISession(ctx context.Context, arg RefreshCLISessionParams) (Session, error) {
+	row := q.db.QueryRow(ctx, refreshCLISession,
+		arg.TokenHash,
+		arg.ExpiresAt,
+		arg.NextRefreshHash,
+		arg.RefreshExpiresAt,
+		arg.RefreshHash,
+	)
+	var i Session
+	err := row.Scan(
+		&i.TokenHash,
+		&i.UserGrn,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ID,
+		&i.Kind,
+		&i.Name,
+		&i.RefreshHash,
+		&i.RefreshExpiresAt,
+	)
+	return i, err
+}
+
 const releasePasswordAttempt = `-- name: ReleasePasswordAttempt :exec
 DELETE FROM password_attempts WHERE attempt_id = $1
 `
@@ -196,5 +415,37 @@ type ReplacePasswordVerifierParams struct {
 
 func (q *Queries) ReplacePasswordVerifier(ctx context.Context, arg ReplacePasswordVerifierParams) error {
 	_, err := q.db.Exec(ctx, replacePasswordVerifier, arg.UserGrn, arg.Verifier, arg.UpdatedAt)
+	return err
+}
+
+const revokeUserSession = `-- name: RevokeUserSession :execrows
+DELETE FROM sessions WHERE user_grn = $1 AND id = $2
+`
+
+type RevokeUserSessionParams struct {
+	UserGrn string
+	ID      pgtype.UUID
+}
+
+func (q *Queries) RevokeUserSession(ctx context.Context, arg RevokeUserSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeUserSession, arg.UserGrn, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const touchDeviceAuthorization = `-- name: TouchDeviceAuthorization :exec
+UPDATE device_authorizations SET last_polled_at = clock_timestamp(), interval_seconds = $2
+WHERE device_code_hash = $1
+`
+
+type TouchDeviceAuthorizationParams struct {
+	DeviceCodeHash  string
+	IntervalSeconds int32
+}
+
+func (q *Queries) TouchDeviceAuthorization(ctx context.Context, arg TouchDeviceAuthorizationParams) error {
+	_, err := q.db.Exec(ctx, touchDeviceAuthorization, arg.DeviceCodeHash, arg.IntervalSeconds)
 	return err
 }

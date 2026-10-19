@@ -104,13 +104,24 @@ rather than a provider
 ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
 Starting a login, by `GET` or by the `POST` that names where it lands,
 its callback, the provider list, reading an invitation, registering
-an account from one, and signing in with a password carry no
-credential, as do the probes and metrics this
-process serves from the same router. Which operations those are is
-read from `api/openapi.yaml` rather than remembered: an operation
-carrying `security: []` opts out of the cookie requirement the file
-applies to every other one. The login write rate is bounded at the store
+an account from one, signing in with a password, and the device
+grant's code and token requests carry no credential, as do the probes
+and metrics this process serves from the same router. Which operations
+those are is read from `api/openapi.yaml` rather than remembered: an
+operation carrying `security: []` opts out of the session requirement,
+cookie or bearer, the file applies to every other one. The login write
+rate is bounded at the store
 ([ADR-0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md)).
+The same session is accepted as `Authorization: Bearer <token>`
+wherever the cookie is, which is how the CLI presents its own, and a
+request carrying an `Authorization` header is read by that header
+alone. The CLI obtains its session by the device grant: requesting a
+device code and polling the token endpoint carry no credential, and
+approving a code is done on a session. Issuing is bounded at the store
+as a login state is, and a poll earlier than its code's interval
+answers `slow_down`
+([ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md);
+[sign-in.md](./sign-in.md) §The CLI's session).
 A callback that finds no live record of the login it claims to
 complete is refused as unauthenticated
 ([ADR-0028](./adr/0028-oauth-state-is-a-server-side-record.md)).
@@ -851,3 +862,6 @@ document owes an update.
   — every legacy path goes now with nothing migrated: the browser
   surface serves no definition and names no agent, and the machine
   listener authenticates no certificate
+- [ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)
+  — the CLI signs in by the device grant, and the browser API accepts
+  its session as a bearer wherever it accepts the cookie

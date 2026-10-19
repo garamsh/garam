@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net/http"
 	"slices"
+	"strings"
 	"time"
 
 	apigen "github.com/garamsh/garam/api"
@@ -147,18 +148,21 @@ func (s *Server) ListProviders(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, names)
 }
 
-// Logout revokes the current session.
+// Logout revokes the current session, whether a cookie or a bearer
+// presents it.
 func (s *Server) Logout(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(sessionCookie)
-	if err != nil || cookie.Value == "" {
+	token, bearer, ok := presentedSession(r)
+	if !ok {
 		writeError(w, errorx.New(errorx.KindUnauthenticated, "no session"))
 		return
 	}
-	if err := s.sessions.Delete(r.Context(), cookie.Value); err != nil {
+	if err := s.sessions.Delete(r.Context(), token); err != nil {
 		writeError(w, err)
 		return
 	}
-	s.expireCookie(w, sessionCookie)
+	if !bearer {
+		s.expireCookie(w, sessionCookie)
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -199,22 +203,57 @@ func (s *Server) upsertUser(r *http.Request, identity *authn.Identity) (*user.Us
 	return u, nil
 }
 
-// currentUser resolves the session cookie to the user.
+// currentUser resolves the presented session to the user.
 func (s *Server) currentUser(r *http.Request) (*user.User, error) {
-	cookie, err := r.Cookie(sessionCookie)
-	if err != nil || cookie.Value == "" {
-		return nil, errorx.New(errorx.KindUnauthenticated, "no session")
-	}
-	sess, err := s.sessions.Get(r.Context(), cookie.Value)
-	if err != nil {
-		return nil, errorx.Wrap(err, "session", errorx.KindUnauthenticated)
-	}
-	u, err := s.users.Get(r.Context(), sess.User())
+	current, err := s.currentSession(r)
 	if err != nil {
 		return nil, err
 	}
+	return current.user, nil
+}
+
+// signedIn is a request's session and the user it names.
+type signedIn struct {
+	session *authn.Session
+	user    *user.User
+}
+
+// currentSession resolves the presented session, a bearer or the
+// cookie, to its row and its user.
+func (s *Server) currentSession(r *http.Request) (signedIn, error) {
+	token, _, ok := presentedSession(r)
+	if !ok {
+		return signedIn{}, errorx.New(errorx.KindUnauthenticated, "no session")
+	}
+	sess, err := s.sessions.Get(r.Context(), token)
+	if err != nil {
+		return signedIn{}, errorx.Wrap(err, "session", errorx.KindUnauthenticated)
+	}
+	u, err := s.users.Get(r.Context(), sess.User())
+	if err != nil {
+		return signedIn{}, err
+	}
 	identify(r, u)
-	return u, nil
+	return signedIn{session: sess, user: u}, nil
+}
+
+// presentedSession is the session token a request presents and whether
+// it came as a bearer. A request carrying an Authorization header is
+// read by it alone (ADR-0120): a malformed one presents nothing rather
+// than falling back to a cookie the caller did not mean.
+func presentedSession(r *http.Request) (token string, bearer, ok bool) {
+	if header := r.Header.Get("Authorization"); header != "" {
+		scheme, value, found := strings.Cut(header, " ")
+		if !found || !strings.EqualFold(scheme, "Bearer") || value == "" {
+			return "", true, false
+		}
+		return value, true, true
+	}
+	cookie, err := r.Cookie(sessionCookie)
+	if err != nil || cookie.Value == "" {
+		return "", false, false
+	}
+	return cookie.Value, false, true
 }
 
 // Principal is who a request turned out to be. A handler resolves

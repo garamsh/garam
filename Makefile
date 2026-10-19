@@ -193,9 +193,10 @@ build:
 	@go build ./...
 
 # gen regenerates everything derived from a source of truth: the
-# OpenAPI server, sqlc queries, protobuf code, and mocks.
+# OpenAPI server and the CLI's client of it, sqlc queries, protobuf code, and mocks.
 gen:
 	$(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
+	$(OAPI_CODEGEN) --config api/client-codegen.yaml api/openapi.yaml
 	$(OAPI_CODEGEN) --config api/machine-codegen.yaml api/machine.yaml
 	$(SQLC) generate
 	$(MOCKERY)
@@ -207,7 +208,8 @@ gen:
 # producing. The paths are literal rather than globs: a glob expands
 # against the working tree, so a deleted generated directory would fall
 # outside it and read as clean (#360).
-GEN_PATHS := $(shell { sed -n 's/^output: //p' api/oapi-codegen.yaml api/machine-codegen.yaml; \
+GEN_PATHS := $(shell { sed -n 's/^output: //p' api/oapi-codegen.yaml api/client-codegen.yaml \
+		api/machine-codegen.yaml; \
 	sed -n 's/^        out: //p' sqlc.yaml; \
 	sed -n 's/^    out: //p' buf.gen.yaml; \
 	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; } | sort -u)

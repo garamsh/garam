@@ -132,7 +132,8 @@ func serveAPI(cmd *cobra.Command) error {
 			CookieSecure: cookieSecure,
 			TokenURL:     tokenURL,
 		},
-	).WithCredentialAudit(auditpg.NewCredentialStore(pool))
+	).WithCredentialAudit(auditpg.NewCredentialStore(pool)).
+		WithDeviceGrant(authn.NewPostgresDeviceStore(pool))
 
 	addr := envOr(envHTTPAddr, ":8080")
 	// A request needs both to be served: rows out of the database, and

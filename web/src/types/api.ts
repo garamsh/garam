@@ -125,6 +125,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/device": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a device sign-in for the CLI.
+         * @description The device authorization request of RFC 8628 §3.1, which `garam login` makes (ADR-0120). It carries no credential. `client_id` is `garam-cli`, the one client garam knows; `client_name`, where given, is what the CLI runs on, shown on the session it opens.
+         *     The answer is the device code the CLI polls with and the user code the person approves on the console's `/device` page, signed in there as they always are. `verification_uri` is that page's path, relative to the origin the console serves this API under, which the API is not told; the CLI joins it to the endpoint it was pointed at. Both codes live ten minutes.
+         *     Issuing writes one row, and refuses with 429 once 1024 codes are live, decided in the statement that writes, as a login state is (ADR-0030).
+         */
+        post: operations["requestDeviceCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/device/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Poll a device sign-in, or refresh a CLI session.
+         * @description The token endpoint of RFC 8628 §3.4 and RFC 6749 §6 (ADR-0120). It carries no credential beyond its form. `client_id` is `garam-cli`.
+         *     Under `grant_type` `urn:ietf:params:oauth:grant-type:device_code` it polls the `device_code` `requestDeviceCode` answered. Until the person decides, it answers 400 `authorization_pending`; a poll sooner than the code's interval answers `slow_down` and moves the interval five seconds later; a denied code answers `access_denied` and a lapsed one `expired_token`. An approved code is redeemed once: the poll that finds it opens a CLI session for the approving user and answers its tokens, and the code buys nothing after. A code garam holds nothing for answers `invalid_grant`.
+         *     Under `grant_type` `refresh_token` it spends a CLI session's `refresh_token` for the next pair, both replaced in one write. A refresh token unknown, lapsed or already spent answers `invalid_grant`.
+         *     The access token lives one hour and is presented as `Authorization: Bearer <token>`. The refresh token lives thirty days from its issue.
+         */
+        post: operations["deviceToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/device/approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve or deny a device sign-in as the signed-in user.
+         * @description What the console's `/device` page sends once the person reads the code their CLI printed (ADR-0120). Approving signs that CLI in as this user, so the page says what is being approved: anyone who gets a person to approve a code they did not start signs a CLI in as them. A code no live, undecided authorization holds answers 404, whether it was never issued, has lapsed or is decided. The code is read without case, separator or surrounding space.
+         */
+        post: operations["decideDeviceCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the signed-in user's sessions, browser and CLI.
+         * @description Every session of this user anything is still live in, newest first (ADR-0120). `current` marks the one the request was made on. No token or hash is answered.
+         */
+        get: operations["listMySessions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/sessions/{session}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke one of the signed-in user's sessions.
+         * @description Deletes the session, so its tokens are refused from the next request (ADR-0005, ADR-0120). A session this user does not hold answers 404, as one that does not exist does.
+         */
+        delete: operations["revokeMySession"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me": {
         parameters: {
             query?: never;
@@ -1101,6 +1206,95 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description RFC 8628's device authorization request (ADR-0120). */
+        DeviceCodeRequest: {
+            /** @enum {string} */
+            client_id: "garam-cli";
+            /** @description What the CLI runs on, shown on the session it opens. */
+            client_name?: string;
+        };
+        /** @description RFC 8628's device authorization response (ADR-0120). */
+        DeviceCode: {
+            /** @description What the CLI polls with. Shown once; garam stores only its hash. */
+            device_code: string;
+            /**
+             * @description What the person approves, eight consonants as `XXXX-XXXX`.
+             * @example BDFG-HJKL
+             */
+            user_code: string;
+            /**
+             * @description The console's approval page, as a path relative to the origin the console serves this API under.
+             * @example /device
+             */
+            verification_uri: string;
+            /**
+             * @description The same page with the user code filled in.
+             * @example /device?code=BDFG-HJKL
+             */
+            verification_uri_complete: string;
+            /** @description Seconds both codes live, 600. */
+            expires_in: number;
+            /** @description Seconds to wait between polls, 5. */
+            interval: number;
+        };
+        /** @description RFC 8628's device access token request, or RFC 6749's refresh (ADR-0120). */
+        DeviceTokenRequest: {
+            /** @enum {string} */
+            grant_type: "urn:ietf:params:oauth:grant-type:device_code" | "refresh_token";
+            /** @enum {string} */
+            client_id: "garam-cli";
+            /** @description Required under the device code grant. */
+            device_code?: string;
+            /** @description Required under the refresh grant. */
+            refresh_token?: string;
+        };
+        /** @description A CLI session's tokens, RFC 6749's successful token response (ADR-0120). */
+        SessionToken: {
+            /** @description Presented as `Authorization: Bearer <token>`. garam stores only its hash. */
+            access_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            /** @description Seconds the access token is accepted for, 3600. */
+            expires_in: number;
+            /** @description Spent once for the next pair. garam stores only its hash. */
+            refresh_token: string;
+            /** @description Seconds the refresh token is accepted for. */
+            refresh_token_expires_in: number;
+        };
+        /** @description RFC 6749's error response, with RFC 8628's codes (ADR-0120). */
+        OAuthError: {
+            /**
+             * @description `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+             * @enum {string}
+             */
+            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unsupported_grant_type" | "authorization_pending" | "slow_down" | "access_denied" | "expired_token";
+            error_description?: string;
+            /** @description With `slow_down`, the seconds to wait between polls from here. */
+            interval?: number;
+        };
+        DeviceDecision: {
+            /** @description The code the CLI printed, read without case or separator. */
+            userCode: string;
+            /** @description True signs the CLI in as the signed-in user; false denies it. */
+            approve: boolean;
+        };
+        /** @description One of the user's sessions, browser or CLI (ADR-0120). */
+        Session: {
+            id: string;
+            /** @enum {string} */
+            kind: "browser" | "cli";
+            /** @description What a CLI said it runs on, absent where it said nothing. */
+            name?: string;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description When nothing the session holds is live any more: its refresh token's lapse for a CLI session, its expiry for a browser's.
+             */
+            expiresAt: string;
+            /** @description Whether the request was made on this session. */
+            current: boolean;
+        };
         User: {
             /** @example grn:garam:default:user:117421510527410544321 */
             grn: string;
@@ -1748,6 +1942,15 @@ export interface components {
         };
     };
     responses: {
+        /** @description RFC 6749's error response of the device grant's endpoints. */
+        OAuthError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["OAuthError"];
+            };
+        };
         /** @description Error response. */
         Error: {
             headers: {
@@ -1805,6 +2008,8 @@ export interface components {
     };
     requestBodies: never;
     headers: {
+        /** @description An answer carrying a credential is never cached (RFC 6749 §5.1). */
+        NoStore: "no-store";
         /** @description The contract version this answer follows, `operation-authority.v1`. */
         ContractVersion: string;
     };
@@ -1984,6 +2189,127 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             429: components["responses"]["Error"];
+        };
+    };
+    requestDeviceCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["DeviceCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description The codes, shown once. */
+            200: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeviceCode"];
+                };
+            };
+            400: components["responses"]["OAuthError"];
+            429: components["responses"]["Error"];
+        };
+    };
+    deviceToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["DeviceTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description The CLI session's tokens, shown once. */
+            200: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionToken"];
+                };
+            };
+            400: components["responses"]["OAuthError"];
+        };
+    };
+    decideDeviceCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeviceDecision"];
+            };
+        };
+        responses: {
+            /** @description Decided. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listMySessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The user's sessions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Session"][];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    revokeMySession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     me: {

@@ -189,7 +189,15 @@ export type ConsoleLocation =
       itemPage?: ConsoleItemPage;
     }
   | { kind: "invitation" }
+  | { kind: "device" }
+  | { kind: "sessions" }
   | { kind: "unknown" };
+
+/** What the breadcrumb and the page call the CLI sign-in page. */
+export const DEVICE_LABEL = "Sign in the CLI";
+
+/** What the breadcrumb, the page and the user menu call the sessions page. */
+export const SESSIONS_LABEL = "Sessions";
 
 /** A breadcrumb entry; the last one is the current page and has no href. */
 export type Crumb = { label: string; href?: string };
@@ -210,6 +218,12 @@ export function parseConsolePath(pathname: string): ConsoleLocation {
     return { kind: "unknown" };
   }
   if (segments[1] === "invitations") return { kind: "invitation" };
+  if (segments.length === 2 && segments[1] === "device") {
+    return { kind: "device" };
+  }
+  if (segments.length === 2 && segments[1] === "sessions") {
+    return { kind: "sessions" };
+  }
   if (segments[1] !== "orgs") return { kind: "unknown" };
   if (segments.length === 2) return { kind: "orgs" };
   if (segments[2] === "new") return { kind: "new-org" };
@@ -301,6 +315,10 @@ export function consoleCrumbs(
     }
     case "invitation":
       return [organizations, { label: "Invitation" }];
+    case "device":
+      return [organizations, { label: DEVICE_LABEL }];
+    case "sessions":
+      return [organizations, { label: SESSIONS_LABEL }];
     case "unknown":
       return [];
   }

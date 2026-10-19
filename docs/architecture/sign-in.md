@@ -98,7 +98,8 @@ session.
   are live, decided in the statement that writes, as ADR-0030 bounds a
   login state.
 
-Open question: the `/device` page is the console's, and its owner
-builds it after the API above. Until it lands a code is approved
-through the API alone, and nothing yet answers the page a reader of a
-code with the client name it is approving (ADR-0120 §Consequences).
+The `/device` page is the console's
+([web-app.md](./web-app.md) §What it serves). No read answers a pending
+code's client name, so the page shows the code the person entered, to
+compare with their terminal, and whom approving signs the CLI in as
+(ADR-0120 §Consequences).

@@ -105,6 +105,7 @@ starts with it.
 | `/login` | sign in — a password form, and a provider button only where the backend answers with that provider; signing in lands on the console path the visitor was sent here from, and a visitor already holding a session is sent on to it | anyone |
 | `/register` | turn an invitation into a password account ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)), landing in the organization it joined; reached from an invitation link the token is filled in, and one no longer usable is said instead of the form | anyone holding an invitation token |
 | `/console/*` | the signed-in application | a visitor carrying a session cookie |
+| `/device` | the page `garam login` names ([ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)); it forwards to `/console/device` with the code it was given, as `code` or RFC 8628's `user_code` | anyone |
 | `/healthz`, `/readyz` | the two probes, spelled as every other process spells them ([ADR-0023](./adr/0023-web-probes.md)) | anything that can open the port |
 | `/api/*` | the same-origin rewrite onto the browser-facing listener ([ADR-0009](./adr/0009-web-frontend.md)) | the browser |
 
@@ -250,6 +251,23 @@ with its path, and the redirect reads it back. The Google button posts
 the same path in its form body to `POST /auth/login/{provider}`, which
 holds it with the login's state, so the provider round trip lands on
 it too.
+
+A CLI is signed in at `/console/device`, behind sign-in for the same
+reason, so the proxy and the return path above bring a signed-out
+visitor back to it with its code. The page shows the code,
+prefilled from the address, and one line naming whom approving signs
+the CLI in as. Approve, its one primary action, or Deny sends
+`POST /auth/device/approval` on the person's session (ADR-0120), and
+a code garam holds nothing pending for is said beside it. No read
+answers a pending code's client name, so the page names none.
+`/console/sessions`, reached from the user menu, lists the person's
+browser and CLI sessions (`GET /me/sessions`) with when each signed in
+and expires, marks the one the page was opened on, and revokes any
+after a confirmation (`DELETE /me/sessions/{session}`). Revoking the
+current one signs that browser out. garam records no last use, so none
+is shown. The code is not a token: approving a code someone else
+started signs their CLI in as the approver, so the page says whom, and
+it sends no referrer, since the code can ride in its address.
 
 Where the token may appear is fixed:
 

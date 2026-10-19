@@ -7,6 +7,11 @@
  */
 export { getSession, type User } from "./api/get-session";
 export { listProviders } from "./api/list-providers";
+export {
+  listMySessions,
+  type Session,
+  type SessionsRead,
+} from "./api/sessions";
 export { GoogleSignInButton } from "./components/google-sign-in-button";
 export { PasswordRegisterForm } from "./components/password-register-form";
 export { PasswordSignInForm } from "./components/password-sign-in-form";

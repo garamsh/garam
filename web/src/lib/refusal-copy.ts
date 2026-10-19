@@ -38,7 +38,9 @@ export type RefusalOperation =
   | "grantOrgConsent"
   | "approveAgentEnrollment"
   | "withdrawAgentEnrollment"
-  | "revokeAgentSupervisor";
+  | "revokeAgentSupervisor"
+  | "decideDeviceCode"
+  | "revokeSession";
 
 /** `status kind`, the stable pair a refusal is matched by. */
 type RefusalKey = `${number} ${string}`;
@@ -84,6 +86,13 @@ const BY_OPERATION: Record<
   RefusalOperation,
   Partial<Record<RefusalKey, string>>
 > = {
+  decideDeviceCode: {
+    "404 not_found":
+      "That code isn't waiting for approval. Check it against your terminal, or run garam login again: a code lasts ten minutes.",
+  },
+  revokeSession: {
+    "404 not_found": "That session has already ended.",
+  },
   acceptInvitation: {
     "404 not_found": INVITATION_NOT_FOUND,
     "409 failed_precondition": INVITATION_SPENT,

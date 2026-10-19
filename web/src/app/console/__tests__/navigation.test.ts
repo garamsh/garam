@@ -236,6 +236,21 @@ describe("consoleCrumbs", () => {
     ]);
   });
 
+  it("names the CLI sign-in page and the sessions page, outside any organization", () => {
+    expect(consoleCrumbs(parseConsolePath("/console/device"), orgs)).toEqual([
+      { label: "Organizations", href: "/console/orgs" },
+      { label: "Sign in the CLI" },
+    ]);
+    expect(consoleCrumbs(parseConsolePath("/console/sessions"), orgs)).toEqual([
+      { label: "Organizations", href: "/console/orgs" },
+      { label: "Sessions" },
+    ]);
+    // The control: nothing is placed below either.
+    expect(parseConsolePath("/console/sessions/s-cli")).toEqual({
+      kind: "unknown",
+    });
+  });
+
   it("names the invitation page (ADR-0011: it renders in the shell)", () => {
     const crumbs = consoleCrumbs(
       parseConsolePath("/console/invitations/token"),

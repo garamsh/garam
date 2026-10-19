@@ -28,13 +28,11 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 	return &PostgresStore{pool: pool, q: db.New(pool)}
 }
 
-// Register persists the record and the enrollment token beside it in
-// one transaction, so a registration never exists without the token
-// that enrols it, and reads the stored operator back inside the same
-// transaction: the enrollment state is derived from tables this write
-// does not touch, so assuming it here would answer `pending` for a GRN
-// that already holds a certificate.
-func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment, c *IssuedCredential) (*Operator, error) {
+// Register persists the record and reads the stored operator back in
+// the same transaction: whether garam already issued a certificate for
+// the GRN is in a table this write does not touch, so assuming none
+// here would be wrong for a GRN `garam issue-certificate` minted for.
+func (s *PostgresStore) Register(ctx context.Context, o *Operator) (*Operator, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
@@ -52,23 +50,11 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 	}); err != nil {
 		return nil, pgxerr.Classify(err, "register operator", nil, ErrOperatorAlreadyRegistered)
 	}
-	if err := q.MintOperatorEnrollment(ctx, db.MintOperatorEnrollmentParams{
-		TokenHash:   e.TokenHash(),
-		OperatorGrn: e.operator.String(),
-		MintedBy:    e.mintedBy.String(),
-		MintedAt:    pgxtype.Timestamptz(e.mintedAt),
-		ExpiresAt:   pgxtype.Timestamptz(e.expiresAt),
-	}); err != nil {
-		return nil, pgxerr.Classify(err, "mint enrollment token", nil, nil)
-	}
-	if err := q.InsertOperatorCredential(ctx, credentialParams(c)); err != nil {
-		return nil, pgxerr.Classify(err, "issue operator credential", nil, nil)
-	}
 	row, err := q.GetOperator(ctx, o.grn.String())
 	if err != nil {
 		return nil, pgxerr.Classify(err, "read registered operator", nil, nil)
 	}
-	registered, err := rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
+	registered, err := rowToOperator(row.Operator, row.CertificateIssuedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -76,110 +62,6 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 		return nil, errorx.Wrap(err, "commit")
 	}
 	return registered, nil
-}
-
-// Remint replaces the operator's enrollment token, refusing the
-// operator that holds a certificate.
-//
-// The read and the write are one transaction for the reason
-// [PostgresStore.Register]'s are: the state is derived from tables
-// this write does not touch, so a refusal decided outside the
-// transaction would be decided on a row that may have moved. It is the
-// aggregate's own [Operator.EnrollmentState] that decides, not a second
-// derivation written in SQL beside it — a certificate outranks a token
-// in one place or it eventually does so in two ways.
-//
-// Replacing is the statement's, not this method's: the upsert in
-// MintOperatorEnrollment carries the operator's row over to the new
-// token, and 000024's unique constraint is what leaves no second row to
-// carry (ADR-0067).
-//
-// The transaction holds the registration FOR KEY SHARE before anything
-// else, the lock the insert's foreign key would take only after the
-// statement's sweep had locked other operators' expired rows. An
-// operator's or its organization's deletion therefore commits first,
-// or waits for this one, and never holds the registration while this
-// holds a row the deletion's cascade reaches (#1424).
-func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	q := s.q.WithTx(tx)
-	if _, err := q.HoldOperatorRegistration(ctx, e.operator.String()); err != nil {
-		return pgxerr.Classify(err, "hold operator", ErrOperatorNotFound, nil)
-	}
-	row, err := q.GetOperator(ctx, e.operator.String())
-	if err != nil {
-		return pgxerr.Classify(err, "read operator", ErrOperatorNotFound, nil)
-	}
-	registered, err := rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
-	if err != nil {
-		return err
-	}
-	if registered.EnrollmentState() == EnrollmentStateEnrolled {
-		return ErrOperatorAlreadyEnrolled
-	}
-	if err := q.MintOperatorEnrollment(ctx, db.MintOperatorEnrollmentParams{
-		TokenHash:   e.TokenHash(),
-		OperatorGrn: e.operator.String(),
-		MintedBy:    e.mintedBy.String(),
-		MintedAt:    pgxtype.Timestamptz(e.mintedAt),
-		ExpiresAt:   pgxtype.Timestamptz(e.expiresAt),
-	}); err != nil {
-		return pgxerr.Classify(err, "mint enrollment token", nil, nil)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return errorx.Wrap(err, "commit")
-	}
-	return nil
-}
-
-// ReissueCredential deletes the operator's credential and every token
-// minted under it, and inserts c, in one transaction under the
-// registration's row lock, so the operator's next request on any of
-// those tokens is refused. The tokens go first, in token_hash order,
-// as every statement waiting on several tokens takes them (#1424).
-//
-// The lock comes first because a deletion and every exchange take the
-// registration first too (#1418). A deletion therefore never holds the
-// registration while this holds the credential the deletion cascades
-// into.
-func (s *PostgresStore) ReissueCredential(ctx context.Context, c *IssuedCredential) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	q := s.q.WithTx(tx)
-	if _, err := q.LockOperatorRegistration(ctx, c.operator.String()); err != nil {
-		return pgxerr.Classify(err, "hold operator", ErrOperatorNotFound, nil)
-	}
-	if err := q.DeleteOperatorCredentialTokens(ctx, c.operator.String()); err != nil {
-		return pgxerr.Classify(err, "void operator credential tokens", nil, nil)
-	}
-	if err := q.DeleteOperatorCredential(ctx, c.operator.String()); err != nil {
-		return pgxerr.Classify(err, "void operator credential", nil, nil)
-	}
-	if err := q.InsertOperatorCredential(ctx, credentialParams(c)); err != nil {
-		return pgxerr.Classify(err, "issue operator credential", nil, nil)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return errorx.Wrap(err, "commit")
-	}
-	return nil
-}
-
-func credentialParams(c *IssuedCredential) db.InsertOperatorCredentialParams {
-	return db.InsertOperatorCredentialParams{
-		OperatorGrn:    c.operator.String(),
-		CredentialHash: c.Hash(),
-		IssuedBy:       c.issuedBy.String(),
-		IssuedAt:       pgxtype.Timestamptz(c.issuedAt),
-	}
 }
 
 // UpdateDetails writes the patch and reads the operator back in one
@@ -208,7 +90,7 @@ func (s *PostgresStore) UpdateDetails(ctx context.Context, g grn.GRN, patch Deta
 	if err != nil {
 		return nil, pgxerr.Classify(err, "read updated operator", ErrOperatorNotFound, nil)
 	}
-	updated, err := rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
+	updated, err := rowToOperator(row.Operator, row.CertificateIssuedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +124,7 @@ func (s *PostgresStore) SetControlEndpoint(ctx context.Context, g grn.GRN, endpo
 	if err != nil {
 		return nil, pgxerr.Classify(err, "read operator", ErrOperatorNotFound, nil)
 	}
-	updated, err := rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
+	updated, err := rowToOperator(row.Operator, row.CertificateIssuedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -253,12 +135,10 @@ func (s *PostgresStore) SetControlEndpoint(ctx context.Context, g grn.GRN, endpo
 }
 
 // Delete removes the record and the record of the certificate garam
-// last issued the operator, in one transaction. An unspent enrollment
-// token needs no statement: it references the registration and goes
-// with it (000023).
+// last issued the operator, in one transaction.
 //
 // The transaction holds the registration first, as every writer of
-// the operator's credential, keys and tokens does, and then deletes
+// the operator's keys and tokens does, and then deletes
 // every token the operator holds or is the audience of in token_hash
 // order, the order every statement waiting on several tokens takes
 // them in. The cascades would take them in their own orders, and the
@@ -314,7 +194,7 @@ func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*Operator, error) {
 	if err != nil {
 		return nil, pgxerr.Classify(err, "get operator", ErrOperatorNotFound, nil)
 	}
-	return rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
+	return rowToOperator(row.Operator, row.CertificateIssuedAt)
 }
 
 // ListByOrg returns the organization's operators.
@@ -325,7 +205,7 @@ func (s *PostgresStore) ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Opera
 	}
 	operators := make([]*Operator, 0, len(rows))
 	for _, row := range rows {
-		o, err := rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
+		o, err := rowToOperator(row.Operator, row.CertificateIssuedAt)
 		if err != nil {
 			return nil, err
 		}
@@ -347,10 +227,10 @@ func (s *PostgresStore) CountByOrg(ctx context.Context, orgGRN grn.GRN) (int, er
 	return int(n), nil
 }
 
-// rowToOperator converts a sqlc row and the two facts joined beside it
-// into the domain aggregate. A stored GRN that no longer parses is data
-// corruption, hence internal.
-func rowToOperator(row db.Operator, certificateIssuedAt pgtype.Timestamptz, liveToken bool) (*Operator, error) {
+// rowToOperator converts a sqlc row and the certificate date joined
+// beside it into the domain aggregate. A stored GRN that no longer
+// parses is data corruption, hence internal.
+func rowToOperator(row db.Operator, certificateIssuedAt pgtype.Timestamptz) (*Operator, error) {
 	g, err := grn.Parse(row.Grn)
 	if err != nil {
 		return nil, errorx.Wrap(err, "grn", errorx.KindInternal)
@@ -383,9 +263,8 @@ func rowToOperator(row db.Operator, certificateIssuedAt pgtype.Timestamptz, live
 		Description:     row.Description,
 		ControlEndpoint: endpoint,
 		// An absent certificate leaves the zero time, which is what
-		// EnrollmentState reads as "garam has issued none".
+		// CertificateIssuedAt answers as "garam has issued none".
 		certificateIssuedAt: certificateIssuedAt.Time,
-		liveToken:           liveToken,
 	}, nil
 }
 

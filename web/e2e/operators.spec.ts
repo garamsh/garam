@@ -110,23 +110,9 @@ test.describe("operators", () => {
 
     await identifier.fill("field-two");
     await dialog.getByRole("textbox", { name: "Name" }).fill("Field two");
+    // Registering issues nothing, so it goes straight on to the setup
+    // page, where the key is issued (ADR-0117).
     await dialog.getByRole("button", { name: "Register", exact: true }).click();
-    // The dialog is named for what it says now: the registration.
-    const registered = page.getByRole("dialog", {
-      name: "Registered Field two",
-    });
-    await expect(
-      registered.getByText("The operator is registered"),
-    ).toBeVisible();
-    // The legacy secrets wait behind a closed disclosure.
-    await expect(
-      registered.getByRole("button", {
-        name: "Legacy credential and enrollment token",
-      }),
-    ).toHaveAttribute("aria-expanded", "false");
-    await registered
-      .getByRole("link", { name: /Continue: issue a key/ })
-      .click();
 
     await expect(page).toHaveURL(`${operators}/field-two/connect`);
     await expectHydrated(page);
@@ -214,7 +200,7 @@ test.describe("operators", () => {
     await expect(revoked).toHaveCount(1);
   });
 
-  test("renames, re-issues the legacy credential, and deletes only what no definition names", async ({
+  test("renames, and deletes only what no definition names", async ({
     page,
     signedIn,
   }) => {
@@ -239,17 +225,6 @@ test.describe("operators", () => {
     await name.fill("Staging cluster");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Saved as Staging cluster")).toBeVisible();
-
-    // Re-issuing the legacy credential asks first, then shows it once.
-    await page
-      .getByRole("button", { name: "Re-issue credential", exact: true })
-      .click();
-    await page
-      .getByRole("alertdialog")
-      .getByRole("button", { name: "Re-issue credential", exact: true })
-      .click();
-    const credential = await keepSecret(page, "Save the new credential");
-    expect(credential).toMatch(/^garam_oc_[0-9a-f]{64}$/);
 
     // A definition naming the operator refuses its delete, and the
     // dialog names it rather than offering the confirmation.
@@ -280,10 +255,8 @@ test.describe("operators", () => {
     await register
       .getByRole("button", { name: "Register", exact: true })
       .click();
-    // The dialog is named for what it says now: the registration.
-    await expect(
-      page.getByRole("dialog", { name: "Registered new" }),
-    ).toBeVisible();
+    // Registering opens the operator's setup page.
+    await expect(page).toHaveURL(`${operators}/new/connect`);
 
     // `new` is a valid identifier, so it is an operator's page and no
     // create route takes it (ADR-0074).
@@ -424,45 +397,6 @@ test.describe("operators", () => {
     expect(await axeViolations(page)).toEqual([]);
   });
 
-  test("issues a fresh enrollment token to an operator holding no certificate, shown once", async ({
-    page,
-    signedIn,
-  }) => {
-    const seeded = `/console/orgs/${signedIn.orgSlug}/operators/${signedIn.operatorIdentifier}`;
-    const certificate = page
-      .getByText("Certificate", { exact: true })
-      .locator("xpath=following-sibling::dd[1]");
-
-    // The seeded operator registered without a spendable token and
-    // never enrolled.
-    await page.goto(seeded);
-    await expect(certificate).toContainText("None");
-
-    await page.goto(`${seeded}?tab=settings`);
-    await expectHydrated(page);
-    await page
-      .getByRole("button", {
-        name: "Issue a new enrollment token",
-        exact: true,
-      })
-      .click();
-    const confirm = page.getByRole("alertdialog", {
-      name: `Issue ${signedIn.operatorName} a new enrollment token?`,
-    });
-    expect(await axeViolations(page, ['[role="alertdialog"]'])).toEqual([]);
-    await confirm
-      .getByRole("button", { name: "Issue token", exact: true })
-      .click();
-    const token = await keepSecret(page, "Save the enrollment token");
-    expect(token).toMatch(/^[0-9a-f]{48}$/);
-
-    // garam now holds a spendable token for it, and the page shows no
-    // token after the reveal closed.
-    await page.goto(seeded);
-    await expect(certificate).toContainText("Awaiting enrollment");
-    await expect(page.getByText(token)).toHaveCount(0);
-  });
-
   test("offers a member, whom the server denies changing operators, the reads alone", async ({
     page,
     context,
@@ -498,10 +432,11 @@ test.describe("operators", () => {
     ).toBeHidden();
 
     await page.goto(`${operators}/${signedIn.operatorIdentifier}?tab=settings`);
-    // Settings holds only what the member may do: the enrollment token,
-    // inactive, and no form to rename or re-issue.
+    // Settings holds only what the member may do, which is nothing: no
+    // form to rename and no danger zone. The selected tab is the
+    // control that Settings is what was read.
     await expect(
-      page.getByRole("heading", { name: "Enrollment token", exact: true }),
+      page.getByRole("tab", { name: "Settings", exact: true, selected: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Name", exact: true }),

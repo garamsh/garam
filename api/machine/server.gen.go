@@ -832,32 +832,6 @@ type DefinitionClaim struct {
 	Epoch int `json:"epoch"`
 }
 
-// EnrolledCertificate What an enrollment answers: the signed certificate, the authority that signed it, and the garam server root the holder verifies garam by. There is no private key field, and its absence is the property rather than an omission — garam signed a key it never held and cannot return one (ADR-0064). Contrast `MachineCertificate`, which the two routes that generate a key pair answer with.
-type EnrolledCertificate struct {
-	CertificatePem string `json:"certificatePem"`
-
-	// Grn The identity the certificate names, which is also what its SAN URI holds. It is the operator the token named.
-	Grn string `json:"grn"`
-
-	// IssuerPem The authority that signed this certificate. It is not what garam is verified against: the two directions rest on different roots (ADR-0040).
-	IssuerPem string `json:"issuerPem"`
-
-	// NotAfter When the certificate stops being valid. It carries jitter, so certificates issued together do not expire together.
-	NotAfter time.Time `json:"notAfter"`
-
-	// ServerRootPem The garam server root. A holder verifies garam's listener against this and against nothing else — one root for every organization, separate from the authority above and signing only what garam presents (ADR-0040).
-	ServerRootPem string `json:"serverRootPem"`
-}
-
-// Enrollment What an enrolling operator presents: the token it was given and the certificate signing request over the key it generated. The key itself does not appear here and never leaves the cluster it was made in.
-type Enrollment struct {
-	// CertificateRequestPem A PEM-encoded PKCS#10 certificate signing request over an ECDSA P-256 key the caller generated. Its signature is what proves the caller holds the private half; nothing else in it is read.
-	CertificateRequestPem string `json:"certificateRequestPem"`
-
-	// Token The one-time enrollment token, as the console showed it once. It names the operator this request obtains a certificate for, so the request names no subject of its own.
-	Token string `json:"token"`
-}
-
 // Error defines model for Error.
 type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
@@ -942,7 +916,7 @@ type InitialCertificateRequest struct {
 	RequestId    string `json:"requestId"`
 }
 
-// MachineCertificate A client certificate, the private key it was issued with, the authority that signed it, and the garam server root the holder verifies garam by. garam stores no private key, so this one is returned once and a holder that loses it asks for another certificate. One shape for both routes that generate a key pair: what an agent is given and what an operator renews differ in who may ask, not in what comes back. An enrollment answers `EnrolledCertificate` instead, because garam generated no key there and has none to return.
+// MachineCertificate A client certificate, the private key it was issued with, the authority that signed it, and the garam server root the holder verifies garam by. garam stores no private key, so this one is returned once and a holder that loses it asks for another certificate. One shape for both routes that generate a key pair: what an agent is given and what an operator renews differ in who may ask, not in what comes back.
 type MachineCertificate struct {
 	CertificatePem string `json:"certificatePem"`
 
@@ -1233,9 +1207,9 @@ type SupervisorRenewalRequest struct {
 	RequestId             string `json:"requestId"`
 }
 
-// TokenExchange What an exchange asks for: a token garam accepts, or one minted for a hosted operator of the same organization.
+// TokenExchange What an exchange asks for. A supervisor's token is garam's alone, so the body names nothing.
 type TokenExchange struct {
-	// Audience The GRN of another operator of the caller's organization the token is to be shown to. Absent, the token is garam's.
+	// Audience Refused with 400: a supervisor's token is shown to no hosted operator.
 	Audience *string `json:"audience,omitempty"`
 }
 
@@ -1479,9 +1453,6 @@ type MintAgentTokenJSONRequestBody = TokenExchange
 // ForwardTurnEventJSONRequestBody defines body for ForwardTurnEvent for application/json ContentType.
 type ForwardTurnEventJSONRequestBody = TurnEvent
 
-// EnrollOperatorJSONRequestBody defines body for EnrollOperator for application/json ContentType.
-type EnrollOperatorJSONRequestBody = Enrollment
-
 // PostMessageJSONRequestBody defines body for PostMessage for application/json ContentType.
 type PostMessageJSONRequestBody = MessageSubmission
 
@@ -1577,9 +1548,6 @@ type ServerInterface interface {
 	// ClaimDefinition Claim the agent a definition minted for the calling operator.
 	// (POST /definitions/{agent}/claim)
 	ClaimDefinition(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
-	// EnrollOperator Obtain an operator's first certificate with an enrollment token.
-	// (POST /enrollment)
-	EnrollOperator(w http.ResponseWriter, r *http.Request)
 	// GetIdentity Return the identity the connection authenticated as.
 	// (GET /identity)
 	GetIdentity(w http.ResponseWriter, r *http.Request)
@@ -1616,7 +1584,7 @@ type ServerInterface interface {
 	// RenewSupervisorCertificate Renew the calling supervisor's certificate over a key it generated.
 	// (POST /supervisors/self/certificate)
 	RenewSupervisorCertificate(w http.ResponseWriter, r *http.Request, params RenewSupervisorCertificateParams)
-	// ExchangeToken Exchange an operator's or a supervisor's credential for a short-lived token.
+	// ExchangeToken Exchange a supervisor's credential for a short-lived token.
 	// (POST /tokens)
 	ExchangeToken(w http.ResponseWriter, r *http.Request, params ExchangeTokenParams)
 }
@@ -2577,20 +2545,6 @@ func (siw *ServerInterfaceWrapper) ClaimDefinition(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
-// EnrollOperator operation middleware
-func (siw *ServerInterfaceWrapper) EnrollOperator(w http.ResponseWriter, r *http.Request) {
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.EnrollOperator(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // GetIdentity operation middleware
 func (siw *ServerInterfaceWrapper) GetIdentity(w http.ResponseWriter, r *http.Request) {
 
@@ -3153,7 +3107,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/identity/certificate", wrapper.RenewIdentityCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tokens", wrapper.ExchangeToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/oauth/token", wrapper.ExchangeClientAssertion)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/enrollment", wrapper.EnrollOperator)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/certificate", wrapper.IssueAgentCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/tokens", wrapper.MintAgentToken)

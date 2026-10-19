@@ -1,13 +1,10 @@
 "use client";
 
-import { ArrowRight, ChevronRight, Plus } from "lucide-react";
-import Link from "next/link";
+import { Plus } from "lucide-react";
 import { useActionState, useState } from "react";
 
-import { Banner } from "@/components/banner";
 import { FormField } from "@/components/form-field";
 import { Refusal } from "@/components/refusal";
-import { SecretReveal } from "@/components/secret-reveal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,7 +28,6 @@ import {
   parseOperatorName,
 } from "@/lib/operator";
 import type { Parsed } from "@/lib/parsed";
-import { cn } from "@/lib/utils";
 
 const initialState: RegisterOperatorState = { status: "idle" };
 
@@ -44,19 +40,14 @@ function errorOf(parsed: Parsed<string>): string | undefined {
  * authenticates as (ADR-0045). It opens from the list rather than from a
  * route of its own, because an identifier may be `new` and that route
  * would take the operator's page (ADR-0074); the rest of the setup is
- * the operator's own `connect` page.
- *
- * Registering also answers a legacy credential and an enrollment token,
- * once. An operator on keys needs neither, so they sit behind a closed
- * disclosure rather than in the way of the next step.
+ * the operator's own `connect` page, which registering opens, since
+ * registering issues nothing and the key is issued there (ADR-0117).
  */
 export function ConnectOperatorDialog({
   org,
-  operatorsHref,
   defaultOpen = false,
 }: {
   org: string;
-  operatorsHref: string;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -79,12 +70,7 @@ export function ConnectOperatorDialog({
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
-        <RegisterStep
-          key={attempt}
-          org={org}
-          operatorsHref={operatorsHref}
-          onCancel={() => setOpen(false)}
-        />
+        <RegisterStep key={attempt} org={org} onCancel={() => setOpen(false)} />
       </DialogContent>
     </Dialog>
   );
@@ -92,11 +78,9 @@ export function ConnectOperatorDialog({
 
 function RegisterStep({
   org,
-  operatorsHref,
   onCancel,
 }: {
   org: string;
-  operatorsHref: string;
   onCancel: () => void;
 }) {
   const [state, formAction, pending] = useActionState(
@@ -107,17 +91,6 @@ function RegisterStep({
   const [identifier, setIdentifier] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-
-  if (state.status === "registered") {
-    return (
-      <Registered
-        name={state.name}
-        connectHref={`${operatorsHref}/${state.operator}/connect`}
-        credential={state.credential}
-        token={state.token}
-      />
-    );
-  }
 
   // What the form can refuse without a round trip, each beside its own
   // field. An empty identifier is left to `required`, and an empty name
@@ -199,121 +172,5 @@ function RegisterStep({
         </Button>
       </DialogFooter>
     </form>
-  );
-}
-
-/**
- * What registering answered: the way on to the key, and the two legacy
- * secrets behind a closed disclosure for an operator not yet on keys.
- */
-function Registered({
-  name,
-  connectHref,
-  credential,
-  token,
-}: {
-  name: string;
-  connectHref: string;
-  credential: string;
-  token: string;
-}) {
-  const [legacyOpen, setLegacyOpen] = useState(false);
-  const [shown, setShown] = useState<"credential" | "token" | null>(null);
-  // Each is answered once, so once kept it is not offered again.
-  const [kept, setKept] = useState<ReadonlySet<"credential" | "token">>(
-    new Set(),
-  );
-  const keep = (secret: "credential" | "token") => {
-    setKept((held) => new Set(held).add(secret));
-    setShown(null);
-  };
-
-  return (
-    <div className="flex flex-col gap-5">
-      <DialogHeader>
-        <DialogTitle>Registered {name}</DialogTitle>
-        <DialogDescription>
-          Next, issue its key. The key is what the operator signs in to garam
-          with.
-        </DialogDescription>
-      </DialogHeader>
-      <Banner tone="ok" title="The operator is registered">
-        It holds no key yet, so it cannot authenticate until you issue one.
-      </Banner>
-      <div className="flex flex-col gap-2 rounded-xl border px-4 py-3">
-        <button
-          type="button"
-          aria-expanded={legacyOpen}
-          aria-controls="legacy-secrets"
-          onClick={() => setLegacyOpen((open) => !open)}
-          className="-mx-1 flex items-center gap-1.5 rounded-md px-1 text-left font-medium"
-        >
-          <ChevronRight
-            aria-hidden
-            className={cn(
-              "size-4 transition-transform",
-              legacyOpen && "rotate-90",
-            )}
-          />
-          Legacy credential and enrollment token
-        </button>
-        {legacyOpen && (
-          <div id="legacy-secrets" className="flex flex-col gap-3 pl-5.5">
-            <p className="text-muted-foreground">
-              For an operator not yet on keys. Each is shown once and garam
-              keeps no copy; an operator on keys needs neither.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={kept.has("credential")}
-                onClick={() => setShown("credential")}
-              >
-                {kept.has("credential")
-                  ? "Credential shown"
-                  : "Show credential"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={kept.has("token")}
-                onClick={() => setShown("token")}
-              >
-                {kept.has("token")
-                  ? "Enrollment token shown"
-                  : "Show enrollment token"}
-              </Button>
-            </div>
-          </div>
-        )}
-      </div>
-      <SecretReveal
-        open={shown === "credential"}
-        title="Save the legacy credential"
-        description="The operator exchanges it for short-lived tokens on garam's machine listener. It is shown once."
-        secret={credential}
-        noun="credential"
-        onDone={() => keep("credential")}
-      />
-      <SecretReveal
-        open={shown === "token"}
-        title="Save the enrollment token"
-        description="The operator presents it once to obtain its certificate. It is shown once."
-        secret={token}
-        noun="enrollment token"
-        onDone={() => keep("token")}
-      />
-      <DialogFooter>
-        <Button asChild>
-          <Link href={connectHref}>
-            Continue: issue a key
-            <ArrowRight />
-          </Link>
-        </Button>
-      </DialogFooter>
-    </div>
   );
 }

@@ -2,12 +2,6 @@
 
 What a garam deployment must plan for that no manifest can carry: what readiness reports, what bounds termination, how the migration fails, what the binary enforces about key material, and what is not known.
 
-Pending removal
-([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
-the second pull request of #1593 removes the operator enrollment token
-and shared-secret credential, after which an operator enters by a key
-alone; §Operator key and enrollment rollout holds until then.
-
 ## Contents
 - What it is
 - What readiness reports
@@ -179,10 +173,13 @@ deployment has adopted the workflow below.
   or Docker generation. Its one-agent connector still supplies current
   scoped API access and writer/lifecycle fencing; this is a new path,
   not a claim the current standalone runner already implements it.
-- Garam first accepts old and new cohorts. The Operator then cuts over
-  in one mode after support is deployed; no new Operator compatibility
-  switch is authorized. Inventory and the plan's acceptance evidence
-  gate later removals. gitops#14 and infra#331 remain owner gates.
+- Garam accepts an Operator's certificate cohort beside its key
+  cohort; the shared-secret cohort and the enrollment token are gone
+  ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)),
+  so a deployment issues each Operator identity a key before it runs
+  without a certificate. The Operator then cuts over in one mode after
+  support is deployed; no new Operator compatibility switch is
+  authorized. gitops#14 and infra#331 remain owner gates.
 - Message signing still seals private keys under the key-encryption
   key, unless the deployment holds them in Transit
   (§A Transit provider for message signing keys). Retiring
@@ -750,10 +747,6 @@ that would assert one:
 - [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)
   — state a working artifact carries and enforces stays there, and the
   document that owns the concern names what it hands over
-- [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)
-  — an operator enrols with a one-time token and keeps its key in its
-  own cluster, so the first certificate is a call rather than a file a
-  deployment moves
 - [ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)
   — garam signs every message it hands out under keys the
   key-encryption key seals, and names itself by an issuer the
@@ -762,3 +755,6 @@ that would assert one:
   — a deployment may hold its message signing keys in an OpenBao
   Transit key it supplies, and the authorities stay on the
   key-encryption key
+- [ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
+  — an Operator enters by a key alone, so a deployment issues it one
+  before it runs without a certificate

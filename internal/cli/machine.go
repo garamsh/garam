@@ -218,15 +218,13 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	if err != nil {
 		return nil, err
 	}
-	// An operator obtains its first certificate on this listener by
-	// enrolling (ADR-0064) and renews it here afterwards (ADR-0046),
+	// An operator renews its certificate on this listener (ADR-0046),
 	// through the same authority and the same server root its agents
-	// are given, and it exchanges its credential for tokens here
-	// (ADR-0100). One store answers all three: what garam last issued
-	// an operator, the token an enrollment spends, and the tokens a
-	// credential is exchanged for.
+	// are given, and exchanges its key for tokens here (ADR-0102). One
+	// store answers both: what garam last issued an operator, and the
+	// tokens a key is exchanged for.
 	operatorStore := operator.NewPostgresStore(pool)
-	operators := operator.NewService(operatorStore, operatorStore, operatorStore,
+	operators := operator.NewService(operatorStore, operatorStore,
 		operatorCertificates{issuer: issuer, serverRoot: cfg.ServerRoot}, operator.Config{TokenEndpoint: cfg.TokenURL})
 	// An agent token's start is backdated by the allowance a
 	// certificate's is, and its audience is an operator the
@@ -495,15 +493,6 @@ func (c operatorCertificates) Issue(ctx context.Context, subject grn.GRN) (*oper
 		Certificate:   c.certificate(&issued.Certificate),
 		PrivateKeyPEM: issued.PrivateKeyPEM(),
 	}, nil
-}
-
-func (c operatorCertificates) Sign(ctx context.Context, subject grn.GRN, request operator.CertificateRequest) (*operator.Certificate, error) {
-	signed, err := c.issuer.Sign(ctx, subject, request)
-	if err != nil {
-		return nil, err
-	}
-	certificate := c.certificate(signed)
-	return &certificate, nil
 }
 
 // certificate renders what the authority signed in the shape the

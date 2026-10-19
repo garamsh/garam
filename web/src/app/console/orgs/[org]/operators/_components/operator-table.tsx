@@ -5,7 +5,6 @@ import Link from "next/link";
 
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { StatusDot } from "@/components/status-dot";
-import type { Operator } from "@/features/orgs";
 
 import { EmptyState } from "../../../../_components/empty-state";
 import {
@@ -16,14 +15,14 @@ import {
   useOperatorReports,
   type ReportsSource,
 } from "./operator-reports";
-import { CERTIFICATE_STATUS } from "./operator-status";
+import { certificateStatus } from "./operator-status";
 
 /** One operator as the list shows it. */
 export type OperatorRow = {
   grn: string;
   identifier: string;
   name: string;
-  enrollmentState: Operator["enrollmentState"];
+  certificateIssuedAt?: string;
   controlEndpoint?: string;
 };
 
@@ -88,10 +87,10 @@ export function OperatorTable({
     },
     {
       id: "certificate",
-      accessorFn: (row) => CERTIFICATE_STATUS[row.enrollmentState].label,
+      accessorFn: (row) => certificateStatus(row.certificateIssuedAt).label,
       header: "Certificate",
       cell: ({ row }) => (
-        <StatusDot {...CERTIFICATE_STATUS[row.original.enrollmentState]} />
+        <StatusDot {...certificateStatus(row.original.certificateIssuedAt)} />
       ),
     },
     ...(read === null

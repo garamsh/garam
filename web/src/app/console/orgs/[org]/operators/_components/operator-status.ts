@@ -1,15 +1,16 @@
 import type { StatusTone } from "@/components/status-dot";
-import type { Operator, OperatorKey } from "@/features/orgs";
+import type { OperatorKey } from "@/features/orgs";
 
 /** A status as a dot's tone and the words beside it. */
 export type Status = { tone: StatusTone; label: string };
 
-/** Where an operator stands in obtaining a certificate (the legacy path). */
-export const CERTIFICATE_STATUS: Record<Operator["enrollmentState"], Status> = {
-  enrolled: { tone: "ok", label: "Issued" },
-  pending: { tone: "info", label: "Awaiting enrollment" },
-  expired: { tone: "neutral", label: "None" },
-};
+/** Whether garam has issued the operator a certificate, read off when it
+ * last did. */
+export function certificateStatus(issuedAt: string | undefined): Status {
+  return issuedAt === undefined
+    ? { tone: "neutral", label: "None" }
+    : { tone: "ok", label: "Issued" };
+}
 
 /** Where one key stands (ADR-0102). */
 export const KEY_STATUS: Record<OperatorKey["state"], Status> = {

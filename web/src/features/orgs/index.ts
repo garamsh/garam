@@ -79,7 +79,6 @@ export {
   type OrgDeletionPreview,
   type Organization,
   type Project,
-  type RegisteredOperator,
 } from "./api/orgs";
 export {
   listOperatorKeys,

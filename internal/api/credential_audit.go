@@ -2,9 +2,7 @@ package api
 
 import (
 	"context"
-	"log/slog"
 	"net/http"
-	"time"
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/agent"
@@ -17,45 +15,20 @@ import (
 	"github.com/garamsh/garam/internal/user"
 )
 
-// CredentialAudit records and reads machine credential events
-// (ADR-0114). internal/audit/postgres's CredentialStore implements it.
+// CredentialAudit reads the machine credential events the machine
+// listener recorded (ADR-0114). internal/audit/postgres's
+// CredentialStore implements it. The browser-facing listener issues no
+// machine credential, so it records none (ADR-0117).
 type CredentialAudit interface {
-	RecordCredential(ctx context.Context, c audit.Credential) error
 	ListCredentials(ctx context.Context, subject grn.GRN, f listfilter.Filter) ([]audit.RecordedCredential, error)
 }
 
-// credentialAuditTimeout bounds one write of an event, which the
-// answer waits on.
-const credentialAuditTimeout = 2 * time.Second
-
-// WithCredentialAudit has the server record the operator credentials
-// it issues or refuses through a and answer listCredentialEvents from
-// it, and answers the server. A server without one records nothing and
-// answers that read unavailable.
+// WithCredentialAudit has the server answer listCredentialEvents from
+// a, and answers the server. A server without one answers that read
+// unavailable.
 func (s *Server) WithCredentialAudit(a CredentialAudit) *Server {
 	s.credentialAudit = a
 	return s
-}
-
-// auditCredential records c once the outcome it describes was decided,
-// before the answer is written. A write that fails is logged and the
-// answer stands, as on the machine listener (ADR-0114).
-func (s *Server) auditCredential(r *http.Request, c audit.Credential) {
-	if s.credentialAudit == nil {
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), credentialAuditTimeout)
-	defer cancel()
-	if err := s.credentialAudit.RecordCredential(ctx, c); err != nil {
-		slog.ErrorContext(ctx, "credential event not recorded",
-			slog.String("subject", c.Subject().String()), slog.String("credential", string(c.Kind())),
-			slog.String("outcome", string(c.Outcome())), slog.String("error", err.Error()))
-	}
-}
-
-// refusedCredential records err as the refusal of subject's credential.
-func (s *Server) refusedCredential(r *http.Request, subject grn.GRN, kind audit.CredentialKind, err error) {
-	s.auditCredential(r, audit.CredentialRefused(subject, kind, audit.ActionIssue, errorx.KindOf(err)))
 }
 
 // ListCredentialEvents answers the credential events recorded for one

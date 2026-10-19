@@ -64,7 +64,6 @@ export default async function OperatorsPage({ params, searchParams }: Params) {
         permissions.get("register") !== "denied" && (
           <ConnectOperatorDialog
             org={org}
-            operatorsHref={operatorsHref}
             defaultOpen={connect !== undefined}
           />
         )
@@ -88,7 +87,7 @@ export default async function OperatorsPage({ params, searchParams }: Params) {
             grn: operator.grn,
             identifier: slugFromGrn(operator.grn),
             name: operator.name,
-            enrollmentState: operator.enrollmentState,
+            certificateIssuedAt: operator.certificateIssuedAt,
             controlEndpoint: operator.controlEndpoint,
           }))}
         />

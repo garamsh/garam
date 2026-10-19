@@ -14,23 +14,12 @@
 // withdraws (ADR-0070). It still issues nothing — the record admits a
 // certificate and mints none.
 //
-// The certificate is what proving itself takes. The first is obtained
-// by enrolling: registering mints a one-time token, the operator
-// generates a key pair in its own cluster and sends a certificate
-// signing request presenting that token, and garam signs a key it never
-// holds (ADR-0064). An operator that lost its token before obtaining a
-// certificate is re-minted one (ADR-0067); the command ADR-0032 ships
-// still mints out of band, and is what recovers the operator that
-// already holds a certificate, for which no token is minted again.
-// Every certificate after the first is issued here, over the connection
-// the certificate being replaced authenticated.
-//
-// A token is permission to ask for a certificate, once. It is not a
-// credential to the operator's identity: it authenticates no other
-// call, it names the operator garam minted it for and no other, and
-// spending it removes it. An operator holds at most one at a time: a
-// re-mint replaces what was there, so one identity never has two live
-// credential paths.
+// An operator enters by a key garam issues on its registration, whose
+// assertions it exchanges for short-lived tokens (ADR-0102, ADR-0117).
+// An operator authenticating by certificate obtained its first out of
+// band, from the command ADR-0032 ships; every certificate after the
+// first is issued here, over the connection the certificate being
+// replaced authenticated.
 //
 // Only the newest certificate an operator holds may be renewed, and
 // renewing moves that record. That is what bounds a stolen
@@ -94,49 +83,6 @@ var (
 	// renewed first, or an answer this caller never received did. Both
 	// are recovered the same way, by minting out of band again.
 	ErrSuperseded = errorx.New(errorx.KindAlreadyExists, "a newer certificate has already been issued for this operator")
-	// ErrOperatorAlreadyEnrolled refuses a re-mint for an operator that
-	// holds a certificate. Whether a member may issue a second
-	// credential path to an identity that already has one is not
-	// decided, and this refusal is where that stands rather than a
-	// gap somebody has to find out about (ADR-0067). The message says
-	// so, because a person meeting it should learn a decision was
-	// made and not that something broke.
-	ErrOperatorAlreadyEnrolled = errorx.New(errorx.KindFailedPrecondition,
-		"this operator has already enrolled: a second token would be a second credential path to an identity that has one, which garam does not decide to issue")
-	// ErrEnrollmentInvalid refuses an enrollment token that is not
-	// spendable. Unknown, already spent and expired are one refusal:
-	// the caller presented no credential either way, and telling the
-	// three apart would answer questions about tokens the caller does
-	// not hold.
-	ErrEnrollmentInvalid = errorx.New(errorx.KindUnauthenticated, "enrollment token is not valid")
-)
-
-// EnrollmentState is where an operator stands in obtaining a
-// certificate from garam. It is derived from what garam holds — a
-// certificate it issued, a token still spendable — and reported by
-// nobody: garam never dials an operator (ADR-0012), so no member of
-// this type says whether one is running.
-//
-// What the members mean to a browser caller is
-// `api/openapi.yaml` §OperatorEnrollmentState, which is authoritative
-// for that (ADR-0059).
-type EnrollmentState string
-
-const (
-	// EnrollmentStateEnrolled is an operator garam has issued a
-	// certificate for. It says one was obtained, not that the operator
-	// still holds a valid one: no expiry is recorded beside the record
-	// and nothing is asked (ADR-0046).
-	EnrollmentStateEnrolled EnrollmentState = "enrolled"
-	// EnrollmentStatePending is an operator with no certificate and a
-	// token still inside its window. It lasts at most EnrollmentTTL
-	// from the registration that minted it.
-	EnrollmentStatePending EnrollmentState = "pending"
-	// EnrollmentStateExpired is an operator with no certificate and no
-	// spendable token. The token was lost or ran out, and this is the
-	// state a re-mint answers: it is refused for an operator holding a
-	// certificate and for no other (ADR-0067).
-	EnrollmentStateExpired EnrollmentState = "expired"
 )
 
 // The bounds on what an organization says about its operator, in
@@ -236,8 +182,6 @@ type Operator struct {
 	// When garam last issued the operator a certificate, zero where it
 	// has issued none.
 	certificateIssuedAt time.Time
-	// Whether a token minted for the operator is still spendable.
-	liveToken bool
 }
 
 // New records that orgGRN has an operator under identifier.
@@ -267,12 +211,6 @@ func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN, details Detail
 		createdAt:    time.Now().UTC(),
 		Name:         name,
 		Description:  description,
-		// The record and the token it enrols with are one write
-		// (ADR-0064), so a registration never exists without a live
-		// token beside it. Whether a certificate already exists is
-		// what this value cannot know, which is why [Store.Register]
-		// answers the operator it stored rather than this one.
-		liveToken: true,
 	}, nil
 }
 
@@ -313,26 +251,6 @@ func (o *Operator) Organization() grn.GRN { return o.orgGRN }
 // RegisteredBy returns the member that registered the operator.
 func (o *Operator) RegisteredBy() grn.GRN { return o.registeredBy }
 func (o *Operator) CreatedAt() time.Time  { return o.createdAt }
-
-// EnrollmentState reports where the operator stands in obtaining a
-// certificate.
-//
-// A certificate outranks a token, because it is the outcome the token
-// exists to produce: an operator holding one has nothing left to do,
-// whatever is still unspent beside it. That case is reachable — a GRN
-// `garam issue-certificate` already minted for is registered under the
-// GRN that certificate names, and the registration mints a token
-// anyway — and it is not a fourth state, it is this order deciding it.
-func (o *Operator) EnrollmentState() EnrollmentState {
-	switch {
-	case !o.certificateIssuedAt.IsZero():
-		return EnrollmentStateEnrolled
-	case o.liveToken:
-		return EnrollmentStatePending
-	default:
-		return EnrollmentStateExpired
-	}
-}
 
 // CertificateIssuedAt returns when garam last issued the operator a
 // certificate, and the zero time where it has issued none.

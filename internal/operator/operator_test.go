@@ -61,21 +61,17 @@ func TestNew_RefusesAnIdentifierThatIsNotASegment(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestNew_StartsPending covers the state a record carries before
-// anything is stored. Registering writes the record and mints the token
-// in one write (ADR-0064), so a registration never exists without a
-// live token beside it and `pending` is what that is.
-//
-// A certificate already recorded for the GRN is the case this value
-// cannot see, which is why the store answers the registration rather
-// than this: the coverage for that is in tests/integration.
-func TestNew_StartsPending(t *testing.T) {
+// TestNew_HoldsNoCertificate covers what a record carries before
+// anything is stored: garam has issued no certificate for an operator
+// it has not registered. A certificate already recorded for the GRN is
+// the case this value cannot see, which is why the store answers the
+// registration rather than this: the coverage for that is in
+// tests/integration.
+func TestNew_HoldsNoCertificate(t *testing.T) {
 	o, err := operator.New(acmeGRN(), "field-one", aliceGRN(), operator.DetailsPatch{})
 	require.NoError(t, err)
 
-	assert.Equal(t, operator.EnrollmentStatePending, o.EnrollmentState())
-	assert.True(t, o.CertificateIssuedAt().IsZero(),
-		"garam has issued no certificate for an operator it has not registered")
+	assert.True(t, o.CertificateIssuedAt().IsZero())
 }
 
 // TestNew_CallsAnOperatorItsIdentifierUntilItIsNamed covers the name a

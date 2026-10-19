@@ -31,9 +31,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	registeredBy := scopedGRN("acme", "user", "ada")
 	one, err := operator.New(orgRootGRN("acme"), "one", registeredBy, operator.DetailsPatch{})
 	require.NoError(t, err)
-	enrollment, err := operator.NewEnrollment(one.GRN(), registeredBy)
-	require.NoError(t, err)
-	_, err = s.Register(ctx, one, enrollment, credentialFor(t, one))
+	_, err = s.Register(ctx, one)
 	require.NoError(t, err)
 
 	stored, err := s.Get(ctx, one.GRN())
@@ -43,23 +41,14 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, registeredBy, stored.RegisteredBy())
 	assert.False(t, stored.CreatedAt().IsZero())
 
-	// Registering the same GRN twice is a conflict, not a second row —
-	// and it mints no second token either, because the two are one
-	// write.
-	again, err := operator.NewEnrollment(one.GRN(), registeredBy)
-	require.NoError(t, err)
-	_, err = s.Register(ctx, one, again, credentialFor(t, one))
+	// Registering the same GRN twice is a conflict, not a second row.
+	_, err = s.Register(ctx, one)
 	assert.ErrorIs(t, err, operator.ErrOperatorAlreadyRegistered)
-	_, err = s.Spend(ctx, again.TokenHash())
-	assert.ErrorIs(t, err, operator.ErrEnrollmentInvalid,
-		"the refused registration rolled back the token beside it")
 
 	// A record belongs to the org that registered it.
 	elsewhere, err := operator.New(orgRootGRN("globex"), "one", scopedGRN("globex", "user", "ada"), operator.DetailsPatch{})
 	require.NoError(t, err)
-	elsewhereEnrollment, err := operator.NewEnrollment(elsewhere.GRN(), scopedGRN("globex", "user", "ada"))
-	require.NoError(t, err)
-	_, err = s.Register(ctx, elsewhere, elsewhereEnrollment, credentialFor(t, elsewhere))
+	_, err = s.Register(ctx, elsewhere)
 	require.NoError(t, err)
 	listed, err := s.ListByOrg(ctx, orgRootGRN("acme"))
 	require.NoError(t, err)

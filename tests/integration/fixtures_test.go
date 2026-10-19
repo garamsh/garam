@@ -167,9 +167,7 @@ func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
 	}
 	o, err := operator.New(orgRootGRN(g.Organization), g.Identifier, scopedGRN(g.Organization, "user", "ada"), operator.DetailsPatch{})
 	require.NoError(t, err)
-	enrollment, err := operator.NewEnrollment(o.GRN(), scopedGRN(g.Organization, "user", "ada"))
-	require.NoError(t, err)
-	_, err = store.Register(context.Background(), o, enrollment, credentialFor(t, o))
+	_, err = store.Register(context.Background(), o)
 	require.NoError(t, err)
 	return o.GRN()
 }
@@ -551,12 +549,4 @@ func anonymousMachineClient(t *testing.T) *http.Client {
 	}}}
 	t.Cleanup(client.CloseIdleConnections)
 	return client
-}
-
-// pemKey renders a private key the way tls.X509KeyPair reads one.
-func pemKey(t *testing.T, key *ecdsa.PrivateKey) []byte {
-	t.Helper()
-	der, err := x509.MarshalPKCS8PrivateKey(key)
-	require.NoError(t, err)
-	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
 }

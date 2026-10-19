@@ -21,7 +21,6 @@ import type {
   PolicyAttachment,
   PolicyVersion,
   Project,
-  RegisteredOperator,
 } from "@/features/orgs";
 
 /** The backend base URL the tests run the server-side client against. */
@@ -69,7 +68,6 @@ export const fieldOne: Operator = {
   orgGrn: acme.grn,
   registeredBy: alice.grn,
   createdAt: "2026-01-02T03:04:05Z",
-  enrollmentState: "enrolled",
   certificateIssuedAt: "2026-03-04T05:06:07Z",
 };
 
@@ -83,28 +81,6 @@ export const fieldOneKey: OperatorKey = {
   state: "active",
   issuedAt: "2026-10-01T09:00:00Z",
   lastExchangedAt: "2026-10-14T08:30:00Z",
-};
-
-/**
- * What registering `fieldOne` answered: the record and the one-time
- * token beside it. The token is in this answer and in no later read of
- * the record, as it is in garam's (ADR-0064).
- */
-export const fieldOneRegistered: RegisteredOperator = {
-  operator: {
-    ...fieldOne,
-    enrollmentState: "pending",
-    certificateIssuedAt: undefined,
-  },
-  enrollment: {
-    token: "8f14e45fceea167a5a36dedd4bea2543a1ba1ffc2fbd07a1",
-    expiresAt: "2026-01-02T03:14:05Z",
-  },
-  credential: {
-    credential:
-      "garam_oc_3c59dc048e8850243be8079a5c74d079c4ca4238a0b923820dcc509a6f75849b",
-    issuedAt: "2026-01-02T03:04:05Z",
-  },
 };
 
 /**

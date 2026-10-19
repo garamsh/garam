@@ -5,82 +5,14 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator/db"
 	"github.com/garamsh/garam/internal/pgxerr"
-	"github.com/garamsh/garam/internal/pgxtype"
 )
 
 // Compile-time check that PostgresStore satisfies TokenStore.
 var _ TokenStore = (*PostgresStore)(nil)
-
-// CredentialHolder answers the operator a presented credential belongs
-// to. The read joins the registration, so a credential whose operator
-// was deleted answers as no credential at all.
-func (s *PostgresStore) CredentialHolder(ctx context.Context, credentialHash string) (CredentialHolder, error) {
-	row, err := s.q.GetOperatorCredentialHolder(ctx, credentialHash)
-	if err != nil {
-		return CredentialHolder{}, pgxerr.Classify(err, "read operator credential", ErrCredentialInvalid, nil)
-	}
-	g, err := storedOperatorGRN(row.OperatorGrn)
-	if err != nil {
-		return CredentialHolder{}, err
-	}
-	return CredentialHolder{ID: row.ID, Operator: g}, nil
-}
-
-// RecordToken stores the token under the credential issuance holder
-// names, and keeps that issuance's newest LiveTokensPerCredential, in
-// one transaction holding the registrations and then the issuance's
-// row. Holding the row is what keeps two exchanges at once inside the
-// bound, and finding it gone is the refusal of a credential re-issued
-// or withdrawn after it was read. The tokens are written as
-// recordTokens orders them.
-func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder, t *Token) error {
-	audience := pgtype.Text{}
-	if t.Audience != nil {
-		audience = pgtype.Text{String: t.Audience.String(), Valid: true}
-	}
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	q := s.q.WithTx(tx)
-	if err := holdRegistrations(ctx, q, holder.Operator.String(), t.Audience, ErrCredentialInvalid); err != nil {
-		return err
-	}
-	if _, err := q.LockOperatorCredential(ctx, holder.ID); err != nil {
-		return pgxerr.Classify(err, "hold operator credential", ErrCredentialInvalid, nil)
-	}
-	err = recordTokens(ctx, q, holder.Operator.String(),
-		func() error {
-			return q.RecordOperatorToken(ctx, db.RecordOperatorTokenParams{
-				TokenHash:    t.Hash(),
-				CredentialID: holder.ID,
-				OperatorGrn:  holder.Operator.String(),
-				AudienceGrn:  audience,
-				IssuedAt:     pgxtype.Timestamptz(t.IssuedAt),
-				ExpiresAt:    pgxtype.Timestamptz(t.ExpiresAt),
-			})
-		},
-		func() error {
-			return q.TrimOperatorTokens(ctx, db.TrimOperatorTokensParams{
-				CredentialID: holder.ID, Keep: LiveTokensPerCredential,
-			})
-		})
-	if err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return errorx.Wrap(err, "commit")
-	}
-	return nil
-}
 
 // holdRegistrations holds the client's registration, and the
 // audience's when one is named, before an exchange touches any other
@@ -130,7 +62,7 @@ func recordTokens(ctx context.Context, q *db.Queries, operatorGRN string, record
 
 // ResolveToken answers what a live token names. The statement joins
 // the registration and filters on expiry, so a deleted operator, a
-// re-issued credential and an expired token are one answer: none.
+// withdrawn key and an expired token are one answer: none.
 func (s *PostgresStore) ResolveToken(ctx context.Context, tokenHash string) (TokenHolder, error) {
 	row, err := s.q.ResolveOperatorToken(ctx, tokenHash)
 	if err != nil {

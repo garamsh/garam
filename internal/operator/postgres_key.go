@@ -232,7 +232,7 @@ func (s *PostgresStore) RecordAssertionToken(ctx context.Context, a VerifiedAsse
 		},
 		func() error {
 			return q.TrimOperatorKeyTokens(ctx, db.TrimOperatorKeyTokensParams{
-				KeyID: a.KeyID, Keep: LiveTokensPerCredential,
+				KeyID: a.KeyID, Keep: LiveTokensPerKey,
 			})
 		})
 	if err != nil {

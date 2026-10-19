@@ -66,6 +66,7 @@ sql:
       - migrations/000032_operator_control_endpoints.up.sql
       - migrations/000038_operator_credentials.up.sql
       - migrations/000043_operator_keys.up.sql
+      - migrations/000056_operator_enrolls_by_key_alone.up.sql
     queries: internal/operator/queries.sql
     gen:
       go:

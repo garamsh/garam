@@ -125,13 +125,7 @@ describe("Home", () => {
     expect(teams).toHaveTextContent("Its members were not shown to you.");
   });
 
-  it("lists what the caller can read that is failing, each linked", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/operators`, () =>
-        HttpResponse.json([{ ...fieldOne, enrollmentState: "expired" }]),
-      ),
-    );
-
+  it("lists the failing agents the caller can read, each linked, and no operator", async () => {
     await renderServerComponent(HomePage(params("acme")));
 
     const look = screen.getByRole("region", { name: /^Worth a look/ });
@@ -139,10 +133,8 @@ describe("Home", () => {
       within(look).getByRole("link", { name: "Unnamed agent" }),
     ).toHaveAttribute("href", "/console/orgs/acme/agents/1c3d5e7f90a2b4c6");
     expect(look).toHaveTextContent(/Provisioning failed.*Disconnected/);
-    expect(
-      within(look).getByRole("link", { name: fieldOne.name }),
-    ).toHaveAttribute("href", "/console/orgs/acme/operators/field-one");
-    expect(look).toHaveTextContent("Enrollment expired");
+    // No operator state is a failure Home reports (ADR-0117).
+    expect(look).not.toHaveTextContent(fieldOne.name);
   });
 
   it("says nothing it can read is failing when nothing is", async () => {
@@ -165,23 +157,18 @@ describe("Home", () => {
     expect(lede()).toHaveTextContent("Nothing you can read is failing.");
   });
 
-  it("says which list it left out of Worth a look", async () => {
-    server.use(refuse("operators"));
+  it("says it could not read the agents rather than that nothing is failing", async () => {
+    server.use(refuse("agents"));
 
     await renderServerComponent(HomePage(params("acme")));
 
     const look = screen.getByRole("region", { name: /^Worth a look/ });
-    expect(look).toHaveTextContent(
-      "Operators are not included: you can't view them.",
-    );
-    // Control: the agents it could read are still listed.
-    expect(
-      within(look).getByRole("link", { name: "Unnamed agent" }),
-    ).toBeInTheDocument();
+    expect(look).toHaveTextContent("You can't view this organization's agents");
+    expect(look).not.toHaveTextContent("Nothing you can read is failing.");
   });
 
   it("claims nothing for a reader who can see little", async () => {
-    server.use(refuse("groups"), refuse("agents"), refuse("operators"));
+    server.use(refuse("groups"), refuse("agents"));
 
     await renderServerComponent(HomePage(params("acme")));
 
@@ -193,7 +180,7 @@ describe("Home", () => {
     ).toBeInTheDocument();
     expect(
       within(screen.getByRole("region", { name: /^Worth a look/ })).getByText(
-        "You can't view this organization's agents or operators",
+        "You can't view this organization's agents",
       ),
     ).toBeInTheDocument();
   });

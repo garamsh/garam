@@ -161,62 +161,6 @@ func TestCredentialAudit_RecordsASupervisorsCertificatesAndItsAgentsTokens(t *te
 	assert.NotContains(t, raw, token)
 }
 
-// TestCredentialAudit_RecordsAnOperatorsEnrollmentAndItsCertificate
-// registers an operator through the browser listener, re-mints its
-// enrollment token, and enrolls it on the machine listener: the two
-// enrollment tokens and the credential registration issued are recorded
-// with no token or credential in the read, and the certificate the
-// enrollment answered is recorded with its serial. Re-minting for the
-// enrolled operator is refused and recorded refused.
-func TestCredentialAudit_RecordsAnOperatorsEnrollmentAndItsCertificate(t *testing.T) {
-	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
-	browser := auditBrowser(t, s, engine)
-
-	status, body := browserDo(t, http.MethodPost, browser+"/orgs/acme/operators", s.owner,
-		jsonReader(t, map[string]string{"identifier": "field-audit"}))
-	require.Equal(t, http.StatusCreated, status, body)
-	var registered apigen.RegisteredOperator
-	require.NoError(t, json.Unmarshal([]byte(body), &registered))
-	subject, err := grn.Parse(registered.Operator.Grn)
-	require.NoError(t, err)
-	status, body = browserDo(t, http.MethodPost, browser+"/orgs/acme/operators/field-audit/enrollment", s.owner, nil)
-	require.Equal(t, http.StatusCreated, status, body)
-	var reminted apigen.OperatorEnrollment
-	require.NoError(t, json.Unmarshal([]byte(body), &reminted))
-
-	request, _ := enrollmentRequest(t)
-	enrollment, err := json.Marshal(machinegen.Enrollment{Token: reminted.Token, CertificateRequestPem: request})
-	require.NoError(t, err)
-	status, answered := machineSend(t, anonymousMachineClient(t), http.MethodPost, s.machine+"/enrollment", string(enrollment))
-	require.Equal(t, http.StatusCreated, status, string(answered))
-	var signed machinegen.EnrolledCertificate
-	require.NoError(t, json.Unmarshal(answered, &signed))
-	status, body = browserDo(t, http.MethodPost, browser+"/orgs/acme/operators/field-audit/enrollment", s.owner, nil)
-	require.Equal(t, http.StatusConflict, status, "an enrolled operator is minted no token: %s", body)
-
-	events, raw := credentialEvents(t, browser, s.member, subject)
-	kinds := make([]apigen.CredentialEventCredential, 0, len(events))
-	for _, e := range events {
-		kinds = append(kinds, e.Credential)
-	}
-	require.Equal(t, []apigen.CredentialEventCredential{
-		apigen.EventOperatorEnrollmentToken, apigen.EventOperatorCertificate, apigen.EventOperatorEnrollmentToken,
-		apigen.EventOperatorCredential, apigen.EventOperatorEnrollmentToken,
-	}, kinds, "newest first: the refused re-mint, the certificate, the re-mint, then registration's two")
-	assert.Equal(t, apigen.EventRefused, events[0].Outcome)
-	serial, _ := leafFacts(t, signed.CertificatePem)
-	require.NotNil(t, events[1].Serial)
-	assert.Equal(t, serial, *events[1].Serial)
-	require.NotNil(t, events[2].NotAfter)
-	assert.True(t, reminted.ExpiresAt.Truncate(time.Microsecond).Equal(*events[2].NotAfter),
-		"the re-minted token's expiry: %v %v", reminted.ExpiresAt, *events[2].NotAfter)
-	assert.NotContains(t, raw, reminted.Token)
-	assert.NotContains(t, raw, registered.Enrollment.Token)
-	assert.NotContains(t, raw, registered.Credential.Credential)
-}
-
 // TestCredentialAudit_RecordsAnOperatorRenewalAndItsRefusal renews an
 // operator certificate three quarters through its life, and one with
 // its whole life ahead: the first is recorded renewed with the

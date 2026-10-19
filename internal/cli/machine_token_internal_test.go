@@ -157,10 +157,11 @@ func TestNewMachineRequestCounter_RegistersOnce(t *testing.T) {
 
 // TestCountTokenExchanges_TellsTheCohortsApartByExchangeMethod holds
 // the cohort evidence ADR-0102 asks for: an exchange is counted by how
-// it authenticated — a shared-secret operator, a shared-secret
-// supervisor, a private_key_jwt operator — and by how it ended, a
-// route that exchanges nothing is not counted, and no label carries
-// what the caller sent beyond its credential's prefix.
+// it authenticated — a shared-secret supervisor, a private_key_jwt
+// operator, or a credential neither, which an operator's retired
+// shared secret now is (ADR-0117) — and by how it ended, a route that
+// exchanges nothing is not counted, and no label carries what the
+// caller sent beyond its credential's prefix.
 func TestCountTokenExchanges_TellsTheCohortsApartByExchangeMethod(t *testing.T) {
 	// Internal: an exchange is answered only from Postgres.
 	registry := prometheus.NewRegistry()
@@ -172,7 +173,7 @@ func TestCountTokenExchanges_TellsTheCohortsApartByExchangeMethod(t *testing.T) 
 	for _, pattern := range []string{"POST /tokens", "POST /oauth/token", "GET /identity"} {
 		mux.Handle(pattern, countTokenExchanges(counter)(http.HandlerFunc(answer)))
 	}
-	operatorSecret := operator.CredentialScheme + " " + operator.CredentialPrefix + strings.Repeat("a", 64)
+	operatorSecret := operator.CredentialScheme + " garam_oc_" + strings.Repeat("a", 64)
 	supervisorSecret := operator.CredentialScheme + " " + agent.SupervisorCredentialPrefix + strings.Repeat("b", 64)
 	send := func(method, path, authorization string, answered int) {
 		req := httptest.NewRequest(method, path, nil)
@@ -194,7 +195,8 @@ func TestCountTokenExchanges_TellsTheCohortsApartByExchangeMethod(t *testing.T) 
 	rec := httptest.NewRecorder()
 	promhttp.HandlerFor(registry, promhttp.HandlerOpts{}).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	scraped := rec.Body.String()
-	assert.Contains(t, scraped, tokenExchangesMetric+`{method="operator_shared_secret",outcome="issued"} 1`)
+	assert.Contains(t, scraped, tokenExchangesMetric+`{method="unrecognised",outcome="issued"} 1`)
+	assert.NotContains(t, scraped, "operator_shared_secret")
 	assert.Contains(t, scraped, tokenExchangesMetric+`{method="supervisor_shared_secret",outcome="refused"} 1`)
 	assert.Contains(t, scraped, tokenExchangesMetric+`{method="operator_private_key_jwt",outcome="issued"} 2`)
 	assert.Contains(t, scraped, tokenExchangesMetric+`{method="operator_private_key_jwt",outcome="limited"} 1`)
@@ -218,7 +220,9 @@ func (h *heldSightings) Record(_ context.Context, s machine.Sighting) error {
 // a token naming an audience is noted on the audience path as well. A
 // refused exchange reports nothing and is noted nowhere, which the
 // issued one beside it on the same route is the control for; a route
-// that issues nothing is noted nowhere either.
+// that issues nothing is noted nowhere either, and neither is a
+// credential no exchange recognises, an operator's retired shared
+// secret among them (ADR-0117).
 func TestRecordIssuances_NotesEachIssuanceUnderItsPath(t *testing.T) {
 	// Internal: an issuance is answered only from Postgres.
 	recorder := &heldSightings{}
@@ -240,7 +244,7 @@ func TestRecordIssuances_NotesEachIssuanceUnderItsPath(t *testing.T) {
 	for _, pattern := range []string{"POST /tokens", "POST /oauth/token", "POST /agents/{agent}/tokens", "GET /identity"} {
 		mux.Handle(pattern, recordIssuances(evidence)(http.HandlerFunc(answer)))
 	}
-	operatorSecret := operator.CredentialScheme + " " + operator.CredentialPrefix + strings.Repeat("a", 64)
+	operatorSecret := operator.CredentialScheme + " garam_oc_" + strings.Repeat("a", 64)
 	supervisorSecret := operator.CredentialScheme + " " + agent.SupervisorCredentialPrefix + strings.Repeat("b", 64)
 	send := func(c, method, path, authorization string, issued *machine.Issuance) {
 		req := httptest.NewRequest(method, path, nil)
@@ -250,7 +254,7 @@ func TestRecordIssuances_NotesEachIssuanceUnderItsPath(t *testing.T) {
 		mux.ServeHTTP(httptest.NewRecorder(), req)
 	}
 
-	send("refused secret", http.MethodPost, "/tokens", operatorSecret, nil)
+	send("refused secret", http.MethodPost, "/tokens", supervisorSecret, nil)
 	send("operator secret", http.MethodPost, "/tokens", operatorSecret,
 		&machine.Issuance{Subject: operatorGRN, Until: until})
 	send("supervisor secret", http.MethodPost, "/tokens", supervisorSecret,
@@ -261,7 +265,6 @@ func TestRecordIssuances_NotesEachIssuanceUnderItsPath(t *testing.T) {
 	send("identity", http.MethodGet, "/identity", "Garam-Token "+liveToken, &machine.Issuance{Subject: agentGRN, Until: until})
 
 	assert.Equal(t, []machine.Sighting{
-		{Caller: operatorGRN, Path: machine.PathSharedSecret, IssuedUntil: until},
 		{Caller: supervisorGRN, Path: machine.PathSharedSecret, IssuedUntil: until},
 		{Caller: operatorGRN, Path: machine.PathPrivateKeyJWT, IssuedUntil: until},
 		{Caller: operatorGRN, Path: machine.PathAudienceToken, IssuedUntil: until},

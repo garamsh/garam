@@ -162,6 +162,7 @@ func newLegacyStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInterfa
 			Sealer: sealer, Issuer: testIssuer, Certificate: presented, ServerRoot: certificatePEM(presented),
 			Delivery: briefDelivery(), Engine: engine,
 			Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), Now: clock.now,
+			TokenURL: testTokenURL,
 		},
 		acme: acme, owner: session("ada", org.RoleOwner), member: session("bob", org.RoleMember),
 		hosted: hosted, controller: scopedGRN("acme", operator.ServiceType, "controller"),

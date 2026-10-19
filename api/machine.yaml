@@ -14,35 +14,33 @@ info:
     A caller may present a short-lived token instead, as
     `Authorization: Garam-Token <token>`, on the operations whose
     `security` lists `machineToken` and on no other (ADR-0100). An
-    operator obtains one from `exchangeToken`, presenting the
-    credential its organization issued it, and mints one for an agent
-    it holds from `mintAgentToken`. The listener reads a token's row
-    beside what it rests on, on every request: a deleted operator, a
-    re-issued credential, a reassigned agent or a recovered lineage
-    is refused from the next request on a connection already open
-    too. A request presents a token or a certificate, never both.
+    operator obtains one from `exchangeClientAssertion`, and mints one
+    for an agent it holds from `mintAgentToken`; a standalone host's
+    supervisor obtains one from `exchangeToken`, presenting the
+    credential its enrollment answered. The listener reads a token's
+    row beside what it rests on, on every request: a deleted operator,
+    a withdrawn key, a reassigned agent or a recovered lineage is
+    refused from the next request on a connection already open too. A request presents a token or a certificate, never both.
 
     `Authorization: Bearer <token>` is the same token under the OAuth
     scheme (ADR-0102), listed as `machineBearer` beside every
     `machineToken`: one resolver reads it, with the same confinement,
     per-request reads and v2 contract values. A request carrying more
     than one `Authorization` header while any of them presents a token
-    carries no identity. An operator registered with a key obtains a
-    token from `exchangeClientAssertion` under `machine-token.v2`,
-    authenticated by a client assertion its private key signed.
+    carries no identity. An operator is registered with a key and
+    obtains a token from `exchangeClientAssertion` under
+    `machine-token.v2`, authenticated by a client assertion its private
+    key signed (ADR-0102, ADR-0117).
 
-    Four operations are reached without a certificate, and each
-    carries `security: []`. Two are how a caller obtains its first
-    certificate: `enrollOperator` is authenticated by the one-time
-    token the console minted (ADR-0064), and `enrollStandaloneAgent` by
+    Three operations are reached without a certificate, and each
+    carries `security: []`. `enrollStandaloneAgent` is authenticated by
     the bootstrap secret whose hash an administrator approved
-    (ADR-0082). The third, `getMessageSigningKeys`, publishes the
-    public keys a verifier checks garam's signature on a message with
-    (ADR-0101), which anyone may read. The fourth,
-    `exchangeClientAssertion`, is authenticated by the client assertion
-    in its body (ADR-0102). `exchangeToken` is reached without one too,
-    authenticated by the operator's credential under
-    `machineCredential`. Every other operation requires the
+    (ADR-0082). `getMessageSigningKeys` publishes the public keys a
+    verifier checks garam's signature on a message with (ADR-0101),
+    which anyone may read. `exchangeClientAssertion` is authenticated
+    by the client assertion in its body (ADR-0102). `exchangeToken` is
+    reached without one too, authenticated by a supervisor's credential
+    under `machineCredential`. Every other operation requires the
     certificate, or a token where it lists `machineToken`, and which is
     which is read from this file rather than remembered. An enrolling caller still verifies garam against the
     garam server root, which it holds before it calls: the listener
@@ -231,10 +229,8 @@ paths:
         certificate from being a permanent one.
 
         An operator that authenticates with a token renews nothing
-        here: it exchanges its credential with `exchangeToken`, or an
-        assertion signed by a key issued to it with
-        `exchangeClientAssertion`, for the next token (ADR-0100,
-        ADR-0102).
+        here: it exchanges an assertion signed by a key issued to it
+        with `exchangeClientAssertion` for the next token (ADR-0102).
 
         Each call signs a new certificate and generates the private key
         it returns once, so it is a POST rather than a GET.
@@ -255,45 +251,27 @@ paths:
     post:
       operationId: exchangeToken
       tags: [identity]
-      summary: Exchange an operator's or a supervisor's credential for a short-lived token.
+      summary: Exchange a supervisor's credential for a short-lived token.
       description: >-
-        Answers a token for the operator the presented credential
-        belongs to (ADR-0100), under `machine-token.v1`. The token is
-        accepted for an hour and is refreshed by exchanging again in
-        the last third of that hour; nothing here renews one token into
-        another, so only the credential mints them.
+        Answers a token for the standalone host's supervisor the
+        presented credential belongs to (ADR-0100), under
+        `machine-token.v1`: the credential `enrollStandaloneAgent`
+        answered it under `standalone-enrollment.v2`. The token is
+        prefixed `garam_st_`, is accepted for an hour on the operations
+        that list `machineToken`, and is refreshed by exchanging again
+        in the last third of that hour; nothing here renews one token
+        into another, so only the credential mints them. A token names
+        no audience, and a request naming one is 400.
 
-        With no `audience`, the token is accepted by garam on the
-        operations that list `machineToken`. With an `audience` naming
-        another operator of the same organization — a hosted control
-        service — the token is minted to be shown to that service, and
-        garam accepts it as a credential on no operation here: the
-        audience forwards it to `introspectController` under
-        `operation-authority.v2`, as `token` in place of
-        `certificatePem`, to prove the operator it names.
+        A revocation or a replacement of the supervisor's registration,
+        and a retried enrollment re-issuing the credential, each refuse
+        the credential and every token it was exchanged for from the
+        next request (ADR-0100). Unknown, voided and withdrawn
+        credentials are one refusal.
 
-        A credential the operator's organization re-issued or withdrew
-        with the operator exchanges nothing, and every token it was
-        exchanged for is refused from the next request. Unknown,
-        voided and withdrawn credentials are one refusal.
-
-        A standalone host's supervisor exchanges the credential
-        `enrollStandaloneAgent` answered it under
-        `standalone-enrollment.v2` the same way, for a token prefixed
-        `garam_st_` that names no audience; one naming an audience is
-        400. A revocation or a replacement of its registration, and a
-        retried enrollment re-issuing the credential, each refuse the
-        credential and every token it was exchanged for from the next
-        request (ADR-0100).
-
-
-        For an operator's credential, one process answers at most 60
-        exchanges per client address, counted before anything is read,
-        and 10 per operator once the credential resolved, each per
-        minute, and 429 with `Retry-After` past either. Both bounds are
-        shared with `exchangeClientAssertion`: either form of exchange
-        holds the operator's registration while it records the token,
-        and a re-issue or a key withdrawal waits for those holds.
+        An operator exchanges no credential here: it is registered with
+        a key and exchanges an assertion with `exchangeClientAssertion`
+        (ADR-0102, ADR-0117).
       security:
         - machineCredential: []
       parameters:
@@ -360,7 +338,7 @@ paths:
         header, the claims or any object inside them. The optional
         `audience` names another operator of the same organization —
         a hosted control service — the token is minted to be shown to,
-        as `exchangeToken`'s does; absent, the token is garam's. A
+        absent, the token is garam's. A
         `scope` is `invalid_scope`, a `client_secret` and any other
         grant are refused, and unrecognised parameters are ignored.
 
@@ -379,8 +357,7 @@ paths:
         anything is read, and 10 verified ones per `client_id`, each per
         minute, and 429 with `Retry-After` past either: a flood from one
         address holds back no other, and an assertion that fails to
-        verify spends no operator's budget. Both bounds are shared with
-        `exchangeToken`'s for an operator's credential. An unconfigured token
+        verify spends no operator's budget. An unconfigured token
         endpoint, or a database that cannot be read, answers 503 and
         issues nothing; a defect answers 500 `server_error`.
       security: []
@@ -421,64 +398,6 @@ paths:
           $ref: '#/components/responses/OAuthError'
         '503':
           $ref: '#/components/responses/OAuthError'
-  /enrollment:
-    post:
-      operationId: enrollOperator
-      tags: [identity]
-      summary: Obtain an operator's first certificate with an enrollment token.
-      description: >-
-        Signs the certificate signing request for the operator the
-        token names, and spends the token (ADR-0064). This is the one
-        operation on this listener that requires no client certificate,
-        because it is what a caller with no certificate calls; what
-        authenticates it is the token, which a signed-in member of the
-        organization minted by registering the operator.
-
-        **The token is permission to ask for one certificate, once.** It
-        is not a credential to the operator's identity: it authenticates
-        no other operation here, it is spent by the first call that
-        presents it whether or not that call goes on to succeed, and it
-        stops being spendable ten minutes after it was minted. A token
-        that is refused is a token to register again for, not one to
-        retry with.
-
-        **What the certificate names is the token's to say and never the
-        request's.** Nothing in the certificate signing request is read
-        but the public key it carries and the signature proving the
-        sender holds the private half: a subject name, a SAN or an
-        extension request in it is discarded. So a token cannot be
-        turned into a certificate for any identity but the operator it
-        was minted for, whatever the request asks for.
-
-        The answer carries no private key, because garam never had one.
-        The operator generated the key pair where the certificate will
-        be used, and what crossed the wire was a public key and a
-        signature over it. A caller that loses the key it generated
-        registers again rather than recovering.
-
-        An operator that authenticates with a token needs no
-        certificate from here: it exchanges the credential its
-        organization issued it with `exchangeToken`, or an assertion
-        signed by a key issued to it with `exchangeClientAssertion`
-        (ADR-0100, ADR-0102).
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Enrollment'
-      responses:
-        '201':
-          description: Certificate signed. The token is spent.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EnrolledCertificate'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
   /agents:
     post:
       operationId: createAgent
@@ -2809,15 +2728,14 @@ components:
     TokenExchange:
       type: object
       description: >-
-        What an exchange asks for: a token garam accepts, or one minted
-        for a hosted operator of the same organization.
+        What an exchange asks for. A supervisor's token is garam's
+        alone, so the body names nothing.
       properties:
         audience:
           type: string
           description: >-
-            The GRN of another operator of the caller's organization the
-            token is to be shown to. Absent, the token is garam's.
-          example: grn:acme:default:operator:control
+            Refused with 400: a supervisor's token is shown to no
+            hosted operator.
     ClientAssertionRequest:
       type: object
       description: >-
@@ -2929,67 +2847,6 @@ components:
         serverRootPem:
           type: string
           description: The garam server root the holder verifies garam by (ADR-0040).
-    Enrollment:
-      type: object
-      description: >-
-        What an enrolling operator presents: the token it was given and
-        the certificate signing request over the key it generated. The
-        key itself does not appear here and never leaves the cluster it
-        was made in.
-      required: [token, certificateRequestPem]
-      properties:
-        token:
-          type: string
-          description: >-
-            The one-time enrollment token, as the console showed it
-            once. It names the operator this request obtains a
-            certificate for, so the request names no subject of its own.
-        certificateRequestPem:
-          type: string
-          description: >-
-            A PEM-encoded PKCS#10 certificate signing request over an
-            ECDSA P-256 key the caller generated. Its signature is what
-            proves the caller holds the private half; nothing else in it
-            is read.
-    EnrolledCertificate:
-      type: object
-      description: >-
-        What an enrollment answers: the signed certificate, the
-        authority that signed it, and the garam server root the holder
-        verifies garam by. There is no private key field, and its
-        absence is the property rather than an omission — garam signed a
-        key it never held and cannot return one (ADR-0064). Contrast
-        `MachineCertificate`, which the two routes that generate a key
-        pair answer with.
-      required: [grn, certificatePem, issuerPem, serverRootPem, notAfter]
-      properties:
-        grn:
-          type: string
-          description: >-
-            The identity the certificate names, which is also what its
-            SAN URI holds. It is the operator the token named.
-          example: grn:acme:default:operator:field-one
-        certificatePem:
-          type: string
-        issuerPem:
-          type: string
-          description: >-
-            The authority that signed this certificate. It is not what
-            garam is verified against: the two directions rest on
-            different roots (ADR-0040).
-        serverRootPem:
-          type: string
-          description: >-
-            The garam server root. A holder verifies garam's listener
-            against this and against nothing else — one root for every
-            organization, separate from the authority above and signing
-            only what garam presents (ADR-0040).
-        notAfter:
-          type: string
-          format: date-time
-          description: >-
-            When the certificate stops being valid. It carries jitter,
-            so certificates issued together do not expire together.
     MachineCertificate:
       type: object
       description: >-
@@ -2999,9 +2856,7 @@ components:
         returned once and a holder that loses it asks for another
         certificate. One shape for both routes that generate a key pair:
         what an agent is given and what an operator renews differ in who
-        may ask, not in what comes back. An enrollment answers
-        `EnrolledCertificate` instead, because garam generated no key
-        there and has none to return.
+        may ask, not in what comes back.
       required: [grn, certificatePem, privateKeyPem, issuerPem, serverRootPem, notAfter]
       properties:
         grn:
@@ -4139,7 +3994,8 @@ components:
       type: http
       scheme: Garam-Token
       description: >-
-        A token `exchangeToken` or `mintAgentToken` answered, as
+        A token `exchangeToken`, `exchangeClientAssertion` or
+        `mintAgentToken` answered, as
         `Authorization: Garam-Token <token>`, presented without a client
         certificate (ADR-0100). The listener reads the token's row joined
         to what it rests on for every request — an operator's
@@ -4171,10 +4027,10 @@ components:
       type: http
       scheme: Garam-Credential
       description: >-
-        An operator's credential, as `Authorization: Garam-Credential
-        <credential>`, which `exchangeToken` alone accepts (ADR-0100).
-        It is issued once in the console and stored there only as a
-        hash.
+        A standalone host's supervisor's credential, as
+        `Authorization: Garam-Credential <credential>`, which
+        `exchangeToken` alone accepts (ADR-0100). Its enrollment
+        answers it once, and garam stores only its hash.
     executionToken:
       type: http
       scheme: Garam-Execution

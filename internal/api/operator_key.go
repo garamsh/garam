@@ -18,7 +18,7 @@ import (
 // It is the one route that issues a key. The first key of an operator
 // holding no live one is the registration's authority,
 // operator:register; issuing beside or in place of a live key is
-// operator:reissue, as re-issuing a credential is. A caller holding
+// operator:reissue, as withdrawing a key is. A caller holding
 // only the first issues under KeyRotationFirst, which the store refuses
 // for an operator that holds a live key in the transaction that would
 // write, so a concurrent issuance cannot split the check from the

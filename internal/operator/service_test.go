@@ -64,10 +64,9 @@ func (r *records) Advance(_ context.Context, current operator.Current, predecess
 // serial of its own, so a test can tell the successor from what it
 // replaced.
 type signer struct {
-	signed    int
-	err       error
-	subject   []grn.GRN
-	requested []string
+	signed  int
+	err     error
+	subject []grn.GRN
 }
 
 func (s *signer) Issue(_ context.Context, subject grn.GRN) (*operator.IssuedCertificate, error) {
@@ -79,13 +78,6 @@ func (s *signer) Issue(_ context.Context, subject grn.GRN) (*operator.IssuedCert
 		Certificate:   *certificate,
 		PrivateKeyPEM: []byte("private key"),
 	}, nil
-}
-
-// Sign records the request beside the subject, so a test can assert
-// that what garam signed over is what the caller sent.
-func (s *signer) Sign(_ context.Context, subject grn.GRN, request operator.CertificateRequest) (*operator.Certificate, error) {
-	s.requested = append(s.requested, string(request))
-	return s.sign(subject)
 }
 
 func (s *signer) sign(subject grn.GRN) (*operator.Certificate, error) {
@@ -120,42 +112,12 @@ type clock struct{ at time.Time }
 
 func (c *clock) now() time.Time { return c.at }
 
-// tokens is the EnrollmentStore in memory. Spend removes the row, as
-// the statement does, so single use is what the store enforces and not
-// what the test remembers.
-type tokens struct {
-	live map[string]grn.GRN
-}
-
-func newTokens() *tokens { return &tokens{live: map[string]grn.GRN{}} }
-
-// mint records a token for subject and returns the secret, as
-// registering an operator would.
-func (t *tokens) mint(secret string, subject grn.GRN) string {
-	t.live[operator.HashToken(secret)] = subject
-	return secret
-}
-
-func (t *tokens) Spend(_ context.Context, tokenHash string) (grn.GRN, error) {
-	subject, live := t.live[tokenHash]
-	if !live {
-		return grn.GRN{}, operator.ErrEnrollmentInvalid
-	}
-	delete(t.live, tokenHash)
-	return subject, nil
-}
-
-// service returns the service under test over its three seams and a
-// clock, and the clock a test ages a certificate with.
+// service returns the service under test over its seams and a clock,
+// and the clock a test ages a certificate with.
 func service(t *testing.T, store operator.CertificateStore, issuer operator.Issuer) (operator.Service, *clock) {
 	t.Helper()
-	return serviceEnrolling(t, store, newTokens(), issuer)
-}
-
-func serviceEnrolling(t *testing.T, store operator.CertificateStore, enrollments operator.EnrollmentStore, issuer operator.Issuer) (operator.Service, *clock) {
-	t.Helper()
 	c := &clock{at: time.Date(2026, time.August, 25, 12, 0, 0, 0, time.UTC)}
-	return operator.NewService(store, enrollments, newExchanges(), issuer, operator.Config{Now: c.now}), c
+	return operator.NewService(store, newExchanges(), issuer, operator.Config{Now: c.now}), c
 }
 
 // TestService_IssueAdoptsTheCertificateItMinted is the bootstrap

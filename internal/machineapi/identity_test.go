@@ -14,51 +14,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/operator"
 )
 
 // operatorService is an operator.Service recording what the surface
-// passed it: the credential it read off the connection, and the token
-// and request it read off an enrollment body. Minting out of band is a
-// command's path (ADR-0032) and reaches no handler, so it panics
-// through the embedded interface.
+// passed it: the credential it read off the connection. Minting out of
+// band is a command's path (ADR-0032) and reaches no handler, so it
+// panics through the embedded interface.
 type operatorService struct {
 	operator.Service
 	certificate *operator.Certificate
 	err         error
 	renewed     []operator.Credential
-	enrolled    []enrolment
-	// credential is the one the exchange answers for, and audiences
-	// and sources what each exchange asked for and arrived from.
-	// exchangeErr, when set, is what every exchange answers.
-	credential  string
-	audiences   []*grn.GRN
-	sources     []string
-	exchangeErr error
-}
-
-// enrolment is one call the enrollment route made, as the domain saw
-// it.
-type enrolment struct {
-	token   string
-	request operator.CertificateRequest
-}
-
-// Exchange answers a token for the one credential the fake was given,
-// recording the audience asked for and the address it came from.
-func (s *operatorService) Exchange(_ context.Context, source, credential string, audience *grn.GRN) (*operator.Token, error) {
-	s.audiences = append(s.audiences, audience)
-	s.sources = append(s.sources, source)
-	if s.exchangeErr != nil {
-		return nil, s.exchangeErr
-	}
-	if credential != s.credential {
-		return nil, operator.ErrCredentialInvalid
-	}
-	return &operator.Token{Value: operator.TokenPrefix + "answered", Operator: s.certificate.Subject,
-		Audience: audience, ExpiresAt: time.Date(2026, time.October, 9, 13, 0, 0, 0, time.UTC)}, nil
 }
 
 func (s *operatorService) Renew(_ context.Context, c operator.Credential) (*operator.IssuedCertificate, error) {
@@ -72,14 +40,6 @@ func (s *operatorService) Renew(_ context.Context, c operator.Credential) (*oper
 	}, nil
 }
 
-func (s *operatorService) Enroll(_ context.Context, token string, request operator.CertificateRequest) (*operator.Certificate, error) {
-	s.enrolled = append(s.enrolled, enrolment{token: token, request: request})
-	if s.err != nil {
-		return nil, s.err
-	}
-	return s.certificate, nil
-}
-
 // anonymous is a client presenting no certificate at all, which is
 // what an operator that has never been issued one has.
 func anonymous(t *testing.T) *http.Client {
@@ -91,40 +51,6 @@ func anonymous(t *testing.T) *http.Client {
 	}}}
 	t.Cleanup(client.CloseIdleConnections)
 	return client
-}
-
-// TestServer_EnrolsWithoutACertificateAndAnswersNoPrivateKey is the
-// enrollment route seen from the wire: a caller holding no certificate
-// reaches it, what it passes on is the token and the request from the
-// body, and what comes back has no private key in it — garam signed a
-// key it never held.
-func TestServer_EnrolsWithoutACertificateAndAnswersNoPrivateKey(t *testing.T) {
-	enrolling := operatorGRN("acme")
-	notAfter := time.Date(2026, time.August, 26, 12, 0, 0, 0, time.UTC)
-	operators := &operatorService{certificate: &operator.Certificate{
-		Subject:        enrolling,
-		Serial:         "first",
-		CertificatePEM: []byte("certificate"),
-		IssuerPEM:      []byte("issuer"),
-		ServerRootPEM:  []byte("server root"),
-		NotAfter:       notAfter,
-	}}
-	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, enrolling)
-
-	status, body := send(t, anonymous(t), http.MethodPost, url+"/enrollment",
-		`{"token":"a-token","certificateRequestPem":"a request"}`)
-	require.Equal(t, http.StatusCreated, status)
-	assert.JSONEq(t, `{
-		"grn": "`+enrolling.String()+`",
-		"certificatePem": "certificate",
-		"issuerPem": "issuer",
-		"serverRootPem": "server root",
-		"notAfter": "2026-08-26T12:00:00Z"
-	}`, body)
-	assert.NotContains(t, body, "privateKeyPem")
-
-	assert.Equal(t, []enrolment{{token: "a-token", request: operator.CertificateRequest("a request")}},
-		operators.enrolled)
 }
 
 // routeRecorder is a machinegen.ServeMux that records the pattern of
@@ -196,27 +122,28 @@ func fillPath(t *testing.T, path string, values map[string]string) string {
 	}
 }
 
-// enrollmentRoute, standaloneEnrollmentRoute, the two exchanges and
-// keySetRoute are the operations reached without a certificate
-// (ADR-0064, ADR-0082, ADR-0100, ADR-0101, ADR-0102). They are named here so that what a reader checks is the
-// exemption rather than the routes that are not exempt, which are
-// whatever is left.
+// standaloneEnrollmentRoute, the two exchanges and keySetRoute are the
+// operations reached without a certificate (ADR-0082, ADR-0100,
+// ADR-0101, ADR-0102). They are named here so that what a reader
+// checks is the exemption rather than the routes that are not exempt,
+// which are whatever is left.
 const (
-	enrollmentRoute           = http.MethodPost + " /enrollment"
 	standaloneEnrollmentRoute = http.MethodPost + " /agent-enrollments"
 	tokenExchangeRoute        = http.MethodPost + " /tokens"
 	assertionExchangeRoute    = http.MethodPost + " /oauth/token"
 	keySetRoute               = http.MethodGet + " /message-signing-keys"
 )
 
-// TestServer_EnrollmentsAndTheKeySetAreTheOnlyRoutesAnUncertifiedCallerReaches
-// is the control on the one above: the same client that enrols is
-// refused everywhere else, so what admitted it was the route and not a
-// listener that stopped checking.
-func TestServer_EnrollmentsAndTheKeySetAreTheOnlyRoutesAnUncertifiedCallerReaches(t *testing.T) {
-	enrolling := operatorGRN("acme")
-	operators := &operatorService{certificate: &operator.Certificate{Subject: enrolling}}
-	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, enrolling)
+// TestServer_TheExemptRoutesAreTheOnlyOnesAnUncertifiedCallerReaches
+// holds that a client presenting no certificate reaches the standalone
+// enrollment, the two exchanges and the key set, each refusing on its
+// own credential or answering, and is refused everywhere else, so what
+// admitted it was the route and not a listener that stopped checking.
+// No route enrols an operator (ADR-0117).
+func TestServer_TheExemptRoutesAreTheOnlyOnesAnUncertifiedCallerReaches(t *testing.T) {
+	caller := operatorGRN("acme")
+	operators := &operatorService{certificate: &operator.Certificate{Subject: caller}}
+	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, caller)
 	client := anonymous(t)
 
 	// Every operation api/machine.yaml declares, read off the generated
@@ -233,17 +160,8 @@ func TestServer_EnrollmentsAndTheKeySetAreTheOnlyRoutesAnUncertifiedCallerReache
 		"activation": "00000000-0000-0000-0000-000000000001",
 		"approval":   "00000000-0000-0000-0000-000000000002",
 	})
-	enrol, ok := routes[enrollmentRoute]
-	require.True(t, ok, "the exemption names no operation the specification declares")
-	delete(routes, enrollmentRoute)
-
-	status, _ := send(t, client, enrol.method, url+enrol.path,
-		`{"token":"a-token","certificateRequestPem":"a request"}`)
-	require.Equal(t, http.StatusCreated, status)
-
-	// The standalone enrollment is reached too, and refuses on its own
-	// credential, the bootstrap secret, rather than on the missing
-	// certificate.
+	// The standalone enrollment refuses on its own credential, the
+	// bootstrap secret, rather than on the missing certificate.
 	standalone, ok := routes[standaloneEnrollmentRoute]
 	require.True(t, ok, "the exemption names no operation the specification declares")
 	delete(routes, standaloneEnrollmentRoute)
@@ -252,7 +170,7 @@ func TestServer_EnrollmentsAndTheKeySetAreTheOnlyRoutesAnUncertifiedCallerReache
 	assert.Contains(t, body, "standalone bootstrap")
 
 	// So is the token exchange, which refuses on its own credential,
-	// the operator's, rather than on the missing certificate.
+	// a supervisor's, rather than on the missing certificate.
 	exchange, ok := routes[tokenExchangeRoute]
 	require.True(t, ok, "the exemption names no operation the specification declares")
 	delete(routes, tokenExchangeRoute)

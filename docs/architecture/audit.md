@@ -4,12 +4,6 @@ The record garam keeps of what it decided, held by garam rather than by
 either party it decided between. Implemented by `internal/audit`,
 whose PostgreSQL writer is `internal/audit/postgres`.
 
-Pending removal
-([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
-once the second pull request of #1593 removes the operator credential
-and enrollment token, no event of either is recorded again; the events
-already recorded stay.
-
 **Send events and machine credential events are the events built.**
 Decision and change events, which this domain was planned for, are
 unbuilt. Send events are read by the deployment's database holder

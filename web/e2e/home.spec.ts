@@ -29,14 +29,13 @@ test.describe("Home", () => {
   }) => {
     await page.goto(`/console/orgs/${signedIn.orgSlug}`);
 
-    // The seeded agent reports failed and disconnected, and the seeded
-    // operator's enrollment expired. Neither is in a team the owner is
-    // in, since the owner is in none.
+    // The seeded agent reports failed and disconnected, and is in no
+    // team the owner is in, since the owner is in none.
     const lede = page
       .getByRole("main")
       .getByText(/^Nothing is waiting on you\./);
     await expect(lede).toHaveText(
-      `Nothing is waiting on you. You are in no team here. These need a look: Unnamed agent and ${signedIn.operatorName}.`,
+      "Nothing is waiting on you. You are in no team here. Unnamed agent needs a look.",
     );
     await lede.getByRole("link", { name: "Unnamed agent" }).click();
 

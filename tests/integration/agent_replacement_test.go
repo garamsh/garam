@@ -31,7 +31,7 @@ func newReplacementStack(t *testing.T) *replacementStack {
 	t.Helper()
 	s := &replacementStack{tokenStack: newTokenStack(t)}
 	s.destination = registerOperator(t, s.pool, scopedGRN("acme", operator.ServiceType, "destination"))
-	s.destinationToken = exchangeOver(t, s.client, s.machine, reissued(t, s.executionStack, s.destination))
+	s.destinationToken = s.keyedToken(t, s.destination)
 	s.delegateTo(t, []grn.GRN{s.controller, s.destination}, "agent:create", "agent:activate", "agent:replace")
 	return s
 }

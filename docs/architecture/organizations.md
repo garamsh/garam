@@ -72,17 +72,17 @@ caller is answered.
 **Deleting an organization reaches past this domain, and the schema is
 what performs it.** `DeleteOrg` issues one statement against `orgs`;
 every row that goes does so through a foreign key declared `ON DELETE
-CASCADE`, so what is taken is fixed by the migrations rather than by
-any code path. Directly: this domain's groups, projects, memberships
-and invitations, the policies the engine stores, the agents, agent
+CASCADE`, so what is taken is fixed by the migrations rather than by any
+code path. Directly: this domain's groups, projects, memberships and
+invitations, the policies the engine stores, the agents, agent
 definitions and agent templates `internal/agent` owns, the operators
 `internal/operator` registers, and the organization's certificate
-authority. Through those: a group's and a project's members, a
-policy's versions and attachments, an agent's assignment, and an
-operator's unspent enrollment tokens, its credential and the tokens
-exchanged for it. Before the cascade, `migrations/000047`'s trigger on
-`orgs` holds the agents' execution rows and then the operators'
-registrations, in the orders [agents.md](./agents.md) and
+authority. Through those: a group's and a project's members, a policy's
+versions and attachments, an agent's assignment, and an operator's keys
+and the tokens exchanged under them. Before the cascade,
+`migrations/000047`'s trigger on `orgs` holds the agents' execution rows
+and then the operators' registrations, in the orders
+[agents.md](./agents.md) and
 [machine-identity.md](./machine-identity.md) state.
 
 Two of those reach further than one organization. A consent relation

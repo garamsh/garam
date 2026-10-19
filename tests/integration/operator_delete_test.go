@@ -3,41 +3,18 @@ package integration_test
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
-
-// enrol spends the operator's token against the machine listener and
-// returns the pair the operator holds afterwards: the certificate
-// garam signed, and the key the operator generated and never sent
-// (ADR-0064).
-func enrol(t *testing.T, url string, e *operator.Enrollment) tls.Certificate {
-	t.Helper()
-	request, key := enrollmentRequest(t)
-	body, err := json.Marshal(machinegen.Enrollment{
-		Token:                 e.Token(),
-		CertificateRequestPem: request,
-	})
-	require.NoError(t, err)
-	status, answered := machineSend(t, anonymousMachineClient(t), http.MethodPost, url+"/enrollment", string(body))
-	require.Equal(t, http.StatusCreated, status, string(answered))
-	var signed machinegen.EnrolledCertificate
-	require.NoError(t, json.Unmarshal(answered, &signed))
-	pair, err := tls.X509KeyPair([]byte(signed.CertificatePem), pemKey(t, key))
-	require.NoError(t, err)
-	return pair
-}
 
 // identifies reports the status the listener answers a caller
 // presenting pair. Each call is a client of its own, so it is a
@@ -51,7 +28,8 @@ func identifies(t *testing.T, url string, pair tls.Certificate) int {
 
 // TestOperatorDelete_StopsTheCertificateItAuthenticatesWith is
 // ADR-0070 end to end against real Postgres and a real handshake: an
-// operator enrols, authenticates, and stops authenticating the moment
+// operator holding a certificate minted out of band authenticates, and
+// stops authenticating the moment
 // its organization deletes the record. The certificate is unchanged
 // across the two calls and has not expired, so what refuses the second
 // is the delete.
@@ -67,15 +45,15 @@ func TestOperatorDelete_StopsTheCertificateItAuthenticatesWith(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	_, sealer := keyEncryptionKey(t)
+	keyFile, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
 	store := operator.NewPostgresStore(p)
 
-	deleted, deletedToken := register(t, store, "one")
-	kept, keptToken := register(t, store, "two")
-	deletedCertificate := enrol(t, url, deletedToken)
-	keptCertificate := enrol(t, url, keptToken)
+	deleted := register(t, store, "one")
+	kept := register(t, store, "two")
+	deletedCertificate := mintedOutOfBand(t, keyFile, deleted)
+	keptCertificate := mintedOutOfBand(t, keyFile, kept)
 
 	require.Equal(t, http.StatusOK, identifies(t, url, deletedCertificate),
 		"the operator authenticates before its record is deleted")
@@ -88,26 +66,24 @@ func TestOperatorDelete_StopsTheCertificateItAuthenticatesWith(t *testing.T) {
 	assert.Equal(t, http.StatusOK, identifies(t, url, keptCertificate),
 		"the operator nobody deleted is untouched")
 
-	// The delete leaves the identifier holding nothing: no record, no
-	// certificate garam would measure a renewal against, and no token.
-	// The certificate row has no foreign key to go by (000019), so its
+	// The delete leaves the identifier holding nothing: no record and no
+	// certificate garam would measure a renewal against. The
+	// certificate row has no foreign key to go by (000019), so its
 	// absence is the statement's rather than the cascade's.
 	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operators WHERE grn = $1`, deleted.String()))
 	assert.Equal(t, 0, countRows(t, p,
 		`SELECT count(*) FROM operator_certificates WHERE operator_grn = $1`, deleted.String()))
-	assert.Equal(t, 0, countRows(t, p,
-		`SELECT count(*) FROM operator_enrollment_tokens WHERE operator_grn = $1`, deleted.String()))
 	assert.Equal(t, 1, countRows(t, p,
 		`SELECT count(*) FROM operator_certificates WHERE operator_grn = $1`, kept.String()),
 		"the operator nobody deleted keeps its lineage")
 
 	// Registering the identifier again is a clean start rather than an
-	// operator that reads as already enrolled off a row the delete left
-	// behind — which is what the certificate row's removal is for.
-	reregistered, _ := register(t, store, "one")
+	// operator that reads as holding a certificate off a row the delete
+	// left behind — which is what the certificate row's removal is for.
+	reregistered := register(t, store, "one")
 	fresh, err := store.Get(ctx, reregistered)
 	require.NoError(t, err)
-	assert.Equal(t, operator.EnrollmentStatePending, fresh.EnrollmentState())
+	assert.True(t, fresh.CertificateIssuedAt().IsZero())
 }
 
 // TestOperatorDelete_RefusesAnOperatorADefinitionNames holds constraint
@@ -128,7 +104,7 @@ func TestOperatorDelete_RefusesAnOperatorADefinitionNames(t *testing.T) {
 
 	named := scopedGRN("acme", operator.ServiceType, "named")
 	defineAgent(t, p, agents, named, agent.Values{"image": "ghcr.io/acme/bot:1"})
-	unnamed, _ := register(t, store, "unnamed")
+	unnamed := register(t, store, "unnamed")
 
 	err := store.Delete(ctx, named)
 	require.Error(t, err)

@@ -8,11 +8,11 @@ Pending removals
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)):
 garam keeps no legacy path no live deployment uses, and each removal is
 its own pull request of #1593. What this document says of each holds
-until its pull request lands: the operator enrollment token and
-shared-secret credential in the second, garam's retired templates in the
-third and the browser's `operatorGrn` in the fourth, both after #1588,
-and legacy execution mode, the staged cut-over and legacy definitions in
-the fifth, after #1594.
+until its pull request lands: garam's retired templates in the third
+and the browser's `operatorGrn` in the fourth, and legacy execution
+mode, the staged cut-over and legacy definitions in the fifth, after
+#1594. The operator enrollment token and shared-secret credential are
+gone.
 
 ## Contents
 - In scope
@@ -38,9 +38,10 @@ the fifth, after #1594.
   certificate's own SAN names (ADR-0014). A connection that presents
   none, and one whose certificate does not verify, completes the
   handshake carrying no identity rather than being refused there —
-  which is what leaves enrolling reachable to an operator that holds
-  none yet, and costs nothing elsewhere, because every other operation
-  refuses a request carrying no identity (ADR-0064). An agent and an
+  which is what leaves a standalone host's enrollment and the token
+  exchanges reachable to a caller that holds none, and costs nothing
+  elsewhere, because every other operation refuses a request carrying
+  no identity. An agent and an
   operator authenticate the same way (ADR-0015), and neither
   authenticates through a user row, a session or a membership.
   What that listener serves has a specification of its own (ADR-0019).
@@ -83,9 +84,9 @@ the fifth, after #1594.
   `/orgs/{org}/operators`, and its members reading the list (ADR-0045).
   A record is a GRN, who registered it and when, and it reports
   nothing, because garam never dials an operator. Registering issues
-  the operator's credential in the same write, shown once, which it
-  exchanges for short-lived tokens; re-issuing it voids the previous one
-  and its tokens (ADR-0100). What the record grants is admission: the
+  nothing: the operator enters by a key issued on the record, whose
+  signed assertions it exchanges for short-lived tokens (ADR-0102,
+  ADR-0117). What the record grants is admission: the
   machine listener reads it per connection for a certificate and per
   request for a token, so an operator authenticates while its
   organization holds the record and stops when the record goes
@@ -95,9 +96,9 @@ the fifth, after #1594.
   the organization's words about the record and not its identity
   (ADR-0074). Registering is granted by `operator:register`, reading by
   `operator:read`, renaming and describing by `operator:update`,
-  re-issuing the credential by `operator:reissue` and deleting by
+  replacing or withdrawing a key by `operator:reissue` and deleting by
   `operator:delete`, each named action by action for the reason the
-  agent actions are — re-issuing and deleting separately from
+  agent actions are — re-keying and deleting separately from
   registering, because each withdraws what an operator runs on.
 - An organization **delegating** bounded execution authority to a
   hosted operator, under `/orgs/{org}/operators/{operator}/delegation`,
@@ -303,8 +304,8 @@ the fifth, after #1594.
   (ADR-0053). The adapter carries messages and forwards nothing (see
   the watching entry below). An agent renews its own certificate on the
   certificate route (ADR-0040) and an operator renews its own by
-  presenting it (ADR-0046); an operator's first is obtained by enrolling
-  with the token registering it minted (ADR-0064), and an agent's first
+  presenting it (ADR-0046); an operator's first is minted out of band
+  (ADR-0032), and an agent's first
   still arrives on the route its operator's claim admits it to, unless
   the agent was created managed: then it is signed over its
   controller's key under the creation's reference, or created
@@ -327,13 +328,10 @@ the fifth, after #1594.
   revoked (ADR-0070). A standalone host's supervisor is the same:
   revoking or replacing it ends the registration its certificate
   authenticates on (ADR-0082).
-- Proving an operator is the operator a record names by any means but
-  the certificate. There is no service-account token and no exchange
-  route: what registering hands over is a one-time enrollment ticket,
-  which buys one certificate and authenticates nothing else (ADR-0064).
-  `garam issue-certificate` still mints one out of band reading no
-  record, and whether it should require a registered operator is a real
-  question ADR-0045 raises and leaves open.
+- Requiring a registered operator before minting its certificate out
+  of band. `garam issue-certificate` mints one reading no record, and
+  whether it should require one is a real question ADR-0045 raises and
+  leaves open.
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies no
   sender (Sherlock at
@@ -455,7 +453,7 @@ the fifth, after #1594.
   probes every serve command mounts (ADR-0021).
 - `internal/operator/` — the record that an organization has an
   operator (ADR-0045), which holds no reported state; the operator's
-  credential and the tokens it exchanges it for (ADR-0100); and the
+  keys and the tokens it exchanges them for (ADR-0102); and the
   operator's own certificate: which one garam last issued it, and what
   it takes to replace that with the next (ADR-0046).
 - `internal/agent/` — agent identities and the operator each is
@@ -550,9 +548,7 @@ it and imports no request surface and no domain.
 | `ca.Certificate` | `internal/ca` | signed client certificate identified by a SAN URI, over a key garam generated or one a request carried |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
 | `operator.Credential` | `internal/operator` | the certificate a connection authenticated with, as the renewal rule reads it |
-| `operator.Service` | `internal/operator` | signs an enrolling operator's certificate request, mints one out of band, renews the one an operator presents, and exchanges a credential for a token |
-| `operator.IssuedCredential` | `internal/operator` | the credential garam issues an operator and answers once (ADR-0100) |
-| `operator.Enrollment` | `internal/operator` | the one-time token an operator obtains its first certificate with |
+| `operator.Service` | `internal/operator` | mints an operator's certificate out of band, renews the one an operator presents, and exchanges a key's signed assertion for a token |
 | `machine.Identity` | `internal/machine` | the GRN a verified client certificate names, and which certificate named it |
 | `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |
 | `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |

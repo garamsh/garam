@@ -54,8 +54,8 @@ type Server struct {
 	// issues (ADR-0102).
 	keysPerOperator *operator.Limiter
 	keysPerProcess  *operator.Limiter
-	// credentialAudit records and reads machine credential events
-	// (ADR-0114); nil records nothing.
+	// credentialAudit reads machine credential events (ADR-0114); nil
+	// answers that read unavailable.
 	credentialAudit CredentialAudit
 }
 

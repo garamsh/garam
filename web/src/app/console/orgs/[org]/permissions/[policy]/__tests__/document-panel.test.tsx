@@ -3,6 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
+// Loaded with the file rather than by the JSON tab's first mount: the
+// editor imports CodeMirror on mount, and under a loaded host that
+// first import is most of what a wait for the tab measured (#1551).
+import "@/lib/codemirror";
 import { DocumentPanel } from "@/app/console/orgs/[org]/permissions/[policy]/_components/document-panel";
 import { OutcomeProvider } from "@/app/console/_components/outcome";
 import { formatPolicyDocument } from "@/lib/policy-document";

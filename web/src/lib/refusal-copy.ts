@@ -53,9 +53,9 @@ const INVITATION_NOT_FOUND =
 const INVITATION_SPENT =
   "This invitation can no longer be used: it was already accepted or it has expired. Ask an admin of the organization for a new one.";
 
-// garam answers every rule a policy document breaks with the same status
-// and kind (`invalid_argument`), so the sentence names the rules rather
-// than the one that failed.
+// garam answers every rule a policy document breaks with the same
+// status and kind (`invalid_argument`), so the sentence names the rules
+// rather than the one that failed.
 const POLICY_DOCUMENT_REFUSED =
   "This policy document can't be saved. It needs a Version and at least one statement, and every statement needs an Effect of Allow or Deny, an Action and a Resource. Keys other than Version, Statement, Sid, Effect, Action, Resource and Condition aren't allowed.";
 

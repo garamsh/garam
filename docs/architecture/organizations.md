@@ -105,20 +105,20 @@ This domain owns its action constants (`ActionOrgRead`,
 including the policy management actions, which the api server enforces
 without importing the engine that stores policies, the consent
 management actions (ADR-0035), which it enforces over the relation
-`internal/message` stores, and reading an
-organization's agents, which it enforces without `internal/agent`
-importing this package back — and `Role.Actions`
-maps each role to the action patterns it grants; `ActionsFor` does the same for
-the role names a `Group` or `Project` carries as data. No role holds a
-wildcard over agents, and none holds one over operators: ADR-0012 keeps
-provisioning outside garam, so each agent action a role grants is granted
-by name and a later one is a decision rather than an increment, and an
-operator's three are named the same way — a wildcard would have granted
-deleting an operator before anybody decided it (ADR-0045, ADR-0070).
-`agent:watch` is granted by no role at all, which is that reason carried
-further — ADR-0022 separates watching from reading so an organization may
-withhold it, and a role naming it would settle that for every
-organization instead. The authz evaluator decides. Groups and projects are addressed under their
+`internal/message` stores, and reading an organization's agents, which
+it enforces without `internal/agent` importing this package back — and
+`Role.Actions` maps each role to the action patterns it grants;
+`ActionsFor` does the same for the role names a `Group` or `Project`
+carries as data. No role holds a wildcard over agents, and none holds
+one over operators: ADR-0012 keeps provisioning outside garam, so each
+agent action a role grants is granted by name and a later one is a
+decision rather than an increment, and an operator's three are named the
+same way — a wildcard would have granted deleting an operator before
+anybody decided it (ADR-0045, ADR-0070). `agent:watch` is granted by no
+role at all, which is that reason carried further — ADR-0022 separates
+watching from reading so an organization may withhold it, and a role
+naming it would settle that for every organization instead. The authz
+evaluator decides. Groups and projects are addressed under their
 organization's HTTP paths, and their GRNs carry the owning org in the
 organization segment, so a group or project role is scoped to that
 resource alone ([authz.md](./authz.md) §Statement collection).

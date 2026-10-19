@@ -538,12 +538,12 @@ exited and been drained, and restarting it is the host's init's; a
 supervisor that stops leaves the workload running.
 
 - **A run waits for a create in flight under its own name.** A
-  supervisor stopped while it creates a container leaves that create
-  to finish in the daemon, so the next run's create is refused the
-  name before the container answers by it. That run asks the engine
-  again until the container answers, its context ends, or ten seconds
-  pass, and adopts it by name and nonce as it adopts any create whose
-  answer was lost (`inFlightCreateWait`, `internal/workload/containers.go`).
+  supervisor stopped while it creates a container leaves that create to
+  finish in the daemon, so the next run's create is refused the name
+  before the container answers by it. That run asks the engine again
+  until the container answers, its context ends, or ten seconds pass,
+  and adopts it by name and nonce as it adopts any create whose answer
+  was lost (`inFlightCreateWait`, `internal/workload/containers.go`).
   Such a create took about 60 ms when measured. Without the wait, the
   next run lost that race every time and exited, and only a further
   start recovered (#1604). A name that still answers nothing after the

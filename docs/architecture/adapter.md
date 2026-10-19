@@ -297,8 +297,8 @@ description of what runs.
 [overview.md](./overview.md) §Out of scope (today) records it, beside
 the §Readiness half.
 
-**Forward turn events only while garam says someone is watching, and read
-that from the claim.** Every claim and every renewal answers with a
+**Forward turn events only while garam says someone is watching, and
+read that from the claim.** Every claim and every renewal answers with a
 watcher count; forward while it is above zero and forward nothing
 otherwise ([ADR-0022](./adr/0022-watching-an-agent.md)). garam cannot
 dial the adapter, so the poll the adapter already holds is the only
@@ -328,8 +328,8 @@ built, rather than a description of what runs.
 Consuming, completing and forwarding use separate subscriptions. A slow
 consumer must not degrade the signal that decides what it completed:
 falling behind would drop completion events, which produces
-redeliveries, which produce load. The same reasoning keeps readiness on a
-subscription of its own (below), and puts watching on a third
+redeliveries, which produce load. The same reasoning keeps readiness on
+a subscription of its own (below), and puts watching on a third
 ([ADR-0022](./adr/0022-watching-an-agent.md)).
 
 ## Readiness

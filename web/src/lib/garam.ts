@@ -147,10 +147,11 @@ export async function garamRequest(
   }).catch((cause: unknown) => {
     throw new GaramUnreachableError({ cause });
   });
-  // A 503 is an outage rather than a refusal: it says a dependency garam
-  // needs is unreachable, and its body names no cause to render
-  // (`api/openapi.yaml` §info). Every reading surface already has a state
-  // for that, so it arrives as the one the connection failure arrives as.
+  // A 503 is an outage rather than a refusal: it says a dependency
+  // garam needs is unreachable, and its body names no cause to render
+  // (`api/openapi.yaml` §info). Every reading surface already has a
+  // state for that, so it arrives as the one the connection failure
+  // arrives as.
   if (response.status === 503) {
     throw new GaramUnreachableError();
   }

@@ -288,7 +288,8 @@ export function CommandPaletteDialog({
                         {more > 0 && (
                           <CommandItem
                             value={`more ${kind}`}
-                            // Matched by what was typed, which found them.
+                            // Matched by what was typed, which found
+                            // them.
                             keywords={[search.trim()]}
                             onSelect={() =>
                               run(() =>

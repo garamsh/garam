@@ -1,6 +1,7 @@
 import { expect, test } from "./fixtures";
 
-// Consents has no content links, so every prefetch belongs to the shell.
+// Consents has no content links, so every prefetch belongs to the
+// shell.
 test.describe("console navigation prefetch", () => {
   test("prefetches a section only once the visitor points at it", async ({
     page,

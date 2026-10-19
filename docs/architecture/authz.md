@@ -1,9 +1,9 @@
 # Authorization
 
 Org-scoped permission decisions, served by an independent gRPC policy
-engine (`garam serve authz`, see [ADR-0003](./adr/0003-single-cli-topology.md)).
-Policies are IAM-style documents (see
-[ADR-0002](./adr/0002-iam-style-policy-model.md)).
+engine (`garam serve authz`, see
+[ADR-0003](./adr/0003-single-cli-topology.md)). Policies are IAM-style
+documents (see [ADR-0002](./adr/0002-iam-style-policy-model.md)).
 
 ## Contents
 - Policy document
@@ -115,7 +115,8 @@ carries (§Policy attachment).
 
 A machine identity holds no roles and belongs to no org, so the machine
 listener collects what its GRN alone grants it and supplies that in the
-same slot ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)).
+same slot
+([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)).
 
 | Origin | Action patterns | Resource patterns |
 |--------|-----------------|-------------------|
@@ -220,11 +221,11 @@ not parse comes back as `invalid_argument` and leaves as 400.
 Policy management is authorized like any other action. The
 `policy:create`, `policy:read`, `policy:update`, `policy:attach`,
 `policy:detach` and `policy:delete` constants live in `internal/org`,
-because the api server enforces them and may not import the engine
-that stores policies. `owner` and `admin` grant `policy:*`; `member` grants none,
-so reading a policy is an admin action. The addressed policy's GRN is
-the object of the check, and its organization segment is the org in the
-path, so a policy of another org is not addressable.
+because the api server enforces them and may not import the engine that
+stores policies. `owner` and `admin` grant `policy:*`; `member` grants
+none, so reading a policy is an admin action. The addressed policy's GRN
+is the object of the check, and its organization segment is the org in
+the path, so a policy of another org is not addressable.
 
 The console calls these operations and no others
 ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)),
@@ -258,24 +259,25 @@ to a group the subject belongs to, and the statements the calling
 server collected. Deny-overrides applies across all four.
 
 **An unattached policy's scope is the caller's obligation, not the
-engine's** ([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md))
-— the engine did not hold it, and the engine now does. The engine
-loads the policies of the organization owning the **object** and
-applies every unattached one to whatever subject it was handed; it
-holds no membership data and cannot tell whether that subject belongs
-to that organization. The caller therefore establishes that the
-subject belongs to the object's organization before asking, sends
-that organization as `subject_org` on `Check` / `Explain`, and the
-engine refuses the call when the field is unset or does not match
+engine's**
+([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md)) — the
+engine did not hold it, and the engine now does. The engine loads the
+policies of the organization owning the **object** and applies every
+unattached one to whatever subject it was handed; it holds no membership
+data and cannot tell whether that subject belongs to that organization.
+The caller therefore establishes that the subject belongs to the
+object's organization before asking, sends that organization as
+`subject_org` on `Check` / `Explain`, and the engine refuses the call
+when the field is unset or does not match
 ([ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)).
 `internal/api` populates it from the org whose member it fetched; the
 machine listener populates it from the sender's own GRN, after the
-consent relation has decided the same-organization half. A caller
-that hands the engine a subject from another organization is refused
-at the engine — the boundary has moved, and the engine is where the
-obligation now lives. The groups a caller sends are subjects too, and
-the same obligation covers them: a group belongs to the org that
-names it in its GRN.
+consent relation has decided the same-organization half. A caller that
+hands the engine a subject from another organization is refused at the
+engine — the boundary has moved, and the engine is where the obligation
+now lives. The groups a caller sends are subjects too, and the same
+obligation covers them: a group belongs to the org that names it in its
+GRN.
 
 The row above reads "every subject the caller asks about" for that
 reason. A caller that hands the engine a subject from another
@@ -287,15 +289,16 @@ Detaching an active policy's last attachment is refused, because the
 policy would not retire — it would widen back to the org, which for a
 Deny turns one subject's restriction into every subject's, and for an
 Allow hands that grant to every subject a caller asks about. The
-remedies the refusal names are the deliberate acts: delete the policy
-to retire it, or attach the next subject before detaching this one.
-The org-wide state itself is unchanged ([ADR-0008](./adr/0008-identity-based-policy-attachments.md)):
-a policy created and activated without an attachment applies to every
-subject the caller asks about, so entering that state stays possible
-and is never a side effect of removing an attachment. A draft policy's
-last attachment detaches freely, since nothing evaluates it. Deleting
-is what takes a policy out of every check, attached or not: nothing of
-it is left to widen, so the deletion refuses nothing on attachments.
+remedies the refusal names are the deliberate acts: delete the policy to
+retire it, or attach the next subject before detaching this one. The
+org-wide state itself is unchanged
+([ADR-0008](./adr/0008-identity-based-policy-attachments.md)): a policy
+created and activated without an attachment applies to every subject the
+caller asks about, so entering that state stays possible and is never a
+side effect of removing an attachment. A draft policy's last attachment
+detaches freely, since nothing evaluates it. Deleting is what takes a
+policy out of every check, attached or not: nothing of it is left to
+widen, so the deletion refuses nothing on attachments.
 
 An attached policy decides what an agent sends
 ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), inside

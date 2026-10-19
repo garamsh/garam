@@ -324,9 +324,9 @@ garam's retired templates and the browser's `operatorGrn`
 - `tests/image/` — black-box checks against a built image rather than
   against the app (`make web-image-e2e`).
 - `web/` — Next.js frontend; reaches the API through a same-origin
-  `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make web-ci`).
-  `/` is the public landing page, `/login` the sign-in page and
-  `/register` where an invitation becomes a password account
+  `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make
+  web-ci`). `/` is the public landing page, `/login` the sign-in page
+  and `/register` where an invitation becomes a password account
   (ADR-0041); the signed-in application lives under `/console`, whose
   shell and route structure are ADR-0011.
 - `deploy/charts/garam/` — the Helm chart a cluster installs garam

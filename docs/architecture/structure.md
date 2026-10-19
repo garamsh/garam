@@ -1,6 +1,7 @@
 # Structure
 
-The shape garam is partitioned into, what may reference what, and when a new boundary is earned.
+The shape garam is partitioned into, what may reference what, and when a
+new boundary is earned.
 
 ## Contents
 - The shape
@@ -12,11 +13,19 @@ The shape garam is partitioned into, what may reference what, and when a new bou
 
 ## The shape
 
-garam is divided by subject matter — one folder per domain, feature or bounded context. What composes several boundaries is not itself one of them.
+garam is divided by subject matter — one folder per domain, feature or
+bounded context. What composes several boundaries is not itself one of
+them.
 
-The division is what *Fundamentals of Software Architecture* (Richards and Ford, 2020) calls domain partitioning, against the technical partitioning a layered system uses. *Domain-Driven Design* (Evans, 2003) names the same boundary Bounded Context.
+The division is what *Fundamentals of Software Architecture* (Richards
+and Ford, 2020) calls domain partitioning, against the technical
+partitioning a layered system uses. *Domain-Driven Design* (Evans, 2003)
+names the same boundary Bounded Context.
 
-Nothing here states what goes *inside* a boundary, or how the system is deployed. The first divides by stack, not by architecture, and a boundary owns whichever parts it needs; the second is a separate decision, and the same partitioning serves one deployable or many.
+Nothing here states what goes *inside* a boundary, or how the system is
+deployed. The first divides by stack, not by architecture, and a
+boundary owns whichever parts it needs; the second is a separate
+decision, and the same partitioning serves one deployable or many.
 
 ## Boundaries and dependency direction
 
@@ -46,16 +55,16 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
   `internal/watch` and `internal/org` keep their store in
   `internal/<domain>/postgres/`, and `go list -deps` on each reports no
   `jackc/pgx`. `user` and `org` carry exported fields on what their
-  stores persist; `watch`'s `Store`
-  persists no aggregate, so it exported none. `internal/machine` had no
-  driver import to move. The other five — `agent`, `message`, `authz`,
-  `operator` and `authn` — still import the driver into the domain package and keep
-  their accessors until each follows in its own pull request (#1083),
-  so the tree reads in two shapes meanwhile and the rule above is what
-  both are measured against. `internal/audit`, added after the ten, was
-  written in the converted shape: its writer sits in
-  `internal/audit/postgres/`, and its one aggregate keeps accessors
-  because it holds an invariant over its fields
+  stores persist; `watch`'s `Store` persists no aggregate, so it
+  exported none. `internal/machine` had no driver import to move. The
+  other five — `agent`, `message`, `authz`, `operator` and `authn` —
+  still import the driver into the domain package and keep their
+  accessors until each follows in its own pull request (#1083), so the
+  tree reads in two shapes meanwhile and the rule above is what both are
+  measured against. `internal/audit`, added after the ten, was written
+  in the converted shape: its writer sits in `internal/audit/postgres/`,
+  and its one aggregate keeps accessors because it holds an invariant
+  over its fields
   ([ADR-0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)).
 - **A boundary reaches a sibling directly, through the surface that
   sibling declares**
@@ -107,7 +116,10 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
 - **The composition site stays thin.** It constructs and passes; it
   decides nothing else.
 
-garam's composition root is `internal/cli`, the package `cmd/garam/main.go` calls: the concrete types behind the seams the domains declare are constructed there, and `cmd/garam/main.go` constructs nothing itself.
+garam's composition root is `internal/cli`, the package
+`cmd/garam/main.go` calls: the concrete types behind the seams the
+domains declare are constructed there, and `cmd/garam/main.go`
+constructs nothing itself.
 
 The rule is the three bullets above, and
 `docs/convention/stack-go.md` §Project envelope states only which Go
@@ -118,7 +130,17 @@ reach it, so `internal/cli` is the file that section names for garam
 ([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md),
 [ADR-0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)).
 
-**The environment is read in the composition root and nowhere else.** Every name the module reads is declared in one block in `internal/cli/cli.go`, and the `envOr` beside it holds the only environment read under `internal/` and `cmd/`, so what the source reads is enumerable from those declarations rather than from the spelling of the calls that read them. A second read there is the defect this states, and `make chart-render` fails on one rather than leaving it to a reviewer: it counts the reads under those two trees and expects the one, because a name read outside the block is one it cannot enumerate against the chart. The suites under `tests/` read `GARAM_TEST_DATABASE_URL` for themselves and are outside both the rule and the count.
+**The environment is read in the composition root and nowhere else.**
+Every name the module reads is declared in one block in
+`internal/cli/cli.go`, and the `envOr` beside it holds the only
+environment read under `internal/` and `cmd/`, so what the source reads
+is enumerable from those declarations rather than from the spelling of
+the calls that read them. A second read there is the defect this states,
+and `make chart-render` fails on one rather than leaving it to a
+reviewer: it counts the reads under those two trees and expects the one,
+because a name read outside the block is one it cannot enumerate against
+the chart. The suites under `tests/` read `GARAM_TEST_DATABASE_URL` for
+themselves and are outside both the rule and the count.
 
 **The placement is what the in-process integration tests rest on.** Only
 a test in its own directory can import a main package, which
@@ -149,9 +171,24 @@ A concept earns its own boundary when all three hold:
 - Something outside it needs to depend on it.
 - It has a surface that can stay stable while its inside changes.
 
-A concern shared by three or more boundaries is extracted. One shared by two stays with the boundary that owns it and is reached through its declared surface — unless a boundary may not reach a sibling at all, in which case it is extracted too. garam's side is the bullet above, so the clause after the dash does not fire here: a concern shared by two is not extracted on that ground. The boundary that owns a concern is the one whose subject matter it is, and not the one the concern was extracted from ([ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)); where no boundary's subject it is, the destination names nothing and the concern stays below them.
+A concern shared by three or more boundaries is extracted. One shared by
+two stays with the boundary that owns it and is reached through its
+declared surface — unless a boundary may not reach a sibling at all, in
+which case it is extracted too. garam's side is the bullet above, so the
+clause after the dash does not fire here: a concern shared by two is not
+extracted on that ground. The boundary that owns a concern is the one
+whose subject matter it is, and not the one the concern was extracted
+from
+([ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md));
+where no boundary's subject it is, the destination names nothing and the
+concern stays below them.
 
-A conversion to a wire format the boundaries already share is not a shared kernel: a package holding it is depended on for the format, not for each other's behaviour, so it does not couple the boundaries that import it. What the format names — a wire type and the two directions of its conversion — belongs to that package; anything that would choose a behaviour rather than convert one does not.
+A conversion to a wire format the boundaries already share is not a
+shared kernel: a package holding it is depended on for the format, not
+for each other's behaviour, so it does not couple the boundaries that
+import it. What the format names — a wire type and the two directions of
+its conversion — belongs to that package; anything that would choose a
+behaviour rather than convert one does not.
 
 ## Decisions this rests on
 

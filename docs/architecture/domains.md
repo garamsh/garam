@@ -1,6 +1,7 @@
 # Domains
 
-garam's domains, named by the subject matter each owns, and what else under `internal/` is not one.
+garam's domains, named by the subject matter each owns, and what else
+under `internal/` is not one.
 
 ## Contents
 - What a domain is here
@@ -120,15 +121,15 @@ imports neither `internal/agent` nor `internal/operator` and the
 domains cooperate through `grn.GRN` alone.
 The recorder's store is `internal/machine/postgres`.
 
-`queries.sql` and `db/` are a source and its output, not two copies. Every
-generated file says so in its first line, and `make check-gen` fails on any
-drift between them. `sqlc.yaml` names where each pair lives, so a domain
-that has moved its store is read there rather than assumed. Every entry
-reads the whole `migrations/` directory as its schema, so each domain
-sees the one schema the database has, and none keeps a list of the
-migrations it believes touch its tables. Each entry also sets
-`omit_unused_structs`, so its `db/` package holds only the models its
-own queries read (#1151).
+`queries.sql` and `db/` are a source and its output, not two copies.
+Every generated file says so in its first line, and `make check-gen`
+fails on any drift between them. `sqlc.yaml` names where each pair
+lives, so a domain that has moved its store is read there rather than
+assumed. Every entry reads the whole `migrations/` directory as its
+schema, so each domain sees the one schema the database has, and none
+keeps a list of the migrations it believes touch its tables. Each entry
+also sets `omit_unused_structs`, so its `db/` package holds only the
+models its own queries read (#1151).
 
 A change announcement reads no row, so it is not in `queries.sql`, and
 the two domains that use one do not raise it the same way.
@@ -184,20 +185,20 @@ read when the repository was named `gagent`),
 so the same answer one hop later is not a new failure mode.
 
 The two ends of a watch are in different processes — a browser opens the
-stream on `garam serve api` and an adapter forwards to `garam serve
-machine` — and Postgres is the crossing for both the events and the
-count (ADR-0027). `Relay` is the event half, as `LISTEN`/`NOTIFY`: it
-announces and writes nothing down, so an event crossing between processes
-is no more a record than one that never left. An event too large for one
-announcement is refused rather than shortened: a shortened turn would put
-words in the agent's mouth, where a refused one is the gap this stream
-already permits. An agent's announcement runs the agent's execution
-fence in the same transaction as its `NOTIFY`, so a superseded
-generation announces nothing that commits after its replacement; one
-announced before may still arrive after it, since arrival is not commit
-order. The fence is the agents domain's `agent_execution_admit`
-function, and this boundary imports no package of that domain
-(ADR-0080).
+stream on `garam serve api` and an adapter forwards to
+`garam serve machine` — and Postgres is the crossing for both the events
+and the count (ADR-0027). `Relay` is the event half, as
+`LISTEN`/`NOTIFY`: it announces and writes nothing down, so an event
+crossing between processes is no more a record than one that never left.
+An event too large for one announcement is refused rather than
+shortened: a shortened turn would put words in the agent's mouth, where
+a refused one is the gap this stream already permits. An agent's
+announcement runs the agent's execution fence in the same transaction as
+its `NOTIFY`, so a superseded generation announces nothing that commits
+after its replacement; one announced before may still arrive after it,
+since arrival is not commit order. The fence is the agents domain's
+`agent_execution_admit` function, and this boundary imports no package
+of that domain (ADR-0080).
 
 `Store` is the count half: a leased row per open watch (ADR-0027).
 Postgres measures the lease, so no instance's clock decides when a watch
@@ -308,12 +309,12 @@ the agent, because garam cannot dial an adapter and the poll it already
 holds is the direction that exists (ADR-0022). The field is always
 answered: zero is the ordinary answer, and a shape that changed with it
 would make the agent nobody watches the exceptional one. A count that
-cannot be read answers zero and is logged rather than returned — the live
-view may not cost a message one of its delivery attempts, which is the
-same reason ADR-0022 keeps watching off the subscription completion rests
-on. A poll that found nothing carries no count: there is no turn to
-forward the events of, and the answer is an empty success rather than a
-kind, so a caller loops on it rather than telling an error apart.
+cannot be read answers zero and is logged rather than returned — the
+live view may not cost a message one of its delivery attempts, which is
+the same reason ADR-0022 keeps watching off the subscription completion
+rests on. A poll that found nothing carries no count: there is no turn
+to forward the events of, and the answer is an empty success rather than
+a kind, so a caller loops on it rather than telling an error apart.
 
 ## Shared code below the domains
 
@@ -507,10 +508,10 @@ are where an ORM hands the work back anyway. See
 
 ## Known gap
 
-Domain types (`User`, `Organization`, …) do not satisfy the `authz.Object`
-seam; the engine adapts a parsed GRN at its transport boundary. If a
-future design needs domain-typed subjects or objects, it should define
-the adapter where it is used.
+Domain types (`User`, `Organization`, …) do not satisfy the
+`authz.Object` seam; the engine adapts a parsed GRN at its transport
+boundary. If a future design needs domain-typed subjects or objects, it
+should define the adapter where it is used.
 
 ## Open questions
 

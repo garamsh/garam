@@ -32,7 +32,7 @@ const testSource = "192.0.2.10"
 // keyService is the operator service over the store alone, configured
 // with the token endpoint the listeners here are (ADR-0102).
 func keyService(s *operator.PostgresStore) operator.Service {
-	return operator.NewService(s, s, nil, operator.Config{TokenEndpoint: testTokenURL})
+	return operator.NewService(s, operator.Config{TokenEndpoint: testTokenURL})
 }
 
 // issueKey issues subject a key under rotation and answers the private

@@ -359,7 +359,7 @@ func TestControlEndpoint_IsTheDelegatingActNotARename(t *testing.T) {
 	status, got = s.introspect(t, s.hostedTLS, before.Authority)
 	require.Equal(t, http.StatusOK, status, got)
 	assert.Equal(t, s.hosted.String(), bindingOf(t, got).AudienceGrn, "the endpoint moved no audience")
-	status, got = call(t, s.hostedTLS, http.MethodGet, s.machine+"/operation-references/"+before.OperationRef, nil, "")
+	status, got = machineCall(t, s.hostedTLS, http.MethodGet, s.machine+"/operation-references/"+before.OperationRef, "")
 	require.Equal(t, http.StatusOK, status, got)
 	assert.Equal(t, s.hosted.String(), bindingOf(t, got).AudienceGrn)
 

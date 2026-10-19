@@ -52,7 +52,7 @@ func main() {
 	case "find":
 		err = find(os.Args[2], os.Args[3])
 	case "garam":
-		err = garam(os.Args[2], os.Args[3], os.Args[4])
+		err = garam(os.Args[2], os.Args[3], os.Args[4], os.Args[5])
 	case "flip":
 		err = flip(os.Args[2])
 	case "remove":
@@ -278,11 +278,11 @@ func find(root, name string) error {
 
 // garam stands in for garam's machine listener as the adapter meets it
 // when nothing is addressed to the agent: a claim finds nothing, and an
-// outbox reply is stored and answered as durable-delivery.v1 answers
-// it, naming the sender the client certificate names. Each stored key
-// is printed. It serves once certFile exists, which is written after
-// its address is known.
-func garam(addr, certFile, keyFile string) error {
+// outbox reply presenting an agent token is stored and answered as
+// durable-delivery.v2 answers it, naming agent as its sender. Each
+// stored key is printed. It serves once certFile exists, which is
+// written after its address is known.
+func garam(addr, certFile, keyFile, agent string) error {
 	for {
 		if _, err := os.Stat(certFile); err == nil {
 			break
@@ -298,8 +298,8 @@ func garam(addr, certFile, keyFile string) error {
 			Recipient      string `json:"recipient"`
 			IdempotencyKey string `json:"idempotencyKey"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || len(r.TLS.PeerCertificates) == 0 ||
-			len(r.TLS.PeerCertificates[0].URIs) != 1 {
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil ||
+			!strings.HasPrefix(r.Header.Get("Authorization"), "Garam-Token garam_at_") {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -308,12 +308,12 @@ func garam(addr, certFile, keyFile string) error {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(map[string]string{
-			"id": "stored-" + in.IdempotencyKey, "sender": r.TLS.PeerCertificates[0].URIs[0].String(),
+			"id": "stored-" + in.IdempotencyKey, "sender": agent,
 			"recipient": in.Recipient, "idempotencyKey": in.IdempotencyKey,
 		})
 	})
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second,
-		TLSConfig: &tls.Config{ClientAuth: tls.RequireAnyClientCert, MinVersion: tls.VersionTLS13}}
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13}}
 	return srv.ListenAndServeTLS(certFile, keyFile)
 }
 

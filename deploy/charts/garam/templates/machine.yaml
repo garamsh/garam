@@ -95,15 +95,14 @@ spec:
               value: {{ printf "/run/garam/key-material/%s" (required "machine.keyMaterial.certKey is required" .Values.machine.keyMaterial.certKey) | quote }}
             - name: GARAM_MACHINE_TLS_KEY_FILE
               value: {{ printf "/run/garam/key-material/%s" (required "machine.keyMaterial.keyKey is required" .Values.machine.keyMaterial.keyKey) | quote }}
-            # The root every identity garam issues a certificate to pins
-            # garam by. It signed the pair above and nothing else, it is
-            # public, and it is read once at startup (ADR-0040).
+            # The root every caller garam issues a credential to pins
+            # garam by, answered beside each one. It signed the pair
+            # above and nothing else, it is public, and it is read once
+            # at startup (ADR-0040).
             - name: GARAM_MACHINE_SERVER_ROOT_FILE
               value: {{ printf "/run/garam/key-material/%s" (required "machine.keyMaterial.serverRootKey is required" .Values.machine.keyMaterial.serverRootKey) | quote }}
             - name: GARAM_CA_KEY_FILE
               value: {{ printf "/run/garam/key-material/%s" (required "machine.keyMaterial.kekKey is required" .Values.machine.keyMaterial.kekKey) | quote }}
-            - name: GARAM_CERTIFICATE_LIFETIME
-              value: {{ required "machine.certificateLifetime is required" .Values.machine.certificateLifetime | quote }}
             - name: GARAM_AGENT_TOKEN_LIFETIME
               value: {{ required "machine.agentTokenLifetime is required" .Values.machine.agentTokenLifetime | quote }}
             - name: GARAM_MACHINE_ISSUER

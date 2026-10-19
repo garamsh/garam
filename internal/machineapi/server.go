@@ -2,9 +2,9 @@
 // api/machine.yaml into api/machine (imported as machinegen): what
 // `garam serve machine` serves.
 //
-// A handler's caller is the machine identity the connection
+// A handler's caller is the machine identity the request's token
 // authenticated as and nothing else — no session, no user row, no
-// organization membership (ADR-0014, ADR-0015). What an operator may
+// organization membership (ADR-0100). What an operator may
 // reach is bounded by the assignments it holds, which `internal/agent`
 // decides, and whose queue a caller may act on is `internal/message`'s
 // to decide; this package reads the caller off the request, parses what
@@ -22,6 +22,7 @@
 package machineapi
 
 import (
+	"context"
 	"net/http"
 
 	machinegen "github.com/garamsh/garam/api/machine"
@@ -44,15 +45,15 @@ type Server struct {
 	groups    Groups
 	evaluator Evaluator
 	authority operator.AuthorityService
-	// certificates verifies a certificate again on a decision, the
-	// caller's own and one forwarded for another identity.
-	certificates machine.Service
-	proofs       operator.ProofService
+	// recheck reads the caller's token dates and registration again on
+	// a decision.
+	rechecker Rechecker
+	proofs    operator.ProofService
 	// executions is what a lifecycle authority does to an agent's
-	// execution, and how an agent renews inside it (ADR-0078).
+	// execution (ADR-0078).
 	executions agent.ExecutionService
 	// supervisors is how a standalone host's supervisor enrolls and
-	// renews (ADR-0082).
+	// exchanges its credential (ADR-0082, ADR-0100).
 	supervisors agent.SupervisorService
 	// admissions is agent-enrollment.v1's approval and admission
 	// (ADR-0102).
@@ -65,31 +66,36 @@ type Server struct {
 	credentialAudit CredentialAudit
 }
 
+// Rechecker reads again, for one decision, what admitted the caller's
+// identity: [machine.Recheck] satisfies it.
+type Rechecker interface {
+	Recheck(ctx context.Context, identity machine.Identity) error
+}
+
 // Compile-time check that Server satisfies the generated interface.
 var _ machinegen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the machine API server over the services it
-// answers from: what an operator does to its agents, what an operator
-// does to its own certificate, what a machine identity does to its own
-// queue, the consent relation that lets a message cross an organization
-// boundary, who is watching one work and what it is saying, which
-// groups a caller belongs to, what decides whom it may send to, what a
-// hosted operator reads its delegated operations back through, what
-// verifies a certificate again on a decision, what proves a
-// controller's current authority to that operator, what activates,
-// inspects, recovers and renews an agent's execution, how a standalone
-// host's supervisor enrolls and renews, what prepares and admits an
-// agent-enrollment.v1 approval, and what signs each message handed
-// out.
-func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, certificates machine.Service, proofs operator.ProofService, executions agent.ExecutionService, supervisors agent.SupervisorService, admissions agent.AdmissionService, keys message.Keyring) *Server {
+// answers from: what an operator does to its agents, how an operator
+// exchanges its key, what a machine identity does to its own queue, the
+// consent relation that lets a message cross an organization boundary,
+// who is watching one work and what it is saying, which groups a
+// caller belongs to, what decides whom it may send to, what a hosted
+// operator reads its delegated operations back through, what rechecks
+// a caller on a decision, what proves a controller's current authority
+// to that operator, what activates, inspects and recovers an agent's
+// execution, how a standalone host's supervisor enrolls, what prepares
+// and admits an agent-enrollment.v1 approval, and what signs each
+// message handed out.
+func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, recheck Rechecker, proofs operator.ProofService, executions agent.ExecutionService, supervisors agent.SupervisorService, admissions agent.AdmissionService, keys message.Keyring) *Server {
 	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator, authority: authority,
-		certificates: certificates, proofs: proofs, executions: executions, supervisors: supervisors, admissions: admissions, keys: keys}
+		rechecker: recheck, proofs: proofs, executions: executions, supervisors: supervisors, admissions: admissions, keys: keys}
 }
 
-// caller returns the GRN the request proved, by certificate or by
-// token, and writes the refusal itself when there is none. It is what a
-// handler needing only the identity takes it through; see
-// identityOf for why taking it is not optional.
+// caller returns the GRN the request's token proved, and writes the
+// refusal itself when there is none. It is what a handler needing only
+// the identity takes it through; see identityOf for why taking it is
+// not optional.
 func caller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
 	identity, ok := identityOf(w, r)
 	return identity.GRN(), ok
@@ -98,13 +104,12 @@ func caller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
 // identityOf returns the identity the request proved, and writes the
 // refusal itself when there is none.
 //
-// The listener admits a connection whose certificate does not
-// authenticate, so that an operator with no certificate yet can reach
-// the enrollment route (ADR-0064). That makes this refusal the only one
-// standing between such a connection and a handler: every handler but
-// EnrollOperator has to take its identity through here, through
-// callerCertificate, or through parties, and a new one that does not is
-// a route an unauthenticated caller reaches.
+// The listener admits a request presenting no token, so that the
+// routes authenticated by what else a request carries can be reached.
+// That makes this refusal the only one standing between such a request
+// and a handler: every handler but those has to take its identity
+// through here, through callerCredential, or through parties, and a new
+// one that does not is a route an unauthenticated caller reaches.
 //
 // A request that presented a token which proved nothing is refused
 // with the reason the listener read (ADR-0100), so a caller holding a
@@ -122,42 +127,18 @@ func identityOf(w http.ResponseWriter, r *http.Request) (machine.Identity, bool)
 	return identity, true
 }
 
-// callerCredential returns the identity and the credential it presented
-// — a certificate, or an agent's token, whose serial and dates the
-// execution fence reads as it reads a certificate's (ADR-0100) — and
-// writes the refusal itself where there is none. An operator's token
-// carries no serial, so it is refused here.
+// callerCredential returns the identity and the token it presented,
+// whose serial and dates the execution fence reads (ADR-0080,
+// ADR-0100), and writes the refusal itself where there is none. An
+// operator's token carries no serial, so it is refused here.
 func callerCredential(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
 	identity, ok := identityOf(w, r)
 	if !ok {
 		return machine.Identity{}, false
 	}
-	if identity.Method() == machine.MethodToken && identity.Serial() == "" {
+	if identity.Serial() == "" {
 		writeError(w, errorx.New(errorx.KindUnauthenticated,
 			"this operation reads a credential's serial, and this token carries none"))
-		return machine.Identity{}, false
-	}
-	return identity, true
-}
-
-// callerCertificate returns the identity and the certificate it
-// authenticated with, and writes the refusal itself when there is none.
-//
-// A route takes the certificate rather than the GRN alone where a
-// decision rests on which certificate authenticated: what may replace
-// it (ADR-0046), a recheck on every request, or the execution fence's
-// judgement of its validity and lineage (ADR-0080). A token carries no
-// certificate, so an identity a token proved is refused here whatever
-// route reached it: ConfineTokens keeps tokens off these routes, and
-// this is what still holds where a route list does not (ADR-0100).
-func callerCertificate(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
-	identity, ok := identityOf(w, r)
-	if !ok {
-		return machine.Identity{}, false
-	}
-	if identity.Method() != machine.MethodCertificate {
-		writeError(w, errorx.New(errorx.KindUnauthenticated,
-			"this operation reads the certificate a connection presented, and a token carries none"))
 		return machine.Identity{}, false
 	}
 	return identity, true

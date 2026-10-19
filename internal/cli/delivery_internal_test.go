@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"net"
@@ -15,28 +14,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/keyfile"
 	"github.com/garamsh/garam/internal/machine"
 )
 
-// clientOf is the client garam is reached through, from the three files
-// the deployment mounts for it.
-func clientOf(certFile, keyFile, serverRootFile string) (*http.Client, error) {
-	pair, err := adapterPair(certFile, keyFile)
-	if err != nil {
-		return nil, err
-	}
-	return adapterClient(pair, serverRootFile, string(envAdapterServerRootFile), "")
-}
-
-// anyMachineIdentity authenticates whatever a handshake presents. What
-// this file measures is the protocol the connection ends up on, and a
-// refusal here would end the handshake before there is one. Nothing
-// here makes a decision that verifies a certificate again.
-type anyMachineIdentity struct{ machine.Service }
-
-func (anyMachineIdentity) Authenticate(context.Context, [][]byte) (machine.Identity, error) {
-	return machine.Identity{}, nil
+// clientOf is the client garam is reached through, from the server
+// root the deployment mounts for it.
+func clientOf(serverRootFile string) (*http.Client, error) {
+	return adapterClient(serverRootFile, string(envAdapterServerRootFile), "")
 }
 
 // heldCertificate is the pair the listener presents, held rather than
@@ -71,7 +55,7 @@ func TestAdapterClient_MeetsTheMachineListenerOverHTTP11(t *testing.T) {
 
 	pair, err := tls.LoadX509KeyPair(certFile, keyFile)
 	require.NoError(t, err)
-	srv := machine.NewServer(anyMachineIdentity{}, identityTokens{operators: liveTokens{}}, nil, heldCertificate{pair: &pair},
+	srv := machine.NewServer(identityTokens{operators: liveTokens{}}, nil, heldCertificate{pair: &pair},
 		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -83,7 +67,7 @@ func TestAdapterClient_MeetsTheMachineListenerOverHTTP11(t *testing.T) {
 	require.True(t, ok, `net.Listen("tcp", ...) returns a *net.TCPAddr`)
 	url := "https://localhost:" + strconv.Itoa(addr.Port)
 
-	subject, err := clientOf(certFile, keyFile, rootFile)
+	subject, err := clientOf(rootFile)
 	require.NoError(t, err)
 	resp, err := subject.Get(url)
 	require.NoError(t, err)
@@ -94,11 +78,7 @@ func TestAdapterClient_MeetsTheMachineListenerOverHTTP11(t *testing.T) {
 	require.True(t, roots.AppendCertsFromPEM(certPEM))
 	control := &http.Client{Transport: &http.Transport{
 		ForceAttemptHTTP2: true,
-		TLSClientConfig: &tls.Config{
-			Certificates: []tls.Certificate{pair},
-			RootCAs:      roots,
-			MinVersion:   tls.VersionTLS13,
-		},
+		TLSClientConfig:   &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS13},
 	}}
 	controlResp, err := control.Get(url)
 	require.NoError(t, err)
@@ -130,18 +110,14 @@ func TestAdapterClient_DialsTheControlSocket(t *testing.T) {
 	t.Cleanup(func() { _ = srv.Close() })
 	// The listener's certificate is self-signed for localhost, so it is
 	// also the root the caller verifies it by.
-	agentCert, agentKey := writeTLSKeyPair(t, t.TempDir())
-	held, err := keyfile.NewPair(agentCert, agentKey)
-	require.NoError(t, err)
-
-	subject, err := adapterClient(held, certFile, "control root", socket)
+	subject, err := adapterClient(certFile, "control root", socket)
 	require.NoError(t, err)
 	resp, err := subject.Get("https://localhost/v1/agents")
 	require.NoError(t, err, "the socket answers under the name the certificate carries")
 	t.Cleanup(func() { _ = resp.Body.Close() })
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
 
-	control, err := adapterClient(held, certFile, "control root", "")
+	control, err := adapterClient(certFile, "control root", "")
 	require.NoError(t, err)
 	controlResp, err := control.Get("https://localhost/v1/agents")
 	if controlResp != nil {

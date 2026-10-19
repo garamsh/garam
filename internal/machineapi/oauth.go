@@ -33,10 +33,9 @@ func (e *oauthRefusal) Error() string { return string(e.code) + ": " + e.descrip
 // key signed the client assertion, under machine-token.v2 (ADR-0102):
 // the client credentials grant authenticated by private_key_jwt.
 //
-// It reads no identity off the connection or the request: a client
-// certificate, or any Authorization header, refuses rather than
-// combining with the assertion, so a caller holds one credential here
-// and never falls back to another.
+// It reads no identity off the request: an Authorization header
+// refuses rather than combining with the assertion, so a caller holds
+// one credential here and never falls back to another.
 func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request) {
 	header := w.Header()
 	header.Set(operator.ContractVersionHeader, operator.AssertionContractVersion)
@@ -95,10 +94,6 @@ func clientCredentialsForm(r *http.Request) (url.Values, *oauthRefusal) {
 	if _, present := r.Header["Authorization"]; present {
 		return nil, &oauthRefusal{machinegen.InvalidRequest,
 			"the exchange is authenticated by its client assertion alone: send no Authorization header"}
-	}
-	if r.TLS != nil && len(r.TLS.PeerCertificates) > 0 {
-		return nil, &oauthRefusal{machinegen.InvalidRequest,
-			"the exchange is authenticated by its client assertion alone: present no client certificate"}
 	}
 	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/x-www-form-urlencoded" {

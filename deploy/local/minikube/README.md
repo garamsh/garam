@@ -103,19 +103,18 @@ of it is disposable:
   here it is thrown away with the temporary directory, so nothing
   renews.
 - The certificate that root signs is valid for a month.
-- The key-encryption key seals certificate authorities that exist only
-  in this cluster's database.
+- The key-encryption key seals message signing keys that exist only in
+  this cluster's database.
 
 **A real key-encryption key is not like this.** A cluster that loses one
-loses every organization's certificate authority, with no recovery
-beyond reissuing every certificate from new authorities
+loses every key sealed under it, with no recovery
 ([ADR-0016](../../../docs/architecture/adr/0016-ca-key-custody.md)). Do
 not carry anything from this directory into a deployment that holds one.
 
 The script generates into a private temporary directory and deletes it
 on the way out, so no generated value is ever written into this
 repository. It never replaces a key-encryption key that already exists:
-a new one would leave every authority already in the database
+a new one would leave every key already sealed in the database
 unopenable. A Secret that already carries a server root is left alone
 whole; one predating the root gets fresh TLS material beside the key
 that was already there, so a cluster brought up before
@@ -224,21 +223,12 @@ given their configuration the way a cluster gives it.
 
 It does not prove anything about the registry path, which this stack
 deliberately does not use, and bringing the stack up does not exercise
-the machine process's mTLS surface: that listener admits no caller
-without a client certificate, and no certificate is minted as part of
-the bring-up. What is verified there is that the process starts with
-its key material, that it answers its own probe, and that the mTLS
-listener refuses a caller presenting no certificate.
+the machine process's surface: that listener admits no caller without
+a token, and none is exchanged as part of the bring-up. What is
+verified there is that the process starts with its key material and
+that it answers its own probe.
 
-Reaching that surface by hand is a named step rather than a throwaway
-program: `garam issue-certificate <subject-grn> --out-dir <dir>` mints
-an operator's first certificate — the one bootstrap
-[ADR-0015](../../../docs/architecture/adr/0015-operator-identity.md)
-leaves out of band — and refuses any subject that is not an operator.
-It reads the same `GARAM_DATABASE_URL` and `GARAM_CA_KEY_FILE` `serve
-machine` runs on, so against this cluster it runs from this machine:
-port-forward `postgres-rw`, lift the key-encryption key out of the
-`machine-throwaway-key-material` Secret into a file its owner alone can
-read, and port-forward the `machine` Service for the call itself. The
-organization the operator's GRN names must exist first — the
-certificate authority the command creates is a row that references it.
+Reaching that surface by hand starts in the console: register an
+operator and issue it a key, then exchange an assertion that key signs
+at the machine listener's `/oauth/token` for a token (ADR-0102,
+ADR-0117), with the `machine` Service port-forwarded for the calls.

@@ -2,16 +2,8 @@ package integration_test
 
 import (
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/json"
-	"encoding/pem"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -60,12 +52,12 @@ func (s *executionStack) creationRef(t *testing.T, cookie *http.Cookie, requestI
 	return authorityOf(t, got).OperationRef
 }
 
-// enrollment sends one managed-enrollment.v1 request, whose every
+// enrollment sends one managed-enrollment.v2 request, whose every
 // answer names that version.
 func (s *executionStack) enrollment(t *testing.T, client *http.Client, path, body string) reply {
 	t.Helper()
-	got := s.send(t, client, http.MethodPost, path, agent.EnrollmentContractVersion, "", body)
-	assert.Equal(t, agent.EnrollmentContractVersion, got.version, "every enrollment answer names its contract")
+	got := s.send(t, client, http.MethodPost, path, agent.TokenEnrollmentContractVersion, "", body)
+	assert.Equal(t, agent.TokenEnrollmentContractVersion, got.version, "every enrollment answer names its contract")
 	return got
 }
 
@@ -100,64 +92,26 @@ func (s *executionStack) created(t *testing.T, requestID string) managed {
 	return managed{agent: g, ref: ref}
 }
 
-func initialBody(requestID, epoch, request, ref string) string {
-	raw, _ := json.Marshal(map[string]string{
-		"requestId": requestID, "epoch": epoch, "certificateRequestPem": request, "operationRef": ref,
-	})
-	return string(raw)
-}
-
-func (s *executionStack) initialCertificate(t *testing.T, client *http.Client, g grn.GRN, body string) reply {
+// tokensOf answers a client presenting m's own token, which the
+// controller minted for garam in the lineage m's creation opened, and
+// the token it minted to be shown to the hosted control service, which
+// that service forwards.
+func (s *executionStack) tokensOf(t *testing.T, m managed) (*http.Client, string) {
 	t.Helper()
-	return s.enrollment(t, client, "/agents/"+g.String()+"/initial-certificate", body)
+	return tokenPresenting(t, s.agentToken(t, m.agent, nil).Token), s.agentToken(t, m.agent, &s.hosted).Token
 }
 
-// issuedInitial issues m's first certificate over a key made where
-// the controller runs, and answers a client presenting it and its
-// leaf.
-func (s *executionStack) issuedInitial(t *testing.T, m managed) (*http.Client, string) {
-	t.Helper()
-	request, key := enrollmentRequest(t)
-	got := s.initialCertificate(t, s.hostedTLS, m.agent, initialBody("initial-"+m.agent.Identifier, "1", request, m.ref))
-	require.Equal(t, http.StatusCreated, got.status, got.body)
-	return initialClient(t, got, key)
-}
-
-// initialClient answers a client presenting the certificate an initial
-// issuance answered, over the key its request was made with.
-func initialClient(t *testing.T, got reply, key *ecdsa.PrivateKey) (*http.Client, string) {
-	t.Helper()
-	var issued machinegen.InitialCertificate
-	require.NoError(t, json.Unmarshal([]byte(got.body), &issued))
-	der, err := x509.MarshalECPrivateKey(key)
-	require.NoError(t, err)
-	pair, err := tls.X509KeyPair([]byte(issued.CertificatePem), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}))
-	require.NoError(t, err)
-	return machineClient(t, pair), issued.CertificatePem
-}
-
-// uninstalled is a certificate the organization's authority signed
-// for g that no initial issuance, renewal or recovery recorded.
-func (s *executionStack) uninstalled(t *testing.T, g grn.GRN) (*http.Client, string) {
-	t.Helper()
-	issued, err := s.issuer.Issue(context.Background(), g)
-	require.NoError(t, err)
-	pair, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
-	require.NoError(t, err)
-	return machineClient(t, pair), string(issued.CertificatePEM())
-}
-
-func managedActivationBody(requestID string, g agent.Generation, replaces, ref *string, leaf string) string {
+func managedActivationBody(requestID string, g agent.Generation, replaces, ref *string, forwarded string) string {
 	raw, _ := json.Marshal(map[string]any{
 		"requestId": requestID, "epoch": "1", "generation": string(g),
-		"replacesActivationId": replaces, "operationRef": ref, "certificatePem": leaf,
+		"replacesActivationId": replaces, "operationRef": ref, "token": forwarded,
 	})
 	return string(raw)
 }
 
-func (s *executionStack) activateManaged(t *testing.T, m grn.GRN, requestID string, g agent.Generation, replaces, ref *string, leaf string) reply {
+func (s *executionStack) activateManaged(t *testing.T, m grn.GRN, requestID string, g agent.Generation, replaces, ref *string, forwarded string) reply {
 	t.Helper()
-	return s.lifecycle(t, s.hostedTLS, "/agents/"+m.String()+"/activations", "", managedActivationBody(requestID, g, replaces, ref, leaf))
+	return s.lifecycle(t, s.hostedTLS, "/agents/"+m.String()+"/activations", "", managedActivationBody(requestID, g, replaces, ref, forwarded))
 }
 
 func activationOf(t *testing.T, got reply) machinegen.Activation {
@@ -167,10 +121,11 @@ func activationOf(t *testing.T, got reply) machinegen.Activation {
 	return a
 }
 
-// standingOf answers what introspection says of leaf for agent g.
-func (s *executionStack) standingOf(t *testing.T, g grn.GRN, leaf string) machinegen.ExecutionIntrospection {
+// standingOf answers what introspection says of the forwarded token
+// for agent g.
+func (s *executionStack) standingOf(t *testing.T, g grn.GRN, forwarded string) machinegen.ExecutionIntrospection {
 	t.Helper()
-	raw, err := json.Marshal(map[string]any{"certificatePem": leaf})
+	raw, err := json.Marshal(map[string]any{"token": forwarded})
 	require.NoError(t, err)
 	got := s.lifecycle(t, s.hostedTLS, "/agents/"+g.String()+"/execution/introspection", "", string(raw))
 	require.Equal(t, http.StatusOK, got.status, got.body)
@@ -276,13 +231,13 @@ func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 
 	got := s.send(t, s.hostedTLS, http.MethodPost, path, "", "", creationBody("create-1", ref))
 	assert.Equal(t, http.StatusBadRequest, got.status, "no contract version: %s", got.body)
-	assert.Equal(t, agent.EnrollmentContractVersion, got.version)
-	got = s.send(t, s.hostedTLS, http.MethodPost, path, agent.ExecutionContractVersion, "", creationBody("create-1", ref))
+	assert.Equal(t, agent.TokenEnrollmentContractVersion, got.version)
+	got = s.send(t, s.hostedTLS, http.MethodPost, path, agent.TokenExecutionContractVersion, "", creationBody("create-1", ref))
 	assert.Equal(t, http.StatusBadRequest, got.status, "another contract: %s", got.body)
 
 	before := s.agentRows(t)
 	globex := scopedGRN("globex", operator.ServiceType, "controller")
-	globexTLS := machineClient(t, installed(t, s.pool, s.issuer, scopedGRN("globex", operator.ServiceType, "hosted")))
+	globexTLS := operatorClient(t, s.pool, s.machine, scopedGRN("globex", operator.ServiceType, "hosted"))
 	refusals := []struct {
 		name   string
 		client *http.Client
@@ -292,7 +247,7 @@ func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 		{"the controller is not the reference's audience", s.controlTLS, s.controller, http.StatusNotFound},
 		{"another organization's operator", globexTLS, s.controller, http.StatusNotFound},
 		{"a controller of another organization", s.hostedTLS, globex, http.StatusNotFound},
-		{"an agent's own certificate", s.agentTLS, s.controller, http.StatusForbidden},
+		{"an agent's own token", s.agentTLS, s.controller, http.StatusForbidden},
 	}
 	for _, r := range refusals {
 		got := s.createManaged(t, r.client, r.path, "create-1", ref)
@@ -321,7 +276,7 @@ func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 	assert.JSONEq(t, created.body, retried.body, "an identical retry answers the same agent")
 
 	other := scopedGRN("acme", operator.ServiceType, "second")
-	_ = installed(t, s.pool, s.issuer, other)
+	registerOperator(t, s.pool, other)
 	s.delegateTo(t, []grn.GRN{s.controller, other}, "agent:create", "agent:activate")
 	ref = s.creationRef(t, s.member, "create-2")
 	got = s.createManaged(t, s.hostedTLS, other, "create-2", ref)
@@ -333,7 +288,7 @@ func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 	// creations before any commits: one creates, every other answers
 	// what it created.
 	answers := s.racing(t, `LOCK TABLE agent_managed_creations IN EXCLUSIVE MODE`, nil, func() (reply, error) {
-		return s.exchange(s.hostedTLS, http.MethodPost, path, agent.EnrollmentContractVersion, "", creationBody("create-2", ref))
+		return s.exchange(s.hostedTLS, http.MethodPost, path, agent.TokenEnrollmentContractVersion, "", creationBody("create-2", ref))
 	})
 	statuses := map[int]int{}
 	for _, a := range answers {
@@ -344,153 +299,38 @@ func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 	assert.Equal(t, 2, countRows(t, s.pool, `SELECT count(*) FROM agent_managed_creations`), "two references, two agents")
 }
 
-// TestManagedEnrollment_AManagedAgentIsFencedFromBirth shows the
-// shared admission predicate refusing every certificate of a managed
-// agent that its initial issuance did not record, before that
-// issuance and after it, with the recorded leaf as the control.
+// TestManagedEnrollment_AManagedAgentIsFencedFromBirth shows a managed
+// agent born in the lineage its creation opened and admitted to no
+// write before its first activation: its own token reaches nothing
+// protected, and another agent's token forwarded for it proves
+// nothing. Its own tokens, current in that lineage, activating it and
+// then collaborating under the activation are the control.
 func TestManagedEnrollment_AManagedAgentIsFencedFromBirth(t *testing.T) {
 	ctx := context.Background()
 	s := newManagedStack(t)
 	m := s.created(t, "birth")
-	strayTLS, stray := s.uninstalled(t, m.agent)
-
-	in := s.standingOf(t, m.agent, stray)
-	assert.Equal(t, machinegen.ExecutionIntrospectionGenerationNone, in.Generation)
-	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialFenced, in.Credential, "a signed leaf no issuance recorded")
-	got := s.activateManaged(t, m.agent, "a-stray", generationOf(1), nil, &m.ref, stray)
-	assert.Equal(t, http.StatusConflict, got.status, "it cannot activate: %s", got.body)
-	assert.Equal(t, map[string]int{
-		"runtime-state": http.StatusUnauthorized, "turn-event": http.StatusUnauthorized,
-	}, s.collaborate(t, strayTLS, m.agent, ""), "nor does it collaborate before an activation")
 	execution, err := agentpg.New(s.pool).GetExecution(ctx, m.agent)
 	require.NoError(t, err)
 	assert.NotNil(t, execution.Lineage, "fenced from birth, in the lineage its creation opened")
 
-	// The predicate is the same one for an agent with no lineage: any
-	// signed leaf of it is current, which is what a managed agent never
-	// inherits.
-	_, legacyStray := s.uninstalled(t, s.agent)
-	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, s.standingOf(t, s.agent, legacyStray).Credential)
+	ownTLS, forwarded := s.tokensOf(t, m)
+	in := s.standingOf(t, m.agent, forwarded)
+	assert.Equal(t, machinegen.ExecutionIntrospectionGenerationNone, in.Generation)
+	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, in.Credential, "the token minted in its lineage")
+	assert.Equal(t, map[string]int{
+		"runtime-state": http.StatusUnauthorized, "turn-event": http.StatusUnauthorized,
+	}, s.collaborate(t, ownTLS, m.agent, ""), "it collaborates before no activation")
 
-	initialTLS, initial := s.issuedInitial(t, m)
-	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, s.standingOf(t, m.agent, initial).Credential, "control: the recorded leaf")
-	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialFenced, s.standingOf(t, m.agent, stray).Credential, "still fenced after issuance")
-	got = s.activateManaged(t, m.agent, "a-stray-2", generationOf(1), nil, &m.ref, stray)
-	assert.Equal(t, http.StatusConflict, got.status, "it still cannot activate: %s", got.body)
-	first := s.activateManaged(t, m.agent, "a-1", generationOf(1), nil, &m.ref, initial)
-	require.Equal(t, http.StatusCreated, first.status, "control: the recorded leaf activates: %s", first.body)
-	token := activationOf(t, first).Token
-	assert.Equal(t, collaborated, s.collaborate(t, initialTLS, m.agent, token), "control: the recorded leaf collaborates")
-	assert.Equal(t, fencedCollaboration, s.collaborate(t, strayTLS, m.agent, token), "the stray leaf does not, with the current token")
-}
-
-// TestManagedEnrollment_TheInitialCertificateIsIssuedOnceAndReplayedExactly
-// issues a managed agent's first certificate, answers its identical
-// retries with the stored public result, and refuses every other
-// request for it.
-func TestManagedEnrollment_TheInitialCertificateIsIssuedOnceAndReplayedExactly(t *testing.T) {
-	s := newManagedStack(t)
-	m := s.created(t, "initial")
-	other := s.created(t, "other")
-
-	// The controller's request names somebody else; only its key is
-	// read.
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	raw, err := json.Marshal(map[string]any{"token": s.forwarded})
 	require.NoError(t, err)
-	elsewhere, err := url.Parse(s.agent.String())
-	require.NoError(t, err)
-	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{
-		Subject: pkix.Name{CommonName: "someone else"}, URIs: []*url.URL{elsewhere},
-	}, key)
-	require.NoError(t, err)
-	request := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der}))
-	body := initialBody("i-1", "1", request, m.ref)
+	got := s.lifecycle(t, s.hostedTLS, "/agents/"+m.agent.String()+"/execution/introspection", "", string(raw))
+	assert.Equal(t, http.StatusUnprocessableEntity, got.status, "another agent's token proves nothing of it: %s", got.body)
+	got = s.activateManaged(t, m.agent, "a-other", generationOf(1), nil, &m.ref, s.forwarded)
+	assert.Equal(t, http.StatusUnprocessableEntity, got.status, "nor activates it: %s", got.body)
 
-	garbage := s.initialCertificate(t, s.hostedTLS, other.agent, initialBody("i-x", "1", "not a request", other.ref))
-	assert.Equal(t, http.StatusUnprocessableEntity, garbage.status, "an invalid request: %s", garbage.body)
-	oversize := s.initialCertificate(t, s.hostedTLS, m.agent, initialBody("i-x", "1", strings.Repeat("A", agent.MaxRequestPEM+1), m.ref))
-	assert.Equal(t, http.StatusBadRequest, oversize.status, oversize.body)
-	refusals := []struct {
-		name   string
-		client *http.Client
-		agent  grn.GRN
-		body   string
-		status int
-	}{
-		{"another agent's creation reference on the same controller", s.hostedTLS, m.agent, initialBody("i-1", "1", request, other.ref), http.StatusForbidden},
-		{"a creation reference for an agent it did not create", s.hostedTLS, s.agent, initialBody("i-1", "1", request, m.ref), http.StatusForbidden},
-		{"the controller", s.controlTLS, m.agent, body, http.StatusForbidden},
-		{"a stale epoch", s.hostedTLS, m.agent, initialBody("i-1", "2", request, m.ref), http.StatusConflict},
-	}
-	for _, r := range refusals {
-		got := s.initialCertificate(t, r.client, r.agent, r.body)
-		assert.Equal(t, r.status, got.status, "%s: %s", r.name, got.body)
-	}
-	assert.Zero(t, countRows(t, s.pool, `SELECT count(*) FROM agent_credentials WHERE agent_grn = $1`, m.agent.String()))
-
-	issued := s.initialCertificate(t, s.hostedTLS, m.agent, body)
-	require.Equal(t, http.StatusCreated, issued.status, "control: %s", issued.body)
-	var fields map[string]any
-	require.NoError(t, json.Unmarshal([]byte(issued.body), &fields))
-	assert.ElementsMatch(t, []string{"certificatePem", "issuerPem", "serverRootPem", "notAfter"}, keysOf(fields), "no private key travels")
-	var answer machinegen.InitialCertificate
-	require.NoError(t, json.Unmarshal([]byte(issued.body), &answer))
-	block, _ := pem.Decode([]byte(answer.CertificatePem))
-	require.NotNil(t, block)
-	leaf, err := x509.ParseCertificate(block.Bytes)
-	require.NoError(t, err)
-	require.Len(t, leaf.URIs, 1)
-	assert.Equal(t, m.agent.String(), leaf.URIs[0].String(), "the agent is the one SAN")
-	assert.Empty(t, leaf.Subject.CommonName)
-	assert.Equal(t, []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, leaf.ExtKeyUsage)
-	assert.True(t, key.PublicKey.Equal(leaf.PublicKey), "signed over the controller's key")
-	assert.Equal(t, string(s.config.ServerRoot), answer.ServerRootPem)
-	assert.Equal(t, leaf.NotAfter.UTC(), answer.NotAfter.UTC())
-
-	// A lost answer: the same request, before and after the listener
-	// restarts, answers exactly what was stored and issues nothing.
-	for _, when := range []string{"retry", "after restart"} {
-		if when == "after restart" {
-			s.restart(t)
-		}
-		again := s.initialCertificate(t, s.hostedTLS, m.agent, body)
-		assert.Equal(t, http.StatusOK, again.status, "%s: %s", when, again.body)
-		assert.Equal(t, issued.body, again.body, "%s: the stored public result, byte for byte", when)
-	}
-	assert.Equal(t, 1, countRows(t, s.pool, `SELECT count(*) FROM agent_credentials WHERE agent_grn = $1`, m.agent.String()))
-
-	second, _ := enrollmentRequest(t)
-	for name, b := range map[string]string{
-		"a second request":           initialBody("i-1", "1", second, m.ref),
-		"another request identifier": initialBody("i-2", "1", request, m.ref),
-	} {
-		got := s.initialCertificate(t, s.hostedTLS, m.agent, b)
-		assert.Equal(t, http.StatusConflict, got.status, "%s: %s", name, got.body)
-	}
-
-	// Concurrent identical first requests, each signed before any
-	// records: they issue one effective certificate between them.
-	request, _ = enrollmentRequest(t)
-	body = initialBody("i-1", "1", request, other.ref)
-	answers := s.racing(t, `SELECT 1 FROM agent_executions WHERE agent_grn = $1 FOR UPDATE`, []any{other.agent.String()}, func() (reply, error) {
-		return s.exchange(s.hostedTLS, http.MethodPost, "/agents/"+other.agent.String()+"/initial-certificate",
-			agent.EnrollmentContractVersion, "", body)
-	})
-	statuses := map[int]int{}
-	for _, a := range answers {
-		statuses[a.status]++
-		assert.Equal(t, answers[0].body, a.body, "every concurrent answer is one certificate")
-	}
-	assert.Equal(t, map[int]int{http.StatusCreated: 1, http.StatusOK: len(answers) - 1}, statuses)
-	assert.Equal(t, 1, countRows(t, s.pool, `SELECT count(*) FROM agent_credentials WHERE agent_grn = $1`, other.agent.String()))
-}
-
-func keysOf(m map[string]any) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return out
+	first := s.activateManaged(t, m.agent, "a-1", generationOf(1), nil, &m.ref, forwarded)
+	require.Equal(t, http.StatusCreated, first.status, "control: its own token activates: %s", first.body)
+	assert.Equal(t, collaborated, s.collaborate(t, ownTLS, m.agent, activationOf(t, first).Token), "control: and collaborates")
 }
 
 // TestManagedEnrollment_AFailureBetweenWritesLeavesNothingAndARetryRecovers
@@ -517,51 +357,6 @@ func TestManagedEnrollment_AFailureBetweenWritesLeavesNothingAndARetryRecovers(t
 	for table, n := range before {
 		assert.Equal(t, n+1, after[table], "one %s row for one creation", table)
 	}
-
-	var m machinegen.ManagedAgent
-	require.NoError(t, json.Unmarshal([]byte(created.body), &m))
-	g, err := grn.Parse(m.Grn)
-	require.NoError(t, err)
-	request, key := enrollmentRequest(t)
-	body := initialBody("partial", "1", request, ref)
-	restore = s.failing(t, "agent_initial_certificates")
-	got = s.initialCertificate(t, s.hostedTLS, g, body)
-	assert.Equal(t, http.StatusServiceUnavailable, got.status, got.body)
-	assert.Zero(t, countRows(t, s.pool, `SELECT count(*) FROM agent_credentials WHERE agent_grn = $1`, g.String()),
-		"the certificate signed for the failed attempt is in no lineage")
-	restore()
-	issued := s.initialCertificate(t, s.hostedTLS, g, body)
-	require.Equal(t, http.StatusCreated, issued.status, issued.body)
-	_, leaf := initialClient(t, issued, key)
-	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, s.standingOf(t, g, leaf).Credential)
-}
-
-// TestManagedEnrollment_ARecoveredLineageIsNotRevivedByAnInitialRetry
-// recovers a managed agent's credential and retries its initial
-// issuance under the identical request.
-func TestManagedEnrollment_ARecoveredLineageIsNotRevivedByAnInitialRetry(t *testing.T) {
-	s := newManagedStack(t)
-	m := s.created(t, "recovered")
-	request, key := enrollmentRequest(t)
-	body := initialBody("r-initial", "1", request, m.ref)
-	issued := s.initialCertificate(t, s.hostedTLS, m.agent, body)
-	require.Equal(t, http.StatusCreated, issued.status, issued.body)
-	_, initial := initialClient(t, issued, key)
-
-	// The stack's recovery helpers act on s.agent.
-	s.agent, s.epoch = m.agent, 1
-	r := s.prepareRecovery(t, "r-recover")
-	recoveredTLS, leaf := recovered(t, s.recover(t, r, r.body), r.key)
-	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, s.standingOf(t, m.agent, leaf).Credential, "control: the recovered lineage")
-	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialFenced, s.standingOf(t, m.agent, initial).Credential)
-
-	again := s.initialCertificate(t, s.hostedTLS, m.agent, body)
-	assert.Equal(t, http.StatusConflict, again.status, "an identical retry after recovery: %s", again.body)
-	assert.Equal(t, machinegen.ExecutionIntrospectionCredentialFenced, s.standingOf(t, m.agent, initial).Credential, "the initial lineage stays superseded")
-
-	first := s.activateManaged(t, m.agent, "a-1", generationOf(1), nil, &m.ref, leaf)
-	require.Equal(t, http.StatusCreated, first.status, first.body)
-	assert.Equal(t, collaborated, s.collaborate(t, recoveredTLS, m.agent, activationOf(t, first).Token))
 }
 
 // TestManagedEnrollment_TheFirstActivationNeedsTheCreationOrAConfigureReference
@@ -571,8 +366,8 @@ func TestManagedEnrollment_ARecoveredLineageIsNotRevivedByAnInitialRetry(t *test
 func TestManagedEnrollment_TheFirstActivationNeedsTheCreationOrAConfigureReference(t *testing.T) {
 	s := newManagedStack(t)
 	a, b := s.created(t, "first-a"), s.created(t, "first-b")
-	_, aLeaf := s.issuedInitial(t, a)
-	_, bLeaf := s.issuedInitial(t, b)
+	_, aLeaf := s.tokensOf(t, a)
+	_, bLeaf := s.tokensOf(t, b)
 
 	got := s.activateManaged(t, a.agent, "a-null", generationOf(1), nil, nil, aLeaf)
 	assert.Equal(t, http.StatusForbidden, got.status, "no reference before any activation: %s", got.body)
@@ -614,17 +409,16 @@ func TestManagedEnrollment_TheFirstActivationNeedsTheCreationOrAConfigureReferen
 }
 
 // TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer
-// retries a creation and an initial issuance whose answers are stored,
-// once the authority they rest on has expired or been revoked and once
-// the agent has moved, each beside the same retry answered before
-// anything changed; and issues nothing for a caller allowed only to
-// create.
+// retries a creation whose answer is stored, once the authority it
+// rests on has expired or been revoked and once the agent has moved,
+// each beside the same retry answered before anything changed; and
+// activates nothing for a caller allowed only to create.
 func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *testing.T) {
 	ctx := context.Background()
 	s := newManagedStack(t)
-	// enrolled creates an agent as cookie's user and issues its first
-	// certificate, answering both requests so they can be retried.
-	enrolled := func(cookie *http.Cookie, requestID string) (managed, string, string) {
+	// enrolled creates an agent as cookie's user, answering the request
+	// so it can be retried.
+	enrolled := func(cookie *http.Cookie, requestID string) (managed, string) {
 		t.Helper()
 		status, minted := s.mint(t, cookie, "agent:create", s.controller, requestID)
 		require.Equal(t, http.StatusCreated, status, minted)
@@ -636,53 +430,37 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 		require.NoError(t, json.Unmarshal([]byte(got.body), &m))
 		g, err := grn.Parse(m.Grn)
 		require.NoError(t, err)
-		request, _ := enrollmentRequest(t)
-		initial := initialBody("initial-"+requestID, "1", request, ref)
-		got = s.initialCertificate(t, s.hostedTLS, g, initial)
-		require.Equal(t, http.StatusCreated, got.status, got.body)
-		return managed{agent: g, ref: ref}, creation, initial
+		return managed{agent: g, ref: ref}, creation
 	}
-	retried := func(m managed, creation, initial string) (int, int) {
+	retried := func(creation string) int {
 		t.Helper()
-		created := s.enrollment(t, s.hostedTLS, "/operators/"+s.controller.String()+"/managed-agents", creation)
-		issued := s.initialCertificate(t, s.hostedTLS, m.agent, initial)
-		return created.status, issued.status
+		return s.enrollment(t, s.hostedTLS, "/operators/"+s.controller.String()+"/managed-agents", creation).status
 	}
 
 	t.Run("an expired grant", func(t *testing.T) {
-		m, creation, initial := enrolled(s.member, "expiring")
-		created, issued := retried(m, creation, initial)
-		assert.Equal(t, [2]int{http.StatusOK, http.StatusOK}, [2]int{created, issued}, "control")
+		_, creation := enrolled(s.member, "expiring")
+		assert.Equal(t, http.StatusOK, retried(creation), "control")
 		_, err := s.pool.Exec(ctx, `UPDATE operator_delegations SET expires_at = now() - interval '1 second' WHERE id = $1`, *s.grant)
 		require.NoError(t, err)
-		created, issued = retried(m, creation, initial)
-		assert.Equal(t, [2]int{http.StatusForbidden, http.StatusForbidden}, [2]int{created, issued})
+		assert.Equal(t, http.StatusForbidden, retried(creation))
 	})
 
 	t.Run("a creator who lost agent:create, after the short token expired", func(t *testing.T) {
 		s.delegate(t, "agent:create", "agent:activate")
-		m, creation, initial := enrolled(s.member, "revoked")
+		m, creation := enrolled(s.member, "revoked")
 		_, err := s.pool.Exec(ctx, `UPDATE operation_authorities SET token_expires_at = now() - interval '1 second' WHERE ref = $1`, m.ref)
 		require.NoError(t, err)
-		created, issued := retried(m, creation, initial)
-		assert.Equal(t, [2]int{http.StatusOK, http.StatusOK}, [2]int{created, issued}, "control: the reference outlives its token")
+		assert.Equal(t, http.StatusOK, retried(creation), "control: the reference outlives its token")
 		s.removeMember(t, "bob")
-		created, issued = retried(m, creation, initial)
-		assert.Equal(t, [2]int{http.StatusForbidden, http.StatusForbidden}, [2]int{created, issued}, "no stored answer is disclosed")
+		assert.Equal(t, http.StatusForbidden, retried(creation), "no stored answer is disclosed")
 	})
 
 	t.Run("a moved assignment", func(t *testing.T) {
-		m, creation, initial := enrolled(s.owner, "moved")
-		created, issued := retried(m, creation, initial)
-		assert.Equal(t, [2]int{http.StatusOK, http.StatusOK}, [2]int{created, issued}, "control")
+		m, creation := enrolled(s.owner, "moved")
+		assert.Equal(t, http.StatusOK, retried(creation), "control")
 		_, err := agent.NewPostgresStore(s.pool).Assign(ctx, m.agent, s.controller)
 		require.NoError(t, err)
-		created, issued = retried(m, creation, initial)
-		assert.Equal(t, [2]int{http.StatusConflict, http.StatusConflict}, [2]int{created, issued},
-			"the stored answers no longer describe where the agent is")
-		request, _ := enrollmentRequest(t)
-		got := s.initialCertificate(t, s.hostedTLS, m.agent, initialBody("initial-moved", "2", request, m.ref))
-		assert.Equal(t, http.StatusConflict, got.status, "at the new epoch: %s", got.body)
+		assert.Equal(t, http.StatusConflict, retried(creation), "the stored answer no longer describes where the agent is")
 	})
 
 	t.Run("a caller allowed only to create", func(t *testing.T) {
@@ -694,9 +472,9 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 		require.NoError(t, json.Unmarshal([]byte(got.body), &m))
 		g, err := grn.Parse(m.Grn)
 		require.NoError(t, err)
-		request, _ := enrollmentRequest(t)
-		got = s.initialCertificate(t, s.hostedTLS, g, initialBody("create-only", "1", request, ref))
-		assert.Equal(t, http.StatusForbidden, got.status, "issuing needs agent:activate: %s", got.body)
+		_, forwarded := s.tokensOf(t, managed{agent: g, ref: ref})
+		got = s.activateManaged(t, g, "create-only", generationOf(1), nil, &ref, forwarded)
+		assert.Equal(t, http.StatusForbidden, got.status, "activating needs agent:activate: %s", got.body)
 
 		s.delegate(t, "agent:create", "agent:activate")
 		ref = s.creationRef(t, s.owner, "create-and-activate")
@@ -705,7 +483,8 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 		require.NoError(t, json.Unmarshal([]byte(got.body), &m))
 		g, err = grn.Parse(m.Grn)
 		require.NoError(t, err)
-		got = s.initialCertificate(t, s.hostedTLS, g, initialBody("create-and-activate", "1", request, ref))
+		_, forwarded = s.tokensOf(t, managed{agent: g, ref: ref})
+		got = s.activateManaged(t, g, "create-and-activate", generationOf(1), nil, &ref, forwarded)
 		assert.Equal(t, http.StatusCreated, got.status, "control: the same request under a grant covering agent:activate: %s", got.body)
 	})
 }

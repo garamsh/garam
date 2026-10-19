@@ -65,11 +65,6 @@ var (
 	// contract version, or another.
 	ErrUnsupportedTokenContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: this route serves "+TokenContractVersion)
-	// ErrNoCertificate refuses a renewal for a caller that presented
-	// no certificate to renew: a token's holder exchanges its key
-	// instead (ADR-0102).
-	ErrNoCertificate = errorx.New(errorx.KindUnauthenticated,
-		"no certificate was presented: a token is not renewed, its key is exchanged again")
 	// ErrAudienceInvalid refuses an audience that is not another
 	// operator of the exchanging operator's organization. A token
 	// minted for a hosted operator is shown to it, so the audience is

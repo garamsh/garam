@@ -24,7 +24,6 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/delivery"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
@@ -178,11 +177,9 @@ func newSigningStackHolding(t *testing.T, signing message.Custodian) signingStac
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 	_, engine := policyEngine(t, p)
 	url := machineListenerHolding(t, p, sealer, engine, signing)
-	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
 	return signingStack{pool: p, sealer: sealer, engine: engine, url: url, sender: sender, recipient: recipient, senderGRN: senderGRN, recipientGRN: recipientGRN}
@@ -315,12 +312,10 @@ func TestMessageSignature_GaramSignsTheRefusalItWroteAsItsOwn(t *testing.T) {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	acmeOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
-	globexOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
+	acmeOperator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
+	globexOperator := operatorClient(t, p, url, scopedGRN("globex", agent.ServiceTypeOperator, "one"))
 	recipientGRN, _ := provisioned(t, url, acmeOperator)
 	strangerGRN, stranger := provisioned(t, url, globexOperator)
 	siblingGRN, sibling := provisioned(t, url, globexOperator)

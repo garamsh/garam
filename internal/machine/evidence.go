@@ -10,14 +10,11 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// Path is how one authentication by a machine caller was decided, as
-// the gate that retires the certificate path reads it (ADR-0109).
+// Path is how one authentication by a machine caller was decided
+// (ADR-0109).
 type Path string
 
 const (
-	// PathCertificate is a request the listener authenticated by the
-	// client certificate its connection presented: the old path.
-	PathCertificate Path = "certificate"
 	// PathToken is a request the listener authenticated by a token.
 	PathToken Path = "token"
 	// PathSharedSecret is an exchange of an operator's or a

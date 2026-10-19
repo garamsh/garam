@@ -150,7 +150,7 @@ export default function LandingPage() {
           <SectionHeading
             eyebrow="Agents"
             title="Reachable, not yet watched"
-            body="The listener, the certificate authority behind it, and the message queue are built. What is not is the adapter that would run beside the agent, or any way to watch one work."
+            body="The listener and the message queue are built. What is not is the adapter that would run beside the agent, or any way to watch one work."
           />
           <ul className="mt-12 grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-3">
             {AGENT_DECISIONS.map(({ adr, title, body }) => (

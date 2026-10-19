@@ -17,12 +17,11 @@ const confined = "a supervisor reaches its lifecycle routes alone"
 
 // TestConfineSupervisors_ASupervisorReachesItsLifecycleRoutesAlone sends
 // every operation api/machine.yaml declares, read off the generated
-// registration, as a supervisor's certificate and as an agent's. The
-// supervisor is refused everywhere but its identity, its renewal and
-// the three execution routes it holds authority on — its certificate
-// reaches no token mint; the agent, the
-// control, is refused by the boundary nowhere, so what refused the
-// supervisor was the kind of identity and not the route.
+// registration, as a supervisor's token and as an agent's. The
+// supervisor is refused everywhere but its identity, the three
+// execution routes it holds authority on and its agent's token mint;
+// the agent, the control, is refused by the boundary nowhere, so what
+// refused the supervisor was the kind of identity and not the route.
 func TestConfineSupervisors_ASupervisorReachesItsLifecycleRoutesAlone(t *testing.T) {
 	routes := machineRoutes(t, map[string]string{
 		"agent":      agentGRN("acme", "0a1b2c3d4e5f6071").String(),
@@ -35,8 +34,8 @@ func TestConfineSupervisors_ASupervisorReachesItsLifecycleRoutesAlone(t *testing
 	})
 	reached := map[string]bool{
 		http.MethodGet + " /identity":                                              true,
-		http.MethodPost + " /supervisors/self/certificate":                         true,
 		http.MethodPost + " /agents/{agent}/activations":                           true,
+		http.MethodPost + " /agents/{agent}/tokens":                                true,
 		http.MethodPost + " /agents/{agent}/activations/{activation}/deactivation": true,
 		http.MethodPost + " /agents/{agent}/execution/introspection":               true,
 		// The client assertion exchange refuses every credential

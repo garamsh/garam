@@ -22,7 +22,7 @@ func (h *host) activateOnce(adapter *stubContainer) (*delivery.Activation, strin
 	h.t.Helper()
 	auth, token := h.adapterOf(adapter)
 	generation := newGeneration()
-	a, err := auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(generation), token), binding(generation), token)
+	a, err := auth.Activate(context.Background(), delivery.RequestID(delivery.TokenExecutionContract, binding(generation), token), binding(generation), token)
 	require.NoError(h.t, err)
 	return a, generation
 }

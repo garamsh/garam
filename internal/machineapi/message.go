@@ -62,7 +62,7 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 // contract version, checked before anything else is read, and a
 // budget, which the store judges at its insert.
 func (s *Server) PostOutboxMessage(w http.ResponseWriter, r *http.Request, params machinegen.PostOutboxMessageParams) {
-	if !served(w, r, params.DeliveryContractVersion, deliveryValues) {
+	if !served(w, params.DeliveryContractVersion, deliveryValues) {
 		return
 	}
 	sender, fence, ok := fenced(w, r)

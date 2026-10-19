@@ -25,36 +25,39 @@ func TestServer_ReportsTheStateTheBodyNamesAndParsesItFirst(t *testing.T) {
 	held := agentGRN("acme", "0a1b2c3d4e5f6071")
 	agents := &agentService{}
 	url, client := listener(t, agents, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, operator)
+	// The agent reports its own runtime state, presenting its own token.
+	agentURL, self := listener(t, agents, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, held)
 	provisioning := url + "/agents/" + held.String() + "/provisioning-state"
-	runtime := url + "/agents/" + held.String() + "/runtime-state"
+	runtime := agentURL + "/agents/" + held.String() + "/runtime-state"
 
 	status, body := send(t, client, http.MethodPost, provisioning, `{"epoch":3,"state":"ready"}`)
 	require.Equal(t, http.StatusNoContent, status, body)
 	assert.Empty(t, body, "a recorded report answers with nothing")
 	assert.Equal(t, []stateReport{{call: call{operator: operator, subject: held}, epoch: 3, state: "ready"}},
-		agents.provisioning, "the caller is what the certificate named and the agent is what the path named")
+		agents.provisioning, "the caller is what the token named and the agent is what the path named")
 
-	status, body = send(t, client, http.MethodPost, runtime, `{"epoch":3,"state":"connected"}`)
+	status, body = send(t, self, http.MethodPost, runtime, `{"epoch":3,"state":"connected"}`)
 	require.Equal(t, http.StatusNoContent, status, body)
-	assert.Equal(t, []stateReport{{call: call{operator: operator, subject: held}, epoch: 3, state: "connected"}},
+	assert.Equal(t, []stateReport{{call: call{operator: held, subject: held}, epoch: 3, state: "connected"}},
 		agents.runtime)
 
 	// Each route carries one of the two facts. The other's vocabulary
 	// is not a state it recognises, so it is refused rather than
 	// written into the wrong field.
 	refused := map[string]struct {
-		url  string
-		body string
+		client *http.Client
+		url    string
+		body   string
 	}{
-		"a provisioning state this domain does not name": {provisioning, `{"epoch":3,"state":"running"}`},
-		"a runtime state on the provisioning route":      {provisioning, `{"epoch":3,"state":"connected"}`},
-		"a runtime state this domain does not name":      {runtime, `{"epoch":3,"state":"alive"}`},
-		"a provisioning state on the runtime route":      {runtime, `{"epoch":3,"state":"ready"}`},
-		"a body that is not an object":                   {runtime, `"connected"`},
+		"a provisioning state this domain does not name": {client, provisioning, `{"epoch":3,"state":"running"}`},
+		"a runtime state on the provisioning route":      {client, provisioning, `{"epoch":3,"state":"connected"}`},
+		"a runtime state this domain does not name":      {self, runtime, `{"epoch":3,"state":"alive"}`},
+		"a provisioning state on the runtime route":      {self, runtime, `{"epoch":3,"state":"ready"}`},
+		"a body that is not an object":                   {self, runtime, `"connected"`},
 	}
 	for name, tt := range refused {
 		t.Run(name, func(t *testing.T) {
-			status, body := send(t, client, http.MethodPost, tt.url, tt.body)
+			status, body := send(t, tt.client, http.MethodPost, tt.url, tt.body)
 			assert.Equal(t, http.StatusBadRequest, status)
 			assert.Contains(t, body, `"kind":"invalid_argument"`)
 		})
@@ -70,7 +73,7 @@ func TestServer_ReportsTheStateTheBodyNamesAndParsesItFirst(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, status)
 	assert.JSONEq(t, `{"kind":"failed_precondition","message":"`+agent.ErrStaleEpoch.Error()+`"}`, body)
 
-	status, body = send(t, client, http.MethodPost, runtime, `{"epoch":1,"state":"connected"}`)
+	status, body = send(t, self, http.MethodPost, runtime, `{"epoch":1,"state":"connected"}`)
 	assert.Equal(t, http.StatusConflict, status)
 	assert.JSONEq(t, `{"kind":"failed_precondition","message":"`+agent.ErrStaleEpoch.Error()+`"}`, body)
 }

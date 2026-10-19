@@ -95,7 +95,6 @@ func machineStart(t *testing.T, certFile, keyFile, caKeyFile, rootFile string) e
 		"GARAM_MACHINE_TLS_KEY_FILE":     keyFile,
 		"GARAM_CA_KEY_FILE":              caKeyFile,
 		"GARAM_MACHINE_SERVER_ROOT_FILE": rootFile,
-		"GARAM_CERTIFICATE_LIFETIME":     "",
 		"GARAM_AGENT_TOKEN_LIFETIME":     "",
 		"GARAM_MACHINE_ISSUER":           "",
 	} {

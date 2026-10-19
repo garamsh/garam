@@ -2,14 +2,8 @@ package standalone_test
 
 import (
 	"bytes"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/tls"
-	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,9 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/stretchr/testify/require"
-
-	"github.com/garamsh/garam/internal/agent"
 )
 
 // host is one standalone host's two directories, as the shipped
@@ -48,62 +41,15 @@ func (h *host) prepare() {
 	require.NoError(h.s.t, json.Unmarshal([]byte(out), &h.request), out)
 }
 
-// prepareV1 is a host an earlier release prepared under
-// standalone-enrollment.v1, finished by this one's `prepare`: the
-// record that release committed before writing the agent's files.
-// Such a host enrolls, renews and runs on certificates, which is the
-// v1 cohort ADR-0100's migration keeps usable.
-func (h *host) prepareV1() {
-	h.s.t.Helper()
-	t := h.s.t
-	require.NoError(t, os.MkdirAll(h.supervisor, 0o700))
-	require.NoError(t, os.MkdirAll(h.agent, 0o700))
-	agentDir, err := filepath.EvalSymlinks(h.agent)
-	require.NoError(t, err)
-	keyAndRequest := func() (string, string) {
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		require.NoError(t, err)
-		der, err := x509.MarshalPKCS8PrivateKey(key)
-		require.NoError(t, err)
-		request, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
-		require.NoError(t, err)
-		return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})),
-			string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: request}))
-	}
-	supervisorKey, supervisorRequest := keyAndRequest()
-	agentKey, agentRequest := keyAndRequest()
-	fingerprint, err := agent.RequestedKeyFingerprint([]byte(agentRequest))
-	require.NoError(t, err)
-	secret := make([]byte, 32)
-	_, err = rand.Read(secret)
-	require.NoError(t, err)
-	raw, err := json.Marshal(map[string]string{
-		"requestId": h.name + "-v1", "secret": base64.RawURLEncoding.EncodeToString(secret),
-		"supervisorKeyPem": supervisorKey, "supervisorCertificateRequestPem": supervisorRequest,
-		"agentDir": agentDir, "agentKeyPem": agentKey, "agentCertificateRequestPem": agentRequest,
-		"agentKeySha256": fingerprint.String(),
-	})
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(h.supervisor, "prepared.json"), raw, 0o600))
-	h.prepare()
-	require.NotEmpty(t, h.request["agentKeySha256"], "a v1 preparation is answered with its fingerprints")
-}
-
 // approve has the stack's principal, the organization's owner, approve
 // what prepare printed through the public API, expiring at expiresAt,
-// and answers the approval's identifier: the key fingerprints where a
-// v1 preparation printed them, and none under v2.
+// and answers the approval's identifier.
 func (h *host) approve(expiresAt time.Time) string {
 	h.s.t.Helper()
 	approval := map[string]string{
 		"requestId": h.request["requestId"], "hostName": h.name,
 		"expiresAt":    expiresAt.UTC().Format(time.RFC3339Nano),
 		"secretSha256": h.request["secretSha256"],
-	}
-	for _, key := range []string{"supervisorKeySha256", "agentKeySha256"} {
-		if h.request[key] != "" {
-			approval[key] = h.request[key]
-		}
 	}
 	raw, err := json.Marshal(approval)
 	require.NoError(h.s.t, err)
@@ -137,28 +83,75 @@ func (h *host) enrolled() (grn, supervisor, epoch string) {
 	return e.Grn, e.SupervisorGrn, e.Epoch
 }
 
-// client is a machine-listener client presenting the certificate and
-// key in certFile and keyFile.
-func (h *host) client(certFile, keyFile string) *http.Client {
+// client is a machine-listener client pinning the stack's root and
+// presenting token, where one is given, on every request that names no
+// Authorization of its own.
+func (h *host) client(token string) *http.Client {
 	h.s.t.Helper()
-	pair, err := tls.LoadX509KeyPair(certFile, keyFile)
-	require.NoError(h.s.t, err)
 	rootPEM, err := os.ReadFile(h.s.rootFile)
 	require.NoError(h.s.t, err)
 	// A claim waits on garam for a message, so the bound is past its
 	// longest wait.
-	return &http.Client{Timeout: 2 * time.Minute, Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		Certificates: []tls.Certificate{pair}, RootCAs: pool(rootPEM), MinVersion: tls.VersionTLS13,
-	}}}
+	var transport http.RoundTripper = &http.Transport{TLSClientConfig: &tls.Config{
+		RootCAs: pool(rootPEM), MinVersion: tls.VersionTLS13,
+	}}
+	if token != "" {
+		transport = presenting{token: token, next: transport}
+	}
+	return &http.Client{Timeout: 2 * time.Minute, Transport: transport}
+}
+
+// presenting sets Authorization to a token on a request naming none.
+type presenting struct {
+	token string
+	next  http.RoundTripper
+}
+
+func (p presenting) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Header.Get("Authorization") != "" {
+		return p.next.RoundTrip(r)
+	}
+	r = r.Clone(r.Context())
+	r.Header.Set("Authorization", "Garam-Token "+p.token)
+	return p.next.RoundTrip(r)
+}
+
+// supervisorToken exchanges the credential the enrollment installed for
+// the supervisor's token, as the supervisor does.
+func (h *host) supervisorToken() string {
+	h.s.t.Helper()
+	credential, err := os.ReadFile(filepath.Join(h.supervisor, "credential"))
+	require.NoError(h.s.t, err)
+	status, raw := h.call(h.client(""), "/tokens", operator.TokenContractVersion,
+		"Garam-Credential "+strings.TrimSpace(string(credential)), map[string]string{})
+	require.Equal(h.s.t, http.StatusCreated, status, string(raw))
+	var token struct {
+		Token string `json:"token"`
+	}
+	require.NoError(h.s.t, json.Unmarshal(raw, &token))
+	return token.Token
 }
 
 func (h *host) supervisorClient() *http.Client {
-	path := filepath.Join(h.supervisor, "supervisor.pem")
-	return h.client(path, path)
+	return h.client(h.supervisorToken())
+}
+
+// agentToken is the agent's token for garam, minted by its supervisor
+// as the supervisor mints the one it hands the adapter.
+func (h *host) agentToken() string {
+	h.s.t.Helper()
+	agentGRN, _, _ := h.enrolled()
+	status, raw := h.call(h.supervisorClient(), "/agents/"+agentGRN+"/tokens", operator.TokenContractVersion, "", map[string]string{})
+	require.Equal(h.s.t, http.StatusCreated, status, string(raw))
+	var token struct {
+		Token string `json:"token"`
+	}
+	require.NoError(h.s.t, json.Unmarshal(raw, &token))
+	return token.Token
 }
 
 func (h *host) agentClient() *http.Client {
-	return h.client(filepath.Join(h.agent, "agent.crt"), filepath.Join(h.agent, "agent.key"))
+	return h.client(h.agentToken())
 }
 
 // call makes one machine-listener request and answers its status and
@@ -177,7 +170,11 @@ func (h *host) call(client *http.Client, path, contract, authorization string, b
 	if contract != "" {
 		req.Header.Set("Garam-Contract-Version", contract)
 	}
-	if authorization != "" {
+	// An execution token travels in a header of its own beside the
+	// agent's token (ADR-0100); any other credential is Authorization.
+	if execution, ok := strings.CutPrefix(authorization, "Garam-Execution "); ok {
+		req.Header.Set("Garam-Execution", execution)
+	} else if authorization != "" {
 		req.Header.Set("Authorization", authorization)
 	}
 	resp, err := client.Do(req)
@@ -191,34 +188,35 @@ func (h *host) call(client *http.Client, path, contract, authorization string, b
 // sender is the second agent the joint scenario's message comes from.
 // It is the test's own: enrolled like any standalone agent, but no
 // runtime runs for it, and the test activates it with its supervisor's
-// certificate under a generation the test makes up, so its own calls
-// carry a token. Nothing here is the supervisor's behaviour.
+// token under a generation the test makes up, so its own calls carry
+// an execution token beside its agent token. Nothing here is the
+// supervisor's behaviour.
 type sender struct {
 	*host
-	grn   string
-	token string
+	grn    string
+	token  string
+	client *http.Client
 }
 
 func (s *stack) newSender() *sender {
 	s.t.Helper()
 	h := s.newHost("sender")
-	h.prepareV1()
+	h.prepare()
 	h.approve(time.Now().Add(time.Hour))
 	out, err := h.enroll()
 	require.NoError(s.t, err, out)
 	agentGRN, _, epoch := h.enrolled()
-	leaf, err := os.ReadFile(filepath.Join(h.agent, "agent.crt"))
-	require.NoError(s.t, err)
-	status, body := h.call(h.supervisorClient(), "/agents/"+agentGRN+"/activations", "execution-fence.v1", "", map[string]any{
+	own := h.agentToken()
+	status, body := h.call(h.supervisorClient(), "/agents/"+agentGRN+"/activations", "execution-fence.v2", "", map[string]any{
 		"requestId": "garam-1180-sender", "epoch": epoch, "generation": hex32(),
-		"replacesActivationId": nil, "operationRef": nil, "certificatePem": string(leaf),
+		"replacesActivationId": nil, "operationRef": nil, "token": own,
 	})
 	require.Equal(s.t, http.StatusCreated, status, string(body))
 	var a struct {
 		Token string `json:"token"`
 	}
 	require.NoError(s.t, json.Unmarshal(body, &a))
-	return &sender{host: h, grn: agentGRN, token: a.Token}
+	return &sender{host: h, grn: agentGRN, token: a.Token, client: h.client(own)}
 }
 
 func hex32() string { return fmt.Sprintf("%x", randomBytes(16)) }
@@ -226,7 +224,7 @@ func hex32() string { return fmt.Sprintf("%x", randomBytes(16)) }
 // post sends body to recipient as the sender.
 func (p *sender) post(recipient, key, body string) {
 	p.s.t.Helper()
-	status, raw := p.call(p.agentClient(), "/messages", "", "Garam-Execution "+p.token, map[string]string{
+	status, raw := p.call(p.client, "/messages", "", "Garam-Execution "+p.token, map[string]string{
 		"recipient": recipient, "idempotencyKey": key, "body": body,
 	})
 	require.Equal(p.s.t, http.StatusCreated, status, string(raw))
@@ -243,7 +241,7 @@ type received struct {
 // it, or answers nil where none arrived within one claim's wait.
 func (p *sender) receive() *received {
 	p.s.t.Helper()
-	status, raw := p.call(p.agentClient(), "/agents/"+p.grn+"/claims", "", "Garam-Execution "+p.token, nil)
+	status, raw := p.call(p.client, "/agents/"+p.grn+"/claims", "", "Garam-Execution "+p.token, nil)
 	if status == http.StatusNoContent {
 		return nil
 	}
@@ -257,7 +255,7 @@ func (p *sender) receive() *received {
 		} `json:"message"`
 	}
 	require.NoError(p.s.t, json.Unmarshal(raw, &c))
-	status, raw = p.call(p.agentClient(), "/agents/"+p.grn+"/claims/"+c.ID+"/completion", "", "Garam-Execution "+p.token, nil)
+	status, raw = p.call(p.client, "/agents/"+p.grn+"/claims/"+c.ID+"/completion", "", "Garam-Execution "+p.token, nil)
 	require.Contains(p.s.t, []int{http.StatusOK, http.StatusNoContent}, status, string(raw))
 	return &received{ID: c.Message.ID, Sender: c.Message.Sender, Body: c.Message.Body}
 }

@@ -33,6 +33,13 @@ SELECT
     (SELECT count(*) FROM org_members m WHERE m.org_grn = $1) AS member_count,
     (SELECT count(*) FROM invitations i WHERE i.org_grn = $1) AS invitation_count;
 
+-- name: HoldsCertificateAuthority :one
+-- Whether DeleteOrg's cascade would take a retired certificate
+-- authority with the organization (ADR-0118). Presence alone: no
+-- column of the row is read, and its sealed key is never opened. It is
+-- the one read of certificate_authorities left.
+SELECT EXISTS (SELECT 1 FROM certificate_authorities WHERE org_grn = $1)::boolean AS held;
+
 -- name: CreateGroup :exec
 INSERT INTO groups (grn, org_grn, name, roles, policies, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7);

@@ -3,18 +3,10 @@ package agent
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/x509"
 	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-)
-
-// Bounds on what a lifecycle request may carry, refused before
-// anything parses it.
-const (
-	MaxCertificatePEM = 8 << 10
-	MaxRequestPEM     = 4 << 10
 )
 
 // LifecycleDeadline bounds an activation, a recovery and a
@@ -43,7 +35,7 @@ var (
 )
 
 // ExecutionService is what a lifecycle authority does to an agent's
-// execution, and how an agent renews inside it (ADR-0078, ADR-0080).
+// execution (ADR-0078, ADR-0080).
 //
 // Each lifecycle method reads its authority fresh before it takes the
 // execution lock and holds no lock while doing so; the store then
@@ -56,23 +48,17 @@ type ExecutionService interface {
 	// Deactivate ends the activation id names if it is the agent's
 	// current one, and does nothing if it already ended.
 	Deactivate(ctx context.Context, caller, agentGRN grn.GRN, id ActivationID) error
-	// Introspect answers whether a forwarded credential and a
+	// Introspect answers whether a forwarded agent token and a
 	// generation are current for the agent.
-	Introspect(ctx context.Context, caller, agentGRN grn.GRN, credential Forwarded, generation *Generation) (*Introspection, error)
+	Introspect(ctx context.Context, caller, agentGRN grn.GRN, credential ForwardedToken, generation *Generation) (*Introspection, error)
 	// Recover moves the agent to a new credential lineage under a
-	// fresh handoff. Under execution-fence.v1 it answers the
-	// certificate signed over the request's key and the chain it was
-	// signed under; under execution-fence.v2 it signs nothing, and the
-	// assignee mints the agent's tokens in the new lineage.
+	// fresh handoff. It signs nothing: the assignee mints the agent's
+	// tokens in the new lineage.
 	Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*RecoveredCredential, error)
 	// CreateManaged registers an agent and its first assignment under
 	// a member's agent:create reference, and answers an identical
 	// retry with the same agent rather than another.
 	CreateManaged(ctx context.Context, caller grn.GRN, in ManagedCreationInput) (*ManagedCreation, bool, error)
-	// IssueInitialCertificate signs a managed agent's first
-	// certificate over its request's key, and answers an identical
-	// retry with the same certificate rather than another.
-	IssueInitialCertificate(ctx context.Context, caller grn.GRN, in InitialCertificateInput) (*InitialCertificate, bool, error)
 }
 
 // ActivationInput is an activation request as received.
@@ -83,29 +69,18 @@ type ActivationInput struct {
 	Generation   Generation
 	Replaces     *ActivationID
 	OperationRef *string
-	// Credential is the agent's, as the caller received it and not yet
-	// proven.
-	Credential Forwarded
+	// Credential is the agent's token, as the caller received it and
+	// not yet proven.
+	Credential ForwardedToken
 }
 
-// Forwarded is an agent's credential as a lifecycle authority received
-// it from the agent and forwards it: a ForwardedCertificate under
-// execution-fence.v1, a ForwardedToken under execution-fence.v2
-// (ADR-0100). Proving it establishes only that it names the agent;
-// whether it is current is the execution fence's to judge.
-type Forwarded interface{ forwarded() }
-
-// ForwardedCertificate is the agent's leaf as the caller received it
-// over mTLS, parsed.
-type ForwardedCertificate struct{ Leaf *x509.Certificate }
-
-// ForwardedToken is an agent token its assignee minted to be shown to
-// the caller, or, where the caller is a standalone host's supervisor,
-// the token it minted for garam.
+// ForwardedToken is an agent token as a lifecycle authority received
+// it from the agent and forwards it: one its assignee minted to be
+// shown to the caller, or, where the caller is a standalone host's
+// supervisor, the token it minted for garam (ADR-0100). Proving it
+// establishes only that it names the agent; whether it is current is
+// the execution fence's to judge.
 type ForwardedToken string
-
-func (ForwardedCertificate) forwarded() {}
-func (ForwardedToken) forwarded()       {}
 
 // ActivationResult is an activation and the token that admits it.
 type ActivationResult struct {
@@ -122,13 +97,9 @@ type RecoveryInput struct {
 	Epoch     int
 	Authority string
 	Body      []byte
-	// CertificateRequestPEM is what a recovery under
-	// execution-fence.v1 signs, and nil under execution-fence.v2,
-	// which signs nothing (ADR-0100).
-	CertificateRequestPEM []byte
 }
 
-// CredentialStanding is whether a presented certificate may act now.
+// CredentialStanding is whether a forwarded token may act now.
 type CredentialStanding string
 
 const (
@@ -147,8 +118,8 @@ const (
 	GenerationNotSupplied GenerationStanding = "not_supplied"
 )
 
-// Introspection is what a lifecycle authority learns about a presented
-// certificate and generation.
+// Introspection is what a lifecycle authority learns about a forwarded
+// token and generation.
 type Introspection struct {
 	Agent      grn.GRN
 	Org        grn.GRN
@@ -164,54 +135,43 @@ type executionService struct {
 	executions ExecutionStore
 	authorizer LifecycleAuthorizer
 	operations OperationResolver
-	leaves     LeafVerifier
 	tokens     ShownTokenReader
-	signer     RequestSigner
 }
 
 // NewExecutionService constructs the execution service over the store
-// it reads assignments from, the execution store, and the authority,
-// verification and signing boundaries it consults: a forwarded
-// certificate is proven by leaves and a forwarded token by tokens.
-func NewExecutionService(store Store, executions ExecutionStore, authorizer LifecycleAuthorizer, operations OperationResolver, leaves LeafVerifier, tokens ShownTokenReader, signer RequestSigner) ExecutionService {
+// it reads assignments from, the execution store, and the authority
+// boundaries it consults; a forwarded token is proven by tokens.
+func NewExecutionService(store Store, executions ExecutionStore, authorizer LifecycleAuthorizer, operations OperationResolver, tokens ShownTokenReader) ExecutionService {
 	return &executionService{
 		store: store, executions: executions, authorizer: authorizer,
-		operations: operations, leaves: leaves, tokens: tokens, signer: signer,
+		operations: operations, tokens: tokens,
 	}
 }
 
-// prove answers the credential a forwarded one stands for once it
-// names agentGRN: a certificate chaining to the agent's organization,
-// or a token minted for the agent to be shown to caller or, for a
-// supervisor caller, by caller for garam. Neither is
-// judged current here; the execution fence does that.
-func (s *executionService) prove(ctx context.Context, caller, agentGRN grn.GRN, forwarded Forwarded) (Credential, error) {
-	switch f := forwarded.(type) {
-	case ForwardedCertificate:
-		return s.leaves.VerifyLeaf(ctx, agentGRN, f.Leaf)
-	case ForwardedToken:
-		// A value no mint could have produced reads nothing.
-		if !WellFormedAccessToken(string(f)) {
-			return Credential{}, ErrTokenNotProven
-		}
-		holder, err := s.tokens.AccessTokenShownTo(ctx, HashAccessToken(string(f)), caller)
-		if err != nil {
-			return Credential{}, err
-		}
-		if holder.Agent != agentGRN {
-			return Credential{}, ErrTokenNotProven
-		}
-		// A token minted for garam proves the agent only to the
-		// supervisor that minted it, which is the assignee and the
-		// lifecycle authority at once; every other caller forwards a
-		// token shown to it (ADR-0100).
-		if holder.Audience == nil && caller.ServiceType != ServiceTypeSupervisor {
-			return Credential{}, ErrTokenNotProven
-		}
-		return Credential{Serial: holder.Serial, NotBefore: holder.IssuedAt, NotAfter: holder.ExpiresAt}, nil
-	default:
-		return Credential{}, errorx.New(errorx.KindInternal, "agent: a forwarded credential of no known kind")
+// prove answers the credential a forwarded token stands for once it
+// names agentGRN: minted for the agent to be shown to caller or, for a
+// supervisor caller, by caller for garam. It is not judged current
+// here; the execution fence does that.
+func (s *executionService) prove(ctx context.Context, caller, agentGRN grn.GRN, forwarded ForwardedToken) (Credential, error) {
+	// A value no mint could have produced reads nothing.
+	if !WellFormedAccessToken(string(forwarded)) {
+		return Credential{}, ErrTokenNotProven
 	}
+	holder, err := s.tokens.AccessTokenShownTo(ctx, HashAccessToken(string(forwarded)), caller)
+	if err != nil {
+		return Credential{}, err
+	}
+	if holder.Agent != agentGRN {
+		return Credential{}, ErrTokenNotProven
+	}
+	// A token minted for garam proves the agent only to the supervisor
+	// that minted it, which is the assignee and the lifecycle authority
+	// at once; every other caller forwards a token shown to it
+	// (ADR-0100).
+	if holder.Audience == nil && caller.ServiceType != ServiceTypeSupervisor {
+		return Credential{}, ErrTokenNotProven
+	}
+	return Credential{Serial: holder.Serial, NotBefore: holder.IssuedAt, NotAfter: holder.ExpiresAt}, nil
 }
 
 // authorize reads the agent's current assignee and the caller's fresh
@@ -339,7 +299,7 @@ func (s *executionService) Deactivate(ctx context.Context, caller, agentGRN grn.
 	return err
 }
 
-func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.GRN, forwarded Forwarded, generation *Generation) (*Introspection, error) {
+func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.GRN, forwarded ForwardedToken, generation *Generation) (*Introspection, error) {
 	assignment, _, err := s.authorize(ctx, caller, agentGRN, OperationActivate)
 	if err != nil {
 		return nil, err
@@ -348,7 +308,7 @@ func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.
 	if err != nil {
 		return nil, err
 	}
-	// One read, so the certificate's standing, the generation and the
+	// One read, so the token's standing, the generation and the
 	// assignment answered were current together.
 	snapshot, err := s.executions.Introspect(ctx, agentGRN, credential)
 	if err != nil {
@@ -393,9 +353,6 @@ func standing(active *CurrentActivation, supplied *Generation) GenerationStandin
 }
 
 func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*RecoveredCredential, error) {
-	if len(in.CertificateRequestPEM) > MaxRequestPEM {
-		return nil, errorx.New(errorx.KindInvalidArgument, "certificate request exceeds its bound")
-	}
 	assignment, grant, err := s.authorize(ctx, caller, in.Agent, OperationRecover)
 	if err != nil {
 		return nil, err
@@ -419,41 +376,18 @@ func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in Recov
 		OperationRef:   b.Ref,
 		BodySHA256:     b.BodySHA256,
 	}
-	// A retry is answered from the record before anything is signed
-	// again; the store still rechecks it under the lock.
+	// A retry answers the lineage the record holds; the store still
+	// rechecks it under the lock.
 	prior, err := s.executions.GetRecovery(ctx, in.Agent, in.RequestID)
 	if err != nil {
 		return nil, err
 	}
 	if prior == nil {
 		req.Lineage = NewLineage()
-		if in.CertificateRequestPEM != nil {
-			signed, err := s.signer.SignRequest(ctx, in.Agent, in.CertificateRequestPEM)
-			if err != nil {
-				return nil, err
-			}
-			req.Credential, req.CertificatePEM = signed.Credential, signed.CertificatePEM
-			req.Chain = Chain{IssuerPEM: signed.IssuerPEM, ServerRootPEM: signed.ServerRootPEM}
-		}
 	}
 	recovered, err := s.executions.Recover(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	if recovered.CertificatePEM == "" {
-		return &RecoveredCredential{Lineage: recovered.Lineage}, nil
-	}
-	chain := recovered.Chain
-	if chain == nil {
-		// A recovery recorded before 000036 kept no chain, so its
-		// retry answers the one the signer signs under now. That is
-		// the chain the certificate was signed under while the
-		// organization's authority and the server root have not been
-		// replaced since; replacing either ends it.
-		if chain, err = s.signer.Chain(ctx, in.Agent); err != nil {
-			return nil, err
-		}
-	}
-	return &RecoveredCredential{Lineage: recovered.Lineage,
-		Signed: &SignedRecovery{CertificatePEM: recovered.CertificatePEM, Chain: *chain}}, nil
+	return &RecoveredCredential{Lineage: recovered.Lineage}, nil
 }

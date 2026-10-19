@@ -61,19 +61,6 @@ func TestNew_RefusesAnIdentifierThatIsNotASegment(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestNew_HoldsNoCertificate covers what a record carries before
-// anything is stored: garam has issued no certificate for an operator
-// it has not registered. A certificate already recorded for the GRN is
-// the case this value cannot see, which is why the store answers the
-// registration rather than this: the coverage for that is in
-// tests/integration.
-func TestNew_HoldsNoCertificate(t *testing.T) {
-	o, err := operator.New(acmeGRN(), "field-one", aliceGRN(), operator.DetailsPatch{})
-	require.NoError(t, err)
-
-	assert.True(t, o.CertificateIssuedAt().IsZero())
-}
-
 // TestNew_CallsAnOperatorItsIdentifierUntilItIsNamed covers the name a
 // registration starts with (ADR-0074). A registration that names none
 // is called by its identifier, which is what the console showed every

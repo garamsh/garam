@@ -3,16 +3,10 @@ package integration_test
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
+	"crypto/rsa"
 	"encoding/json"
-	"encoding/pem"
 	"io"
 	"log/slog"
-	"math/big"
 	"net"
 	"net/http"
 	"net/http/httptrace"
@@ -31,8 +25,6 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/authz"
-	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -43,7 +35,7 @@ import (
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
-// heldClock is the time the machine listener measures certificates and
+// heldClock is the time the machine listener measures tokens and
 // grants against, moved by the test across an expiry while a
 // connection stays open. The listener reads it from its own goroutines.
 type heldClock struct {
@@ -74,8 +66,6 @@ type proofStack struct {
 	clock      *heldClock
 	logs       *syncBuffer
 	url        string
-	sealer     ca.Sealer
-	issuer     ca.Service
 	acme       grn.GRN
 	hosted     grn.GRN
 	controller grn.GRN
@@ -83,17 +73,21 @@ type proofStack struct {
 	globex     grn.GRN
 	grants     *operatorpg.Store
 	grant      operator.GrantID
+	// client exchanges each operator's key, and keys holds the key
+	// each operator signs its assertions with.
+	client *http.Client
+	keys   map[grn.GRN]*rsa.PrivateKey
 	// hostedTLS is the hosted operator's client, one connection reused
-	// across every request a test sends it, and hostedLeaf the
-	// certificate that connection authenticated with.
-	hostedTLS  *http.Client
-	hostedLeaf *x509.Certificate
-	// controllerPEM, otherPEM and globexPEM are each controller's leaf
-	// as its own TLS handshake presents it, which the hosted operator
-	// forwards.
-	controllerPEM string
-	otherPEM      string
-	globexPEM     string
+	// across every request a test sends it, presenting the token whose
+	// expiry is hostedExpiry.
+	hostedTLS    *http.Client
+	hostedExpiry time.Time
+	// controllerShown and otherShown are each controller's token shown
+	// to the hosted operator, which the hosted operator forwards, and
+	// globexToken globex's controller's token for garam.
+	controllerShown string
+	otherShown      string
+	globexToken     string
 }
 
 // syncBuffer is the listener's log, which its goroutines write.
@@ -123,8 +117,6 @@ func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, polic
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
 
 	_, sealer := keyEncryptionKey(t)
-	issuer, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 	clock := &heldClock{at: time.Now()}
 	logs := &syncBuffer{}
 	presented := loopbackCertificate(t)
@@ -137,6 +129,7 @@ func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, polic
 		Engine:      engine,
 		Logger:      slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug})),
 		Now:         clock.now,
+		TokenURL:    testTokenURL,
 	})
 	require.NoError(t, err)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
@@ -146,28 +139,38 @@ func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, polic
 
 	s := &proofStack{
 		pool: p, policies: policies, engine: engine, clock: clock, logs: logs,
-		url: "https://" + lis.Addr().String(), sealer: sealer, issuer: issuer, acme: acme,
+		url: "https://" + lis.Addr().String(), acme: acme, keys: map[grn.GRN]*rsa.PrivateKey{},
 		hosted:     scopedGRN("acme", operator.ServiceType, "hosted"),
 		controller: scopedGRN("acme", operator.ServiceType, "controller"),
 		other:      scopedGRN("acme", operator.ServiceType, "other"),
 		globex:     scopedGRN("globex", operator.ServiceType, "controller"),
 		grants:     operatorpg.New(p),
 	}
-	hostedPair := installed(t, p, issuer, s.hosted)
-	s.hostedTLS = machineClient(t, hostedPair)
-	s.hostedLeaf, err = x509.ParseCertificate(hostedPair.Certificate[0])
-	require.NoError(t, err)
-	s.controllerPEM = leafPEM(installed(t, p, issuer, s.controller))
-	s.otherPEM = leafPEM(installed(t, p, issuer, s.other))
-	s.globexPEM = leafPEM(installed(t, p, issuer, s.globex))
+	s.client, _ = tokenClient(t)
+	for _, g := range []grn.GRN{s.hosted, s.controller, s.other, s.globex} {
+		registerOperator(t, p, g)
+		s.keys[g], _ = issueKey(t, operator.NewPostgresStore(p), g, operator.KeyRotationFirst)
+	}
+	s.hostedTLS = tokenPresenting(t, s.token(t, s.hosted, nil))
+	s.hostedExpiry = time.Now().Add(operator.TokenTTL)
+	s.controllerShown = s.token(t, s.controller, &s.hosted)
+	s.otherShown = s.token(t, s.other, &s.hosted)
+	s.globexToken = s.token(t, s.globex, nil)
 	s.grant = s.delegate(t, "g-1", nil, time.Now().Add(time.Hour), s.controller)
 	return s
 }
 
-// leafPEM is the leaf of pair in the PEM form a hosted operator
-// forwards.
-func leafPEM(pair tls.Certificate) string {
-	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: pair.Certificate[0]}))
+// token exchanges subject's key for a token: garam's where audience is
+// nil, and one shown to audience otherwise.
+func (s *proofStack) token(t *testing.T, subject grn.GRN, audience *grn.GRN) string {
+	t.Helper()
+	return exchangeKey(t, s.client, s.url, subject, s.keys[subject], audience)
+}
+
+// operatorTLS is a client presenting subject's token for garam.
+func (s *proofStack) operatorTLS(t *testing.T, subject grn.GRN) *http.Client {
+	t.Helper()
+	return tokenPresenting(t, s.token(t, subject, nil))
 }
 
 // delegate writes the hosted operator's grant of agent:activate on
@@ -194,11 +197,12 @@ type proof struct {
 	reused bool
 }
 
-// prove asks the route as client for controller, forwarding
-// certificatePEM and naming agent where it is not empty.
-func (s *proofStack) prove(t *testing.T, client *http.Client, controller grn.GRN, certificatePEM, agent string) proof {
+// prove asks the route as client for controller under
+// operation-authority.v2, forwarding token and naming agent where it is
+// not empty.
+func (s *proofStack) prove(t *testing.T, client *http.Client, controller grn.GRN, token, agent string) proof {
 	t.Helper()
-	body := map[string]any{"certificatePem": certificatePEM}
+	body := map[string]any{"token": token}
 	if agent != "" {
 		body["agent"] = agent
 	}
@@ -210,13 +214,13 @@ func (s *proofStack) prove(t *testing.T, client *http.Client, controller grn.GRN
 		s.url+"/operators/"+url.PathEscape(controller.String())+"/introspection", bytes.NewReader(raw))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(operator.ContractVersionHeader, operator.ContractVersion)
+	req.Header.Set(operator.ContractVersionHeader, operator.TokenAuthorityContractVersion)
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 	answer, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	assert.Equal(t, operator.ContractVersion, resp.Header.Get(operator.ContractVersionHeader))
+	assert.Equal(t, operator.TokenAuthorityContractVersion, resp.Header.Get(operator.ContractVersionHeader))
 	got.status, got.body = resp.StatusCode, string(answer)
 	return got
 }
@@ -250,56 +254,37 @@ func (s *proofStack) provision(t *testing.T, client *http.Client) (string, int) 
 	return g.String(), assignment.Epoch()
 }
 
-// selfSignedFor is a certificate naming subject that nothing but its
-// own key signed: what anyone can make for a GRN they want to assert.
-func selfSignedFor(t *testing.T, subject grn.GRN) string {
-	t.Helper()
-	uri, err := url.Parse(subject.String())
-	require.NoError(t, err)
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	template := &x509.Certificate{
-		SerialNumber: big.NewInt(time.Now().UnixNano()), NotBefore: time.Now().Add(-time.Hour),
-		NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, URIs: []*url.URL{uri},
-	}
-	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
-	require.NoError(t, err)
-	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
-}
-
-// TestControllerProof_ProvesTheControllerItsCertificateNames is the
-// session proof and the refusal of every party it is not: another
-// controller, another organization's, a certificate naming another
-// identity or signed by nothing, and another audience. The valid
-// controller is the control, through the same listener and caller.
-func TestControllerProof_ProvesTheControllerItsCertificateNames(t *testing.T) {
+// TestControllerProof_ProvesTheControllerItsTokenNames is the session
+// proof and the refusal of every party it is not: another controller,
+// another organization's, a token naming another operator or minted by
+// nobody, and another audience. The valid controller is the control,
+// through the same listener and caller.
+func TestControllerProof_ProvesTheControllerItsTokenNames(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
 	s := newProofStack(t, engine, p, policies)
 
-	got := s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, "")
+	got := s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
 	require.Equal(t, http.StatusOK, got.status, got.body)
 	assert.JSONEq(t, `{"operator":"`+s.controller.String()+`","org":"`+s.acme.String()+`","agent":null}`, got.body)
 
-	got = s.prove(t, s.hostedTLS, s.other, s.otherPEM, "")
+	got = s.prove(t, s.hostedTLS, s.other, s.otherShown, "")
 	assert.Equal(t, http.StatusForbidden, got.status, "a controller the grant does not name: %s", got.body)
-	got = s.prove(t, s.hostedTLS, s.controller, s.otherPEM, "")
-	assert.Equal(t, http.StatusUnprocessableEntity, got.status, "another controller's certificate: %s", got.body)
-	got = s.prove(t, s.hostedTLS, s.controller, selfSignedFor(t, s.controller), "")
-	assert.Equal(t, http.StatusUnprocessableEntity, got.status, "the controller's GRN in a certificate nobody issued: %s", got.body)
-	got = s.prove(t, s.hostedTLS, s.globex, s.globexPEM, "")
+	got = s.prove(t, s.hostedTLS, s.controller, s.otherShown, "")
+	assert.Equal(t, http.StatusUnprocessableEntity, got.status, "another controller's token: %s", got.body)
+	got = s.prove(t, s.hostedTLS, s.controller, operator.TokenPrefix+strings.Repeat("0", 64), "")
+	assert.Equal(t, http.StatusUnprocessableEntity, got.status, "a token of the right spelling nobody minted: %s", got.body)
+	got = s.prove(t, s.hostedTLS, s.globex, s.globexToken, "")
 	assert.Equal(t, http.StatusNotFound, got.status, "another organization's controller: %s", got.body)
 
-	// The controller is registered and holds a valid certificate, but
-	// no grant names it as an audience.
-	controllerTLS := machineClient(t, installed(t, p, s.issuer, s.controller))
-	got = s.prove(t, controllerTLS, s.controller, s.controllerPEM, "")
+	// The controller is registered and holds a live token, and proves
+	// the other controller by a token shown to it, but no grant names it
+	// as an audience.
+	got = s.prove(t, s.operatorTLS(t, s.controller), s.other, s.token(t, s.other, &s.controller), "")
 	assert.Equal(t, http.StatusForbidden, got.status, "another audience: %s", got.body)
 
 	for _, line := range []string{s.logs.String(), got.body} {
-		assert.NotContains(t, line, "BEGIN CERTIFICATE")
-		assert.NotContains(t, line, strings.Split(s.controllerPEM, "\n")[1], "no part of a forwarded certificate")
+		assert.NotContains(t, line, strings.TrimPrefix(s.controllerShown, operator.TokenPrefix), "no part of a forwarded token")
 	}
 }
 
@@ -311,24 +296,24 @@ func TestControllerProof_BindsAnAgentToItsCurrentAssignment(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
 	s := newProofStack(t, engine, p, policies)
-	controllerTLS := machineClient(t, installed(t, p, s.issuer, s.controller))
+	controllerTLS := s.operatorTLS(t, s.controller)
 	placed, epoch := s.provision(t, controllerTLS)
 
-	got := s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, placed)
+	got := s.prove(t, s.hostedTLS, s.controller, s.controllerShown, placed)
 	require.Equal(t, http.StatusOK, got.status, got.body)
 	assert.JSONEq(t, `{"operator":"`+s.controller.String()+`","org":"`+s.acme.String()+
 		`","agent":{"grn":"`+placed+`","epoch":"`+strconv.Itoa(epoch)+`"}}`, got.body)
 
-	elsewhere, _ := s.provision(t, machineClient(t, installed(t, p, s.issuer, s.other)))
-	got = s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, elsewhere)
+	elsewhere, _ := s.provision(t, s.operatorTLS(t, s.other))
+	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, elsewhere)
 	assert.Equal(t, http.StatusForbidden, got.status, "an agent assigned to another controller: %s", got.body)
-	got = s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, scopedGRN("acme", "agent", "nobody").String())
+	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, scopedGRN("acme", "agent", "nobody").String())
 	assert.Equal(t, http.StatusNotFound, got.status, "an agent the organization does not have: %s", got.body)
 	// globex's agent is real and placed, on globex's controller: what
 	// refuses it is the organization, decided before its placement is
 	// read.
-	foreign, _ := s.provision(t, machineClient(t, installed(t, p, s.issuer, s.globex)))
-	got = s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, foreign)
+	foreign, _ := s.provision(t, s.operatorTLS(t, s.globex))
+	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, foreign)
 	assert.Equal(t, http.StatusNotFound, got.status, "another organization's agent: %s", got.body)
 
 	// Moving the agent away and back raises the epoch: the proof answers
@@ -338,10 +323,10 @@ func TestControllerProof_BindsAnAgentToItsCurrentAssignment(t *testing.T) {
 	require.NoError(t, err)
 	_, err = agents.Assign(context.Background(), placedGRN, s.other)
 	require.NoError(t, err)
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, placed), http.StatusForbidden, "moved")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, placed), http.StatusForbidden, "moved")
 	back, err := agents.Assign(context.Background(), placedGRN, s.controller)
 	require.NoError(t, err)
-	got = s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, placed)
+	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, placed)
 	require.Equal(t, http.StatusOK, got.status, got.body)
 	assert.Contains(t, got.body, `"epoch":"`+strconv.Itoa(back.Epoch())+`"`)
 	assert.NotEqual(t, epoch, back.Epoch())
@@ -349,85 +334,62 @@ func TestControllerProof_BindsAnAgentToItsCurrentAssignment(t *testing.T) {
 
 // TestControllerProof_RefusesWithdrawalOnTheSameOpenConnection holds
 // that a withdrawal refuses the next decision on a connection that
-// authenticated before it: an ended grant, a deleted controller and the
-// caller's own deleted registration. Each refusal follows a proof on
-// the same connection, which is its control.
+// authenticated before it: an ended grant, a deleted controller, whose
+// tokens go with it, and the caller's own deleted registration. Each
+// refusal follows a proof on the same connection, which is its control.
 func TestControllerProof_RefusesWithdrawalOnTheSameOpenConnection(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
 	s := newProofStack(t, engine, p, policies)
 
-	require.Equal(t, http.StatusOK, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, "").status)
+	require.Equal(t, http.StatusOK, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "").status)
 	require.NoError(t, s.grants.EndGrant(ctx, s.acme, s.hosted, s.grant, time.Now()))
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, ""), http.StatusForbidden, "grant ended")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusForbidden, "grant ended")
 
 	s.delegate(t, "g-2", nil, time.Now().Add(time.Hour), s.controller, s.other)
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, ""), http.StatusOK, "granted again")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "granted again")
 	require.NoError(t, operator.NewPostgresStore(p).Delete(ctx, s.controller))
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, ""), http.StatusNotFound, "controller deleted")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusUnprocessableEntity,
+		"controller deleted, and its tokens with it")
 
 	// The other controller, which the same grant names, is the control
 	// for the caller's own deletion: it answers on this connection until
 	// the caller goes.
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.other, s.otherPEM, ""), http.StatusOK, "the other controller")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.other, s.otherShown, ""), http.StatusOK, "the other controller")
 	require.NoError(t, operator.NewPostgresStore(p).Delete(ctx, s.hosted))
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.other, s.otherPEM, ""), http.StatusForbidden, "caller deleted")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.other, s.otherShown, ""), http.StatusUnauthorized,
+		"caller deleted, and its token with it")
 }
 
-// TestControllerProof_ReadsTheTimeOnEveryDecision moves the listener's
-// clock across three expiries on one open connection: the forwarded
-// controller certificate's, the grant's, and the caller's own TLS
-// certificate's. Each refusal is read against a certificate or caller
-// the same move leaves valid.
+// TestControllerProof_ReadsTheTimeOnEveryDecision holds three expiries
+// on one open connection: the forwarded controller token's, which the
+// database reads, and the grant's and the caller's own token's, which
+// the listener's clock is moved across. Each refusal is read against a
+// token or caller the same move leaves valid.
 func TestControllerProof_ReadsTheTimeOnEveryDecision(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
 	s := newProofStack(t, engine, p, policies)
 	start := s.clock.now()
+	fresh := s.token(t, s.controller, &s.hosted)
 
-	// A controller certificate issued half a lifetime ago runs out
-	// first; one issued a quarter of a lifetime from now outlives the
-	// caller's.
-	issuedAt := func(at time.Time) *x509.Certificate {
-		svc, err := ca.NewService(capg.New(p), s.sealer, ca.Config{Now: func() time.Time { return at }})
-		require.NoError(t, err)
-		issued, err := svc.Issue(context.Background(), s.controller)
-		require.NoError(t, err)
-		leaf, err := x509.ParseCertificate(mustPEMBlock(t, issued.CertificatePEM()))
-		require.NoError(t, err)
-		return leaf
-	}
-	early := issuedAt(start.Add(-ca.DefaultCertificateLifetime / 2))
-	late := issuedAt(start.Add(ca.DefaultCertificateLifetime / 4))
-	caller := s.hostedLeaf
-	require.True(t, early.NotAfter.Before(caller.NotAfter) && caller.NotAfter.Before(late.NotAfter),
-		"early %s, caller %s, late %s", early.NotAfter, caller.NotAfter, late.NotAfter)
-	require.True(t, late.NotBefore.Before(early.NotAfter))
-	earlyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: early.Raw}))
-	latePEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: late.Raw}))
+	require.Equal(t, http.StatusOK, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "").status)
+	_, err := p.Exec(context.Background(), `UPDATE operator_tokens SET expires_at = now() - interval '1 second' WHERE token_hash = $1`,
+		operator.HashToken(s.controllerShown))
+	require.NoError(t, err)
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusUnprocessableEntity, "forwarded token expired")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, fresh, ""), http.StatusOK, "a forwarded token still live")
 
-	require.Equal(t, http.StatusOK, s.prove(t, s.hostedTLS, s.controller, earlyPEM, "").status)
+	grantEnds := start.Add(30 * time.Minute)
+	second := s.delegate(t, "g-2", &s.grant, grantEnds, s.controller)
+	s.clock.set(grantEnds.Add(time.Second))
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, fresh, ""), http.StatusForbidden, "grant expired")
 
-	s.clock.set(early.NotAfter.Add(time.Second))
-	second := s.delegate(t, "g-2", &s.grant, early.NotAfter.Add(time.Hour), s.controller)
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, earlyPEM, ""), http.StatusForbidden, "forwarded certificate expired")
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, latePEM, ""), http.StatusOK, "a forwarded certificate still valid")
-
-	s.clock.set(early.NotAfter.Add(time.Hour + time.Second))
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, latePEM, ""), http.StatusForbidden, "grant expired")
-
-	s.delegate(t, "g-3", &second, caller.NotAfter.Add(time.Hour), s.controller)
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, latePEM, ""), http.StatusOK, "granted past the caller's expiry")
-	s.clock.set(caller.NotAfter.Add(time.Second))
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, latePEM, ""), http.StatusForbidden, "caller certificate expired")
-}
-
-func mustPEMBlock(t *testing.T, raw []byte) []byte {
-	t.Helper()
-	block, _ := pem.Decode(raw)
-	require.NotNil(t, block)
-	return block.Bytes
+	s.delegate(t, "g-3", &second, s.hostedExpiry.Add(time.Hour), s.controller)
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, fresh, ""), http.StatusOK, "granted past the caller's expiry")
+	s.clock.set(s.hostedExpiry.Add(time.Minute))
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, fresh, ""), http.StatusForbidden, "caller token expired")
 }
 
 // TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow holds that
@@ -443,7 +405,7 @@ func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
 	policies, engine := policyEngine(t, p)
 	s := newProofStack(t, engine, p, policies)
 	orgs := orgpg.New(p)
-	controllerTLS := machineClient(t, installed(t, p, s.issuer, s.controller))
+	controllerTLS := s.operatorTLS(t, s.controller)
 	placed, _ := s.provision(t, controllerTLS)
 
 	team := scopedGRN("acme", org.ServiceTypeGroup, "controllers")
@@ -451,12 +413,12 @@ func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
 	denied := activePolicy(t, policies, s.acme, "deny-activate",
 		statementDoc("deny-activate", wire.EffectDeny, "agent:activate", s.acme.String()))
 	attachPolicy(t, policies, denied, team)
-	got := s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, "")
+	got := s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
 	require.Equal(t, http.StatusOK, got.status, "not in the denied group: %s", got.body)
 	require.NoError(t, orgs.AddGroupMember(ctx, team, s.hosted))
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, ""), http.StatusForbidden, "added to the denied group")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusForbidden, "added to the denied group")
 	require.NoError(t, orgs.RemoveGroupMember(ctx, team, s.hosted))
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, ""), http.StatusOK, "removed again")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "removed again")
 
 	check := &authzv1.CheckRequest{
 		SubjectGrn: s.hosted.String(), ObjectGrn: s.acme.String(), Action: "agent:activate",
@@ -482,8 +444,8 @@ func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, stale.GetAllowed(), "the control: the ordinary check still answers its cached allow")
 
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, placed), http.StatusForbidden, "a Deny on the agent")
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, ""), http.StatusOK, "the session, which the Deny does not name")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, placed), http.StatusForbidden, "a Deny on the agent")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "the session, which the Deny does not name")
 }
 
 // TestControllerProof_UnknownFreshnessRefusesAsUnavailable holds that
@@ -506,16 +468,16 @@ func TestControllerProof_UnknownFreshnessRefusesAsUnavailable(t *testing.T) {
 	t.Cleanup(func() { _ = engine.Close() })
 	s := newProofStack(t, engine, p, nil)
 
-	require.Equal(t, http.StatusOK, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, "").status)
+	require.Equal(t, http.StatusOK, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "").status)
 	gate.checkOnly()
-	got := s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, "")
+	got := s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
 	onOpenConnection(t, got, http.StatusServiceUnavailable, "an engine without CheckCurrent")
 	assert.Contains(t, got.body, `"message":"internal error"`)
 
 	gate.restore()
-	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, ""), http.StatusOK, "the engine restored")
+	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "the engine restored")
 	p.Close()
-	got = s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, "")
+	got = s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
 	onOpenConnection(t, got, http.StatusServiceUnavailable, "a database that stopped answering")
 	assert.Contains(t, got.body, `"message":"internal error"`)
 }

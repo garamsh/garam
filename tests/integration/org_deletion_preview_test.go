@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	"context"
-	"crypto/rand"
 	"testing"
 	"time"
 
@@ -10,8 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
@@ -194,14 +191,17 @@ func TestOrgDeletionPreview_ConsentGoesForBothSides(t *testing.T) {
 }
 
 // The certificate authority is reported only where there is one, and
-// deleting the organization takes it with no way back. `internal/ca`
-// declares Create and Get and nothing else, so the row that goes here
-// cannot be put back by any route in the package.
+// deleting the organization takes it with no way back. Since ADR-0118
+// garam creates no authority and reads one only for its presence, so
+// the row is written here as an earlier release left it, and the read
+// under test is that presence read: it opens nothing and decodes
+// nothing. An organization holding none is the control: a presence
+// check that answered yes for everything would pass the first
+// assertion alone.
 func TestOrgDeletionPreview_CertificateAuthorityGoesAndDoesNotReturn(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	orgs := orgpg.New(p)
-	authorities := capg.New(p)
 
 	withCA := orgRootGRN("preview-ca-holder")
 	withoutCA := orgRootGRN("preview-ca-none")
@@ -211,39 +211,23 @@ func TestOrgDeletionPreview_CertificateAuthorityGoesAndDoesNotReturn(t *testing.
 		_ = orgs.DeleteOrg(ctx, withCA)
 		_ = orgs.DeleteOrg(ctx, withoutCA)
 	})
-
-	key := make([]byte, ca.KeySize)
-	_, err := rand.Read(key)
-	require.NoError(t, err)
-	sealer, err := ca.NewAESGCMSealer(key)
-	require.NoError(t, err)
-	svc, err := ca.NewService(authorities, sealer, ca.Config{})
+	_, err := p.Exec(ctx, `INSERT INTO certificate_authorities (org_grn, certificate, sealed_key, not_after, created_at)
+		VALUES ($1, 'certificate', 'sealed', now() + interval '1 day', now())`, withCA.String())
 	require.NoError(t, err)
 
-	// An authority is created on the first certificate the org needs,
-	// so issuing one is what gives this organization an authority.
-	agentGRN, err := agent.NewGRN(withCA)
+	held, err := orgs.HoldsCertificateAuthority(ctx, withCA)
 	require.NoError(t, err)
-	_, err = svc.Issue(ctx, agentGRN)
+	assert.True(t, held, "an organization an earlier release gave an authority holds it")
+	held, err = orgs.HoldsCertificateAuthority(ctx, withoutCA)
 	require.NoError(t, err)
-
-	// Before: one organization holds an authority and the other, which
-	// has needed no certificate, does not. The second is the control:
-	// a presence check that answered yes for everything would pass the
-	// first assertion alone.
-	held, err := authorities.Get(ctx, withCA)
-	require.NoError(t, err)
-	require.NotEmpty(t, held.SealedKey, "the private key is stored sealed and goes with the row")
-	_, err = authorities.Get(ctx, withoutCA)
-	assert.True(t, errorx.IsKind(err, errorx.KindNotFound),
-		"an organization that has needed no certificate has no authority")
+	assert.False(t, held, "the control: an organization that never needed one holds none")
 
 	require.NoError(t, orgs.DeleteOrg(ctx, withCA))
 
-	// After: the row is gone. ca.Store declares Create and Get, so
-	// nothing in the package restores it, and Create needs an org row
-	// that the same delete removed.
-	_, err = authorities.Get(ctx, withCA)
-	assert.True(t, errorx.IsKind(err, errorx.KindNotFound),
+	// After: the row is gone, and nothing in garam writes one.
+	assert.Zero(t, countRows(t, p, `SELECT count(*) FROM certificate_authorities WHERE org_grn = $1`, withCA.String()),
 		"the authority goes with the organization")
+	held, err = orgs.HoldsCertificateAuthority(ctx, withCA)
+	require.NoError(t, err)
+	assert.False(t, held)
 }

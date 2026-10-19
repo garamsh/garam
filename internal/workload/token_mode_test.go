@@ -2,10 +2,8 @@ package workload_test
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
+	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -44,53 +42,6 @@ func (s *stubTokens) set(token string) {
 // agentToken is an agent token as garam spells one, made of c.
 func agentToken(c string) string { return "garam_at_" + strings.Repeat(c, 64) }
 
-// tokenConfig is the host's configuration in the token mode: no agent
-// certificate, key or issuer, and the agent's token from tokens.
-func (h *host) tokenConfig(tokens workload.AgentTokens, edit ...func(*workload.Desired)) workload.Config {
-	cfg := h.config(edit...)
-	cfg.Adapter.CertificatePEM, cfg.Adapter.KeyPEM, cfg.Adapter.IssuerPEM = nil, nil, nil
-	cfg.Tokens = tokens
-	cfg.TokenCheckInterval = 5 * time.Millisecond
-	return cfg
-}
-
-// startTokens runs the supervisor in the token mode.
-func (h *host) startTokens(tokens workload.AgentTokens, edit ...func(*workload.Desired)) *running {
-	h.t.Helper()
-	return h.run(h.tokenConfig(tokens, edit...))
-}
-
-// serverOnlyClient reaches the adapter's control as the token mode's
-// adapter does: verifying the generation's root and presenting no
-// certificate.
-func (h *host) serverOnlyClient(c *stubContainer) *http.Client {
-	h.t.Helper()
-	roots := x509.NewCertPool()
-	require.True(h.t, roots.AppendCertsFromPEM(c.files["/etc/garam/control-root.pem"].Data))
-	socket := filepath.Join(c.spec.Binds[0].Source, "control.sock")
-	return &http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS13},
-		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-			var d net.Dialer
-			return d.DialContext(ctx, "unix", socket)
-		},
-	}}
-}
-
-// tokenAdapterOf is the token-mode adapter's own control client, built
-// from what its container was given: its control token file, the root
-// and the socket, and its placement token.
-func (h *host) tokenAdapterOf(c *stubContainer) (*delivery.HTTPAuthority, string) {
-	h.t.Helper()
-	path := filepath.Join(h.t.TempDir(), "control-token")
-	require.NoError(h.t, os.WriteFile(path, c.files["/etc/garam/control-token"].Data, 0o600))
-	control, err := delivery.NewTokenFile(path)
-	require.NoError(h.t, err)
-	auth, err := delivery.NewHTTPAuthority(h.serverOnlyClient(c), "https://"+workload.ControlName, testAgent, control)
-	require.NoError(h.t, err)
-	return auth, string(c.files["/etc/garam/placement-token"].Data)
-}
-
 // TestRun_TokenModeHandsTheAdapterTokensAndNoCertificate holds what a
 // token-mode adapter is given (ADR-0100): the agent token garam accepts
 // and the generation's control token, each its own file readable by the
@@ -99,8 +50,7 @@ func (h *host) tokenAdapterOf(c *stubContainer) (*delivery.HTTPAuthority, string
 // obtained from garam.
 func TestRun_TokenModeHandsTheAdapterTokensAndNoCertificate(t *testing.T) {
 	h := newHost(t)
-	tokens := &stubTokens{current: agentToken("a")}
-	h.startTokens(tokens)
+	h.start()
 	_, _, adapter := h.serving()
 
 	agentFile, controlFile := adapter.files["/etc/garam/agent-token"], adapter.files["/etc/garam/control-token"]
@@ -128,10 +78,10 @@ func TestRun_TokenModeHandsTheAdapterTokensAndNoCertificate(t *testing.T) {
 // certificate. The runtime's status is taken under the same token.
 func TestActivate_TokenModeForwardsTheAgentTokenUnderV2(t *testing.T) {
 	h := newHost(t)
-	tokens := &stubTokens{current: agentToken("a")}
-	h.startTokens(tokens)
+	tokens := h.tokens
+	h.start()
 	_, _, adapter := h.serving()
-	auth, placement := h.tokenAdapterOf(adapter)
+	auth, placement := h.adapterOf(adapter)
 	generation := newGeneration()
 	id := delivery.RequestID(delivery.TokenExecutionContract, binding(generation), placement)
 
@@ -156,21 +106,20 @@ func TestActivate_TokenModeForwardsTheAgentTokenUnderV2(t *testing.T) {
 
 // TestActivate_TokenModeAcceptsTheGenerationsControlTokenAlone holds
 // the token mode's control to its one credential: no token, garam's
-// agent token, another token of the same spelling and the certificate
-// mode's contract are each refused before anything reaches garam. The
+// agent token, another token of the same spelling and another contract
+// are each refused before anything reaches garam. The
 // adapter's own request, which carries the generation's control token,
 // is the control.
 func TestActivate_TokenModeAcceptsTheGenerationsControlTokenAlone(t *testing.T) {
 	h := newHost(t)
-	tokens := &stubTokens{current: agentToken("a")}
-	h.startTokens(tokens)
+	h.start()
 	_, _, adapter := h.serving()
-	_, placement := h.tokenAdapterOf(adapter)
+	_, placement := h.adapterOf(adapter)
 	control := string(adapter.files["/etc/garam/control-token"].Data)
 	generation := newGeneration()
 	body := fmt.Sprintf(`{"requestId":%q,"epoch":"3","generation":%q,"configRevision":"r1"}`,
 		delivery.RequestID(delivery.TokenExecutionContract, binding(generation), placement), generation)
-	client := h.serverOnlyClient(adapter)
+	client := h.clientOf(adapter)
 	post := func(contract, token string) int {
 		req, err := http.NewRequest(http.MethodPost,
 			"https://supervisor/v1/agents/"+testAgent.String()+"/activations", strings.NewReader(body))
@@ -191,8 +140,8 @@ func TestActivate_TokenModeAcceptsTheGenerationsControlTokenAlone(t *testing.T) 
 		"garam's agent token is not control's")
 	assert.Equal(t, http.StatusUnauthorized, post(workload.TokenExecutionContract, agentToken("f")),
 		"a token of the same spelling that is not the generation's")
-	assert.Equal(t, http.StatusBadRequest, post(workload.ExecutionContract, control),
-		"the certificate mode's contract is not served")
+	assert.Equal(t, http.StatusBadRequest, post("agent-execution.v1", control),
+		"another contract is not served")
 	assert.Empty(t, h.garam.asked(), "nothing reached garam")
 
 	assert.Equal(t, http.StatusCreated, post(workload.TokenExecutionContract, control),
@@ -205,8 +154,8 @@ func TestActivate_TokenModeAcceptsTheGenerationsControlTokenAlone(t *testing.T) 
 // before the refresh is the control.
 func TestRun_TokenModeHandsARefreshedTokenToTheRunningAdapter(t *testing.T) {
 	h := newHost(t)
-	tokens := &stubTokens{current: agentToken("a")}
-	h.startTokens(tokens)
+	tokens := h.tokens
+	h.start()
 	_, _, adapter := h.serving()
 	handed := func() string {
 		h.engine.mu.Lock()
@@ -230,13 +179,12 @@ func TestRun_TokenModeHandsARefreshedTokenToTheRunningAdapter(t *testing.T) {
 // still activates against the new process.
 func TestRun_TokenModeKeepsTheControlTokenAcrossARestart(t *testing.T) {
 	h := newHost(t)
-	tokens := &stubTokens{current: agentToken("a")}
-	first := h.startTokens(tokens)
+	first := h.start()
 	_, _, adapter := h.serving()
-	auth, placement := h.tokenAdapterOf(adapter)
+	auth, placement := h.adapterOf(adapter)
 	require.NoError(t, first.stop())
 
-	h.startTokens(tokens)
+	h.start()
 	generation := newGeneration()
 	var err error
 	require.Eventually(t, func() bool {
@@ -246,25 +194,17 @@ func TestRun_TokenModeKeepsTheControlTokenAcrossARestart(t *testing.T) {
 	}, 5*time.Second, 10*time.Millisecond, "the adapter's control token is still the generation's: %v", err)
 }
 
-// TestNewSupervisor_TakesOneCredentialMode refuses a token-mode host
-// handed an agent certificate, and a certificate-mode host without its
-// issuer; the configuration of each mode alone is the control.
-func TestNewSupervisor_TakesOneCredentialMode(t *testing.T) {
+// TestNewSupervisor_RequiresTheAgentsTokens refuses a host with no
+// source of the agent's token, which is the one credential an adapter
+// is handed (ADR-0118); the same configuration with one is the control.
+func TestNewSupervisor_RequiresTheAgentsTokens(t *testing.T) {
 	h := newHost(t)
-	tokens := &stubTokens{current: agentToken("a")}
-	_, err := workload.NewSupervisor(h.engine, h.garam, h.tokenConfig(tokens))
-	require.NoError(t, err, "the control: the token mode alone")
-	_, err = workload.NewSupervisor(h.engine, h.garam, h.config())
-	require.NoError(t, err, "the control: the certificate mode alone")
+	_, err := workload.NewSupervisor(h.engine, h.garam, h.config())
+	require.NoError(t, err, "the control: the agent's tokens")
 
-	both := h.tokenConfig(tokens)
-	both.Adapter.CertificatePEM, both.Adapter.KeyPEM = h.id.leafPEM, h.id.keyPEM
-	_, err = workload.NewSupervisor(h.engine, h.garam, both)
-	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "%v", err)
-
-	neither := h.config()
-	neither.Adapter.IssuerPEM = nil
-	_, err = workload.NewSupervisor(h.engine, h.garam, neither)
+	none := h.config()
+	none.Tokens = nil
+	_, err = workload.NewSupervisor(h.engine, h.garam, none)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "%v", err)
 }
 
@@ -282,31 +222,49 @@ func (h *host) controlTokenOf(adapter *stubContainer) string {
 // control.
 func TestRun_TokenModeDrawsEachGenerationsControlToken(t *testing.T) {
 	h := newHost(t)
-	tokens := &stubTokens{current: agentToken("a")}
-	first := h.startTokens(tokens)
+	first := h.start()
 	runtime, _, adapter := h.serving()
 	firstToken := h.controlTokenOf(adapter)
 	require.NoError(t, first.stop())
 
-	again := h.startTokens(tokens)
+	again := h.start()
 	_, _, adopted := h.serving()
 	assert.Equal(t, firstToken, h.controlTokenOf(adopted), "the control: the same generation keeps its token")
 	require.NoError(t, again.stop())
 
-	h.startTokens(tokens, replace)
+	h.start(replace)
 	require.NoError(t, h.engine.await(func() bool { return runtime.status == workload.ContainerExited }))
 	_, _, successor := h.serving()
 	assert.NotEqual(t, firstToken, h.controlTokenOf(successor), "the next generation draws its own")
 	assert.Regexp(t, `^garam_at_[0-9a-f]{64}$`, h.controlTokenOf(successor))
 }
 
-// TestRun_TokenModeDrainsAGenerationTheCertificateModeStarted holds a
-// token-mode supervisor to serving only an intent that holds a control
-// token: a generation the certificate mode started, which holds none,
-// is drained and replaced rather than adopted, so no request is ever
-// compared with an empty token. A certificate-mode restart adopting
-// the same generation is the control.
-func TestRun_TokenModeDrainsAGenerationTheCertificateModeStarted(t *testing.T) {
+// forgetControlToken rewrites the host's record as a supervisor of the
+// certificate mode ADR-0118 removed left it: its intent holds no
+// control token.
+func (h *host) forgetControlToken() {
+	h.t.Helper()
+	path := filepath.Join(h.dir, "workload.json")
+	raw, err := os.ReadFile(path)
+	require.NoError(h.t, err)
+	var record map[string]any
+	require.NoError(h.t, json.Unmarshal(raw, &record))
+	intent, ok := record["intent"].(map[string]any)
+	require.True(h.t, ok, "the record holds an intent")
+	require.Contains(h.t, intent, "controlToken")
+	delete(intent, "controlToken")
+	raw, err = json.Marshal(record)
+	require.NoError(h.t, err)
+	require.NoError(h.t, os.WriteFile(path, raw, 0o600))
+}
+
+// TestRun_DrainsAGenerationRecordedWithoutAControlToken holds a
+// supervisor to serving only an intent that holds a control token: a
+// generation a certificate-mode supervisor started, recorded without
+// one, is drained and replaced rather than adopted, so no request is
+// ever compared with an empty token. The same record holding its
+// token, adopted, is the control.
+func TestRun_DrainsAGenerationRecordedWithoutAControlToken(t *testing.T) {
 	h := newHost(t)
 	first := h.start()
 	runtime, _, _ := h.serving()
@@ -314,12 +272,13 @@ func TestRun_TokenModeDrainsAGenerationTheCertificateModeStarted(t *testing.T) {
 
 	again := h.start()
 	adopted, _, _ := h.serving()
-	require.Same(t, runtime, adopted, "the control: the same mode adopts its generation")
+	require.Same(t, runtime, adopted, "the control: a record holding its token is adopted")
 	require.NoError(t, again.stop())
 
-	h.startTokens(&stubTokens{current: agentToken("a")})
+	h.forgetControlToken()
+	h.start()
 	require.NoError(t, h.engine.await(func() bool { return runtime.status == workload.ContainerExited }),
-		"the certificate mode's generation is drained")
+		"the generation recorded without a control token is drained")
 	successor, _, adapter := h.serving()
 	assert.NotSame(t, runtime, successor)
 	assert.Regexp(t, `^garam_at_[0-9a-f]{64}$`, h.controlTokenOf(adapter), "and its successor holds a control token")

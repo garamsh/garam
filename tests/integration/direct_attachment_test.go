@@ -323,8 +323,6 @@ func TestDirectAttachment_FirstAttachmentAndItsRetryActivateWhatTheRuntimeReport
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	h := newDirectHost(t, s, freeLoopback(t), nil)
-	assert.Equal(t, 0, countRows(t, s.pool, `SELECT count(*) FROM agent_credentials WHERE agent_grn = $1`, h.agent.String()),
-		"a direct agent holds no certificate")
 	rt, err := startDirectRuntime(t, h.store, h.address, h.agent.String(), h.epoch)
 	require.NoError(t, err)
 	h.run(t, s)
@@ -506,20 +504,12 @@ func TestDirectAttachment_AdmissionIsTheAdministratorsAndNeverAnOperators(t *tes
 	assert.Equal(t, "direct_placement_gated", reasonOf(t, got))
 
 	h := newStandaloneHost(t)
-	keyed := map[string]any{}
-	require.NoError(t, json.Unmarshal([]byte(h.approval(t, time.Now().Add(time.Hour), nil)), &keyed))
-	keyed["placement"] = "direct"
-	raw, err := json.Marshal(keyed)
+	keyless := map[string]any{}
+	require.NoError(t, json.Unmarshal([]byte(h.approval(t, time.Now().Add(time.Hour), nil)), &keyless))
+	keyless["placement"] = "direct"
+	raw, err := json.Marshal(keyless)
 	require.NoError(t, err)
 	status, body := s.approve(t, s.owner, "acme", string(raw))
-	assert.Equal(t, http.StatusBadRequest, status, "a direct host binds no key: %s", body)
-
-	keyless := map[string]any{}
-	require.NoError(t, json.Unmarshal([]byte(h.credentialApproval(t)), &keyless))
-	keyless["placement"] = "direct"
-	raw, err = json.Marshal(keyless)
-	require.NoError(t, err)
-	status, body = s.approve(t, s.owner, "acme", string(raw))
 	assert.Equal(t, http.StatusCreated, status, "the control: a direct approval binding no key: %s", body)
 	assert.Equal(t, agent.CredentialStandaloneContractVersion, credentialContract(t, s, h))
 }
@@ -528,7 +518,7 @@ func TestDirectAttachment_AdmissionIsTheAdministratorsAndNeverAnOperators(t *tes
 // the answer names, which is the contract a direct host enrolls under.
 func credentialContract(t *testing.T, s *tokenStack, h standaloneHost) string {
 	t.Helper()
-	got := s.spendV2(t, h.secret, h.credentialEnrollment())
+	got := s.spend(t, h.secret, h.enrollment(t))
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var e machinegen.StandaloneEnrollment
 	require.NoError(t, json.Unmarshal([]byte(got.body), &e))

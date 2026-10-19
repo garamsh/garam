@@ -43,7 +43,7 @@ func TestBounds_StalledPeerIsRefusedWithinItsBound(t *testing.T) {
 	const bound = 200 * time.Millisecond
 	base := stalled(t)
 
-	q, err := delivery.NewHTTPQueue(&http.Client{}, base, agentGRN(), delivery.HeldExecution("held-token"), certificateMode())
+	q, err := delivery.NewHTTPQueue(&http.Client{}, base, agentGRN(), delivery.HeldExecution("held-token"), agentCredential())
 	require.NoError(t, err)
 	streamBounded := &http.Client{Transport: &http.Transport{ResponseHeaderTimeout: bound}}
 	g, err := delivery.NewHTTPGateway(streamBounded, base, agentGRN())
@@ -104,7 +104,7 @@ func TestBounds_ClaimIsNotCutShortByTheOrdinaryBound(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	q, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), delivery.HeldExecution("held-token"), certificateMode())
+	q, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), delivery.HeldExecution("held-token"), agentCredential())
 	require.NoError(t, err)
 
 	// The ordinary bound is under the poll; the claim's is over it.

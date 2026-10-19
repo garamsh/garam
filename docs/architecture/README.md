@@ -354,11 +354,8 @@ Responsibility documents:
 - [users.md](./users.md) — human identity
 - [sign-in.md](./sign-in.md) — how a person proves who they are, and the
   session that carries the proof afterwards
-- [certificate-authorities.md](./certificate-authorities.md) — the
-  certificate authority an organization signs machine identities with
 - [operators.md](./operators.md) — what an organization records about an
-  operator, where that operator stands in obtaining a certificate, and
-  what it authenticates with
+  operator and what it authenticates with
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam
 - [machine-identity.md](./machine-identity.md) — who is calling on the

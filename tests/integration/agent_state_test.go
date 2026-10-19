@@ -11,8 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
@@ -61,11 +59,9 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
 
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 	holds := scopedGRN("acme", operator.ServiceType, "one")
-	holder := machineClient(t, installed(t, p, outOfBand, holds))
-	sibling := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", operator.ServiceType, "two")))
+	holder := operatorClient(t, p, url, holds)
+	sibling := operatorClient(t, p, url, scopedGRN("acme", operator.ServiceType, "two"))
 
 	// The epoch a report carries is the assignment's: provisioned assigns
 	// the agent once, so it is the first.
@@ -105,21 +101,26 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 
 	// Each route answers one party, and each of these callers is
 	// refused on the route that is not its own.
+	// The runtime route reads the caller's credential serial, which an
+	// operator's token carries none of, so it is refused before any
+	// decision is made (ADR-0100).
 	refused := map[string]struct {
 		client *http.Client
 		url    string
 		body   string
+		status int
+		kind   string
 	}{
-		"an operator that does not hold the agent": {sibling, provisioning, reportBody(epoch, "failed")},
-		"the agent reporting on its own pod":       {self, provisioning, reportBody(epoch, "failed")},
-		"the operator reporting for the agent":     {holder, runtime, reportBody(epoch, "disconnected")},
-		"another agent of the organization":        {stranger, runtime, reportBody(epoch, "disconnected")},
+		"an operator that does not hold the agent": {sibling, provisioning, reportBody(epoch, "failed"), http.StatusForbidden, "permission_denied"},
+		"the agent reporting on its own pod":       {self, provisioning, reportBody(epoch, "failed"), http.StatusForbidden, "permission_denied"},
+		"the operator reporting for the agent":     {holder, runtime, reportBody(epoch, "disconnected"), http.StatusUnauthorized, "unauthenticated"},
+		"another agent of the organization":        {stranger, runtime, reportBody(epoch, "disconnected"), http.StatusForbidden, "permission_denied"},
 	}
 	for name, tt := range refused {
 		t.Run(name, func(t *testing.T) {
 			status, body := machineSend(t, tt.client, http.MethodPost, tt.url, tt.body)
-			assert.Equal(t, http.StatusForbidden, status, string(body))
-			assert.Contains(t, string(body), `"kind":"permission_denied"`)
+			assert.Equal(t, tt.status, status, string(body))
+			assert.Contains(t, string(body), `"kind":"`+tt.kind+`"`)
 		})
 	}
 	unmoved := storedAgent(t, p, agentGRN)
@@ -141,7 +142,7 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 	// reporting the old one meets the route's own fence.
 	status, body = machineSend(t, self, http.MethodPost, runtime, reportBody(reassigned.Epoch(), "disconnected"))
 	assert.Equal(t, http.StatusUnauthorized, status, "a token minted at the epoch the agent has left")
-	_, execution = f.activate(t, "reassigned", generation(2), &active.ID, valid("1"))
+	_, execution = f.activate(t, "reassigned", generation(2), &active.ID, f.valid(t, "1"))
 	self = f.client(t, execution)
 	status, body = machineSend(t, self, http.MethodPost, runtime, reportBody(epoch, "disconnected"))
 	assert.Equal(t, http.StatusConflict, status, "the agent reporting at the epoch it was told")

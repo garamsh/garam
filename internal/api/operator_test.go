@@ -123,13 +123,9 @@ func TestOperatorRegister_RefusesWhatItCannotStore(t *testing.T) {
 // TestOperatorRegister_AnswersTheRecordAloneAndListsIt covers what a
 // registration hands back (ADR-0117): the operator it stored, with no
 // enrollment token and no credential, since it issues neither; an
-// operator enters by a key. The list answers the same record.
-//
-// certificateIssuedAt is absent rather than zero. The two are different
-// states and only the absence is the property — a zero date renders as
-// a date. The response carries no serial either: which certificate an
-// operator holds decides a renewal and belongs to the machine listener
-// (ADR-0046).
+// operator enters by a key. The list answers the same record, and the
+// fields it answers are the whole record: no certificate date and no
+// serial, which garam no longer issues an operator (ADR-0118).
 func TestOperatorRegister_AnswersTheRecordAloneAndListsIt(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -152,9 +148,6 @@ func TestOperatorRegister_AnswersTheRecordAloneAndListsIt(t *testing.T) {
 	listed := decodeBody[[]apigen.Operator](t, rec)
 	require.Len(t, listed, 1)
 	assert.Equal(t, operatorGRNOf(slug, "field-one").String(), listed[0].Grn)
-	assert.Nil(t, listed[0].CertificateIssuedAt)
-	assert.NotContains(t, rec.Body.String(), "certificateIssuedAt",
-		"an absent timestamp is omitted rather than answered as a zero date")
 	assert.NotContains(t, rec.Body.String(), "serial")
 
 	// The fields an entry answers with, so one added without a decision
@@ -248,8 +241,8 @@ func TestOperatorDelete_AnswersTheStateTheOperatorIsIn(t *testing.T) {
 		permission{userGRNOf("owner-sub"), org.ActionOperatorRead},
 	)
 
-	// An operator is deleted whether or not it was ever issued a
-	// certificate: nothing here asks.
+	// An operator is deleted whether or not it ever held a key: nothing
+	// here asks.
 	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"never-enrolled"}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
 	rec = f.do(t, "DELETE", "/orgs/"+slug+"/operators/never-enrolled", "", owner)

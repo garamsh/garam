@@ -7,7 +7,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
 	"io"
@@ -41,7 +40,6 @@ import (
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
-	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
@@ -248,9 +246,8 @@ func TestLogRequests_ServesAStreamThroughTheRecorder(t *testing.T) {
 }
 
 // machineListener starts the machine listener behind obs's middleware
-// and returns its URL and a client holding a certificate the
-// organization's own authority signed for subject. The parts are the
-// ones serveMachine assembles.
+// and returns its URL and a client presenting a live token of subject.
+// The parts are the ones serveMachine assembles.
 func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string, *http.Client) {
 	t.Helper()
 	// The identity endpoint answers out of the request alone, so the
@@ -271,9 +268,9 @@ func machineListenerServing(t *testing.T, obs *observability, subject grn.GRN, s
 
 // machineListenerAround starts serveMachine's own listener around next,
 // on a port of the kernel's choosing, and returns its URL and a client
-// holding a certificate the organization's own authority signed for
-// subject. Everything but the address is what serveMachine assembles,
-// because machineServer is what assembles it.
+// presenting a live token of subject. Everything but the address is
+// what serveMachine assembles, because machineServer is what assembles
+// it.
 func machineListenerAround(t *testing.T, obs *observability, subject grn.GRN, next http.Handler) (string, *http.Client) {
 	t.Helper()
 	dir := t.TempDir()
@@ -281,35 +278,44 @@ func machineListenerAround(t *testing.T, obs *observability, subject grn.GRN, ne
 	keys, err := machineKeyMaterial(certFile, keyFile, writeKeyEncryptionKey(t, dir), writeServerRoot(t, dir))
 	require.NoError(t, err)
 
-	store := authorities{}
-	key := make([]byte, ca.KeySize)
-	_, err = rand.Read(key)
-	require.NoError(t, err)
-	sealer, err := ca.NewAESGCMSealer(key)
-	require.NoError(t, err)
-	issuer, err := ca.NewService(store, sealer, ca.Config{})
-	require.NoError(t, err)
-	issued, err := issuer.Issue(context.Background(), subject)
-	require.NoError(t, err)
-	client, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
-	require.NoError(t, err)
-
-	srv := obs.machineServer(machine.NewService(certificateAuthorities{store: store}, everyRecordHeld{}, machine.Config{}),
-		identityTokens{operators: liveTokens{}}, nil, keys.listener, next)
+	srv := obs.machineServer(subjectTokens{subject: subject}, nil, keys.listener, next)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	go func() { _ = srv.ServeTLS(lis, "", "") }()
 	t.Cleanup(func() { _ = srv.Close() })
 
-	// What garam presents is not what is under test; the certificate it
-	// asks for is.
-	c := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		InsecureSkipVerify: true,
-		MinVersion:         tls.VersionTLS13,
-		Certificates:       []tls.Certificate{client},
-	}}}
-	t.Cleanup(c.CloseIdleConnections)
-	return "https://" + lis.Addr().String(), c
+	// What garam presents is not what is under test; the token the
+	// client presents is.
+	transport := &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS13}}
+	t.Cleanup(transport.CloseIdleConnections)
+	return "https://" + lis.Addr().String(), &http.Client{Transport: presenting{token: subjectToken, next: transport}}
+}
+
+// subjectToken is the one token subjectTokens answers.
+var subjectToken = agent.AccessTokenPrefix + strings.Repeat("f", 64)
+
+// subjectTokens resolves subjectToken to subject, live for an hour, and
+// refuses every other token.
+type subjectTokens struct{ subject grn.GRN }
+
+func (s subjectTokens) Resolve(_ context.Context, token string) (machine.Bearer, error) {
+	if token != subjectToken {
+		return machine.Bearer{}, errorx.New(errorx.KindUnauthenticated, "not the subject's token")
+	}
+	return machine.Bearer{Subject: s.subject, Serial: "t" + strings.Repeat("f", 32),
+		IssuedAt: time.Now().Add(-time.Minute), ExpiresAt: time.Now().Add(time.Hour)}, nil
+}
+
+// presenting is a transport that presents token on every request.
+type presenting struct {
+	token string
+	next  http.RoundTripper
+}
+
+func (p presenting) RoundTrip(r *http.Request) (*http.Response, error) {
+	r = r.Clone(r.Context())
+	r.Header.Set("Authorization", "Garam-Token "+p.token)
+	return p.next.RoundTrip(r)
 }
 
 // TestLogServed_NamesAMachinePrincipalAsOne reads the machine

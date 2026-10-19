@@ -21,17 +21,19 @@ import (
 )
 
 // fence is one agent assigned to a controller, with the execution
-// store over it.
+// store over it. minted holds the credential valid answers for each
+// label, where the fence keeps them.
 type fence struct {
 	p          *pgxpool.Pool
 	agents     *agent.PostgresStore
 	exec       *agentpg.Store
 	agent      grn.GRN
 	controller grn.GRN
+	minted     map[string]agent.Credential
 }
 
-// newFence is an agent assigned to the controller and never
-// activated: what every test below starts from.
+// newFence is an agent assigned to the controller in a lineage of its
+// own and never activated: what every test below starts from.
 func newFence(t *testing.T) fence {
 	t.Helper()
 	p := pool(t)
@@ -41,7 +43,9 @@ func newFence(t *testing.T) fence {
 	controller := scopedGRN("acme", agent.ServiceTypeOperator, "controller")
 	_, err := agents.Assign(context.Background(), g, controller)
 	require.NoError(t, err)
-	return fence{p: p, agents: agents, exec: agentpg.New(p), agent: g, controller: controller}
+	openedLineage(t, p, g)
+	return fence{p: p, agents: agents, exec: agentpg.New(p), agent: g, controller: controller,
+		minted: map[string]agent.Credential{}}
 }
 
 // newLineageFence is newFence once it has been activated and a
@@ -60,8 +64,8 @@ func newLineageFence(t *testing.T) (fence, agent.ActivationID) {
 // ended.
 func (f fence) openLineage(t *testing.T) agent.ActivationID {
 	t.Helper()
-	ended, _ := f.activate(t, "fixture-r0", generation(1000), nil, valid("0"))
-	rec := f.recovery("fixture-rec", "fixture-ref-"+f.agent.Identifier, 0xff, valid("1"))
+	ended, _ := f.activate(t, "fixture-r0", generation(1000), nil, presented(f.mintedIn(t)))
+	rec := f.recovery("fixture-rec", "fixture-ref-"+f.agent.Identifier, 0xff)
 	rec.Epoch = f.epoch(t)
 	_, err := f.exec.Recover(context.Background(), rec)
 	require.NoError(t, err)
@@ -70,10 +74,22 @@ func (f fence) openLineage(t *testing.T) agent.ActivationID {
 
 func generation(n int) agent.Generation { return agent.Generation(fmt.Sprintf("%032x", n)) }
 
-// valid is a certificate of the agent inside its validity now.
-func valid(serial string) agent.Credential {
-	now := time.Now()
-	return agent.Credential{Serial: serial, NotBefore: now.Add(-time.Hour), NotAfter: now.Add(time.Hour)}
+// valid is the credential the fence is handed for a token of the agent
+// inside its validity now: the one minted for label the first time it
+// is asked for, in the lineage and at the epoch the execution holds
+// then, and the same one each time after, so two labels are two tokens
+// a recovery can tell apart. A fence that keeps none mints one each
+// time.
+func (f fence) valid(t *testing.T, label string) agent.Credential {
+	t.Helper()
+	if c, ok := f.minted[label]; ok {
+		return c
+	}
+	c := presented(f.mintedIn(t))
+	if f.minted != nil {
+		f.minted[label] = c
+	}
+	return c
 }
 
 func authority(assignee grn.GRN) agent.Lifecycle {
@@ -169,23 +185,23 @@ func TestExecution_AnAgentNeverActivatedAdmitsNoWrite(t *testing.T) {
 
 	stranger, err := agent.NewToken()
 	require.NoError(t, err)
-	assert.Equal(t, agent.AdmissionTokenRequired, f.admit(t, nil, valid("1")))
-	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &stranger, valid("1")))
+	assert.Equal(t, agent.AdmissionTokenRequired, f.admit(t, nil, f.valid(t, "1")))
+	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &stranger, f.valid(t, "1")))
 
-	_, token := f.activate(t, "r1", generation(1), nil, valid("1"))
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &token, valid("1")), "control: its activation's token is admitted")
+	_, token := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &token, f.valid(t, "1")), "control: its activation's token is admitted")
 }
 
 func TestExecution_ActivationFencesEveryOtherToken(t *testing.T) {
 	f := newFence(t)
 
-	a1, t1 := f.activate(t, "r1", generation(1), nil, valid("1"))
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t1, valid("1")))
-	assert.Equal(t, agent.AdmissionTokenRequired, f.admit(t, nil, valid("1")))
+	a1, t1 := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t1, f.valid(t, "1")))
+	assert.Equal(t, agent.AdmissionTokenRequired, f.admit(t, nil, f.valid(t, "1")))
 
-	_, t2 := f.activate(t, "r2", generation(2), &a1.ID, valid("1"))
-	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &t1, valid("1")))
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, valid("1")), "control: the replacement's token is admitted")
+	_, t2 := f.activate(t, "r2", generation(2), &a1.ID, f.valid(t, "1"))
+	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &t1, f.valid(t, "1")))
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, f.valid(t, "1")), "control: the replacement's token is admitted")
 
 	e, err := f.exec.GetExecution(context.Background(), f.agent)
 	require.NoError(t, err)
@@ -209,9 +225,9 @@ func TestExecution_ReplacementIsOrderedAgainstAdmittedWrites(t *testing.T) {
 		tx, err := f.p.Begin(ctx)
 		require.NoError(t, err)
 		defer func() { _ = tx.Rollback(ctx) }()
-		require.Equal(t, agent.AdmissionAdmitted, f.admitIn(t, tx, token, valid("1")))
+		require.Equal(t, agent.AdmissionAdmitted, f.admitIn(t, tx, token, f.valid(t, "1")))
 
-		req, next := f.activation(t, "ordered-"+string(gen), gen, latest, valid("1"))
+		req, next := f.activation(t, "ordered-"+string(gen), gen, latest, f.valid(t, "1"))
 		done := make(chan error, 1)
 		go func() {
 			_, _, err := f.exec.Activate(ctx, req)
@@ -233,13 +249,13 @@ func TestExecution_ReplacementIsOrderedAgainstAdmittedWrites(t *testing.T) {
 		return e.Latest, next
 	}
 
-	activated, first := f.activate(t, "r1", generation(1), nil, valid("1"))
+	activated, first := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
 	latest := &activated.ID
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &first, valid("1")), "control: the activation is admitted")
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &first, f.valid(t, "1")), "control: the activation is admitted")
 
 	_, second := replace(t, &first, generation(2), latest)
-	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &first, valid("1")), "replacement: the old token is refused after it")
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &second, valid("1")), "control: the replacement is admitted")
+	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &first, f.valid(t, "1")), "replacement: the old token is refused after it")
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &second, f.valid(t, "1")), "control: the replacement is admitted")
 }
 
 // TestExecution_AWriteWaitingOnAReplacementIsRefusedWhenItCommits
@@ -249,7 +265,7 @@ func TestExecution_ReplacementIsOrderedAgainstAdmittedWrites(t *testing.T) {
 func TestExecution_AWriteWaitingOnAReplacementIsRefusedWhenItCommits(t *testing.T) {
 	ctx := context.Background()
 	f := newFence(t)
-	a1, t1 := f.activate(t, "r1", generation(1), nil, valid("1"))
+	a1, t1 := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
 
 	// Deactivating through the store cannot be paused, so the test
 	// holds the row as the store does and writes what it writes.
@@ -260,7 +276,7 @@ func TestExecution_AWriteWaitingOnAReplacementIsRefusedWhenItCommits(t *testing.
 	require.NoError(t, err)
 
 	answer := make(chan agent.Admission, 1)
-	go func() { answer <- f.admit(t, &t1, valid("1")) }()
+	go func() { answer <- f.admit(t, &t1, f.valid(t, "1")) }()
 	awaitLockWaiter(t, f.p)
 	_, err = replacing.Exec(ctx, `UPDATE agent_executions SET activation_id = NULL, token_hash = NULL WHERE agent_grn = $1`, f.agent.String())
 	require.NoError(t, err)
@@ -274,10 +290,10 @@ func TestExecution_AWriteWaitingOnAReplacementIsRefusedWhenItCommits(t *testing.
 func TestExecution_RetriesAnswerOneActivationAndRacesHaveOneWinner(t *testing.T) {
 	ctx := context.Background()
 	f := newFence(t)
-	a1, _ := f.activate(t, "r1", generation(1), nil, valid("1"))
+	a1, _ := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
 
 	t.Run("identical retries return the same activation with rising token versions", func(t *testing.T) {
-		req, _ := f.activation(t, "r2", generation(2), &a1.ID, valid("1"))
+		req, _ := f.activation(t, "r2", generation(2), &a1.ID, f.valid(t, "1"))
 		const retries = 4
 		type outcome struct {
 			a       *agent.Activation
@@ -326,7 +342,7 @@ func TestExecution_RetriesAnswerOneActivationAndRacesHaveOneWinner(t *testing.T)
 			if o.a.TokenVersion == newest {
 				want = agent.AdmissionAdmitted
 			}
-			assert.Equal(t, want, f.admit(t, &o.token, valid("1")), "only the highest token version is admitted")
+			assert.Equal(t, want, f.admit(t, &o.token, f.valid(t, "1")), "only the highest token version is admitted")
 		}
 	})
 
@@ -334,7 +350,7 @@ func TestExecution_RetriesAnswerOneActivationAndRacesHaveOneWinner(t *testing.T)
 	require.NoError(t, err)
 
 	t.Run("a changed request under the same identifier conflicts", func(t *testing.T) {
-		req, _ := f.activation(t, "r2", generation(3), &a1.ID, valid("1"))
+		req, _ := f.activation(t, "r2", generation(3), &a1.ID, f.valid(t, "1"))
 		_, _, err := f.exec.Activate(ctx, req)
 		assert.ErrorIs(t, err, agent.ErrActivationConflict)
 	})
@@ -344,7 +360,7 @@ func TestExecution_RetriesAnswerOneActivationAndRacesHaveOneWinner(t *testing.T)
 		errs := make([]error, contenders)
 		reqs := make([]agent.ActivationRequest, contenders)
 		for i := range contenders {
-			reqs[i], _ = f.activation(t, fmt.Sprintf("race-%d", i), generation(10+i), e.Latest, valid("1"))
+			reqs[i], _ = f.activation(t, fmt.Sprintf("race-%d", i), generation(10+i), e.Latest, f.valid(t, "1"))
 		}
 		start := make(chan struct{})
 		var wg sync.WaitGroup
@@ -370,7 +386,7 @@ func TestExecution_RetriesAnswerOneActivationAndRacesHaveOneWinner(t *testing.T)
 	})
 
 	t.Run("an ended activation is never revived by a retry", func(t *testing.T) {
-		req, _ := f.activation(t, "r2", generation(2), &a1.ID, valid("1"))
+		req, _ := f.activation(t, "r2", generation(2), &a1.ID, f.valid(t, "1"))
 		_, _, err := f.exec.Activate(ctx, req)
 		assert.ErrorIs(t, err, agent.ErrActivationEnded)
 	})
@@ -379,14 +395,14 @@ func TestExecution_RetriesAnswerOneActivationAndRacesHaveOneWinner(t *testing.T)
 func TestExecution_AGenerationIsActivatedOncePerLineage(t *testing.T) {
 	ctx := context.Background()
 	f := newFence(t)
-	a1, _ := f.activate(t, "r1", generation(1), nil, valid("1"))
-	a2, _ := f.activate(t, "r2", generation(2), &a1.ID, valid("1"))
+	a1, _ := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
+	a2, _ := f.activate(t, "r2", generation(2), &a1.ID, f.valid(t, "1"))
 
-	req, _ := f.activation(t, "r3", generation(1), &a2.ID, valid("1"))
+	req, _ := f.activation(t, "r3", generation(1), &a2.ID, f.valid(t, "1"))
 	_, _, err := f.exec.Activate(ctx, req)
 	assert.ErrorIs(t, err, agent.ErrGenerationUsed)
 
-	control, _ := f.activation(t, "r4", generation(3), &a2.ID, valid("1"))
+	control, _ := f.activation(t, "r4", generation(3), &a2.ID, f.valid(t, "1"))
 	_, created, err := f.exec.Activate(ctx, control)
 	require.NoError(t, err, "control: a new generation on the same anchor activates")
 	assert.True(t, created)
@@ -395,24 +411,24 @@ func TestExecution_AGenerationIsActivatedOncePerLineage(t *testing.T) {
 func TestExecution_DeactivationEndsOnlyTheActivationItNames(t *testing.T) {
 	ctx := context.Background()
 	f := newFence(t)
-	a1, t1 := f.activate(t, "r1", generation(1), nil, valid("1"))
+	a1, t1 := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
 
 	ended, err := f.exec.Deactivate(ctx, f.agent, a1.ID, authority(f.controller))
 	require.NoError(t, err)
 	assert.True(t, ended)
-	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &t1, valid("1")))
+	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &t1, f.valid(t, "1")))
 
 	// The anchor stays the deactivated activation, so a replay of the
 	// first activation's anchor is stale.
-	stale, _ := f.activation(t, "r-stale", generation(9), nil, valid("1"))
+	stale, _ := f.activation(t, "r-stale", generation(9), nil, f.valid(t, "1"))
 	_, _, err = f.exec.Activate(ctx, stale)
 	assert.ErrorIs(t, err, agent.ErrActivationStale)
 
-	a2, t2 := f.activate(t, "r2", generation(2), &a1.ID, valid("1"))
+	a2, t2 := f.activate(t, "r2", generation(2), &a1.ID, f.valid(t, "1"))
 	ended, err = f.exec.Deactivate(ctx, f.agent, a1.ID, authority(f.controller))
 	require.NoError(t, err)
 	assert.False(t, ended, "a replay of an ended activation is a no-op")
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, valid("1")), "the successor survives the replay")
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, f.valid(t, "1")), "the successor survives the replay")
 
 	_, err = f.exec.Deactivate(ctx, f.agent, agent.ActivationID{1}, authority(f.controller))
 	assert.ErrorIs(t, err, agent.ErrActivationNotFound)
@@ -425,10 +441,10 @@ func TestExecution_DeactivationEndsOnlyTheActivationItNames(t *testing.T) {
 
 	_, err = f.exec.Deactivate(ctx, f.agent, a2.ID, authority(scopedGRN("acme", agent.ServiceTypeOperator, "elsewhere")))
 	assert.ErrorIs(t, err, agent.ErrNotAssigned)
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, valid("1")))
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, f.valid(t, "1")))
 }
 
-func (f fence) recovery(requestID, ref string, digest byte, c agent.Credential) agent.RecoveryRequest {
+func (f fence) recovery(requestID, ref string, digest byte) agent.RecoveryRequest {
 	return agent.RecoveryRequest{
 		Agent:          f.agent,
 		RequestID:      agent.RequestID(requestID),
@@ -437,48 +453,47 @@ func (f fence) recovery(requestID, ref string, digest byte, c agent.Credential) 
 		OperationRef:   ref,
 		BodySHA256:     [32]byte{digest},
 		Lineage:        agent.NewLineage(),
-		Credential:     c,
-		CertificatePEM: "certificate " + c.Serial,
-		Chain:          agent.Chain{IssuerPEM: "issuer of " + c.Serial, ServerRootPEM: "server root"},
 	}
 }
 
-func TestExecution_RecoveryFencesTheLegacyCohortAndEveryOlderLineage(t *testing.T) {
+// TestExecution_RecoveryFencesEveryOlderLineage recovers an activated
+// agent twice. Each recovery ends the current activation and moves the
+// execution to a new lineage, so a token minted in the one before is
+// fenced from then on, while one minted in the new lineage is admitted
+// with the next activation's token, which is the control. A lost
+// response is answered with the recorded lineage, a changed body is
+// refused, and a reference recovers once.
+func TestExecution_RecoveryFencesEveryOlderLineage(t *testing.T) {
 	ctx := context.Background()
 	f := newFence(t)
-	a1, t1 := f.activate(t, "r1", generation(1), nil, valid("1"))
-	require.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t1, valid("1")))
+	a1, t1 := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
+	require.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t1, f.valid(t, "1")))
 
-	first := f.recovery("rec-1", "ref-1", 1, valid("2"))
+	first := f.recovery("rec-1", "ref-1", 1)
 	first.Epoch = f.epoch(t)
 	recovered, err := f.exec.Recover(ctx, first)
 	require.NoError(t, err)
 	assert.Equal(t, first.Lineage, recovered.Lineage)
-	assert.Equal(t, &first.Chain, recovered.Chain, "the chain the signer produced")
-	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &t1, valid("1")), "recovery ends the current activation")
+	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &t1, f.valid(t, "1")), "recovery ends the current activation")
 
 	// The same generation activates again in the new lineage.
-	a2, t2 := f.activate(t, "r2", generation(1), &a1.ID, valid("2"))
-	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t2, valid("1")), "the legacy cohort is fenced")
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, valid("2")), "control: the recovered credential is admitted")
+	a2, t2 := f.activate(t, "r2", generation(1), &a1.ID, f.valid(t, "2"))
+	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t2, f.valid(t, "1")), "the older lineage's token is fenced")
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, f.valid(t, "2")), "control: the new lineage's token is admitted")
 
-	old, err := f.exec.CredentialCurrent(ctx, f.agent, valid("1"))
+	old, err := f.exec.CredentialCurrent(ctx, f.agent, f.valid(t, "1"))
 	require.NoError(t, err)
 	assert.False(t, old)
 
-	t.Run("a lost response is answered with the recorded certificate", func(t *testing.T) {
+	t.Run("a lost response is answered with the recorded lineage", func(t *testing.T) {
 		retry := first
 		retry.Lineage = agent.NewLineage()
-		retry.CertificatePEM = "another"
-		retry.Chain = agent.Chain{IssuerPEM: "another issuer", ServerRootPEM: "another root"}
 		got, err := f.exec.Recover(ctx, retry)
 		require.NoError(t, err)
 		assert.Equal(t, first.Lineage, got.Lineage)
-		assert.Equal(t, first.CertificatePEM, got.CertificatePEM)
-		assert.Equal(t, &first.Chain, got.Chain, "the recorded chain, not the retry's")
 		stored, err := f.exec.GetRecovery(ctx, f.agent, first.RequestID)
 		require.NoError(t, err)
-		assert.Equal(t, &first.Chain, stored.Chain)
+		assert.Equal(t, first.Lineage, stored.Lineage)
 	})
 	t.Run("a changed body is refused", func(t *testing.T) {
 		changed := first
@@ -487,19 +502,19 @@ func TestExecution_RecoveryFencesTheLegacyCohortAndEveryOlderLineage(t *testing.
 		assert.ErrorIs(t, err, agent.ErrRecoveryConflict)
 	})
 	t.Run("a reference recovers once", func(t *testing.T) {
-		again := f.recovery("rec-2", "ref-1", 1, valid("3"))
+		again := f.recovery("rec-2", "ref-1", 1)
 		again.Epoch = f.epoch(t)
 		_, err := f.exec.Recover(ctx, again)
 		assert.ErrorIs(t, err, agent.ErrRecoveryConflict)
 	})
 
-	second := f.recovery("rec-3", "ref-2", 3, valid("3"))
+	second := f.recovery("rec-3", "ref-2", 3)
 	second.Epoch = f.epoch(t)
 	_, err = f.exec.Recover(ctx, second)
 	require.NoError(t, err)
-	_, t3 := f.activate(t, "r3", generation(3), &a2.ID, valid("3"))
-	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t3, valid("2")), "an older tracked lineage is fenced")
-	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t3, valid("3")))
+	_, t3 := f.activate(t, "r3", generation(3), &a2.ID, f.valid(t, "3"))
+	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t3, f.valid(t, "2")), "an older lineage is fenced")
+	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t3, f.valid(t, "3")))
 }
 
 // fencing is what a request of agentGRN presenting c and token offers
@@ -516,13 +531,13 @@ func fencing(agentGRN grn.GRN, token *agent.Token, c agent.Credential) agent.Fen
 func TestExecution_ReassignmentEndsTheActivationAndIsOrderedAgainstWrites(t *testing.T) {
 	ctx := context.Background()
 	f := newFence(t)
-	_, t1 := f.activate(t, "r1", generation(1), nil, valid("1"))
+	_, t1 := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
 	staleEpoch := f.epoch(t)
 
 	tx, err := f.p.Begin(ctx)
 	require.NoError(t, err)
 	defer func() { _ = tx.Rollback(ctx) }()
-	require.Equal(t, agent.AdmissionAdmitted, f.admitIn(t, tx, &t1, valid("1")))
+	require.Equal(t, agent.AdmissionAdmitted, f.admitIn(t, tx, &t1, f.valid(t, "1")))
 
 	successor := scopedGRN("acme", agent.ServiceTypeOperator, "successor")
 	done := make(chan error, 1)
@@ -534,11 +549,11 @@ func TestExecution_ReassignmentEndsTheActivationAndIsOrderedAgainstWrites(t *tes
 	require.NoError(t, tx.Commit(ctx))
 	require.NoError(t, <-done)
 
-	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &t1, valid("1")))
+	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &t1, f.valid(t, "1")))
 
 	e, err := f.exec.GetExecution(ctx, f.agent)
 	require.NoError(t, err)
-	req, _ := f.activation(t, "r2", generation(2), e.Latest, valid("1"))
+	req, _ := f.activation(t, "r2", generation(2), e.Latest, f.valid(t, "1"))
 	_, _, err = f.exec.Activate(ctx, req)
 	assert.ErrorIs(t, err, agent.ErrNotAssigned, "the replaced assignee no longer activates")
 
@@ -547,7 +562,12 @@ func TestExecution_ReassignmentEndsTheActivationAndIsOrderedAgainstWrites(t *tes
 	_, _, err = f.exec.Activate(ctx, req)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 
+	// The credential the control forwards is a token the new assignee
+	// minted at the current epoch.
+	held := f
+	held.controller, held.minted = successor, nil
 	req.Epoch = f.epoch(t)
+	req.Credential = held.valid(t, "successor")
 	_, created, err := f.exec.Activate(ctx, req)
 	require.NoError(t, err, "control: the new assignee at the current epoch activates")
 	assert.True(t, created)
@@ -561,12 +581,12 @@ func TestExecution_ReassignmentEndsTheActivationAndIsOrderedAgainstWrites(t *tes
 func TestExecution_ValidityIsJudgedWhenTheLockIsGranted(t *testing.T) {
 	ctx := context.Background()
 	f := newFence(t)
-	_, t1 := f.activate(t, "r1", generation(1), nil, valid("1"))
+	_, t1 := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
 
-	expired := valid("1")
+	expired := f.valid(t, "1")
 	expired.NotAfter = time.Now().Add(-time.Second)
 	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t1, expired))
-	notYet := valid("1")
+	notYet := f.valid(t, "1")
 	notYet.NotBefore = time.Now().Add(time.Minute)
 	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t1, notYet))
 
@@ -589,7 +609,7 @@ func TestExecution_ValidityIsJudgedWhenTheLockIsGranted(t *testing.T) {
 		t.Run("write: "+tc.name, func(t *testing.T) {
 			tx := hold(t)
 			defer func() { _ = tx.Rollback(ctx) }()
-			c := valid("1")
+			c := f.valid(t, "1")
 			c.NotAfter = time.Now().Add(tc.margin)
 			answer := make(chan agent.Admission, 1)
 			go func() { answer <- f.admit(t, &t1, c) }()
@@ -611,7 +631,7 @@ func TestExecution_ValidityIsJudgedWhenTheLockIsGranted(t *testing.T) {
 		t.Run("activation: "+tc.name, func(t *testing.T) {
 			e, err := f.exec.GetExecution(ctx, f.agent)
 			require.NoError(t, err)
-			req, _ := f.activation(t, fmt.Sprintf("late-%d", i), generation(20+i), e.Latest, valid("1"))
+			req, _ := f.activation(t, fmt.Sprintf("late-%d", i), generation(20+i), e.Latest, f.valid(t, "1"))
 			req.Authority.GrantExpiresAt = time.Now().Add(tc.margin)
 			tx := hold(t)
 			defer func() { _ = tx.Rollback(ctx) }()
@@ -658,20 +678,20 @@ func TestExecution_NoPathHoldsALockWhileAwaitingAnotherConnection(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	req, _ := f.activation(t, "r1", generation(1), nil, valid("1"))
+	req, _ := f.activation(t, "r1", generation(1), nil, f.valid(t, "1"))
 	a1, _, err := exec.Activate(ctx, req)
 	require.NoError(t, err)
 	_, _, err = exec.Activate(ctx, req)
 	require.NoError(t, err, "a retry reminting the token")
 	_, err = exec.Deactivate(ctx, f.agent, a1.ID, authority(f.controller))
 	require.NoError(t, err)
-	rec := f.recovery("rec-1", "ref-1", 1, valid("3"))
+	rec := f.recovery("rec-1", "ref-1", 1)
 	rec.Epoch = f.epoch(t)
 	_, err = exec.Recover(ctx, rec)
 	require.NoError(t, err)
 	_, err = exec.GetExecution(ctx, f.agent)
 	require.NoError(t, err)
-	_, err = exec.CredentialCurrent(ctx, f.agent, valid("3"))
+	_, err = exec.CredentialCurrent(ctx, f.agent, f.valid(t, "3"))
 	require.NoError(t, err)
 	_, err = agents.Assign(ctx, f.agent, f.controller)
 	require.NoError(t, err)
@@ -681,8 +701,8 @@ func TestExecution_NoPathHoldsALockWhileAwaitingAnotherConnection(t *testing.T) 
 func TestExecution_AnAgentNobodyHoldsIsUnknownToTheFence(t *testing.T) {
 	f := newFence(t)
 	stranger := fence{p: f.p, agent: scopedGRN("acme", agent.ServiceType, "nobody")}
-	assert.Equal(t, agent.AdmissionUnknownAgent, stranger.admit(t, nil, valid("1")))
-	assert.Equal(t, agent.AdmissionTokenRequired, f.admit(t, nil, valid("1")),
+	assert.Equal(t, agent.AdmissionUnknownAgent, stranger.admit(t, nil, f.valid(t, "1")))
+	assert.Equal(t, agent.AdmissionTokenRequired, f.admit(t, nil, f.valid(t, "1")),
 		"control: the fence knows a held agent, and asks it for its activation's token")
 	_, err := f.exec.GetExecution(context.Background(), stranger.agent)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))

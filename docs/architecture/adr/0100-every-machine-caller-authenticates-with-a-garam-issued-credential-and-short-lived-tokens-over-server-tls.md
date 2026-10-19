@@ -61,7 +61,7 @@ What that costs is read off the tree rather than estimated.
   key** ([ADR-0016](./0016-ca-key-custody.md)), and losing it loses
   every authority with no recovery short of reissuing every
   certificate
-  ([certificate-authorities.md](../certificate-authorities.md)).
+  ([certificate-authorities.md](https://github.com/garamsh/garam/blob/c551f13ef50301340a755bee6350c2d446287965/docs/architecture/certificate-authorities.md)).
 - **Revocation is three mechanisms.** An operator stops when its
   record is deleted
   ([ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)),
@@ -472,7 +472,7 @@ here.
   [overview.md](../overview.md), [domains.md](../domains.md),
   [organizations.md](../organizations.md),
   [web-app.md](../web-app.md), and
-  [certificate-authorities.md](../certificate-authorities.md), which
+  [certificate-authorities.md](https://github.com/garamsh/garam/blob/c551f13ef50301340a755bee6350c2d446287965/docs/architecture/certificate-authorities.md), which
   is deleted with the authorities (rule 5).
 
 ## Signs the decision was wrong

@@ -119,7 +119,7 @@ func TestExchangeClientAssertion_AnswersRFC6749sTokenForm(t *testing.T) {
 // reaches it, and no refusal quotes the body.
 func TestExchangeClientAssertion_RefusesAFormOutsideTheProfile(t *testing.T) {
 	operators := &assertionService{}
-	base, certified := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, assertingClient)
+	base, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, assertingClient)
 	client := anonymous(t)
 
 	resp, body := exchangeForm(t, client, base, validForm().Encode(), nil)
@@ -165,12 +165,6 @@ func TestExchangeClientAssertion_RefusesAFormOutsideTheProfile(t *testing.T) {
 		})
 	}
 
-	t.Run("a client certificate", func(t *testing.T) {
-		resp, body := exchangeForm(t, certified, base, validForm().Encode(), nil)
-		assert.Equal(t, http.StatusBadRequest, resp.StatusCode, body)
-		assert.Equal(t, "invalid_request", oauthError(t, body))
-		assert.Contains(t, body, "client certificate")
-	})
 	assert.Empty(t, operators.calls, "no refused form reached the domain")
 }
 

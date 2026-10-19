@@ -41,11 +41,12 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
   ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)). That ADR supersedes ADR-0051's accessor and ends
   ADR-0066's reservation; an aggregate that does hold an invariant over
   its fields is not decided by it.
-- **Four of the ten domains #1083 covers have converted.**
-  `internal/user`, `internal/ca`, `internal/watch` and `internal/org`
-  keep their store in `internal/<domain>/postgres/`, and `go list
-  -deps` on each reports no `jackc/pgx`. `user`, `ca` and `org` carry
-  exported fields on what their stores persist; `watch`'s `Store`
+- **Of the ten domains #1083 covers, `internal/ca` has since lost its
+  store (ADR-0118), and three have converted.** `internal/user`,
+  `internal/watch` and `internal/org` keep their store in
+  `internal/<domain>/postgres/`, and `go list -deps` on each reports no
+  `jackc/pgx`. `user` and `org` carry exported fields on what their
+  stores persist; `watch`'s `Store`
   persists no aggregate, so it exported none. `internal/machine` had no
   driver import to move. The other five — `agent`, `message`, `authz`,
   `operator` and `authn` — still import the driver into the domain package and keep
@@ -125,9 +126,9 @@ a test in its own directory can import a main package, which
 the site out of `main.go`, and §7. Testing of that file designates
 `tests/` for the integration and E2E tests that wire multiple domains
 ([ADR-0096](./adr/0096-garam-syncs-the-convention-template-to-f7de866.md)).
-`tests/integration/issue_certificate_test.go` and
-`tests/integration/migrate_test.go` reach the shipped command tree
-through `cli.NewRootCommand()`. Construction moved into
+`tests/integration/migrate_test.go` and
+`tests/integration/standalone_host_test.go` reach the shipped command
+tree through `cli.NewRootCommand()`. Construction moved into
 `cmd/garam/main.go` is construction those two cannot reach: what they
 exercise goes uncovered, or is rebuilt beside them as a second copy of
 the wiring — and a copy does not fail when the shipped wiring breaks.

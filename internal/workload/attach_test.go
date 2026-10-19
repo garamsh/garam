@@ -198,7 +198,7 @@ func TestRun_AttachedHandsTheAdapterItsFilesAndStartsNothing(t *testing.T) {
 	h := newHost(t)
 	status := &stubStatus{}
 	status.serving(newGeneration())
-	tokens := &stubTokens{current: agentToken("a")}
+	tokens := h.tokens
 	h.runAttached(h.attachConfig(status, tokens))
 
 	for _, name := range []string{"control-root.pem", "placement-token", "control-token", "agent-token"} {
@@ -230,7 +230,7 @@ func TestRun_AttachedEndsOnlyWhenTheRuntimeReportsAnotherGeneration(t *testing.T
 	status := &stubStatus{}
 	old := newGeneration()
 	status.serving(old)
-	tokens := &stubTokens{current: agentToken("a")}
+	tokens := h.tokens
 	run := h.runAttached(h.attachConfig(status, tokens))
 	auth, placement := h.attachedAdapter()
 	first, err := activateAttached(auth, placement, old)
@@ -269,7 +269,7 @@ func TestRun_AttachedResumesItsIntentAcrossARestart(t *testing.T) {
 	status := &stubStatus{}
 	generation := newGeneration()
 	status.serving(generation)
-	tokens := &stubTokens{current: agentToken("a")}
+	tokens := h.tokens
 	run := h.runAttached(h.attachConfig(status, tokens))
 	auth, placement := h.attachedAdapter()
 	first, err := activateAttached(auth, placement, generation)
@@ -290,8 +290,8 @@ func TestRun_AttachedResumesItsIntentAcrossARestart(t *testing.T) {
 // beside the attached one. A host with no such record attaches.
 func TestRun_AttachedRefusesAGenerationThisHostStarted(t *testing.T) {
 	h := newHost(t)
-	tokens := &stubTokens{current: agentToken("a")}
-	h.startTokens(tokens)
+	tokens := h.tokens
+	h.start()
 	h.serving()
 	require.NoError(t, h.latest.stop())
 
@@ -313,16 +313,16 @@ func TestRun_AttachedRefusesAGenerationThisHostStarted(t *testing.T) {
 // no engine, are each what NewSupervisor takes.
 func TestNewSupervisor_AttachesWithNoEngineAndInTheTokenModeAlone(t *testing.T) {
 	h := newHost(t)
-	tokens := &stubTokens{current: agentToken("a")}
+	tokens := h.tokens
 	status := &stubStatus{}
 	refused := map[string]func() (workload.Engine, workload.Config){
 		"an engine beside the attachment": func() (workload.Engine, workload.Config) {
 			return h.engine, h.attachConfig(status, tokens)
 		},
 		"no engine and no attachment": func() (workload.Engine, workload.Config) {
-			return nil, h.tokenConfig(tokens)
+			return nil, h.config()
 		},
-		"the certificate mode": func() (workload.Engine, workload.Config) {
+		"no agent tokens": func() (workload.Engine, workload.Config) {
 			cfg := h.attachConfig(status, tokens)
 			cfg.Tokens = nil
 			return nil, cfg
@@ -352,7 +352,7 @@ func TestNewSupervisor_AttachesWithNoEngineAndInTheTokenModeAlone(t *testing.T) 
 	}
 	_, err := workload.NewSupervisor(nil, h.garam, h.attachConfig(status, tokens))
 	assert.NoError(t, err, "the control: an attachment, no engine, the token mode")
-	_, err = workload.NewSupervisor(h.engine, h.garam, h.tokenConfig(tokens))
+	_, err = workload.NewSupervisor(h.engine, h.garam, h.config())
 	assert.NoError(t, err, "the control: an engine and no attachment")
 }
 
@@ -365,7 +365,7 @@ func TestRun_SeedsTheLastActivationOnlyWhereTheRecordHoldsNone(t *testing.T) {
 	status := &stubStatus{}
 	generation := newGeneration()
 	status.serving(generation)
-	tokens := &stubTokens{current: agentToken("a")}
+	tokens := h.tokens
 	cfg := h.attachConfig(status, tokens)
 	cfg.Replaces = "ended-by-the-replacement"
 	run := h.runAttached(cfg)

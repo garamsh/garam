@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -13,6 +15,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
@@ -115,7 +118,7 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 	// The reassignment ended the activation, so the new assignee
 	// activates the agent again before its token is of use.
 	f.controller = second
-	_, execution = f.activate(t, "after-reassignment", generation(2), &a1.ID, valid("1"))
+	_, execution = f.activate(t, "after-reassignment", generation(2), &a1.ID, f.valid(t, "1"))
 	again := mintedFor(t, client, url, secondToken, bot)
 	assert.Equal(t, minted.Epoch+1, again.Epoch, "the new assignee mints at the new epoch")
 	status = agentCall(t, client, http.MethodPost, claims, again.Token, execution)
@@ -234,4 +237,41 @@ func TestAgentToken_AnAgentHoldsTenTokensAcrossItsAudiences(t *testing.T) {
 
 	assert.Equal(t, agent.LiveAccessTokensPerAgent, countRows(t, p,
 		`SELECT count(*) FROM agent_tokens WHERE agent_grn = $1`, bot.String()))
+}
+
+// TestAgentToken_TheMintAnswersTheServerRootTheListenerWasGiven pins
+// serverRootPem in the agent-token mint answer to the root `serve
+// machine` was configured with, which it reads from
+// GARAM_MACHINE_SERVER_ROOT_FILE (ADR-0040, ADR-0118): the answer is
+// those bytes exactly, for a holder to pin garam by. The root here is
+// not the certificate the listener serves, so an answer naming the
+// serving certificate, or any root but the configured one, fails; the
+// serving certificate differing from it is the control.
+func TestAgentToken_TheMintAnswersTheServerRootTheListenerWasGiven(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	_, sealer := keyEncryptionKey(t)
+	_, engine := policyEngine(t, p)
+	presented := loopbackCertificate(t)
+	root := certificatePEM(loopbackCertificate(t))
+	require.NotEqual(t, certificatePEM(presented), root, "the control: the configured root is not the serving certificate")
+	srv, err := cli.NewMachineServer(p, cli.MachineConfig{
+		Sealer: sealer, Issuer: testIssuer, Certificate: presented, ServerRoot: root,
+		Delivery: briefDelivery(), Engine: engine, Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)),
+		TokenURL: testTokenURL,
+	})
+	require.NoError(t, err)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	go func() { _ = srv.ServeTLS(lis, "", "") }()
+	t.Cleanup(func() { _ = srv.Close() })
+	url := "https://" + lis.Addr().String()
+
+	controller, key := keyed(t, operator.NewPostgresStore(p), "controller")
+	client, _ := tokenClient(t)
+	token := exchangeKey(t, client, url, controller, key, nil)
+	f, _, _ := lineaged(t, p, controller)
+	minted := mintedFor(t, client, url, token, f.agent)
+	assert.Equal(t, string(root), minted.ServerRootPem, "the mint answers the configured server root, byte for byte")
 }

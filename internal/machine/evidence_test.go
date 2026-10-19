@@ -77,20 +77,20 @@ func TestEvidence_WritesACallersPathOncePerWindow(t *testing.T) {
 	one, other := operatorGRNOf("acme", "one"), operatorGRNOf("acme", "other")
 	ctx := context.Background()
 
-	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathCertificate})
-	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathCertificate})
+	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathPrivateKeyJWT})
+	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathPrivateKeyJWT})
 	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathToken})
-	evidence.Note(ctx, machine.Sighting{Caller: other, Path: machine.PathCertificate})
+	evidence.Note(ctx, machine.Sighting{Caller: other, Path: machine.PathPrivateKeyJWT})
 	at.advance(59 * time.Second)
-	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathCertificate})
+	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathPrivateKeyJWT})
 	at.advance(time.Second)
-	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathCertificate})
+	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathPrivateKeyJWT})
 
 	assert.Equal(t, []machine.Sighting{
-		{Caller: one, Path: machine.PathCertificate},
+		{Caller: one, Path: machine.PathPrivateKeyJWT},
 		{Caller: one, Path: machine.PathToken},
-		{Caller: other, Path: machine.PathCertificate},
-		{Caller: one, Path: machine.PathCertificate},
+		{Caller: other, Path: machine.PathPrivateKeyJWT},
+		{Caller: one, Path: machine.PathPrivateKeyJWT},
 	}, recorder.all())
 }
 
@@ -107,14 +107,14 @@ func TestEvidence_AFailedWriteIsTriedAgainOnlyOnceTheWindowPasses(t *testing.T) 
 	one := agentGRN("acme", "bot-1")
 	ctx := context.Background()
 
-	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathCertificate})
+	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathToken})
 	recorder.failWith(nil)
-	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathCertificate})
+	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathToken})
 	require.Empty(t, recorder.all(), "the failed write is not retried inside the window")
 
 	at.advance(time.Minute)
-	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathCertificate})
-	assert.Equal(t, []machine.Sighting{{Caller: one, Path: machine.PathCertificate}}, recorder.all())
+	evidence.Note(ctx, machine.Sighting{Caller: one, Path: machine.PathToken})
+	assert.Equal(t, []machine.Sighting{{Caller: one, Path: machine.PathToken}}, recorder.all())
 }
 
 // TestEvidence_NilRecordsNothing is the listener served without
@@ -145,26 +145,19 @@ func TestReportIssuance_ReachesOnlyTheRequestAwaitingIt(t *testing.T) {
 	assert.Equal(t, issued, got)
 }
 
-// TestNewServer_NotesHowEachRequestAuthenticated is ADR-0109's one
-// recording point for the listener: a request a certificate
-// authenticated is noted on the certificate path and one a token
-// authenticated on the token path, each under the identity it carries.
-// A request that authenticated nothing — no credential, or a token
-// that is not live — is noted nowhere.
+// TestNewServer_NotesHowEachRequestAuthenticated holds that a request
+// a token authenticated is noted on the token path under the identity
+// it carries, and that a request that authenticated nothing — no
+// credential, or a token that is not live — is noted nowhere.
 func TestNewServer_NotesHowEachRequestAuthenticated(t *testing.T) {
-	issuer := newIssuer(t)
 	known := newTokens()
 	operator := operatorGRNOf("acme", "one")
 	known.set("garam_ot_live", operator)
-	agent := agentGRN("acme", "bot-1")
 	recorder := &sightings{}
 	dir := t.TempDir()
 	roots := serverPair(t, dir, presented)
-	url := serveEvidence(t, dir, issuer.service(), known, machine.NewEvidence(recorder, time.Minute, nil), methodHandler())
+	url := serveEvidence(t, dir, known, machine.NewEvidence(recorder, time.Minute, nil), methodHandler())
 
-	_, body, err := get(t, url, roots, issuer.issue(t, agent))
-	require.NoError(t, err)
-	require.Equal(t, agent.String()+" certificate", body)
 	client := &http.Client{Transport: &http.Transport{
 		TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS13}}}
 	t.Cleanup(client.CloseIdleConnections)
@@ -176,7 +169,6 @@ func TestNewServer_NotesHowEachRequestAuthenticated(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, status)
 
 	assert.ElementsMatch(t, []machine.Sighting{
-		{Caller: agent, Path: machine.PathCertificate},
 		{Caller: operator, Path: machine.PathToken},
 	}, recorder.all())
 }

@@ -8,7 +8,7 @@ type Credentials interface {
 	// PlacementToken answers the placement token as mounted now.
 	PlacementToken() (string, error)
 	// Fingerprint answers a digest of what the agent's calls present
-	// now — the certificate's serial, or each token file's hash — which
-	// a renewal or a rewritten token file changes.
+	// now — each token file's hash — which a rewritten token file
+	// changes.
 	Fingerprint() (string, error)
 }

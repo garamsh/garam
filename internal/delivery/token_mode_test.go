@@ -167,10 +167,9 @@ func TestHTTPQueue_TokenModePresentsTheTokenFileOnEveryCall(t *testing.T) {
 }
 
 // TestHTTPQueue_TokenModeReadsARefusedTokenAsUndecided holds a 401 to
-// what it means in the token mode: the token expired or is not yet
-// replaced, so the call is retried with the file read again and the
-// execution is not closed. The certificate mode meeting the same answer
-// is the control: there it is the fence.
+// what it means: the token expired or is not yet replaced, so the call
+// is retried with the file read again and the execution is not closed.
+// A 403, the fence, is its control in the test below.
 func TestHTTPQueue_TokenModeReadsARefusedTokenAsUndecided(t *testing.T) {
 	g := &recordingGaram{answer: http.StatusUnauthorized}
 	server := httptest.NewServer(http.HandlerFunc(g.serve))
@@ -185,20 +184,12 @@ func TestHTTPQueue_TokenModeReadsARefusedTokenAsUndecided(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "undecided: %v", err)
 	_, err = tokenExecution.Present()
 	assert.NoError(t, err, "the execution stays open")
-
-	certificateExecution := delivery.HeldExecution("held-token")
-	certificates, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), certificateExecution, certificateMode())
-	require.NoError(t, err)
-	_, err = certificates.Claim(context.Background())
-	require.ErrorIs(t, err, delivery.ErrFenced, "the control: a certificate refused is the fence")
-	_, err = certificateExecution.Present()
-	assert.ErrorIs(t, err, delivery.ErrInactive)
 }
 
 // TestHTTPQueue_TokenModeReadsAForbiddenCallAsTheFence holds the token
 // mode's undecided reading to a 401 alone: a 403 is garam refusing
 // what the call presented beside a token it accepted, which is the
-// fence, and closes the execution as in the certificate mode. A 401 on
+// fence, and closes the execution. A 401 on
 // the same queue, which leaves the execution open, is the control.
 func TestHTTPQueue_TokenModeReadsAForbiddenCallAsTheFence(t *testing.T) {
 	f, _ := tokenFile(t, agentTokenOf("a"))
@@ -225,12 +216,12 @@ func TestHTTPQueue_TokenModeReadsAForbiddenCallAsTheFence(t *testing.T) {
 // control path's token mode as ADR-0100 pins it: agent-execution.v2,
 // the control token in Authorization read for each call, the placement
 // token on activation alone in a header of its own, and a refused
-// control token undecided. The certificate mode is the control on the
-// last: there a 401 is a definite refusal.
+// control token undecided. A 403 is the control on the last: it is a
+// definite refusal.
 func TestHTTPAuthority_TokenModeCallsUnderAgentExecutionV2(t *testing.T) {
 	var mu sync.Mutex
 	var calls []http.Header
-	refuse := false
+	refuse := 0
 	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		calls = append(calls, r.Header.Clone())
@@ -238,8 +229,8 @@ func TestHTTPAuthority_TokenModeCallsUnderAgentExecutionV2(t *testing.T) {
 		mu.Unlock()
 		w.Header().Set("Garam-Contract-Version", r.Header.Get("Garam-Contract-Version"))
 		switch {
-		case refusing:
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"kind": "unauthenticated", "message": "refused"})
+		case refusing != 0:
+			writeJSON(w, refusing, map[string]string{"kind": "refused", "message": "refused"})
 		case strings.HasSuffix(r.URL.Path, "/activations"):
 			writeJSON(w, http.StatusCreated, activationAnswer(binding()))
 		default:
@@ -269,16 +260,18 @@ func TestHTTPAuthority_TokenModeCallsUnderAgentExecutionV2(t *testing.T) {
 	assert.Empty(t, calls[1].Get("Garam-Placement"), "a report carries no placement")
 
 	mu.Lock()
-	refuse = true
+	refuse = http.StatusUnauthorized
 	mu.Unlock()
 	_, err = authority.Activate(context.Background(), "request-1", binding(), "placement-1")
 	require.ErrorIs(t, err, delivery.ErrTokenRefused)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "undecided: %v", err)
 
-	certificates, err := delivery.NewHTTPAuthority(server.Client(), server.URL, agentGRN(), certificateMode())
-	require.NoError(t, err)
-	_, err = certificates.Activate(context.Background(), "request-1", binding(), "placement-1")
-	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition), "the control: definite in the certificate mode: %v", err)
+	mu.Lock()
+	refuse = http.StatusForbidden
+	mu.Unlock()
+	_, err = authority.Activate(context.Background(), "request-1", binding(), "placement-1")
+	assert.NotErrorIs(t, err, delivery.ErrTokenRefused)
+	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition), "the control: a 403 is definite: %v", err)
 }
 
 // tokenLoop is the loop of a token-mode adapter over the fakes: garam's
@@ -298,7 +291,6 @@ func startTokenMode(t *testing.T, queue *garamQueue, gateway *agentGateway, c *c
 	writeToken(t, files.garam, garamToken)
 	garam, err := delivery.NewTokenFile(files.garam)
 	require.NoError(t, err)
-	c.contract = delivery.TokenExecutionContract
 	files.control = filepath.Join(dir, "control-token")
 	writeToken(t, files.control, agentTokenOf("c"))
 	files.placement = filepath.Join(dir, "placement-token")

@@ -298,7 +298,7 @@ func (q *Queries) GetAdmittedReplacementByReference(ctx context.Context, operati
 }
 
 const getEnrollment = `-- name: GetEnrollment :one
-SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem, placement, replaced_activation_id FROM agent_enrollments WHERE org_grn = $1 AND id = $2
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, placement, replaced_activation_id FROM agent_enrollments WHERE org_grn = $1 AND id = $2
 `
 
 type GetEnrollmentParams struct {
@@ -315,8 +315,6 @@ func (q *Queries) GetEnrollment(ctx context.Context, arg GetEnrollmentParams) (A
 		&i.AgentGrn,
 		&i.SupervisorGrn,
 		&i.HostName,
-		&i.SupervisorKeySha256,
-		&i.AgentKeySha256,
 		&i.ExpectedAssigneeGrn,
 		&i.ExpectedEpoch,
 		&i.RequestID,
@@ -329,10 +327,6 @@ func (q *Queries) GetEnrollment(ctx context.Context, arg GetEnrollmentParams) (A
 		&i.RequestSha256,
 		&i.Epoch,
 		&i.Lineage,
-		&i.SupervisorCertificatePem,
-		&i.AgentCertificatePem,
-		&i.IssuerPem,
-		&i.ServerRootPem,
 		&i.Placement,
 		&i.ReplacedActivationID,
 	)
@@ -404,7 +398,7 @@ func (q *Queries) GetEnrollmentApprovalByRequest(ctx context.Context, arg GetEnr
 }
 
 const getEnrollmentByID = `-- name: GetEnrollmentByID :one
-SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem, placement, replaced_activation_id FROM agent_enrollments WHERE id = $1
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, placement, replaced_activation_id FROM agent_enrollments WHERE id = $1
 `
 
 func (q *Queries) GetEnrollmentByID(ctx context.Context, id pgtype.UUID) (AgentEnrollment, error) {
@@ -416,8 +410,6 @@ func (q *Queries) GetEnrollmentByID(ctx context.Context, id pgtype.UUID) (AgentE
 		&i.AgentGrn,
 		&i.SupervisorGrn,
 		&i.HostName,
-		&i.SupervisorKeySha256,
-		&i.AgentKeySha256,
 		&i.ExpectedAssigneeGrn,
 		&i.ExpectedEpoch,
 		&i.RequestID,
@@ -430,10 +422,6 @@ func (q *Queries) GetEnrollmentByID(ctx context.Context, id pgtype.UUID) (AgentE
 		&i.RequestSha256,
 		&i.Epoch,
 		&i.Lineage,
-		&i.SupervisorCertificatePem,
-		&i.AgentCertificatePem,
-		&i.IssuerPem,
-		&i.ServerRootPem,
 		&i.Placement,
 		&i.ReplacedActivationID,
 	)
@@ -441,7 +429,7 @@ func (q *Queries) GetEnrollmentByID(ctx context.Context, id pgtype.UUID) (AgentE
 }
 
 const getEnrollmentByRequest = `-- name: GetEnrollmentByRequest :one
-SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem, placement, replaced_activation_id FROM agent_enrollments WHERE org_grn = $1 AND request_id = $2
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, placement, replaced_activation_id FROM agent_enrollments WHERE org_grn = $1 AND request_id = $2
 `
 
 type GetEnrollmentByRequestParams struct {
@@ -458,8 +446,6 @@ func (q *Queries) GetEnrollmentByRequest(ctx context.Context, arg GetEnrollmentB
 		&i.AgentGrn,
 		&i.SupervisorGrn,
 		&i.HostName,
-		&i.SupervisorKeySha256,
-		&i.AgentKeySha256,
 		&i.ExpectedAssigneeGrn,
 		&i.ExpectedEpoch,
 		&i.RequestID,
@@ -472,10 +458,6 @@ func (q *Queries) GetEnrollmentByRequest(ctx context.Context, arg GetEnrollmentB
 		&i.RequestSha256,
 		&i.Epoch,
 		&i.Lineage,
-		&i.SupervisorCertificatePem,
-		&i.AgentCertificatePem,
-		&i.IssuerPem,
-		&i.ServerRootPem,
 		&i.Placement,
 		&i.ReplacedActivationID,
 	)
@@ -483,7 +465,7 @@ func (q *Queries) GetEnrollmentByRequest(ctx context.Context, arg GetEnrollmentB
 }
 
 const getEnrollmentBySecret = `-- name: GetEnrollmentBySecret :one
-SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem, placement, replaced_activation_id FROM agent_enrollments WHERE secret_sha256 = $1
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, placement, replaced_activation_id FROM agent_enrollments WHERE secret_sha256 = $1
 `
 
 func (q *Queries) GetEnrollmentBySecret(ctx context.Context, secretSha256 []byte) (AgentEnrollment, error) {
@@ -495,8 +477,6 @@ func (q *Queries) GetEnrollmentBySecret(ctx context.Context, secretSha256 []byte
 		&i.AgentGrn,
 		&i.SupervisorGrn,
 		&i.HostName,
-		&i.SupervisorKeySha256,
-		&i.AgentKeySha256,
 		&i.ExpectedAssigneeGrn,
 		&i.ExpectedEpoch,
 		&i.RequestID,
@@ -509,10 +489,6 @@ func (q *Queries) GetEnrollmentBySecret(ctx context.Context, secretSha256 []byte
 		&i.RequestSha256,
 		&i.Epoch,
 		&i.Lineage,
-		&i.SupervisorCertificatePem,
-		&i.AgentCertificatePem,
-		&i.IssuerPem,
-		&i.ServerRootPem,
 		&i.Placement,
 		&i.ReplacedActivationID,
 	)
@@ -544,29 +520,6 @@ func (q *Queries) GetExecution(ctx context.Context, agentGrn string) (GetExecuti
 		&i.ActivationID,
 		&i.LatestActivationID,
 		&i.CurrentGeneration,
-	)
-	return i, err
-}
-
-const getInitialCertificate = `-- name: GetInitialCertificate :one
-SELECT agent_grn, request_id, operation_ref, epoch, request_sha256, lineage, certificate_pem, issuer_pem, server_root_pem, not_after, created_at FROM agent_initial_certificates WHERE agent_grn = $1
-`
-
-func (q *Queries) GetInitialCertificate(ctx context.Context, agentGrn string) (AgentInitialCertificate, error) {
-	row := q.db.QueryRow(ctx, getInitialCertificate, agentGrn)
-	var i AgentInitialCertificate
-	err := row.Scan(
-		&i.AgentGrn,
-		&i.RequestID,
-		&i.OperationRef,
-		&i.Epoch,
-		&i.RequestSha256,
-		&i.Lineage,
-		&i.CertificatePem,
-		&i.IssuerPem,
-		&i.ServerRootPem,
-		&i.NotAfter,
-		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -612,7 +565,7 @@ func (q *Queries) GetManagedCreationByReference(ctx context.Context, operationRe
 }
 
 const getRecovery = `-- name: GetRecovery :one
-SELECT agent_grn, request_id, operation_ref, body_sha256, lineage, certificate_pem, created_at, issuer_pem, server_root_pem FROM agent_recoveries WHERE agent_grn = $1 AND request_id = $2
+SELECT agent_grn, request_id, operation_ref, body_sha256, lineage, created_at FROM agent_recoveries WHERE agent_grn = $1 AND request_id = $2
 `
 
 type GetRecoveryParams struct {
@@ -629,16 +582,13 @@ func (q *Queries) GetRecovery(ctx context.Context, arg GetRecoveryParams) (Agent
 		&i.OperationRef,
 		&i.BodySha256,
 		&i.Lineage,
-		&i.CertificatePem,
 		&i.CreatedAt,
-		&i.IssuerPem,
-		&i.ServerRootPem,
 	)
 	return i, err
 }
 
 const getSupervisor = `-- name: GetSupervisor :one
-SELECT grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at, ended_at FROM agent_supervisors WHERE grn = $1
+SELECT grn, agent_grn, enrollment_id, host_name, registered_at, ended_at FROM agent_supervisors WHERE grn = $1
 `
 
 func (q *Queries) GetSupervisor(ctx context.Context, grn string) (AgentSupervisor, error) {
@@ -649,8 +599,6 @@ func (q *Queries) GetSupervisor(ctx context.Context, grn string) (AgentSuperviso
 		&i.AgentGrn,
 		&i.EnrollmentID,
 		&i.HostName,
-		&i.Serial,
-		&i.NotAfter,
 		&i.RegisteredAt,
 		&i.EndedAt,
 	)
@@ -658,7 +606,7 @@ func (q *Queries) GetSupervisor(ctx context.Context, grn string) (AgentSuperviso
 }
 
 const getSupervisorByEnrollment = `-- name: GetSupervisorByEnrollment :one
-SELECT grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at, ended_at FROM agent_supervisors WHERE enrollment_id = $1
+SELECT grn, agent_grn, enrollment_id, host_name, registered_at, ended_at FROM agent_supervisors WHERE enrollment_id = $1
 `
 
 func (q *Queries) GetSupervisorByEnrollment(ctx context.Context, enrollmentID pgtype.UUID) (AgentSupervisor, error) {
@@ -669,8 +617,6 @@ func (q *Queries) GetSupervisorByEnrollment(ctx context.Context, enrollmentID pg
 		&i.AgentGrn,
 		&i.EnrollmentID,
 		&i.HostName,
-		&i.Serial,
-		&i.NotAfter,
 		&i.RegisteredAt,
 		&i.EndedAt,
 	)
@@ -693,51 +639,6 @@ func (q *Queries) GetSupervisorCredentialHolder(ctx context.Context, credentialH
 	row := q.db.QueryRow(ctx, getSupervisorCredentialHolder, credentialHash)
 	var i GetSupervisorCredentialHolderRow
 	err := row.Scan(&i.ID, &i.SupervisorGrn)
-	return i, err
-}
-
-const getSupervisorRenewal = `-- name: GetSupervisorRenewal :one
-SELECT r.supervisor_grn, r.predecessor_serial, r.request_id, r.request_sha256, r.serial, r.certificate_pem, r.issuer_pem, r.server_root_pem, r.not_after, r.created_at, (s.ended_at IS NULL AND s.serial = r.serial)::boolean AS current
-FROM agent_supervisor_renewals r
-JOIN agent_supervisors s ON s.grn = r.supervisor_grn
-WHERE r.supervisor_grn = $1 AND r.predecessor_serial = $2
-`
-
-type GetSupervisorRenewalParams struct {
-	SupervisorGrn     string
-	PredecessorSerial string
-}
-
-type GetSupervisorRenewalRow struct {
-	SupervisorGrn     string
-	PredecessorSerial string
-	RequestID         string
-	RequestSha256     []byte
-	Serial            string
-	CertificatePem    string
-	IssuerPem         string
-	ServerRootPem     string
-	NotAfter          pgtype.Timestamptz
-	CreatedAt         pgtype.Timestamptz
-	Current           bool
-}
-
-func (q *Queries) GetSupervisorRenewal(ctx context.Context, arg GetSupervisorRenewalParams) (GetSupervisorRenewalRow, error) {
-	row := q.db.QueryRow(ctx, getSupervisorRenewal, arg.SupervisorGrn, arg.PredecessorSerial)
-	var i GetSupervisorRenewalRow
-	err := row.Scan(
-		&i.SupervisorGrn,
-		&i.PredecessorSerial,
-		&i.RequestID,
-		&i.RequestSha256,
-		&i.Serial,
-		&i.CertificatePem,
-		&i.IssuerPem,
-		&i.ServerRootPem,
-		&i.NotAfter,
-		&i.CreatedAt,
-		&i.Current,
-	)
 	return i, err
 }
 
@@ -802,40 +703,17 @@ func (q *Queries) InsertActivation(ctx context.Context, arg InsertActivationPara
 	return i, err
 }
 
-const insertCredential = `-- name: InsertCredential :exec
-INSERT INTO agent_credentials (agent_grn, serial, lineage, not_after)
-VALUES ($1, $2, $3, $4)
-`
-
-type InsertCredentialParams struct {
-	AgentGrn string
-	Serial   string
-	Lineage  pgtype.UUID
-	NotAfter pgtype.Timestamptz
-}
-
-func (q *Queries) InsertCredential(ctx context.Context, arg InsertCredentialParams) error {
-	_, err := q.db.Exec(ctx, insertCredential,
-		arg.AgentGrn,
-		arg.Serial,
-		arg.Lineage,
-		arg.NotAfter,
-	)
-	return err
-}
-
 const insertEnrollment = `-- name: InsertEnrollment :execrows
 
 INSERT INTO agent_enrollments (
-    id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256,
-    agent_key_sha256, expected_assignee_grn, expected_epoch, request_id,
+    id, org_grn, agent_grn, supervisor_grn, host_name,
+    expected_assignee_grn, expected_epoch, request_id,
     approved_by, secret_sha256, expires_at, created_at, placement
 ) VALUES (
     $1, $2, $3, $4,
-    $5, $6, $7,
-    $8, $9, $10,
-    $11, $12, $13, $14,
-    $15
+    $5, $6, $7, $8,
+    $9, $10, $11, $12,
+    $13
 )
 ON CONFLICT (org_grn, request_id) DO NOTHING
 `
@@ -846,8 +724,6 @@ type InsertEnrollmentParams struct {
 	AgentGrn            string
 	SupervisorGrn       string
 	HostName            string
-	SupervisorKeySha256 []byte
-	AgentKeySha256      []byte
 	ExpectedAssigneeGrn pgtype.Text
 	ExpectedEpoch       pgtype.Int4
 	RequestID           string
@@ -866,8 +742,6 @@ func (q *Queries) InsertEnrollment(ctx context.Context, arg InsertEnrollmentPara
 		arg.AgentGrn,
 		arg.SupervisorGrn,
 		arg.HostName,
-		arg.SupervisorKeySha256,
-		arg.AgentKeySha256,
 		arg.ExpectedAssigneeGrn,
 		arg.ExpectedEpoch,
 		arg.RequestID,
@@ -928,44 +802,6 @@ func (q *Queries) InsertEnrollmentApproval(ctx context.Context, arg InsertEnroll
 	return result.RowsAffected(), nil
 }
 
-const insertInitialCertificate = `-- name: InsertInitialCertificate :exec
-INSERT INTO agent_initial_certificates (
-    agent_grn, request_id, operation_ref, epoch, request_sha256, lineage,
-    certificate_pem, issuer_pem, server_root_pem, not_after, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-`
-
-type InsertInitialCertificateParams struct {
-	AgentGrn       string
-	RequestID      string
-	OperationRef   string
-	Epoch          int32
-	RequestSha256  []byte
-	Lineage        pgtype.UUID
-	CertificatePem string
-	IssuerPem      string
-	ServerRootPem  string
-	NotAfter       pgtype.Timestamptz
-	CreatedAt      pgtype.Timestamptz
-}
-
-func (q *Queries) InsertInitialCertificate(ctx context.Context, arg InsertInitialCertificateParams) error {
-	_, err := q.db.Exec(ctx, insertInitialCertificate,
-		arg.AgentGrn,
-		arg.RequestID,
-		arg.OperationRef,
-		arg.Epoch,
-		arg.RequestSha256,
-		arg.Lineage,
-		arg.CertificatePem,
-		arg.IssuerPem,
-		arg.ServerRootPem,
-		arg.NotAfter,
-		arg.CreatedAt,
-	)
-	return err
-}
-
 const insertManagedCreation = `-- name: InsertManagedCreation :exec
 INSERT INTO agent_managed_creations (
     agent_grn, audience_grn, controller_grn, request_id, operation_ref,
@@ -1000,21 +836,17 @@ func (q *Queries) InsertManagedCreation(ctx context.Context, arg InsertManagedCr
 
 const insertRecovery = `-- name: InsertRecovery :exec
 INSERT INTO agent_recoveries (
-    agent_grn, request_id, operation_ref, body_sha256, lineage,
-    certificate_pem, issuer_pem, server_root_pem, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    agent_grn, request_id, operation_ref, body_sha256, lineage, created_at
+) VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type InsertRecoveryParams struct {
-	AgentGrn       string
-	RequestID      string
-	OperationRef   string
-	BodySha256     []byte
-	Lineage        pgtype.UUID
-	CertificatePem pgtype.Text
-	IssuerPem      pgtype.Text
-	ServerRootPem  pgtype.Text
-	CreatedAt      pgtype.Timestamptz
+	AgentGrn     string
+	RequestID    string
+	OperationRef string
+	BodySha256   []byte
+	Lineage      pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
 }
 
 func (q *Queries) InsertRecovery(ctx context.Context, arg InsertRecoveryParams) error {
@@ -1024,17 +856,14 @@ func (q *Queries) InsertRecovery(ctx context.Context, arg InsertRecoveryParams) 
 		arg.OperationRef,
 		arg.BodySha256,
 		arg.Lineage,
-		arg.CertificatePem,
-		arg.IssuerPem,
-		arg.ServerRootPem,
 		arg.CreatedAt,
 	)
 	return err
 }
 
 const insertSupervisor = `-- name: InsertSupervisor :exec
-INSERT INTO agent_supervisors (grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO agent_supervisors (grn, agent_grn, enrollment_id, host_name, registered_at)
+VALUES ($1, $2, $3, $4, $5)
 `
 
 type InsertSupervisorParams struct {
@@ -1042,8 +871,6 @@ type InsertSupervisorParams struct {
 	AgentGrn     string
 	EnrollmentID pgtype.UUID
 	HostName     string
-	Serial       pgtype.Text
-	NotAfter     pgtype.Timestamptz
 	RegisteredAt pgtype.Timestamptz
 }
 
@@ -1053,8 +880,6 @@ func (q *Queries) InsertSupervisor(ctx context.Context, arg InsertSupervisorPara
 		arg.AgentGrn,
 		arg.EnrollmentID,
 		arg.HostName,
-		arg.Serial,
-		arg.NotAfter,
 		arg.RegisteredAt,
 	)
 	return err
@@ -1072,42 +897,6 @@ type InsertSupervisorCredentialParams struct {
 
 func (q *Queries) InsertSupervisorCredential(ctx context.Context, arg InsertSupervisorCredentialParams) error {
 	_, err := q.db.Exec(ctx, insertSupervisorCredential, arg.SupervisorGrn, arg.CredentialHash, arg.IssuedAt)
-	return err
-}
-
-const insertSupervisorRenewal = `-- name: InsertSupervisorRenewal :exec
-INSERT INTO agent_supervisor_renewals (
-    supervisor_grn, predecessor_serial, request_id, request_sha256, serial,
-    certificate_pem, issuer_pem, server_root_pem, not_after, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-`
-
-type InsertSupervisorRenewalParams struct {
-	SupervisorGrn     string
-	PredecessorSerial string
-	RequestID         string
-	RequestSha256     []byte
-	Serial            string
-	CertificatePem    string
-	IssuerPem         string
-	ServerRootPem     string
-	NotAfter          pgtype.Timestamptz
-	CreatedAt         pgtype.Timestamptz
-}
-
-func (q *Queries) InsertSupervisorRenewal(ctx context.Context, arg InsertSupervisorRenewalParams) error {
-	_, err := q.db.Exec(ctx, insertSupervisorRenewal,
-		arg.SupervisorGrn,
-		arg.PredecessorSerial,
-		arg.RequestID,
-		arg.RequestSha256,
-		arg.Serial,
-		arg.CertificatePem,
-		arg.IssuerPem,
-		arg.ServerRootPem,
-		arg.NotAfter,
-		arg.CreatedAt,
-	)
 	return err
 }
 
@@ -1329,7 +1118,7 @@ func (q *Queries) ListSupervisors(ctx context.Context, arg ListSupervisorsParams
 }
 
 const lockEnrollment = `-- name: LockEnrollment :one
-SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem, placement, replaced_activation_id FROM agent_enrollments WHERE id = $1 FOR UPDATE
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, placement, replaced_activation_id FROM agent_enrollments WHERE id = $1 FOR UPDATE
 `
 
 // LockEnrollment is what withdrawing and spending an approval
@@ -1343,8 +1132,6 @@ func (q *Queries) LockEnrollment(ctx context.Context, id pgtype.UUID) (AgentEnro
 		&i.AgentGrn,
 		&i.SupervisorGrn,
 		&i.HostName,
-		&i.SupervisorKeySha256,
-		&i.AgentKeySha256,
 		&i.ExpectedAssigneeGrn,
 		&i.ExpectedEpoch,
 		&i.RequestID,
@@ -1357,10 +1144,6 @@ func (q *Queries) LockEnrollment(ctx context.Context, id pgtype.UUID) (AgentEnro
 		&i.RequestSha256,
 		&i.Epoch,
 		&i.Lineage,
-		&i.SupervisorCertificatePem,
-		&i.AgentCertificatePem,
-		&i.IssuerPem,
-		&i.ServerRootPem,
 		&i.Placement,
 		&i.ReplacedActivationID,
 	)
@@ -1415,7 +1198,7 @@ func (q *Queries) LockExecution(ctx context.Context, agentGrn string) (AgentExec
 }
 
 const lockSupervisor = `-- name: LockSupervisor :one
-SELECT grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at, ended_at FROM agent_supervisors WHERE grn = $1 FOR UPDATE
+SELECT grn, agent_grn, enrollment_id, host_name, registered_at, ended_at FROM agent_supervisors WHERE grn = $1 FOR UPDATE
 `
 
 func (q *Queries) LockSupervisor(ctx context.Context, grn string) (AgentSupervisor, error) {
@@ -1426,8 +1209,6 @@ func (q *Queries) LockSupervisor(ctx context.Context, grn string) (AgentSupervis
 		&i.AgentGrn,
 		&i.EnrollmentID,
 		&i.HostName,
-		&i.Serial,
-		&i.NotAfter,
 		&i.RegisteredAt,
 		&i.EndedAt,
 	)
@@ -1467,21 +1248,6 @@ func (q *Queries) MoveLineage(ctx context.Context, arg MoveLineageParams) error 
 	return err
 }
 
-const moveSupervisorCertificate = `-- name: MoveSupervisorCertificate :exec
-UPDATE agent_supervisors SET serial = $2, not_after = $3 WHERE grn = $1
-`
-
-type MoveSupervisorCertificateParams struct {
-	Grn      string
-	Serial   pgtype.Text
-	NotAfter pgtype.Timestamptz
-}
-
-func (q *Queries) MoveSupervisorCertificate(ctx context.Context, arg MoveSupervisorCertificateParams) error {
-	_, err := q.db.Exec(ctx, moveSupervisorCertificate, arg.Grn, arg.Serial, arg.NotAfter)
-	return err
-}
-
 const now = `-- name: Now :one
 SELECT clock_timestamp()::timestamptz
 `
@@ -1493,18 +1259,6 @@ func (q *Queries) Now(ctx context.Context) (pgtype.Timestamptz, error) {
 	var column_1 pgtype.Timestamptz
 	err := row.Scan(&column_1)
 	return column_1, err
-}
-
-const pruneCredentials = `-- name: PruneCredentials :exec
-DELETE FROM agent_credentials
-WHERE agent_grn = $1 AND not_after <= clock_timestamp()
-`
-
-// Expired credentials admit nothing, so dropping them changes no
-// answer; it keeps a lineage's rows to the certificates still valid.
-func (q *Queries) PruneCredentials(ctx context.Context, agentGrn string) error {
-	_, err := q.db.Exec(ctx, pruneCredentials, agentGrn)
-	return err
 }
 
 const reassignSupervisor = `-- name: ReassignSupervisor :one
@@ -1666,25 +1420,17 @@ UPDATE agent_enrollments SET
     request_sha256             = $2,
     epoch                      = $3,
     lineage                    = $4,
-    supervisor_certificate_pem = $5,
-    agent_certificate_pem      = $6,
-    issuer_pem                 = $7,
-    server_root_pem            = $8,
-    replaced_activation_id     = $9
-WHERE id = $10
+    replaced_activation_id     = $5
+WHERE id = $6
 `
 
 type SpendEnrollmentParams struct {
-	ConsumedAt               pgtype.Timestamptz
-	RequestSha256            []byte
-	Epoch                    pgtype.Int4
-	Lineage                  pgtype.UUID
-	SupervisorCertificatePem pgtype.Text
-	AgentCertificatePem      pgtype.Text
-	IssuerPem                pgtype.Text
-	ServerRootPem            pgtype.Text
-	ReplacedActivationID     pgtype.UUID
-	ID                       pgtype.UUID
+	ConsumedAt           pgtype.Timestamptz
+	RequestSha256        []byte
+	Epoch                pgtype.Int4
+	Lineage              pgtype.UUID
+	ReplacedActivationID pgtype.UUID
+	ID                   pgtype.UUID
 }
 
 func (q *Queries) SpendEnrollment(ctx context.Context, arg SpendEnrollmentParams) error {
@@ -1693,10 +1439,6 @@ func (q *Queries) SpendEnrollment(ctx context.Context, arg SpendEnrollmentParams
 		arg.RequestSha256,
 		arg.Epoch,
 		arg.Lineage,
-		arg.SupervisorCertificatePem,
-		arg.AgentCertificatePem,
-		arg.IssuerPem,
-		arg.ServerRootPem,
 		arg.ReplacedActivationID,
 		arg.ID,
 	)

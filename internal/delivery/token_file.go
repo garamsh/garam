@@ -22,7 +22,7 @@ var agentToken = regexp.MustCompile(`^garam_at_[0-9a-f]{64}$`)
 // whitespace a mounted Secret may end in.
 const maxTokenFile = 1 << 10
 
-// TokenFile is the token mode's credential: an agent token its
+// TokenFile is the adapter's credential: an agent token its
 // assignee writes to a file and replaces before it expires. It is read
 // before every call and never held, so a replacement is presented on
 // the next call without a restart (ADR-0100).
@@ -68,9 +68,6 @@ func (f *TokenFile) Authorization() (string, error) {
 	}
 	return TokenScheme + " " + token, nil
 }
-
-// IsToken is true.
-func (f *TokenFile) IsToken() bool { return true }
 
 // Fingerprint answers the token's SHA-256, so the token itself never
 // reaches what keeps the fingerprint.

@@ -1,47 +1,20 @@
 package machineapi_test
 
 import (
-	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"net/http"
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/machineapi"
-	"github.com/garamsh/garam/internal/operator"
 )
 
-// operatorService is an operator.Service recording what the surface
-// passed it: the credential it read off the connection. Minting out of
-// band is a command's path (ADR-0032) and reaches no handler, so it
-// panics through the embedded interface.
-type operatorService struct {
-	operator.Service
-	certificate *operator.Certificate
-	err         error
-	renewed     []operator.Credential
-}
-
-func (s *operatorService) Renew(_ context.Context, c operator.Credential) (*operator.IssuedCertificate, error) {
-	s.renewed = append(s.renewed, c)
-	if s.err != nil {
-		return nil, s.err
-	}
-	return &operator.IssuedCertificate{
-		Certificate:   *s.certificate,
-		PrivateKeyPEM: []byte("private key"),
-	}, nil
-}
-
-// anonymous is a client presenting no certificate at all, which is
-// what an operator that has never been issued one has.
+// anonymous is a client presenting no token at all.
 func anonymous(t *testing.T) *http.Client {
 	t.Helper()
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
@@ -123,7 +96,7 @@ func fillPath(t *testing.T, path string, values map[string]string) string {
 }
 
 // standaloneEnrollmentRoute, the two exchanges and keySetRoute are the
-// operations reached without a certificate (ADR-0082, ADR-0100,
+// operations reached without a token (ADR-0082, ADR-0100,
 // ADR-0101, ADR-0102). They are named here so that what a reader
 // checks is the exemption rather than the routes that are not exempt,
 // which are whatever is left.
@@ -134,16 +107,15 @@ const (
 	keySetRoute               = http.MethodGet + " /message-signing-keys"
 )
 
-// TestServer_TheExemptRoutesAreTheOnlyOnesAnUncertifiedCallerReaches
-// holds that a client presenting no certificate reaches the standalone
+// TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches
+// holds that a client presenting no token reaches the standalone
 // enrollment, the two exchanges and the key set, each refusing on its
 // own credential or answering, and is refused everywhere else, so what
 // admitted it was the route and not a listener that stopped checking.
 // No route enrols an operator (ADR-0117).
-func TestServer_TheExemptRoutesAreTheOnlyOnesAnUncertifiedCallerReaches(t *testing.T) {
+func TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches(t *testing.T) {
 	caller := operatorGRN("acme")
-	operators := &operatorService{certificate: &operator.Certificate{Subject: caller}}
-	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, caller)
+	url, _ := listener(t, &agentService{}, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, caller)
 	client := anonymous(t)
 
 	// Every operation api/machine.yaml declares, read off the generated
@@ -161,7 +133,7 @@ func TestServer_TheExemptRoutesAreTheOnlyOnesAnUncertifiedCallerReaches(t *testi
 		"approval":   "00000000-0000-0000-0000-000000000002",
 	})
 	// The standalone enrollment refuses on its own credential, the
-	// bootstrap secret, rather than on the missing certificate.
+	// bootstrap secret, rather than on the missing token.
 	standalone, ok := routes[standaloneEnrollmentRoute]
 	require.True(t, ok, "the exemption names no operation the specification declares")
 	delete(routes, standaloneEnrollmentRoute)
@@ -170,7 +142,7 @@ func TestServer_TheExemptRoutesAreTheOnlyOnesAnUncertifiedCallerReaches(t *testi
 	assert.Contains(t, body, "standalone bootstrap")
 
 	// So is the token exchange, which refuses on its own credential,
-	// a supervisor's, rather than on the missing certificate.
+	// a supervisor's, rather than on the missing token.
 	exchange, ok := routes[tokenExchangeRoute]
 	require.True(t, ok, "the exemption names no operation the specification declares")
 	delete(routes, tokenExchangeRoute)
@@ -179,7 +151,7 @@ func TestServer_TheExemptRoutesAreTheOnlyOnesAnUncertifiedCallerReaches(t *testi
 	assert.Contains(t, body, "Garam-Credential")
 
 	// So is the client assertion exchange, which refuses on its own
-	// form, carrying the assertion, rather than on the certificate.
+	// form, carrying the assertion, rather than on a token.
 	assertion, ok := routes[assertionExchangeRoute]
 	require.True(t, ok, "the exemption names no operation the specification declares")
 	delete(routes, assertionExchangeRoute)
@@ -203,85 +175,6 @@ func TestServer_TheExemptRoutesAreTheOnlyOnesAnUncertifiedCallerReaches(t *testi
 			status, body := send(t, client, route.method, url+route.path, "")
 			assert.Equal(t, http.StatusUnauthorized, status)
 			assert.Contains(t, body, "no machine identity")
-		})
-	}
-}
-
-// presentedBy returns the certificate the client authenticates with,
-// which is what the surface has to read the renewal off.
-func presentedBy(t *testing.T, client *http.Client) *x509.Certificate {
-	t.Helper()
-	transport, ok := client.Transport.(*http.Transport)
-	require.True(t, ok)
-	require.Len(t, transport.TLSClientConfig.Certificates, 1)
-	leaf, err := x509.ParseCertificate(transport.TLSClientConfig.Certificates[0].Certificate[0])
-	require.NoError(t, err)
-	return leaf
-}
-
-// TestServer_RenewsTheCertificateTheConnectionAuthenticatedWith covers
-// what the surface reads off the handshake and what comes back. The
-// route names no subject, so what it passes on is the certificate
-// presented — the identity it names, and which certificate it is.
-func TestServer_RenewsTheCertificateTheConnectionAuthenticatedWith(t *testing.T) {
-	holder := operatorGRN("acme")
-	notAfter := time.Date(2026, time.August, 26, 12, 0, 0, 0, time.UTC)
-	operators := &operatorService{certificate: &operator.Certificate{
-		Subject:        holder,
-		Serial:         "successor",
-		CertificatePEM: []byte("certificate"),
-		IssuerPEM:      []byte("issuer"),
-		ServerRootPEM:  []byte("server root"),
-		NotAfter:       notAfter,
-	}}
-	url, client := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, holder)
-
-	status, body := do(t, client, http.MethodPost, url+"/identity/certificate")
-	require.Equal(t, http.StatusCreated, status)
-	assert.JSONEq(t, `{
-		"grn": "`+holder.String()+`",
-		"certificatePem": "certificate",
-		"privateKeyPem": "private key",
-		"issuerPem": "issuer",
-		"serverRootPem": "server root",
-		"notAfter": "2026-08-26T12:00:00Z"
-	}`, body)
-
-	presented := presentedBy(t, client)
-	require.Len(t, operators.renewed, 1)
-	assert.Equal(t, operator.Credential{
-		Subject:   holder,
-		Serial:    operator.Serial(presented.SerialNumber.String()),
-		NotBefore: presented.NotBefore,
-		NotAfter:  presented.NotAfter,
-	}, operators.renewed[0], "the renewal names the certificate the connection presented")
-}
-
-// TestServer_RenewalRefusalsCarryTheirKind holds each refusal the rule
-// makes against the answer above: a caller reads a renewal it may ask
-// for again off a different kind from one only a mint out of band
-// recovers, and neither is invented at this boundary.
-func TestServer_RenewalRefusalsCarryTheirKind(t *testing.T) {
-	holder := operatorGRN("acme")
-	operators := &operatorService{}
-	url, client := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, holder)
-
-	refusals := map[string]struct {
-		err    error
-		status int
-		kind   string
-	}{
-		"too early":       {operator.ErrRenewalTooEarly, http.StatusConflict, "failed_precondition"},
-		"superseded":      {operator.ErrSuperseded, http.StatusConflict, "already_exists"},
-		"expired":         {operator.ErrCertificateExpired, http.StatusForbidden, "permission_denied"},
-		"not an operator": {operator.ErrNotAnOperator, http.StatusForbidden, "permission_denied"},
-	}
-	for name, refusal := range refusals {
-		t.Run(name, func(t *testing.T) {
-			operators.err = refusal.err
-			status, body := do(t, client, http.MethodPost, url+"/identity/certificate")
-			assert.Equal(t, refusal.status, status)
-			assert.JSONEq(t, `{"kind":"`+refusal.kind+`","message":"`+refusal.err.Error()+`"}`, body)
 		})
 	}
 }

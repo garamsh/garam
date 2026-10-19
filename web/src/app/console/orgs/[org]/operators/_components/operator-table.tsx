@@ -4,7 +4,6 @@ import { Server as ServerIcon } from "lucide-react";
 import Link from "next/link";
 
 import { DataTable, type ColumnDef } from "@/components/data-table";
-import { StatusDot } from "@/components/status-dot";
 
 import { EmptyState } from "../../../../_components/empty-state";
 import {
@@ -15,14 +14,12 @@ import {
   useOperatorReports,
   type ReportsSource,
 } from "./operator-reports";
-import { certificateStatus } from "./operator-status";
 
 /** One operator as the list shows it. */
 export type OperatorRow = {
   grn: string;
   identifier: string;
   name: string;
-  certificateIssuedAt?: string;
   controlEndpoint?: string;
 };
 
@@ -84,14 +81,6 @@ export function OperatorTable({
         ) : (
           <span className="text-muted-foreground">Not registered</span>
         ),
-    },
-    {
-      id: "certificate",
-      accessorFn: (row) => certificateStatus(row.certificateIssuedAt).label,
-      header: "Certificate",
-      cell: ({ row }) => (
-        <StatusDot {...certificateStatus(row.original.certificateIssuedAt)} />
-      ),
     },
     ...(read === null
       ? []

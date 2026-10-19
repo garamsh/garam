@@ -74,25 +74,25 @@ what performs it.** `DeleteOrg` issues one statement against `orgs`;
 every row that goes does so through a foreign key declared `ON DELETE
 CASCADE`, so what is taken is fixed by the migrations rather than by any
 code path. Directly: this domain's groups, projects, memberships and
-invitations, the policies the engine stores, the agents
-`internal/agent` owns, the operators
-`internal/operator` registers, and the organization's certificate
-authority. Through those: a group's and a project's members, a policy's
-versions and attachments, an agent's assignment, and an operator's keys
-and the tokens exchanged under them. Before the cascade,
-`migrations/000047`'s trigger on `orgs` holds the agents' execution rows
-and then the operators' registrations, in the orders
-[agents.md](./agents.md) and
+invitations, the policies the engine stores, the agents `internal/agent`
+owns, the operators `internal/operator` registers, and the certificate
+authority an earlier release gave the organization, where it has one.
+Through those: a group's and a project's members, a policy's versions
+and attachments, an agent's assignment, and an operator's keys and the
+tokens exchanged under them. Before the cascade, `migrations/000047`'s
+trigger on `orgs` holds the agents' execution rows and then the
+operators' registrations, in the orders [agents.md](./agents.md) and
 [machine-identity.md](./machine-identity.md) state.
 
 Two of those reach further than one organization. A consent relation
 is a pair, so deleting one organization removes the relation the other
 is still a side of, without that organization acting (ADR-0035). And
-the certificate authority is the one row nothing can put back —
-[certificate-authorities.md](./certificate-authorities.md) holds why.
-What does **not** go is a certificate an operator already holds
-(ADR-0045 errata), and the user accounts of the members, which the
-organization does not own.
+the certificate authority is the one row nothing can put back: it
+holds the authority's private key sealed under the key-encryption key,
+and garam makes no authority again (ADR-0118,
+[domains.md](./domains.md) §Shared code below the domains). What does
+**not** go is the user accounts of the members, which the organization
+does not own.
 
 `getOrgDeletionPreview` is what states this to a caller before the
 act, counted on the server rather than assembled from a list the

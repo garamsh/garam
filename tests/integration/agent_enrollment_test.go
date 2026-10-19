@@ -247,14 +247,15 @@ func TestAgentEnrollment_ModelledPlacementsRefuseByName(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, got.status, "control: the managed binding admits: %s", got.body)
 }
 
-// TestAgentEnrollment_TakesATokenAndNoCertificate refuses the hosted
-// control service's certificate, beside its token admitted.
-func TestAgentEnrollment_TakesATokenAndNoCertificate(t *testing.T) {
+// TestAgentEnrollment_TakesAToken refuses a request presenting no
+// token and one under another contract's value, beside the hosted
+// control service's token admitted.
+func TestAgentEnrollment_TakesAToken(t *testing.T) {
 	s := newTokenStack(t)
 	ref := s.creationRef(t, s.member, "enrol-1")
 	body := bindingBody("enrol-1", "managed", s.controller, ref, nil)
 
-	got := s.send(t, s.hostedTLS, http.MethodPost, "/agent-enrollment-approvals", agent.AdmissionContractVersion, "", body)
+	got := s.send(t, s.client, http.MethodPost, "/agent-enrollment-approvals", agent.AdmissionContractVersion, "", body)
 	assert.Equal(t, http.StatusUnauthorized, got.status, got.body)
 	assert.Equal(t, agent.AdmissionContractVersion, got.version)
 

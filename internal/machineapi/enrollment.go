@@ -2,7 +2,6 @@ package machineapi
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
@@ -19,7 +18,7 @@ import (
 // the agent's lineage under managed-enrollment.v1 and v2 alike; under
 // v2 its assignee then mints the agent's tokens in it (ADR-0100).
 func (s *Server) CreateManagedAgent(w http.ResponseWriter, r *http.Request, controllerGRN machinegen.ControllerGrn, params machinegen.CreateManagedAgentParams) {
-	if !served(w, r, params.EnrollmentContractVersion, enrollmentValues) {
+	if !served(w, params.EnrollmentContractVersion, enrollmentValues) {
 		return
 	}
 	r, cancel := lifecycleBudget(r)
@@ -53,64 +52,6 @@ func (s *Server) CreateManagedAgent(w http.ResponseWriter, r *http.Request, cont
 	}
 	writeJSON(w, createdOrReplayed(created), machinegen.ManagedAgent{
 		Grn: creation.Agent.String(), Epoch: strconv.Itoa(creation.Epoch),
-	})
-}
-
-// IssueInitialCertificate signs a managed agent's first certificate
-// over the key its controller generated, for the hosted control
-// service calling under the agent's creation reference. The answer is
-// public: no private key reaches garam or leaves it. It goes with the
-// certificate path and refuses a token itself, beside ConfineTokens:
-// an agent created under managed-enrollment.v2 is minted tokens by its
-// assignee instead (ADR-0100).
-func (s *Server) IssueInitialCertificate(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, params machinegen.IssueInitialCertificateParams) {
-	if tokenBorne(r) {
-		writeError(w, errorx.New(errorx.KindUnauthenticated,
-			"initial issuance takes no token: the assignee mints a token-borne agent's tokens instead"))
-		return
-	}
-	if !served(w, r, params.EnrollmentContractVersion, enrollmentValues) {
-		return
-	}
-	r, cancel := lifecycleBudget(r)
-	defer cancel()
-	caller, subject, ok := s.lifecycleParties(w, r, agentGRN)
-	if !ok {
-		return
-	}
-	var body machinegen.InitialCertificateRequest
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, errorx.Wrap(err, "initial certificate", errorx.KindInvalidArgument))
-		return
-	}
-	requestID, err := agent.ParseRequestID(body.RequestId)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	epoch, err := parseEpoch(body.Epoch)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	issued, created, err := s.executions.IssueInitialCertificate(r.Context(), caller, agent.InitialCertificateInput{
-		Agent: subject, RequestID: requestID, Epoch: epoch, OperationRef: body.OperationRef,
-		CertificateRequestPEM: []byte(body.CertificateRequestPem),
-	})
-	if err != nil {
-		err = withinBudget(r, err)
-		if errors.Is(err, agent.ErrInvalidCertificateRequest) {
-			writeErrorStatus(w, http.StatusUnprocessableEntity, err)
-			return
-		}
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, createdOrReplayed(created), machinegen.InitialCertificate{
-		CertificatePem: issued.CertificatePEM,
-		IssuerPem:      issued.IssuerPEM,
-		ServerRootPem:  issued.ServerRootPEM,
-		NotAfter:       issued.NotAfter.UTC(),
 	})
 }
 

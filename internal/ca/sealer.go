@@ -1,3 +1,9 @@
+// Package ca holds the sealer that keeps key material unreadable in
+// storage without the key-encryption key the process holds (ADR-0016,
+// ADR-0104). garam's certificate authorities are retired (ADR-0118):
+// the sealed authority keys stay in certificate_authorities, unread,
+// until the owner decides their drop, and what still seals under this
+// is message signing.
 package ca
 
 import (

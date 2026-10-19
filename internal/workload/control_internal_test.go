@@ -28,7 +28,7 @@ type fixedTokens struct{}
 func (fixedTokens) Current(context.Context) (string, error) { return "", nil }
 
 // TestCaller_RefusesAControlTokenThatIsNotOneBeforeComparing holds the
-// token mode's caller check to the presented token's spelling: an empty
+// caller check to the presented token's spelling: an empty
 // token against an empty record, and a malformed one against the same
 // malformed record, are each refused with 401 although the
 // constant-time comparison alone would accept them. A well-formed
@@ -50,7 +50,7 @@ func TestCaller_RefusesAControlTokenThatIsNotOneBeforeComparing(t *testing.T) {
 			r.SetPathValue("agent", agent.String())
 			r.Header.Set("Authorization", "Garam-Token "+c.presented)
 			w := httptest.NewRecorder()
-			_, ok := s.caller(w, r, &intent{ControlToken: c.recorded})
+			ok := s.caller(w, r, &intent{ControlToken: c.recorded})
 			assert.Equal(t, c.want == http.StatusOK, ok)
 			assert.Equal(t, c.want, w.Code)
 		})

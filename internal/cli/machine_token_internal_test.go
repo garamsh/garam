@@ -94,10 +94,10 @@ func TestIdentityTokens_AnswersAGaramTokenAndNothingElse(t *testing.T) {
 }
 
 // TestCountMachineRequests_CountsEachRequestByHowItAuthenticated drives
-// the machine listener with a certificate, a token and neither, and
-// reads the counter the probe port's /metrics serves. Each method is
-// counted once for its own request, so a counter that labelled every
-// request alike would fail two of the three.
+// the machine listener with a token and without one, and reads the
+// counter the probe port's /metrics serves. Each method is counted for
+// its own requests, so a counter that labelled every request alike
+// would fail one of the two.
 func TestCountMachineRequests_CountsEachRequestByHowItAuthenticated(t *testing.T) {
 	// Internal: a request is counted once Postgres authenticated it.
 	var out lines
@@ -105,7 +105,7 @@ func TestCountMachineRequests_CountsEachRequestByHowItAuthenticated(t *testing.T
 	counter, err := newMachineRequestCounter(obs.registry)
 	require.NoError(t, err)
 	subject := grn.New("acme", grn.DefaultProject, "agent", "bot-1")
-	url, certified := machineListenerAround(t, obs, subject,
+	url, _ := machineListenerAround(t, obs, subject,
 		countMachineRequests(counter)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
 		})))
@@ -120,24 +120,22 @@ func TestCountMachineRequests_CountsEachRequestByHowItAuthenticated(t *testing.T
 		require.NoError(t, err)
 		_ = resp.Body.Close()
 	}
-	// What garam presents is not under test, and this client presents
-	// no certificate.
+	// What garam presents is not under test; this client presents only
+	// what request sets.
 	anonymous := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
 		InsecureSkipVerify: true,
 		MinVersion:         tls.VersionTLS13,
 	}}}
 	t.Cleanup(anonymous.CloseIdleConnections)
 
-	request(certified, "")
-	request(anonymous, liveToken)
-	request(anonymous, liveToken)
+	request(anonymous, subjectToken)
+	request(anonymous, subjectToken)
 	request(anonymous, "")
 
 	rec := httptest.NewRecorder()
 	obs.machineProbeHandler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/metrics", nil))
 	require.Equal(t, http.StatusOK, rec.Code)
 	scraped := rec.Body.String()
-	assert.Contains(t, scraped, machineRequestsMetric+`{authentication="certificate"} 1`)
 	assert.Contains(t, scraped, machineRequestsMetric+`{authentication="token"} 2`)
 	assert.Contains(t, scraped, machineRequestsMetric+`{authentication="none"} 1`)
 }

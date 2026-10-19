@@ -3,46 +3,43 @@ info:
   title: garam machine API
   version: 0.1.0
   description: >-
-    What `garam serve machine` serves (ADR-0017). A caller is a client
-    certificate whose SAN URI holds its GRN (ADR-0014, ADR-0015): no
+    What `garam serve machine` serves (ADR-0017). A caller presents a
+    short-lived token, as `Authorization: Garam-Token <token>`, and the
+    GRN the token names is its identity (ADR-0100, ADR-0118): no
     session cookie and no user row exist on this listener, a caller
     presents no membership and none is looked up to admit it, and the
     organization segment of that GRN is the whole of the tenancy it
-    carries. This is a different listener from the one
-    `api/openapi.yaml` describes and shares nothing with it.
+    carries. The listener asks for no client certificate. This is a
+    different listener from the one `api/openapi.yaml` describes and
+    shares nothing with it.
 
-    A caller may present a short-lived token instead, as
-    `Authorization: Garam-Token <token>`, on the operations whose
-    `security` lists `machineToken` and on no other (ADR-0100). An
-    operator obtains one from `exchangeClientAssertion`, and mints one
-    for an agent it holds from `mintAgentToken`; a standalone host's
+    An operator obtains a token from `exchangeClientAssertion` under
+    `machine-token.v2`, authenticated by a client assertion the private
+    key issued to it signed (ADR-0102, ADR-0117), and mints one for an
+    agent it holds from `mintAgentToken`; a standalone host's
     supervisor obtains one from `exchangeToken`, presenting the
     credential its enrollment answered. The listener reads a token's
     row beside what it rests on, on every request: a deleted operator,
     a withdrawn key, a reassigned agent or a recovered lineage is
-    refused from the next request on a connection already open too. A request presents a token or a certificate, never both.
+    refused from the next request on a connection already open too.
 
     `Authorization: Bearer <token>` is the same token under the OAuth
     scheme (ADR-0102), listed as `machineBearer` beside every
-    `machineToken`: one resolver reads it, with the same confinement,
-    per-request reads and v2 contract values. A request carrying more
-    than one `Authorization` header while any of them presents a token
-    carries no identity. An operator is registered with a key and
-    obtains a token from `exchangeClientAssertion` under
-    `machine-token.v2`, authenticated by a client assertion its private
-    key signed (ADR-0102, ADR-0117).
+    `machineToken`: one resolver reads it, with the same confinement
+    and per-request reads. A request carrying more than one
+    `Authorization` header while any of them presents a token carries
+    no identity.
 
-    Three operations are reached without a certificate, and each
-    carries `security: []`. `enrollStandaloneAgent` is authenticated by
-    the bootstrap secret whose hash an administrator approved
-    (ADR-0082). `getMessageSigningKeys` publishes the public keys a
-    verifier checks garam's signature on a message with (ADR-0101),
-    which anyone may read. `exchangeClientAssertion` is authenticated
-    by the client assertion in its body (ADR-0102). `exchangeToken` is
-    reached without one too, authenticated by a supervisor's credential
-    under `machineCredential`. Every other operation requires the
-    certificate, or a token where it lists `machineToken`, and which is
-    which is read from this file rather than remembered. An enrolling caller still verifies garam against the
+    Four operations are reached without a token, and each carries
+    `security: []` or a credential of its own.
+    `enrollStandaloneAgent` is authenticated by the bootstrap secret
+    whose hash an administrator approved (ADR-0082).
+    `getMessageSigningKeys` publishes the public keys a verifier checks
+    garam's signature on a message with (ADR-0101), which anyone may
+    read. `exchangeClientAssertion` is authenticated by the client
+    assertion in its body (ADR-0102). `exchangeToken` is authenticated
+    by a supervisor's credential under `machineCredential`. Every other
+    operation requires a token. Every caller verifies garam against the
     garam server root, which it holds before it calls: the listener
     presents that root's leaf to everyone (ADR-0040), and a caller that
     does not check it is talking to whoever answered.
@@ -69,23 +66,16 @@ info:
 tags:
   - name: identity
     description: >-
-      The identity a connection authenticated as, and the certificate
-      it authenticated with. An operator obtains its first certificate
-      here by enrolling with a one-time token (ADR-0064), and replaces
-      that certificate here while it still holds it (ADR-0046). Both
-      routes leave the private key where it was generated: the renewal
-      generates it inside the answer and returns it once, and the
-      enrollment never has it, because the operator made it in its own
-      cluster and sent only the request over it.
+      The identity a request's token authenticated as, and the
+      exchanges that obtain a token.
   - name: agent
     description: >-
       The agents an operator creates and holds, and what the two
       parties report about them. What an operator may obtain is exactly
       the agents assigned to it at the current epoch (ADR-0015), and
       what it may report about is bounded the same way. An agent
-      reaches two routes of its own here: it renews its own certificate
-      over the connection that certificate authenticated (ADR-0040),
-      and it reports its own runtime state. Provisioning state and
+      reaches one route of its own here: it reports its own runtime
+      state. Provisioning state and
       runtime state are separate facts reported by different parties,
       and each report is accepted only at the assignment's current
       epoch (ADR-0012).
@@ -109,25 +99,23 @@ tags:
       Which process of an agent may act, and with which credentials
       (ADR-0078). The hosted Operator control service activates a
       runtime generation, deactivates it, recovers a lost credential
-      lineage and asks whether a certificate and a generation are
+      lineage and asks whether an agent's token and a generation are
       current; a standalone host's supervisor activates, deactivates
       and inspects the one agent it is registered for, and recovers
-      nothing (ADR-0082); an agent's own certificate can do none of it. Once an
-      agent is activated, its own protected calls carry the token the
+      nothing (ADR-0082); an agent's own token can do none of it. Once
+      an agent is activated, its own protected calls carry the token the
       activation issued, and every one of them is admitted against the
       current activation and lineage when it writes, on a connection
       already open too (ADR-0080).
   - name: enrollment
     description: >-
       How the hosted Operator control service creates a managed agent
-      and obtains its first certificate (ADR-0077, ADR-0078). Creation
-      is authorized by a member's `agent:create` reference alone and
-      registers the identity, its first assignment and an execution
-      fenced from birth in one transaction; the first certificate is
-      signed over a key the controller generated and is the first of
-      that agent's credential lineage. Neither route carries a private
-      key, and a retry under the same request identifier answers what
-      the first request did rather than creating or issuing again.
+      (ADR-0077, ADR-0078). Creation is authorized by a member's
+      `agent:create` reference alone and registers the identity, its
+      first assignment, an execution fenced from birth and the
+      agent's first credential lineage in one transaction, and a retry
+      under the same request identifier answers what the first request
+      did rather than creating again.
   - name: agent-enrollment
     description: >-
       `agent-enrollment.v1`, the one admission contract both placements
@@ -142,15 +130,13 @@ tags:
       Error body.
   - name: standalone
     description: >-
-      How a standalone host's supervisor obtains its own certificate
-      and its agent's by spending an administrator's approval of the
-      host's keys, and renews its own afterwards (ADR-0082). Neither
-      route carries a private key: the host generated both keys and the
-      bootstrap secret before it asked, and a retry of the same request
-      answers what the first did. A supervisor's certificate reaches
-      `renewSupervisorCertificate`, `getIdentity`, `activateAgent`,
-      `deactivateAgent` and `introspectAgentExecution` alone; every
-      other operation answers it 403.
+      How a standalone host's supervisor obtains its credential by
+      spending an administrator's approval of the host's bootstrap
+      secret (ADR-0082, ADR-0100). A retry of the same request answers
+      what the first did. A supervisor's token reaches `getIdentity`,
+      `activateAgent`, `deactivateAgent`, `introspectAgentExecution`
+      and its own agent's `mintAgentToken` alone; every other operation
+      answers it 403.
   - name: watch
     description: >-
       What an agent is saying now, on its way to the people watching it
@@ -159,14 +145,14 @@ tags:
       garam keeps none of it, so an agent nobody watches costs nothing
       here.
 security:
-  - machineCertificate: []
+  - machineToken: []
+  - machineBearer: []
 paths:
   /identity:
     get:
       operationId: getIdentity
       tags: [identity]
       security:
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
       summary: Return the identity the connection authenticated as.
@@ -178,54 +164,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Identity'
         '401':
-          $ref: '#/components/responses/Error'
-  /identity/certificate:
-    post:
-      operationId: renewIdentityCertificate
-      tags: [identity]
-      summary: Renew the certificate the connection authenticated with.
-      description: >-
-        The successor to the certificate the caller is presenting, for
-        an operator renewing its own (ADR-0046). The route names no
-        subject: what is replaced is what the connection authenticated
-        with, so there is no other identity to ask for and nothing to
-        authorize beyond the handshake. An agent is refused here — its
-        certificate is admitted by the claim its operator made and
-        renewed on the route that admits it (ADR-0040).
-
-        Three things refuse a renewal. A certificate that has expired
-        never reaches this route, because it authenticates nothing and
-        the request carries no identity: an expired operator has no
-        certificate left to renew from, and what follows is a token to
-        enrol with (ADR-0064) or a mint out of band (ADR-0032). A
-        certificate with more than a third of its validity still to run
-        is refused as too early, under `failed_precondition`, and the
-        caller asks again closer to expiry. A certificate garam has
-        already replaced is refused as superseded, under
-        `already_exists`: either an answer this caller never received
-        took the lineage, or another holder of the same identity did,
-        and only a mint out of band recovers from it. garam has no
-        revocation, and that refusal is what keeps a renewable
-        certificate from being a permanent one.
-
-        An operator that authenticates with a token renews nothing
-        here: it exchanges an assertion signed by a key issued to it
-        with `exchangeClientAssertion` for the next token (ADR-0102).
-
-        Each call signs a new certificate and generates the private key
-        it returns once, so it is a POST rather than a GET.
-      responses:
-        '201':
-          description: Certificate issued. The one presented is now superseded.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MachineCertificate'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '409':
           $ref: '#/components/responses/Error'
   /tokens:
     post:
@@ -296,8 +234,7 @@ paths:
         The OAuth 2.0 client credentials grant authenticated by
         `private_key_jwt` (RFC 6749, RFC 7523), under
         `machine-token.v2` (ADR-0102). It is reached over the listener's
-        verified server TLS with no client certificate and no
-        `Authorization` header: what authenticates the request is the
+        verified server TLS with no `Authorization` header: what authenticates the request is the
         assertion in its body, signed by a live key of the operator
         `client_id` names. A request presenting either is
         `invalid_request`.
@@ -383,10 +320,9 @@ paths:
       operationId: mintAgentToken
       tags: [agent]
       security:
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
-      summary: Mint the token an agent authenticates with in place of a certificate.
+      summary: Mint the token an agent authenticates with.
       description: >-
         Answers a short-lived token for an agent the calling operator
         holds at the current epoch, or for the one agent a standalone
@@ -443,7 +379,6 @@ paths:
       operationId: reportProvisioningState
       tags: [agent]
       security:
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
       summary: Report what the operator sees of an agent's pod.
@@ -497,9 +432,6 @@ paths:
       operationId: reportRuntimeState
       tags: [agent]
       security:
-        - machineCertificate: []
-          executionToken: []
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
           executionHeader: []
@@ -528,15 +460,16 @@ paths:
         stops reporting stays in the state it last claimed. Silence is
         not `disconnected`, and nothing here turns one into the other.
 
-        An agent whose execution has been activated presents its
-        execution token here, and the call is admitted against the
-        current activation and credential lineage in the transaction
+        An agent presents its execution token here, which it holds once
+        its execution has been activated (ADR-0118), and the call is
+        admitted against the current activation and credential lineage
+        in the transaction
         of its own write: after a replacement, a reassignment, a
-        recovery or the certificate's expiry it is refused, on a
-        connection already open too (ADR-0080). A missing token is
-        401, one that is not current 403, and a certificate that is
-        not current, or a token presented for an agent never
-        activated, 409.
+        recovery or its agent token's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing execution
+        token is 401, one that is not current, or one presented for an
+        agent never activated, 403, and an agent token outside the
+        agent's lineage, epoch or dates 409.
       parameters:
         - $ref: '#/components/parameters/agent'
       requestBody:
@@ -563,9 +496,6 @@ paths:
       operationId: postMessage
       tags: [message]
       security:
-        - machineCertificate: []
-          executionToken: []
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
           executionHeader: []
@@ -573,7 +503,7 @@ paths:
         - machineBearer: []
       summary: Post a message to a recipient.
       description: >-
-        The sender is what the certificate names, so the body carries
+        The sender is what the token names, so the body carries
         the recipient and nothing about who is sending. garam answers
         once the message is durably stored and does not check that the
         recipient exists: rejecting a message it cannot route would
@@ -605,15 +535,16 @@ paths:
         derives from the sender's so a retried post is answered with
         the one refusal already stored.
 
-        An agent whose execution has been activated presents its
-        execution token here, and the call is admitted against the
-        current activation and credential lineage in the transaction
+        An agent presents its execution token here, which it holds once
+        its execution has been activated (ADR-0118), and the call is
+        admitted against the current activation and credential lineage
+        in the transaction
         of its own write: after a replacement, a reassignment, a
-        recovery or the certificate's expiry it is refused, on a
-        connection already open too (ADR-0080). A missing token is
-        401, one that is not current 403, and a certificate that is
-        not current, or a token presented for an agent never
-        activated, 409.
+        recovery or its agent token's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing execution
+        token is 401, one that is not current, or one presented for an
+        agent never activated, 403, and an agent token outside the
+        agent's lineage, epoch or dates 409.
       requestBody:
         required: true
         content:
@@ -640,9 +571,6 @@ paths:
       operationId: postOutboxMessage
       tags: [message]
       security:
-        - machineCertificate: []
-          executionToken: []
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
           executionHeader: []
@@ -651,7 +579,7 @@ paths:
       summary: Post a durable reply under the creation instant its outbox entry holds.
       description: >-
         The same message write as `postMessage`, reached under contract
-        `durable-delivery.v1` (ADR-0083) by a sender that retries one
+        `durable-delivery.v2` (ADR-0083) by a sender that retries one
         outbox entry under one idempotency key until garam answers. The
         body adds `createdAt`, the instant the entry was created, and
         garam stores a new message only while that instant is inside a
@@ -682,7 +610,7 @@ paths:
         The answers, each with the `Garam-Contract-Version` header:
         201 is the message the key stores, stored now or earlier, or
         the refusal. 400 `invalid_argument` is a missing or unknown
-        contract version, which names `durable-delivery.v1`, or a
+        contract version, which names `durable-delivery.v2`, or a
         malformed body, including a missing `createdAt` or one that is
         not an RFC 3339 instant. 400 `out_of_range` is a `createdAt`
         later than garam's clock: the entry is not lost, and a later
@@ -691,9 +619,9 @@ paths:
         attempt changes. 409 `already_exists` is a key that stores a
         message to another recipient, or with another body while it
         still holds one. A missing token is 401, one that is not current
-        403, and a certificate that is not current, or a token
-        presented for an agent never activated, 409 `failed_precondition`
-        (ADR-0080). A garam that predates this route answers 404, as it
+        403, as is one presented for an agent never activated, and an
+        agent token outside the agent's lineage, epoch or dates 409
+        `failed_precondition` (ADR-0080). A garam that predates this route answers 404, as it
         does any path it does not serve, and has stored nothing.
       parameters:
         - $ref: '#/components/parameters/deliveryContractVersion'
@@ -728,9 +656,6 @@ paths:
       operationId: getMessageStatus
       tags: [message]
       security:
-        - machineCertificate: []
-          executionToken: []
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
           executionHeader: []
@@ -770,15 +695,16 @@ paths:
         one this route answers, and there is nothing to track: the
         refusal arrives on the caller's own queue.
 
-        An agent whose execution has been activated presents its
-        execution token here, and the call is admitted against the
-        current activation and credential lineage in the transaction
+        An agent presents its execution token here, which it holds once
+        its execution has been activated (ADR-0118), and the call is
+        admitted against the current activation and credential lineage
+        in the transaction
         of its own write: after a replacement, a reassignment, a
-        recovery or the certificate's expiry it is refused, on a
-        connection already open too (ADR-0080). A missing token is
-        401, one that is not current 403, and a certificate that is
-        not current, or a token presented for an agent never
-        activated, 409.
+        recovery or its agent token's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing execution
+        token is 401, one that is not current, or one presented for an
+        agent never activated, 403, and an agent token outside the
+        agent's lineage, epoch or dates 409.
       parameters:
         - $ref: '#/components/parameters/message'
       responses:
@@ -834,9 +760,6 @@ paths:
       operationId: claimMessage
       tags: [message]
       security:
-        - machineCertificate: []
-          executionToken: []
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
           executionHeader: []
@@ -852,15 +775,16 @@ paths:
         nobody completes lapses and the message is handed on, up to a
         bounded number of attempts (ADR-0018).
 
-        An agent whose execution has been activated presents its
-        execution token here, and the call is admitted against the
-        current activation and credential lineage in the transaction
+        An agent presents its execution token here, which it holds once
+        its execution has been activated (ADR-0118), and the call is
+        admitted against the current activation and credential lineage
+        in the transaction
         of its own write: after a replacement, a reassignment, a
-        recovery or the certificate's expiry it is refused, on a
-        connection already open too (ADR-0080). A missing token is
-        401, one that is not current 403, and a certificate that is
-        not current, or a token presented for an agent never
-        activated, 409.
+        recovery or its agent token's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing execution
+        token is 401, one that is not current, or one presented for an
+        agent never activated, 403, and an agent token outside the
+        agent's lineage, epoch or dates 409.
       parameters:
         - $ref: '#/components/parameters/agent'
       responses:
@@ -885,9 +809,6 @@ paths:
       operationId: renewClaim
       tags: [message]
       security:
-        - machineCertificate: []
-          executionToken: []
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
           executionHeader: []
@@ -903,15 +824,16 @@ paths:
         away (ADR-0018). A claim already lapsed, handed on, or
         completed is refused.
 
-        An agent whose execution has been activated presents its
-        execution token here, and the call is admitted against the
-        current activation and credential lineage in the transaction
+        An agent presents its execution token here, which it holds once
+        its execution has been activated (ADR-0118), and the call is
+        admitted against the current activation and credential lineage
+        in the transaction
         of its own write: after a replacement, a reassignment, a
-        recovery or the certificate's expiry it is refused, on a
-        connection already open too (ADR-0080). A missing token is
-        401, one that is not current 403, and a certificate that is
-        not current, or a token presented for an agent never
-        activated, 409.
+        recovery or its agent token's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing execution
+        token is 401, one that is not current, or one presented for an
+        agent never activated, 403, and an agent token outside the
+        agent's lineage, epoch or dates 409.
       parameters:
         - $ref: '#/components/parameters/agent'
         - $ref: '#/components/parameters/claim'
@@ -935,9 +857,6 @@ paths:
       operationId: forwardTurnEvent
       tags: [watch]
       security:
-        - machineCertificate: []
-          executionToken: []
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
           executionHeader: []
@@ -962,15 +881,16 @@ paths:
         mouth, where a refused event is the gap this stream already
         permits.
 
-        An agent whose execution has been activated presents its
-        execution token here, and the call is admitted against the
-        current activation and credential lineage in the transaction
+        An agent presents its execution token here, which it holds once
+        its execution has been activated (ADR-0118), and the call is
+        admitted against the current activation and credential lineage
+        in the transaction
         of its own write: after a replacement, a reassignment, a
-        recovery or the certificate's expiry it is refused, on a
-        connection already open too (ADR-0080). A missing token is
-        401, one that is not current 403, and a certificate that is
-        not current, or a token presented for an agent never
-        activated, 409.
+        recovery or its agent token's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing execution
+        token is 401, one that is not current, or one presented for an
+        agent never activated, 403, and an agent token outside the
+        agent's lineage, epoch or dates 409.
 
         An event admitted before a replacement is announced before that
         replacement commits; when a watcher receives it is not part of
@@ -1001,9 +921,6 @@ paths:
       operationId: completeClaim
       tags: [message]
       security:
-        - machineCertificate: []
-          executionToken: []
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
           executionHeader: []
@@ -1016,15 +933,16 @@ paths:
         Completing twice reports the same delivery, because a caller
         that could not read the answer retries.
 
-        An agent whose execution has been activated presents its
-        execution token here, and the call is admitted against the
-        current activation and credential lineage in the transaction
+        An agent presents its execution token here, which it holds once
+        its execution has been activated (ADR-0118), and the call is
+        admitted against the current activation and credential lineage
+        in the transaction
         of its own write: after a replacement, a reassignment, a
-        recovery or the certificate's expiry it is refused, on a
-        connection already open too (ADR-0080). A missing token is
-        401, one that is not current 403, and a certificate that is
-        not current, or a token presented for an agent never
-        activated, 409.
+        recovery or its agent token's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing execution
+        token is 401, one that is not current, or one presented for an
+        agent never activated, 403, and an agent token outside the
+        agent's lineage, epoch or dates 409.
       parameters:
         - $ref: '#/components/parameters/agent'
         - $ref: '#/components/parameters/claim'
@@ -1044,7 +962,6 @@ paths:
       operationId: introspectOperationAuthority
       tags: [authority]
       security:
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
       summary: Read what an operation authority binds, once current state still authorizes it.
@@ -1089,7 +1006,6 @@ paths:
       operationId: checkOperationReference
       tags: [authority]
       security:
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
       summary: Recheck a durable operation reference before activating a new desired revision.
@@ -1125,49 +1041,38 @@ paths:
       operationId: introspectController
       tags: [authority]
       security:
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
       summary: Prove a controller's current authority, and an agent's placement on it, for one decision.
       description: >-
-        The calling operator is the hosted control audience and forwards
-        the controller's leaf certificate exactly as that controller
-        presented it in its own TLS handshake; garam verifies the
-        certificate and never a forwarded GRN. The answer is a positive
-        proof, and 200 is returned only when every check passes, each
-        read on this request: the caller's own certificate is still
-        within its validity and its registration is still held; the
-        forwarded certificate names `controller` in its SAN, chains to
-        the organization's authority, is within its validity, and the
-        controller is still registered; the caller's current grant
-        covers `agent:activate` for that controller; and current policy
-        for the caller and its current groups, beside an Allow of
-        `agent:activate` on the organization (or, with `agent`, on that
-        agent) that the grant contributes, does not deny it. With
-        `agent`, the agent must currently be assigned to `controller`,
-        and the answer carries that assignment's epoch, which the caller
-        compares with the epoch it expects. A session admitted without
-        an agent is not permission to release any agent's desired
-        content, status or placement: obtain the agent-bound proof
-        before each such decision, again after a long wait, and never
-        reuse one across decisions. Malformed input is 400; a
-        certificate that does not prove `controller` is 422; a
-        controller or agent that is unknown, of another organization,
-        or no longer registered is 404; any other current-authority
-        refusal — a certificate outside its validity, the caller's
-        withdrawn registration, an ended or out-of-scope grant, a Deny,
-        or an agent assigned elsewhere — is 403; and authority garam
-        cannot read as current is 503. This proves current authority as
-        of its reads and is not a transaction with the caller's store.
-
-
-        Under `operation-authority.v2` the caller presents its own token
-        and no certificate, and forwards `token` in place of
-        `certificatePem`: the token the controller exchanged its
-        credential for to be shown to the caller. It proves `controller`
-        only while it is live, names `controller`, and names the caller
-        as its audience; one that does not is 422, as a certificate that
-        does not prove `controller` is (ADR-0100).
+        The calling operator is the hosted control audience, presents
+        its own token, and forwards `token`: the token the controller
+        exchanged its credential for to be shown to the caller (ADR-0100,
+        ADR-0118). garam verifies that token and never a forwarded GRN.
+        The answer is a positive proof, and 200 is returned only when
+        every check passes, each read on this request: the caller's own
+        token is still live and its registration is still held; the
+        forwarded token is live, names `controller` and names the caller
+        as its audience, and the controller is still registered; the
+        caller's current grant covers `agent:activate` for that
+        controller; and current policy for the caller and its current
+        groups, beside an Allow of `agent:activate` on the organization
+        (or, with `agent`, on that agent) that the grant contributes,
+        does not deny it. With `agent`, the agent must currently be
+        assigned to `controller`, and the answer carries that
+        assignment's epoch, which the caller compares with the epoch it
+        expects. A session admitted without an agent is not permission
+        to release any agent's desired content, status or placement:
+        obtain the agent-bound proof before each such decision, again
+        after a long wait, and never reuse one across decisions.
+        Malformed input is 400; a token that does not prove
+        `controller` is 422; a controller or agent that is unknown, of
+        another organization, or no longer registered is 404; any other
+        current-authority refusal — the caller's withdrawn registration,
+        an ended or out-of-scope grant, a Deny, or an agent assigned
+        elsewhere — is 403; and authority garam cannot read as current
+        is 503. This proves current authority as of its reads and is
+        not a transaction with the caller's store.
       parameters:
         - $ref: '#/components/parameters/contractVersion'
         - $ref: '#/components/parameters/controller'
@@ -1202,7 +1107,6 @@ paths:
       operationId: activateAgent
       tags: [execution]
       security:
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
       summary: Admit a runtime generation of an agent, and issue the token its calls carry.
@@ -1212,21 +1116,24 @@ paths:
         before it calls. Per request, garam reads the caller's
         registration, its current grant, which must cover
         `agent:activate` for the agent's current assignee, and current
-        policy on the agent, where an explicit Deny wins. It verifies
-        `certificatePem`, the agent's leaf as the caller received it,
-        against the agent's organization authority. Then, under the
-        agent's execution lock, it rechecks the assignment, the
-        epoch, the grant's expiry, and whether that certificate is
-        current: inside its validity and in the agent's credential
-        lineage. An agent's own certificate cannot activate.
+        policy on the agent, where an explicit Deny wins. The caller
+        presents its own token and forwards `token`: the agent's token
+        its assignee minted to be shown to the caller, or, where the
+        caller is the assignee itself — a standalone host's supervisor —
+        the token it minted for garam (ADR-0100, ADR-0118). A token that
+        is neither, for this agent, is 422. Then, under the agent's
+        execution lock, garam rechecks the assignment, the epoch, the
+        grant's expiry, and whether that token is current: inside its
+        dates, minted at the agent's current assignee and epoch, and in
+        its current lineage. An agent's own token cannot activate.
 
 
         `replacesActivationId` names the agent's most recent
         activation, current or ended, and is null only before the
         first. Another value is 409, so a stale placement's replay never
         wins, and a generation already activated in the current lineage
-        is 409 too. After the first activation, every call offering
-        `executionToken` requires the token.
+        is 409 too. Every call offering `executionHeader` requires the
+        token the current activation issued.
 
 
         `operationRef` is null for the revision the runtime last
@@ -1252,17 +1159,6 @@ paths:
         activation that has ended, is 409. Past garam's ten-second
         deadline the answer is 503, which does not say whether the
         activation committed: retry it under the same `requestId`.
-
-
-        Under `execution-fence.v2` the caller presents its own token and
-        no certificate, and forwards `token` in place of
-        `certificatePem`: the agent's token its assignee minted to be
-        shown to the caller, or, where the caller is the assignee
-        itself — a standalone host's supervisor — the token it minted
-        for garam. A token that is neither, for this agent, is 422. The fence judges it as it judges a
-        certificate: current while inside its dates, minted at the
-        agent's current assignee and epoch, and in its current lineage
-        (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1308,7 +1204,6 @@ paths:
       operationId: deactivateAgent
       tags: [execution]
       security:
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
       summary: End an activation of an agent, if it is still the current one.
@@ -1346,28 +1241,23 @@ paths:
       operationId: introspectAgentExecution
       tags: [execution]
       security:
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
-      summary: Ask whether an agent certificate and a generation are current, together.
+      summary: Ask whether an agent token and a generation are current, together.
       description: >-
-        Authorized as `activateAgent` is, on every call. `certificatePem`
-        is the agent's leaf as the caller received it; a leaf that does
-        not chain to the agent's organization authority or names
-        another identity is 422. One that does is answered `current`
-        only if it is inside its validity now and in the agent's
-        credential lineage, and `fenced` otherwise, including when it
-        has expired. The answer is read from one snapshot, so its parts
-        were current together. Ask per decision, never per connection.
-
-
-        Under `execution-fence.v2` `token` replaces `certificatePem` as
-        `activateAgent` describes. A token of an earlier epoch or
+        Authorized as `activateAgent` is, on every call, and `token` is
+        what `activateAgent` forwards. A token that is neither the one
+        the assignee minted to be shown to the caller nor the
+        assignee's own for garam, for this agent, is 422. One that is
+        is answered `current` only if it is inside its dates, minted at
+        the agent's current assignee and epoch, and in its current
+        lineage, and `fenced` otherwise: a token of an earlier epoch or
         lineage, or one that has expired, is answered `fenced` while
-        garam still holds its row, and 422 once the row is gone: a mint
-        deletes the agent's expired tokens and keeps its newest five
-        per audience. Either answer means the token may not act
-        (ADR-0100).
+        garam still holds its row, and 422 once the row is gone, since a
+        mint deletes the agent's expired tokens and keeps its newest
+        five per audience. Either answer means the token may not act
+        (ADR-0100). The answer is read from one snapshot, so its parts
+        were current together. Ask per decision, never per connection.
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1379,7 +1269,7 @@ paths:
               $ref: '#/components/schemas/ExecutionIntrospectionRequest'
       responses:
         '200':
-          description: The certificate's and the generation's standing.
+          description: The token's and the generation's standing.
           headers:
             Garam-Contract-Version:
               $ref: '#/components/headers/ExecutionContractVersion'
@@ -1402,8 +1292,6 @@ paths:
       operationId: recoverAgentCredential
       tags: [execution]
       security:
-        - machineCertificate: []
-          operationAuthority: []
         - machineToken: []
         - machineBearer: []
           operationHeader: []
@@ -1417,31 +1305,23 @@ paths:
         must bind this caller, this agent and its current assignment,
         and the SHA-256 of the received body must equal its digest, or
         the request is refused with 409 and the handoff is not spent.
-        The certificate is signed over `certificateRequestPem`'s key,
-        which never leaves the holder, and the answer names the
-        authority that signed it and the garam server root, so the
-        holder verifies the recovered credential from the answer alone.
+        The caller presents its own token, and the handoff travels in a
+        `Garam-Operation` header of its own. Nothing is signed, and the
+        answer names `grn` and the new `lineage` alone (ADR-0100,
+        ADR-0118).
 
 
         The recovery ends the current activation and starts a new
-        lineage: every certificate the agent held before stops
-        authorizing protected calls and renewal, on connections already
-        open too. The runtime is then activated again, and may keep its
-        generation. The same `requestId` with the same body and handoff
-        reference answers the certificate it issued and its chain; any
-        other request under that `requestId`, or a second recovery with
-        the same reference, is 409. Past garam's ten-second deadline the
-        answer is 503, which does not say whether the recovery
-        committed: retry it under the same `requestId`.
-
-
-        Under `execution-fence.v2` the caller presents its own token,
-        and the handoff travels in a `Garam-Operation` header of its
-        own. The body carries `requestId` and `epoch` and no
-        `certificateRequestPem`: nothing is signed, and the answer names
-        `grn` and the new `lineage` alone. Every agent token minted
-        before it is refused from the next request, and the assignee
-        mints the agent's tokens in the new lineage (ADR-0100).
+        lineage: every agent token minted before it is refused from the
+        next request, on connections already open too, and the assignee
+        mints the agent's tokens in the new lineage. The runtime is then
+        activated again, and may keep its generation. The same
+        `requestId` with the same body and handoff reference answers the
+        recovery it recorded; any other request under that `requestId`,
+        or a second recovery with the same reference, is 409. Past
+        garam's ten-second deadline the answer is 503, which does not
+        say whether the recovery committed: retry it under the same
+        `requestId`.
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1453,7 +1333,7 @@ paths:
               $ref: '#/components/schemas/CredentialRecoveryRequest'
       responses:
         '201':
-          description: The recovered certificate, the first time or again.
+          description: The recovered lineage, the first time or again.
           headers:
             Garam-Contract-Version:
               $ref: '#/components/headers/ExecutionContractVersion'
@@ -1476,7 +1356,6 @@ paths:
       operationId: createManagedAgent
       tags: [enrollment]
       security:
-        - machineCertificate: []
         - machineToken: []
         - machineBearer: []
       summary: Create an agent assigned to a controller, under a member's agent:create reference.
@@ -1496,10 +1375,9 @@ paths:
         garam mints the GRN and writes the agent, its first assignment
         to `controller` and its execution in one transaction, so a
         failure leaves no agent behind. The execution is fenced from
-        birth with no active generation and in a credential lineage
-        holding no certificate, so no certificate of the agent
-        authorizes anything until `issueInitialCertificate` records
-        the first one.
+        birth with no active generation, and creation opens the agent's
+        credential lineage, in which the controller then mints the
+        agent's tokens with `mintAgentToken` (ADR-0100, ADR-0118).
 
 
         The first answer is 201. The same `operationRef` and
@@ -1514,13 +1392,6 @@ paths:
         another audience's; a reference of another kind is 403, and so
         is one current state no longer authorizes. Authority garam
         cannot read as current is 503.
-
-
-        Under `managed-enrollment.v2` the caller presents its own token
-        and no certificate; nothing else changes. Creation opens the
-        agent's lineage under either value, and under v2 the controller
-        mints the agent's tokens in it with `mintAgentToken` instead of
-        `issueInitialCertificate`, which takes no token (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/enrollmentContractVersion'
         - $ref: '#/components/parameters/controller'
@@ -1559,121 +1430,44 @@ paths:
           $ref: '#/components/responses/EnrollmentContractError'
         '409':
           $ref: '#/components/responses/EnrollmentContractError'
-  /agents/{agent}/initial-certificate:
-    post:
-      operationId: issueInitialCertificate
-      tags: [enrollment]
-      summary: Sign a managed agent's first certificate over the key its controller generated.
-      description: >-
-        For an agent `createManagedAgent` made. Authorized as
-        `activateAgent` is, on every call, and also by `operationRef`,
-        which must be the `agent:create` reference of this agent's own
-        creation, rechecked as current; a reference of another agent's
-        creation, on the same controller too, is 403. The agent must
-        still be assigned where its creation put it, at `epoch`.
-
-
-        It takes a certificate and no token: a token is 401. A
-        controller that created the agent under `managed-enrollment.v2`
-        asks nothing here, and mints the agent's tokens with
-        `mintAgentToken` instead (ADR-0100).
-
-
-        The certificate is signed over `certificateRequestPem`'s key,
-        which never leaves the controller. garam reads the key alone:
-        the request's subject, SAN and extension requests are ignored,
-        and the certificate names the agent's GRN as its one SAN URI
-        for client authentication. A request that is not one PEM
-        `CERTIFICATE REQUEST` proving possession of an ECDSA P-256 key
-        is 422. Signing happens before the agent's execution lock;
-        under it garam rechecks the assignment, the epoch and the
-        grant's expiry, and records the certificate as the first of the
-        agent's lineage. From then on that certificate, and the ones it
-        renews into, are the agent's current credential; no other
-        certificate naming the agent is.
-
-
-        The first answer is 201. The same `requestId`, `operationRef`,
-        `epoch` and `certificateRequestPem` answer exactly the stored
-        public result with 200, even after the reference's short token
-        has expired, while current authority still permits it; a lost
-        answer never issues a second effective certificate. Any other
-        request once one is recorded is 409, and so is every request,
-        identical ones included, once `recoverAgentCredential` has
-        replaced the lineage: recovery, not this route, replaces a lost
-        credential. A stale `epoch` is 409. Authority garam cannot read
-        as current is 503.
-      parameters:
-        - $ref: '#/components/parameters/enrollmentContractVersion'
-        - $ref: '#/components/parameters/agent'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/InitialCertificateRequest'
-      responses:
-        '200':
-          description: The certificate an identical earlier request issued.
-          headers:
-            Garam-Contract-Version:
-              $ref: '#/components/headers/EnrollmentContractVersion'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InitialCertificate'
-        '201':
-          description: The agent's first certificate.
-          headers:
-            Garam-Contract-Version:
-              $ref: '#/components/headers/EnrollmentContractVersion'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InitialCertificate'
-        '400':
-          $ref: '#/components/responses/EnrollmentContractError'
-        '401':
-          $ref: '#/components/responses/EnrollmentContractError'
-        '403':
-          $ref: '#/components/responses/EnrollmentContractError'
-        '404':
-          $ref: '#/components/responses/EnrollmentContractError'
-        '409':
-          $ref: '#/components/responses/EnrollmentContractError'
-        '422':
-          $ref: '#/components/responses/EnrollmentContractError'
   /agent-enrollments:
     post:
       operationId: enrollStandaloneAgent
       tags: [standalone]
-      summary: Spend an administrator's approval and obtain a supervisor's credential, or its and its agent's first certificates.
+      summary: Spend an administrator's approval and obtain a supervisor's credential.
       description: >-
         Authenticated by `Authorization: Garam-Bootstrap <secret>`,
         whose SHA-256 an administrator approved with
-        `approveAgentEnrollment` together with the two key fingerprints
-        and `requestId` this body carries; no client certificate is
-        read. An unknown, withdrawn or expired secret, and one of
-        another organization's approval, are one 401. Each certificate
-        request must prove possession of the key whose fingerprint was
-        approved, or the call is 403 and spends nothing; one that is not
-        a PEM `CERTIFICATE REQUEST` proving an ECDSA P-256 key is 422.
-        The approving administrator's `agent:enroll` is read again from
-        current state on every call: denied is 403, and authority garam
-        cannot read as current is 503.
+        `approveAgentEnrollment` together with the `requestId` this body
+        carries. An unknown, withdrawn or expired secret, and one of
+        another organization's approval, are one 401. The approving
+        administrator's `agent:enroll` is read again from current state
+        on every call: denied is 403, and authority garam cannot read as
+        current is 503.
 
 
         A new agent is created with an execution fenced from birth,
-        assigned to the supervisor at epoch 1, and its certificate is
-        the first of its credential lineage. A replacement moves the
-        agent from exactly the supervisor and epoch the approval named
-        to the new supervisor at the next epoch, ends the replaced
-        registration and the agent's activation, and starts a new
-        lineage holding the new certificate, so every earlier
-        certificate of the agent is fenced; the agent's GRN is
-        unchanged and garam holds none of its memory. Where the
-        assignment has moved since the approval, the call is 409 and
-        writes nothing.
+        assigned to the supervisor at epoch 1, in a new credential
+        lineage. A replacement moves the agent from exactly the
+        supervisor and epoch the approval named to the new supervisor at
+        the next epoch, ends the replaced registration and the agent's
+        activation, and starts a new lineage, so every earlier token of
+        the agent is fenced; the agent's GRN is unchanged and garam
+        holds none of its memory. Where the assignment has moved since
+        the approval, the call is 409 and writes nothing.
+
+
+        Nothing is signed. The supervisor is registered, and the answer
+        names `credential`, the supervisor's credential, beside the
+        agent, the supervisor, the epoch, the lineage and the garam
+        server root (ADR-0100, ADR-0118). garam stores the credential's
+        hash alone, so an identical retry while the registration still
+        holds the agent re-issues it: the credential answered before,
+        and every token it was exchanged for, is refused from then on.
+        The supervisor exchanges the credential for hour-long tokens
+        with `exchangeToken`, mints its agent's tokens with
+        `mintAgentToken`, and presents its token on the execution routes
+        it holds authority on.
 
 
         The first answer is 201. The same secret and the same exact
@@ -1684,30 +1478,11 @@ paths:
         nothing. Any other body once the approval is spent is 409.
 
 
-        Under `standalone-enrollment.v2` the approval binds no key and
-        the body carries `requestId` alone. Nothing is signed: the agent
-        is placed as above, the supervisor is registered holding no
-        certificate, and the answer names `credential`, the supervisor's
-        credential, beside the agent, the supervisor, the epoch, the
-        lineage and the garam server root. garam stores the credential's
-        hash alone, so an identical retry while the registration still
-        holds the agent re-issues it: the credential answered before,
-        and every token it was exchanged for, is refused from then on.
-        The supervisor exchanges the credential for hour-long tokens
-        with `exchangeToken`, mints its agent's tokens with
-        `mintAgentToken`, and presents its token on the execution routes
-        it holds authority on. An approval binding the host's keys is
-        spent under v1 alone and one binding none under v2 alone;
-        spending either under the other value is 400 and spends nothing
-        (ADR-0100).
-
-
         The answer names the `placement` the administrator approved.
         `standalone` is a host whose supervisor starts the runtime, its
         workspace and the adapter as three containers (ADR-0085).
         `direct` is a host whose supervisor attaches to a runtime
-        already running there and starts nothing (ADR-0111); its
-        approval binds no key, so it is spent under v2 alone. garam
+        already running there and starts nothing (ADR-0111). garam
         places, registers and fences both alike.
       security: []
       parameters:
@@ -1729,7 +1504,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/StandaloneEnrollment'
         '201':
-          description: The supervisor is registered and both certificates are issued.
+          description: The supervisor is registered and its credential answered.
           headers:
             Garam-Contract-Version:
               $ref: '#/components/headers/StandaloneContractVersion'
@@ -1747,75 +1522,6 @@ paths:
           $ref: '#/components/responses/StandaloneContractError'
         '422':
           $ref: '#/components/responses/StandaloneContractError'
-  /supervisors/self/certificate:
-    post:
-      operationId: renewSupervisorCertificate
-      tags: [standalone]
-      summary: Renew the calling supervisor's certificate over a key it generated.
-      description: >-
-        The caller is a supervisor, presenting the certificate garam
-        last issued it with more than two thirds of its validity spent;
-        an earlier one is 409 as too early, and a caller that is not a
-        supervisor is 403. The new certificate is signed over the key
-        `certificateRequestPem` proves, with the lifetime every
-        certificate garam issues has, and becomes the one renewals are
-        measured against.
-
-
-        The first answer is 201. The certificate that renewal replaced,
-        presented again with the same `requestId` and
-        `certificateRequestPem` while still valid, answers the stored
-        public result with 200, so a lost answer or a restart never
-        strands the supervisor. Any other request from it, and any
-        request from an older certificate, is 409. A supervisor whose
-        registration was revoked or replaced is refused at the
-        connection, and an expired certificate cannot connect: both
-        recover only by an administrator's new approval.
-
-
-        A supervisor `enrollStandaloneAgent` registered under
-        `standalone-enrollment.v2` holds no certificate to renew: it
-        exchanges its credential for tokens with `exchangeToken`
-        (ADR-0100).
-      parameters:
-        - $ref: '#/components/parameters/standaloneContractVersion'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SupervisorRenewalRequest'
-      responses:
-        '200':
-          description: The certificate an identical earlier renewal issued.
-          headers:
-            Garam-Contract-Version:
-              $ref: '#/components/headers/StandaloneContractVersion'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InitialCertificate'
-        '201':
-          description: The supervisor's next certificate.
-          headers:
-            Garam-Contract-Version:
-              $ref: '#/components/headers/StandaloneContractVersion'
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InitialCertificate'
-        '400':
-          $ref: '#/components/responses/StandaloneContractError'
-        '401':
-          $ref: '#/components/responses/StandaloneContractError'
-        '403':
-          $ref: '#/components/responses/StandaloneContractError'
-        '404':
-          $ref: '#/components/responses/StandaloneContractError'
-        '409':
-          $ref: '#/components/responses/StandaloneContractError'
-        '422':
-          $ref: '#/components/responses/StandaloneContractError'
   /agent-enrollment-approvals:
     post:
       operationId: prepareAgentEnrollment
@@ -1827,7 +1533,7 @@ paths:
       description: >-
         The first of the contract's three stages (ADR-0102). The caller
         is the hosted Operator control service and presents its own
-        token; a certificate is 401. It binds one approval to its
+        token. It binds one approval to its
         organization, `requestId`, `placement`, `assignee` and the
         member's `agent:create` reference, rechecked from current state
         as `createManagedAgent` rechecks it: an `agent:create`
@@ -1917,8 +1623,7 @@ paths:
       summary: Admit the agent an approval binds, fenced and with no active generation.
       description: >-
         The second stage. The caller is the approval's own audience and
-        repeats the binding it prepared; a certificate is 401, and an
-        approval of another organization or another audience is 404.
+        repeats the binding it prepared, and an approval of another organization or another audience is 404.
         garam rechecks the reference from current state as
         `prepareAgentEnrollment` does, mints the agent's GRN and writes
         the agent, its first assignment to `assignee` and its execution
@@ -2024,10 +1729,8 @@ components:
       in: header
       required: true
       description: >-
-        `standalone-enrollment.v1` or, on `enrollStandaloneAgent`,
-        `standalone-enrollment.v2` (ADR-0100); any other value is refused
-        with 400 naming what the route serves. `renewSupervisorCertificate`
-        takes no v2 value.
+        `standalone-enrollment.v2` (ADR-0100, ADR-0118); any other value
+        is refused with 400 naming it.
       x-go-name: StandaloneContractVersion
       schema:
         type: string
@@ -2036,12 +1739,8 @@ components:
       in: header
       required: true
       description: >-
-        `managed-enrollment.v1` where the caller presents a certificate
-        and, on `createManagedAgent`, `managed-enrollment.v2` where it
-        presents a token (ADR-0100); any other value, or one that
-        disagrees with the credential, is refused with 400 naming the
-        value the credential takes. `issueInitialCertificate` takes no
-        token and no v2 value.
+        `managed-enrollment.v2` (ADR-0100, ADR-0118); any other value is
+        refused with 400 naming it.
       x-go-name: EnrollmentContractVersion
       schema:
         type: string
@@ -2058,11 +1757,8 @@ components:
       in: header
       required: true
       description: >-
-        `durable-delivery.v1` where the caller presents a certificate and
-        `durable-delivery.v2` where it presents an agent token (ADR-0083,
-        ADR-0100); any other value, or one that disagrees with the
-        credential, is refused with 400 naming the value the credential
-        takes.
+        `durable-delivery.v2` (ADR-0083, ADR-0100, ADR-0118); any other
+        value is refused with 400 naming it.
       x-go-name: DeliveryContractVersion
       schema:
         type: string
@@ -2071,10 +1767,8 @@ components:
       in: header
       required: true
       description: >-
-        `execution-fence.v1` where the caller presents a certificate and
-        `execution-fence.v2` where it presents a token (ADR-0100); any other
-        value, or one that disagrees with the credential, is refused
-        with 400 naming the value the credential takes.
+        `execution-fence.v2` (ADR-0100, ADR-0118); any other value is
+        refused with 400 naming it.
       x-go-name: ExecutionContractVersion
       schema:
         type: string
@@ -2091,10 +1785,8 @@ components:
       in: header
       required: true
       description: >-
-        `operation-authority.v1` where the caller presents a certificate and
-        `operation-authority.v2` where it presents a token (ADR-0079, ADR-0100); any other
-        value, or one that disagrees with the credential, is refused
-        with 400 naming the value the credential takes.
+        `operation-authority.v2` (ADR-0079, ADR-0100, ADR-0118); any
+        other value is refused with 400 naming it.
       x-go-name: ContractVersion
       schema:
         type: string
@@ -2268,7 +1960,7 @@ components:
           enum: [invalid_request, invalid_client, unsupported_grant_type, invalid_scope, temporarily_unavailable, server_error]
           description: >-
             `invalid_request` for a malformed or repeated parameter, a
-            client certificate or `Authorization` header, or an audience
+            `Authorization` header, or an audience
             that is not another operator of the organization;
             `invalid_client` for an assertion that authenticates no
             operator; `unsupported_grant_type` for a grant other than
@@ -2324,50 +2016,9 @@ components:
         serverRootPem:
           type: string
           description: The garam server root the holder verifies garam by (ADR-0040).
-    MachineCertificate:
-      type: object
-      description: >-
-        A client certificate, the private key it was issued with, the
-        authority that signed it, and the garam server root the holder
-        verifies garam by. garam stores no private key, so this one is
-        returned once and a holder that loses it asks for another
-        certificate. One shape for both routes that generate a key pair:
-        what an agent is given and what an operator renews differ in who
-        may ask, not in what comes back.
-      required: [grn, certificatePem, privateKeyPem, issuerPem, serverRootPem, notAfter]
-      properties:
-        grn:
-          type: string
-          description: >-
-            The identity the certificate names, which is also what its
-            SAN URI holds.
-          example: grn:acme:default:agent:0a1b2c3d4e5f6071
-        certificatePem:
-          type: string
-        privateKeyPem:
-          type: string
-        issuerPem:
-          type: string
-          description: >-
-            The authority that signed this certificate. It is not what
-            garam is verified against: the two directions rest on
-            different roots (ADR-0040).
-        serverRootPem:
-          type: string
-          description: >-
-            The garam server root. A holder verifies garam's listener
-            against this and against nothing else — one root for every
-            organization, separate from the authority above and signing
-            only what garam presents (ADR-0040).
-        notAfter:
-          type: string
-          format: date-time
-          description: >-
-            When the certificate stops being valid. It carries jitter,
-            so certificates issued together do not expire together.
     MessageSubmission:
       type: object
-      description: What a sender supplies. Who is sending is the certificate's to say.
+      description: What a sender supplies. Who is sending is the token's to say.
       required: [recipient, idempotencyKey, body]
       properties:
         recipient:
@@ -2398,7 +2049,7 @@ components:
       type: object
       description: >-
         What a sender supplies for one outbox entry. Who is sending is
-        the certificate's to say.
+        the token's to say.
       required: [recipient, idempotencyKey, body, createdAt]
       properties:
         recipient:
@@ -2692,22 +2343,15 @@ components:
           description: Opaque.
     ControllerIntrospection:
       type: object
+      required: [token]
       properties:
-        certificatePem:
-          type: string
-          description: >-
-            Under `operation-authority.v1`, the controller's leaf
-            certificate in PEM form, exactly as the controller presented
-            it in its TLS handshake with the caller. Required there, and
-            refused under `operation-authority.v2`.
         token:
           type: string
           pattern: '^garam_ot_[0-9a-f]{64}$'
           description: >-
-            Under `operation-authority.v2`, the token the controller
-            exchanged its credential for to be shown to the caller,
-            exactly as the controller presented it (ADR-0100). Required
-            there, and refused under `operation-authority.v1`.
+            The token the controller exchanged its credential for to be
+            shown to the caller, exactly as the controller presented it
+            (ADR-0100).
         agent:
           type: [string, 'null']
           description: >-
@@ -2739,7 +2383,7 @@ components:
           description: The current assignment's epoch. Opaque; compare it for equality only.
     ActivationRequest:
       type: object
-      required: [requestId, epoch, generation, replacesActivationId, operationRef]
+      required: [requestId, epoch, generation, replacesActivationId, operationRef, token]
       properties:
         requestId:
           type: string
@@ -2760,23 +2404,14 @@ components:
             A durable `agent:configure` reference for a pending
             revision, or a managed agent's own `agent:create` reference
             for its first activation; null otherwise.
-        certificatePem:
-          type: string
-          maxLength: 8192
-          description: >-
-            Under `execution-fence.v1`, the agent's leaf certificate in
-            PEM form, exactly as the agent presented it to the caller.
-            Required there, and refused under `execution-fence.v2`.
         token:
           type: string
           pattern: '^garam_at_[0-9a-f]{64}$'
           description: >-
-            Under `execution-fence.v2`, the agent's token its assignee
-            minted to be shown to the caller, or, where the caller is
-            the assignee itself — a standalone host's supervisor — the
-            token it minted for garam, exactly as the agent presented it
-            (ADR-0100). Required there, and refused under
-            `execution-fence.v1`.
+            The agent's token its assignee minted to be shown to the
+            caller, or, where the caller is the assignee itself — a
+            standalone host's supervisor — the token it minted for garam,
+            exactly as the agent presented it (ADR-0100).
     Activation:
       type: object
       required: [activationId, token, tokenVersion, grn, epoch, generation, lineage]
@@ -2801,27 +2436,19 @@ components:
           type: string
         lineage:
           type: [string, 'null']
-          description: The credential lineage checked, null for the certificates issued before any recovery.
+          description: The credential lineage checked.
     ExecutionIntrospectionRequest:
       type: object
+      required: [token]
       properties:
-        certificatePem:
-          type: string
-          maxLength: 8192
-          description: >-
-            Under `execution-fence.v1`, the agent's leaf certificate in
-            PEM form, exactly as the agent presented it to the caller.
-            Required there, and refused under `execution-fence.v2`.
         token:
           type: string
           pattern: '^garam_at_[0-9a-f]{64}$'
           description: >-
-            Under `execution-fence.v2`, the agent's token its assignee
-            minted to be shown to the caller, or, where the caller is
-            the assignee itself — a standalone host's supervisor — the
-            token it minted for garam, exactly as the agent presented it
-            (ADR-0100). Required there, and refused under
-            `execution-fence.v1`.
+            The agent's token its assignee minted to be shown to the
+            caller, or, where the caller is the assignee itself — a
+            standalone host's supervisor — the token it minted for garam,
+            exactly as the agent presented it (ADR-0100).
         generation:
           type: [string, 'null']
           description: A generation to compare with the active one.
@@ -2862,41 +2489,17 @@ components:
         epoch:
           type: string
           description: The assignment's epoch the caller expects. Opaque.
-        certificateRequestPem:
-          type: string
-          maxLength: 4096
-          description: >-
-            Under `execution-fence.v1`, a PEM-encoded PKCS#10 request
-            over an ECDSA P-256 key the holder generated; only its key is
-            read. Required there, and refused under `execution-fence.v2`,
-            whose recovery signs nothing: the assignee mints the agent's
-            tokens in the new lineage (ADR-0100).
     RecoveredCredential:
       type: object
       description: >-
-        The agent and its new lineage. Under `execution-fence.v1` it adds
-        the recovered certificate, the authority that signed it and the
-        garam server root the holder verifies garam by, and carries no
-        private key; under `execution-fence.v2` it carries none of the
-        three (ADR-0100).
+        The agent and its new lineage; the assignee mints the agent's
+        tokens in it (ADR-0100).
       required: [grn, lineage]
       properties:
         grn:
           type: string
         lineage:
           type: string
-        certificatePem:
-          type: string
-        issuerPem:
-          type: string
-          description: >-
-            The authority that signed `certificatePem`. It is not what
-            garam is verified against (ADR-0040).
-        serverRootPem:
-          type: string
-          description: >-
-            The garam server root the recovered credential trusts, which
-            the holder verifies garam's listener against (ADR-0040).
     AgentEnrollmentBinding:
       type: object
       required: [requestId, placement, assignee, operationRef]
@@ -3005,25 +2608,6 @@ components:
         epoch:
           type: string
           description: The first assignment's epoch. Opaque.
-    InitialCertificateRequest:
-      type: object
-      required: [requestId, epoch, certificateRequestPem, operationRef]
-      properties:
-        requestId:
-          type: string
-          pattern: '^[A-Za-z0-9._~-]{1,128}$'
-        epoch:
-          type: string
-          description: The assignment's epoch the caller expects. Opaque.
-        certificateRequestPem:
-          type: string
-          maxLength: 4096
-          description: >-
-            One PEM-encoded PKCS#10 request over an ECDSA P-256 key the
-            controller generated. Only its key is read.
-        operationRef:
-          type: string
-          description: The `agent:create` reference of this agent's creation.
     StandaloneEnrollmentRequest:
       type: object
       required: [requestId]
@@ -3031,28 +2615,12 @@ components:
         requestId:
           type: string
           description: The identifier the host chose and the administrator approved.
-        supervisorCertificateRequestPem:
-          type: string
-          maxLength: 4096
-          description: >-
-            A PKCS#10 request over the supervisor key whose fingerprint was
-            approved. Required under `standalone-enrollment.v1`, and
-            refused under v2.
-        agentCertificateRequestPem:
-          type: string
-          maxLength: 4096
-          description: >-
-            A PKCS#10 request over the agent key whose fingerprint was
-            approved. Required under `standalone-enrollment.v1`, and
-            refused under v2.
     StandaloneEnrollment:
       type: object
       description: >-
-        What an enrollment issued and the garam server root the host
-        verifies garam by: under `standalone-enrollment.v1` both
-        certificates and the authority that signed them, carrying no
-        private key; under v2 the supervisor's credential (ADR-0100).
-      required: [grn, supervisorGrn, epoch, lineage, serverRootPem, placement]
+        The supervisor's credential and the garam server root the host
+        verifies garam by (ADR-0100).
+      required: [grn, supervisorGrn, epoch, lineage, credential, serverRootPem, placement]
       properties:
         grn:
           type: string
@@ -3065,24 +2633,12 @@ components:
         lineage:
           type: string
           format: uuid
-        supervisorCertificatePem:
-          type: string
-          description: Under `standalone-enrollment.v1` alone.
-        agentCertificatePem:
-          type: string
-          description: Under `standalone-enrollment.v1` alone.
-        issuerPem:
-          type: string
-          description: >-
-            The authority that signed both, under
-            `standalone-enrollment.v1` alone. It is not what garam is
-            verified against (ADR-0040).
         credential:
           type: string
           description: >-
-            Under `standalone-enrollment.v2` alone: the supervisor's
-            credential, prefixed `garam_sc_`, answered by this call alone.
-            garam stores only its hash, and a retry re-issues it.
+            The supervisor's credential, prefixed `garam_sc_`, answered by
+            this call alone. garam stores only its hash, and a retry
+            re-issues it.
         serverRootPem:
           type: string
           description: The garam server root, which the host verifies garam's listener against (ADR-0040).
@@ -3105,37 +2661,6 @@ components:
             whose supervisor has never activated has no other way to
             learn it. A replay answers the same one. Absent for a new
             agent and for an agent never activated.
-    SupervisorRenewalRequest:
-      type: object
-      required: [requestId, certificateRequestPem]
-      properties:
-        requestId:
-          type: string
-        certificateRequestPem:
-          type: string
-          maxLength: 4096
-    InitialCertificate:
-      type: object
-      description: >-
-        A managed agent's first certificate, the authority that signed
-        it and the garam server root the holder verifies garam by. It
-        carries no private key: the key stays where it was generated.
-      required: [certificatePem, issuerPem, serverRootPem, notAfter]
-      properties:
-        certificatePem:
-          type: string
-        issuerPem:
-          type: string
-          description: >-
-            The authority that signed this certificate. It is not what
-            garam is verified against (ADR-0040).
-        serverRootPem:
-          type: string
-          description: The garam server root, which the holder verifies garam's listener against (ADR-0040).
-        notAfter:
-          type: string
-          format: date-time
-          description: When the certificate stops being valid.
     Error:
       type: object
       required: [kind, message]
@@ -3185,32 +2710,27 @@ components:
         type: string
     StandaloneContractVersion:
       description: >-
-        The contract version this answer follows: `standalone-enrollment.v1`
-        or `standalone-enrollment.v2`, as the request named.
+        The contract version this answer follows: `standalone-enrollment.v2`.
       schema:
         type: string
     EnrollmentContractVersion:
       description: >-
-        The contract version this answer follows: `managed-enrollment.v1` or
-        `managed-enrollment.v2`, as the request's credential takes.
+        The contract version this answer follows: `managed-enrollment.v2`.
       schema:
         type: string
     DeliveryContractVersion:
       description: >-
-        The contract version this answer follows: `durable-delivery.v1`
-        or `durable-delivery.v2`, as the request's credential takes.
+        The contract version this answer follows: `durable-delivery.v2`.
       schema:
         type: string
     ExecutionContractVersion:
       description: >-
-        The contract version this answer follows: `execution-fence.v1` or
-        `execution-fence.v2`, as the request's credential takes.
+        The contract version this answer follows: `execution-fence.v2`.
       schema:
         type: string
     ContractVersion:
       description: >-
-        The contract version this answer follows: `operation-authority.v1` or
-        `operation-authority.v2`, as the request's credential takes.
+        The contract version this answer follows: `operation-authority.v2`.
       schema:
         type: string
   responses:
@@ -3299,8 +2819,7 @@ components:
       description: >-
         A token `exchangeToken`, `exchangeClientAssertion` or
         `mintAgentToken` answered, as
-        `Authorization: Garam-Token <token>`, presented without a client
-        certificate (ADR-0100). The listener reads the token's row joined
+        `Authorization: Garam-Token <token>` (ADR-0100). The listener reads the token's row joined
         to what it rests on for every request — an operator's
         registration, an agent's assignment and lineage — so a token
         whose operator was deleted or whose credential was re-issued,
@@ -3314,8 +2833,7 @@ components:
       description: >-
         The same token `machineToken` carries, as `Authorization: Bearer
         <token>` (ADR-0102, RFC 6750): resolved by the same read, held
-        to the same operations, contract values and refusals, and never
-        read as a certificate when it proves nothing. The scheme name
+        to the same operations, contract values and refusals. The scheme name
         matches case-insensitively.
     executionHeader:
       type: apiKey
@@ -3324,8 +2842,11 @@ components:
       description: >-
         The token an activation issued, in a header of its own, on a
         request whose `Authorization` carries an agent token
-        (`machineToken`), which takes that header (ADR-0100). It means
-        what `executionToken` means beside a certificate.
+        (`machineToken`), which takes that header (ADR-0100). An agent
+        whose execution has been activated presents it on every call
+        that offers this scheme, and is refused without it; one never
+        activated is refused on every such call (ADR-0118). garam stores
+        only its hash.
     machineCredential:
       type: http
       scheme: Garam-Credential
@@ -3334,16 +2855,6 @@ components:
         `Authorization: Garam-Credential <credential>`, which
         `exchangeToken` alone accepts (ADR-0100). Its enrollment
         answers it once, and garam stores only its hash.
-    executionToken:
-      type: http
-      scheme: Garam-Execution
-      description: >-
-        The token an activation issued, as `Authorization:
-        Garam-Execution <token>` beside the client certificate. An agent
-        whose execution has been activated presents it on every call
-        that offers this scheme, and is refused without it; one never
-        activated presents none, and is refused with one. garam stores
-        only its hash.
     operationHeader:
       type: apiKey
       in: header
@@ -3351,17 +2862,5 @@ components:
       description: >-
         What `operationAuthority` carries, in a header of its own, on a
         request whose `Authorization` carries a token (`machineToken`),
-        which takes that header (ADR-0100). It means what
-        `operationAuthority` means beside a certificate.
-    operationAuthority:
-      type: http
-      scheme: Garam-Operation
-      description: >-
-        A user's handoff for one operation, as `Authorization:
-        Garam-Operation <authority>` beside the client certificate. It
-        is minted for the exact request body it accompanies.
-    machineCertificate:
-      type: mutualTLS
-      description: >-
-        The client certificate the listener requires. Its SAN URI holds
-        the caller's GRN and nothing else — no roles and no claims.
+        which takes that header (ADR-0100): a user's handoff for one
+        operation, minted for the exact request body it accompanies.

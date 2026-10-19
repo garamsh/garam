@@ -63,10 +63,9 @@ func TestNewRootCommand_AFailureWhileRunningPrintsNoUsage(t *testing.T) {
 // runs before that check and would take this block away.
 func TestNewRootCommand_AUsageErrorStillPrintsUsage(t *testing.T) {
 	tests := map[string][]string{
-		"a flag that does not exist":  {"migrate", "--bogus"},
-		"an argument that is missing": {"issue-certificate"},
-		"a required flag that is not set": {
-			"issue-certificate", "grn:acme:default:operator:one"},
+		"a flag that does not exist":      {"migrate", "--bogus"},
+		"an argument that is missing":     {"retire-message-signing-key"},
+		"a required flag that is not set": {"copy-memory", "--from", "/data"},
 	}
 	for name, args := range tests {
 		t.Run(name, func(t *testing.T) {

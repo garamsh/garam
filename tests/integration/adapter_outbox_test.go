@@ -67,8 +67,8 @@ func TestAdapterOutbox_ForwardsARepliesUnderDurableDeliveryAndRemovesItOnItsAckn
 		"createdAt": now.Add(-time.Hour).UTC().Format(time.RFC3339Nano),
 	})
 	require.NoError(t, err)
-	earlier := s.activated(t, "earlier", generationOf(9), nil, s.leaf)
-	first := s.send(t, s.agentTLS, http.MethodPost, "/outbox-messages", delivery.DeliveryContract, bearer(earlier.Token), string(lost))
+	earlier := s.activated(t, "earlier", generationOf(9), nil, s.forwarded)
+	first := s.send(t, s.agentTLS, http.MethodPost, "/outbox-messages", delivery.TokenDeliveryContract, bearer(earlier.Token), string(lost))
 	require.Equal(t, http.StatusCreated, first.status, first.body)
 
 	writeOutboxEntry(t, dir, "entry-lost", s.agent, s.peer, "the reply whose answer was lost", now.Add(-time.Hour))
@@ -79,8 +79,7 @@ func TestAdapterOutbox_ForwardsARepliesUnderDurableDeliveryAndRemovesItOnItsAckn
 	// The control replaces that process's activation with the next one.
 	control := newControlStandIn(t, s)
 	control.latest = &earlier.ActivationId
-	startAdapterWith(t, s, control, newRuntimeDouble(t, s.agent, s.epoch, generationOf(1)),
-		&heldPair{pair: s.agentPair(t)}, placementToken(t, "placement-1"), dir)
+	startAdapterWith(t, s, control, newRuntimeDouble(t, s.agent, s.epoch, generationOf(1)), s.agentFiles(t), dir)
 
 	require.Eventually(t, absent(filepath.Join(dir, "entry-reply.json")), 10*time.Second, 20*time.Millisecond,
 		"an acknowledged reply is removed")

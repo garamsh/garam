@@ -83,7 +83,7 @@ Facts the design has to fit:
 - **garam already seals private keys** under a key-encryption key the
   process reads from a file
   ([ADR-0016](./0016-ca-key-custody.md),
-  [certificate-authorities.md](../certificate-authorities.md)).
+  [certificate-authorities.md](https://github.com/garamsh/garam/blob/c551f13ef50301340a755bee6350c2d446287965/docs/architecture/certificate-authorities.md)).
 - **No garam process dials an agent**
   ([ADR-0012](./0012-agent-operator-model.md),
   [ADR-0013](./0013-agent-messaging.md)), so what garam signs reaches

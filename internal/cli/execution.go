@@ -2,9 +2,7 @@ package cli
 
 import (
 	"context"
-	"crypto/x509"
 	"encoding/hex"
-	"encoding/pem"
 	"strconv"
 	"time"
 
@@ -13,10 +11,8 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
-	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -24,11 +20,10 @@ import (
 )
 
 // newExecutionService composes what a lifecycle authority does to an
-// agent's execution (ADR-0078) over the database, the policy engine,
-// the delegated operation authority, the machine boundary's
-// certificate proof and the certificate authority.
+// agent's execution (ADR-0078) over the database, the policy engine and
+// the delegated operation authority.
 func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, authority operator.AuthorityService,
-	identities machine.Service, issuer ca.Service, serverRoot []byte, now func() time.Time,
+	now func() time.Time,
 ) agent.ExecutionService {
 	if now == nil {
 		now = time.Now
@@ -43,9 +38,7 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 			now: now,
 		},
 		operationAuthorities{service: authority},
-		provenLeaves{identities: identities},
-		agents,
-		requestSigner{issuer: issuer, serverRoot: serverRoot})
+		agents)
 }
 
 // newAdmissionService composes agent-enrollment.v1's approval and
@@ -104,12 +97,10 @@ func (a lifecycleAuthorization) Authorize(ctx context.Context, caller, agentGRN,
 // now, names this agent and the supervisor holds the agent's
 // assignment. It covers activation alone; recovery is an
 // administrator's new approval. The authority's identifier is the
-// approval that registered it, so a renewal changes nothing an
-// activation retry is matched by. It expires with the certificate
-// garam last issued the supervisor; one enrolled under
-// standalone-enrollment.v2 holds none, and its authority holds while
-// its registration does, which the store reads again under the
-// execution lock, so it is bounded by the decision's own deadline.
+// approval that registered it, so a credential re-issue changes nothing
+// an activation retry is matched by. It holds while the registration
+// does, which the store reads again under the execution lock, so it is
+// bounded by the decision's own deadline.
 func (a lifecycleAuthorization) supervising(ctx context.Context, caller, agentGRN, assignee grn.GRN, op agent.LifecycleOperation) (agent.Grant, error) {
 	if op != agent.OperationActivate {
 		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "a supervisor's authority does not cover "+string(op))
@@ -124,11 +115,8 @@ func (a lifecycleAuthorization) supervising(ctx context.Context, caller, agentGR
 	if registered.Agent != agentGRN || assignee != caller {
 		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "the supervisor does not hold this agent")
 	}
-	expires := a.now().Add(agent.LifecycleDeadline)
-	if c := registered.Certificate; c != nil {
-		expires = c.NotAfter
-	}
-	return agent.Grant{ID: "supervisor:" + registered.Enrollment.String(), ExpiresAt: expires}, nil
+	return agent.Grant{ID: "supervisor:" + registered.Enrollment.String(),
+		ExpiresAt: a.now().Add(agent.LifecycleDeadline)}, nil
 }
 
 // delegated answers a hosted operator's authority: its current grant,
@@ -195,62 +183,4 @@ func bindingOf(b operator.Binding, expiresAt time.Time) (*agent.OperationBinding
 		out.Assignee, out.Epoch = b.Assignment.Assignee, epoch
 	}
 	return out, nil
-}
-
-// provenLeaves proves a forwarded agent certificate through the machine
-// boundary (agent.LeafVerifier). The proof establishes the chain and
-// the subject only; the execution fence judges the time and the
-// lineage.
-type provenLeaves struct{ identities machine.Service }
-
-func (p provenLeaves) VerifyLeaf(ctx context.Context, agentGRN grn.GRN, leaf *x509.Certificate) (agent.Credential, error) {
-	identity, err := p.identities.Prove(ctx, agentGRN, leaf)
-	if errorx.IsKind(err, errorx.KindInvalidArgument) {
-		return agent.Credential{}, agent.ErrLeafNotProven
-	}
-	if err != nil {
-		return agent.Credential{}, err
-	}
-	return agent.Credential{Serial: identity.Serial(), NotBefore: identity.NotBefore(), NotAfter: identity.NotAfter()}, nil
-}
-
-// requestSigner signs an agent's initial or recovered certificate over
-// the key its request carries (agent.RequestSigner), and hands back the
-// garam server root beside it. Its Chain reads the same two values
-// without signing.
-type requestSigner struct {
-	issuer     ca.Service
-	serverRoot []byte
-}
-
-func (s requestSigner) SignRequest(ctx context.Context, subject grn.GRN, requestPEM []byte) (*agent.SignedCertificate, error) {
-	signed, err := s.issuer.Sign(ctx, subject, requestPEM)
-	if errorx.IsKind(err, errorx.KindInvalidArgument) {
-		return nil, agent.ErrInvalidCertificateRequest
-	}
-	if err != nil {
-		return nil, err
-	}
-	block, _ := pem.Decode(signed.CertificatePEM())
-	if block == nil {
-		return nil, errorx.New(errorx.KindInternal, "signed certificate is not PEM")
-	}
-	leaf, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, errorx.Wrap(err, "signed certificate", errorx.KindInternal)
-	}
-	return &agent.SignedCertificate{
-		Credential:     agent.Credential{Serial: signed.Serial(), NotBefore: leaf.NotBefore, NotAfter: leaf.NotAfter},
-		CertificatePEM: string(signed.CertificatePEM()),
-		IssuerPEM:      string(signed.IssuerPEM()),
-		ServerRootPEM:  string(s.serverRoot),
-	}, nil
-}
-
-func (s requestSigner) Chain(ctx context.Context, subject grn.GRN) (*agent.Chain, error) {
-	issuer, err := s.issuer.IssuerPEM(ctx, subject)
-	if err != nil {
-		return nil, err
-	}
-	return &agent.Chain{IssuerPEM: string(issuer), ServerRootPEM: string(s.serverRoot)}, nil
 }

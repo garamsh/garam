@@ -7,14 +7,13 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/audit"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 )
 
-// GetIdentity answers with the GRN the connection authenticated as. It
-// is what tells a certificate that works from one that was never
+// GetIdentity answers with the GRN the request's token authenticated
+// as. It is what tells a token that works from one that was never
 // tried, and a freshly provisioned agent has nothing else to call.
 func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 	identity, ok := caller(w, r)
@@ -29,9 +28,9 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 // operator exchanges a key with ExchangeClientAssertion instead
 // (ADR-0102, ADR-0117).
 //
-// It reads no identity off the connection: what authenticates the
-// request is the credential in its Authorization header, which an
-// approved enrollment answered.
+// It reads no identity off the request: what authenticates it is the
+// credential in its Authorization header, which an approved
+// enrollment answered.
 func (s *Server) ExchangeToken(w http.ResponseWriter, r *http.Request, params machinegen.ExchangeTokenParams) {
 	w.Header().Set("Garam-Contract-Version", operator.TokenContractVersion)
 	// The credential is read first, so a caller that presents none
@@ -63,39 +62,5 @@ func (s *Server) ExchangeToken(w http.ResponseWriter, r *http.Request, params ma
 	machine.ReportIssuance(r, machine.Issuance{Subject: token.Supervisor, Until: token.ExpiresAt})
 	writeJSON(w, http.StatusCreated, machinegen.MachineToken{
 		Token: token.Value, Grn: token.Supervisor.String(), ExpiresAt: token.ExpiresAt,
-	})
-}
-
-// RenewIdentityCertificate answers with the successor to the
-// certificate the connection authenticated with, for an operator
-// renewing its own (ADR-0046). The route names no subject, so there is
-// nothing to authorize here: what is replaced is what was presented,
-// and which certificate that is comes off the handshake rather than off
-// the request.
-func (s *Server) RenewIdentityCertificate(w http.ResponseWriter, r *http.Request) {
-	identity, ok := callerCertificate(w, r)
-	if !ok {
-		return
-	}
-	certificate, err := s.operators.Renew(r.Context(), operator.Credential{
-		Subject:   identity.GRN(),
-		Serial:    operator.Serial(identity.Serial()),
-		NotBefore: identity.NotBefore(),
-		NotAfter:  identity.NotAfter(),
-	})
-	if err != nil {
-		s.refusedCredential(r, identity.GRN(), audit.CredentialOperatorCertificate, audit.ActionRenew, err)
-		writeError(w, err)
-		return
-	}
-	s.issuedCertificate(r, identity.GRN(), audit.CredentialOperatorCertificate, audit.ActionRenew,
-		string(certificate.CertificatePEM), false)
-	writeJSON(w, http.StatusCreated, machinegen.MachineCertificate{
-		Grn:            identity.GRN().String(),
-		CertificatePem: string(certificate.CertificatePEM),
-		PrivateKeyPem:  string(certificate.PrivateKeyPEM),
-		IssuerPem:      string(certificate.IssuerPEM),
-		ServerRootPem:  string(certificate.ServerRootPEM),
-		NotAfter:       certificate.NotAfter,
 	})
 }

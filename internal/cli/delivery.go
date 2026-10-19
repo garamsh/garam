@@ -14,7 +14,6 @@ import (
 	"github.com/garamsh/garam/internal/delivery"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/keyfile"
 )
 
 // defaultGatewayURL is where the agent platform's gateway answers when
@@ -63,8 +62,6 @@ func adapt(cmd *cobra.Command) error {
 		agent:          envOr(envAdapterAgent, ""),
 		machineURL:     envOr(envAdapterMachineURL, ""),
 		gatewayURL:     envOr(envAdapterGatewayURL, defaultGatewayURL),
-		certFile:       envOr(envAdapterTLSCertFile, ""),
-		keyFile:        envOr(envAdapterTLSKeyFile, ""),
 		tokenFile:      envOr(envAdapterTokenFile, ""),
 		controlToken:   envOr(envAdapterControlToken, ""),
 		serverRootFile: envOr(envAdapterServerRootFile, ""),
@@ -89,12 +86,11 @@ func adapt(cmd *cobra.Command) error {
 
 // adapterSettings is what the environment names the adapter.
 type adapterSettings struct {
-	agent, machineURL, gatewayURL     string
-	certFile, keyFile, serverRootFile string
-	// tokenFile and controlToken are the token mode's files: the agent
-	// token garam accepts and, where the adapter is fenced, the one its
-	// lifecycle authority accepts (ADR-0100). Each is read before every
-	// call to its peer.
+	agent, machineURL, gatewayURL string
+	serverRootFile                string
+	// tokenFile and controlToken are the adapter's credential files:
+	// the agent token garam accepts and the one its lifecycle authority
+	// accepts (ADR-0100). Each is read before every call to its peer.
 	tokenFile, controlToken   string
 	controlURL, controlRoot   string
 	placementToken, outboxDir string
@@ -123,45 +119,27 @@ func (s adapterSettings) controlled() error {
 }
 
 // credentials answers what the adapter's calls present to garam and to
-// its lifecycle authority: the agent's certificate to both, or a token
-// file to each (ADR-0100). Exactly one of the two modes is named, and
-// neither falls back to the other. The pair is nil in the token mode.
-func (s adapterSettings) credentials() (garam, control delivery.Credential, pair *keyfile.Pair, err error) {
-	if s.tokenFile == "" {
-		if s.controlToken != "" {
-			return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
-				"GARAM_ADAPTER_CONTROL_TOKEN_FILE is set only beside GARAM_ADAPTER_TOKEN_FILE")
-		}
-		if pair, err = adapterPair(s.certFile, s.keyFile); err != nil {
-			return nil, nil, nil, err
-		}
-		garam = delivery.NewCertificate(pair.Get)
-		return garam, garam, pair, nil
-	}
-	if s.certFile != "" || s.keyFile != "" {
-		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
-			"GARAM_ADAPTER_TOKEN_FILE and the GARAM_ADAPTER_TLS_* files are two modes, and only one is set")
-	}
-	if s.controlToken == "" {
-		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
-			"GARAM_ADAPTER_CONTROL_TOKEN_FILE is required beside the control settings and GARAM_ADAPTER_TOKEN_FILE")
+// its lifecycle authority: a token file to each (ADR-0100, ADR-0118).
+func (s adapterSettings) credentials() (garam, control delivery.Credential, err error) {
+	if s.tokenFile == "" || s.controlToken == "" {
+		return nil, nil, errorx.New(errorx.KindInvalidArgument,
+			"GARAM_ADAPTER_TOKEN_FILE and GARAM_ADAPTER_CONTROL_TOKEN_FILE are required")
 	}
 	tokens, err := delivery.NewTokenFile(s.tokenFile)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	if control, err = delivery.NewTokenFile(s.controlToken); err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	return tokens, control, nil, nil
+	return tokens, control, nil
 }
 
 // adapterLoop builds the loop from what the environment named, or
 // refuses what it cannot run on. One GRN names the agent to garam and
 // to the runtime beside it, which serves the agent under that GRN. The
-// control settings name its lifecycle authority, the credential files
-// choose the certificate or token mode, and the outbox is forwarded
-// from where it is named.
+// control settings name its lifecycle authority, the token files are
+// what it presents, and the outbox is forwarded from where it is named.
 func adapterLoop(s adapterSettings) (delivery.Service, error) {
 	if s.agent == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_AGENT is required")
@@ -176,11 +154,11 @@ func adapterLoop(s adapterSettings) (delivery.Service, error) {
 	if err := s.controlled(); err != nil {
 		return nil, err
 	}
-	garam, control, pair, err := s.credentials()
+	garam, control, err := s.credentials()
 	if err != nil {
 		return nil, err
 	}
-	client, err := adapterClient(pair, s.serverRootFile, string(envAdapterServerRootFile), "")
+	client, err := adapterClient(s.serverRootFile, string(envAdapterServerRootFile), "")
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +167,7 @@ func adapterLoop(s adapterSettings) (delivery.Service, error) {
 		Execution:   delivery.NewFencedExecution(),
 		Credentials: delivery.NewFileCredentials(s.placementToken, garam, control),
 	}
-	controlClient, err := adapterClient(pair, s.controlRoot, string(envAdapterControlRoot), s.controlSocket)
+	controlClient, err := adapterClient(s.controlRoot, string(envAdapterControlRoot), s.controlSocket)
 	if err != nil {
 		return nil, err
 	}
@@ -227,28 +205,11 @@ func gatewayClient() *http.Client {
 	return &http.Client{Transport: bounded}
 }
 
-// adapterPair is the agent's certificate and key, read per handshake
-// so a renewed one needs no restart.
-func adapterPair(certFile, keyFile string) (*keyfile.Pair, error) {
-	if certFile == "" || keyFile == "" {
-		return nil, errorx.New(errorx.KindInvalidArgument,
-			"GARAM_ADAPTER_TLS_CERT_FILE and GARAM_ADAPTER_TLS_KEY_FILE are required, or GARAM_ADAPTER_TOKEN_FILE in their place")
-	}
-	pair, err := keyfile.NewPair(certFile, keyFile)
-	if err != nil {
-		return nil, errorx.Wrap(err, "adapter certificate")
-	}
-	return pair, nil
-}
-
-// adapterClient is a connection to garam or control. In the
-// certificate mode the agent's certificate authenticates it, presented
-// per handshake so a renewed one needs no restart; in the token mode
-// pair is nil and the connection presents none, since a token in each
-// request authenticates it (ADR-0100). Either way the peer is verified
-// against a root of its own — garam's server root, which the authority
-// that signed the agent never signs (ADR-0040), or the root control's
-// serving certificate chains to (ADR-0084).
+// adapterClient is a connection to garam or control. The connection
+// presents no certificate, since a token in each request authenticates
+// it (ADR-0100), and the peer is verified against a root of its own —
+// garam's server root (ADR-0040), or the root control's serving
+// certificate chains to (ADR-0084).
 //
 // The client carries no timeout, and one added here breaks the adapter:
 // a claim is a long poll and the event stream is held open for as long
@@ -259,7 +220,7 @@ func adapterPair(certFile, keyFile string) (*keyfile.Pair, error) {
 // whatever address a request names; TLS still verifies the URL's
 // host, so a standalone supervisor's control is reached on the unix
 // socket it serves (ADR-0085).
-func adapterClient(pair *keyfile.Pair, rootFile, what, socket string) (*http.Client, error) {
+func adapterClient(rootFile, what, socket string) (*http.Client, error) {
 	if rootFile == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, what+" is required")
 	}
@@ -272,11 +233,6 @@ func adapterClient(pair *keyfile.Pair, rootFile, what, socket string) (*http.Cli
 		return nil, errorx.New(errorx.KindInvalidArgument, what+": no certificate in "+rootFile)
 	}
 	config := &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS13}
-	if pair != nil {
-		config.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
-			return pair.Get()
-		}
-	}
 	transport := &http.Transport{TLSClientConfig: config}
 	if socket != "" {
 		var dialer net.Dialer

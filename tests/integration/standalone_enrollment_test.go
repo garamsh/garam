@@ -2,20 +2,15 @@ package integration_test
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/pem"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -24,21 +19,17 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
-	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/operator"
 )
 
 // standaloneHost is what a standalone host prepares before asking for
-// an approval (ADR-0082): a bootstrap secret, a request identifier and
-// two keys with their requests. None of it but hashes and fingerprints
-// reaches the administrator.
+// an approval (ADR-0082, ADR-0100): a bootstrap secret and a request
+// identifier. Only the secret's hash reaches the administrator, and no
+// key is bound (ADR-0118).
 type standaloneHost struct {
-	secret        string
-	requestID     string
-	supervisorKey *ecdsa.PrivateKey
-	supervisorCSR string
-	agentKey      *ecdsa.PrivateKey
-	agentCSR      string
+	secret    string
+	requestID string
 }
 
 func newStandaloneHost(t *testing.T) standaloneHost {
@@ -46,17 +37,7 @@ func newStandaloneHost(t *testing.T) standaloneHost {
 	raw := make([]byte, 32)
 	_, err := rand.Read(raw)
 	require.NoError(t, err)
-	h := standaloneHost{secret: base64.RawURLEncoding.EncodeToString(raw), requestID: "host-" + hex.EncodeToString(raw[:6])}
-	h.supervisorCSR, h.supervisorKey = enrollmentRequest(t)
-	h.agentCSR, h.agentKey = enrollmentRequest(t)
-	return h
-}
-
-func fingerprintOf(t *testing.T, csr string) string {
-	t.Helper()
-	f, err := agent.RequestedKeyFingerprint([]byte(csr))
-	require.NoError(t, err)
-	return f.String()
+	return standaloneHost{secret: base64.RawURLEncoding.EncodeToString(raw), requestID: "host-" + hex.EncodeToString(raw[:6])}
 }
 
 // approval is the body an administrator approves h with. replaces is
@@ -66,8 +47,7 @@ func (h standaloneHost) approval(t *testing.T, expiresAt time.Time, replaces map
 	secret := sha256.Sum256([]byte(h.secret))
 	body := map[string]any{
 		"requestId": h.requestID, "hostName": "laptop", "expiresAt": expiresAt.UTC().Format(time.RFC3339Nano),
-		"secretSha256": hex.EncodeToString(secret[:]), "supervisorKeySha256": fingerprintOf(t, h.supervisorCSR),
-		"agentKeySha256": fingerprintOf(t, h.agentCSR),
+		"secretSha256": hex.EncodeToString(secret[:]),
 	}
 	if replaces != nil {
 		body["replaces"] = replaces
@@ -80,11 +60,7 @@ func (h standaloneHost) approval(t *testing.T, expiresAt time.Time, replaces map
 // enrollment is the exact body h spends its approval with.
 func (h standaloneHost) enrollment(t *testing.T) string {
 	t.Helper()
-	raw, err := json.Marshal(map[string]string{
-		"requestId": h.requestID, "supervisorCertificateRequestPem": h.supervisorCSR, "agentCertificateRequestPem": h.agentCSR,
-	})
-	require.NoError(t, err)
-	return string(raw)
+	return `{"requestId":"` + h.requestID + `"}`
 }
 
 // browse makes one browser request as cookie's user.
@@ -126,58 +102,60 @@ type machinegenAgentEnrollment struct {
 	Spent         bool   `json:"spent"`
 }
 
-// spend sends one standalone enrollment, whose every answer names the
-// standalone contract. A client presenting no certificate is what a
-// host holding none yet has.
+// spend sends one standalone-enrollment.v2 spending, whose every
+// answer names that value. A client presenting nothing is what a host
+// holding no credential yet has.
 func (s *executionStack) spend(t *testing.T, secret, body string) reply {
 	t.Helper()
-	got := s.send(t, anonymousMachineClient(t), http.MethodPost, "/agent-enrollments", agent.StandaloneContractVersion,
-		"Garam-Bootstrap "+secret, body)
-	assert.Equal(t, agent.StandaloneContractVersion, got.version, "every standalone answer names its contract")
+	got, err := s.exchange(anonymousMachineClient(t), http.MethodPost, "/agent-enrollments",
+		agent.CredentialStandaloneContractVersion, "Garam-Bootstrap "+secret, body)
+	require.NoError(t, err)
+	assert.Equal(t, agent.CredentialStandaloneContractVersion, got.version, "every standalone answer names its contract")
 	return got
 }
 
 // standaloneAgent is a host after its enrollment: its agent and
-// supervisor, and a client presenting each certificate.
+// supervisor, the supervisor's credential, a client presenting the
+// token the supervisor exchanged it for, and the agent's token for
+// garam, which the supervisor minted and forwards on activation, with
+// a client presenting it.
 type standaloneAgent struct {
-	agent          grn.GRN
-	supervisor     grn.GRN
-	epoch          int
-	supervisorTLS  *http.Client
-	supervisorLeaf string
-	agentTLS       *http.Client
-	agentLeaf      string
+	agent         grn.GRN
+	supervisor    grn.GRN
+	epoch         int
+	credential    string
+	supervisorTLS *http.Client
+	agentTLS      *http.Client
+	agentToken    string
 }
 
-func (s *executionStack) enrolled(t *testing.T, h standaloneHost, got reply) standaloneAgent {
+func (s *executionStack) enrolled(t *testing.T, _ standaloneHost, got reply) standaloneAgent {
 	t.Helper()
-	require.Contains(t, []int{http.StatusCreated, http.StatusOK}, got.status, got.body)
+	c := credentialOf(t, got)
 	var e machinegen.StandaloneEnrollment
 	require.NoError(t, json.Unmarshal([]byte(got.body), &e))
-	a, err := grn.Parse(e.Grn)
-	require.NoError(t, err)
-	sup, err := grn.Parse(e.SupervisorGrn)
-	require.NoError(t, err)
 	epoch, err := strconv.Atoi(e.Epoch)
 	require.NoError(t, err)
-	assert.NotContains(t, got.body, "PRIVATE KEY", "an enrollment answers no private key")
-	require.NotNil(t, e.SupervisorCertificatePem, "a v1 enrollment answers its certificates")
-	require.NotNil(t, e.AgentCertificatePem)
+	supervisor := s.supervisorToken(t, c.credential)
+	minted := s.send(t, tokenPresenting(t, supervisor), http.MethodPost, "/agents/"+c.agent.String()+"/tokens",
+		operator.TokenContractVersion, "", `{}`)
+	require.Equal(t, http.StatusCreated, minted.status, minted.body)
+	var own machinegen.AgentToken
+	require.NoError(t, json.Unmarshal([]byte(minted.body), &own))
 	return standaloneAgent{
-		agent: a, supervisor: sup, epoch: epoch,
-		supervisorTLS: clientOver(t, *e.SupervisorCertificatePem, h.supervisorKey), supervisorLeaf: *e.SupervisorCertificatePem,
-		agentTLS: clientOver(t, *e.AgentCertificatePem, h.agentKey), agentLeaf: *e.AgentCertificatePem,
+		agent: c.agent, supervisor: c.supervisor, epoch: epoch, credential: c.credential,
+		supervisorTLS: tokenPresenting(t, supervisor), agentTLS: tokenPresenting(t, own.Token), agentToken: own.Token,
 	}
 }
 
-// clientOver presents certificatePEM over key.
-func clientOver(t *testing.T, certificatePEM string, key *ecdsa.PrivateKey) *http.Client {
+// supervisorToken exchanges credential for the supervisor's token.
+func (s *executionStack) supervisorToken(t *testing.T, credential string) string {
 	t.Helper()
-	der, err := x509.MarshalECPrivateKey(key)
-	require.NoError(t, err)
-	pair, err := tls.X509KeyPair([]byte(certificatePEM), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}))
-	require.NoError(t, err)
-	return machineClient(t, pair)
+	got := s.send(t, s.client, http.MethodPost, "/tokens", operator.TokenContractVersion, "Garam-Credential "+credential, `{}`)
+	require.Equal(t, http.StatusCreated, got.status, got.body)
+	var token machinegen.MachineToken
+	require.NoError(t, json.Unmarshal([]byte(got.body), &token))
+	return token.Token
 }
 
 // standaloneOf enrolls a new standalone host and points the stack's
@@ -192,8 +170,8 @@ func (s *executionStack) standaloneOf(t *testing.T) (standaloneHost, standaloneA
 }
 
 // TestStandalone_AnApprovedHostEnrollsWithoutAnOperator covers the
-// approval and its spending end to end: only an administrator
-// approves, only the approved keys spend it, a retry answers what the
+// approval and its spending end to end: only an administrator approves,
+// only the approved request spends it, a retry answers the agent the
 // first did, and what it writes is an agent fenced from birth held by
 // its supervisor, with no operator record, grant or managed creation.
 func TestStandalone_AnApprovedHostEnrollsWithoutAnOperator(t *testing.T) {
@@ -227,13 +205,6 @@ func TestStandalone_AnApprovedHostEnrollsWithoutAnOperator(t *testing.T) {
 	unknown := s.spend(t, "not-the-secret", h.enrollment(t))
 	assert.Equal(t, http.StatusUnauthorized, unknown.status, unknown.body)
 
-	// Keys the administrator did not approve spend nothing, so the
-	// approved ones still enroll afterwards.
-	other := h
-	other.agentCSR, other.agentKey = enrollmentRequest(t)
-	refused := s.spend(t, h.secret, other.enrollment(t))
-	assert.Equal(t, http.StatusForbidden, refused.status, refused.body)
-
 	first := s.spend(t, h.secret, h.enrollment(t))
 	require.Equal(t, http.StatusCreated, first.status, first.body)
 	e := s.enrolled(t, h, first)
@@ -243,7 +214,11 @@ func TestStandalone_AnApprovedHostEnrollsWithoutAnOperator(t *testing.T) {
 
 	retry := s.spend(t, h.secret, h.enrollment(t))
 	assert.Equal(t, http.StatusOK, retry.status, retry.body)
-	assert.JSONEq(t, first.body, retry.body, "a retry answers the recorded result")
+	retried := credentialOf(t, retry)
+	assert.Equal(t, e.agent, retried.agent, "a retry answers the recorded agent")
+	assert.Equal(t, e.supervisor, retried.supervisor)
+	other := h
+	other.requestID = "another-request"
 	changed := s.spend(t, h.secret, other.enrollment(t))
 	assert.Equal(t, http.StatusConflict, changed.status, "a spent approval answers its own request alone: %s", changed.body)
 
@@ -265,7 +240,7 @@ func TestStandalone_AnApprovedHostEnrollsWithoutAnOperator(t *testing.T) {
 // the supervisor's lifecycle authority on the existing execution
 // routes: it activates, inspects and deactivates its agent's
 // generation, and nothing else holds that authority for it — not the
-// agent's own certificate, not the hosted operator, and not the
+// agent's own token, not the hosted operator, and not the
 // supervisor over another agent or for a recovery.
 func TestStandalone_TheSupervisorActivatesItsOwnAgentAndNothingElse(t *testing.T) {
 	p := pool(t)
@@ -279,44 +254,42 @@ func TestStandalone_TheSupervisorActivatesItsOwnAgentAndNothingElse(t *testing.T
 	s.open(t, e.agentTLS)
 	allRefused(t, s.protectedCalls(t, e.agentTLS, ""), http.StatusUnauthorized, "no activation yet")
 
-	byRuntime := s.activate(t, e.agentTLS, "a-runtime", generationOf(1), nil, e.agentLeaf)
-	assert.Equal(t, http.StatusForbidden, byRuntime.status, "the execution credential activates nothing: %s", byRuntime.body)
-	byHosted := s.activate(t, s.hostedTLS, "a-hosted", generationOf(1), nil, e.agentLeaf)
+	byRuntime := s.activate(t, e.agentTLS, "a-runtime", generationOf(1), nil, e.agentToken)
+	assert.Equal(t, http.StatusForbidden, byRuntime.status, "the agent's own token activates nothing: %s", byRuntime.body)
+	byHosted := s.activate(t, s.hostedTLS, "a-hosted", generationOf(1), nil, e.agentToken)
 	assert.Equal(t, http.StatusForbidden, byHosted.status, "no grant covers a supervisor's agent: %s", byHosted.body)
 
-	got := s.activate(t, e.supervisorTLS, "a-1", generationOf(1), nil, e.agentLeaf)
+	got := s.activate(t, e.supervisorTLS, "a-1", generationOf(1), nil, e.agentToken)
 	require.Equal(t, http.StatusCreated, got.status, "the first activation rests on the approval: %s", got.body)
 	var a machinegen.Activation
 	require.NoError(t, json.Unmarshal([]byte(got.body), &a))
 	assert.Equal(t, e.agent.String(), a.Grn)
 	allAdmitted(t, s.protectedCalls(t, e.agentTLS, a.Token), "the activation's token")
 
-	// The supervisor's certificate reaches no collaboration or operator
-	// route; an agent of the organization posting is the control.
+	// The supervisor's token reaches no collaboration or operator route;
+	// an agent of the organization posting is the control.
 	posted := s.send(t, s.peerTLS, http.MethodPost, "/messages", "", "", submissionTo(e.agent, s.key()))
 	assert.Equal(t, http.StatusCreated, posted.status, "the control: an ordinary sender posts: %s", posted.body)
 	for _, route := range []struct{ method, path, body string }{
 		{http.MethodPost, "/messages", submissionTo(e.agent, s.key())},
 		{http.MethodPost, s.agentPath("/claims"), ""},
-		{http.MethodPost, "/identity/certificate", ""},
 	} {
 		got := s.send(t, e.supervisorTLS, route.method, route.path, "", "", route.body)
 		assert.Equal(t, http.StatusForbidden, got.status, "%s %s: %s", route.method, route.path, got.body)
 		assert.Contains(t, got.body, "lifecycle routes alone", "%s %s", route.method, route.path)
 	}
 
-	in := s.introspect(t, e.supervisorTLS, e.agentLeaf, &[]agent.Generation{generationOf(1)}[0])
+	in := s.introspect(t, e.supervisorTLS, e.agentToken, &[]agent.Generation{generationOf(1)}[0])
 	require.Equal(t, http.StatusOK, in.status, in.body)
 	assert.Contains(t, in.body, `"assignee":"`+e.supervisor.String()+`"`)
 
 	s.agent = legacy
-	elsewhere := s.activate(t, e.supervisorTLS, "a-other", generationOf(2), nil, s.leaf)
+	elsewhere := s.activate(t, e.supervisorTLS, "a-other", generationOf(2), nil, s.forwarded)
 	assert.Equal(t, http.StatusForbidden, elsewhere.status, "a supervisor holds one agent: %s", elsewhere.body)
 	s.agent = e.agent
-	csr, _ := enrollmentRequest(t)
-	raw, err := json.Marshal(map[string]string{"requestId": "x", "epoch": strconv.Itoa(e.epoch), "certificateRequestPem": csr})
+	raw, err := json.Marshal(map[string]string{"requestId": "x", "epoch": strconv.Itoa(e.epoch)})
 	require.NoError(t, err)
-	recovery := s.send(t, e.supervisorTLS, http.MethodPost, s.agentPath("/credential-recovery"), agent.ExecutionContractVersion,
+	recovery := s.send(t, e.supervisorTLS, http.MethodPost, s.agentPath("/credential-recovery"), agent.TokenExecutionContractVersion,
 		"Garam-Operation anything", string(raw))
 	assert.Equal(t, http.StatusForbidden, recovery.status, "recovery is an administrator's new approval: %s", recovery.body)
 
@@ -376,15 +349,15 @@ func TestStandalone_BootstrapRefusals(t *testing.T) {
 // TestStandalone_ReplacementFencesTheFormerHolderAndLineage covers an
 // administrator replacing a supervisor for the same GRN: the agent
 // moves to the next epoch and a new lineage, the former supervisor and
-// every earlier agent certificate stop acting on connections already
-// open, an approval of the same assignment made earlier cannot spend
-// over the newer one, and the first enrollment no longer replays.
+// every earlier agent token stop acting on connections already open, an
+// approval of the same assignment made earlier cannot spend over the
+// newer one, and the first enrollment no longer replays.
 func TestStandalone_ReplacementFencesTheFormerHolderAndLineage(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	h, e := s.standaloneOf(t)
-	got := s.activate(t, e.supervisorTLS, "r-1", generationOf(1), nil, e.agentLeaf)
+	got := s.activate(t, e.supervisorTLS, "r-1", generationOf(1), nil, e.agentToken)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var a machinegen.Activation
 	require.NoError(t, json.Unmarshal([]byte(got.body), &a))
@@ -405,26 +378,22 @@ func TestStandalone_ReplacementFencesTheFormerHolderAndLineage(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, lost.status, "an older approval of the replaced assignment: %s", lost.body)
 	replay := s.spend(t, h.secret, h.enrollment(t))
 	assert.Equal(t, http.StatusConflict, replay.status, "a superseded result is not disclosed: %s", replay.body)
-	assert.NotContains(t, replay.body, "CERTIFICATE")
+	assert.NotContains(t, replay.body, "credential")
 
-	// The certificate's own renewal asks the lineage before the token,
-	// so it is refused as fenced where the others are refused as stale.
-	for route, r := range s.protectedCalls(t, e.agentTLS, a.Token) {
-		assert.Contains(t, []int{http.StatusForbidden, http.StatusConflict}, r.status, "the former lineage: %s: %s", route, r.body)
-		assert.True(t, r.reused, "%s reused an open connection", route)
-	}
-	former := s.activate(t, e.supervisorTLS, "r-2", generationOf(2), nil, r.agentLeaf)
-	assert.Equal(t, http.StatusForbidden, former.status, "the former supervisor on its open connection: %s", former.body)
+	// The former lineage's token is refused on the next request.
+	allRefused(t, s.protectedCalls(t, e.agentTLS, a.Token), http.StatusUnauthorized, "the former lineage")
+	former := s.activate(t, e.supervisorTLS, "r-2", generationOf(2), nil, r.agentToken)
+	assert.Equal(t, http.StatusUnauthorized, former.status, "the former supervisor on its open connection: %s", former.body)
 	assert.True(t, former.reused)
 
 	s.epoch = r.epoch
-	before := s.introspect(t, r.supervisorTLS, e.agentLeaf, nil)
-	require.Equal(t, http.StatusOK, before.status, before.body)
-	assert.Contains(t, before.body, `"credential":"fenced"`, "the former agent certificate left the lineage")
-	now := s.introspect(t, r.supervisorTLS, r.agentLeaf, nil)
+	before := s.introspect(t, r.supervisorTLS, e.agentToken, nil)
+	assert.Equal(t, http.StatusUnprocessableEntity, before.status,
+		"the former supervisor's agent token proves nothing to its successor: %s", before.body)
+	now := s.introspect(t, r.supervisorTLS, r.agentToken, nil)
 	require.Equal(t, http.StatusOK, now.status, now.body)
 	assert.Contains(t, now.body, `"credential":"current"`, "the control: the enrolled one is current")
-	got = s.activate(t, r.supervisorTLS, "r-3", generationOf(3), &a.ActivationId, r.agentLeaf)
+	got = s.activate(t, r.supervisorTLS, "r-3", generationOf(3), &a.ActivationId, r.agentToken)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var b machinegen.Activation
 	require.NoError(t, json.Unmarshal([]byte(got.body), &b))
@@ -440,9 +409,8 @@ func TestStandalone_RevocationEndsTheSupervisorAndItsActivation(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
-	h, e := s.standaloneOf(t)
-	supervisorKey := h.supervisorKey
-	got := s.activate(t, e.supervisorTLS, "v-1", generationOf(1), nil, e.agentLeaf)
+	_, e := s.standaloneOf(t)
+	got := s.activate(t, e.supervisorTLS, "v-1", generationOf(1), nil, e.agentToken)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var a machinegen.Activation
 	require.NoError(t, json.Unmarshal([]byte(got.body), &a))
@@ -452,164 +420,30 @@ func TestStandalone_RevocationEndsTheSupervisorAndItsActivation(t *testing.T) {
 	s.open(t, e.supervisorTLS)
 
 	path := "/orgs/acme/agent-supervisors/" + e.supervisor.Identifier
-	fresh := func() *http.Client { return clientOver(t, e.supervisorLeaf, supervisorKey) }
-	identity := s.send(t, fresh(), http.MethodGet, "/identity", "", "", "")
-	assert.Equal(t, http.StatusOK, identity.status, "the control: a current supervisor authenticates: %s", identity.body)
+	fresh := func() *http.Client { return anonymousMachineClient(t) }
+	identity := s.send(t, fresh(), http.MethodPost, "/tokens", operator.TokenContractVersion, "Garam-Credential "+e.credential, `{}`)
+	assert.Equal(t, http.StatusCreated, identity.status, "the control: a current supervisor exchanges its credential: %s", identity.body)
 	status, body := s.browse(t, http.MethodDelete, path, s.member, "")
 	assert.Equal(t, http.StatusForbidden, status, "a member revokes nothing: %s", body)
 	allAdmitted(t, s.protectedCalls(t, e.agentTLS, a.Token), "the control: still admitted before the revocation")
 
 	status, body = s.browse(t, http.MethodDelete, path, s.owner, "")
 	require.Equal(t, http.StatusNoContent, status, body)
-	identity = s.send(t, fresh(), http.MethodGet, "/identity", "", "", "")
-	assert.Equal(t, http.StatusUnauthorized, identity.status, "a revoked supervisor's next connection: %s", identity.body)
+	identity = s.send(t, fresh(), http.MethodPost, "/tokens", operator.TokenContractVersion, "Garam-Credential "+e.credential, `{}`)
+	assert.Equal(t, http.StatusUnauthorized, identity.status, "a revoked supervisor's credential exchanges nothing: %s", identity.body)
 	allRefused(t, s.protectedCalls(t, e.agentTLS, a.Token), http.StatusForbidden, "the revoked supervisor's activation")
-	lifecycle := s.activate(t, e.supervisorTLS, "v-2", generationOf(2), &a.ActivationId, e.agentLeaf)
-	assert.Equal(t, http.StatusForbidden, lifecycle.status, "a revoked supervisor on its open connection: %s", lifecycle.body)
+	lifecycle := s.activate(t, e.supervisorTLS, "v-2", generationOf(2), &a.ActivationId, e.agentToken)
+	assert.Equal(t, http.StatusUnauthorized, lifecycle.status, "a revoked supervisor on its open connection: %s", lifecycle.body)
 	withdrawn := s.spend(t, pending.secret, pending.enrollment(t))
 	assert.Equal(t, http.StatusUnauthorized, withdrawn.status, "a pending approval cannot undo the revocation: %s", withdrawn.body)
 	status, body = s.browse(t, http.MethodDelete, path, s.owner, "")
 	assert.Equal(t, http.StatusNotFound, status, body)
 }
 
-// renewal sends one supervisor renewal as client.
-func (s *executionStack) renewal(t *testing.T, client *http.Client, requestID, csr string) reply {
-	t.Helper()
-	raw, err := json.Marshal(map[string]string{"requestId": requestID, "certificateRequestPem": csr})
-	require.NoError(t, err)
-	got := s.send(t, client, http.MethodPost, "/supervisors/self/certificate", agent.StandaloneContractVersion, "", string(raw))
-	assert.Equal(t, agent.StandaloneContractVersion, got.version)
-	return got
-}
-
-// TestStandalone_ASupervisorRenewalReplaysForItsPredecessor covers the
-// supervisor renewing its own certificate: too early is refused, the
-// renewal is answered again to the certificate it replaced for the same
-// request after a lost answer, two identical renewals racing install
-// one successor, and an older certificate or a changed request is
-// refused. An activation retry survives the renewal.
-func TestStandalone_ASupervisorRenewalReplaysForItsPredecessor(t *testing.T) {
-	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
-	_, e := s.standaloneOf(t)
-	got := s.activate(t, e.supervisorTLS, "n-1", generationOf(1), nil, e.agentLeaf)
-	require.Equal(t, http.StatusCreated, got.status, got.body)
-
-	csr, key := enrollmentRequest(t)
-	early := s.renewal(t, e.supervisorTLS, "renew-1", csr)
-	assert.Equal(t, http.StatusConflict, early.status, "two thirds of its validity left: %s", early.body)
-
-	s.clock.shift(17 * time.Hour)
-	var (
-		wg      sync.WaitGroup
-		answers [2]reply
-	)
-	for i := range answers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			raw, _ := json.Marshal(map[string]string{"requestId": "renew-1", "certificateRequestPem": csr})
-			answers[i], _ = s.exchange(e.supervisorTLS, http.MethodPost, "/supervisors/self/certificate",
-				agent.StandaloneContractVersion, "", string(raw))
-		}()
-	}
-	wg.Wait()
-	statuses := []int{answers[0].status, answers[1].status}
-	assert.ElementsMatch(t, []int{http.StatusCreated, http.StatusOK}, statuses, "%s / %s", answers[0].body, answers[1].body)
-	assert.JSONEq(t, answers[0].body, answers[1].body, "racing identical renewals answer one certificate")
-	assert.Equal(t, 1, countRows(t, s.pool, `SELECT count(*) FROM agent_supervisor_renewals WHERE supervisor_grn = $1`, e.supervisor.String()))
-
-	lost := s.renewal(t, e.supervisorTLS, "renew-1", csr)
-	assert.Equal(t, http.StatusOK, lost.status, "a lost answer is answered again: %s", lost.body)
-	assert.JSONEq(t, answers[0].body, lost.body)
-	otherCSR, _ := enrollmentRequest(t)
-	assert.Equal(t, http.StatusConflict, s.renewal(t, e.supervisorTLS, "renew-1", otherCSR).status, "another request")
-
-	var issued machinegen.InitialCertificate
-	require.NoError(t, json.Unmarshal([]byte(lost.body), &issued))
-	renewed := clientOver(t, issued.CertificatePem, key)
-	retry := s.activate(t, renewed, "n-1", generationOf(1), nil, e.agentLeaf)
-	assert.Equal(t, http.StatusOK, retry.status, "an activation retry survives the renewal: %s", retry.body)
-
-	csr2, _ := enrollmentRequest(t)
-	second := s.renewal(t, renewed, "renew-2", csr2)
-	require.Equal(t, http.StatusCreated, second.status, second.body)
-	stale := s.renewal(t, e.supervisorTLS, "renew-1", csr)
-	assert.Equal(t, http.StatusConflict, stale.status, "two renewals back is not replayed: %s", stale.body)
-}
-
-// heldRegistration holds the first registration read until release
-// closes, after it has closed reading.
-type heldRegistration struct {
-	agent.StandaloneStore
-	once    sync.Once
-	reading chan struct{}
-	release chan struct{}
-}
-
-func (h *heldRegistration) GetSupervisor(ctx context.Context, g grn.GRN) (*agent.Supervisor, error) {
-	first := false
-	h.once.Do(func() { first = true })
-	if first {
-		close(h.reading)
-		<-h.release
-	}
-	return h.StandaloneStore.GetSupervisor(ctx, g)
-}
-
-// TestSupervisorRenewal_ARenewalReadingTheRegistrationAfterItsTwinCommittedReplaysIt
-// covers two identical renewals racing where one reads the
-// registration only after the other has moved it to its successor:
-// the late one answers that successor again rather than refusing the
-// certificate it presented (#1509).
-func TestSupervisorRenewal_ARenewalReadingTheRegistrationAfterItsTwinCommittedReplaysIt(t *testing.T) {
-	p := pool(t)
-	_, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
-	_, e := s.standaloneOf(t)
-	ctx := context.Background()
-	store := agentpg.New(p)
-	registered, err := store.GetSupervisor(ctx, e.supervisor)
-	require.NoError(t, err)
-	require.NotNil(t, registered.Certificate, "a v1 supervisor holds a certificate to renew")
-	presented := *registered.Certificate
-
-	held := &heldRegistration{StandaloneStore: store, reading: make(chan struct{}), release: make(chan struct{})}
-	late := func() time.Time { return presented.NotAfter.Add(-time.Minute) }
-	signer := &countingSigner{}
-	racing := agent.NewSupervisorService(held, store, nil, signer, nil, late)
-	request := []byte("csr-" + strconv.FormatInt(time.Now().UnixNano(), 10))
-
-	type answer struct {
-		issued  *agent.SupervisorCertificate
-		created bool
-		err     error
-	}
-	second := make(chan answer, 1)
-	go func() {
-		issued, created, err := racing.RenewSupervisor(ctx, e.supervisor, presented, "renew-1", request)
-		second <- answer{issued, created, err}
-	}()
-	<-held.reading
-	first, created, err := racing.RenewSupervisor(ctx, e.supervisor, presented, "renew-1", request)
-	require.NoError(t, err)
-	assert.True(t, created, "the first renewal installs the successor")
-	close(held.release)
-	got := <-second
-
-	require.NoError(t, got.err, "the identical renewal is answered again, not refused")
-	assert.False(t, got.created)
-	assert.Equal(t, first.CertificatePEM, got.issued.CertificatePEM, "both answer one certificate")
-	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM agent_supervisor_renewals WHERE supervisor_grn = $1`, e.supervisor.String()))
-	_, _, err = racing.RenewSupervisor(ctx, e.supervisor, presented, "renew-1", []byte("csr-another"))
-	assert.ErrorIs(t, err, agent.ErrRenewalConflict, "another request under the same identifier is still refused")
-}
-
 // spending is spend for a goroutine, which cannot fail the test.
 func (s *executionStack) spending(client *http.Client, h standaloneHost, body string) func() (reply, error) {
 	return func() (reply, error) {
-		return s.exchange(client, http.MethodPost, "/agent-enrollments", agent.StandaloneContractVersion, "Garam-Bootstrap "+h.secret, body)
+		return s.exchange(client, http.MethodPost, "/agent-enrollments", agent.CredentialStandaloneContractVersion, "Garam-Bootstrap "+h.secret, body)
 	}
 }
 
@@ -709,8 +543,8 @@ func TestStandalone_ARevocationLeavesNoActivationInEitherOrder(t *testing.T) {
 		_, e := s.standaloneOf(t)
 		revoke := s.browsing(http.MethodDelete, "/orgs/acme/agent-supervisors/"+e.supervisor.Identifier, s.owner)
 		activate := func() (reply, error) {
-			return s.exchange(e.supervisorTLS, http.MethodPost, s.agentPath("/activations"), agent.ExecutionContractVersion, "",
-				activationBodyOf("q-1", e.epoch, generationOf(1), nil, e.agentLeaf))
+			return s.exchange(e.supervisorTLS, http.MethodPost, s.agentPath("/activations"), agent.TokenExecutionContractVersion, "",
+				activationBodyOf("q-1", e.epoch, generationOf(1), nil, e.agentToken))
 		}
 		var activated reply
 		if revokeFirst {
@@ -729,7 +563,7 @@ func TestStandalone_ARevocationLeavesNoActivationInEitherOrder(t *testing.T) {
 			var a machinegen.Activation
 			require.NoError(t, json.Unmarshal([]byte(activated.body), &a))
 			s.open(t, e.agentTLS)
-			allRefused(t, s.protectedCalls(t, e.agentTLS, a.Token), http.StatusForbidden, "the revoked supervisor's token")
+			allRefused(t, s.protectedCalls(t, e.agentTLS, a.Token), http.StatusForbidden, "the revoked supervisor's activation")
 		}
 	}
 }
@@ -737,8 +571,9 @@ func TestStandalone_ARevocationLeavesNoActivationInEitherOrder(t *testing.T) {
 // TestStandalone_IdenticalFirstSpendingsCreateOneAgent queues two
 // identical first spendings of one approval behind its row, each having
 // found no agent before it waits. One creates the agent and the other
-// answers the same recorded result rather than a supersession; a
-// changed request queued the same way still conflicts.
+// answers the same agent rather than a supersession. A changed request
+// is refused before it waits, and spends nothing, which the approval
+// then spent is the control on.
 func TestStandalone_IdenticalFirstSpendingsCreateOneAgent(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
@@ -750,22 +585,17 @@ func TestStandalone_IdenticalFirstSpendingsCreateOneAgent(t *testing.T) {
 	e := s.approved(t, h, nil)
 	first, second := s.queuedBehind(t, lock, e.ID, s.spending(anonymous, h, h.enrollment(t)), s.spending(anonymous, h, h.enrollment(t)))
 	assert.Equal(t, http.StatusCreated, first.status, first.body)
-	assert.Equal(t, http.StatusOK, second.status, "an identical spending answers the recorded result: %s", second.body)
-	assert.JSONEq(t, first.body, second.body)
+	assert.Equal(t, http.StatusOK, second.status, "an identical spending answers the recorded agent: %s", second.body)
+	assert.Equal(t, credentialOf(t, first).agent, credentialOf(t, second).agent)
 	assert.Equal(t, 1, countRows(t, s.pool, `SELECT count(*) FROM agents WHERE grn = $1`, e.AgentGrn))
 	assert.Equal(t, 1, countRows(t, s.pool, `SELECT count(*) FROM agent_supervisors WHERE agent_grn = $1`, e.AgentGrn))
-	assert.Equal(t, 1, countRows(t, s.pool, `SELECT count(DISTINCT lineage) FROM agent_credentials WHERE agent_grn = $1`, e.AgentGrn))
 
 	other := newStandaloneHost(t)
-	o := s.approved(t, other, nil)
-	// The same approved key under a request signed again: it passes
-	// the fingerprint and waits on the row, then differs from the
-	// recorded request.
+	s.approved(t, other, nil)
 	changed := other
-	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, other.agentKey)
-	require.NoError(t, err)
-	changed.agentCSR = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der}))
-	first, second = s.queuedBehind(t, lock, o.ID, s.spending(anonymous, other, other.enrollment(t)), s.spending(anonymous, other, changed.enrollment(t)))
-	assert.Equal(t, http.StatusCreated, first.status, first.body)
-	assert.Equal(t, http.StatusConflict, second.status, "a changed request still conflicts: %s", second.body)
+	changed.requestID = "another-request"
+	refused := s.spend(t, other.secret, changed.enrollment(t))
+	assert.Equal(t, http.StatusConflict, refused.status, "a changed request conflicts: %s", refused.body)
+	spent := s.spend(t, other.secret, other.enrollment(t))
+	assert.Equal(t, http.StatusCreated, spent.status, "the control: the approved request spends it: %s", spent.body)
 }

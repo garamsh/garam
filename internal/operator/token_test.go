@@ -49,31 +49,9 @@ func (e *exchanges) ResolveToken(_ context.Context, tokenHash string) (operator.
 func exchanging(t *testing.T, store *exchanges) (operator.Service, time.Time) {
 	t.Helper()
 	at := time.Date(2026, time.October, 9, 12, 0, 0, 0, time.UTC)
-	svc := operator.NewService(newRecords(), store, &signer{},
+	svc := operator.NewService(store,
 		operator.Config{Now: func() time.Time { return at }})
 	return svc, at
-}
-
-// TestService_RenewRefusesACallerThatPresentedNoCertificate holds the
-// renewal's own refusal of a token's holder (ADR-0100): a credential
-// with no serial and no start is refused before anything is signed.
-// The certificate inside its window is the control: the same service
-// renews it, so what refuses the first is the missing certificate and
-// not a window everything fails.
-func TestService_RenewRefusesACallerThatPresentedNoCertificate(t *testing.T) {
-	issuer := &signer{}
-	svc, c := service(t, newRecords(), issuer)
-	subject := operatorGRN("acme", "one")
-	now := c.now()
-
-	_, err := svc.Renew(context.Background(), operator.Credential{Subject: subject, NotAfter: now.Add(time.Hour)})
-	require.ErrorIs(t, err, operator.ErrNoCertificate)
-	assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated))
-
-	_, err = svc.Renew(context.Background(), operator.Credential{
-		Subject: subject, Serial: "1", NotBefore: now.Add(-lifetime + time.Hour), NotAfter: now.Add(time.Hour),
-	})
-	assert.NoError(t, err, "a certificate inside its window renews")
 }
 
 // holds the controller proof's token half (ADR-0100): a token proves
@@ -149,7 +127,7 @@ func assertionExchanging(t *testing.T, endpoint string) (operator.Service, *keyE
 	t.Helper()
 	private, _ := keys(t)
 	store := &keyExchanges{exchanges: newExchanges(), key: recorded(t, client, private)}
-	svc := operator.NewService(newRecords(), store, &signer{},
+	svc := operator.NewService(store,
 		operator.Config{TokenEndpoint: endpoint})
 	return svc, store
 }

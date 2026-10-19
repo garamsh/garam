@@ -159,7 +159,8 @@ func (h *host) record() record {
 // interposer stands between a supervisor and garam's machine listener,
 // as the test's own fixture: it terminates TLS under a certificate the
 // stack's root signed and calls garam with the supervisor's own
-// certificate, so garam sees the supervisor's request unchanged. While
+// headers, its token among them, so garam sees the supervisor's request
+// unchanged. While
 // lose is set it forwards an activation and then drops garam's answer,
 // as a connection lost after garam committed; while hold is set it
 // keeps every activation waiting. It keeps every token garam's
@@ -180,11 +181,11 @@ func (s *stack) interpose(h *host, certPEM, keyPEM []byte) *interposer {
 	s.t.Helper()
 	p := &interposer{s: s, held: make(chan struct{})}
 	close(p.held)
-	upstream := h.supervisorClient()
+	upstream := h.client("")
 	pair, err := tls.X509KeyPair(certPEM, keyPEM)
 	require.NoError(s.t, err)
 	ln, err := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
-		Certificates: []tls.Certificate{pair}, ClientAuth: tls.RequireAnyClientCert, MinVersion: tls.VersionTLS13,
+		Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS13,
 	})
 	require.NoError(s.t, err)
 	srv := &http.Server{ReadHeaderTimeout: 10 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

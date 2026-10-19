@@ -1,37 +1,15 @@
 // Package operator owns what an organization records about an operator
 // and what that operator authenticates with: the record that the
-// organization has it (ADR-0045), and which certificate garam last
-// issued it, together with what it takes to replace that with the next
-// one (ADR-0046).
+// organization has it (ADR-0045), and the keys issued on that record,
+// whose signed assertions it exchanges for short-lived tokens
+// (ADR-0102, ADR-0117).
 //
 // An operator provisions agents inside a cluster garam never dials
-// (ADR-0012) and authenticates with a certificate of its own
-// (ADR-0015). Neither of those left garam holding a record that the
-// operator exists. The registration is that record, and it is what the certificate
-// authenticates on: an operator the organization no longer holds a
-// record of does not authenticate, which is what deleting one
-// withdraws (ADR-0070). It still issues nothing — the record admits a
-// certificate and mints none.
-//
-// An operator enters by a key garam issues on its registration, whose
-// assertions it exchanges for short-lived tokens (ADR-0102, ADR-0117).
-// An operator authenticating by certificate obtained its first out of
-// band, from the command ADR-0032 ships; every certificate after the
-// first is issued here, over the connection the certificate being
-// replaced authenticated.
-//
-// Only the newest certificate an operator holds may be renewed, and
-// renewing moves that record. That is what bounds a stolen
-// certificate while the operator is still wanted: the operator it was
-// taken from renews, the theft loses the lineage and expires, and
-// whichever of the two is cut off learns of it at its next renewal.
-// It narrows a theft rather than ending one, and what ends one is
-// deleting the operator, which stops every certificate naming it at
-// once (ADR-0070).
-//
-// The agent's certificate is not this package's. An agent is admitted
-// to its own by the claim its operator made (ADR-0033) and renews on
-// the route ADR-0040 gave it; nothing here reads or writes that.
+// (ADR-0012). The registration is the record that it exists, and it is
+// what its tokens authenticate on: an operator the organization no
+// longer holds a record of does not authenticate, which is what
+// deleting one withdraws (ADR-0070). garam issues an operator no
+// certificate (ADR-0118).
 package operator
 
 import (
@@ -54,26 +32,9 @@ var (
 	// caller learns the identifier is taken rather than being told it
 	// registered what somebody else did.
 	ErrOperatorAlreadyRegistered = errorx.New(errorx.KindAlreadyExists, "operator is already registered")
-	// ErrNotAnOperator refuses a caller whose certificate names
-	// something else. An agent authenticates on the same listener
-	// (ADR-0015) and renews on the route of its own that the claim
-	// admits it to (ADR-0040).
-	ErrNotAnOperator = errorx.New(errorx.KindPermissionDenied, "certificate does not name an operator")
-	// ErrCertificateExpired refuses a certificate that has run out.
-	// This is the bootstrap boundary: an expired certificate has no
-	// connection left to renew over, and the command ADR-0032 ships is
-	// what mints the one that follows it.
-	ErrCertificateExpired = errorx.New(errorx.KindPermissionDenied, "certificate has expired: the next one is minted out of band")
-	// ErrRenewalTooEarly refuses a certificate that has too much life
-	// left. A certificate replaceable from the moment it is issued has
-	// no lifetime worth configuring.
-	ErrRenewalTooEarly = errorx.New(errorx.KindFailedPrecondition, "certificate is not yet within its renewal window")
-	// ErrSuperseded refuses a certificate garam has already replaced.
-	// The caller holds a certificate that still authenticates and can
-	// no longer be renewed: either another holder of the same identity
-	// renewed first, or an answer this caller never received did. Both
-	// are recovered the same way, by minting out of band again.
-	ErrSuperseded = errorx.New(errorx.KindAlreadyExists, "a newer certificate has already been issued for this operator")
+	// ErrNotAnOperator refuses a caller or a stored identity that is
+	// not an operator.
+	ErrNotAnOperator = errorx.New(errorx.KindPermissionDenied, "the identity is not an operator")
 )
 
 // The bounds on what an organization says about its operator, in
@@ -143,14 +104,11 @@ func (p DetailsPatch) Name() *string { return p.name }
 func (p DetailsPatch) Description() *string { return p.description }
 
 // Operator is an organization's record that it has an operator under
-// this GRN, and where that operator stands in obtaining a certificate.
+// this GRN.
 //
 // It carries no state the operator reports and no credential. What an
 // operator does is reported against the agents it holds (ADR-0012), and
-// what it authenticates with is the certificate this package's Service
-// issues. The last two fields are what garam already knows about that
-// certificate, read beside the record and persisted nowhere on it: the
-// state is a property of the tables together rather than of this row.
+// what it authenticates with is a token its key was exchanged for.
 // Name and Description are persisted on the row and exported, as
 // structure.md asks of what an aggregate persists (ADR-0074).
 type Operator struct {
@@ -169,19 +127,14 @@ type Operator struct {
 	// the console, nil where none is registered. Only an actor holding
 	// operator:delegate moves it (#1170).
 	ControlEndpoint *ControlEndpoint
-
-	// When garam last issued the operator a certificate, zero where it
-	// has issued none.
-	certificateIssuedAt time.Time
 }
 
 // New records that orgGRN has an operator under identifier.
 // registeredBy is the member that registered it, and details what it
 // says about the operator; a name it leaves out is the identifier.
 //
-// The identifier is supplied rather than minted, because it is already
-// the subject of a certificate wherever an operator holds one
-// (ADR-0032).
+// The identifier is supplied rather than minted, because the operator
+// is configured with it before it is registered.
 func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN, details DetailsPatch) (*Operator, error) {
 	g, err := GRNOf(orgGRN, identifier)
 	if err != nil {
@@ -223,9 +176,8 @@ func GRNOf(orgGRN grn.GRN, identifier string) (grn.GRN, error) {
 }
 
 // validateOwnership returns nil if g names an operator of the
-// organization orgGRN identifies. An operator holds one organization's
-// certificate (ADR-0015), so an operator of another organization is not
-// a resource this one can register.
+// organization orgGRN identifies. An operator of another organization
+// is not a resource this one can register.
 func validateOwnership(g, orgGRN grn.GRN) error {
 	switch {
 	case g.ServiceType != ServiceType:
@@ -242,12 +194,3 @@ func (o *Operator) Organization() grn.GRN { return o.orgGRN }
 // RegisteredBy returns the member that registered the operator.
 func (o *Operator) RegisteredBy() grn.GRN { return o.registeredBy }
 func (o *Operator) CreatedAt() time.Time  { return o.createdAt }
-
-// CertificateIssuedAt returns when garam last issued the operator a
-// certificate, and the zero time where it has issued none.
-//
-// It is the current certificate's and not the first one's: a renewal
-// moves the record this reads (ADR-0046) and what came before is not
-// kept, so this answers when garam last signed for the operator rather
-// than when the operator enrolled.
-func (o *Operator) CertificateIssuedAt() time.Time { return o.certificateIssuedAt }

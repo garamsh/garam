@@ -415,6 +415,21 @@ func (q *Queries) GetProject(ctx context.Context, grn string) (Project, error) {
 	return i, err
 }
 
+const holdsCertificateAuthority = `-- name: HoldsCertificateAuthority :one
+SELECT EXISTS (SELECT 1 FROM certificate_authorities WHERE org_grn = $1)::boolean AS held
+`
+
+// Whether DeleteOrg's cascade would take a retired certificate
+// authority with the organization (ADR-0118). Presence alone: no
+// column of the row is read, and its sealed key is never opened. It is
+// the one read of certificate_authorities left.
+func (q *Queries) HoldsCertificateAuthority(ctx context.Context, orgGrn string) (bool, error) {
+	row := q.db.QueryRow(ctx, holdsCertificateAuthority, orgGrn)
+	var held bool
+	err := row.Scan(&held)
+	return held, err
+}
+
 const listGroupMembers = `-- name: ListGroupMembers :many
 SELECT member_grn FROM group_members WHERE group_grn = $1 ORDER BY member_grn
 `

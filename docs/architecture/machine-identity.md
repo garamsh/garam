@@ -1,29 +1,27 @@
 # Machine Identity
 
 Who is calling on the listener a machine identity authenticates on
-(ADR-0014, ADR-0015, ADR-0100), and the evidence of how each caller
-authenticated (ADR-0109). Implemented by `internal/machine`.
+(ADR-0100), and the evidence of how each caller authenticated
+(ADR-0109). Implemented by `internal/machine`.
 
-Pending removal
+Every machine caller authenticates by a token it presents, and the
+listener asks for no client certificate
 ([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)):
-the certificate path goes in G4 (#1494), the certificates of an agent
-whose execution holds no lineage among them, and what this document
-says of it holds until then. An agent's generation has no legacy
-cohort: every agent's protected call waits for an activation
-(ADR-0118). An operator's shared-secret credential, its exchange and
-its enrollment token are gone
+garam signs no certificate for a machine caller, and the rows of
+`certificate_authorities` an earlier release left stay unread. An
+agent's generation has no legacy cohort: every agent's protected call
+waits for an activation (ADR-0118). An operator's shared-secret
+credential, its exchange and its enrollment token are gone
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md));
 the supervisor's shared-secret exchange and `machine-token.v1` stay.
 
 | Type | Responsibility |
 |------|----------------|
-| `Identity` | the GRN a verified client certificate names, and the certificate's own serial and dates — which is what a caller asking to replace it is answered by (ADR-0046) |
-| `Service` | recovers that GRN, verifies the certificate against the organization's authority, and refuses an identity the organization no longer holds a record of; for a decision, verifies again — the caller's identity against the clock and its record, and a certificate presented on another identity's behalf against that identity. `Prove` is the certificate half alone: the SAN and the chain, establishing neither validity now, nor a record, nor any authority to act |
-| `TrustRoot` | supplies the authority a presented certificate has to chain to |
-| `Registration` | answers whether the organization still holds its record of the identity a certificate names: an operator's record (ADR-0070) or a supervisor's current registration (ADR-0082) |
+| `Identity` | the GRN a live token names, and the token's own serial and dates — which is what the execution fence judges an agent's request by (ADR-0080) |
+| `Recheck` | reads again, for one decision, what admitted an identity: its token's dates against the clock, and the organization's record of it |
+| `Registration` | answers whether the organization still holds its record of an identity: an operator's record (ADR-0070) or a supervisor's current registration (ADR-0082) |
 | `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
 | `Tokens` | answers what a token a request presents stands for, read for that request beside the record it rests on (ADR-0100) |
-| `Method` | how a request's identity was proven: a certificate the handshake verified, or a token the request presented |
 | `Evidence` | notes each caller's authentication by path, at most once a minute per caller and path per process, and never fails a request (ADR-0109) |
 | `Recorder` | keeps that evidence; satisfied by `internal/machine/postgres` |
 
@@ -32,95 +30,61 @@ here and the listener does not branch on which. It asks one question
 of each and the branch is in the seam that answers it: an operator is
 admitted while its organization still holds the record (ADR-0070), a
 supervisor while its registration is current — a revocation or a
-replacement ends it (ADR-0082) — and an agent is held without a
-read. What the certificate asserts is the
-GRN in its SAN URI and nothing beside it: no user row, no session, no
-membership, so no foreign key on `users` is touched and no handler
-taking a `*user.User` changes. The identity carries the certificate's
-own serial and dates as well, which assert nothing and describe which
-certificate authenticated — the one question a caller asking to replace
-it is answered by (ADR-0046).
-
-The SAN carries exactly one URI and it is parsed whole as a GRN. That
-one parse is the whole of the check on the URI: `grn.Parse` splits on
-every colon and holds every segment to the character rule
-([grn-model.md](./grn-model.md) §identifier), so a URI carrying a
-separator that would move a segment — a colon outside the four, a `?`,
-a `#` — is not a GRN and names no identity. The rule lives in
-`internal/grn` and is pinned there; this boundary calls it rather than
-keeping a copy. Which authority the certificate must then chain to is
-read off the organization segment of that GRN, so a certificate one
-organization's CA signed for another organization's identity is
-refused by the trust root rather than by a check. Chaining is not the
-whole of that verification either: at the handshake it is
-`crypto/x509`'s, which in the same call refuses a certificate outside
-its validity period and one not marked for client authentication, so
-neither refusal at authentication is code this repository holds. What
-is read again after the handshake is below.
+replacement ends it (ADR-0082) — and an agent is admitted by its
+assignment and its token's lineage, which its token's read already
+joins. What the token asserts is the GRN it was issued to and nothing
+beside it: no user row, no session, no membership, so no foreign key on
+`users` is touched and no handler taking a `*user.User` changes. The
+identity carries the token's own serial and dates as well, which
+assert nothing and describe which token authenticated — an agent
+token's serial is what the execution fence judges its request by
+(§Generation and lineage).
 
 The package holds no store and reaches no database; the one store
 beside it, `internal/machine/postgres`, keeps the evidence
-§Authentication evidence describes behind `Recorder`. `TrustRoot` is the
-seam the composition root satisfies from `internal/ca`, which keeps the
-two domains cooperating through `grn.GRN` alone. Verification needs the
-authority's certificate and never its key. `Registration` is a seam of
-the same shape, satisfied from `internal/operator` for an operator and
-from `internal/agent` for a supervisor, and it is what turns an
-organization deleting an operator, or revoking a supervisor, into a
-certificate that stops authenticating — no list, no responder and no
-stored serial, just the record the organization already keeps, read
-once per connection after the chain verifies. Both reads are per
-connection and a resumed handshake takes them too, because
-`Authenticate` runs from
-`VerifyConnection` (ADR-0064): a check that ran only on a full
-handshake would let a deleted operator keep connecting for as long as
-its tickets lasted.
+§Authentication evidence describes behind `Recorder`. `Tokens` and
+`Registration` are seams the composition root satisfies
+(`internal/cli/machine.go`): `Tokens` from the domain a token's prefix
+names, and `Registration` from `internal/operator` for an operator and
+from `internal/agent` for a supervisor. A token's read joins the record
+it rests on, so an organization deleting an operator, or revoking a
+supervisor, refuses the next request on a connection already open
+(§Tokens) — no list, no responder, just the record the organization
+already keeps.
 
-Three kinds of route read them again on every request:
+Three kinds of route read them again for their decision:
 
 - **The controller proof**
   ([operators.md](./operators.md) §Controller proof) asks `Recheck` of
-  the caller's identity — its credential's dates against the clock,
-  then its record — and `Verify` of the controller certificate the
-  caller forwards, which proves the identity it is presented for by its
-  SAN, by its organization's authority, by its validity at the decision
-  and by its record. A controller token
-  forwarded under `operation-authority.v2` is the operator domain's to
-  prove instead. The chain is verified
-  at a time inside the certificate's validity and the validity at the
-  decision is checked apart from it, so a certificate nothing signed
-  and one that has run out are told apart.
+  the caller's identity — its token's dates against the clock, then its
+  record — and the operator domain proves the controller token the
+  caller forwards under `operation-authority.v2`.
 - **The execution lifecycle routes** ask `Recheck` of the caller the
-  same way, and `Prove` of the agent certificate it forwards. That
-  proof establishes only that the certificate names the agent and
-  chains to its organization's authority; whether it is valid now and
-  in the current lineage is the execution fence's to judge
-  (§Generation and lineage), so an expired agent certificate is
-  answered as fenced rather than as unproven. An agent token forwarded
-  under `execution-fence.v2` is proven the same way by the agent
-  domain, and judged by the same fence.
+  same way, and the agent domain proves the agent token the caller
+  forwards under `execution-fence.v2`: that it names the agent and was
+  minted to be shown to the caller, or by a supervisor caller for
+  garam. Whether it is valid now and in the current lineage is the
+  execution fence's to judge (§Generation and lineage), so an expired or
+  superseded agent token is answered as fenced rather than as unproven.
 - **An agent's protected calls** are judged by the execution fence on
-  the certificate's serial and dates as the handshake read them, so a
-  certificate that expired on an open connection is refused there
+  the token's serial and dates as the request's read answered them
   (§Generation and lineage).
 
-Every other route relies on listener admission, which reads them once
-per connection; an operator's renewal also reads the certificate's
-dates, to decide its renewal window ([operators.md](./operators.md)).
-`ServerCertificate` is the
-other seam, satisfied from `internal/keyfile`, and what it answers with
-is a different trust root: garam verifies an identity by its
-organization's authority, and an identity verifies garam by the one
-root every organization shares (ADR-0040).
+Every other route relies on listener admission, which reads them on
+every request. `ServerCertificate` is the other seam, satisfied from
+`internal/keyfile`, and what it answers with is the certificate every
+machine caller verifies garam by: it chains to the one root every
+organization shares (ADR-0040), which garam answers as `serverRootPem`
+beside every agent token it mints and every supervisor credential it
+issues.
 
 `garam serve machine` is where the listener runs — its own process and
 its own port (ADR-0017), terminating TLS itself with the pair it holds
 as two paths and re-reads per handshake, the private key under the
 owner-only rule `internal/keyfile` holds, and the root that signed that
-pair beside them for every identity it issues a certificate to. It
-terminates TLS itself because a forwarded client-certificate header is
-trustworthy only where every deployment strips it at the edge
-(ADR-0014). It is not part of the local Docker stack: its key material
+pair beside them. It terminates TLS itself, so the certificate a caller
+pins that root against is the one garam presents (ADR-0040). It is not
+part of the local Docker stack: its key material
 is per host, and compose has
 no step that generates it and hands a container a file that container
 owns. The Kubernetes stacks under `deploy/` have that step — an init
@@ -130,18 +94,17 @@ what compose lacks is the step, not something a container cannot do.
 ## Asymmetric Operator exchange
 
 **Built at garam; no Operator release exchanges yet.**
-[ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
-adds signed client assertions beside the certificate cohort §Tokens
-describes, which remains; they are how an operator obtains a token, the
+[ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)'s
+signed client assertions are how an operator obtains a token, the
 shared-secret exchange beside them being gone (ADR-0117).
 `api/machine.yaml` §exchangeClientAssertion is authoritative for the
 exchange's wire and refusals, and §machineBearer for the alias.
 
 - **`exchangeClientAssertion`, `POST /oauth/token`, is the client
   credentials grant authenticated by private_key_jwt under
-  `machine-token.v2`.** It reads no client certificate and no
-  `Authorization` header — either refuses as `invalid_request` — so a
-  caller holds one credential there and falls back to none. Its RS256,
+  `machine-token.v2`.** It reads no `Authorization` header — one
+  refuses as `invalid_request` — so a caller holds one credential there
+  and falls back to none. Its RS256,
   identity, endpoint audience, lifetime and duplicate-member checks are
   `internal/operator` `ParseClientAssertion` and
   `ClientAssertion.Verify`; the key is looked up by `kid` within the
@@ -216,7 +179,7 @@ exchange's wire and refusals, and §machineBearer for the alias.
 - **`Authorization: Bearer <token>` is the same token as
   `Garam-Token`.** `machine.PresentedToken` is the one reading of that
   header the listener and the routes share, so the alias takes the
-  same resolver, route set, v2 contract values and header placement;
+  same resolver, operations, contract values and header placement;
   `api/machine.yaml` lists `machineBearer` beside every `machineToken`
   and a test holds the two lists equal. The scheme matches
   case-insensitively, and a `Bearer` value with no token after it is
@@ -249,27 +212,23 @@ exchange's wire and refusals, and §machineBearer for the alias.
 ## Tokens
 
 **Built for an operator, an agent and a standalone host's
-supervisor.** ADR-0100 moves every machine caller from a client
-certificate to a short-lived token it obtains with a credential garam
-issued, and `docs/plans/2026-10-09-machine-identity-migration.md` is
-the order it lands in. What runs now is its step G1, the four pull
-requests G1a to G1d, and G2, the adapter presenting an agent token
-from a file and a standalone host running on its supervisor credential
+supervisor, and the one way a machine caller authenticates**
+(ADR-0100, ADR-0118). Each presents a short-lived token it obtained
+with a credential garam issued: an operator exchanges an assertion its
+key signed (§Asymmetric Operator exchange), a supervisor its
+credential, and an agent holds the tokens its assignee mints for it
 ([adapter.md](./adapter.md) §Token mode,
-[agents.md](./agents.md) §Standalone hosts); a certificate still
-authenticates beside a token until G3.
+[agents.md](./agents.md) §Standalone hosts).
 
-- **A request may present a token instead of a certificate**, as
-  `Authorization: Garam-Token <token>` or, the same token,
-  `Authorization: Bearer <token>` (ADR-0102). The listener asks `Tokens`
-  for that request, and the identity it answers carries `MethodToken`,
-  the GRN and the token's dates. An agent's token carries a serial too —
-  `t` and hex, which no certificate's decimal serial equals — and the
-  execution fence reads it as it reads a certificate's: current while
-  the token is inside its dates, minted at the agent's present assignee
-  and epoch, and in the lineage the execution holds now. An operator's
-  token carries none, so a route reading a credential refuses it, and no
-  token reaches a route that renews a certificate.
+- **A request presents a token**, as `Authorization: Garam-Token
+  <token>` or, the same token, `Authorization: Bearer <token>`
+  (ADR-0102). The listener asks `Tokens` for that request, and the
+  identity it answers carries the GRN and the token's dates. An agent's
+  token carries a serial too — `t` and hex — and the execution fence
+  reads it: current while the token is inside its dates, minted at the
+  agent's present assignee and epoch, and in the lineage the execution
+  holds now. An operator's token carries none, so a route reading a
+  credential's serial refuses it.
 - **The read is per request, not per connection.** A value that is not a
   token's shape is refused before it is read, and a refusal is logged at
   debug: it is the caller's to fix, and only a read that could not be
@@ -284,48 +243,53 @@ authenticates beside a token until G3.
   for the lifecycle decision it is shown for
   ([operators.md](./operators.md) §Controller proof,
   [agents.md](./agents.md) §Tokens in place of certificates).
-- **A token or a certificate, never both.** A request presenting a
-  token over a connection whose certificate authenticated carries no
-  identity, and the reason travels with it, as it does for a token
-  that proved nothing, so the handler's refusal says why. So does a
-  request carrying more than one `Authorization` header while any of
-  them presents a token.
-- **A token takes its contract's v2 value.** Each contract whose
-  transport changes is served to a token under its v2 value and to a
-  certificate under v1, and a request whose value and credential
-  disagree is refused with 400 naming the value its credential takes;
-  `internal/machineapi/contract.go` holds the pairs. The values that
-  share `Authorization` beside a certificate — an execution token, an
-  operation authority or reference — travel in a header of their own
-  beside a token, `Garam-Execution` and `Garam-Operation`.
+- **One `Authorization` header.** A request carrying more than one
+  while any of them presents a token carries no identity, and the reason
+  travels with it, as it does for a token that proved nothing, so the
+  handler's refusal says why.
+- **Each contract has one value.** `internal/machineapi/contract.go`
+  holds the ones the listener serves to a token —
+  `operation-authority.v2`, `execution-fence.v2`,
+  `managed-enrollment.v2` and `durable-delivery.v2` — and a request
+  under another value is
+  refused with 400 naming the one served. A standalone host spends its
+  approval under `standalone-enrollment.v2`, the supervisor's exchange
+  and an agent token's mint take `machine-token.v1` and the client
+  assertion exchange `machine-token.v2`, and an approval's admission
+  takes `agent-enrollment.v1`. The values that travel beside the
+  caller's token — an execution token, an operation authority or
+  reference — take headers of their own, `Garam-Execution` and
+  `Garam-Operation`.
 - **A token reaches the operations `api/machine.yaml` lists
-  `machineToken` on, and no other.** `ConfineTokens` in
-  `internal/machineapi/token.go` is where that is decided, as
-  `ConfineSupervisors` decides a supervisor's reach, and a test holds
-  its route set against that file. A route that reads the certificate
-  a connection presented — a renewal, the execution fence — refuses a
-  token's identity by itself as well, so that refusal does not rest on
-  the route set alone.
+  `machineToken` on.** Every operation lists it but the four that take
+  no token — a standalone enrollment, the two exchanges and the
+  published message signing keys — and a test in
+  `internal/machineapi` holds the specification to that. What a caller
+  may do there is its identity's: a route reading a credential's serial
+  refuses an operator's token, and `ConfineSupervisors` keeps a
+  supervisor to its identity, its lifecycle routes and its agent's mint
+  ([agents.md](./agents.md) §Standalone hosts).
 
 ## Authentication evidence
 
-**Built; read by the G3 gate**
-([ADR-0109](./adr/0109-each-machine-callers-last-authentication-by-each-path-is-kept-in-postgres-for-the-g3-gate.md)).
-The certificate path is retired only once each cohort is shown on the
-new paths and no request has taken the old one for seven days
-(`docs/plans/2026-10-09-machine-identity-migration.md`). This section
-covers what records that.
+**Built**
+([ADR-0109](./adr/0109-each-machine-callers-last-authentication-by-each-path-is-kept-in-postgres-for-the-g3-gate.md)):
+the record of how each caller has authenticated by each path, which
+ADR-0118 read before the certificate path went. This section covers
+what records it.
 
 - **One row per caller and path** in `machine_authentication_evidence`
-  (`migrations/000052`). The paths are `certificate`, `token`,
+  (`migrations/000052`). The paths written are `token`,
   `exchange_shared_secret`, `exchange_private_key_jwt`, `agent_mint` and
-  `audience_token`, and `machine.Path` names them. A row holds when its
+  `audience_token`, and `machine.Path` names them; a `certificate` row
+  an earlier release recorded stays, and the inventory reads it. A row
+  holds when its
   path was first and last seen. For an issuance it also holds when the
   last recorded token expires and the last refresh, meaning an issuance
   made while that token was still accepted. No column holds a credential
   or any part of one.
 - **Recorded where each path is decided.** `identify` notes the
-  certificate or token path of every request it hands an identity. The
+  token path of every request it hands an identity. The
   exchange and mint handlers report what they issued through
   `machine.ReportIssuance`, and `recordIssuances` in
   `internal/cli/machine_token.go` records it under the path the route
@@ -346,21 +310,20 @@ covers what records that.
 
 **Built**
 ([ADR-0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)).
-Every issuance, renewal and refusal of an operator certificate,
-supervisor certificate, supervisor credential or agent token is one row
-of `audit_credential_events` (`migrations/000054`; `000056` dropped the
-operator credential and enrollment token kinds with them), held by the
-audit domain ([audit.md](./audit.md)). Unlike the evidence above, it is
+Every issuance and refusal of a supervisor credential or an agent token
+is one row of `audit_credential_events` (`migrations/000054`; `000056`
+dropped the operator credential and enrollment token kinds with them),
+held by the audit domain ([audit.md](./audit.md)); a row an earlier
+release wrote for an operator or a supervisor certificate stays and
+reads as it was. Unlike the evidence above, it is
 a record and not a sampling: one row per answer, none coalesced.
 
 - **What a row says.** The subject, the credential, `issue` or `renew`,
   issued or refused, whether an issued answer replayed an earlier
-  identical one, a refusal's error kind, and for a certificate the
-  serial and validity read off the certificate answered; for a token,
-  when it was minted and until when it is accepted. No column holds a
-  key, token, credential or certificate.
-- **Where it is written.** `RenewIdentityCertificate`,
-  `EnrollStandaloneAgent`, `RenewSupervisorCertificate` and
+  identical one, a refusal's error kind, and for a token when it was
+  minted and until when it is accepted. No column holds a key, token,
+  credential or certificate.
+- **Where it is written.** `EnrollStandaloneAgent` and
   `MintAgentToken` on this listener, after the outcome and before the
   answer, through the `CredentialAudit` port it declares
   (`WithCredentialAudit`). The browser-facing listener issues no
@@ -369,8 +332,8 @@ a record and not a sampling: one row per answer, none coalesced.
   stands.
 - **What it does not record.** A refusal no subject is attributable
   to — an enrollment whose bootstrap secret did not resolve —
-  and a refusal of the member asking. Agent certificates and token
-  exchanges are not recorded yet.
+  and a refusal of the member asking. Token exchanges are not recorded
+  yet.
 - **The read is `listCredentialEvents`** on the browser-facing
   listener, one subject at a time, newest first, on that subject's own
   read ([api-surface.md](./api-surface.md) §What decides the rest).
@@ -395,15 +358,14 @@ request rather than per connection, so an open connection loses them
 the moment they change:
 
 - **Is this the active generation?** The call carries the token of the
-  activation of its current generation, in `Authorization:
-  Garam-Execution <token>` beside a certificate and in `Garam-Execution`
-  beside an agent token. A missing token is refused, and so is one an
+  activation of its current generation, in `Garam-Execution` beside its
+  agent token. A missing token is refused, and so is one an
   activation, a deactivation, a recovery or a reassignment ended, or
   one the agent was never activated with (ADR-0080).
-- **Is this certificate current?** It must be inside its validity by
-  the database's clock and, once a recovery or a managed creation has
-  started a lineage, in that lineage. The certificate is the one the
-  connection's handshake verified; nothing in a body names it.
+- **Is this agent token current?** It must be inside its dates by the
+  database's clock, minted at the agent's present assignee and epoch,
+  and in the lineage the execution holds now. The token is the one the
+  request's read resolved; nothing in a body names it.
 
 Claiming, renewing and completing a message, posting one, reporting
 runtime state and forwarding a turn event each ask both inside the
@@ -412,34 +374,34 @@ commits (ADR-0080). Reading a sent
 message's state writes nothing; it asks both in the transaction of its
 read, so a refused caller reads nothing. `getIdentity` asks neither.
 The routes and their schemes are `api/machine.yaml`'s, under the
-`executionToken` scheme each declares.
+`executionHeader` scheme each declares.
 
 The hosted control service is a lifecycle caller. It activates,
 deactivates, inspects and recovers an agent's execution on the routes
 tagged `execution` in `api/machine.yaml`, which is authoritative for
-their wire and their `execution-fence.v1` and `.v2` contract values. A
+their wire and their `execution-fence.v2` contract value. A
 standalone host's supervisor is the other: on the same routes it
 activates, deactivates and inspects the one agent it is registered
-for and holds, and recovers nothing; its certificate reaches no
-route but those, its own renewal and its identity
+for and holds, and recovers nothing; its token reaches no route but
+those, its identity and its agent's mint
 ([agents.md](./agents.md) §Standalone hosts). The hosted control
-service alone creates a managed agent and obtains its first
-certificate, on the routes tagged `enrollment`, authoritative for
-theirs and `managed-enrollment.v1` and `.v2`, and prepares and admits
+service alone creates a managed agent, on the route tagged
+`enrollment`, authoritative for its wire and `managed-enrollment.v2`,
+and prepares and admits
 one under `agent-enrollment.v1` on those tagged `agent-enrollment`,
 which take its token alone.
-Each request rereads the caller's credential and registration; each
+Each request rereads the caller's token and registration; each
 but creation and admission rereads its grant, or a supervisor's
 registration and assignment, and current policy too, and those reread
 the member's `agent:create` reference instead, or for a replacement
 the `agent:replace` reference whose grant must cover both the
 controller the agent is on and the one it moves to (ADR-0107). An
-agent's own certificate and a controller's are refused.
-Activation, deactivation, recovery, creation, admission and initial
-issuance are each bounded by a ten-second server deadline over both
+agent's own token and a controller's are refused.
+Activation, deactivation, recovery, creation and admission are each
+bounded by a ten-second server deadline over both
 their authority reads and their write, and past it answer unavailable
 without saying whether the write committed (ADR-0080). Introspection
-answers a forwarded credential's standing and a generation's from one
+answers a forwarded token's standing and a generation's from one
 snapshot; a 200 is a status answer, and only `credential` and
 `generation` both `current`, with the expected binding, is positive. The
 credential's GRN still answers who is calling; these answer whether that

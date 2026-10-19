@@ -27,15 +27,8 @@ const Prepared = z
   .object({
     requestId: z.string().regex(/^[A-Za-z0-9._~-]{1,128}$/),
     secretSha256: Hex64,
-    supervisorKeySha256: Hex64.optional(),
-    agentKeySha256: Hex64.optional(),
   })
-  .strict()
-  .refine(
-    (prepared) =>
-      (prepared.supervisorKeySha256 === undefined) ===
-      (prepared.agentKeySha256 === undefined),
-  );
+  .strict();
 
 const Grn = z.string().refine((value) => parseGrn(value) !== null);
 
@@ -61,9 +54,9 @@ function readPrepared(text: string): z.infer<typeof Prepared> | null {
 
 /**
  * Approves what a standalone or direct host prepared (ADR-0082,
- * ADR-0111): the hash of its bootstrap secret, its request identifier
- * and, for a keyed host, its two key fingerprints, pasted as `garam
- * standalone prepare` printed them. A replacement names the assignment
+ * ADR-0111): the hash of its bootstrap secret and its request
+ * identifier, pasted as `garam standalone prepare` printed them
+ * (ADR-0118). A replacement names the assignment
  * it replaces, exactly as it stands. Nothing pasted is said back.
  */
 export async function approveAgentEnrollment(
@@ -91,9 +84,6 @@ export async function approveAgentEnrollment(
     return { status: "error", message: REFUSAL_COPY.preparedUnreadable };
   }
   const { org, hostName, placement, hours, ...replaces } = parsed.data;
-  if (placement === "direct" && prepared.supervisorKeySha256 !== undefined) {
-    return { status: "error", message: REFUSAL_COPY.directWithKeys };
-  }
 
   const approval: components["schemas"]["AgentEnrollmentApproval"] = {
     placement,

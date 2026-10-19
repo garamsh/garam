@@ -13,8 +13,8 @@ import (
 // inputs is what an activation is sought on and what re-arms one a
 // definite refusal paused: the binding the runtime reports, the
 // placement token's fingerprint and the fingerprint of what the
-// adapter's calls present — the agent certificate's serial, or its
-// token files' hashes (ADR-0084, ADR-0100). Only the first two decide
+// adapter's calls present — its token files' hashes (ADR-0084,
+// ADR-0100). Only the first two decide
 // the request identifier, and a re-armed activation is asked again,
 // never assumed.
 type inputs struct {

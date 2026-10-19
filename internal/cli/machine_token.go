@@ -104,10 +104,10 @@ func minted() error {
 }
 
 // machineRequestsMetric counts the machine listener's requests by how
-// each proved its identity: `certificate`, `token`, or `none` for one
-// that proved none — an enrollment, an exchange, or a refusal. The
-// certificate path is removed once this reads no certificate for long
-// enough (ADR-0100, docs/plans/2026-10-09-machine-identity-migration.md).
+// each proved its identity: `token`, or `none` for one that proved
+// none — an enrollment, an exchange, or a refusal (ADR-0100). The
+// label keeps its name and its `certificate` value is gone with the
+// certificate path (ADR-0118).
 const machineRequestsMetric = "garam_machine_requests_total"
 
 // newMachineRequestCounter builds the counter and registers it on
@@ -134,8 +134,8 @@ func countMachineRequests(counter *prometheus.CounterVec) func(http.Handler) htt
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			method := "none"
-			if identity, ok := machine.IdentityOf(r); ok {
-				method = string(identity.Method())
+			if _, ok := machine.IdentityOf(r); ok {
+				method = "token"
 			}
 			counter.WithLabelValues(method).Inc()
 			next.ServeHTTP(w, r)

@@ -14,6 +14,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
@@ -133,7 +134,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 		oauth_states, password_credentials, password_attempts,
 		policies, policy_versions, policy_attachments, agents,
 		agent_assignments, operators, certificate_authorities,
-		operator_certificates, operator_assertions,
+		operator_assertions,
 		messages, message_consents, message_signing_keys, agent_watches,
 		audit_send_events CASCADE`)
 	require.NoError(t, err)
@@ -150,8 +151,8 @@ func countRows(t *testing.T, p *pgxpool.Pool, query string, args ...any) int {
 }
 
 // registerOperator records that the org owning g has an operator under
-// it, which the machine listener reads per connection to admit its
-// certificate (ADR-0070).
+// it, which the machine listener reads on every request to admit its
+// token (ADR-0070).
 //
 // A GRN the org already holds is left as it is rather than refused.
 // Registering is what standing an operator up takes, and more than one
@@ -217,21 +218,26 @@ func assertUpdated(t *testing.T, was, now stamps) {
 }
 
 // tokenless is what an agent with no activation presents to the
-// execution fence: a valid certificate and no token, which the fence
-// refuses for an agent it holds (ADR-0118).
+// execution fence: a credential inside its dates and no token, which
+// the fence refuses for an agent it holds before it reads the
+// credential (ADR-0118).
 func tokenless(g grn.GRN) agent.Fencing {
-	return agent.Fencing{Agent: g, Credential: valid("1")}
+	now := time.Now()
+	return agent.Fencing{Agent: g, Credential: agent.Credential{Serial: "t" + strings.Repeat("0", 32),
+		NotBefore: now.Add(-time.Minute), NotAfter: now.Add(time.Hour)}}
 }
 
 // activatedFence activates g for assignee through the store, replacing
 // replaces where one is given, and answers the fence its writes then
-// present: a valid certificate and the activation's token. It answers
+// present: a token minted for g and the activation's token. It answers
 // the activation too, for the next one to replace.
 func activatedFence(t *testing.T, p *pgxpool.Pool, g, assignee grn.GRN, requestID string, gen int, replaces *agent.ActivationID) (agent.Fencing, agent.ActivationID) {
 	t.Helper()
+	withLineage(t, p, g)
 	f := fence{p: p, agents: agent.NewPostgresStore(p), exec: agentpg.New(p), agent: g, controller: assignee}
-	a, token := f.activate(t, requestID, generation(gen), replaces, valid("1"))
-	return fencing(g, &token, valid("1")), a.ID
+	c := f.valid(t, "1")
+	a, token := f.activate(t, requestID, generation(gen), replaces, c)
+	return fencing(g, &token, c), a.ID
 }
 
 // seedAgent mints an agent of the org and stores it.
@@ -447,39 +453,44 @@ func machineListenerHolding(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, eng
 	return "https://" + lis.Addr().String()
 }
 
-// installed returns the certificate garam signs for subject as the
-// process holding it presents one. An operator's own first certificate
-// arrives out of band (ADR-0015); an agent's comes from the surface
-// under test.
-//
-// An operator is registered here as well, because a certificate is
-// half of what one needs: the machine listener reads the organization's
-// record per connection, so an operator nobody registered does not
-// authenticate however it obtained its certificate (ADR-0070). An
-// agent has no such record and is left alone.
-func installed(t *testing.T, p *pgxpool.Pool, issuer ca.Service, subject grn.GRN) tls.Certificate {
+// tokenPresenting reaches the machine listener presenting token on
+// every request that names no Authorization of its own.
+func tokenPresenting(t *testing.T, token string) *http.Client {
 	t.Helper()
-	if subject.ServiceType == operator.ServiceType {
-		registerOperator(t, p, subject)
-	}
-	issued, err := issuer.Issue(context.Background(), subject)
-	require.NoError(t, err)
-	pair, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
-	require.NoError(t, err)
-	return pair
+	client, _ := tokenClient(t)
+	client.Transport = withHeaders{base: client.Transport, headers: map[string]string{"Authorization": "Garam-Token " + token}}
+	return client
 }
 
-// machineClient presents pair on every request it makes, the way a
-// process holding one certificate reaches this listener.
-func machineClient(t *testing.T, pair tls.Certificate) *http.Client {
+// openedLineage gives g's execution a lineage of its own and no
+// activation, as a managed creation opens one: an agent outside a
+// lineage is minted no token (ADR-0100).
+func openedLineage(t *testing.T, p *pgxpool.Pool, g grn.GRN) {
 	t.Helper()
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		InsecureSkipVerify: true,
-		MinVersion:         tls.VersionTLS13,
-		Certificates:       []tls.Certificate{pair},
-	}}}
-	t.Cleanup(client.CloseIdleConnections)
-	return client
+	require.EqualValues(t, 1, withLineage(t, p, g), "the agent held no lineage")
+}
+
+// withLineage is openedLineage for an agent that may already hold one,
+// which it leaves as it is. It answers how many it opened.
+func withLineage(t *testing.T, p *pgxpool.Pool, g grn.GRN) int64 {
+	t.Helper()
+	tag, err := p.Exec(context.Background(),
+		`UPDATE agent_executions SET lineage = gen_random_uuid(), updated_at = now() WHERE agent_grn = $1 AND lineage IS NULL`, g.String())
+	require.NoError(t, err)
+	return tag.RowsAffected()
+}
+
+// operatorClient registers subject where its organization holds no
+// record of it, issues it a key, exchanges an assertion signed by that
+// key for garam's token on the listener at url, and answers a client
+// presenting the token on every request, as an operator's controller
+// does (ADR-0102, ADR-0118).
+func operatorClient(t *testing.T, p *pgxpool.Pool, url string, subject grn.GRN) *http.Client {
+	t.Helper()
+	registerOperator(t, p, subject)
+	private, _ := issueKey(t, operator.NewPostgresStore(p), subject, operator.KeyRotationFirst)
+	client, _ := tokenClient(t)
+	return tokenPresenting(t, exchangeKey(t, client, url, subject, private, nil))
 }
 
 // machineRequest performs one request and returns the status and body.
@@ -506,15 +517,6 @@ func machineSend(t *testing.T, client *http.Client, method, url, body string) (i
 // submissionTo is the body a sender posts to address recipient.
 func submissionTo(recipient grn.GRN, key string) string {
 	return `{"recipient":"` + recipient.String() + `","idempotencyKey":"` + key + `","body":"hello"}`
-}
-
-// pairOf is the certificate the surface issued, as the process it was
-// issued for presents it.
-func pairOf(t *testing.T, issued machinegen.MachineCertificate) tls.Certificate {
-	t.Helper()
-	pair, err := tls.X509KeyPair([]byte(issued.CertificatePem), []byte(issued.PrivateKeyPem))
-	require.NoError(t, err)
-	return pair
 }
 
 // provisioned stands an agent up for the calling operator and returns
@@ -562,9 +564,10 @@ func lineaged(t *testing.T, p *pgxpool.Pool, operator grn.GRN) (fence, *agent.Ac
 	g := seedAgent(t, agents, grn.Org(operator.Organization))
 	_, err := agents.Assign(context.Background(), g, operator)
 	require.NoError(t, err)
+	openedLineage(t, p, g)
 	f := fence{p: p, agents: agents, exec: agentpg.New(p), agent: g, controller: operator}
 	ended := f.openLineage(t)
-	current, token := f.activate(t, "lineaged", generation(1), &ended, valid("1"))
+	current, token := f.activate(t, "lineaged", generation(1), &ended, f.valid(t, "1"))
 	return f, current, token
 }
 
@@ -586,20 +589,8 @@ func (p withHeaders) RoundTrip(r *http.Request) (*http.Response, error) {
 	return p.base.RoundTrip(r)
 }
 
-// enrollmentRequest generates a key pair the way an operator does in
-// its own cluster and returns the certificate signing request over it
-// with the key that stays there.
-func enrollmentRequest(t *testing.T) (string, *ecdsa.PrivateKey) {
-	t.Helper()
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	require.NoError(t, err)
-	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
-	require.NoError(t, err)
-	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der})), key
-}
-
-// anonymousMachineClient reaches the listener presenting no certificate
-// at all, which is what an operator that has never held one has.
+// anonymousMachineClient reaches the listener presenting no credential
+// at all.
 func anonymousMachineClient(t *testing.T) *http.Client {
 	t.Helper()
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
@@ -608,4 +599,46 @@ func anonymousMachineClient(t *testing.T) *http.Client {
 	}}}
 	t.Cleanup(client.CloseIdleConnections)
 	return client
+}
+
+// keyEncryptionKey writes the key-encryption key the message signing
+// keys are sealed under the way ADR-0015 has key material arrive — a
+// file its owner alone can read — and returns the path beside the
+// sealer that opens it. A command under test reads the file; the
+// listener beside it takes the sealer.
+func keyEncryptionKey(t *testing.T) (string, ca.Sealer) {
+	t.Helper()
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	path := filepath.Join(t.TempDir(), "ca.key")
+	require.NoError(t, os.WriteFile(path, []byte(hex.EncodeToString(key)), 0o600))
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	return path, sealer
+}
+
+// register records an operator of acme and answers its GRN.
+func register(t *testing.T, s *operator.PostgresStore, id string) grn.GRN {
+	t.Helper()
+	o, err := operator.New(orgRootGRN("acme"), id, scopedGRN("acme", "user", "ada"), operator.DetailsPatch{})
+	require.NoError(t, err)
+	_, err = s.Register(context.Background(), o)
+	require.NoError(t, err)
+	return o.GRN()
+}
+
+// stateOf reads one operator out of the organization's listing, which
+// is the read the console makes.
+func stateOf(t *testing.T, s *operator.PostgresStore, g grn.GRN) *operator.Operator {
+	t.Helper()
+	listed, err := s.ListByOrg(context.Background(), orgRootGRN("acme"))
+	require.NoError(t, err)
+	for _, o := range listed {
+		if o.GRN() == g {
+			return o
+		}
+	}
+	t.Fatalf("operator %s is not in the listing", g)
+	return nil
 }

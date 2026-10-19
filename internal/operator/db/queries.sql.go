@@ -11,55 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const adoptOperatorCertificate = `-- name: AdoptOperatorCertificate :exec
-INSERT INTO operator_certificates (operator_grn, serial, issued_at)
-VALUES ($1, $2, $3)
-ON CONFLICT (operator_grn) DO UPDATE
-    SET serial = EXCLUDED.serial, issued_at = EXCLUDED.issued_at
-`
-
-type AdoptOperatorCertificateParams struct {
-	OperatorGrn string
-	Serial      string
-	IssuedAt    pgtype.Timestamptz
-}
-
-func (q *Queries) AdoptOperatorCertificate(ctx context.Context, arg AdoptOperatorCertificateParams) error {
-	_, err := q.db.Exec(ctx, adoptOperatorCertificate, arg.OperatorGrn, arg.Serial, arg.IssuedAt)
-	return err
-}
-
-const advanceOperatorCertificate = `-- name: AdvanceOperatorCertificate :execrows
-INSERT INTO operator_certificates (operator_grn, serial, issued_at)
-VALUES ($1, $2, $3)
-ON CONFLICT (operator_grn) DO UPDATE
-    SET serial = EXCLUDED.serial, issued_at = EXCLUDED.issued_at
-    WHERE operator_certificates.serial = $4
-`
-
-type AdvanceOperatorCertificateParams struct {
-	OperatorGrn string
-	Serial      string
-	IssuedAt    pgtype.Timestamptz
-	Predecessor string
-}
-
-// Moves the record only where it still holds the serial the caller
-// presented, so two holders of one identity cannot both carry the
-// lineage on. An operator with no row yet is adopted by the insert.
-func (q *Queries) AdvanceOperatorCertificate(ctx context.Context, arg AdvanceOperatorCertificateParams) (int64, error) {
-	result, err := q.db.Exec(ctx, advanceOperatorCertificate,
-		arg.OperatorGrn,
-		arg.Serial,
-		arg.IssuedAt,
-		arg.Predecessor,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const countOperatorsByOrg = `-- name: CountOperatorsByOrg :one
 SELECT count(*) FROM operators WHERE org_grn = $1
 `
@@ -114,21 +65,6 @@ func (q *Queries) DeleteOperator(ctx context.Context, grn string) (int64, error)
 		return 0, err
 	}
 	return result.RowsAffected(), nil
-}
-
-const deleteOperatorCertificate = `-- name: DeleteOperatorCertificate :exec
-DELETE FROM operator_certificates WHERE operator_grn = $1
-`
-
-// The record of the certificate garam last issued goes with the
-// registration. It has no cascade to go by (000019), so the delete
-// removes it and the two statements are one transaction. Left standing
-// it would outlive the registration exactly as the row ADR-0045's
-// errata found did, and the next registration of the same identifier
-// would read as holding a certificate it was never issued.
-func (q *Queries) DeleteOperatorCertificate(ctx context.Context, operatorGrn string) error {
-	_, err := q.db.Exec(ctx, deleteOperatorCertificate, operatorGrn)
-	return err
 }
 
 const deleteOperatorKeyTokens = `-- name: DeleteOperatorKeyTokens :exec
@@ -198,32 +134,20 @@ func (q *Queries) GetLiveOperatorKey(ctx context.Context, arg GetLiveOperatorKey
 }
 
 const getOperator = `-- name: GetOperator :one
-SELECT o.grn, o.org_grn, o.registered_by, o.created_at, o.name, o.description, o.control_endpoint,
-       c.issued_at AS certificate_issued_at
-FROM operators o
-LEFT JOIN operator_certificates c ON c.operator_grn = o.grn
-WHERE o.grn = $1
+SELECT grn, org_grn, registered_by, created_at, name, description, control_endpoint FROM operators WHERE grn = $1
 `
 
-type GetOperatorRow struct {
-	Operator            Operator
-	CertificateIssuedAt pgtype.Timestamptz
-}
-
-// When garam last issued the operator a certificate is read from
-// `operator_certificates` beside the record, and stored in neither.
-func (q *Queries) GetOperator(ctx context.Context, grn string) (GetOperatorRow, error) {
+func (q *Queries) GetOperator(ctx context.Context, grn string) (Operator, error) {
 	row := q.db.QueryRow(ctx, getOperator, grn)
-	var i GetOperatorRow
+	var i Operator
 	err := row.Scan(
-		&i.Operator.Grn,
-		&i.Operator.OrgGrn,
-		&i.Operator.RegisteredBy,
-		&i.Operator.CreatedAt,
-		&i.Operator.Name,
-		&i.Operator.Description,
-		&i.Operator.ControlEndpoint,
-		&i.CertificateIssuedAt,
+		&i.Grn,
+		&i.OrgGrn,
+		&i.RegisteredBy,
+		&i.CreatedAt,
+		&i.Name,
+		&i.Description,
+		&i.ControlEndpoint,
 	)
 	return i, err
 }
@@ -395,37 +319,26 @@ func (q *Queries) ListOperatorKeys(ctx context.Context, operatorGrn string) ([]L
 }
 
 const listOperatorsByOrg = `-- name: ListOperatorsByOrg :many
-SELECT o.grn, o.org_grn, o.registered_by, o.created_at, o.name, o.description, o.control_endpoint,
-       c.issued_at AS certificate_issued_at
-FROM operators o
-LEFT JOIN operator_certificates c ON c.operator_grn = o.grn
-WHERE o.org_grn = $1
-ORDER BY o.grn
+SELECT grn, org_grn, registered_by, created_at, name, description, control_endpoint FROM operators WHERE org_grn = $1 ORDER BY grn
 `
 
-type ListOperatorsByOrgRow struct {
-	Operator            Operator
-	CertificateIssuedAt pgtype.Timestamptz
-}
-
-func (q *Queries) ListOperatorsByOrg(ctx context.Context, orgGrn string) ([]ListOperatorsByOrgRow, error) {
+func (q *Queries) ListOperatorsByOrg(ctx context.Context, orgGrn string) ([]Operator, error) {
 	rows, err := q.db.Query(ctx, listOperatorsByOrg, orgGrn)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListOperatorsByOrgRow
+	var items []Operator
 	for rows.Next() {
-		var i ListOperatorsByOrgRow
+		var i Operator
 		if err := rows.Scan(
-			&i.Operator.Grn,
-			&i.Operator.OrgGrn,
-			&i.Operator.RegisteredBy,
-			&i.Operator.CreatedAt,
-			&i.Operator.Name,
-			&i.Operator.Description,
-			&i.Operator.ControlEndpoint,
-			&i.CertificateIssuedAt,
+			&i.Grn,
+			&i.OrgGrn,
+			&i.RegisteredBy,
+			&i.CreatedAt,
+			&i.Name,
+			&i.Description,
+			&i.ControlEndpoint,
 		); err != nil {
 			return nil, err
 		}

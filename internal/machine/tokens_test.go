@@ -51,9 +51,8 @@ func (k *tokens) withdraw(token string) {
 	delete(k.live, token)
 }
 
-// methodHandler answers with the GRN and the method the request proved
-// its identity by, and with the refusal a request carrying none was
-// given.
+// methodHandler answers with the GRN the request's token proved, and
+// with the refusal a request carrying none was given.
 func methodHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		identity, ok := machine.IdentityOf(r)
@@ -65,7 +64,7 @@ func methodHandler() http.Handler {
 			http.Error(w, reason, http.StatusUnauthorized)
 			return
 		}
-		_, _ = io.WriteString(w, identity.GRN().String()+" "+string(identity.Method()))
+		_, _ = io.WriteString(w, identity.GRN().String())
 	})
 }
 
@@ -95,13 +94,12 @@ func presenting(t *testing.T, client *http.Client, url, token string) (int, stri
 // — so what refuses it is the per-request read and not a new
 // handshake.
 func TestNewServer_ReadsATokenOnEveryRequestOverAnOpenConnection(t *testing.T) {
-	issuer := newIssuer(t)
 	known := newTokens()
 	subject := operatorGRNOf("acme", "one")
 	known.set("garam_ot_live", subject)
 	dir := t.TempDir()
 	roots := serverPair(t, dir, presented)
-	url := serveTokens(t, dir, issuer.service(), known, methodHandler())
+	url := serveTokens(t, dir, known, methodHandler())
 
 	var connections int
 	client := &http.Client{Transport: &http.Transport{
@@ -119,7 +117,7 @@ func TestNewServer_ReadsATokenOnEveryRequestOverAnOpenConnection(t *testing.T) {
 
 	status, body, _ := presenting(t, client, url, "garam_ot_live")
 	require.Equal(t, http.StatusOK, status, body)
-	assert.Equal(t, subject.String()+" token", body, "a token's identity says it was a token")
+	assert.Equal(t, subject.String(), body)
 
 	known.withdraw("garam_ot_live")
 	status, body, _ = presenting(t, client, url, "garam_ot_live")
@@ -129,62 +127,30 @@ func TestNewServer_ReadsATokenOnEveryRequestOverAnOpenConnection(t *testing.T) {
 	assert.Equal(t, 2, known.asked, "each request that presented the token was read")
 }
 
-// TestNewServer_RefusesATokenBesideACertificate covers the request that
-// presents two credentials. The certificate alone is the control: it
-// authenticates on the same listener, so what refuses the pair is the
-// pair and not the certificate.
-func TestNewServer_RefusesATokenBesideACertificate(t *testing.T) {
-	issuer := newIssuer(t)
+// TestNewServer_ReadsAnotherAuthorizationSchemeAsNoToken holds that
+// only the token scheme is read as a token: a request carrying another
+// scheme in Authorization carries no identity, and nothing is read for
+// it. The token on the same connection is the control.
+func TestNewServer_ReadsAnotherAuthorizationSchemeAsNoToken(t *testing.T) {
 	known := newTokens()
-	certified := agentGRN("acme", "bot-1")
-	known.set("garam_ot_live", operatorGRNOf("acme", "one"))
+	subject := operatorGRNOf("acme", "one")
+	known.set("garam_ot_live", subject)
 	dir := t.TempDir()
 	roots := serverPair(t, dir, presented)
-	url := serveTokens(t, dir, issuer.service(), known, methodHandler())
+	url := serveTokens(t, dir, known, methodHandler())
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
 		RootCAs: roots, MinVersion: tls.VersionTLS13,
-		Certificates: []tls.Certificate{issuer.issue(t, certified)},
 	}}}
 	t.Cleanup(client.CloseIdleConnections)
 
-	status, body, _ := presenting(t, client, url, "")
+	status, body := presentingAuthorization(t, client, url, "Garam-Token garam_ot_live")
 	require.Equal(t, http.StatusOK, status, body)
-	assert.Equal(t, certified.String()+" certificate", body)
+	asked := known.asked
 
-	status, body, _ = presenting(t, client, url, "garam_ot_live")
+	status, body = presentingAuthorization(t, client, url, "Garam-Execution an-execution-token")
 	assert.Equal(t, http.StatusUnauthorized, status)
-	assert.Contains(t, body, "a token or a certificate, not both")
-	assert.Equal(t, 0, known.asked, "a request carrying both is refused before the token is read")
-}
-
-// TestNewServer_LeavesAnotherAuthorizationSchemeToTheCertificate holds
-// that only the token scheme is read as a token: the execution header
-// shares Authorization on routes a certificate authenticates, and a
-// request carrying it keeps the certificate's identity.
-func TestNewServer_LeavesAnotherAuthorizationSchemeToTheCertificate(t *testing.T) {
-	issuer := newIssuer(t)
-	known := newTokens()
-	certified := agentGRN("acme", "bot-1")
-	dir := t.TempDir()
-	roots := serverPair(t, dir, presented)
-	url := serveTokens(t, dir, issuer.service(), known, methodHandler())
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		RootCAs: roots, MinVersion: tls.VersionTLS13,
-		Certificates: []tls.Certificate{issuer.issue(t, certified)},
-	}}}
-	t.Cleanup(client.CloseIdleConnections)
-
-	req, err := http.NewRequest(http.MethodGet, url+"/identity", nil)
-	require.NoError(t, err)
-	req.Header.Set("Authorization", "Garam-Execution an-execution-token")
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, certified.String()+" certificate", string(body))
-	assert.Equal(t, 0, known.asked)
+	assert.Contains(t, body, "no identity")
+	assert.Equal(t, asked, known.asked, "another scheme is not read as a token")
 }
 
 // presentingAuthorization performs one request over client carrying
@@ -211,13 +177,12 @@ func presentingAuthorization(t *testing.T, client *http.Client, url string, valu
 // it refuses the next request on the open connection. Garam-Token on
 // the same token is the control the alias is measured against.
 func TestNewServer_ReadsABearerTokenAsItReadsAGaramToken(t *testing.T) {
-	issuer := newIssuer(t)
 	known := newTokens()
 	subject := operatorGRNOf("acme", "one")
 	known.set("garam_ot_live", subject)
 	dir := t.TempDir()
 	roots := serverPair(t, dir, presented)
-	url := serveTokens(t, dir, issuer.service(), known, methodHandler())
+	url := serveTokens(t, dir, known, methodHandler())
 	var connections int
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
 		RootCAs: roots, MinVersion: tls.VersionTLS13,
@@ -228,7 +193,7 @@ func TestNewServer_ReadsABearerTokenAsItReadsAGaramToken(t *testing.T) {
 	for _, value := range []string{"Garam-Token garam_ot_live", "Bearer garam_ot_live", "bearer garam_ot_live", "BEARER garam_ot_live"} {
 		status, body := presentingAuthorization(t, client, url, value)
 		require.Equal(t, http.StatusOK, status, value)
-		assert.Equal(t, subject.String()+" token", body, value)
+		assert.Equal(t, subject.String(), body, value)
 	}
 
 	known.withdraw("garam_ot_live")
@@ -239,35 +204,30 @@ func TestNewServer_ReadsABearerTokenAsItReadsAGaramToken(t *testing.T) {
 	assert.Equal(t, 5, known.asked, "each request presenting the token was read, under either scheme")
 }
 
-// TestNewServer_RefusesABearerBesideACertificateOrMalformed holds that
-// the alias never falls back to the certificate (ADR-0102): a Bearer
-// value beside a certificate, and a Bearer value with no token after
-// it, both leave the request with no identity, where the same
-// connection with no Authorization header is the certificate's.
-func TestNewServer_RefusesABearerBesideACertificateOrMalformed(t *testing.T) {
-	issuer := newIssuer(t)
+// TestNewServer_RefusesAMalformedBearer holds that the alias proves
+// nothing without a token after it (ADR-0102): a Bearer value with no
+// token leaves the request with no identity, where the same scheme
+// with the live token is the control.
+func TestNewServer_RefusesAMalformedBearer(t *testing.T) {
 	known := newTokens()
-	certified := agentGRN("acme", "bot-1")
-	known.set("garam_ot_live", operatorGRNOf("acme", "one"))
+	subject := operatorGRNOf("acme", "one")
+	known.set("garam_ot_live", subject)
 	dir := t.TempDir()
 	roots := serverPair(t, dir, presented)
-	url := serveTokens(t, dir, issuer.service(), known, methodHandler())
+	url := serveTokens(t, dir, known, methodHandler())
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
 		RootCAs: roots, MinVersion: tls.VersionTLS13,
-		Certificates: []tls.Certificate{issuer.issue(t, certified)},
 	}}}
 	t.Cleanup(client.CloseIdleConnections)
 
-	status, body := presentingAuthorization(t, client, url)
+	status, body := presentingAuthorization(t, client, url, "Bearer garam_ot_live")
 	require.Equal(t, http.StatusOK, status, body)
-	assert.Equal(t, certified.String()+" certificate", body, "the control: the certificate authenticates")
+	assert.Equal(t, subject.String(), body, "the control: the live token authenticates")
 
-	for _, value := range []string{"Bearer garam_ot_live", "Bearer", "Bearer ", "bearer"} {
-		status, body := presentingAuthorization(t, client, url, value)
+	for _, value := range []string{"Bearer", "Bearer ", "bearer"} {
+		status, _ := presentingAuthorization(t, client, url, value)
 		assert.Equal(t, http.StatusUnauthorized, status, value)
-		assert.Contains(t, body, "a token or a certificate, not both", value)
 	}
-	assert.Equal(t, 0, known.asked, "beside a certificate no token is read")
 }
 
 // TestNewServer_RefusesATokenAmongSeveralAuthorizationHeaders holds
@@ -275,13 +235,12 @@ func TestNewServer_RefusesABearerBesideACertificateOrMalformed(t *testing.T) {
 // either of two Authorization headers is refused before it is read,
 // where the same token alone authenticates.
 func TestNewServer_RefusesATokenAmongSeveralAuthorizationHeaders(t *testing.T) {
-	issuer := newIssuer(t)
 	known := newTokens()
 	subject := operatorGRNOf("acme", "one")
 	known.set("garam_ot_live", subject)
 	dir := t.TempDir()
 	roots := serverPair(t, dir, presented)
-	url := serveTokens(t, dir, issuer.service(), known, methodHandler())
+	url := serveTokens(t, dir, known, methodHandler())
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
 		RootCAs: roots, MinVersion: tls.VersionTLS13,
 	}}}

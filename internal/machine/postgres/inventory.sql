@@ -7,8 +7,9 @@
 -- A registered caller with every column NULL has not authenticated
 -- since evidence began to be kept: an idle caller G3 has to name. One
 -- whose registered column is false was deleted while its organization
--- remained, and its row is the evidence that it stopped. The gate's
--- seven days are last_certificate older than seven days on every row.
+-- remained, and its row is the evidence that it stopped.
+-- last_certificate is a sighting an earlier release recorded: garam
+-- accepts no certificate since ADR-0118, so nothing writes one now.
 -- Nothing here reads a credential: the table holds none.
 WITH callers AS (
     SELECT grn AS caller_grn,

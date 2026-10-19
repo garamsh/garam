@@ -12,7 +12,6 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/wire"
 )
@@ -101,10 +100,6 @@ func (s *Server) admissionParties(w http.ResponseWriter, r *http.Request, versio
 	}
 	identity, ok := identityOf(w, r)
 	if !ok {
-		return grn.GRN{}, agent.EnrollmentBinding{}, false
-	}
-	if identity.Method() != machine.MethodToken {
-		writeError(w, errorx.New(errorx.KindUnauthenticated, agent.AdmissionContractVersion+" takes a token and no certificate"))
 		return grn.GRN{}, agent.EnrollmentBinding{}, false
 	}
 	if !s.recheck(w, r, identity) {

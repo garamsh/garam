@@ -23,13 +23,13 @@ func controlAnswering(t *testing.T, answer http.HandlerFunc) *delivery.HTTPAutho
 	t.Helper()
 	server := httptest.NewTLSServer(answer)
 	t.Cleanup(server.Close)
-	authority, err := delivery.NewHTTPAuthority(server.Client(), server.URL, agentGRN(), certificateMode())
+	authority, err := delivery.NewHTTPAuthority(server.Client(), server.URL, agentGRN(), agentCredential())
 	require.NoError(t, err)
 	return authority
 }
 
 // activationAnswer is what control answers the binding with, as
-// agent-execution.v1 writes it.
+// agent-execution.v2 writes it.
 func activationAnswer(b delivery.Binding) map[string]any {
 	return map[string]any{
 		"activationId": "activation-1", "tokenVersion": 2, "token": "the-token",
@@ -44,19 +44,21 @@ func activationAnswer(b delivery.Binding) map[string]any {
 // activation or token, is refused with its token unused. The answer
 // naming what was asked is the control.
 func TestHTTPAuthority_ActivateSendsTheContractAndVerifiesTheBinding(t *testing.T) {
-	var route, version, authorization string
+	var route, version, authorization, placement string
 	var sent map[string]any
 	authority := controlAnswering(t, func(w http.ResponseWriter, r *http.Request) {
 		route, version, authorization = r.URL.Path, r.Header.Get("Garam-Contract-Version"), r.Header.Get("Authorization")
+		placement = r.Header.Get("Garam-Placement")
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&sent))
-		w.Header().Set("Garam-Contract-Version", delivery.ExecutionContract)
+		w.Header().Set("Garam-Contract-Version", delivery.TokenExecutionContract)
 		writeJSON(w, http.StatusCreated, activationAnswer(binding()))
 	})
 	activation, err := authority.Activate(context.Background(), "request-1", binding(), "placement-1")
 	require.NoError(t, err, "the control: an answer binding what was asked")
 	assert.Equal(t, "/v1/agents/"+agentGRN().String()+"/activations", route)
-	assert.Equal(t, "agent-execution.v1", version)
-	assert.Equal(t, "Garam-Placement placement-1", authorization)
+	assert.Equal(t, "agent-execution.v2", version)
+	assert.Equal(t, "Garam-Token "+agentTokenOf("a"), authorization)
+	assert.Equal(t, "placement-1", placement)
 	assert.Equal(t, map[string]any{
 		"requestId": "request-1", "epoch": "3", "generation": strings.Repeat("a", 32), "configRevision": "7",
 	}, sent)
@@ -77,7 +79,7 @@ func TestHTTPAuthority_ActivateSendsTheContractAndVerifiesTheBinding(t *testing.
 			answer := activationAnswer(binding())
 			change(answer)
 			authority := controlAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Garam-Contract-Version", delivery.ExecutionContract)
+				w.Header().Set("Garam-Contract-Version", delivery.TokenExecutionContract)
 				writeJSON(w, http.StatusOK, answer)
 			})
 			_, err := authority.Activate(context.Background(), "request-1", binding(), "placement-1")
@@ -99,11 +101,11 @@ func TestHTTPAuthority_SortsControlsAnswersIntoUndecidedAndDefinite(t *testing.T
 		want    errorx.Kind
 		said    string
 	}{
-		"503 undecided":             {http.StatusServiceUnavailable, delivery.ExecutionContract, errorx.KindUnavailable, "503"},
-		"403 placement_not_current": {http.StatusForbidden, delivery.ExecutionContract, errorx.KindFailedPrecondition, "placement_not_current"},
-		"409 epoch_superseded":      {http.StatusConflict, delivery.ExecutionContract, errorx.KindFailedPrecondition, "epoch_superseded"},
+		"503 undecided":             {http.StatusServiceUnavailable, delivery.TokenExecutionContract, errorx.KindUnavailable, "503"},
+		"403 placement_not_current": {http.StatusForbidden, delivery.TokenExecutionContract, errorx.KindFailedPrecondition, "placement_not_current"},
+		"409 epoch_superseded":      {http.StatusConflict, delivery.TokenExecutionContract, errorx.KindFailedPrecondition, "epoch_superseded"},
 		"an answer of no contract":  {http.StatusCreated, "", errorx.KindUnimplemented, "201"},
-		"an answer of another":      {http.StatusForbidden, "agent-execution.v2", errorx.KindUnimplemented, "403"},
+		"an answer of another":      {http.StatusForbidden, "agent-execution.v1", errorx.KindUnimplemented, "403"},
 	}
 	for name, answer := range answers {
 		t.Run(name, func(t *testing.T) {
@@ -121,7 +123,7 @@ func TestHTTPAuthority_SortsControlsAnswersIntoUndecidedAndDefinite(t *testing.T
 	}
 
 	server := httptest.NewTLSServer(http.NotFoundHandler())
-	unreachable, err := delivery.NewHTTPAuthority(server.Client(), server.URL, agentGRN(), certificateMode())
+	unreachable, err := delivery.NewHTTPAuthority(server.Client(), server.URL, agentGRN(), agentCredential())
 	require.NoError(t, err)
 	server.Close()
 	_, err = unreachable.Activate(context.Background(), "request-1", binding(), "placement-1")
@@ -132,12 +134,12 @@ func TestHTTPAuthority_SortsControlsAnswersIntoUndecidedAndDefinite(t *testing.T
 // covers the report as ADR-0084 pins it: the activation, then the
 // runtime's own fields unchanged, and when it was read.
 func TestHTTPAuthority_ReportCarriesTheRuntimesStatusUnderItsActivation(t *testing.T) {
-	var route, authorization string
+	var route, placement string
 	var sent map[string]any
 	authority := controlAnswering(t, func(w http.ResponseWriter, r *http.Request) {
-		route, authorization = r.URL.Path, r.Header.Get("Authorization")
+		route, placement = r.URL.Path, r.Header.Get("Garam-Placement")
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&sent))
-		w.Header().Set("Garam-Contract-Version", delivery.ExecutionContract)
+		w.Header().Set("Garam-Contract-Version", delivery.TokenExecutionContract)
 		w.WriteHeader(http.StatusNoContent)
 	})
 	status := delivery.RuntimeStatus{
@@ -148,13 +150,13 @@ func TestHTTPAuthority_ReportCarriesTheRuntimesStatusUnderItsActivation(t *testi
 	require.NoError(t, authority.Report(context.Background(), "activation-1", &status, observed))
 
 	superseded := controlAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Garam-Contract-Version", delivery.ExecutionContract)
+		w.Header().Set("Garam-Contract-Version", delivery.TokenExecutionContract)
 		writeJSON(w, http.StatusConflict, map[string]string{"kind": "generation_not_current", "message": "newer"})
 	})
 	err := superseded.Report(context.Background(), "activation-1", &status, observed)
 	assert.ErrorIs(t, err, delivery.ErrGenerationSuperseded, "a 409 is the generation not being current")
 	assert.Equal(t, "/v1/agents/"+agentGRN().String()+"/runtime-status", route)
-	assert.Empty(t, authorization, "no token goes to control on a report")
+	assert.Empty(t, placement, "no placement token goes to control on a report")
 	assert.Equal(t, map[string]any{
 		"activationId": "activation-1", "grn": agentGRN().String(), "epoch": "3",
 		"generation": strings.Repeat("a", 32), "configRevision": "", "state": "draining",
@@ -165,7 +167,7 @@ func TestHTTPAuthority_ReportCarriesTheRuntimesStatusUnderItsActivation(t *testi
 // TestNewHTTPAuthority_RefusesWhatItCannotCall keeps a misconfiguration
 // at the start. An https address is the control.
 func TestNewHTTPAuthority_RefusesWhatItCannotCall(t *testing.T) {
-	_, err := delivery.NewHTTPAuthority(http.DefaultClient, "https://control.example", agentGRN(), certificateMode())
+	_, err := delivery.NewHTTPAuthority(http.DefaultClient, "https://control.example", agentGRN(), agentCredential())
 	require.NoError(t, err, "the control: an https address and an agent")
 	for name, args := range map[string]struct {
 		client *http.Client
@@ -178,7 +180,7 @@ func TestNewHTTPAuthority_RefusesWhatItCannotCall(t *testing.T) {
 		"no agent":             {http.DefaultClient, "https://control.example", grn.GRN{}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := delivery.NewHTTPAuthority(args.client, args.base, args.agent, certificateMode())
+			_, err := delivery.NewHTTPAuthority(args.client, args.base, args.agent, agentCredential())
 			require.Error(t, err)
 		})
 	}

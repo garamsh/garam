@@ -2,10 +2,7 @@ package integration_test
 
 import (
 	"bytes"
-	"context"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -21,11 +18,9 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/audit"
 	auditpg "github.com/garamsh/garam/internal/audit/postgres"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -75,63 +70,34 @@ func credentialEvents(t *testing.T, browser string, cookie *http.Cookie, subject
 	return events, body
 }
 
-// leafFacts is a PEM certificate's serial and expiry.
-func leafFacts(t *testing.T, certificatePEM string) (string, time.Time) {
+// supervisedHost enrolls a standalone host under
+// standalone-enrollment.v2 and answers its enrollment and the token its
+// supervisor exchanged its credential for.
+func supervisedHost(t *testing.T, s *tokenStack) (credentialed, string) {
 	t.Helper()
-	block, _ := pem.Decode([]byte(certificatePEM))
-	require.NotNil(t, block)
-	cert, err := x509.ParseCertificate(block.Bytes)
-	require.NoError(t, err)
-	return cert.SerialNumber.String(), cert.NotAfter
+	h := newStandaloneHost(t)
+	status, body := s.approve(t, s.owner, "acme", h.approval(t, time.Now().Add(time.Hour), nil))
+	require.Equal(t, http.StatusCreated, status, body)
+	c := credentialOf(t, s.spend(t, h.secret, h.enrollment(t)))
+	status, token := s.supervisorExchange(t, c.credential, `{}`)
+	require.Equal(t, http.StatusCreated, status)
+	return c, token
 }
 
-// TestCredentialAudit_RecordsASupervisorsCertificatesAndItsAgentsTokens
+// TestCredentialAudit_RecordsASupervisorsCredentialAndItsAgentsTokens
 // carries a standalone host through the listener `serve machine`
-// composes: a v1 enrollment's supervisor certificate is recorded issued
-// with the serial and expiry of the certificate answered, and its
-// renewal, asked with its whole life ahead, recorded refused. A v2
-// host's credential is recorded issued, and its supervisor's mint of the
-// agent's token recorded issued with the token's expiry, beside a mint
-// naming an audience recorded refused. A member reads each subject's
-// events newest first, and no body carries a certificate, a credential
-// or a token.
-func TestCredentialAudit_RecordsASupervisorsCertificatesAndItsAgentsTokens(t *testing.T) {
+// composes: its credential is recorded issued, and its supervisor's
+// mint of the agent's token recorded issued with the token's expiry,
+// beside a mint naming an audience recorded refused. A member reads
+// each subject's events newest first, and no body carries a
+// credential or a token.
+func TestCredentialAudit_RecordsASupervisorsCredentialAndItsAgentsTokens(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
-	s.client, _ = tokenClient(t)
 	browser := auditBrowser(t, s.executionStack, engine)
 
-	_, v1 := s.standaloneOf(t)
-	csr, _ := enrollmentRequest(t)
-	early := s.renewal(t, v1.supervisorTLS, "renew-early", csr)
-	require.Equal(t, http.StatusConflict, early.status, early.body)
-
-	events, raw := credentialEvents(t, browser, s.member, v1.supervisor)
-	require.Len(t, events, 2)
-	assert.Equal(t, apigen.EventRenew, events[0].Action, "newest first")
-	assert.Equal(t, apigen.EventRefused, events[0].Outcome)
-	require.NotNil(t, events[0].RefusalKind)
-	assert.Equal(t, "failed_precondition", *events[0].RefusalKind)
-	assert.Nil(t, events[0].Serial, "a refusal names nothing issued")
-	issued := events[1]
-	assert.Equal(t, apigen.EventSupervisorCertificate, issued.Credential)
-	assert.Equal(t, apigen.EventIssue, issued.Action)
-	assert.Equal(t, apigen.EventIssued, issued.Outcome)
-	assert.False(t, issued.Replay)
-	serial, notAfter := leafFacts(t, v1.supervisorLeaf)
-	require.NotNil(t, issued.Serial)
-	assert.Equal(t, serial, *issued.Serial, "the serial of the certificate answered")
-	require.NotNil(t, issued.NotAfter)
-	assert.True(t, notAfter.Equal(*issued.NotAfter), "its expiry: %v, %v", notAfter, *issued.NotAfter)
-	assert.NotContains(t, raw, "CERTIFICATE")
-
-	h := newStandaloneHost(t)
-	status, body := s.approve(t, s.owner, "acme", h.credentialApproval(t))
-	require.Equal(t, http.StatusCreated, status, body)
-	c := credentialOf(t, s.spendV2(t, h.secret, h.credentialEnrollment()))
-	status, token := s.supervisorExchange(t, c.credential, `{}`)
-	require.Equal(t, http.StatusCreated, status)
+	c, token := supervisedHost(t, s)
 	minted := s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens", operator.TokenContractVersion, token, "", `{}`)
 	require.Equal(t, http.StatusCreated, minted.status, minted.body)
 	var own machinegen.AgentToken
@@ -140,7 +106,7 @@ func TestCredentialAudit_RecordsASupervisorsCertificatesAndItsAgentsTokens(t *te
 		`{"audience":"`+s.hosted.String()+`"}`)
 	require.Equal(t, http.StatusBadRequest, shown.status, shown.body)
 
-	events, raw = credentialEvents(t, browser, s.member, c.supervisor)
+	events, raw := credentialEvents(t, browser, s.member, c.supervisor)
 	require.Len(t, events, 1)
 	assert.Equal(t, apigen.EventSupervisorCredential, events[0].Credential)
 	assert.Equal(t, apigen.EventIssued, events[0].Outcome)
@@ -161,47 +127,6 @@ func TestCredentialAudit_RecordsASupervisorsCertificatesAndItsAgentsTokens(t *te
 	assert.NotContains(t, raw, token)
 }
 
-// TestCredentialAudit_RecordsAnOperatorRenewalAndItsRefusal renews an
-// operator certificate three quarters through its life, and one with
-// its whole life ahead: the first is recorded renewed with the
-// successor's serial, the second refused as failed_precondition.
-func TestCredentialAudit_RecordsAnOperatorRenewalAndItsRefusal(t *testing.T) {
-	p := pool(t)
-	require.NoError(t, orgpg.New(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
-	_, sealer := keyEncryptionKey(t)
-	_, engine := policyEngine(t, p)
-	listener := machineListener(t, p, sealer, engine)
-	due := scopedGRN("acme", operator.ServiceType, "due")
-	fresh := scopedGRN("acme", operator.ServiceType, "fresh")
-	dueClient := machineClient(t, installed(t, p, aged(t, p, sealer, time.Hour, time.Now().Add(-45*time.Minute)), due))
-	freshClient := machineClient(t, installed(t, p, aged(t, p, sealer, time.Hour, time.Now()), fresh))
-
-	status, body := renew(t, dueClient, listener)
-	require.Equal(t, http.StatusCreated, status, string(body))
-	var issued machinegen.MachineCertificate
-	require.NoError(t, json.Unmarshal(body, &issued))
-	status, body = renew(t, freshClient, listener)
-	require.Equal(t, http.StatusConflict, status, string(body))
-
-	store := auditpg.NewCredentialStore(p)
-	renewed, err := store.ListCredentials(context.Background(), due, listfilter.Filter{})
-	require.NoError(t, err)
-	require.Len(t, renewed, 1)
-	assert.Equal(t, audit.ActionRenew, renewed[0].Action())
-	assert.Equal(t, audit.OutcomeIssued, renewed[0].Outcome())
-	serial, notAfter := leafFacts(t, issued.CertificatePem)
-	assert.Equal(t, serial, renewed[0].Serial(), "the successor's serial")
-	assert.True(t, notAfter.Equal(renewed[0].Validity().NotAfter))
-
-	refused, err := store.ListCredentials(context.Background(), fresh, listfilter.Filter{})
-	require.NoError(t, err)
-	require.Len(t, refused, 1)
-	assert.Equal(t, audit.OutcomeRefused, refused[0].Outcome())
-	reason, ok := refused[0].Reason()
-	require.True(t, ok)
-	assert.Equal(t, "failed_precondition", reason)
-}
-
 // TestCredentialAudit_IsReadOnTheSubjectsRead lists an operator's and a
 // supervisor's events as the member, then attaches a Deny of
 // operator:read to the member: the operator's events are refused and
@@ -212,11 +137,13 @@ func TestCredentialAudit_RecordsAnOperatorRenewalAndItsRefusal(t *testing.T) {
 func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)
-	s := newExecutionStack(t, p, engine)
-	browser := auditBrowser(t, s, engine)
-	_, v1 := s.standaloneOf(t)
-	csr, _ := enrollmentRequest(t)
-	require.Equal(t, http.StatusConflict, s.renewal(t, v1.supervisorTLS, "renew-early", csr).status)
+	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	browser := auditBrowser(t, s.executionStack, engine)
+	c, token := supervisedHost(t, s)
+	require.Equal(t, http.StatusCreated, s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens",
+		operator.TokenContractVersion, token, "", `{}`).status)
+	require.Equal(t, http.StatusBadRequest, s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens",
+		operator.TokenContractVersion, token, "", `{"audience":"`+s.hosted.String()+`"}`).status)
 	status, body := browserDo(t, http.MethodPost, browser+"/orgs/acme/operators", s.owner,
 		jsonReader(t, map[string]string{"identifier": "field-read"}))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -228,7 +155,7 @@ func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 	}
 	status, body = read(operatorGRN, "")
 	require.Equal(t, http.StatusOK, status, "control, before the Deny: %s", body)
-	status, body = read(v1.supervisor, "&limit=1&offset=1")
+	status, body = read(c.agent, "&limit=1&offset=1")
 	require.Equal(t, http.StatusOK, status, body)
 	var page []apigen.CredentialEvent
 	require.NoError(t, json.Unmarshal([]byte(body), &page))
@@ -241,7 +168,7 @@ func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 
 	status, body = read(operatorGRN, "")
 	assert.Equal(t, http.StatusForbidden, status, body)
-	status, body = read(v1.supervisor, "")
+	status, body = read(c.supervisor, "")
 	assert.Equal(t, http.StatusOK, status, "a supervisor is read on agent:read: %s", body)
 	status, body = read(scopedGRN("globex", operator.ServiceType, "x"), "")
 	assert.Equal(t, http.StatusBadRequest, status, body)

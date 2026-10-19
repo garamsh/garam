@@ -87,7 +87,6 @@ export default async function OperatorsPage({ params, searchParams }: Params) {
             grn: operator.grn,
             identifier: slugFromGrn(operator.grn),
             name: operator.name,
-            certificateIssuedAt: operator.certificateIssuedAt,
             controlEndpoint: operator.controlEndpoint,
           }))}
         />

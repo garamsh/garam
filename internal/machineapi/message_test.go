@@ -221,18 +221,18 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 	req.Header.Set("Content-Type", "application/json")
 	// Every route but the contracts' ignores it; on those it moves the
 	// request past the router's own refusal to the handler under test.
-	version := operator.ContractVersion
+	version := operator.TokenAuthorityContractVersion
 	switch {
 	case executionPath(req.URL.Path):
-		version = agent.ExecutionContractVersion
+		version = agent.TokenExecutionContractVersion
 	case enrollmentPath(req.URL.Path):
-		version = agent.EnrollmentContractVersion
+		version = agent.TokenEnrollmentContractVersion
 	case standalonePath(req.URL.Path):
-		version = agent.StandaloneContractVersion
+		version = agent.CredentialStandaloneContractVersion
 	case strings.HasPrefix(req.URL.Path, "/agent-enrollment-approvals"):
 		version = agent.AdmissionContractVersion
 	case strings.HasSuffix(req.URL.Path, "/outbox-messages"):
-		version = message.DeliveryContractVersion
+		version = message.TokenDeliveryContractVersion
 	case strings.HasSuffix(req.URL.Path, "/tokens"):
 		version = operator.TokenContractVersion
 	}
@@ -246,7 +246,7 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 }
 
 // executionPath reports whether path is one of the execution routes,
-// which serve execution-fence.v1.
+// which serve execution-fence.v2.
 func executionPath(path string) bool {
 	for _, suffix := range []string{"/activations", "/deactivation", "/execution/introspection", "/credential-recovery"} {
 		if strings.HasSuffix(path, suffix) {
@@ -256,16 +256,16 @@ func executionPath(path string) bool {
 	return false
 }
 
-// enrollmentPath reports whether path is one of the managed enrollment
-// routes, which serve managed-enrollment.v1.
+// enrollmentPath reports whether path is the managed creation route,
+// which serves managed-enrollment.v2.
 func enrollmentPath(path string) bool {
-	return strings.HasSuffix(path, "/managed-agents") || strings.HasSuffix(path, "/initial-certificate")
+	return strings.HasSuffix(path, "/managed-agents")
 }
 
-// standalonePath reports whether path is a standalone enrollment
-// route, whose contract is standalone-enrollment.v1.
+// standalonePath reports whether path is the standalone enrollment
+// route, whose contract is standalone-enrollment.v2.
 func standalonePath(path string) bool {
-	return path == "/agent-enrollments" || path == "/supervisors/self/certificate"
+	return path == "/agent-enrollments"
 }
 
 // TestServer_PostsUnderTheSenderTheCertificateNames covers what reaches
@@ -786,11 +786,11 @@ func TestServer_RefusesAnOutboxMessageBeforeTheQueueWithoutItsContractOrCreation
 	recipient := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
 	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
-	const v1 = message.DeliveryContractVersion
+	const v2 = message.TokenDeliveryContractVersion
 
-	status, version, body := outboxSend(t, client, url, v1, outboxEntry(recipient, "entry-1", "2026-10-04T18:07:52.1Z"))
+	status, version, body := outboxSend(t, client, url, v2, outboxEntry(recipient, "entry-1", "2026-10-04T18:07:52.1Z"))
 	require.Equal(t, http.StatusCreated, status, body)
-	assert.Equal(t, v1, version)
+	assert.Equal(t, v2, version)
 	assert.Contains(t, body, `"sender":"`+sender.String()+`"`)
 	assert.Equal(t, []messageCall{{
 		method: "post within budget", caller: sender, recipient: recipient, key: "entry-1", body: "hello",
@@ -800,18 +800,18 @@ func TestServer_RefusesAnOutboxMessageBeforeTheQueueWithoutItsContractOrCreation
 	tests := []struct {
 		name, version, body, names string
 	}{
-		{name: "no contract version", body: outboxEntry(recipient, "entry-2", "2026-10-04T18:07:52Z"), names: v1},
-		{name: "another contract version", version: operator.ContractVersion, body: outboxEntry(recipient, "entry-2", "2026-10-04T18:07:52Z"), names: v1},
-		{name: "no creation instant", version: v1, body: `{"recipient":"` + recipient.String() + `","idempotencyKey":"entry-2","body":"hello"}`, names: "createdAt"},
-		{name: "a creation instant that is not RFC 3339", version: v1, body: outboxEntry(recipient, "entry-2", "2026-10-04 18:07:52"), names: "createdAt"},
-		{name: "a creation instant with no zone", version: v1, body: outboxEntry(recipient, "entry-2", "2026-10-04T18:07:52"), names: "createdAt"},
+		{name: "no contract version", body: outboxEntry(recipient, "entry-2", "2026-10-04T18:07:52Z"), names: v2},
+		{name: "another contract version", version: "durable-delivery.v1", body: outboxEntry(recipient, "entry-2", "2026-10-04T18:07:52Z"), names: v2},
+		{name: "no creation instant", version: v2, body: `{"recipient":"` + recipient.String() + `","idempotencyKey":"entry-2","body":"hello"}`, names: "createdAt"},
+		{name: "a creation instant that is not RFC 3339", version: v2, body: outboxEntry(recipient, "entry-2", "2026-10-04 18:07:52"), names: "createdAt"},
+		{name: "a creation instant with no zone", version: v2, body: outboxEntry(recipient, "entry-2", "2026-10-04T18:07:52"), names: "createdAt"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			before := len(messages.calls)
 			status, version, body := outboxSend(t, client, url, tt.version, tt.body)
 			assert.Equal(t, http.StatusBadRequest, status, body)
-			assert.Equal(t, v1, version, "the refusal names the contract the route serves")
+			assert.Equal(t, v2, version, "the refusal names the contract the route serves")
 			assert.Contains(t, body, `"kind":"invalid_argument"`)
 			assert.Contains(t, body, tt.names)
 			assert.Len(t, messages.calls, before, "a refused entry reached the queue")
@@ -846,9 +846,9 @@ func TestServer_AnswersEachBudgetRefusalWithItsOwnStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			messages := &messageService{err: tt.err}
 			url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
-			status, version, body := outboxSend(t, client, url, message.DeliveryContractVersion, outboxEntry(recipient, "entry-1", "2026-10-04T18:07:52Z"))
+			status, version, body := outboxSend(t, client, url, message.TokenDeliveryContractVersion, outboxEntry(recipient, "entry-1", "2026-10-04T18:07:52Z"))
 			assert.Equal(t, tt.status, status, body)
-			assert.Equal(t, message.DeliveryContractVersion, version)
+			assert.Equal(t, message.TokenDeliveryContractVersion, version)
 			if tt.status < http.StatusInternalServerError {
 				assert.Contains(t, body, `"kind":"`+tt.kind.String()+`"`)
 			}
@@ -869,9 +869,9 @@ func TestServer_RefusesAnOutboxMessageAcrossTheBoundaryUnderItsBudget(t *testing
 	url, client := listener(t, &agentService{}, nil, messages, consenting([2]string{"acme", "globex"}), unwatched(t), &memberGroups{}, &engine{}, sender)
 	created := time.Date(2026, time.October, 4, 18, 7, 52, 0, time.UTC)
 
-	status, _, body := outboxSend(t, client, url, message.DeliveryContractVersion, outboxEntry(foreign, "entry-1", created.Format(time.RFC3339)))
+	status, _, body := outboxSend(t, client, url, message.TokenDeliveryContractVersion, outboxEntry(foreign, "entry-1", created.Format(time.RFC3339)))
 	require.Equal(t, http.StatusCreated, status, body)
-	status, _, body = outboxSend(t, client, url, message.DeliveryContractVersion, outboxEntry(stranger, "entry-2", created.Format(time.RFC3339)))
+	status, _, body = outboxSend(t, client, url, message.TokenDeliveryContractVersion, outboxEntry(stranger, "entry-2", created.Format(time.RFC3339)))
 	require.Equal(t, http.StatusCreated, status, body)
 	assert.Contains(t, body, `"recipient":"`+sender.String()+`"`)
 	assert.Contains(t, body, `"sender":"`+stranger.String()+`"`)

@@ -2,10 +2,7 @@ package integration_test
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -24,40 +21,8 @@ import (
 	"github.com/garamsh/garam/internal/delivery"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/operator"
 )
-
-// heldPair is the agent's certificate as the files hold it, replaceable
-// mid-test the way a renewal replaces the files.
-type heldPair struct {
-	mu   sync.Mutex
-	pair tls.Certificate
-}
-
-func (h *heldPair) get() (*tls.Certificate, error) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	pair := h.pair
-	return &pair, nil
-}
-
-func (h *heldPair) replace(pair tls.Certificate) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.pair = pair
-}
-
-// presenting is a client that presents what h holds on every handshake,
-// as the adapter's own clients do (ADR-0040).
-func presenting(t *testing.T, h *heldPair) *http.Client {
-	t.Helper()
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		InsecureSkipVerify:   true,
-		MinVersion:           tls.VersionTLS13,
-		GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return h.get() },
-	}}}
-	t.Cleanup(client.CloseIdleConnections)
-	return client
-}
 
 // runtimeDouble is Sherlock v0.1.0's loopback gateway as the adapter
 // reads it: its status, its ingress keyed by the caller's identifier,
@@ -175,162 +140,41 @@ func (r *runtimeDouble) finish(id string) {
 	}
 }
 
-// controlStandIn is the lifecycle authority's adapter-facing activation
-// route as agent-execution.v1 pins it, in front of garam's real
-// activateAgent: it reads the leaf the adapter presented on its own
-// connection, preserves the replacement anchor per request so a replay
-// is the same request to garam, and forwards garam's answer. It stands
-// in for the Operator control service, which is not this repository's.
-type controlStandIn struct {
-	stack  *executionStack
-	server *httptest.Server
-
-	mu       sync.Mutex
-	replaces map[string]*string
-	latest   *string
-	asked    []string
-}
-
-func newControlStandIn(t *testing.T, s *executionStack) *controlStandIn {
+// newControlStandIn is the lifecycle authority in front of the
+// stack's own agent, which its controller holds outside any managed
+// creation, so its first activation names no reference.
+func newControlStandIn(t *testing.T, s *executionStack) *tokenControlStandIn {
 	t.Helper()
-	c := &controlStandIn{stack: s, replaces: map[string]*string{}}
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /v1/agents/{grn}/activations", c.activate)
-	mux.HandleFunc("POST /v1/agents/{grn}/runtime-status", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Garam-Contract-Version", delivery.ExecutionContract)
-		w.WriteHeader(http.StatusNoContent)
-	})
-	c.server = httptest.NewUnstartedServer(mux)
-	c.server.TLS = &tls.Config{ClientAuth: tls.RequireAnyClientCert, MinVersion: tls.VersionTLS13}
-	c.server.StartTLS()
-	t.Cleanup(c.server.Close)
+	c := newTokenControlStandIn(t, &tokenStack{executionStack: s}, managed{agent: s.agent})
+	c.ref = nil
 	return c
 }
 
-func (c *controlStandIn) activate(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Garam-Contract-Version", delivery.ExecutionContract)
-	refuse := func(status int, kind string) {
-		writeAnswer(w, status, map[string]string{"kind": kind, "message": kind})
-	}
-	if r.Header.Get("Garam-Contract-Version") != delivery.ExecutionContract {
-		refuse(http.StatusBadRequest, "invalid_request")
-		return
-	}
-	leaf := r.TLS.PeerCertificates[0]
-	if len(leaf.URIs) != 1 || leaf.URIs[0].String() != r.PathValue("grn") {
-		refuse(http.StatusForbidden, "not_authorized")
-		return
-	}
-	var body struct {
-		RequestID      string `json:"requestId"`
-		Epoch          string `json:"epoch"`
-		Generation     string `json:"generation"`
-		ConfigRevision string `json:"configRevision"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		refuse(http.StatusBadRequest, "invalid_request")
-		return
-	}
-	epoch, err := strconv.Atoi(body.Epoch)
-	if err != nil {
-		refuse(http.StatusBadRequest, "invalid_request")
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.asked = append(c.asked, body.RequestID)
-	replaces, replay := c.replaces[body.RequestID]
-	if !replay {
-		replaces = c.latest
-		c.replaces[body.RequestID] = replaces
-	}
-	leafPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leaf.Raw}))
-	got, err := c.stack.exchange(c.stack.hostedTLS, http.MethodPost, c.stack.agentPath("/activations"),
-		agent.ExecutionContractVersion, "", activationBodyOf(body.RequestID, epoch, agent.Generation(body.Generation), replaces, leafPEM))
-	switch {
-	case err != nil || got.status >= http.StatusInternalServerError:
-		refuse(http.StatusServiceUnavailable, "undecided")
-		return
-	case got.status == http.StatusConflict:
-		refuse(http.StatusConflict, "activation_superseded")
-		return
-	case got.status != http.StatusOK && got.status != http.StatusCreated:
-		refuse(http.StatusForbidden, "credential_fenced")
-		return
-	}
-	var a machinegen.Activation
-	if err := json.Unmarshal([]byte(got.body), &a); err != nil {
-		refuse(http.StatusServiceUnavailable, "undecided")
-		return
-	}
-	c.latest = &a.ActivationId
-	writeAnswer(w, got.status, map[string]any{
-		"activationId": a.ActivationId, "tokenVersion": a.TokenVersion, "token": a.Token,
-		"grn": a.Grn, "epoch": a.Epoch, "generation": a.Generation, "configRevision": body.ConfigRevision,
-	})
-}
-
-// requests is every request identifier the adapter asked under.
-func (c *controlStandIn) requests() []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]string(nil), c.asked...)
-}
-
-// adapterProcess is one fenced adapter process beside rt, presenting
-// what held holds, under the placement token in tokenFile, forwarding
-// the outbox it was given.
+// adapterProcess is one fenced adapter process: its execution, and the
+// queue its loop claims on, until stop.
 type adapterProcess struct {
 	execution *delivery.Execution
 	queue     *delivery.HTTPQueue
 	stop      func()
 }
 
-func startAdapter(t *testing.T, s *executionStack, c *controlStandIn, rt *runtimeDouble, held *heldPair, tokenFile string) *adapterProcess {
+// agentFiles are the stack's agent's token files: its own token for
+// garam, the token shown to the hosted control service as its control
+// token, and the placement token.
+func (s *executionStack) agentFiles(t *testing.T) tokenFiles {
 	t.Helper()
-	return startAdapterWith(t, s, c, rt, held, tokenFile, t.TempDir())
+	return newTokenFiles(t, s.agentToken(t, s.agent, nil).Token, s.forwarded)
+}
+
+func startAdapter(t *testing.T, s *executionStack, c *tokenControlStandIn, rt *runtimeDouble, files tokenFiles) *adapterProcess {
+	t.Helper()
+	return startAdapterWith(t, s, c, rt, files, t.TempDir())
 }
 
 // startAdapterWith is startAdapter forwarding the outbox in dir.
-func startAdapterWith(t *testing.T, s *executionStack, c *controlStandIn, rt *runtimeDouble, held *heldPair, tokenFile, dir string) *adapterProcess {
+func startAdapterWith(t *testing.T, s *executionStack, c *tokenControlStandIn, rt *runtimeDouble, files tokenFiles, dir string) *adapterProcess {
 	t.Helper()
-	return startAdapterSigning(t, s, c, rt, held, tokenFile, dir, false)
-}
-
-// startAdapterSigning is startAdapterWith with the adapter's signing
-// switch as sign says.
-func startAdapterSigning(t *testing.T, s *executionStack, c *controlStandIn, rt *runtimeDouble, held *heldPair, tokenFile, dir string, sign bool) *adapterProcess {
-	t.Helper()
-	execution := delivery.NewFencedExecution()
-	client := presenting(t, held)
-	queue, err := delivery.NewHTTPQueue(client, s.machine, s.agent, execution, delivery.NewCertificate(nil))
-	require.NoError(t, err)
-	gateway, err := delivery.NewHTTPGateway(rt.server.Client(), rt.server.URL, s.agent)
-	require.NoError(t, err)
-	authority, err := delivery.NewHTTPAuthority(presenting(t, held), c.server.URL, s.agent, delivery.NewCertificate(held.get))
-	require.NoError(t, err)
-	outbox, err := delivery.NewOutbox(dir)
-	require.NoError(t, err)
-	loop, err := delivery.NewService(delivery.Ends{
-		Agent: s.agent, Queue: queue, Gateway: gateway, Execution: execution, Authority: authority,
-		Credentials: delivery.NewFileCredentials(tokenFile, delivery.NewCertificate(held.get)), Outbox: outbox,
-	}, delivery.Config{
-		RetryDelay: 10 * time.Millisecond, MaxRetryDelay: 50 * time.Millisecond, MinRenewInterval: 50 * time.Millisecond,
-		StatusInterval: 10 * time.Millisecond, OutboxInterval: 50 * time.Millisecond,
-		ClaimTimeout: 5 * time.Second, CallTimeout: 2 * time.Second,
-		ForwardSignature: sign,
-	})
-	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		assert.NoError(t, loop.Run(ctx))
-	}()
-	var once sync.Once
-	stop := func() { once.Do(func() { cancel(); <-done }) }
-	t.Cleanup(stop)
-	return &adapterProcess{execution: execution, queue: queue, stop: stop}
+	return startTokenAdapterSigning(t, s, c, rt, s.agent, files, dir, false)
 }
 
 // placementToken writes a placement token file and answers its path.
@@ -341,25 +185,11 @@ func placementToken(t *testing.T, token string) string {
 	return path
 }
 
-// stackPair is the agent's current certificate as the stack issued it.
-func (s *executionStack) agentPair(t *testing.T) tls.Certificate {
-	t.Helper()
-	tr, ok := s.agentTLS.Transport.(*http.Transport)
-	require.True(t, ok)
-	return tr.TLSClientConfig.Certificates[0]
-}
-
 // postTo has the peer post a message to the agent and answers its
 // identifier.
 func (s *executionStack) postTo(t *testing.T, body string) string {
 	t.Helper()
-	raw, err := json.Marshal(map[string]string{"recipient": s.agent.String(), "idempotencyKey": s.key(), "body": body})
-	require.NoError(t, err)
-	got := s.send(t, s.peerTLS, http.MethodPost, "/messages", "", "", string(raw))
-	require.Equal(t, http.StatusCreated, got.status, got.body)
-	var m machinegen.Message
-	require.NoError(t, json.Unmarshal([]byte(got.body), &m))
-	return m.Id
+	return s.postToAgent(t, s.agent, body)
 }
 
 // stateOf is the state the peer reads for a message it sent.
@@ -378,8 +208,7 @@ func (s *executionStack) stateOf(t *testing.T, id string) string {
 func activatedProcess(t *testing.T, s *executionStack) *adapterProcess {
 	t.Helper()
 	c := newControlStandIn(t, s)
-	proc := startAdapter(t, s, c, newRuntimeDouble(t, s.agent, s.epoch, generationOf(1)),
-		&heldPair{pair: s.agentPair(t)}, placementToken(t, "placement-1"))
+	proc := startAdapter(t, s, c, newRuntimeDouble(t, s.agent, s.epoch, generationOf(1)), s.agentFiles(t))
 	require.Eventually(t, func() bool {
 		_, err := proc.execution.Present()
 		return err == nil
@@ -388,67 +217,45 @@ func activatedProcess(t *testing.T, s *executionStack) *adapterProcess {
 	return proc
 }
 
-// TestAdapter_ReadsAClaimsConflictAsTheFenceAndARenewalsAsALapse holds
-// ADR-0084's reading of the claim route against the real listener: a
-// 409 on a claim has no source but the fence, so a certificate past its
-// validity on the connection it opened is read as the fence and closes
-// the execution, though it presents the current activation's token. The
-// current certificate claiming under that token is the control, and a
-// renewal's 409 for a hold that is gone still reads as a lapse.
-func TestAdapter_ReadsAClaimsConflictAsTheFenceAndARenewalsAsALapse(t *testing.T) {
+// TestAdapter_ReadsARenewalsConflictAsALapse holds ADR-0084's reading
+// of a renewal against the real listener: a renewal's 409 for a hold
+// that is gone is a lapse and fences nothing. The claim and completion
+// it follows, under the activation's token, are the control.
+func TestAdapter_ReadsARenewalsConflictAsALapse(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
-	issued, err := s.past.Issue(context.Background(), s.agent)
-	require.NoError(t, err)
-	pair, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
-	require.NoError(t, err)
-	leaf, err := x509.ParseCertificate(pair.Certificate[0])
-	require.NoError(t, err)
-	expiredTLS := machineClient(t, pair)
-	s.clock.shift(leaf.NotAfter.Add(-time.Minute).Sub(time.Now()))
-	s.open(t, expiredTLS)
-	s.clock.shift(0)
 	proc := activatedProcess(t, s)
 
 	s.postTo(t, "hello")
 	claim, err := proc.queue.Claim(context.Background())
-	require.NoError(t, err, "the control: the current certificate claims under the activation")
+	require.NoError(t, err, "the control: the agent's token claims under the activation")
 	require.NoError(t, proc.queue.Complete(context.Background(), claim.ID))
 	_, err = proc.queue.Renew(context.Background(), claim.ID)
 	assert.ErrorIs(t, err, delivery.ErrClaimLapsed, "a renewal's 409 for a hold that is gone is a lapse")
 	_, err = proc.execution.Present()
 	assert.NoError(t, err, "which fences nothing")
-
-	expired, err := delivery.NewHTTPQueue(expiredTLS, s.machine, s.agent, proc.execution, delivery.NewCertificate(nil))
-	require.NoError(t, err)
-	_, err = expired.Claim(context.Background())
-	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "the claim's 409 is the fence: %v", err)
-	assert.Contains(t, err.Error(), "409 failed_precondition: credential is not current")
-	_, err = proc.execution.Present()
-	assert.ErrorIs(t, err, delivery.ErrInactive, "and closes the execution")
 }
 
 // TestAdapter_ReadsAnotherTenantsRefusalAsTheFence is an adapter
-// presenting another organization's agent certificate against this
-// agent's queue, beside the activation's token: garam refuses it, and
-// the adapter stops rather than retrying. The agent's own certificate
-// on the same queue under the same token is the control.
+// presenting another organization's agent token against this agent's
+// queue, beside the activation's token: garam refuses it, and the
+// adapter stops rather than retrying. The agent's own token on the
+// same queue under the same execution token is the control.
 func TestAdapter_ReadsAnotherTenantsRefusalAsTheFence(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
-	other := scopedGRN("globex", "agent", "0f0e0d0c0b0a0908")
-	otherTLS := machineClient(t, installed(t, p, s.issuer, other))
+	foreign, _, _ := lineaged(t, p, registerOperator(t, p, scopedGRN("globex", operator.ServiceType, "controller")))
+	otherToken := newTokenFiles(t, foreign.mintedIn(t).Value, "")
 	proc := activatedProcess(t, s)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := proc.queue.Claim(ctx)
-	assert.ErrorIs(t, err, delivery.ErrNoMessageReady, "the control: its own certificate's queue answers")
+	assert.ErrorIs(t, err, delivery.ErrNoMessageReady, "the control: its own token's queue answers")
 
-	wrong, err := delivery.NewHTTPQueue(otherTLS, s.machine, s.agent, proc.execution, delivery.NewCertificate(nil))
+	wrong, err := delivery.NewHTTPQueue(serverTLSOnly(t), s.machine, s.agent, proc.execution, tokenFileOf(t, otherToken.garam))
 	require.NoError(t, err)
 	_, err = wrong.Claim(context.Background())
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "%v", err)
@@ -469,11 +276,10 @@ func TestAdapter_CarriesAMessageAndAReplacementFencesTheGenerationBefore(t *test
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	c := newControlStandIn(t, s)
-	held := &heldPair{pair: s.agentPair(t)}
-	token := placementToken(t, "placement-1")
+	files := s.agentFiles(t)
 
 	first := newRuntimeDouble(t, s.agent, s.epoch, generationOf(1))
-	one := startAdapter(t, s, c, first, held, token)
+	one := startAdapter(t, s, c, first, files)
 	id := s.postTo(t, `{"sender":"grn:evil:default:agent:1"}`)
 	require.Eventually(t, func() bool { return len(first.received()) == 1 }, 10*time.Second, 10*time.Millisecond,
 		"the message reaches the runtime")
@@ -486,7 +292,7 @@ func TestAdapter_CarriesAMessageAndAReplacementFencesTheGenerationBefore(t *test
 		"the turn's end completes the message at garam")
 
 	second := newRuntimeDouble(t, s.agent, s.epoch, generationOf(2))
-	startAdapter(t, s, c, second, held, token)
+	startAdapter(t, s, c, second, files)
 	require.Eventually(t, func() bool {
 		_, err := one.execution.Present()
 		return err != nil
@@ -514,11 +320,10 @@ func TestAdapter_ForwardsWhatGaramSignedSoTheRuntimeCanVerifyIt(t *testing.T) {
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	c := newControlStandIn(t, s)
-	held := &heldPair{pair: s.agentPair(t)}
-	token := placementToken(t, "placement-1")
+	files := s.agentFiles(t)
 
 	signing := newRuntimeDouble(t, s.agent, s.epoch, generationOf(1))
-	one := startAdapterSigning(t, s, c, signing, held, token, t.TempDir(), true)
+	one := startTokenAdapterSigning(t, s, c, signing, s.agent, files, t.TempDir(), true)
 	id := s.postTo(t, "café")
 	require.Eventually(t, func() bool { return len(signing.received()) == 1 }, 10*time.Second, 10*time.Millisecond,
 		"the message reaches the runtime")
@@ -537,7 +342,7 @@ func TestAdapter_ForwardsWhatGaramSignedSoTheRuntimeCanVerifyIt(t *testing.T) {
 	one.stop()
 
 	unsigned := newRuntimeDouble(t, s.agent, s.epoch, generationOf(2))
-	startAdapter(t, s, c, unsigned, held, token)
+	startAdapter(t, s, c, unsigned, files)
 	next := s.postTo(t, "café")
 	require.Eventually(t, func() bool { return len(unsigned.received()) == 1 }, 10*time.Second, 10*time.Millisecond,
 		"the next message reaches the runtime")
@@ -545,58 +350,51 @@ func TestAdapter_ForwardsWhatGaramSignedSoTheRuntimeCanVerifyIt(t *testing.T) {
 		"the switch off sends the same content and no signature member")
 }
 
-// TestAdapter_ReplaysItsActivationAcrossRenewalAndRestart is the
+// TestAdapter_ReplaysItsActivationAcrossRefreshAndRestart is the
 // consumer test #1169's 16:47 decision asks for. A restarted adapter
-// presenting another certificate of the agent replays the same request
-// and is answered the same activation at a higher token version. The expired
-// first certificate, and the same request after the activation ended,
-// are refused, and the adapter pauses on each rather than retrying.
-func TestAdapter_ReplaysItsActivationAcrossRenewalAndRestart(t *testing.T) {
+// holding refreshed tokens of the agent replays the same request and
+// is answered the same activation at a higher token version. A control
+// token past its expiry, and the same request after the activation
+// ended, are refused, and the adapter pauses on each rather than
+// retrying.
+func TestAdapter_ReplaysItsActivationAcrossRefreshAndRestart(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	c := newControlStandIn(t, s)
 	rt := newRuntimeDouble(t, s.agent, s.epoch, generationOf(1))
-	token := placementToken(t, "placement-1")
-	held := &heldPair{pair: s.agentPair(t)}
 
-	one := startAdapter(t, s, c, rt, held, token)
+	one := startAdapter(t, s, c, rt, s.agentFiles(t))
 	require.Eventually(t, func() bool { _, err := one.execution.Present(); return err == nil },
 		10*time.Second, 10*time.Millisecond, "the first process is activated")
-	first := s.standing(t, s.leaf, ptr(generationOf(1)))
+	first := s.standing(t, s.forwarded, ptr(generationOf(1)))
 	require.Equal(t, machinegen.ExecutionIntrospectionGenerationCurrent, first.Generation)
 
-	// The agent holds a second certificate garam issued it.
+	// The agent holds refreshed tokens its controller minted.
 	one.stop()
-	renewed, err := s.issuer.Issue(context.Background(), s.agent)
-	require.NoError(t, err)
-	renewedPair, err := tls.X509KeyPair(renewed.CertificatePEM(), renewed.PrivateKeyPEM())
-	require.NoError(t, err)
-
-	held.replace(renewedPair)
-	two := startAdapter(t, s, c, rt, held, token)
+	refreshed := newTokenFiles(t, s.agentToken(t, s.agent, nil).Token, s.agentToken(t, s.agent, &s.hosted).Token)
+	two := startAdapter(t, s, c, rt, refreshed)
 	require.Eventually(t, func() bool { _, err := two.execution.Present(); return err == nil },
-		10*time.Second, 10*time.Millisecond, "the restarted process is activated with the second certificate")
+		10*time.Second, 10*time.Millisecond, "the restarted process is activated with the refreshed tokens")
 	asked := c.requests()
 	require.Len(t, asked, 2)
-	assert.Equal(t, asked[0], asked[1], "the restart replays the same request: the certificate is not part of it")
+	assert.Equal(t, asked[0], asked[1], "the restart replays the same request: the token is not part of it")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, err = two.queue.Claim(ctx)
-	assert.ErrorIs(t, err, delivery.ErrNoMessageReady, "and the newer token is admitted")
+	_, err := two.queue.Claim(ctx)
+	assert.ErrorIs(t, err, delivery.ErrNoMessageReady, "and the newer execution token is admitted")
 	two.stop()
 
-	// The first certificate, expired: control forwards it and garam
+	// A control token past its expiry: control forwards it and garam
 	// refuses it, so the adapter pauses.
-	issued, err := s.past.Issue(context.Background(), s.agent)
+	expired := s.agentToken(t, s.agent, &s.hosted)
+	_, err = p.Exec(context.Background(), `UPDATE agent_tokens SET expires_at = now() - interval '1 second',
+		issued_at = now() - interval '1 hour' WHERE token_hash = $1`, agent.HashAccessToken(expired.Token))
 	require.NoError(t, err)
-	expired, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
-	require.NoError(t, err)
-	held.replace(expired)
-	three := startAdapter(t, s, c, rt, held, token)
+	three := startAdapter(t, s, c, rt, newTokenFiles(t, s.agentToken(t, s.agent, nil).Token, expired.Token))
 	require.Eventually(t, func() bool { return len(c.requests()) == 3 }, 10*time.Second, 10*time.Millisecond)
 	time.Sleep(200 * time.Millisecond)
-	assert.Len(t, c.requests(), 3, "an expired certificate's refusal is not resent on a timer")
+	assert.Len(t, c.requests(), 3, "an expired token's refusal is not resent on a timer")
 	_, err = three.execution.Present()
 	assert.ErrorIs(t, err, delivery.ErrInactive)
 	three.stop()
@@ -605,8 +403,7 @@ func TestAdapter_ReplaysItsActivationAcrossRenewalAndRestart(t *testing.T) {
 	require.NotNil(t, first.ActivationId)
 	ended := s.deactivate(t, *first.ActivationId)
 	require.Equal(t, http.StatusOK, ended.status, ended.body)
-	held.replace(renewedPair)
-	four := startAdapter(t, s, c, rt, held, token)
+	four := startAdapter(t, s, c, rt, refreshed)
 	require.Eventually(t, func() bool { return len(c.requests()) == 4 }, 10*time.Second, 10*time.Millisecond)
 	assert.Equal(t, asked[0], c.requests()[3], "the same request")
 	time.Sleep(200 * time.Millisecond)

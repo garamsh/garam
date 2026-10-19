@@ -207,22 +207,16 @@ func (s *Store) Recover(ctx context.Context, req agent.RecoveryRequest) (*agent.
 		case !errors.Is(err, pgx.ErrNoRows):
 			return storageError(err, "read recovery", nil, nil)
 		}
+		// A recovery signs nothing: it only moves the lineage, and the
+		// assignee mints tokens in the new one (ADR-0100).
 		lineage := pgUUID(uuid.UUID(req.Lineage))
-		// A recovery that signed nothing — execution-fence.v2's —
-		// records no certificate, chain or credential: it only moves
-		// the lineage, and the assignee mints tokens in the new one
-		// (ADR-0100).
-		signed := req.CertificatePEM != ""
 		if err := q.InsertRecovery(ctx, db.InsertRecoveryParams{
-			AgentGrn:       req.Agent.String(),
-			RequestID:      string(req.RequestID),
-			OperationRef:   req.OperationRef,
-			BodySha256:     req.BodySHA256[:],
-			Lineage:        lineage,
-			CertificatePem: pgtype.Text{String: req.CertificatePEM, Valid: signed},
-			IssuerPem:      pgtype.Text{String: req.Chain.IssuerPEM, Valid: signed},
-			ServerRootPem:  pgtype.Text{String: req.Chain.ServerRootPEM, Valid: signed},
-			CreatedAt:      pgxtype.Timestamptz(now),
+			AgentGrn:     req.Agent.String(),
+			RequestID:    string(req.RequestID),
+			OperationRef: req.OperationRef,
+			BodySha256:   req.BodySHA256[:],
+			Lineage:      lineage,
+			CreatedAt:    pgxtype.Timestamptz(now),
 		}); err != nil {
 			return storageError(err, "insert recovery", nil, agent.ErrRecoveryConflict)
 		}
@@ -234,17 +228,7 @@ func (s *Store) Recover(ctx context.Context, req agent.RecoveryRequest) (*agent.
 		if err := q.MoveLineage(ctx, db.MoveLineageParams{AgentGrn: req.Agent.String(), Lineage: lineage, UpdatedAt: pgxtype.Timestamptz(now)}); err != nil {
 			return storageError(err, "move lineage", nil, nil)
 		}
-		if !signed {
-			out = &agent.Recovery{Lineage: req.Lineage}
-			return nil
-		}
-		if err := q.InsertCredential(ctx, db.InsertCredentialParams{
-			AgentGrn: req.Agent.String(), Serial: req.Credential.Serial, Lineage: lineage, NotAfter: pgxtype.Timestamptz(req.Credential.NotAfter),
-		}); err != nil {
-			return storageError(err, "record credential", nil, nil)
-		}
-		chain := req.Chain
-		out = &agent.Recovery{Lineage: req.Lineage, CertificatePEM: req.CertificatePEM, Chain: &chain}
+		out = &agent.Recovery{Lineage: req.Lineage}
 		return nil
 	})
 	if err != nil {
@@ -264,14 +248,9 @@ func (s *Store) GetRecovery(ctx context.Context, agentGRN grn.GRN, requestID age
 	return recoveryOf(row), nil
 }
 
-// recoveryOf reads a recorded recovery. A row recorded before 000036
-// holds no chain.
+// recoveryOf reads a recorded recovery.
 func recoveryOf(row db.AgentRecovery) *agent.Recovery {
-	out := &agent.Recovery{Lineage: agent.Lineage(row.Lineage.Bytes), CertificatePEM: row.CertificatePem.String}
-	if row.IssuerPem.Valid && row.ServerRootPem.Valid {
-		out.Chain = &agent.Chain{IssuerPEM: row.IssuerPem.String, ServerRootPEM: row.ServerRootPem.String}
-	}
-	return out
+	return &agent.Recovery{Lineage: agent.Lineage(row.Lineage.Bytes)}
 }
 
 func activationOf(agentGRN grn.GRN, row db.AgentActivation) *agent.Activation {

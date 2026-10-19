@@ -3,7 +3,6 @@ package workload
 import (
 	"context"
 	"crypto/rand"
-	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"log/slog"
@@ -73,9 +72,8 @@ type Config struct {
 	// renders no issuers entry and leaves the adapter unsigned: the
 	// runtime is handed the host's configuration as it stands.
 	MessageIssuer string
-	// TokenCheckInterval is how often the token mode compares the
-	// running adapter's agent token with the one held; zero is every
-	// thirty seconds.
+	// TokenCheckInterval is how often the running adapter's agent token
+	// is compared with the one held; zero is every thirty seconds.
 	TokenCheckInterval time.Duration
 	// Attach is a runtime the host runs itself, which the supervisor
 	// attaches to instead of starting one (ADR-0111); nil is the
@@ -87,11 +85,8 @@ type Config struct {
 	// supervisor that never activated, so its first activation names
 	// what garam requires it to.
 	Replaces string
-	// Tokens is the agent's garam token in the token mode, where the
-	// host enrolled under standalone-enrollment.v2 and holds a
-	// supervisor credential (ADR-0100); nil is the certificate mode,
-	// where the adapter presents the agent's certificate and
-	// Adapter's certificate, key and issuer are required.
+	// Tokens is the agent's garam token, which the supervisor mints with
+	// the token its credential was exchanged for (ADR-0100). Required.
 	Tokens AgentTokens
 }
 
@@ -100,9 +95,6 @@ type Supervisor struct {
 	engine Engine
 	garam  Activator
 	cfg    Config
-	// issuer is what an adapter's certificate chains to, nil in the
-	// token mode.
-	issuer *x509.CertPool
 	// renderedConfig is the host's runtime configuration with garam's
 	// issuers entry added, which is what the runtime is handed.
 	renderedConfig []byte
@@ -111,8 +103,8 @@ type Supervisor struct {
 	// with the run, and handed.
 	mu sync.Mutex
 	st *state
-	// handed is the agent token the running adapter was last given, in
-	// the token mode. It is not recorded: a restarted supervisor hands
+	// handed is the agent token the running adapter was last given. It
+	// is not recorded: a restarted supervisor hands
 	// the adapter the token it holds then.
 	handed string
 	// activating holds one activation attempt at a time (ADR-0084).
@@ -127,6 +119,9 @@ func NewSupervisor(engine Engine, garam Activator, cfg Config) (*Supervisor, err
 		return nil, errorx.New(errorx.KindInvalidArgument,
 			"workload: garam is required, and either an engine or an attachment, not both")
 	}
+	if cfg.Tokens == nil {
+		return nil, errorx.New(errorx.KindInvalidArgument, "workload: the adapter is handed tokens, so Tokens is required")
+	}
 	if cfg.Dir == "" || cfg.Prefix == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "workload: a directory and a name prefix are required")
 	}
@@ -139,8 +134,6 @@ func NewSupervisor(engine Engine, garam Activator, cfg Config) (*Supervisor, err
 	}
 	if a := cfg.Attach; a != nil {
 		switch {
-		case cfg.Tokens == nil:
-			return nil, errorx.New(errorx.KindInvalidArgument, "workload: an attached runtime's adapter is handed tokens")
 		case a.Status == nil || a.AdapterDir == "":
 			return nil, errorx.New(errorx.KindInvalidArgument,
 				"workload: an attachment names the runtime's status and the adapter's directory")
@@ -158,15 +151,6 @@ func NewSupervisor(engine Engine, garam Activator, cfg Config) (*Supervisor, err
 	if d.MoveMemoryTo != "" && !volumeName.MatchString(d.MoveMemoryTo) {
 		return nil, errorx.New(errorx.KindInvalidArgument, "workload: not a volume name: "+d.MoveMemoryTo)
 	}
-	var issuer *x509.CertPool
-	if cfg.Tokens == nil {
-		issuer = x509.NewCertPool()
-		if !issuer.AppendCertsFromPEM(cfg.Adapter.IssuerPEM) {
-			return nil, errorx.New(errorx.KindInvalidArgument, "workload: the agent's issuer holds no certificate")
-		}
-	} else if len(cfg.Adapter.CertificatePEM)+len(cfg.Adapter.KeyPEM)+len(cfg.Adapter.IssuerPEM) > 0 {
-		return nil, errorx.New(errorx.KindInvalidArgument, "workload: the token mode copies no agent certificate in")
-	}
 	renderedConfig := d.Config
 	if cfg.MessageIssuer != "" {
 		if cfg.Adapter.MachineURL == "" {
@@ -178,7 +162,7 @@ func NewSupervisor(engine Engine, garam Activator, cfg Config) (*Supervisor, err
 			return nil, err
 		}
 	}
-	return &Supervisor{engine: engine, garam: garam, cfg: cfg, issuer: issuer, renderedConfig: renderedConfig}, nil
+	return &Supervisor{engine: engine, garam: garam, cfg: cfg, renderedConfig: renderedConfig}, nil
 }
 
 // Run brings the desired generation up, or adopts the one running, and
@@ -269,9 +253,7 @@ func (s *Supervisor) newIntent() (*intent, error) {
 		Attached:       s.cfg.Attach != nil,
 		PlacementToken: base64.RawURLEncoding.EncodeToString(token),
 	}
-	if s.cfg.Tokens != nil {
-		in.ControlToken = controlTokenPrefix + randomHex(32)
-	}
+	in.ControlToken = controlTokenPrefix + randomHex(32)
 	// An attached runtime is no container of this host's and runs on
 	// no volume it recorded.
 	if !in.Attached {

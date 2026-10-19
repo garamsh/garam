@@ -84,8 +84,7 @@ type garamQueue struct {
 	// token is the one execution token garam admits, empty before the
 	// agent's first activation, when garam admits no protected call.
 	token string
-	// live is the agent tokens garam accepts in the token mode, nil in
-	// the certificate mode, where the connection authenticates.
+	// live is the agent tokens garam accepts.
 	live map[string]bool
 	// presented is every Authorization a claim carried, in order, and
 	// fenced how many claims the fence refused.
@@ -97,7 +96,7 @@ type garamQueue struct {
 	outbox outboxRoute
 }
 
-// outboxRoute is `POST /outbox-messages` under durable-delivery.v1: a
+// outboxRoute is `POST /outbox-messages` under durable-delivery.v2: a
 // submission is stored once per key and its replay answers the stored
 // message. answer overrides what one submission is answered with.
 type outboxRoute struct {
@@ -115,12 +114,12 @@ type outboxSubmission struct {
 	IdempotencyKey string    `json:"idempotencyKey"`
 	Body           string    `json:"body"`
 	CreatedAt      time.Time `json:"createdAt"`
-	Authorization  string    `json:"-"`
+	Execution      string    `json:"-"`
 }
 
 func newGaramQueue(t *testing.T, lease time.Duration, bodies ...string) *garamQueue {
 	t.Helper()
-	q := &garamQueue{lease: lease, claims: map[string]*queued{}}
+	q := &garamQueue{lease: lease, claims: map[string]*queued{}, live: map[string]bool{agentTokenOf("a"): true}}
 	q.outbox.stored = map[string]machinegen.Message{}
 	for i, body := range bodies {
 		q.messages = append(q.messages, &queued{id: fmt.Sprintf("message-%d", i), body: body})
@@ -144,22 +143,15 @@ func newGaramQueue(t *testing.T, lease time.Duration, bodies ...string) *garamQu
 // admits reports whether garam admits what a request presents, and
 // answers the refusal it would write otherwise. The caller holds mu.
 func (q *garamQueue) admits(w http.ResponseWriter, r *http.Request) bool {
-	got := r.Header.Get("Authorization")
-	if q.live != nil {
-		agentToken, ok := strings.CutPrefix(got, "Garam-Token ")
-		if !ok || !q.live[agentToken] {
-			writeJSON(w, http.StatusUnauthorized, machinegen.Error{Kind: "unauthenticated", Message: "agent token is not valid"})
-			return false
-		}
-		got = ""
-		if execution := r.Header.Get("Garam-Execution"); execution != "" {
-			got = "Garam-Execution " + execution
-		}
+	agentToken, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Garam-Token ")
+	if !ok || !q.live[agentToken] {
+		writeJSON(w, http.StatusUnauthorized, machinegen.Error{Kind: "unauthenticated", Message: "agent token is not valid"})
+		return false
 	}
-	switch {
-	case got == "":
+	switch execution := r.Header.Get("Garam-Execution"); {
+	case execution == "":
 		writeJSON(w, http.StatusUnauthorized, machinegen.Error{Kind: "unauthenticated", Message: "execution token required"})
-	case got != "Garam-Execution "+q.token:
+	case execution != q.token:
 		writeJSON(w, http.StatusForbidden, machinegen.Error{Kind: "permission_denied", Message: "execution token is not current"})
 	default:
 		return true
@@ -167,8 +159,7 @@ func (q *garamQueue) admits(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
-// accept makes garam accept exactly the agent tokens named, which puts
-// the queue in the token mode.
+// accept makes garam accept exactly the agent tokens named.
 func (q *garamQueue) accept(tokens ...string) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -176,14 +167,6 @@ func (q *garamQueue) accept(tokens ...string) {
 	for _, token := range tokens {
 		q.live[token] = true
 	}
-}
-
-// deliveryContract is the outbox contract the mode serves.
-func (q *garamQueue) deliveryContract() string {
-	if q.live != nil {
-		return delivery.TokenDeliveryContract
-	}
-	return delivery.DeliveryContract
 }
 
 // admit makes token the one garam admits, as an activation does.
@@ -334,10 +317,10 @@ func (q *garamQueue) submit(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, machinegen.Error{Kind: "invalid_argument", Message: "body"})
 		return
 	}
-	sub.Authorization = r.Header.Get("Authorization")
+	sub.Execution = r.Header.Get("Garam-Execution")
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if r.Header.Get("Garam-Contract-Version") != q.deliveryContract() {
+	if r.Header.Get("Garam-Contract-Version") != delivery.TokenDeliveryContract {
 		writeJSON(w, http.StatusBadRequest, machinegen.Error{Kind: "invalid_argument", Message: "version"})
 		return
 	}
@@ -361,7 +344,7 @@ func (q *garamQueue) submit(w http.ResponseWriter, r *http.Request) {
 		}
 		q.outbox.stored[sub.IdempotencyKey] = stored
 	}
-	w.Header().Set("Garam-Contract-Version", q.deliveryContract())
+	w.Header().Set("Garam-Contract-Version", delivery.TokenDeliveryContract)
 	writeJSON(w, http.StatusCreated, stored)
 }
 
@@ -390,6 +373,13 @@ func (q *garamQueue) claimsPresenting() []string {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return append([]string(nil), q.presented...)
+}
+
+// claimsExecuting is every Garam-Execution header the claims carried.
+func (q *garamQueue) claimsExecuting() []string {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return append([]string(nil), q.executions...)
 }
 
 // refuseRenewals answers every renewal the way garam answers one for a
@@ -804,10 +794,15 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-// certificateMode is the certificate mode's credential as a call
-// presents it: nothing in a header, since the connection carries the
-// certificate. Nothing here fingerprints it.
-func certificateMode() delivery.Credential { return delivery.NewCertificate(nil) }
+// agentCredential is the agent token garam accepts unless a test says
+// otherwise.
+func agentCredential() delivery.Credential { return staticToken(agentTokenOf("a")) }
+
+// staticToken is an agent credential holding one token throughout.
+type staticToken string
+
+func (s staticToken) Authorization() (string, error) { return "Garam-Token " + string(s), nil }
+func (s staticToken) Fingerprint() (string, error)   { return "fingerprint-" + string(s), nil }
 
 // mounted is what the deployment mounted: the placement token and the
 // fingerprint of what the agent's calls present, either replaceable
@@ -878,7 +873,7 @@ func ends(t *testing.T, queue *garamQueue, gateway *agentGateway, execution *del
 	authority delivery.Authority, credentials delivery.Credentials, outbox *delivery.Outbox,
 ) delivery.Ends {
 	t.Helper()
-	claims, err := delivery.NewHTTPQueue(queue.server.Client(), queue.server.URL, agentGRN(), execution, certificateMode())
+	claims, err := delivery.NewHTTPQueue(queue.server.Client(), queue.server.URL, agentGRN(), execution, agentCredential())
 	require.NoError(t, err)
 	ingress, err := delivery.NewHTTPGateway(gateway.server.Client(), gateway.server.URL, agentGRN())
 	require.NoError(t, err)
@@ -1032,7 +1027,7 @@ func TestRun_CompletesTheClaimATurnSucceededOnAndNamedIt(t *testing.T) {
 	eventually(t, func() bool { return queue.delivered() == 1 }, "the turn that named it completes it")
 	assert.Equal(t, 1, queue.completionCalls(), "an event that is not a turn ending completes nothing")
 	assert.Equal(t, 1, queue.deliveries(0), "a completed message is not handed out again")
-	assert.Equal(t, []string{tokenOf(1, 1)}, queue.claimsPresenting()[:1], "the claim carries the activation's token")
+	assert.Equal(t, []string{tokenOf(1, 1)}, queue.claimsExecuting()[:1], "the claim carries the activation's token")
 }
 
 // TestRun_LeavesAFailedTurnsMessageForRedelivery is §Failure and
@@ -1466,7 +1461,7 @@ func (s idleStream) Close() error { return nil }
 // another for.
 type idleAuthority struct{}
 
-func (idleAuthority) Contract() string { return delivery.ExecutionContract }
+func (idleAuthority) Contract() string { return delivery.TokenExecutionContract }
 
 func (idleAuthority) Activate(context.Context, string, delivery.Binding, string) (*delivery.Activation, error) {
 	return nil, errorx.New(errorx.KindUnavailable, "delivery: no authority here")

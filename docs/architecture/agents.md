@@ -3,15 +3,10 @@
 Autonomous identity, provisioned outside garam (ADR-0012). Implemented
 by `internal/agent`.
 
-Pending removal
-([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)):
-the certificate path goes in G4 (#1494) — an agent's and a
-supervisor's certificates, a managed agent's initial certificate and a
-recovery's v1 form — and what this document says of it holds until
-then. Legacy execution mode, the
-staged cut-over, `garam cutover-inventory` and every agent definition
-are gone (ADR-0118), as are garam's own templates and the browser's
-legacy `operatorGrn`
+garam issues no agent or supervisor a certificate, and every agent's
+writes wait for an activation
+([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)).
+garam keeps no template of its own and no browser `operatorGrn`
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)).
 
 | Type | Responsibility |
@@ -19,14 +14,14 @@ legacy `operatorGrn`
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
 | `Assignment` | what holds an agent — an operator, or a standalone host's supervisor (ADR-0082) — and the epoch that binding holds |
 | `Service` | records the state each party reports (ADR-0053), and mints an agent's tokens for the operator or supervisor holding it (ADR-0100) |
-| `ExecutionService` | what a lifecycle authority does to an agent's execution — creates a managed agent and issues its first certificate, activates a generation, deactivates it, inspects a certificate and a generation, and recovers the credential lineage (ADR-0077, ADR-0078) |
-| `ExecutionStore` | the execution row every agent has, its activations and its credential lineage, written under the row's lock (ADR-0080), and a managed agent's creation and the initial issuance that starts its lineage |
+| `ExecutionService` | what a lifecycle authority does to an agent's execution — creates a managed agent, activates a generation, deactivates it, inspects a forwarded token and a generation, and recovers the credential lineage (ADR-0077, ADR-0078) |
+| `ExecutionStore` | the execution row every agent has, its activations and its credential lineage, written under the row's lock (ADR-0080), and a managed agent's creation, which opens its lineage |
 | `ManagedCreation` | an agent the hosted control service created: its GRN, the controller and epoch of its first assignment, the `agent:create` reference and request identifier that authorized it, and the lineage it was born into |
-| `Enrollment` | an administrator's approval of a standalone host: the hash of the host's bootstrap secret, the fingerprints of its two keys, its request identifier, the agent and supervisor GRNs it binds, the assignment a replacement expects, and the public result once spent (ADR-0082) |
-| `Supervisor` | a standalone host's current supervisor registration: the one agent it holds and the certificate garam last issued it |
+| `Enrollment` | an administrator's approval of a standalone host: the hash of the host's bootstrap secret, its request identifier, the agent and supervisor GRNs it binds, the assignment a replacement expects, and the public result once spent (ADR-0082) |
+| `Supervisor` | a standalone host's current supervisor registration: the one agent it holds |
 | `StandaloneService` | how an administrator approves a host, withdraws an unspent approval and revokes a supervisor, each decided from current authority; it signs nothing |
-| `SupervisorService` | how a host spends its approval for both first certificates, and how its supervisor renews its own |
-| `StandaloneStore` | approvals, registrations and supervisor renewals, written after the execution row's lock wherever an assignment or an execution changes |
+| `SupervisorService` | how a host spends its approval for its supervisor's credential, and how that supervisor exchanges it for tokens (ADR-0100) |
+| `StandaloneStore` | approvals and registrations, written after the execution row's lock wherever an assignment or an execution changes |
 | `MemberAuthorizer` | decides a user's authority from current state, as approving, withdrawing, revoking and spending need |
 
 garam mints an agent's GRN and never changes it, so which operator runs
@@ -161,8 +156,8 @@ and §Standalone hosts describe the older cohorts, which stay served.
   agent replaced before it ever ran starts on it.
 - **One admission write.** Admitting an identity is one store
   primitive, `admit` (`internal/agent/postgres/postgres_admission.go`),
-  which `agent-enrollment.v1`, `managed-enrollment.v1`/`.v2` creation
-  and standalone spending each call: a new agent fenced from birth
+  which `agent-enrollment.v1`, `managed-enrollment.v2` creation and
+  standalone spending each call: a new agent fenced from birth
   with its first assignment, or a move from exactly the expected
   assignment into a new lineage, which a managed replacement and a
   standalone one share. An `agent-enrollment.v1` admission
@@ -231,9 +226,9 @@ lock and drain order (`tests/integration/direct_attachment_test.go`).
   isolation and the lock's advisory scope, less than a managed or
   standalone agent's.
 
-Legacy v1/v2 approval bindings and supervisor credential retry behavior
-remain unchanged until explicitly migrated; an `agent-enrollment.v1`
-retry answers the recorded binding and re-issues nothing.
+A standalone spending's retry re-issues the supervisor's credential
+(§Standalone hosts); an `agent-enrollment.v1` retry answers the
+recorded binding and re-issues nothing.
 
 ## Tokens in place of certificates
 
@@ -241,12 +236,12 @@ retry answers the recorded binding and re-issues nothing.
 control service's contracts and the adapter.**
 [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 replaces an agent's certificate with a short-lived token, and the
-order is the plan's,
-`docs/plans/2026-10-09-machine-identity-migration.md`: this is steps
-G1b to G1d, with the adapter reading its tokens as G2
+token is the one credential an agent presents: garam issues no agent a
+certificate
+([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)).
+The adapter reads its tokens from files
 ([adapter.md](./adapter.md) §Token mode), and a supervisor's own
-credential is §Standalone hosts'. A certificate still authenticates as
-it did until G3.
+credential is §Standalone hosts'.
 
 - **The assignee mints, at the current epoch.** `mintAgentToken`
   answers an operator, or a standalone host's supervisor presenting its
@@ -265,13 +260,12 @@ it did until G3.
   carry their activation's token in a `Garam-Execution` header of its
   own, since the agent token takes `Authorization`.
 - **It lives an hour by default**, configurable from twenty minutes to
-  a day, and its start is backdated by the minute a certificate's is,
-  so a database whose clock trails the minting process finds it
-  current at once. A mint voids nothing; an agent keeps its newest
-  five tokens per audience and its newest ten in all, and an audience
-  is an operator the organization registered, so naming more
-  audiences widens nothing. A token renews no certificate: an agent
-  holding one is minted another by its assignee.
+  a day, and its start is backdated by a minute, so a database whose
+  clock trails the minting process finds it current at once. A mint
+  voids nothing; an agent keeps its newest five tokens per audience and
+  its newest ten in all, and an audience is an operator the
+  organization registered, so naming more audiences widens nothing. An
+  agent holding a token is minted the next by its assignee.
 - **A mint and an operator's deletion each wait on agent tokens in one
   statement, which takes them in `token_hash` order; an organization's
   deletion takes them in its cascade's order and waits on none** (#1434;
@@ -295,20 +289,19 @@ it did until G3.
 - **A token shown to a hosted operator is forwarded, not presented.**
   The assignee may mint one naming the control service as its
   audience; garam accepts it on no route, and the control service
-  forwards it where it forwarded the agent's certificate, on activation
-  and execution introspection under `execution-fence.v2`. garam reads
+  forwards it on activation and execution introspection under
+  `execution-fence.v2`. garam reads
   that token's row as it was minted, requires it to name the agent and
   the caller as its audience, and hands its serial and dates to the
-  execution fence, which judges it as it judges a certificate: a token
-  of an earlier epoch or lineage, or an expired one, is answered fenced
-  while its row is kept, and not proven once a mint has swept or
-  trimmed it; either way it may not act.
+  execution fence: a token of an earlier epoch or lineage, or an
+  expired one, is answered fenced while its row is kept, and not proven
+  once a mint has swept or trimmed it; either way it may not act.
   Deleting the hosted operator takes the tokens shown to it
   (`migrations/000041`).
 ## Separated execution
 
-**Built here is garam's half of four parts: managed creation and its
-initial issuance (below), the controller proof
+**Built here is garam's half of four parts: managed creation (below),
+the controller proof
 ([operators.md](./operators.md) §Controller proof), the generation fence
 ([machine-identity.md](./machine-identity.md) §Generation and lineage),
 and garam's holding no agent definition (below), which is garam's
@@ -348,23 +341,16 @@ in #1157.
   the bound controller, its execution and the creation record are one
   transaction (migration 000030), so a failure leaves no agent, and the
   same reference answers the same GRN and epoch while the agent stays
-  where its creation put it. Under `managed-enrollment.v2` the control
-  service presents its token and nothing else changes: creation opens
-  the agent's lineage under either value, and its controller then
-  mints the agent's tokens in it (§Tokens in place of certificates)
-  where it would have obtained the initial certificate, which takes no
-  token.
+  where its creation put it. The control service presents its token
+  under `managed-enrollment.v2`; creation opens the agent's lineage,
+  and its controller then mints the agent's tokens in it (§Tokens in
+  place of certificates).
 - **A managed agent is fenced from birth.** Its execution starts
-  fenced, with no activation, in a lineage holding no certificate, so
-  the one credential predicate (ADR-0080) refuses every certificate
-  naming it until its initial issuance records the first. Initial
-  issuance signs over a key the controller generated,
-  under the creation's own reference and the caller's lifecycle
-  authority for the current controller: it signs before the execution
-  lock and rechecks the assignment and every expiry under it, and an
-  identical retry answers the stored public result. Recovery, not
-  initial issuance, replaces a lost credential, and once it has the
-  initial issuance is refused, retries included.
+  fenced, with no activation, in the lineage its creation opened, so
+  none of its writes is admitted until a lifecycle authority activates
+  a generation, and the one credential predicate (ADR-0080) admits only
+  a token minted in that lineage at the current assignment
+  (`migrations/000059`). Recovery replaces a lost credential.
 - **A generation is what an assignment does not fence.** Beside the GRN
   and the epoch, every agent has one execution row recording its
   active generation and its credential lineage. A lifecycle
@@ -375,7 +361,7 @@ in #1157.
   protects takes the row's
   lock in its own transaction, which is what orders a replacement
   against writes already admitted (ADR-0078, ADR-0080). A restart is a
-  new activation, not a new certificate; a revision still pending
+  new activation, not a new credential; a revision still pending
   carries a durable `agent:configure` reference, rechecked fresh, and
   one the runtime already applied needs none. A managed agent's first
   activation carries its own creation's reference or such a configure
@@ -402,70 +388,46 @@ in #1157.
   lineage and fencing the old one, rather than by recreating the agent
   (ADR-0078). It is built: the control service presents an
   administrator's `agent:recover` handoff for the exact request body,
-  and the agent's earlier certificates stop authorizing from the next
-  request, on a connection already open too. Ordinary renewal stays in
-  the lineage the renewing certificate is current in. Under
-  `execution-fence.v2` it answers what may have been taken rather than
-  what was lost: it signs nothing, ends the lineage and opens the next,
-  so every token minted before it is refused from the next request, and
-  the assignee mints in the new one. The handoff travels in a
-  `Garam-Operation` header there, and the recovery records no
-  certificate or chain (`migrations/000040`).
-- **A recovery's answer under `execution-fence.v1` names its chain**:
-  the authority that signed the recovered certificate and the garam
-  server root the holder verifies garam by, as initial issuance's
-  does, so a holder verifies
-  the recovered credential from the answer alone
-  ([ADR-0091](./adr/0091-a-recovered-credential-names-its-chain-and-garam-stores-it-with-the-recovery.md)).
-  Both are what the signer produced and are stored with the recovery,
-  so a retry answers them again. A recovery recorded before
-  `migrations/000036` stored neither, and its retry answers the chain
-  the signer signs under now: the same one while neither the
-  organization's authority nor the listener's server root has been
-  replaced since.
+  in a `Garam-Operation` header under `execution-fence.v2`. It answers
+  what may have been taken rather than what was lost: it signs
+  nothing, ends the lineage and opens the next, so every token minted
+  before it is refused from the next request, on a connection already
+  open too, and the assignee mints in the new one. It answers the GRN
+  and the new lineage, records the request against its body's digest,
+  and a retry answers that lineage again.
 
 ## Standalone hosts
 
 **garam's half is built, and so is the host's runner; the joint
 acceptance is not.** A standalone host enrolls with
 `garam standalone prepare` and `enroll`, under
-`standalone-enrollment.v2` for a host prepared now and v1 for one an
-earlier release prepared, and a v1 host renews with `renew`
-(`internal/cli/standalone_host.go`); `garam standalone run`
-supervises the runtime, proves the old writer exited and hands the
-adapter its activation (`internal/workload`, ADR-0085). The runner is
+`standalone-enrollment.v2` (`internal/cli/standalone_host.go`);
+`garam standalone run` supervises the runtime, proves the old writer
+exited and hands the adapter its activation (`internal/workload`,
+ADR-0085). The runner is
 tested against a real rootless daemon and the pinned Sherlock images
 with garam's activation stood in for; enrollment, a message and its
 reply, and a restart that keeps memory, joined to garam, are
 unverified (#1180, #1169).
 
-- **An administrator approves the host's own keys.** The host
-  generates its supervisor key, its agent key and a bootstrap secret
-  before it asks, and keeps them with a request identifier; the
-  approval binds the secret's hash, both fingerprints and that
+- **An administrator approves the host's request.** The host
+  generates a bootstrap secret before it asks, and keeps it with a
+  request identifier; the approval binds the secret's hash and that
   identifier to one organization, host name and agent, expiring within
-  a day, on `agent:enroll` read from current state (ADR-0082). An
-  identical approval retry answers the same binding; a withdrawn or
-  expired one is not revived.
+  a day, on `agent:enroll` read from current state (ADR-0082), and
+  binds no key (ADR-0118). An identical approval retry answers the same
+  binding; a withdrawn or expired one is not revived.
 - **Spending is one transaction and retryable.** The host presents the
-  secret and a request over each approved key; the approver's
-  authority is read again, both certificates are signed over the
-  host's keys, and a new agent is written with an execution fenced
-  from birth, its first assignment to the supervisor and the first
-  certificate of its lineage (migration 000031). An identical retry
-  answers the recorded public result while that registration still
-  holds the agent, and nothing otherwise; two identical first
-  spendings queued on one approval create one agent and answer the
-  second with the first's result. Withdrawing and spending one
-  approval serialize on its row.
-- **Under `standalone-enrollment.v2` the host is answered a credential,
-  not certificates** (ADR-0100). An approval binding the host's keys is
-  spent under v1 alone and one binding none under v2 alone, so neither
-  contract spends the other's approval, and one fingerprint without
-  the other is refused. A v2 spending signs nothing: it places the
-  agent as v1 does, registers the supervisor holding no certificate,
-  and answers a credential garam keeps only the hash of
-  (`migrations/000042`). An identical retry, while the registration
+  secret and its request identifier; the approver's authority is read
+  again, and a new agent is written with an execution fenced from
+  birth in a lineage of its own and its first assignment to the
+  supervisor (migration 000031). Two identical first spendings queued
+  on one approval create one agent and answer the second with the same
+  one. Withdrawing and spending one approval serialize on its row.
+- **The host is answered a credential, not certificates** (ADR-0100).
+  A spending signs nothing: it registers the supervisor and answers a
+  credential garam keeps only the hash of, beside the garam server
+  root (`migrations/000042`). An identical retry, while the registration
   still holds the agent, re-issues it under the approval's row lock,
   and the credential answered before goes with every token it was
   exchanged for; garam keeps no audit trail of that or of any other
@@ -485,13 +447,13 @@ unverified (#1180, #1169).
   behind a revocation or a replacement is refused rather than
   installing a token. Its first activation rests on the approval,
   where a managed creation's needs its reference. It reaches its own
-  identity, its renewal and those three execution routes, and with its
-  own token its agent's token mint as well, and nothing else:
+  identity, those three execution routes and its agent's token mint,
+  and nothing else:
   `ConfineSupervisors` in
   `internal/machineapi/standalone.go` refuses every other route at the
   router, so a supervisor posts, claims and reads no message and acts
   on no operator route. Every collaboration route admits through the
-  one fence for both modes.
+  one fence.
 - **Replacement and revocation are an administrator's.** A replacement
   approval names the supervisor and epoch it replaces and, spent,
   reassigns the agent at the next epoch, ends the former registration
@@ -512,9 +474,7 @@ unverified (#1180, #1169).
 - **The approval names the placement.** `standalone`, the default, is
   the three containers §The host's runner starts; `direct` is a runtime
   the host already runs, which the supervisor attaches to
-  (§Common managed and direct enrollment). A direct approval binds no
-  key, so it is spent under v2 alone, and the schema refuses one
-  binding keys (`migrations/000053`). The spending answers the
+  (§Common managed and direct enrollment). The spending answers the
   placement and the host's enrollment record keeps it; a record an
   earlier release wrote names none and is a standalone host's.
 - **An organization lists what it approved and registered.**
@@ -525,48 +485,30 @@ unverified (#1180, #1169).
   and decided on `agent:read` from current state, as the writes beside
   them are. The store reads them into summary types
   (`internal/agent/standalone.go`, `EnrollmentSummary` and
-  `SupervisorSummary`) with no field for a secret's hash, a key
-  fingerprint, a request digest, a serial, a certificate or a
-  credential, so no listing can answer one.
-- **The supervisor's renewal replays for its predecessor.** It renews
-  over a new key in the last third of its validity; the certificate a
-  renewal replaced may replay that renewal's public answer for the
-  identical request, and two identical renewals racing install one
-  successor; a supervisor enrolled under v2 holds no certificate and
-  renews none. `api/machine.yaml` §standalone is authoritative for the
-  wire and both `standalone-enrollment` values.
-- **`garam standalone` prepares and enrolls under v2 (#1352).**
+  `SupervisorSummary`) with no field for a secret's hash, a request
+  digest or a credential, so no listing can answer one.
+  `api/machine.yaml` §standalone is authoritative for the wire and
+  `standalone-enrollment.v2`.
+- **`garam standalone` prepares and enrolls (#1352).**
   `prepare` writes the bootstrap secret and the request identifier and
   generates no key, so the approval it asks for binds none. `enroll`
   spends it and installs the supervisor's credential as `credential` in
   the supervisor's directory, owner-only, and the server root in both
   directories; the credential never enters the enrollment record.
   Interrupted before that record, `enroll` sends the same request, and
-  garam re-issues the credential and voids the one written before. A
-  v2 host has no certificate, so `renew` refuses it.
-- **The record decides the contract, and no flag does.** A preparation
-  or enrollment an earlier release wrote with keys goes on enrolling,
-  renewing and running under v1. A flag would be a second source of
-  truth that could disagree with the record, which already says which
-  approval was asked for.
+  garam re-issues the credential and voids the one written before.
 - **The host's files.** The supervisor's directory holds the prepared
-  secret and key, its current certificate and key in one file a
-  renewal replaces in one rename, and a pending renewal kept from
-  before its request until its answer is installed. The agent's
-  credential directory holds the agent's key and certificate. A v2
-  host's supervisor directory holds the credential instead, and its
-  agent directory the server root alone. Neither
+  secret, the credential and the server root, and the agent's
+  credential directory the server root alone. Neither
   is the agent's memory, outbox or workspace, and no container mounts
   either: the supervisor copies what the adapter needs into it.
 - **The host's commands own what they write.** The two directories
-  never overlap; the preparation records the agent directory it owns
-  and refuses one holding credentials it did not write. Each command
+  never overlap; the preparation records the agent directory it owns,
+  and its supervisor directory serves no other. Each command
   holds an exclusive lock on each directory it writes, and refuses
   rather than waits where another holds it. Once the enrollment record
   exists, `enroll` installs nothing again, so a replay never replaces
-  a credential renewed since; `renew` runs only after it, and the CLI
-  writes the agent's directory only before it, so the agent's own
-  renewal is never overwritten. Every request goes to an `https://`
+  the credential it installed. Every request goes to an `https://`
   origin verified by the pinned garam server root, and a redirect is
   refused rather than followed.
 
@@ -633,34 +575,34 @@ supervisor that stops leaves the workload running.
   its control listener stopping. A replacement is a changed revision,
   epoch or image, or `--replace`.
 - **The adapter activates through a socket only its generation
-  mounts.** The supervisor serves `agent-execution.v1` there over TLS,
-  with a serving root minted for the generation and removed with it.
-  It verifies the agent's leaf against the agent's issuer and forwards
-  that leaf to garam. It forwards an activation only for the intent's
-  placement token, epoch and revision, its runtime unrestarted, and a
-  generation never asked for before. A retry repeats the first
-  request, so garam answers the same activation with a newer token.
-- **A v2 host serves `agent-execution.v2` on that socket instead**
+  mounts.** The supervisor serves `agent-execution.v2` there over TLS,
+  with a serving root minted for the generation and removed with it
   (ADR-0100). The listener asks for no certificate, and each request
   presents the generation's control token: 256 random bits the
   supervisor draws with the intent, records with it and never sends to
-  garam. The supervisor forwards the agent token it minted for garam in
-  place of the leaf, whichever it holds when it forwards. The control
+  garam. A generation an earlier release recorded with no control token
+  is drained and replaced rather than adopted
+  (`internal/workload/containers.go`). The supervisor forwards an
+  activation only for the intent's placement token, epoch and
+  revision, its runtime unrestarted, and a generation never asked for
+  before, with the agent token it minted for garam, whichever it holds
+  when it forwards. A retry repeats the first request, so garam
+  answers the same activation with a newer token. The control
   path never leaves the host, since the supervisor is the lifecycle
   authority, and `mintAgentToken` refuses a supervisor an audience; a
   token garam issued for control would be one garam accepts, which
   ADR-0100's audiences forbid.
 - **Credentials are copied in, never mounted.** The runtime's
-  configuration and the adapter's key, certificate, roots and
-  placement token are written into each container before it starts,
+  configuration and the adapter's tokens, roots and placement token
+  are written into each container before it starts,
   owned by 65532 and readable by it alone; the runtime's environment
   is the model credential. That credential is a limit rather than an
   isolation: every tool the runtime runs reads its environment, as
   Sherlock passes it on (ADR-0085), and the engine shows it to whoever
   reaches the rootless daemon, which is the host user alone.
-- **A v2 host copies tokens in, and keeps the agent's current.** The
-  adapter receives the agent token and the control token in place of
-  a key and certificate (`adapter.md` §Token mode). The supervisor
+- **The supervisor keeps the agent's token current.** The adapter
+  receives the agent token and the control token
+  (`adapter.md` §Token mode). The supervisor
   exchanges its credential for its own token and mints the agent's,
   holds both in memory, and replaces each at a point drawn from two
   thirds to three quarters of its life; a refresh that fails while the
@@ -786,8 +728,8 @@ nothing; restarting the runtime is the host's.
 
 What is still not settled is ADR-0085 §What this does not decide, but
 for the storage handover ADR-0089 answers: the joint acceptance with
-garam and a model, renewing the agent's certificate in a running
-adapter, and a measured daemon stop. ADR-0085 is authoritative for the
-arrangement and the socket's contract, and ADR-0089 for the move.
+garam and a model, and a measured daemon stop. ADR-0085 is
+authoritative for the arrangement and the socket's contract, and
+ADR-0089 for the move.
 `make workload-integration` runs both against a real daemon, and `make
 standalone-e2e` runs the move against a real garam and model too.

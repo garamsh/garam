@@ -165,10 +165,6 @@ func (s *Server) ListOperators(w http.ResponseWriter, r *http.Request, orgSlug a
 // operatorToAPI renders an Operator from what garam holds about it
 // rather than anything the operator reports: garam never dials one
 // (ADR-0012).
-//
-// certificateIssuedAt is answered only where garam has issued one,
-// because an absent timestamp and a zero one are different states and
-// only the absence is the property.
 func operatorToAPI(o *operator.Operator) apigen.Operator {
 	out := apigen.Operator{
 		Grn:          o.GRN().String(),
@@ -177,9 +173,6 @@ func operatorToAPI(o *operator.Operator) apigen.Operator {
 		OrgGrn:       o.Organization().String(),
 		RegisteredBy: o.RegisteredBy().String(),
 		CreatedAt:    o.CreatedAt(),
-	}
-	if issuedAt := o.CertificateIssuedAt(); !issuedAt.IsZero() {
-		out.CertificateIssuedAt = &issuedAt
 	}
 	if o.ControlEndpoint != nil {
 		endpoint := string(*o.ControlEndpoint)

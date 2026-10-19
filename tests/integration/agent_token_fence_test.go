@@ -55,12 +55,12 @@ func TestAgentToken_TheFenceRefusesAReassignedTokenOnItsOwn(t *testing.T) {
 	ctx := context.Background()
 	f, ended := newLineageFence(t)
 	token := f.mintedIn(t)
-	a1, t1 := f.activate(t, "r1", generation(1), &ended, valid("1"))
+	a1, t1 := f.activate(t, "r1", generation(1), &ended, f.valid(t, "1"))
 	require.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t1, presented(token)))
 
 	_, err := f.agents.Assign(ctx, f.agent, f.controller)
 	require.NoError(t, err)
-	_, t2 := f.activate(t, "r2", generation(2), &a1.ID, valid("1"))
+	_, t2 := f.activate(t, "r2", generation(2), &a1.ID, f.valid(t, "2"))
 
 	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t2, presented(token)),
 		"the fence refuses a token minted at the earlier assignment")
@@ -76,8 +76,8 @@ func TestAgentToken_TheFenceRefusesAReassignedTokenOnItsOwn(t *testing.T) {
 func TestAgentToken_ARecoveryFencesTheTokensOfTheLineageItReplaces(t *testing.T) {
 	ctx := context.Background()
 	f := newFence(t)
-	a1, _ := f.activate(t, "r1", generation(1), nil, valid("1"))
-	first := f.recovery("rec-1", "ref-1", 1, valid("2"))
+	a1, _ := f.activate(t, "r1", generation(1), nil, f.valid(t, "1"))
+	first := f.recovery("rec-1", "ref-1", 1)
 	first.Epoch = f.epoch(t)
 	_, err := f.exec.Recover(ctx, first)
 	require.NoError(t, err)
@@ -85,16 +85,16 @@ func TestAgentToken_ARecoveryFencesTheTokensOfTheLineageItReplaces(t *testing.T)
 	token := f.mintedIn(t)
 	require.NotNil(t, token.Lineage)
 	assert.Equal(t, first.Lineage, *token.Lineage, "the token is minted in the lineage the recovery opened")
-	a2, t2 := f.activate(t, "r2", generation(1), &a1.ID, valid("2"))
+	a2, t2 := f.activate(t, "r2", generation(1), &a1.ID, f.valid(t, "2"))
 	require.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, presented(token)))
 	_, err = f.agents.ResolveAccessToken(ctx, token.Hash())
 	require.NoError(t, err)
 
-	second := f.recovery("rec-2", "ref-2", 2, valid("3"))
+	second := f.recovery("rec-2", "ref-2", 2)
 	second.Epoch = f.epoch(t)
 	_, err = f.exec.Recover(ctx, second)
 	require.NoError(t, err)
-	_, t3 := f.activate(t, "r3", generation(3), &a2.ID, valid("3"))
+	_, t3 := f.activate(t, "r3", generation(3), &a2.ID, f.valid(t, "3"))
 
 	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t3, presented(token)),
 		"the fence refuses a token of the replaced lineage")

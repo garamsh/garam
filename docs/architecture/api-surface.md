@@ -2,14 +2,6 @@
 
 What garam serves to a caller outside it: which listeners exist, what admits a caller to each, and what the file describing each one is authoritative for.
 
-Pending removal
-([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)):
-G4 (#1494) removes client certificates on the machine listener and
-every route that issues or renews one, and what this document says of
-them holds until it lands. The cut-over operations, the definition
-operations, legacy execution mode, `createAgent` and
-`issueAgentCertificate` are gone (ADR-0118).
-
 ## Contents
 - What it is
 - The surfaces
@@ -45,7 +37,7 @@ repeated. A second copy is a second thing to keep true.
 | Surface | Served by | Described by | A caller reaches it as |
 |---|---|---|---|
 | Browser-facing HTTP | `garam serve api` | `api/openapi.yaml` | a signed-in person, through the web app's same-origin `/api/*` rewrite (ADR-0009) |
-| Machine | `garam serve machine` | `api/machine.yaml` | an operator or an agent holding a certificate garam issued (ADR-0014, ADR-0015), or an operator presenting a token it exchanged its credential for (ADR-0100) |
+| Machine | `garam serve machine` | `api/machine.yaml` | an operator, an agent or a standalone host's supervisor presenting a token garam issued (ADR-0100, ADR-0118) |
 | Policy engine | `garam serve authz` | `proto/garam/authz/v1` | one of the two listeners above, over gRPC (ADR-0003) |
 | Probes | every serve command, and the web app | no specification | anything that can open the port (ADR-0021, ADR-0023) |
 | Metrics | `garam serve api` and `garam serve authz`, on the listener each already runs, and `garam serve machine`, on its probe port | no specification | anything that can open the port (§Not decided) |
@@ -78,11 +70,10 @@ is admitted by a standalone approval that names it, not by
   `api/machine.yaml` §exchangeClientAssertion is authoritative for its
   wire. `machine-token.v1`'s exchange and mint are unchanged.
 - The `Bearer` alias resolves the same opaque access tokens as
-  `Garam-Token`, with the same route confinement, per-request reads, v2
-  contract selection and refusal of combined credentials
-  (`machine-identity.md` §Asymmetric Operator exchange). It changes no
-  execution or operation
-  header and reaches no certificate renewal route.
+  `Garam-Token`, with the same per-request reads and the same refusal
+  of a second `Authorization` header (`machine-identity.md`
+  §Asymmetric Operator exchange). It changes no execution or operation
+  header.
 - `issueOperatorKey`, `listOperatorKeys` and `revokeOperatorKey` on
   the browser-facing listener answer a private PEM once and public
   metadata thereafter; no secret is read back
@@ -93,9 +84,9 @@ is admitted by a standalone approval that names it, not by
   activates nothing, and only managed placement admits. Its refusals
   name a `reason`. Direct placement's is `direct_placement_gated`, and
   it is permanent, since `approveAgentEnrollment` with
-  `placement: direct` is what admits a direct agent. The
-  managed/standalone v1/v2 paths keep their approval bindings, retry
-  behavior and refusal semantics.
+  `placement: direct` is what admits a direct agent. Managed and
+  standalone enrollment keep their approval bindings, retry behavior
+  and refusal semantics.
 
 [agents.md](./agents.md) §Common managed and direct enrollment owns
 admission; [operators.md](./operators.md) §Issued PEM identity owns
@@ -135,65 +126,45 @@ the `url.path` of the request's trace span, name the route pattern
 rather than the path, so the token reaches neither the log nor an
 exported span.
 
-**Machine.** A client certificate whose SAN URI holds the caller's GRN
-and nothing else — no roles and no claims
-([ADR-0014](./adr/0014-agent-authentication.md)). The chain is verified
-per connection against the authority the certificate's own organization
-names, never against a pool holding every organization's, and both ends
-read their certificate per handshake, so a replaced one is presented on
-the next connection with nothing restarted
-([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)).
-The controller proof is the one route that verifies the caller's
-certificate and record again on every request
-([machine-identity.md](./machine-identity.md)).
-Admission reads that certificate and nothing else: no session and no
-user row exist on this listener, and nothing about the caller is looked
-up to admit it. What an admitted caller may do is decided after that
-(§What decides the rest). An operator reaches the listener on the same
-terms an agent does
+**Machine.** A token, presented as `Authorization: Garam-Token
+<token>` or `Bearer <token>`, and nothing else: the listener asks for
+no client certificate
+([ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md),
+[ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md),
+[ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)).
+An operator exchanges a client assertion its key signed for a one-hour
+token at `exchangeClientAssertion`. An agent's token is minted by its
+operator, or by the supervisor holding it, at `mintAgentToken` and read
+against the agent's current assignment and lineage. A standalone
+host's supervisor exchanges the credential its enrollment answered for
+a token at `exchangeToken`, prefixed `garam_st_`. The token is read on
+every request, beside the registration, key or assignment it rests on,
+so a deleted operator, a withdrawn key, a reassignment or a recovery is
+refused from the next request on a connection already open
+([machine-identity.md](./machine-identity.md) §Tokens). A request
+presenting a token in more than one `Authorization` header is refused,
+and a token minted for another audience reaches none of garam's
+operations. No session and no user row exist on this listener. What an
+admitted caller may do is decided after that (§What decides the rest);
+the lifecycle routes and the controller proof read the caller's token
+dates and record again for their decision. An operator reaches the
+listener on the same terms an agent does
 ([ADR-0015](./adr/0015-operator-identity.md)).
 
-**Or a token, which is ADR-0100's direction and is built for an operator
-and an agent its operator holds.** An operator exchanges a client
-assertion its key signed for a one-hour token at
-`exchangeClientAssertion`, and presents the token as `Authorization:
-Garam-Token <token>`, or `Bearer <token>`, with no certificate
-([ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md),
-[ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)).
-The token is read on every request, beside the registration and the key
-it rests on, so a deleted operator or a withdrawn key is refused from
-the next request on a connection already open; a request presenting a
-token beside a certificate is refused rather than read as either. A
-token reaches only the operations `api/machine.yaml` lists
-`machineToken` on — `ConfineTokens` in `internal/machineapi/token.go`
-refuses it everywhere else — and one minted for another audience reaches
-none. An agent's token is minted by its operator at `mintAgentToken` and
-read against the agent's current assignment and lineage, and beside it a
-fenced agent's execution token travels in a `Garam-Execution` header of
-its own; a durable submission it authenticates is served under
-`durable-delivery.v2`. Every contract below whose transport ADR-0100
-changes is served to a token under its v2 value and to a certificate
-under v1, and a request whose value disagrees with its credential is
-refused naming the value the credential takes; beside a token an
-operation authority or reference travels in a `Garam-Operation` header,
-since the token takes `Authorization`. A standalone host's supervisor
-exchanges the credential its v2 enrollment answered for a token at
-`exchangeToken`, prefixed `garam_st_`, and `ConfineSupervisors` bounds
-its token as it bounds its certificate.
+Beside the token, a fenced agent's execution token travels in a
+`Garam-Execution` header of its own, and an operation authority or
+reference in a `Garam-Operation` header, since the token takes
+`Authorization`. Every versioned contract on this listener is served
+under one value, and a request naming none or another is refused naming
+that value. `ConfineSupervisors` bounds a supervisor's token to the
+routes it holds, which standalone enrollment below names.
 
-**The listener requests a client certificate and does not require
-one** — `tls.RequestClientCert` in `internal/machine/listener.go` — so
-a handshake completes for a caller that presents none at all. It has
-to: a standalone host enrolling holds no certificate yet, so the route
-serving `POST /agent-enrollments` cannot demand from that caller the
-thing enrolling exists to issue, and a caller presenting a token or a
-client assertion presents none.
-A connection whose certificate does not authenticate is not refused
-there either; it carries no identity instead, and every operation but
-four refuses a request that carries none. The identity a handler holds
-is the one the handshake's own verification returned, so nothing
-derives it a second time and a certificate naming any GRN under a
-chain nothing signed reaches no handler that asks for one. Which
+**The listener asks for no client certificate**
+(`internal/machine/listener.go`), so a handshake completes for every
+caller, and what authenticates a request is the token it presents. A
+request presenting none carries no identity, and a token that proves
+nothing leaves its request with none and the reason beside it; every
+operation but four refuses a request that carries none. Which
 operations opt out is read from `api/machine.yaml` rather than
 remembered: `enrollStandaloneAgent` carries `security: []`, as an
 operation on the browser-facing listener does, and is authenticated by
@@ -204,22 +175,21 @@ garam's signature on a message with
 ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)),
 read at the issuer followed by `/message-signing-keys`.
 `exchangeClientAssertion` carries it as well, and is authenticated by
-the client assertion in its body, refusing a certificate or an
-`Authorization` header beside it
+the client assertion in its body, refusing an `Authorization` header
+beside it
 ([ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)).
 `exchangeToken` carries `machineCredential`, and is authenticated by
 a supervisor's credential.
 
-Why a connection did not authenticate is written to the listener's own
-log and nowhere else: what crosses the wire says only that no identity
-was resolved, and nothing about which organizations exist. A connection
-presenting no certificate is one of the paths above and is recorded as
-ordinary traffic; one presenting a certificate that did not
-authenticate is recorded as an anomaly.
+Why a token did not authenticate is written to the listener's own log
+and nowhere else: what crosses the wire says only that the token was
+not accepted, and nothing about which organizations exist. A token
+that resolves nothing is recorded as ordinary traffic; a read that
+could not be made is recorded as an anomaly.
 
 **Each handler makes that refusal itself, and a test is what makes it
 true of every route.** `internal/machineapi/identity_test.go`, in
-`TestServer_TheExemptRoutesAreTheOnlyOnesAnUncertifiedCallerReaches`,
+`TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches`,
 is authoritative for that: every operation `api/machine.yaml` declares
 except `POST /agent-enrollments`, `GET /message-signing-keys`,
 `POST /tokens` and `POST /oauth/token` answers `401` naming the missing
@@ -235,29 +205,23 @@ of its value: read as a fixture the test is a handful of paths someone
 chose, and a route added unauthenticated would read as one nobody
 thought to cover rather than as one this already covers.
 
-**One listener mints a first certificate without a certificate.** A
-standalone host's supervisor and agent obtain theirs together with
-`enrollStandaloneAgent`, presenting the bootstrap secret whose hash an
-administrator approved with `approveAgentEnrollment`, over the keys
-whose fingerprints the approval names (ADR-0082). **What either
-certificate names is the approval's to say and never the request's**,
-and no private key is generated or answered.
+**A standalone host enrolls without a token.** Its supervisor obtains
+its credential with `enrollStandaloneAgent`, presenting the bootstrap
+secret whose hash an administrator approved with
+`approveAgentEnrollment` (ADR-0082, ADR-0100). **What the enrollment
+answers is the approval's to say and never the request's**, and garam
+keeps only the credential's hash.
 
 **`registerOperator` writes the record and issues nothing.** An
 operator enters by a key that `issueOperatorKey` issues on the
 registration
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)).
-An operator authenticating by certificate obtains its first out of
-band, from the command ADR-0032 ships, which is also what recovers one
-whose certificate was lost; it remains a root-level subcommand no serve
-path references
-([ADR-0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)).
 
 **`getOperator` and `updateOperator` read one operator and change
 its name and description**, on `operator:read` and `operator:update`
 ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)).
 The identifier is the path's and not a field, so the update moves no
-certificate or key.
+key or token.
 
 **`getAgent` and `listAgents` answer the generation garam last
 activated for each agent**, on `agent:read`, beside the assignment that
@@ -272,8 +236,8 @@ control service publishes, on the organization.
 
 **`deleteOperator` is on the same listener and is the one operation
 here that stops a machine identity.** It removes the organization's
-record, which the machine listener reads per connection, so the
-operator's certificate is refused from its next connection
+record, which the machine listener reads on every request, so the
+operator's token is refused from its next request
 ([ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)).
 It is authorized on `operator:delete` rather than on the action the
 other two take, because registering grants nothing and this withdraws
@@ -291,11 +255,11 @@ reports about the organization's operators (#1374); the machine
 listener answers that authority
 and its durable reference to the operator it names and no other, and
 proves a controller's current authority to that operator before each
-lifecycle decision. Each
-requires and answers `Garam-Contract-Version: operation-authority.v1`
-beside a certificate and `operation-authority.v2` beside a token, and a
-request naming none or another is refused naming the one its
-credential takes (ADR-0079, ADR-0100). The specifications are
+lifecycle decision. The browser-facing routes require and answer
+`Garam-Contract-Version: operation-authority.v1` and the machine
+listener's `operation-authority.v2`, and a request naming none or
+another is refused naming the one its listener serves (ADR-0079,
+ADR-0100, ADR-0118). The specifications are
 authoritative for their forms, and
 [operators.md](./operators.md) §Delegated operation authority for what
 they decide.
@@ -303,11 +267,11 @@ they decide.
 **An agent's execution is a versioned contract of its own on the
 machine listener** (ADR-0078). Activation, deactivation, introspection
 and recovery each require and answer `Garam-Contract-Version:
-execution-fence.v1` beside a certificate and `execution-fence.v2`
-beside a token, and a request naming none or another is refused naming
-the one its credential takes, not the operation authority's. An agent's
-own protected calls carry its activation's token, under the
-`executionToken` scheme each declares.
+execution-fence.v2`, and a request naming none or another is refused
+naming it, not the operation authority's. A recovery replaces the
+agent's credential lineage, so every token minted in the one before is
+refused from the next request. An agent's own protected calls carry its
+activation's token, under the `executionHeader` scheme each declares.
 `api/machine.yaml` is authoritative for both, and
 [machine-identity.md](./machine-identity.md) §Generation and lineage
 for what they decide. No route adds a 5xx of its own (ADR-0050): an
@@ -322,33 +286,28 @@ version, as an operator's registration does not, and
 `listAgentEnrollments` and `listAgentSupervisors` beside them are
 decided on `agent:read` the same way and answer no secret, hash, key
 fingerprint, certificate or credential; on the machine
-listener `enrollStandaloneAgent` and `renewSupervisorCertificate`
-require and answer `Garam-Contract-Version: standalone-enrollment.v1`,
-and `enrollStandaloneAgent` answers `standalone-enrollment.v2` as well,
-the value the request names: an approval binding the host's keys is
-spent under v1 alone and one binding none under v2 alone (ADR-0100). A
-supervisor is admitted to those, to `getIdentity` and to the three
-execution routes it holds authority on, and by its own token to its
-agent's token mint as well, and refused on every other route at the
-router before a handler runs. The
+listener `enrollStandaloneAgent` requires and answers
+`Garam-Contract-Version: standalone-enrollment.v2`, and an approval
+binds no key (ADR-0100, ADR-0118). A supervisor's token is admitted to
+`getIdentity`, to the three execution routes it holds authority on and
+to its agent's token mint, and refused on every other route at the
+router before a handler runs (`ConfineSupervisors`). The
 specifications are authoritative for their forms, and
 [agents.md](./agents.md) §Standalone hosts for what they decide.
 
 **Managed enrollment is a third versioned contract on the machine
-listener** (ADR-0077, ADR-0078). Creating a managed agent and issuing
-its first certificate each require and answer `Garam-Contract-Version:
-managed-enrollment.v1`, and creation answers `managed-enrollment.v2`
-to a token; a request naming none or another is refused naming the one
-its credential takes. Initial issuance takes no token. Neither carries a
-private key, and no other route creates an agent or issues its
-certificate. `api/machine.yaml` is authoritative for the wire, and
+listener** (ADR-0077, ADR-0078). Creating a managed agent requires and
+answers `Garam-Contract-Version: managed-enrollment.v2`, and a request
+naming none or another is refused naming it. It carries no private
+key, and no other route creates an agent. `api/machine.yaml` is
+authoritative for the wire, and
 [agents.md](./agents.md) §Separated execution for what they decide.
 
 **Durable submission is a fourth versioned contract on the machine
 listener**
 ([ADR-0083](./adr/0083-a-durable-reply-is-admitted-under-a-fixed-budget-from-its-creation-and-its-key-is-answered-after-it.md)).
 `POST /outbox-messages` requires and answers `Garam-Contract-Version:
-durable-delivery.v1` and is the message write `POST /messages` makes,
+durable-delivery.v2` and is the message write `POST /messages` makes,
 which is unchanged, with the entry's `createdAt` added: a new message
 is stored only inside seven days of it on the database's clock, and a
 key that already stores one is answered at any time. An adapter
@@ -357,7 +316,7 @@ branches on these answers, each carrying the header:
 | Status | Kind | When |
 |---|---|---|
 | 201 | — | the message the key stores, stored now or earlier, or the cross-organization refusal |
-| 400 | `invalid_argument` | no or another contract version, naming `durable-delivery.v1`; a malformed body, including a missing `createdAt` or one that is not RFC 3339 |
+| 400 | `invalid_argument` | no or another contract version, naming `durable-delivery.v2`; a malformed body, including a missing `createdAt` or one that is not RFC 3339 |
 | 400 | `out_of_range` | `createdAt` later than the decision instant; the entry is kept and a later attempt may be admitted |
 | 410 | `deadline_exceeded` | the key stores nothing and the budget has run out; no later attempt changes it |
 | 409 | `already_exists` | the key stores a different message |
@@ -366,17 +325,6 @@ branches on these answers, each carrying the header:
 
 `api/machine.yaml` is authoritative for the wire, and
 [messaging.md](./messaging.md) for what the budget decides.
-
-Every certificate after the first is replaced over the connection the
-previous one authenticated: an operator's on the machine listener
-([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)),
-and a supervisor's on `renewSupervisorCertificate`. An agent's
-certificate is not renewed: a managed agent's first is signed over its
-controller's key on the enrollment route. The one exception is an
-agent's recovery, which the hosted control service asks for under an
-administrator's handoff and which replaces the agent's credential
-lineage instead
-([machine-identity.md](./machine-identity.md) §Generation and lineage).
 
 **Policy engine.** Nothing. Both listeners hold a client of their own,
 and the transport carries no credential because the processes run
@@ -399,11 +347,9 @@ and not in the same place on every surface.
   request ([ADR-0002](./adr/0002-iam-style-policy-model.md)). How it
   decides is [authz.md](./authz.md).
 - **Machine**: by construction more often than by policy. A read is
-  scoped by the caller's own identity, and an operator's renewal route
-  names no subject, so there is nothing to authorize past the handshake
-  there
-  ([ADR-0033](./adr/0033-an-operator-claims-the-agent-a-definition-mints.md),
-  ADR-0046). A state report is decided the same way and by a second
+  scoped by the caller's own identity, so there is nothing to authorize
+  past the token there. A state report is decided the same way and by a
+  second
   thing besides: the assignment's epoch, which the route refuses a
   stale one of
   ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)).
@@ -411,8 +357,8 @@ and not in the same place on every surface.
   the other side — the caller is the sender the row is matched on, so a
   message it did not send answers as one that is not there
   ([ADR-0055](./adr/0055-a-sender-reads-the-state-of-a-message-it-sent.md)).
-  An agent's protected calls, its own renewal among them, are also
-  decided per request by its execution fence, and the lifecycle routes
+  An agent's protected calls are also decided per request by its
+  execution fence, and the lifecycle routes
   by the caller's current authority
   (`machine-identity.md` §Generation and lineage).
 - **What a machine caller may send** is the exception, and the
@@ -787,7 +733,7 @@ an author having read this far, which is weaker than a check;
   the listener its metrics already use, and ADR-0030 counts it among
   the paths that write nothing — context and reasoning, never a
   decision. `garam serve machine` is the exception: it serves
-  `/metrics` on its probe port because ADR-0100's migration plan gates
+  `/metrics` on its probe port because ADR-0100's migration plan gated
   removing the certificate path on a count of the listener's requests
   by how each authenticated, `garam_machine_requests_total`
   (`internal/cli/machine_token.go`). That decides that this process
@@ -820,9 +766,6 @@ document owes an update.
   agent
 - [ADR-0013](./adr/0013-agent-messaging.md) — garam is a message API an
   adapter polls
-- [ADR-0014](./adr/0014-agent-authentication.md) — a machine caller is
-  a client certificate on a listener of its own, verified against the
-  authority its own organization names
 - [ADR-0015](./adr/0015-operator-identity.md) — an operator
   authenticates as an agent does, on the same listener
 - [ADR-0017](./adr/0017-machine-process.md) — that listener is a
@@ -847,12 +790,6 @@ document owes an update.
   login's state is a record the callback spends
 - [ADR-0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md)
   — the login write rate is bounded at the store
-- [ADR-0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)
-  — a first certificate comes from a command no serving process can
-  reach
-- [ADR-0033](./adr/0033-an-operator-claims-the-agent-a-definition-mints.md)
-  — the machine listener answers an operator its own definitions,
-  scoped by the definition rather than by a policy
 - [ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)
   — a cross-organization message needs both organizations' consent
 - [ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)
@@ -862,7 +799,7 @@ document owes an update.
   object's, and refuses a call naming none
 - [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate,
-  and both ends read theirs per handshake
+  read per handshake
 - [ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)
   — a password is garam's own credential, served as an endpoint rather
   than a provider
@@ -871,8 +808,6 @@ document owes an update.
   in front of them
 - [ADR-0044](./adr/0044-the-development-only-sign-in-provider-is-removed.md)
   — the development-only sign-in provider is removed
-- [ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)
-  — an operator renews its own certificate on the machine listener
 - [ADR-0049](./adr/0049-neither-published-specification-promises-anything-across-versions.md)
   — neither specification promises anything across versions, and each
   says so in its own text
@@ -900,14 +835,17 @@ document owes an update.
   — a durable reply is admitted on a versioned route of its own under
   a fixed seven-day budget from its creation, and its key is answered
   after it
+- [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+  — every machine caller authenticates with a garam-issued credential
+  and short-lived tokens over server TLS
 - [ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)
   — garam signs every message the machine listener hands out, and that
   listener publishes the keys it signs with on an operation a caller
-  with no certificate reaches
+  with no credential reaches
 - [ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)
   — garam keeps no legacy path no live deployment uses: an operator
   enters by a key alone
 - [ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)
   — every legacy path goes now with nothing migrated: the browser
   surface serves no definition and names no agent, and the machine
-  listener's certificate path goes in G4
+  listener authenticates no certificate

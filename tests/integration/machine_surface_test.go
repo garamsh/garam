@@ -17,7 +17,6 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/ca"
-	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
@@ -79,12 +78,10 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
 	queue := url + "/agents/" + recipientGRN.String() + "/claims"
@@ -192,13 +189,11 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 
 	policies, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	acmeOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
-	globexOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
+	acmeOperator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
+	globexOperator := operatorClient(t, p, url, scopedGRN("globex", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, acmeOperator)
 	recipientGRN, recipient := provisioned(t, url, acmeOperator)
 	strangerGRN, stranger := provisioned(t, url, globexOperator)
@@ -321,12 +316,10 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 
 	policies, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, operator)
 	_, other := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
@@ -419,12 +412,10 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 
 	policies, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, operator)
 	_, outsider := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
@@ -538,14 +529,12 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 
 	policies, engine := policyEngine(t, p)
 	evaluator := machineapi.NewGRPCEvaluator(engine)
 	url := machineListener(t, p, sealer, engine)
-	alphaOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("alpha", agent.ServiceTypeOperator, "one")))
-	betaOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("beta", agent.ServiceTypeOperator, "one")))
+	alphaOperator := operatorClient(t, p, url, scopedGRN("alpha", agent.ServiceTypeOperator, "one"))
+	betaOperator := operatorClient(t, p, url, scopedGRN("beta", agent.ServiceTypeOperator, "one"))
 	foreignGRN, foreign := provisioned(t, url, alphaOperator)
 	recipientGRN, recipient := provisioned(t, url, betaOperator)
 	neighbourGRN, neighbour := provisioned(t, url, betaOperator)
@@ -718,14 +707,12 @@ func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *test
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
-	require.NoError(t, err)
 
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	acmeOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
-	globexOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
-	initechOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("initech", agent.ServiceTypeOperator, "one")))
+	acmeOperator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
+	globexOperator := operatorClient(t, p, url, scopedGRN("globex", agent.ServiceTypeOperator, "one"))
+	initechOperator := operatorClient(t, p, url, scopedGRN("initech", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, acmeOperator)
 	siblingGRN, _ := provisioned(t, url, acmeOperator)
 	recipientGRN, recipient := provisioned(t, url, globexOperator)

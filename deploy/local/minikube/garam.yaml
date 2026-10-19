@@ -274,14 +274,13 @@ spec:
         # Every value in this Secret is generated on this machine by
         # `deploy/local/minikube/machine-key-material.sh` and is worth
         # nothing off it: the certificate and the root that signed it are
-        # trusted by nothing, and the key-encryption key seals
-        # certificate authorities that exist only in this cluster's
-        # database.
+        # trusted by nothing, and the key-encryption key seals message
+        # signing keys that exist only in this cluster's database.
         #
         # The real one is not like this. A cluster that loses its
-        # key-encryption key loses every organization's certificate
-        # authority with no way back (ADR-0016) — so nothing about how
-        # this one is made, stored or thrown away is a pattern to copy.
+        # key-encryption key loses every key sealed under it with no
+        # way back (ADR-0016) — so nothing about how this one is made,
+        # stored or thrown away is a pattern to copy.
         - name: throwaway-secret
           secret:
             secretName: machine-throwaway-key-material

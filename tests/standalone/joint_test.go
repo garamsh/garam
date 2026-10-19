@@ -284,7 +284,7 @@ embedding:
 	require.Len(t, replies, 1, "garam stored exactly one reply")
 	assert.Equal(t, entry.ID, replies[0].Key, "under the outbox entry's own key")
 	assert.Equal(t, entry.Target, replies[0].Recipient, "to the entry's target")
-	assert.Equal(t, agentGRN, replies[0].Sender, "from the agent whose certificate posted it")
+	assert.Equal(t, agentGRN, replies[0].Sender, "from the agent whose token posted it")
 	assert.Equal(t, from.grn, entry.Target, "the original sender")
 	assert.Equal(t, entry.Content, reply.Body, "the sender received what the runtime wrote")
 

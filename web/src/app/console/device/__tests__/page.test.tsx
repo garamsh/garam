@@ -37,7 +37,7 @@ function recordDecisions() {
 
 describe("device page", () => {
   it("prefills the code from the address and says whom approving signs the CLI in as", async () => {
-    await renderDevice({ user_code: "WDJB-MJHT" });
+    await renderDevice({ code: "WDJB-MJHT" });
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Sign in the CLI" }),
@@ -48,8 +48,16 @@ describe("device page", () => {
     );
   });
 
+  it("reads RFC 8628's user_code where the address has no code", async () => {
+    await renderDevice({ user_code: "ABCD-EFGH" });
+
+    expect(screen.getByRole("textbox", { name: "Code" })).toHaveValue(
+      "ABCD-EFGH",
+    );
+  });
+
   it("starts empty without a code in the address", async () => {
-    // The control for the prefill above.
+    // The control for the prefills above.
     await renderDevice();
 
     expect(screen.getByRole("textbox", { name: "Code" })).toHaveValue("");
@@ -58,7 +66,7 @@ describe("device page", () => {
   it("approves the code it shows, and then says to return to the terminal", async () => {
     const sent = recordDecisions();
     const user = userEvent.setup();
-    await renderDevice({ user_code: "WDJB-MJHT" });
+    await renderDevice({ code: "WDJB-MJHT" });
 
     await user.click(screen.getByRole("button", { name: "Approve" }));
 
@@ -93,7 +101,7 @@ describe("device page", () => {
       ),
     );
     const user = userEvent.setup();
-    await renderDevice({ user_code: "OLDC-ODE1" });
+    await renderDevice({ code: "OLDC-ODE1" });
 
     await user.click(screen.getByRole("button", { name: "Approve" }));
 
@@ -111,10 +119,13 @@ describe("device page", () => {
 describe("the /device address", () => {
   it("forwards to the console's page, keeping the code", async () => {
     await expect(
+      DeviceRedirect({ searchParams: Promise.resolve({ code: "WDJB MJHT" }) }),
+    ).rejects.toThrow("NEXT_REDIRECT:/console/device?code=WDJB%20MJHT");
+    await expect(
       DeviceRedirect({
-        searchParams: Promise.resolve({ user_code: "WDJB MJHT" }),
+        searchParams: Promise.resolve({ user_code: "ABCD-EFGH" }),
       }),
-    ).rejects.toThrow("NEXT_REDIRECT:/console/device?user_code=WDJB%20MJHT");
+    ).rejects.toThrow("NEXT_REDIRECT:/console/device?code=ABCD-EFGH");
     // The control: with no code there is nothing to carry.
     await expect(
       DeviceRedirect({ searchParams: Promise.resolve({}) }),

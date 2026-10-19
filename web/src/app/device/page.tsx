@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
-type Params = { searchParams: Promise<{ user_code?: string | string[] }> };
+import { deviceCodeOf, type DeviceCodeParams } from "@/lib/device-code";
+
+type Params = { searchParams: Promise<DeviceCodeParams> };
 
 /**
  * The verification page `garam login` names (ADR-0120). The page itself
@@ -9,10 +11,10 @@ type Params = { searchParams: Promise<{ user_code?: string | string[] }> };
  * keeping the code the CLI put in it.
  */
 export default async function DeviceRedirect({ searchParams }: Params) {
-  const { user_code: code } = await searchParams;
+  const code = deviceCodeOf(await searchParams);
   redirect(
-    typeof code === "string" && code !== ""
-      ? `/console/device?user_code=${encodeURIComponent(code)}`
-      : "/console/device",
+    code === ""
+      ? "/console/device"
+      : `/console/device?code=${encodeURIComponent(code)}`,
   );
 }

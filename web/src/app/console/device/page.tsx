@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { getSession } from "@/features/auth";
+import { deviceCodeOf, type DeviceCodeParams } from "@/lib/device-code";
 
 import { DEVICE_LABEL } from "../_components/navigation";
 import { PageHeader } from "../_components/page-header";
@@ -16,11 +17,11 @@ export const metadata: Metadata = {
   referrer: "no-referrer",
 };
 
-type Params = { searchParams: Promise<{ user_code?: string | string[] }> };
+type Params = { searchParams: Promise<DeviceCodeParams> };
 
 /**
  * Where `garam login` sends a person (ADR-0120): the code their
- * terminal printed, prefilled from `?user_code=` when the CLI opened
+ * terminal printed, prefilled from `?code=` when the CLI opened
  * the page with it, and the decision on it. The console's sign-in gate
  * and return path bring a signed-out visitor back here, code and all.
  * The page says whom approving signs the CLI in as, since anyone who
@@ -28,10 +29,7 @@ type Params = { searchParams: Promise<{ user_code?: string | string[] }> };
  * them.
  */
 export default async function DevicePage({ searchParams }: Params) {
-  const [{ user_code: code }, session] = await Promise.all([
-    searchParams,
-    getSession(),
-  ]);
+  const [params, session] = await Promise.all([searchParams, getSession()]);
   const who = session.status === "signed-in" ? session.user.nickname : "you";
   return (
     <div className="flex flex-col gap-6">
@@ -39,7 +37,7 @@ export default async function DevicePage({ searchParams }: Params) {
         title={DEVICE_LABEL}
         description={`This lets the CLI act as ${who}.`}
       />
-      <DeviceForm initialCode={typeof code === "string" ? code : ""} />
+      <DeviceForm initialCode={deviceCodeOf(params)} />
     </div>
   );
 }

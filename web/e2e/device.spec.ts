@@ -53,7 +53,7 @@ test.describe("device sign-in", () => {
 
     await page.goto(login.verification_uri_complete);
     await expect(page).toHaveURL(
-      `/console/device?user_code=${encodeURIComponent(login.user_code)}`,
+      `/console/device?code=${encodeURIComponent(login.user_code)}`,
     );
     await expect(
       page.getByText(`This lets the CLI act as ${signedIn.nickname}.`),
@@ -96,8 +96,13 @@ test.describe("device sign-in", () => {
     await dialog
       .getByRole("button", { name: "Revoke session", exact: true })
       .click();
+    // The dialog closes once garam has revoked it, and the list read
+    // again holds no such row.
+    await expect(dialog).toBeHidden();
     await expect(
-      page.getByRole("button", { name: "Revoke CLI on e2e-laptop" }),
+      page
+        .getByRole("table", { name: "Sessions" })
+        .getByText("CLI on e2e-laptop"),
     ).toHaveCount(0);
     const revoked = await cli.get("/api/me", {
       headers: { authorization: `Bearer ${token}` },
@@ -134,10 +139,10 @@ test.describe("device sign-in", () => {
   test("sends a signed-out visitor to sign in and back with the code", async ({
     page,
   }) => {
-    await page.goto("/device?user_code=WDJB-MJHT");
+    await page.goto("/device?code=WDJB-MJHT");
 
     await expect(page).toHaveURL(
-      `/login?next=${encodeURIComponent("/console/device?user_code=WDJB-MJHT")}`,
+      `/login?next=${encodeURIComponent("/console/device?code=WDJB-MJHT")}`,
     );
   });
 
@@ -148,7 +153,7 @@ test.describe("device sign-in", () => {
     }) => {
       void signedIn;
       await useTheme(page, theme);
-      await page.goto("/console/device?user_code=WDJB-MJHT");
+      await page.goto("/console/device?code=WDJB-MJHT");
       await expect(
         page.getByRole("heading", { level: 1, name: "Sign in the CLI" }),
       ).toBeVisible();

@@ -132,8 +132,16 @@ private_key_jwt exchange
 once `GARAM_MACHINE_TOKEN_URL` is set. The chart renders it from
 `machine.tokenUrl` on both `serve api` and `serve machine`, and renders
 it on neither while that value is empty, its default
-(`deploy/charts/garam/README.md` §Values a deployment must supply); no
-deployment has adopted the workflow below.
+(`deploy/charts/garam/README.md` §Values a deployment must supply).
+`garamsh/aurora` adopted the workflow below for its deployment:
+aurora#663, merged 2026-10-18T18:14:09Z as
+0a14d255f158291c132cbfed63437580d85de5dd, sets
+`GARAM_MACHINE_TOKEN_URL` on both processes to the machine Service's
+in-cluster name. Its operator authenticates by key: aurora#664's
+post-merge comment of 2026-10-19
+(https://github.com/garamsh/aurora/pull/664#issuecomment-6257270142)
+records version 0.2.0 running with its key and no exchange failure,
+and the agent ready at 00:44:37Z.
 
 - Set `machine.tokenUrl` to the one absolute https URL of the machine
   listener's `/oauth/token` that every operator and control service

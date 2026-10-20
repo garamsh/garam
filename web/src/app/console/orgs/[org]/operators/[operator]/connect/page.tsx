@@ -105,6 +105,9 @@ export default async function ConnectOperatorPage({
         problem={problem}
         initialStep={initialStep}
         canReplace={!denied("reissue")}
+        isControlService={
+          record.status === "ok" && record.data.manager !== undefined
+        }
         operatorHref={operatorHref}
         operatorsHref={orgHref(org, "operators")}
       />

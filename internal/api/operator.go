@@ -37,6 +37,12 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
+	if body.Manager != nil {
+		if err := o.ServeManager(*body.Manager); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
 	registered, err := s.operators.Register(r.Context(), o)
 	if err != nil {
 		writeError(w, err)
@@ -177,6 +183,10 @@ func operatorToAPI(o *operator.Operator) apigen.Operator {
 	if o.ControlEndpoint != nil {
 		endpoint := string(*o.ControlEndpoint)
 		out.ControlEndpoint = &endpoint
+	}
+	if o.Manager != nil {
+		manager := o.Manager.String()
+		out.Manager = &manager
 	}
 	return out
 }

@@ -16,6 +16,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   registerOperator,
@@ -30,7 +37,13 @@ import {
 import type { Parsed } from "@/lib/parsed";
 import { refuseUnsent } from "@/lib/unsent-action";
 
+import type { OperatorIdentity } from "./operator-pairs";
+
 const initialState: RegisterOperatorState = { status: "idle" };
+
+/** The choice that registers a manager, starting a new Operator. A
+ * Select item cannot carry an empty value, so this is not one. */
+const NEW_OPERATOR = "new";
 
 // A call garam's answer never came back from stays in the dialog as a
 // refusal rather than closing it as if cancelled (#1631).
@@ -50,12 +63,21 @@ function errorOf(parsed: Parsed<string>): string | undefined {
  * would take the operator's page (ADR-0074); the rest of the setup is
  * the operator's own `connect` page, which registering opens, since
  * registering issues nothing and the key is issued there (ADR-0117).
+ *
+ * The identity is a new Operator's manager, or the control service of
+ * one of `managers`, which are the managers no control service names
+ * yet: registering it as one records the pair from the start
+ * (ADR-0124). `defaultManager` is the GRN of the one chosen first.
  */
 export function ConnectOperatorDialog({
   org,
+  managers = [],
+  defaultManager,
   defaultOpen = false,
 }: {
   org: string;
+  managers?: OperatorIdentity[];
+  defaultManager?: string;
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -78,7 +100,13 @@ export function ConnectOperatorDialog({
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
-        <RegisterStep key={attempt} org={org} onCancel={() => setOpen(false)} />
+        <RegisterStep
+          key={attempt}
+          org={org}
+          managers={managers}
+          defaultManager={defaultManager}
+          onCancel={() => setOpen(false)}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -86,9 +114,13 @@ export function ConnectOperatorDialog({
 
 function RegisterStep({
   org,
+  managers,
+  defaultManager,
   onCancel,
 }: {
   org: string;
+  managers: OperatorIdentity[];
+  defaultManager?: string;
   onCancel: () => void;
 }) {
   const [state, formAction, pending] = useActionState(register, initialState);
@@ -96,6 +128,10 @@ function RegisterStep({
   const [identifier, setIdentifier] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [role, setRole] = useState(
+    managers.find((manager) => manager.grn === defaultManager)?.grn ??
+      NEW_OPERATOR,
+  );
 
   // What the form can refuse without a round trip, each beside its own
   // field. An empty identifier is left to `required`, and an empty name
@@ -115,10 +151,48 @@ function RegisterStep({
         <DialogDescription>
           Step 1 of 4: register the identity it authenticates as. An Operator
           has two — its manager and its control service — and each is connected
-          on its own.
+          on its own, the manager first.
         </DialogDescription>
       </DialogHeader>
       <input type="hidden" name="org" value={org} />
+      <input
+        type="hidden"
+        name="manager"
+        value={role === NEW_OPERATOR ? "" : role}
+      />
+      {managers.length > 0 && (
+        <FormField
+          label="Identity"
+          hint="A control service is recorded as part of its manager's Operator. This cannot be changed later."
+        >
+          {(control) => (
+            <Select
+              value={role}
+              disabled={!hydrated}
+              onValueChange={(value) => {
+                if (value !== "") setRole(value);
+              }}
+            >
+              <SelectTrigger {...control} className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NEW_OPERATOR}>
+                  The manager of a new Operator
+                </SelectItem>
+                {managers.map((manager) => (
+                  <SelectItem key={manager.grn} value={manager.grn}>
+                    <span>The control service of {manager.name}</span>{" "}
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {manager.identifier}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </FormField>
+      )}
       <FormField
         label="Identifier"
         hint="Lowercase letters, digits and hyphens. It cannot be changed later."

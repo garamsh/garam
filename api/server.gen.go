@@ -1251,6 +1251,9 @@ type Operator struct {
 	Description string `json:"description"`
 	Grn         string `json:"grn"`
 
+	// Manager The GRN of the operator this one is the control service of, absent where this one is a manager or stands alone (ADR-0124). An Operator is a manager and at most one control service, so a list read pairs the two by this field alone. It is set by `registerOperator` and by nothing after, and it names the identity rather than a live record: it stays after that manager's registration is deleted.
+	Manager *string `json:"manager,omitempty"`
+
 	// Name What the organization calls the operator. It is not unique and not an identity: two operators may share one, and the GRN is what tells them apart. A registration that named none, including every one made before names existed, is called by its identifier.
 	Name   string `json:"name"`
 	OrgGrn string `json:"orgGrn"`
@@ -1322,6 +1325,9 @@ type OperatorRegistration struct {
 
 	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, and it is supplied rather than minted because the operator is configured with it before it is registered.
 	Identifier string `json:"identifier"`
+
+	// Manager Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124). Absent registers a manager or a lone identity.
+	Manager *string `json:"manager,omitempty"`
 
 	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
 	Name *OperatorName `json:"name,omitempty"`

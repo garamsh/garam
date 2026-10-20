@@ -58,9 +58,11 @@ function wizard(
   {
     problem = null,
     canReplace = true,
+    isControlService = false,
   }: {
     problem?: "unreachable" | "forbidden" | null;
     canReplace?: boolean;
+    isControlService?: boolean;
   } = {},
 ) {
   return (
@@ -74,6 +76,7 @@ function wizard(
         problem={problem}
         initialStep={initialStep}
         canReplace={canReplace}
+        isControlService={isControlService}
         operatorHref="/console/orgs/acme/operators/field-one"
         operatorsHref="/console/orgs/acme/operators"
       />
@@ -392,7 +395,16 @@ describe("connect wizard", () => {
     expect(screen.getByText("Field one is connected")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Connect the control service too" }),
-    ).toHaveAttribute("href", "/console/orgs/acme/operators?connect");
+    ).toHaveAttribute("href", "/console/orgs/acme/operators?connect=field-one");
     expect(currentStep()).toHaveTextContent("Verify");
+  });
+
+  it("offers no second identity once a control service is connected, since its record names its manager (#1636)", () => {
+    render(wizard("verify", [fieldOneKey], { isControlService: true }));
+
+    expect(screen.getByText("Field one is connected")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Connect the control service too" }),
+    ).toBeNull();
   });
 });

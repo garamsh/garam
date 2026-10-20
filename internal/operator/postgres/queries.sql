@@ -1,6 +1,17 @@
 -- name: CreateOperator :exec
-INSERT INTO operators (grn, org_grn, registered_by, created_at, name, description)
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO operators (grn, org_grn, registered_by, created_at, name, description, manager_grn)
+VALUES ($1, $2, $3, $4, $5, $6, sqlc.narg('manager_grn'));
+
+-- Holds the manager a control service is being registered for, and
+-- answers whom it serves itself (ADR-0124). KEY SHARE waits for the
+-- manager's deletion and for nothing else, as a token's hold does.
+-- name: HoldOperatorManager :one
+SELECT manager_grn FROM operators WHERE grn = $1 FOR KEY SHARE;
+
+-- Whether a control service names the operator as its manager, which a
+-- deleted manager's control service still does (ADR-0124).
+-- name: OperatorIsManager :one
+SELECT EXISTS (SELECT 1 FROM operators WHERE manager_grn = $1);
 
 -- An absent argument keeps the column it would have written, so a
 -- caller changing one of the two leaves the other as it stands. The

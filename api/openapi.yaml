@@ -3909,6 +3909,17 @@ components:
             by `setOperatorControlEndpoint` and
             `clearOperatorControlEndpoint`, never by `updateOperator`.
           example: https://control.example.com
+        manager:
+          type: string
+          description: >-
+            The GRN of the operator this one is the control service of,
+            absent where this one is a manager or stands alone
+            (ADR-0124). An Operator is a manager and at most one control
+            service, so a list read pairs the two by this field alone.
+            It is set by `registerOperator` and by nothing after, and it
+            names the identity rather than a live record: it stays
+            after that manager's registration is deleted.
+          example: grn:acme:default:operator:field-one
     OperatorKeyIssuance:
       type: object
       description: How an issued key stands beside the keys the operator holds (ADR-0102).
@@ -4019,6 +4030,15 @@ components:
           $ref: '#/components/schemas/OperatorName'
         description:
           $ref: '#/components/schemas/OperatorDescription'
+        manager:
+          type: string
+          description: >-
+            Registers this operator as the control service of the
+            operator this GRN names, which must be registered in this
+            organization, must not be a control service itself, and
+            must not have one already; each refusal is a 409
+            (ADR-0124). Absent registers a manager or a lone identity.
+          example: grn:acme:default:operator:field-one
     OperatorPatch:
       type: object
       description: >-

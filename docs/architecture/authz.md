@@ -331,8 +331,9 @@ other policy write.
 | `StatementEvaluator` | native in-process `Evaluator` | — |
 | `Policy` / `PolicyVersion` | stored policy and its revisions | — |
 | `PolicyAttachment` | binds a policy to a subject (ADR-0008) | — |
-| `Store` / `PostgresStore` | policy and attachment persistence | `migrations/` |
+| `Store` | policy and attachment persistence, implemented by `internal/authz/postgres` (ADR-0069) | `migrations/` |
 | `PolicyCache` | per-org parsed policies and their attachments, and the uncached read `CheckCurrent` uses | `Store` |
+| `ListenPolicyChanges` (`internal/authz/postgres`) | drops a `PolicyCache` entry as `garam_policy_change` announces the write | `PolicyCache` |
 | `GRPCServer` | `Check` / `CheckBatch` / `CheckCurrent` / `Explain` RPCs | `PolicyCache` |
 | `PolicyGRPCServer` | policy lifecycle RPCs | `Store`, `PolicyCache` |
 

@@ -23,6 +23,7 @@ import (
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
+	authzpg "github.com/garamsh/garam/internal/authz/postgres"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -279,7 +280,7 @@ func TestDelegatedAuthority_RefusesPastAStaleCachedAllow(t *testing.T) {
 	require.True(t, cached.GetAllowed())
 
 	// Another process's write: it drops its own cache, not the engine's.
-	store := authz.NewPostgresStore(p)
+	store := authzpg.New(p)
 	activePolicy(t, authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store)), s.acme, "deny-create",
 		statementDoc("deny-create", wire.EffectDeny, "agent:create", s.acme.String()))
 	stale, err := client.Check(ctx, check)
@@ -379,7 +380,7 @@ func (e checkOnlyEngine) Check(ctx context.Context, r *authzv1.CheckRequest) (*a
 func TestDelegatedAuthority_AnEngineWithoutCheckCurrentRefuses(t *testing.T) {
 	p := pool(t)
 	srv := grpc.NewServer()
-	authzv1.RegisterAuthzServiceServer(srv, checkOnlyEngine{check: authz.NewGRPCServer(authz.NewPolicyCache(authz.NewPostgresStore(p)))})
+	authzv1.RegisterAuthzServiceServer(srv, checkOnlyEngine{check: authz.NewGRPCServer(authz.NewPolicyCache(authzpg.New(p)))})
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	go func() { _ = srv.Serve(lis) }()

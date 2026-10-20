@@ -158,7 +158,7 @@ func (s *PolicyGRPCServer) ActivatePolicy(ctx context.Context, req *authzv1.Acti
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	s.cache.Invalidate(p.Organization())
+	s.cache.Invalidate(p.Organization)
 	return &authzv1.ActivatePolicyResponse{Policy: policyToProto(p)}, nil
 }
 
@@ -173,7 +173,7 @@ func (s *PolicyGRPCServer) DeletePolicy(ctx context.Context, req *authzv1.Delete
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	s.cache.Invalidate(p.Organization())
+	s.cache.Invalidate(p.Organization)
 	return &authzv1.DeletePolicyResponse{}, nil
 }
 
@@ -191,7 +191,7 @@ func (s *PolicyGRPCServer) RollbackPolicy(ctx context.Context, req *authzv1.Roll
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	s.cache.Invalidate(p.Organization())
+	s.cache.Invalidate(p.Organization)
 	return &authzv1.RollbackPolicyResponse{Policy: policyToProto(p)}, nil
 }
 
@@ -211,7 +211,7 @@ func (s *PolicyGRPCServer) AttachPolicy(ctx context.Context, req *authzv1.Attach
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	s.cache.Invalidate(p.Organization())
+	s.cache.Invalidate(p.Organization)
 	return &authzv1.AttachPolicyResponse{Attachment: attachmentToProto(a)}, nil
 }
 
@@ -230,7 +230,7 @@ func (s *PolicyGRPCServer) DetachPolicy(ctx context.Context, req *authzv1.Detach
 	if err := s.store.DetachPolicy(ctx, g, subject); err != nil {
 		return nil, grpcError(err)
 	}
-	s.cache.Invalidate(p.Organization())
+	s.cache.Invalidate(p.Organization)
 	return &authzv1.DetachPolicyResponse{}, nil
 }
 
@@ -266,34 +266,34 @@ func parseAttachment(policyGRN, subjectGRN string) (grn.GRN, grn.GRN, error) {
 
 func policyToProto(p *Policy) *authzv1.Policy {
 	return &authzv1.Policy{
-		Grn:            p.GRN().String(),
-		OrgGrn:         p.Organization().String(),
-		Name:           p.Name(),
-		Status:         wire.PolicyStatusToProto(p.Status()),
-		DefaultVersion: int32(p.DefaultVersion()),
-		CreatedAt:      timestamppb.New(p.CreatedAt()),
-		UpdatedAt:      timestamppb.New(p.UpdatedAt()),
+		Grn:            p.GRN.String(),
+		OrgGrn:         p.Organization.String(),
+		Name:           p.Name,
+		Status:         wire.PolicyStatusToProto(p.Status),
+		DefaultVersion: int32(p.DefaultVersion),
+		CreatedAt:      timestamppb.New(p.CreatedAt),
+		UpdatedAt:      timestamppb.New(p.UpdatedAt),
 	}
 }
 
 func policyVersionToProto(v *PolicyVersion) (*authzv1.PolicyVersion, error) {
-	raw, err := json.Marshal(v.Document())
+	raw, err := json.Marshal(v.Document)
 	if err != nil {
 		return nil, errorx.Wrap(err, "encode policy document")
 	}
 	return &authzv1.PolicyVersion{
-		PolicyGrn: v.Policy().String(),
-		Version:   int32(v.Version()),
+		PolicyGrn: v.Policy.String(),
+		Version:   int32(v.Version),
 		Document:  string(raw),
-		CreatedBy: v.CreatedBy().String(),
-		CreatedAt: timestamppb.New(v.CreatedAt()),
+		CreatedBy: v.CreatedBy.String(),
+		CreatedAt: timestamppb.New(v.CreatedAt),
 	}, nil
 }
 
 func attachmentToProto(a *PolicyAttachment) *authzv1.PolicyAttachment {
 	return &authzv1.PolicyAttachment{
-		PolicyGrn:  a.Policy().String(),
-		SubjectGrn: a.Subject().String(),
-		CreatedAt:  timestamppb.New(a.CreatedAt()),
+		PolicyGrn:  a.Policy.String(),
+		SubjectGrn: a.Subject.String(),
+		CreatedAt:  timestamppb.New(a.CreatedAt),
 	}
 }

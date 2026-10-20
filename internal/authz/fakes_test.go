@@ -67,7 +67,7 @@ func (s *fakeStore) tick() time.Time {
 
 func (s *fakeStore) find(g grn.GRN) (*fakePolicy, error) {
 	for _, p := range s.policies {
-		if p.policy.GRN() == g {
+		if p.policy.GRN == g {
 			return p, nil
 		}
 	}
@@ -79,9 +79,9 @@ func (s *fakeStore) CreatePolicy(_ context.Context, p *authz.Policy, doc authz.P
 	defer s.mu.Unlock()
 	s.policies = append(s.policies, &fakePolicy{
 		policy:         p,
-		status:         p.Status(),
-		defaultVersion: p.DefaultVersion(),
-		versions:       []*authz.PolicyVersion{authz.NewPolicyVersion(p.GRN(), p.DefaultVersion(), doc, createdBy, s.tick())},
+		status:         p.Status,
+		defaultVersion: p.DefaultVersion,
+		versions:       []*authz.PolicyVersion{{Policy: p.GRN, Version: p.DefaultVersion, Document: doc, CreatedBy: createdBy, CreatedAt: s.tick()}},
 	})
 	return p, nil
 }
@@ -101,7 +101,7 @@ func (s *fakeStore) ListPolicies(_ context.Context, orgGRN grn.GRN) ([]*authz.Po
 	defer s.mu.Unlock()
 	var out []*authz.Policy
 	for _, p := range s.policies {
-		if p.policy.Organization() == orgGRN {
+		if p.policy.Organization == orgGRN {
 			out = append(out, p.policy)
 		}
 	}
@@ -116,8 +116,8 @@ func (s *fakeStore) SearchPolicies(_ context.Context, orgGRN grn.GRN, n listfilt
 	needle := strings.ToLower(n.Text())
 	var out []*authz.Policy
 	for _, p := range s.policies {
-		name, id := strings.ToLower(p.policy.Name()), strings.ToLower(p.policy.GRN().Identifier)
-		if p.policy.Organization() == orgGRN && (strings.Contains(name, needle) || strings.Contains(id, needle)) {
+		name, id := strings.ToLower(p.policy.Name), strings.ToLower(p.policy.GRN.Identifier)
+		if p.policy.Organization == orgGRN && (strings.Contains(name, needle) || strings.Contains(id, needle)) {
 			out = append(out, p.policy)
 		}
 	}
@@ -131,7 +131,7 @@ func (s *fakeStore) AddPolicyVersion(_ context.Context, g grn.GRN, doc authz.Pol
 	if err != nil {
 		return nil, err
 	}
-	v := authz.NewPolicyVersion(g, len(p.versions)+1, doc, createdBy, s.tick())
+	v := &authz.PolicyVersion{Policy: g, Version: len(p.versions) + 1, Document: doc, CreatedBy: createdBy, CreatedAt: s.tick()}
 	p.versions = append(p.versions, v)
 	return v, nil
 }
@@ -186,7 +186,7 @@ func (s *fakeStore) AttachPolicy(_ context.Context, policyGRN, subjectGRN grn.GR
 	if err != nil {
 		return nil, err
 	}
-	a := authz.NewPolicyAttachment(policyGRN, subjectGRN, s.tick())
+	a := &authz.PolicyAttachment{Policy: policyGRN, Subject: subjectGRN, CreatedAt: s.tick()}
 	p.attachments = append(p.attachments, a)
 	return a, nil
 }
@@ -198,7 +198,7 @@ func (s *fakeStore) DetachPolicy(_ context.Context, policyGRN, subjectGRN grn.GR
 	if err != nil {
 		return err
 	}
-	i := slices.IndexFunc(p.attachments, func(a *authz.PolicyAttachment) bool { return a.Subject() == subjectGRN })
+	i := slices.IndexFunc(p.attachments, func(a *authz.PolicyAttachment) bool { return a.Subject == subjectGRN })
 	if i < 0 {
 		return authz.ErrAttachmentNotFound
 	}
@@ -224,14 +224,14 @@ func (s *fakeStore) ActivePolicies(_ context.Context, orgGRN grn.GRN) ([]authz.A
 	defer s.mu.Unlock()
 	var out []authz.ActivePolicy
 	for _, p := range s.policies {
-		if p.policy.Organization() != orgGRN || p.status != wire.PolicyStatusActive {
+		if p.policy.Organization != orgGRN || p.status != wire.PolicyStatusActive {
 			continue
 		}
 		subjects := make([]grn.GRN, 0, len(p.attachments))
 		for _, a := range p.attachments {
-			subjects = append(subjects, a.Subject())
+			subjects = append(subjects, a.Subject)
 		}
-		out = append(out, authz.ActivePolicy{GRN: p.policy.GRN(), Document: p.versions[p.defaultVersion-1].Document(), Subjects: subjects})
+		out = append(out, authz.ActivePolicy{GRN: p.policy.GRN, Document: p.versions[p.defaultVersion-1].Document, Subjects: subjects})
 	}
 	return out, nil
 }

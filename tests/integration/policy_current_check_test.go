@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/authz"
+	authzpg "github.com/garamsh/garam/internal/authz/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
@@ -42,7 +43,7 @@ func servedEngine(t *testing.T, cache *authz.PolicyCache) authzv1.AuthzServiceCl
 
 // activateStatement stores and activates an org-wide policy granting
 // or denying project:read across acme, and returns its GRN.
-func activateStatement(t *testing.T, s *authz.PostgresStore, orgGRN grn.GRN, sid string, effect wire.Effect) grn.GRN {
+func activateStatement(t *testing.T, s *authzpg.Store, orgGRN grn.GRN, sid string, effect wire.Effect) grn.GRN {
 	t.Helper()
 	ctx := context.Background()
 	g, err := authz.NewPolicyGRN(orgGRN)
@@ -82,12 +83,12 @@ func readProjectCurrent() *authzv1.CheckCurrentRequest {
 func TestCheckCurrent_SeesAWithdrawalNoInvalidationReported(t *testing.T) {
 	withdrawals := []struct {
 		name     string
-		withdraw func(t *testing.T, s *authz.PostgresStore, orgGRN, allow grn.GRN)
+		withdraw func(t *testing.T, s *authzpg.Store, orgGRN, allow grn.GRN)
 	}{
-		{"a persisted Deny", func(t *testing.T, s *authz.PostgresStore, orgGRN, _ grn.GRN) {
+		{"a persisted Deny", func(t *testing.T, s *authzpg.Store, orgGRN, _ grn.GRN) {
 			activateStatement(t, s, orgGRN, "deny-read", wire.EffectDeny)
 		}},
-		{"the Allow revoked", func(t *testing.T, s *authz.PostgresStore, _, allow grn.GRN) {
+		{"the Allow revoked", func(t *testing.T, s *authzpg.Store, _, allow grn.GRN) {
 			_, err := s.DeletePolicy(context.Background(), allow)
 			require.NoError(t, err)
 		}},
@@ -96,7 +97,7 @@ func TestCheckCurrent_SeesAWithdrawalNoInvalidationReported(t *testing.T) {
 		t.Run(w.name, func(t *testing.T) {
 			ctx := context.Background()
 			p := pool(t)
-			s := authz.NewPostgresStore(p)
+			s := authzpg.New(p)
 			orgGRN := newPolicyOrg(t, p)
 			allow := activateStatement(t, s, orgGRN, "allow-read", wire.EffectAllow)
 			client := servedEngine(t, authz.NewPolicyCache(s))
@@ -138,10 +139,10 @@ func TestCheckCurrent_RefusesWhenStorageIsUnreachable(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			p := pool(t)
 			orgGRN := newPolicyOrg(t, p)
-			activateStatement(t, authz.NewPostgresStore(p), orgGRN, "allow-read", wire.EffectAllow)
+			activateStatement(t, authzpg.New(p), orgGRN, "allow-read", wire.EffectAllow)
 
 			proxy := newPGProxy(t, databaseAddr(t))
-			cache := authz.NewPolicyCache(authz.NewPostgresStore(listenerPool(t, proxy, currentCheckAppName)))
+			cache := authz.NewPolicyCache(authzpg.New(listenerPool(t, proxy, currentCheckAppName)))
 			client := servedEngine(t, cache)
 
 			checked, err := client.Check(context.Background(), readProject())

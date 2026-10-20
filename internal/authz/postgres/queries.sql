@@ -10,7 +10,8 @@ SELECT * FROM policies WHERE grn = $1;
 SELECT * FROM policies WHERE org_grn = $1 ORDER BY grn;
 
 -- SearchPolicies answers the org's policies whose name or identifier
--- (the GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+-- (the GRN's fifth segment) matches pattern, case aside, ordered by
+-- GRN.
 -- name: SearchPolicies :many
 SELECT * FROM policies
 WHERE org_grn = sqlc.arg('org_grn')
@@ -77,8 +78,8 @@ SELECT * FROM policy_attachments WHERE policy_grn = $1 ORDER BY subject_grn;
 
 -- ActivePolicies returns what each active policy of the org currently
 -- evaluates: its GRN, its default version's document, and the subjects
--- it is attached to. An empty subject list means the policy applies org-wide
--- (ADR-0008).
+-- it is attached to. An empty subject list means the policy applies
+-- org-wide (ADR-0008).
 -- name: ActivePolicies :many
 SELECT p.grn,
        v.document,

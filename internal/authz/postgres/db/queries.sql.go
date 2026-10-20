@@ -31,8 +31,8 @@ type ActivePoliciesRow struct {
 
 // ActivePolicies returns what each active policy of the org currently
 // evaluates: its GRN, its default version's document, and the subjects
-// it is attached to. An empty subject list means the policy applies org-wide
-// (ADR-0008).
+// it is attached to. An empty subject list means the policy applies
+// org-wide (ADR-0008).
 func (q *Queries) ActivePolicies(ctx context.Context, orgGrn string) ([]ActivePoliciesRow, error) {
 	rows, err := q.db.Query(ctx, activePolicies, orgGrn)
 	if err != nil {
@@ -387,7 +387,8 @@ type SearchPoliciesParams struct {
 }
 
 // SearchPolicies answers the org's policies whose name or identifier
-// (the GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+// (the GRN's fifth segment) matches pattern, case aside, ordered by
+// GRN.
 func (q *Queries) SearchPolicies(ctx context.Context, arg SearchPoliciesParams) ([]Policy, error) {
 	rows, err := q.db.Query(ctx, searchPolicies, arg.OrgGrn, arg.Pattern)
 	if err != nil {

@@ -1,7 +1,7 @@
 // Internal test package: the row parsers are unexported and the only
 // exported path to them holds a database, so the kind a corrupt row
 // answers with is reachable from here alone.
-package authz
+package postgres
 
 import (
 	"testing"
@@ -10,7 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/authz/db"
+	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/internal/authz/postgres/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/wire"
@@ -51,7 +52,7 @@ func policyVersionRow() db.PolicyVersion {
 func TestRowToPolicy_CorruptFieldIsInternal(t *testing.T) {
 	ok, err := rowToPolicy(policyRow())
 	require.NoError(t, err, "the row that parses is the control")
-	require.Equal(t, "read-only", ok.Name())
+	require.Equal(t, "read-only", ok.Name)
 
 	corruptions := map[string]func(*db.Policy){
 		"grn":     func(row *db.Policy) { row.Grn = corrupt },
@@ -74,7 +75,7 @@ func TestRowToPolicy_CorruptFieldIsInternal(t *testing.T) {
 func TestRowToPolicyVersion_CorruptFieldIsInternal(t *testing.T) {
 	ok, err := rowToPolicyVersion(policyVersionRow())
 	require.NoError(t, err, "the row that parses is the control")
-	require.Equal(t, 1, ok.Version())
+	require.Equal(t, 1, ok.Version)
 
 	corruptions := map[string]func(*db.PolicyVersion){
 		"policy grn": func(row *db.PolicyVersion) { row.PolicyGrn = corrupt },
@@ -100,9 +101,9 @@ func TestStoredRowParsers_AnswerTheCallersKindOnTheirOwn(t *testing.T) {
 	_, err := grn.Parse(corrupt)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "grn.Parse: %v", err)
 
-	_, err = ParsePolicyStatus("retired")
+	_, err = authz.ParsePolicyStatus("retired")
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "ParsePolicyStatus: %v", err)
 
-	_, err = ParsePolicyDocument([]byte(`{"Statement":[]}`))
+	_, err = authz.ParsePolicyDocument([]byte(`{"Statement":[]}`))
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "ParsePolicyDocument: %v", err)
 }

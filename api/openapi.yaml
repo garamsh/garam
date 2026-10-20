@@ -2071,6 +2071,49 @@ paths:
           $ref: '#/components/responses/ContractError'
         '404':
           $ref: '#/components/responses/ContractError'
+  /orgs/{org}/operators/{operator}/manager:
+    put:
+      operationId: setOperatorManager
+      tags: [operator]
+      summary: Link a control service to its cluster manager, once. Requires `operator:register`.
+      description: >-
+        Records this operator as the control service of the operator
+        `manager` names, on a record that names no manager yet
+        (ADR-0124). It links a pair registered before the two could
+        be registered together, keeping its keys, its control
+        endpoint and its delegation. The link is set once: a record
+        that already names a manager is refused with 409, whichever
+        manager the request names, and no route moves or clears it.
+        It is refused with 409 as `registerOperator` refuses
+        `manager`: a manager not registered, one that is itself a
+        control service, one another control service already names,
+        and a record a control service names as its manager.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/operator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatorManagerWrite'
+      responses:
+        '200':
+          description: The operator as stored, naming its manager.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operator'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/operators/{operator}/control-endpoint:
     put:
       operationId: setOperatorControlEndpoint
@@ -4114,6 +4157,16 @@ components:
           description: >-
             Within the next 30 days. Kept to the microsecond: finer digits
             are dropped, and the grant answers and replays the value kept.
+    OperatorManagerWrite:
+      type: object
+      required: [manager]
+      properties:
+        manager:
+          type: string
+          description: >-
+            The GRN of the cluster manager this operator is the control
+            service of: another operator of this organization.
+          example: grn:acme:default:operator:field-one
     ControlEndpointWrite:
       type: object
       required: [url]

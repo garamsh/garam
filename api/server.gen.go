@@ -1306,6 +1306,12 @@ type OperatorKeyList struct {
 // OperatorKeyState Where a key stands at garam's database time. `active` verifies assertions; `retiring` verifies them until `retiresAt`, which a planned successor set; `revoked` verifies nothing, because it was withdrawn or its `retiresAt` has passed, and the tokens exchanged under it authenticate nothing.
 type OperatorKeyState string
 
+// OperatorManagerWrite defines model for OperatorManagerWrite.
+type OperatorManagerWrite struct {
+	// Manager The GRN of the cluster manager this operator is the control service of: another operator of this organization.
+	Manager string `json:"manager"`
+}
+
 // OperatorName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
 type OperatorName = string
 
@@ -1914,6 +1920,9 @@ type WriteOperatorDelegationJSONRequestBody = DelegationWrite
 // IssueOperatorKeyJSONRequestBody defines body for IssueOperatorKey for application/json ContentType.
 type IssueOperatorKeyJSONRequestBody = OperatorKeyIssuance
 
+// SetOperatorManagerJSONRequestBody defines body for SetOperatorManager for application/json ContentType.
+type SetOperatorManagerJSONRequestBody = OperatorManagerWrite
+
 // CheckPermissionsJSONRequestBody defines body for CheckPermissions for application/json ContentType.
 type CheckPermissionsJSONRequestBody = PermissionCheckRequest
 
@@ -2114,6 +2123,9 @@ type ServerInterface interface {
 	// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
 	// (DELETE /orgs/{org}/operators/{operator}/keys/{kid})
 	RevokeOperatorKey(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, keyID KeyID)
+	// SetOperatorManager Link a control service to its cluster manager, once. Requires `operator:register`.
+	// (PUT /orgs/{org}/operators/{operator}/manager)
+	SetOperatorManager(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
 	// CheckPermissions Ask whether the signed-in caller may take each of a list of actions. Requires membership.
 	// (POST /orgs/{org}/permission-checks)
 	CheckPermissions(w http.ResponseWriter, r *http.Request, org Org)
@@ -4201,6 +4213,41 @@ func (siw *ServerInterfaceWrapper) RevokeOperatorKey(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// SetOperatorManager operation middleware
+func (siw *ServerInterfaceWrapper) SetOperatorManager(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetOperatorManager(w, r, org, operatorSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CheckPermissions operation middleware
 func (siw *ServerInterfaceWrapper) CheckPermissions(w http.ResponseWriter, r *http.Request) {
 
@@ -5266,6 +5313,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.EndOperatorDelegation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.GetOperatorDelegation)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.WriteOperatorDelegation)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/manager", wrapper.SetOperatorManager)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/control-endpoint", wrapper.ClearOperatorControlEndpoint)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/control-endpoint", wrapper.SetOperatorControlEndpoint)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operation-authorities", wrapper.MintOperationAuthority)

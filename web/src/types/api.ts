@@ -906,6 +906,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/operators/{operator}/manager": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Link a control service to its cluster manager, once. Requires `operator:register`.
+         * @description Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
+         */
+        put: operations["setOperatorManager"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/operators/{operator}/control-endpoint": {
         parameters: {
             query?: never;
@@ -1911,6 +1931,13 @@ export interface components {
              * @description Within the next 30 days. Kept to the microsecond: finer digits are dropped, and the grant answers and replays the value kept.
              */
             expiresAt: string;
+        };
+        OperatorManagerWrite: {
+            /**
+             * @description The GRN of the cluster manager this operator is the control service of: another operator of this organization.
+             * @example grn:acme:default:operator:field-one
+             */
+            manager: string;
         };
         ControlEndpointWrite: {
             /** @example https://control.example.com/garam */
@@ -3817,6 +3844,40 @@ export interface operations {
             401: components["responses"]["ContractError"];
             403: components["responses"]["ContractError"];
             404: components["responses"]["ContractError"];
+        };
+    };
+    setOperatorManager: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorManagerWrite"];
+            };
+        };
+        responses: {
+            /** @description The operator as stored, naming its manager. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operator"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     setOperatorControlEndpoint: {

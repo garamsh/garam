@@ -19,6 +19,7 @@ import (
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	messagepg "github.com/garamsh/garam/internal/message/postgres"
@@ -50,7 +51,7 @@ func signedInCLI(t *testing.T) string {
 	require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, ada, org.RoleOwner)))
 	token, err := authn.NewToken()
 	require.NoError(t, err)
-	sessions := authn.NewPostgresSessionStore(p)
+	sessions := authnpg.NewSessionStore(p)
 	require.NoError(t, sessions.Create(ctx, token, authn.NewSession(ada, time.Hour)))
 
 	srv := api.NewServer(users, orgs, agentpg.New(p), operatorpg.New(p), messagepg.New(p), nil,

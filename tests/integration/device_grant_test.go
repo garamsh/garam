@@ -19,6 +19,7 @@ import (
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	messagepg "github.com/garamsh/garam/internal/message/postgres"
@@ -51,7 +52,7 @@ func newDeviceStack(t *testing.T) *deviceStack {
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
-	sessions := authn.NewPostgresSessionStore(p)
+	sessions := authnpg.NewSessionStore(p)
 	session := func(id string) (*http.Cookie, grn.GRN) {
 		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
@@ -68,7 +69,7 @@ func newDeviceStack(t *testing.T) *deviceStack {
 	srv := api.NewServer(users, orgs, agentpg.New(p), operatorpg.New(p), messagepg.New(p), nil,
 		sessions, nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil,
-		api.Config{SessionTTL: time.Hour}).WithDeviceGrant(authn.NewPostgresDeviceStore(p))
+		api.Config{SessionTTL: time.Hour}).WithDeviceGrant(authnpg.NewDeviceStore(p))
 	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError})
 	// The CLI reaches the API behind the console's /api rewrite, so the
 	// server answers there as the deployed one does.
@@ -364,7 +365,7 @@ func TestDeviceGrant_ARefreshReplacesBothTokensAndIsSpentOnce(t *testing.T) {
 	require.NoError(t, err)
 	token, err := authn.NewToken()
 	require.NoError(t, err)
-	require.NoError(t, authn.NewPostgresSessionStore(s.pool).Create(context.Background(), token, authn.NewSession(s.adaGRN, time.Hour)))
+	require.NoError(t, authnpg.NewSessionStore(s.pool).Create(context.Background(), token, authn.NewSession(s.adaGRN, time.Hour)))
 	status, body = s.refresh(t, second.RefreshToken)
 	require.Equal(t, http.StatusOK, status, "the prune spared it: %s", body)
 	third := sessionToken(t, body)

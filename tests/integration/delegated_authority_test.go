@@ -22,6 +22,7 @@ import (
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	"github.com/garamsh/garam/internal/authz"
 	authzpg "github.com/garamsh/garam/internal/authz/postgres"
 	"github.com/garamsh/garam/internal/cli"
@@ -70,14 +71,14 @@ func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *
 		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, role)))
 		token, err := authn.NewToken()
 		require.NoError(t, err)
-		require.NoError(t, authn.NewPostgresSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
+		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
 	owner, _ := session("ada", org.RoleOwner)
 	member, memberGRN := session("bob", org.RoleMember)
 
 	srv := api.NewServer(users, orgs, nil, operatorpg.New(p), nil, nil,
-		authn.NewPostgresSessionStore(p), nil, nil, nil, nil,
+		authnpg.NewSessionStore(p), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
@@ -313,7 +314,7 @@ func TestDelegatedAuthority_RechecksRolesAndGroups(t *testing.T) {
 	cookieFor := func(g grn.GRN) *http.Cookie {
 		token, err := authn.NewToken()
 		require.NoError(t, err)
-		require.NoError(t, authn.NewPostgresSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
+		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}
 	}
 	admin := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "carol")

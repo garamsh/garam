@@ -15,6 +15,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
@@ -40,7 +41,7 @@ func TestPasswordCredentialStore_RoundTrip(t *testing.T) {
 	alice := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "local-alice")
 	require.NoError(t, users.Create(ctx, user.New(alice, "alice")))
 
-	credentials := authn.NewPostgresPasswordCredentialStore(p)
+	credentials := authnpg.NewPasswordCredentialStore(p)
 	_, err := credentials.Get(ctx, alice)
 	require.ErrorIs(t, err, authn.ErrPasswordCredentialNotFound, "absent before it is written")
 
@@ -88,7 +89,7 @@ func TestPasswordCredentialStore_ClassifiesWhatTheSchemaRefuses(t *testing.T) {
 
 	verifier, err := authn.NewVerifier(integrationPassword)
 	require.NoError(t, err)
-	credentials := authn.NewPostgresPasswordCredentialStore(p)
+	credentials := authnpg.NewPasswordCredentialStore(p)
 	require.NoError(t, credentials.Create(ctx, alice, verifier), "a first credential for a real user lands")
 
 	// 23505 on password_credentials' primary key: the user holds one.
@@ -119,7 +120,7 @@ func TestPasswordAttemptStore_BoundsWhatIsLive(t *testing.T) {
 	truncate(t, p)
 	ctx := context.Background()
 
-	attempts := authn.NewPostgresPasswordAttemptStore(p)
+	attempts := authnpg.NewPasswordAttemptStore(p)
 	for i := range authn.MaxLivePasswordAttempts {
 		require.NoError(t, attempts.Record(ctx, fmt.Sprintf("attempt-%d", i), time.Hour))
 	}
@@ -146,7 +147,7 @@ func TestPasswordAttemptStore_PrunesWhatLapsed(t *testing.T) {
 	truncate(t, p)
 	ctx := context.Background()
 
-	attempts := authn.NewPostgresPasswordAttemptStore(p)
+	attempts := authnpg.NewPasswordAttemptStore(p)
 	for i := range authn.MaxLivePasswordAttempts {
 		require.NoError(t, attempts.Record(ctx, fmt.Sprintf("lapsed-%d", i), -time.Second))
 	}
@@ -190,9 +191,9 @@ func TestRegisterPassword_ADuplicateCarriesNoneOfPostgresText(t *testing.T) {
 	}
 
 	srv := api.NewServer(users, orgs, nil, nil, nil, nil,
-		authn.NewPostgresSessionStore(p), nil,
-		authn.NewPostgresPasswordCredentialStore(p),
-		authn.NewPostgresPasswordAttemptStore(p),
+		authnpg.NewSessionStore(p), nil,
+		authnpg.NewPasswordCredentialStore(p),
+		authnpg.NewPasswordAttemptStore(p),
 		nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	handler := apigen.Handler(srv)
 	register := func(token string) *httptest.ResponseRecorder {
@@ -243,9 +244,9 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 		org.NewInvitation(token, acme, org.RoleMember, owner, time.Now().UTC().Add(time.Hour))))
 
 	srv := api.NewServer(users, orgs, nil, nil, nil, nil,
-		authn.NewPostgresSessionStore(p), nil,
-		authn.NewPostgresPasswordCredentialStore(p),
-		authn.NewPostgresPasswordAttemptStore(p),
+		authnpg.NewSessionStore(p), nil,
+		authnpg.NewPasswordCredentialStore(p),
+		authnpg.NewPasswordAttemptStore(p),
 		nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	handler := apigen.Handler(srv)
 

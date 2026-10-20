@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 )
@@ -17,7 +18,7 @@ func TestSessionStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	users := userpg.New(p)
-	s := authn.NewPostgresSessionStore(p)
+	s := authnpg.NewSessionStore(p)
 	userGRN := grnOf("user", "ada")
 	require.NoError(t, users.Create(ctx, user.New(userGRN, "ada")))
 
@@ -27,7 +28,7 @@ func TestSessionStore_RoundTrip(t *testing.T) {
 
 	got, err := s.Get(ctx, token)
 	require.NoError(t, err)
-	assert.Equal(t, userGRN, got.User())
+	assert.Equal(t, userGRN, got.User)
 
 	_, err = s.Get(ctx, "unknown-token")
 	assert.ErrorIs(t, err, authn.ErrSessionNotFound)
@@ -59,7 +60,7 @@ func TestSessionStore_CreatePrunesExpired(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	users := userpg.New(p)
-	s := authn.NewPostgresSessionStore(p)
+	s := authnpg.NewSessionStore(p)
 	userGRN := grnOf("user", "ada")
 	require.NoError(t, users.Create(ctx, user.New(userGRN, "ada")))
 

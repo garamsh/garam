@@ -19,7 +19,7 @@ import (
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	auditpg "github.com/garamsh/garam/internal/audit/postgres"
-	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
@@ -36,7 +36,7 @@ import (
 func auditBrowser(t *testing.T, s *executionStack, engine grpc.ClientConnInterface) string {
 	t.Helper()
 	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agentpg.New(s.pool), operatorpg.New(s.pool),
-		nil, nil, authn.NewPostgresSessionStore(s.pool), nil, nil, nil, nil,
+		nil, nil, authnpg.NewSessionStore(s.pool), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, nil, nil, api.Config{SessionTTL: time.Hour}).
 		WithCredentialAudit(auditpg.NewCredentialStore(s.pool))
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 )
 
 // TestOAuthStateStore_RoundTrip drives a login state through the shape
@@ -19,7 +20,7 @@ import (
 func TestOAuthStateStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authn.NewPostgresOAuthStateStore(p)
+	s := authnpg.NewOAuthStateStore(p)
 
 	state, err := authn.NewToken()
 	require.NoError(t, err)
@@ -76,7 +77,7 @@ func TestOAuthStateStore_RoundTrip(t *testing.T) {
 func TestOAuthStateStore_IssueBoundsTheLiveStates(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authn.NewPostgresOAuthStateStore(p)
+	s := authnpg.NewOAuthStateStore(p)
 
 	// One row short of the bound, seeded in bulk so the test pays no
 	// round trip per row.

@@ -93,7 +93,7 @@ func TestLogout_ByBearerRevokesThatSessionAndSetsNoCookie(t *testing.T) {
 	require.NoError(t, err)
 	ada, err := f.sessions.Get(testCtx(t), browser.Value)
 	require.NoError(t, err)
-	require.NoError(t, f.sessions.Create(testCtx(t), token, authn.NewSession(ada.User(), time.Hour)))
+	require.NoError(t, f.sessions.Create(testCtx(t), token, authn.NewSession(ada.User, time.Hour)))
 
 	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
 	req.Header.Set("Authorization", "Bearer "+token)

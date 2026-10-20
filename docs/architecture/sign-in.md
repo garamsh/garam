@@ -1,7 +1,8 @@
 # Sign-in
 
 How a person proves who they are, and the session that carries the
-proof afterwards. Implemented by `internal/authn`.
+proof afterwards. Implemented by `internal/authn`, which persists
+through `internal/authn/postgres` (ADR-0069).
 
 | Type | Responsibility |
 |------|----------------|

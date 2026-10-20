@@ -29,41 +29,31 @@ const (
 
 // Session is an authenticated session for a user: a browser's, held as
 // the session cookie, or a CLI's, presented as a bearer (ADR-0005,
-// ADR-0120).
+// ADR-0120). Every field is persisted on the row and exported: the type
+// holds no invariant over them, so it is a data carrier (ADR-0069).
 type Session struct {
-	userGRN   grn.GRN
-	createdAt time.Time
-	expiresAt time.Time
-	// id names the session to its user, who lists and revokes it; empty
+	User      grn.GRN
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	// ID names the session to its user, who lists and revokes it; empty
 	// before it is stored.
-	id   string
-	kind SessionKind
-	// name is what a CLI said it runs on, empty where it said nothing.
-	name string
-	// refreshExpiresAt is when a CLI session's refresh token lapses,
+	ID   string
+	Kind SessionKind
+	// Name is what a CLI said it runs on, empty where it said nothing.
+	Name string
+	// RefreshExpiresAt is when a CLI session's refresh token lapses,
 	// zero for a browser's.
-	refreshExpiresAt time.Time
+	RefreshExpiresAt time.Time
 }
 
 // NewSession constructs a Session that expires after ttl.
 func NewSession(userGRN grn.GRN, ttl time.Duration) *Session {
 	now := time.Now().UTC()
-	return &Session{userGRN: userGRN, createdAt: now, expiresAt: now.Add(ttl), kind: SessionBrowser}
+	return &Session{User: userGRN, CreatedAt: now, ExpiresAt: now.Add(ttl), Kind: SessionBrowser}
 }
 
-func (s *Session) User() grn.GRN        { return s.userGRN }
-func (s *Session) CreatedAt() time.Time { return s.createdAt }
-func (s *Session) ExpiresAt() time.Time { return s.expiresAt }
-func (s *Session) ID() string           { return s.id }
-func (s *Session) Kind() SessionKind    { return s.kind }
-func (s *Session) Name() string         { return s.name }
-
-// RefreshExpiresAt is when a CLI session's refresh token lapses, zero
-// for a browser's session.
-func (s *Session) RefreshExpiresAt() time.Time { return s.refreshExpiresAt }
-
 // Expired reports whether the session is past its expiry at now.
-func (s *Session) Expired(now time.Time) bool { return !now.Before(s.expiresAt) }
+func (s *Session) Expired(now time.Time) bool { return !now.Before(s.ExpiresAt) }
 
 // NewToken returns a random session token. The raw token is the bearer
 // secret stored in the cookie; only its hash is persisted.

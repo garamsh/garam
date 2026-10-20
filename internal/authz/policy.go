@@ -29,14 +29,16 @@ func ParsePolicyStatus(s string) (wire.PolicyStatus, error) {
 
 // Policy is an org-managed, versioned rule set. Only an active policy
 // contributes statements to a check, and only at its default version.
+// Every field is persisted on the row and exported: the type holds no
+// invariant over them, so it is a data carrier (ADR-0069).
 type Policy struct {
-	grn            grn.GRN
-	orgGRN         grn.GRN
-	name           string
-	status         wire.PolicyStatus
-	defaultVersion int
-	createdAt      time.Time
-	updatedAt      time.Time
+	GRN            grn.GRN
+	Organization   grn.GRN
+	Name           string
+	Status         wire.PolicyStatus
+	DefaultVersion int
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // NewPolicy constructs a draft Policy owned by orgGRN, pointing at the
@@ -44,69 +46,36 @@ type Policy struct {
 func NewPolicy(g, orgGRN grn.GRN, name string) *Policy {
 	now := time.Now().UTC()
 	return &Policy{
-		grn:            g,
-		orgGRN:         orgGRN,
-		name:           name,
-		status:         wire.PolicyStatusDraft,
-		defaultVersion: firstPolicyVersion,
-		createdAt:      now,
-		updatedAt:      now,
+		GRN:            g,
+		Organization:   orgGRN,
+		Name:           name,
+		Status:         wire.PolicyStatusDraft,
+		DefaultVersion: firstPolicyVersion,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 }
 
-func (p *Policy) GRN() grn.GRN              { return p.grn }
-func (p *Policy) Organization() grn.GRN     { return p.orgGRN }
-func (p *Policy) Name() string              { return p.name }
-func (p *Policy) Status() wire.PolicyStatus { return p.status }
-func (p *Policy) DefaultVersion() int       { return p.defaultVersion }
-func (p *Policy) CreatedAt() time.Time      { return p.createdAt }
-func (p *Policy) UpdatedAt() time.Time      { return p.updatedAt }
-
-// PolicyVersion is one immutable revision of a policy's document.
+// PolicyVersion is one immutable revision of a policy's document: the
+// document CreatedBy recorded at CreatedAt, numbered Version. It is a
+// data carrier, its fields exported (ADR-0069).
 type PolicyVersion struct {
-	policyGRN grn.GRN
-	version   int
-	document  PolicyDocument
-	createdBy grn.GRN
-	createdAt time.Time
+	Policy    grn.GRN
+	Version   int
+	Document  PolicyDocument
+	CreatedBy grn.GRN
+	CreatedAt time.Time
 }
-
-// NewPolicyVersion reconstructs a stored revision of policyGRN: the
-// document createdBy recorded at createdAt, numbered version.
-func NewPolicyVersion(policyGRN grn.GRN, version int, document PolicyDocument, createdBy grn.GRN, createdAt time.Time) *PolicyVersion {
-	return &PolicyVersion{
-		policyGRN: policyGRN,
-		version:   version,
-		document:  document,
-		createdBy: createdBy,
-		createdAt: createdAt,
-	}
-}
-
-func (v *PolicyVersion) Policy() grn.GRN          { return v.policyGRN }
-func (v *PolicyVersion) Version() int             { return v.version }
-func (v *PolicyVersion) Document() PolicyDocument { return v.document }
-func (v *PolicyVersion) CreatedBy() grn.GRN       { return v.createdBy }
-func (v *PolicyVersion) CreatedAt() time.Time     { return v.createdAt }
 
 // PolicyAttachment binds a policy to the subject it applies to
 // (ADR-0008). A subject is a user or a group of the policy's org; the
-// engine matches its GRN as a string and never resolves it.
+// engine matches its GRN as a string and never resolves it. It is a
+// data carrier, its fields exported (ADR-0069).
 type PolicyAttachment struct {
-	policyGRN  grn.GRN
-	subjectGRN grn.GRN
-	createdAt  time.Time
+	Policy    grn.GRN
+	Subject   grn.GRN
+	CreatedAt time.Time
 }
-
-// NewPolicyAttachment reconstructs a stored attachment of policyGRN to
-// subjectGRN, recorded at createdAt.
-func NewPolicyAttachment(policyGRN, subjectGRN grn.GRN, createdAt time.Time) *PolicyAttachment {
-	return &PolicyAttachment{policyGRN: policyGRN, subjectGRN: subjectGRN, createdAt: createdAt}
-}
-
-func (a *PolicyAttachment) Policy() grn.GRN      { return a.policyGRN }
-func (a *PolicyAttachment) Subject() grn.GRN     { return a.subjectGRN }
-func (a *PolicyAttachment) CreatedAt() time.Time { return a.createdAt }
 
 // ActivePolicy is one active policy's contribution to evaluation: the
 // policy, the document it evaluates and the subjects it is attached

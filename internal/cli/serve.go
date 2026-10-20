@@ -21,6 +21,7 @@ import (
 	auditpg "github.com/garamsh/garam/internal/audit/postgres"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
+	authzpg "github.com/garamsh/garam/internal/authz/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/health"
@@ -272,12 +273,12 @@ func serveAuthz(cmd *cobra.Command) error {
 	}
 	defer pool.Close()
 
-	store := authz.NewPostgresStore(pool)
+	store := authzpg.New(pool)
 	cache := authz.NewPolicyCache(store)
 	// Writes made here invalidate the cache directly; the listener
 	// covers writes made by any other process.
 	go func() {
-		if err := authz.ListenPolicyChanges(ctx, pool, cache); err != nil && !errors.Is(err, context.Canceled) {
+		if err := authzpg.ListenPolicyChanges(ctx, pool, cache); err != nil && !errors.Is(err, context.Canceled) {
 			obs.logger.Error("policy change listener stopped", slog.String("error", err.Error()))
 		}
 	}()

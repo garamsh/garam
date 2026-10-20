@@ -1,11 +1,12 @@
-package authz
+package postgres
 
 import (
 	"context"
 	"encoding/json"
 	"time"
 
-	"github.com/garamsh/garam/internal/authz/db"
+	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/internal/authz/postgres/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
@@ -17,7 +18,7 @@ import (
 // CreatePolicy stores the policy and its first version in one
 // transaction, so a policy never exists without the version it points
 // at.
-func (s *PostgresStore) CreatePolicy(ctx context.Context, p *Policy, doc PolicyDocument, createdBy grn.GRN) (*Policy, error) {
+func (s *Store) CreatePolicy(ctx context.Context, p *authz.Policy, doc authz.PolicyDocument, createdBy grn.GRN) (*authz.Policy, error) {
 	raw, err := json.Marshal(doc)
 	if err != nil {
 		return nil, errorx.Wrap(err, "encode policy document", errorx.KindInvalidArgument)
@@ -30,22 +31,22 @@ func (s *PostgresStore) CreatePolicy(ctx context.Context, p *Policy, doc PolicyD
 
 	q := s.q.WithTx(tx)
 	row, err := q.CreatePolicy(ctx, db.CreatePolicyParams{
-		Grn:            p.grn.String(),
-		OrgGrn:         p.orgGRN.String(),
-		Name:           p.name,
-		Status:         string(p.status),
-		DefaultVersion: int32(p.defaultVersion),
-		CreatedAt:      pgxtype.Timestamptz(p.createdAt),
-		UpdatedAt:      pgxtype.Timestamptz(p.updatedAt),
+		Grn:            p.GRN.String(),
+		OrgGrn:         p.Organization.String(),
+		Name:           p.Name,
+		Status:         string(p.Status),
+		DefaultVersion: int32(p.DefaultVersion),
+		CreatedAt:      pgxtype.Timestamptz(p.CreatedAt),
+		UpdatedAt:      pgxtype.Timestamptz(p.UpdatedAt),
 	})
 	if err != nil {
-		return nil, pgxerr.Classify(err, "create policy", nil, ErrPolicyAlreadyExists)
+		return nil, pgxerr.Classify(err, "create policy", nil, authz.ErrPolicyAlreadyExists)
 	}
 	if _, err := q.CreateFirstPolicyVersion(ctx, db.CreateFirstPolicyVersionParams{
-		PolicyGrn: p.grn.String(),
+		PolicyGrn: p.GRN.String(),
 		Document:  raw,
 		CreatedBy: createdBy.String(),
-		CreatedAt: pgxtype.Timestamptz(p.createdAt),
+		CreatedAt: pgxtype.Timestamptz(p.CreatedAt),
 	}); err != nil {
 		return nil, pgxerr.Classify(err, "create policy version", nil, nil)
 	}
@@ -57,21 +58,21 @@ func (s *PostgresStore) CreatePolicy(ctx context.Context, p *Policy, doc PolicyD
 
 // GetPolicy returns the policy with the given GRN, or
 // ErrPolicyNotFound.
-func (s *PostgresStore) GetPolicy(ctx context.Context, g grn.GRN) (*Policy, error) {
+func (s *Store) GetPolicy(ctx context.Context, g grn.GRN) (*authz.Policy, error) {
 	row, err := s.q.GetPolicy(ctx, g.String())
 	if err != nil {
-		return nil, pgxerr.Classify(err, "get policy", ErrPolicyNotFound, nil)
+		return nil, pgxerr.Classify(err, "get policy", authz.ErrPolicyNotFound, nil)
 	}
 	return rowToPolicy(row)
 }
 
 // ListPolicies returns the org's policies ordered by GRN.
-func (s *PostgresStore) ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*Policy, error) {
+func (s *Store) ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*authz.Policy, error) {
 	rows, err := s.q.ListPolicies(ctx, orgGRN.String())
 	if err != nil {
 		return nil, pgxerr.Classify(err, "list policies", nil, nil)
 	}
-	policies := make([]*Policy, 0, len(rows))
+	policies := make([]*authz.Policy, 0, len(rows))
 	for _, row := range rows {
 		p, err := rowToPolicy(row)
 		if err != nil {
@@ -84,12 +85,12 @@ func (s *PostgresStore) ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*Po
 
 // SearchPolicies returns the org's policies whose name or identifier
 // holds n, ordered by GRN.
-func (s *PostgresStore) SearchPolicies(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*Policy, error) {
+func (s *Store) SearchPolicies(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*authz.Policy, error) {
 	rows, err := s.q.SearchPolicies(ctx, db.SearchPoliciesParams{OrgGrn: orgGRN.String(), Pattern: pgxtype.Contains(n.Text())})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "search policies", nil, nil)
 	}
-	policies := make([]*Policy, 0, len(rows))
+	policies := make([]*authz.Policy, 0, len(rows))
 	for _, row := range rows {
 		p, err := rowToPolicy(row)
 		if err != nil {
@@ -101,7 +102,7 @@ func (s *PostgresStore) SearchPolicies(ctx context.Context, orgGRN grn.GRN, n li
 }
 
 // AddPolicyVersion appends a version to an existing policy.
-func (s *PostgresStore) AddPolicyVersion(ctx context.Context, g grn.GRN, doc PolicyDocument, createdBy grn.GRN) (*PolicyVersion, error) {
+func (s *Store) AddPolicyVersion(ctx context.Context, g grn.GRN, doc authz.PolicyDocument, createdBy grn.GRN) (*authz.PolicyVersion, error) {
 	raw, err := json.Marshal(doc)
 	if err != nil {
 		return nil, errorx.Wrap(err, "encode policy document", errorx.KindInvalidArgument)
@@ -113,18 +114,18 @@ func (s *PostgresStore) AddPolicyVersion(ctx context.Context, g grn.GRN, doc Pol
 		CreatedAt: pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, pgxerr.Classify(err, "add policy version", ErrPolicyNotFound, nil)
+		return nil, pgxerr.Classify(err, "add policy version", authz.ErrPolicyNotFound, nil)
 	}
 	return rowToPolicyVersion(row)
 }
 
 // ListPolicyVersions returns a policy's versions, oldest first.
-func (s *PostgresStore) ListPolicyVersions(ctx context.Context, g grn.GRN) ([]*PolicyVersion, error) {
+func (s *Store) ListPolicyVersions(ctx context.Context, g grn.GRN) ([]*authz.PolicyVersion, error) {
 	rows, err := s.q.ListPolicyVersions(ctx, g.String())
 	if err != nil {
 		return nil, pgxerr.Classify(err, "list policy versions", nil, nil)
 	}
-	versions := make([]*PolicyVersion, 0, len(rows))
+	versions := make([]*authz.PolicyVersion, 0, len(rows))
 	for _, row := range rows {
 		v, err := rowToPolicyVersion(row)
 		if err != nil {
@@ -139,35 +140,35 @@ func (s *PostgresStore) ListPolicyVersions(ctx context.Context, g grn.GRN) ([]*P
 // policy's row lock as DetachPolicy's does, so the two serialize. Its
 // versions and attachments cascade with it, which the append-only
 // trigger admits only once the policy row is gone (migration 000002).
-func (s *PostgresStore) DeletePolicy(ctx context.Context, g grn.GRN) (*Policy, error) {
+func (s *Store) DeletePolicy(ctx context.Context, g grn.GRN) (*authz.Policy, error) {
 	row, err := s.q.DeletePolicy(ctx, g.String())
 	if err != nil {
-		return nil, pgxerr.Classify(err, "delete policy", ErrPolicyNotFound, nil)
+		return nil, pgxerr.Classify(err, "delete policy", authz.ErrPolicyNotFound, nil)
 	}
 	return rowToPolicy(row)
 }
 
 // SetPolicyStatus moves the policy through its lifecycle.
-func (s *PostgresStore) SetPolicyStatus(ctx context.Context, g grn.GRN, status wire.PolicyStatus) (*Policy, error) {
+func (s *Store) SetPolicyStatus(ctx context.Context, g grn.GRN, status wire.PolicyStatus) (*authz.Policy, error) {
 	row, err := s.q.SetPolicyStatus(ctx, db.SetPolicyStatusParams{
 		Grn:       g.String(),
 		Status:    string(status),
 		UpdatedAt: pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, pgxerr.Classify(err, "set policy status", ErrPolicyNotFound, nil)
+		return nil, pgxerr.Classify(err, "set policy status", authz.ErrPolicyNotFound, nil)
 	}
 	return rowToPolicy(row)
 }
 
 // SetPolicyDefaultVersion points the policy at an already-stored
 // version; rollback is exactly this pointer move (ADR-0002).
-func (s *PostgresStore) SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, version int) (*Policy, error) {
+func (s *Store) SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, version int) (*authz.Policy, error) {
 	if _, err := s.q.GetPolicyVersion(ctx, db.GetPolicyVersionParams{
 		PolicyGrn: g.String(),
 		Version:   int32(version),
 	}); err != nil {
-		return nil, pgxerr.Classify(err, "get policy version", ErrPolicyVersionNotFound, nil)
+		return nil, pgxerr.Classify(err, "get policy version", authz.ErrPolicyVersionNotFound, nil)
 	}
 	row, err := s.q.SetPolicyDefaultVersion(ctx, db.SetPolicyDefaultVersionParams{
 		Grn:            g.String(),
@@ -175,7 +176,7 @@ func (s *PostgresStore) SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, 
 		UpdatedAt:      pgxtype.Timestamptz(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, pgxerr.Classify(err, "set policy default version", ErrPolicyNotFound, nil)
+		return nil, pgxerr.Classify(err, "set policy default version", authz.ErrPolicyNotFound, nil)
 	}
 	return rowToPolicy(row)
 }
@@ -184,7 +185,7 @@ func (s *PostgresStore) SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, 
 // value that no longer parses is data corruption, hence internal: the
 // parsers below answer the kind a caller's own input earns, and this
 // value passed that boundary before it was stored.
-func rowToPolicy(row db.Policy) (*Policy, error) {
+func rowToPolicy(row db.Policy) (*authz.Policy, error) {
 	g, err := grn.Parse(row.Grn)
 	if err != nil {
 		return nil, errorx.Wrap(err, "policy grn", errorx.KindInternal)
@@ -193,22 +194,22 @@ func rowToPolicy(row db.Policy) (*Policy, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "policy org grn", errorx.KindInternal)
 	}
-	status, err := ParsePolicyStatus(row.Status)
+	status, err := authz.ParsePolicyStatus(row.Status)
 	if err != nil {
 		return nil, errorx.Wrap(err, "policy status", errorx.KindInternal)
 	}
-	return &Policy{
-		grn:            g,
-		orgGRN:         orgGRN,
-		name:           row.Name,
-		status:         status,
-		defaultVersion: int(row.DefaultVersion),
-		createdAt:      row.CreatedAt.Time,
-		updatedAt:      row.UpdatedAt.Time,
+	return &authz.Policy{
+		GRN:            g,
+		Organization:   orgGRN,
+		Name:           row.Name,
+		Status:         status,
+		DefaultVersion: int(row.DefaultVersion),
+		CreatedAt:      row.CreatedAt.Time,
+		UpdatedAt:      row.UpdatedAt.Time,
 	}, nil
 }
 
-func rowToPolicyVersion(row db.PolicyVersion) (*PolicyVersion, error) {
+func rowToPolicyVersion(row db.PolicyVersion) (*authz.PolicyVersion, error) {
 	g, err := grn.Parse(row.PolicyGrn)
 	if err != nil {
 		return nil, errorx.Wrap(err, "policy grn", errorx.KindInternal)
@@ -217,9 +218,9 @@ func rowToPolicyVersion(row db.PolicyVersion) (*PolicyVersion, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "policy version author", errorx.KindInternal)
 	}
-	doc, err := ParsePolicyDocument(row.Document)
+	doc, err := authz.ParsePolicyDocument(row.Document)
 	if err != nil {
 		return nil, errorx.Wrap(err, "stored document", errorx.KindInternal)
 	}
-	return NewPolicyVersion(g, int(row.Version), doc, createdBy, row.CreatedAt.Time), nil
+	return &authz.PolicyVersion{Policy: g, Version: int(row.Version), Document: doc, CreatedBy: createdBy, CreatedAt: row.CreatedAt.Time}, nil
 }

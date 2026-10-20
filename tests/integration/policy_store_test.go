@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/authz"
+	authzpg "github.com/garamsh/garam/internal/authz/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -22,7 +23,7 @@ import (
 func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	orgGRN := newPolicyOrg(t, p)
 	author := grnOf("user", "ada")
 
@@ -30,13 +31,13 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	created, err := s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), author)
 	require.NoError(t, err)
-	assert.Equal(t, wire.PolicyStatusDraft, created.Status())
-	assert.Equal(t, 1, created.DefaultVersion())
+	assert.Equal(t, wire.PolicyStatusDraft, created.Status)
+	assert.Equal(t, 1, created.DefaultVersion)
 
 	policies, err := s.ListPolicies(ctx, orgGRN)
 	require.NoError(t, err)
 	require.Len(t, policies, 1)
-	assert.Equal(t, "read-only", policies[0].Name())
+	assert.Equal(t, "read-only", policies[0].Name)
 
 	// A draft contributes nothing until it is activated.
 	active, err := s.ActivePolicies(ctx, orgGRN)
@@ -45,7 +46,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 
 	activated, err := s.SetPolicyStatus(ctx, g, wire.PolicyStatusActive)
 	require.NoError(t, err)
-	assert.Equal(t, wire.PolicyStatusActive, activated.Status())
+	assert.Equal(t, wire.PolicyStatusActive, activated.Status)
 	active, err = s.ActivePolicies(ctx, orgGRN)
 	require.NoError(t, err)
 	require.Len(t, active, 1)
@@ -55,14 +56,14 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	// Appending a version leaves the default pointer alone.
 	v2, err := s.AddPolicyVersion(ctx, g, policyDoc("v2", wire.EffectDeny), author)
 	require.NoError(t, err)
-	assert.Equal(t, 2, v2.Version())
+	assert.Equal(t, 2, v2.Version)
 	active, err = s.ActivePolicies(ctx, orgGRN)
 	require.NoError(t, err)
 	assert.Equal(t, "v1", active[0].Document.Statement[0].Sid)
 
 	rolled, err := s.SetPolicyDefaultVersion(ctx, g, 2)
 	require.NoError(t, err)
-	assert.Equal(t, 2, rolled.DefaultVersion())
+	assert.Equal(t, 2, rolled.DefaultVersion)
 	active, err = s.ActivePolicies(ctx, orgGRN)
 	require.NoError(t, err)
 	assert.Equal(t, "v2", active[0].Document.Statement[0].Sid)
@@ -71,7 +72,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	versions, err := s.ListPolicyVersions(ctx, g)
 	require.NoError(t, err)
 	require.Len(t, versions, 2)
-	assert.Equal(t, author, versions[0].CreatedBy())
+	assert.Equal(t, author, versions[0].CreatedBy)
 
 	_, err = s.SetPolicyDefaultVersion(ctx, g, 99)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
@@ -88,7 +89,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 func TestPolicyService_DeleteRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	cache := authz.NewPolicyCache(s)
 	srv := authz.NewPolicyGRPCServer(s, cache)
 	orgGRN := newPolicyOrg(t, p)
@@ -146,7 +147,7 @@ func TestPolicyService_DeleteRoundTrip(t *testing.T) {
 func TestPolicies_RefuseTheArchivedStatus(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	orgGRN := newPolicyOrg(t, p)
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
@@ -165,7 +166,7 @@ func TestPolicies_RefuseTheArchivedStatus(t *testing.T) {
 func TestPolicyVersions_AppendOnly(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	orgGRN := newPolicyOrg(t, p)
 
 	g, err := authz.NewPolicyGRN(orgGRN)
@@ -205,7 +206,7 @@ func TestPolicyVersions_AppendOnly(t *testing.T) {
 func TestPolicyVersions_StoreAndReturnTheSubmittedDocument(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	srv := authz.NewPolicyGRPCServer(s, authz.NewPolicyCache(s))
 	orgGRN := newPolicyOrg(t, p)
 
@@ -248,11 +249,11 @@ func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	orgGRN := newPolicyOrg(t, p)
 
 	cache := authz.NewPolicyCache(s)
-	go func() { _ = authz.ListenPolicyChanges(ctx, p, cache) }()
+	go func() { _ = authzpg.ListenPolicyChanges(ctx, p, cache) }()
 
 	before, err := cache.Statements(ctx, orgGRN, nil)
 	require.NoError(t, err)
@@ -270,7 +271,7 @@ func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
 	// receive. TestPolicyWrite_Notifies covers the write's own
 	// announcement.
 	assert.Eventually(t, func() bool {
-		_, err := p.Exec(ctx, `SELECT pg_notify($1, $2)`, authz.PolicyChannel, orgGRN.String())
+		_, err := p.Exec(ctx, `SELECT pg_notify($1, $2)`, authzpg.PolicyChannel, orgGRN.String())
 		require.NoError(t, err)
 		got, err := cache.Statements(ctx, orgGRN, nil)
 		return err == nil && len(got) == 1
@@ -281,13 +282,13 @@ func TestPolicyWrite_Notifies(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	orgGRN := newPolicyOrg(t, p)
 
 	conn, err := p.Acquire(ctx)
 	require.NoError(t, err)
 	defer conn.Release()
-	_, err = conn.Exec(ctx, "LISTEN "+authz.PolicyChannel)
+	_, err = conn.Exec(ctx, "LISTEN "+authzpg.PolicyChannel)
 	require.NoError(t, err)
 
 	g, err := authz.NewPolicyGRN(orgGRN)
@@ -297,7 +298,7 @@ func TestPolicyWrite_Notifies(t *testing.T) {
 
 	n, err := conn.Conn().WaitForNotification(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, authz.PolicyChannel, n.Channel)
+	assert.Equal(t, authzpg.PolicyChannel, n.Channel)
 	assert.Equal(t, orgGRN.String(), n.Payload)
 
 	// An attachment write changes what the policy applies to, so it
@@ -318,7 +319,7 @@ func TestPolicyWrite_Notifies(t *testing.T) {
 func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	cache := authz.NewPolicyCache(s)
 	srv := authz.NewPolicyGRPCServer(s, cache)
 	orgGRN := newPolicyOrg(t, p)
@@ -401,7 +402,7 @@ func TestPolicyAttachments_RoundTrip(t *testing.T) {
 func TestPolicyAttachment_StaysInsideItsOrg(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	orgGRN := newPolicyOrg(t, p)
 
 	g, err := authz.NewPolicyGRN(orgGRN)
@@ -426,7 +427,7 @@ func TestPolicyAttachment_StaysInsideItsOrg(t *testing.T) {
 func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	cache := authz.NewPolicyCache(s)
 	orgGRN := newPolicyOrg(t, p)
 	ada, eng := grnOf("user", "ada"), grnOf("group", "eng")
@@ -483,7 +484,7 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 func TestPolicyAttachment_ADenyDoesNotWidenOnDetach(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	cache := authz.NewPolicyCache(s)
 	srv := authz.NewPolicyGRPCServer(s, cache)
 	orgGRN := newPolicyOrg(t, p)

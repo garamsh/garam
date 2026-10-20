@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/authz"
+	authzpg "github.com/garamsh/garam/internal/authz/postgres"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -195,15 +196,15 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	p := pool(t)
-	s := authz.NewPostgresStore(p)
+	s := authzpg.New(p)
 	orgGRN := newPolicyOrg(t, p)
 	author := grnOf("user", "ada")
 
 	proxy := newPGProxy(t, databaseAddr(t))
 	listening := listenerPool(t, proxy, policyListenerAppName)
 	cache := authz.NewPolicyCache(s)
-	go func() { _ = authz.ListenPolicyChanges(ctx, listening, cache) }()
-	requireListenerSessions(t, p, policyListenerAppName, authz.PolicyChannel, 1)
+	go func() { _ = authzpg.ListenPolicyChanges(ctx, listening, cache) }()
+	requireListenerSessions(t, p, policyListenerAppName, authzpg.PolicyChannel, 1)
 
 	// An entry to invalidate, and then a write to invalidate it with:
 	// the cache answering "before" is the listener delivering, since
@@ -227,7 +228,7 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 	proxy.cut()
 	// Postgres drops the session with the socket, so the writes below
 	// are made with nothing listening on the channel at all.
-	requireListenerSessions(t, p, policyListenerAppName, authz.PolicyChannel, 0)
+	requireListenerSessions(t, p, policyListenerAppName, authzpg.PolicyChannel, 0)
 	// A refused retry puts the listener past queued setup notifications.
 	// Warm only then, so no old invalidation can drop the control's entry.
 	proxy.requireRefused(t)

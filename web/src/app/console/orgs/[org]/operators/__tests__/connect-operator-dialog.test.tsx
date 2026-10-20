@@ -54,9 +54,17 @@ function recordRegistrations() {
   return posted;
 }
 
-async function openDialog() {
+const fieldOneIdentity = {
+  grn: fieldOne.grn,
+  identifier: "field-one",
+  name: fieldOne.name,
+};
+
+async function openDialog(
+  props: Partial<Parameters<typeof ConnectOperatorDialog>[0]> = {},
+) {
   const user = userEvent.setup();
-  render(<ConnectOperatorDialog org="acme" />);
+  render(<ConnectOperatorDialog org="acme" {...props} />);
   await user.click(screen.getByRole("button", { name: "Connect an operator" }));
   const dialog = within(
     screen.getByRole("dialog", { name: "Connect an operator" }),
@@ -146,5 +154,68 @@ describe("connect operator dialog", () => {
     expect(dialog.getByRole("textbox", { name: "Identifier" })).toHaveValue(
       "field-one",
     );
+  });
+
+  it("registers the identity as the control service of the manager chosen, so the pair is recorded from the start (#1636)", async () => {
+    const posted = recordRegistrations();
+    const { user, dialog } = await openDialog({ managers: [fieldOneIdentity] });
+    const identity = dialog.getByRole("combobox", { name: "Identity" });
+    expect(identity).toHaveTextContent("The manager of a new Operator");
+
+    await user.click(identity);
+    await user.click(
+      // Presence: the option's name goes on with the identifier.
+      await screen.findByRole("option", {
+        name: /^The control service of Field cluster one/,
+      }),
+    );
+    await enter(
+      user,
+      dialog.getByRole("textbox", { name: "Identifier" }),
+      "field-one-control",
+    );
+    await user.click(dialog.getByRole("button", { name: "Register" }));
+
+    await vi.waitFor(() =>
+      expect(posted).toEqual([
+        expect.objectContaining({
+          identifier: "field-one-control",
+          manager: fieldOne.grn,
+        }),
+      ]),
+    );
+  });
+
+  it("registers a manager, naming none, unless a control service is chosen", async () => {
+    // The control for the test above: the same dialog, left on its
+    // default, sends no manager.
+    const posted = recordRegistrations();
+    const { user, dialog } = await openDialog({ managers: [fieldOneIdentity] });
+    await enter(
+      user,
+      dialog.getByRole("textbox", { name: "Identifier" }),
+      "field-two",
+    );
+    await user.click(dialog.getByRole("button", { name: "Register" }));
+
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).not.toHaveProperty("manager");
+  });
+
+  it("opens on the manager the address chose", async () => {
+    const { dialog } = await openDialog({
+      managers: [fieldOneIdentity],
+      defaultManager: fieldOne.grn,
+    });
+    expect(
+      dialog.getByRole("combobox", { name: "Identity" }),
+    ).toHaveTextContent("The control service of Field cluster one");
+  });
+
+  it("asks no identity where every manager already has its control service", async () => {
+    const { dialog } = await openDialog();
+    expect(dialog.queryByRole("combobox", { name: "Identity" })).toBeNull();
+    // Control: the dialog is open with its form.
+    expect(dialog.getByRole("textbox", { name: "Identifier" })).toBeVisible();
   });
 });

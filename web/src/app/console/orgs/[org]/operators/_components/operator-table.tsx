@@ -14,14 +14,7 @@ import {
   useOperatorReports,
   type ReportsSource,
 } from "./operator-reports";
-
-/** One operator as the list shows it. */
-export type OperatorRow = {
-  grn: string;
-  identifier: string;
-  name: string;
-  controlEndpoint?: string;
-};
+import type { OperatorIdentity, OperatorRow } from "./operator-pairs";
 
 /** The control service's host, which is what tells two endpoints apart. */
 function host(endpoint: string): string {
@@ -32,10 +25,40 @@ function host(endpoint: string): string {
   }
 }
 
+/** An identity by name, opening its own page, its identifier under it. */
+function IdentityCell({
+  identity,
+  operatorsHref,
+}: {
+  identity: OperatorIdentity;
+  operatorsHref: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col py-1.5">
+      <Link
+        href={`${operatorsHref}/${identity.identifier}`}
+        className="font-medium wrap-anywhere underline-offset-4 hover:underline"
+      >
+        {identity.name}
+      </Link>
+      <span className="font-mono text-xs text-muted-foreground">
+        {identity.identifier}
+      </span>
+      {identity.controlEndpoint && (
+        <span className="font-mono text-xs text-muted-foreground">
+          {host(identity.controlEndpoint)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 /**
- * The organization's operators by name, each opening its own page. A
- * name is what the organization calls an operator and two may share
- * one, so the identifier stands under every name. Where `reports` is
+ * The organization's Operators, one row each: the manager and the
+ * control service that names it (ADR-0124), each by name and opening
+ * its own page. A name is what the organization calls an identity and
+ * two may share one, so the identifier stands under every name, with
+ * the host its control endpoint answers on where it has one. Where `reports` is
  * given, each row also says what images the operator reported and
  * when it last made contact; a page passes null where the server
  * denies the caller that read.
@@ -52,34 +75,39 @@ export function OperatorTable({
   const read = useOperatorReports(reports);
   const columns: ColumnDef<OperatorRow, unknown>[] = [
     {
-      id: "operator",
-      accessorFn: (row) => `${row.name} ${row.identifier}`,
-      header: "Operator",
-      cell: ({ row }) => (
-        <div className="flex min-w-0 flex-col py-1.5">
-          <Link
-            href={`${operatorsHref}/${row.original.identifier}`}
-            className="font-medium wrap-anywhere underline-offset-4 hover:underline"
-          >
-            {row.original.name}
-          </Link>
-          <span className="font-mono text-xs text-muted-foreground">
-            {row.original.identifier}
-          </span>
-        </div>
-      ),
+      id: "manager",
+      accessorFn: (row) => `${row.manager?.name ?? ""} ${row.identifier}`,
+      header: "Manager",
+      cell: ({ row }) =>
+        row.original.manager ? (
+          <IdentityCell
+            identity={row.original.manager}
+            operatorsHref={operatorsHref}
+          />
+        ) : (
+          <div className="flex min-w-0 flex-col py-1.5">
+            <span className="text-muted-foreground">Not registered</span>
+            <span className="font-mono text-xs text-muted-foreground">
+              {row.original.identifier}
+            </span>
+          </div>
+        ),
     },
     {
       id: "control",
-      accessorFn: (row) => row.controlEndpoint ?? "",
+      accessorFn: (row) =>
+        row.controlService
+          ? `${row.controlService.name} ${row.controlService.identifier}`
+          : "",
       header: "Control service",
       cell: ({ row }) =>
-        row.original.controlEndpoint ? (
-          <span className="font-mono text-xs">
-            {host(row.original.controlEndpoint)}
-          </span>
+        row.original.controlService ? (
+          <IdentityCell
+            identity={row.original.controlService}
+            operatorsHref={operatorsHref}
+          />
         ) : (
-          <span className="text-muted-foreground">Not registered</span>
+          <span className="text-muted-foreground">Not connected</span>
         ),
     },
     ...(read === null
@@ -118,7 +146,7 @@ export function OperatorTable({
         label="Operators"
         columns={columns}
         data={operators}
-        getRowId={(row) => row.identifier}
+        getRowId={(row) => row.grn}
         search={{ placeholder: "Search operators" }}
         empty={<EmptyState icon={ServerIcon} title="No operators registered" />}
       />

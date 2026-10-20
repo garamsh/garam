@@ -1030,3 +1030,8 @@ ADRs:
   — the CLI derives a command for every browser API operation from
   `api/openapi.yaml`, with one grammar, output contract and set of exit
   codes, and writes a secret answer to a file at mode 0600 alone
+- [0124](./adr/0124-a-control-service-names-its-manager-on-its-own-record-set-when-it-is-registered.md)
+  — a control service's operator record names its manager by GRN, set
+  when it is registered and by nothing after, at most one per manager
+  and never a chain, and answered by `listOperators`, so the console
+  lists one row per Operator; the delegation stays authority alone

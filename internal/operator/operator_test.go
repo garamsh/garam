@@ -162,3 +162,35 @@ func TestNewDetailsPatch_RefusesInTheOrderAndWordsAnAgentsNameIs(t *testing.T) {
 		assert.Equal(t, want, err.Error(), "%q", in)
 	}
 }
+
+// TestServeManager_NamesAnotherOperatorOfTheOrganization holds what the
+// record can check of a manager without reading the store (ADR-0124):
+// it is a GRN, of an operator, of this organization, and not the
+// record itself. The accepted manager is the control for each refusal.
+func TestServeManager_NamesAnotherOperatorOfTheOrganization(t *testing.T) {
+	tests := []struct {
+		name    string
+		manager string
+	}{
+		{"not a grn", "field-one"},
+		{"another organization's operator", operatorGRN("globex", "field-one").String()},
+		{"not an operator", agentGRN("acme", "field-one").String()},
+		{"the record itself", operatorGRN("acme", "field-one-control").String()},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			o, err := operator.New(acmeGRN(), "field-one-control", aliceGRN(), operator.DetailsPatch{})
+			require.NoError(t, err)
+			err = o.ServeManager(tt.manager)
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+			assert.Nil(t, o.Manager, "a refused manager is not recorded")
+		})
+	}
+
+	o, err := operator.New(acmeGRN(), "field-one-control", aliceGRN(), operator.DetailsPatch{})
+	require.NoError(t, err)
+	require.NoError(t, o.ServeManager("grn:acme:default:operator:field-one"))
+	require.NotNil(t, o.Manager)
+	assert.Equal(t, operatorGRN("acme", "field-one"), *o.Manager)
+}

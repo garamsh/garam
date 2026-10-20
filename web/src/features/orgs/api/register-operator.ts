@@ -25,11 +25,15 @@ const Schema = z.object({
   identifier: z.string(),
   name: z.string(),
   description: z.string(),
+  // The manager's GRN where the identity is its control service
+  // (ADR-0124); empty or absent registers a manager.
+  manager: z.string().optional(),
 });
 
 /**
- * Registers an operator of the organization (ADR-0045) and opens its
- * setup page, where its key is issued: registering issues nothing, and
+ * Registers an operator of the organization (ADR-0045), as the control
+ * service of the manager the form names where it names one (ADR-0124),
+ * and opens its setup page, where its key is issued: registering issues nothing, and
  * an operator enters by a key alone (ADR-0102, ADR-0117).
  */
 export async function registerOperator(
@@ -41,6 +45,7 @@ export async function registerOperator(
     identifier: formData.get("identifier"),
     name: formData.get("name"),
     description: formData.get("description"),
+    manager: formData.get("manager") ?? undefined,
   });
   if (!parsed.success) {
     return { status: "error", message: "The form did not arrive complete." };
@@ -71,6 +76,7 @@ export async function registerOperator(
           identifier: identifier.value,
           name: name?.value,
           description: description.value,
+          manager: parsed.data.manager || undefined,
         } satisfies components["schemas"]["OperatorRegistration"]),
       },
     );

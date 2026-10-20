@@ -1,4 +1,5 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -81,6 +82,98 @@ describe("operators list", () => {
     await renderPage();
 
     expect(screen.getByText("control.example.com")).toBeInTheDocument();
+  });
+
+  // The pair is read from the control service's `manager` (ADR-0124),
+  // never from names: `field-one-control` below is the name a person
+  // would pair by, and only the record joins it (#1636).
+  const control = {
+    ...fieldOne,
+    grn: "grn:acme:default:operator:field-one-control",
+    name: "Field one control",
+    controlEndpoint: "https://control.example.com",
+  };
+
+  function listing(...operators: unknown[]) {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json(operators),
+      ),
+    );
+  }
+
+  it("shows a linked pair as one Operator: its manager and its control service", async () => {
+    listing(fieldOne, { ...control, manager: fieldOne.grn });
+
+    await renderPage();
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: /Operators/ }),
+    ).toHaveTextContent("Operators1");
+    const [, row] = screen.getAllByRole("row");
+    expect(
+      within(row).getByRole("link", { name: "Field cluster one" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/operators/field-one");
+    expect(
+      within(row).getByRole("link", { name: "Field one control" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/operators/field-one-control");
+    expect(within(row).getByText("control.example.com")).toBeInTheDocument();
+    expect(within(row).queryByText("Not connected")).toBeNull();
+  });
+
+  it("says a manager with no control service is not connected, and pairs nothing by name", async () => {
+    // The same two records with no `manager`: two Operators, neither
+    // connected, though one is named like the other's control service.
+    listing(fieldOne, control);
+
+    await renderPage();
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: /Operators/ }),
+    ).toHaveTextContent("Operators2");
+    expect(screen.getAllByText("Not connected")).toHaveLength(2);
+  });
+
+  it("shows a lone control service under the manager it names, which garam no longer holds", async () => {
+    listing({ ...control, manager: fieldOne.grn });
+
+    await renderPage();
+
+    const [, row] = screen.getAllByRole("row");
+    expect(within(row).getByText("Not registered")).toBeInTheDocument();
+    expect(within(row).getByText("field-one")).toBeInTheDocument();
+    expect(
+      within(row).getByRole("link", { name: "Field one control" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Field cluster one" }),
+    ).toBeNull();
+  });
+
+  it("offers only managers without a control service to connect one to, choosing the one the address names", async () => {
+    const fieldTwo = {
+      ...fieldOne,
+      grn: "grn:acme:default:operator:field-two",
+      name: "Field cluster two",
+    };
+    listing(fieldOne, { ...control, manager: fieldOne.grn }, fieldTwo);
+    const user = userEvent.setup();
+
+    await renderPage("acme", "field-two");
+
+    const identity = screen.getByRole("combobox", { name: "Identity" });
+    expect(identity).toHaveTextContent(
+      "The control service of Field cluster two",
+    );
+    await user.click(identity);
+    expect(
+      (await screen.findAllByRole("option")).map(
+        (option) => option.textContent,
+      ),
+    ).toEqual([
+      "The manager of a new Operator",
+      "The control service of Field cluster two field-two",
+    ]);
   });
 
   it("offers connecting an operator to a caller the server allows", async () => {

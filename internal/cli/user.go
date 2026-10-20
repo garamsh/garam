@@ -43,8 +43,10 @@ type userFlags struct {
 	output   string
 }
 
-// bind adds the flags to cmd and every command under it.
+// bind adds the flags to cmd and every command under it, and records
+// them as cmd's, so a derived command placed under it reads them.
 func (f *userFlags) bind(cmd *cobra.Command) {
+	userFlagsOf[cmd] = f
 	cmd.PersistentFlags().StringVar(&f.endpoint, "endpoint", "",
 		"the garam to talk to (default $"+string(envEndpoint)+", or "+defaultEndpoint+")")
 	cmd.PersistentFlags().StringVar(&f.org, "org", "",

@@ -18,6 +18,255 @@ var _ = uuid.Parse
 // command for (ADR-0122).
 var apiOperations = []apiOperation{
 	{
+		ID: "listOrgs", Method: "GET", Path: "/orgs",
+		Words: []string{"orgs"}, Verb: "list", Short: "List organizations the caller belongs to.",
+		Args: []string(nil), FromOrg: false,
+		Fields: []apiField{
+			{Name: "limit", In: "query", Kind: "integer", Required: false, Help: "Maximum entries to return; 0 means no limit."},
+			{Name: "offset", In: "query", Kind: "integer", Required: false, Help: ""},
+		},
+		Columns: []string{"grn", "name", "createdAt"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.ListOrgs(ctx, nil, edit)
+		},
+	},
+	{
+		ID: "createOrg", Method: "POST", Path: "/orgs",
+		Words: []string{"orgs"}, Verb: "create", Short: "Create an organization.",
+		Args: []string(nil), FromOrg: false,
+		Fields: []apiField{
+			{Name: "name", In: "body", Kind: "string", Required: true, Help: ""},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"grn", "name", "createdAt"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.CreateOrgWithBody(ctx, contentType, body, edit)
+		},
+	},
+	{
+		ID: "getOrg", Method: "GET", Path: "/orgs/{org}",
+		Words: []string{"orgs"}, Verb: "get", Short: "Get an organization. Requires the `member` role.",
+		Args: []string{"org"}, FromOrg: false,
+		Columns: []string{"grn", "name", "createdAt"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.GetOrg(ctx, path[0], edit)
+		},
+	},
+	{
+		ID: "updateOrg", Method: "PATCH", Path: "/orgs/{org}",
+		Words: []string{"orgs"}, Verb: "update", Short: "Update an organization. Requires the `admin` role.",
+		Args: []string{"org"}, FromOrg: false,
+		Fields: []apiField{
+			{Name: "name", In: "body", Kind: "string", Required: false, Help: ""},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"grn", "name", "createdAt"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.UpdateOrgWithBody(ctx, path[0], contentType, body, edit)
+		},
+	},
+	{
+		ID: "deleteOrg", Method: "DELETE", Path: "/orgs/{org}",
+		Words: []string{"orgs"}, Verb: "delete", Short: "Delete an organization. Requires the `owner` role.",
+		Args: []string{"org"}, FromOrg: false,
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.DeleteOrg(ctx, path[0], edit)
+		},
+	},
+	{
+		ID: "getOrgDeletionPreview", Method: "GET", Path: "/orgs/{org}/deletion-preview",
+		Words: []string{"orgs"}, Verb: "deletion-preview", Short: "What deleting the organization would destroy. Requires the `owner` role.",
+		Args: []string(nil), FromOrg: true,
+		Columns: []string{"certificateAuthority", "counts.groups", "counts.projects", "counts.members", "counts.invitations", "counts.policies", "counts.agents", "counts.operators", "counts.consents"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.GetOrgDeletionPreview(ctx, path[0], edit)
+		},
+	},
+	{
+		ID: "listOrgMembers", Method: "GET", Path: "/orgs/{org}/members",
+		Words: []string{"members"}, Verb: "list", Short: "List members of an organization. Requires the `member` role.",
+		Args: []string(nil), FromOrg: true,
+		Columns: []string{"userGrn", "nickname", "role", "since"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.ListOrgMembers(ctx, path[0], edit)
+		},
+	},
+	{
+		ID: "listGroups", Method: "GET", Path: "/orgs/{org}/groups",
+		Words: []string{"groups"}, Verb: "list", Short: "List an organization's groups. Requires the `member` role.",
+		Args: []string(nil), FromOrg: true,
+		Fields: []apiField{
+			{Name: "limit", In: "query", Kind: "integer", Required: false, Help: "Maximum entries to return; 0 means no limit."},
+			{Name: "offset", In: "query", Kind: "integer", Required: false, Help: ""},
+			{Name: "member", In: "query", Kind: "string", Required: false, Help: "`me` keeps only the groups the signed-in caller belongs to."},
+		},
+		Columns: []string{"grn", "name", "orgGrn"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.ListGroups(ctx, path[0], nil, edit)
+		},
+	},
+	{
+		ID: "createGroup", Method: "POST", Path: "/orgs/{org}/groups",
+		Words: []string{"groups"}, Verb: "create", Short: "Create a group in an organization. Requires the `admin` role.",
+		Args: []string(nil), FromOrg: true,
+		Fields: []apiField{
+			{Name: "name", In: "body", Kind: "string", Required: true, Help: ""},
+			{Name: "roles", In: "body", Kind: "strings", Required: false, Help: "Roles a group or project grants its own members, scoped to that group or project alone."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"grn", "name", "orgGrn"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.CreateGroupWithBody(ctx, path[0], contentType, body, edit)
+		},
+	},
+	{
+		ID: "getGroup", Method: "GET", Path: "/orgs/{org}/groups/{group}",
+		Words: []string{"groups"}, Verb: "get", Short: "Get a group. Requires the `member` role.",
+		Args: []string{"group"}, FromOrg: true,
+		Columns: []string{"grn", "name", "orgGrn"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.GetGroup(ctx, path[0], path[1], edit)
+		},
+	},
+	{
+		ID: "updateGroup", Method: "PATCH", Path: "/orgs/{org}/groups/{group}",
+		Words: []string{"groups"}, Verb: "update", Short: "Rename a group. Requires the `admin` role.",
+		Args: []string{"group"}, FromOrg: true,
+		Fields: []apiField{
+			{Name: "name", In: "body", Kind: "string", Required: false, Help: ""},
+			{Name: "roles", In: "body", Kind: "strings", Required: false, Help: "Roles a group or project grants its own members, scoped to that group or project alone."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"grn", "name", "orgGrn"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.UpdateGroupWithBody(ctx, path[0], path[1], contentType, body, edit)
+		},
+	},
+	{
+		ID: "deleteGroup", Method: "DELETE", Path: "/orgs/{org}/groups/{group}",
+		Words: []string{"groups"}, Verb: "delete", Short: "Delete a group. Requires the `admin` role.",
+		Args: []string{"group"}, FromOrg: true,
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.DeleteGroup(ctx, path[0], path[1], edit)
+		},
+	},
+	{
+		ID: "listGroupMembers", Method: "GET", Path: "/orgs/{org}/groups/{group}/members",
+		Words: []string{"groups", "members"}, Verb: "list", Short: "List a group's members. Requires the `member` role.",
+		Args: []string{"group"}, FromOrg: true,
+		Columns: []string{"memberGrn"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.ListGroupMembers(ctx, path[0], path[1], edit)
+		},
+	},
+	{
+		ID: "addGroupMember", Method: "POST", Path: "/orgs/{org}/groups/{group}/members",
+		Words: []string{"groups", "members"}, Verb: "add", Short: "Add a member to a group. Requires the `admin` role.",
+		Args: []string{"group"}, FromOrg: true,
+		Fields: []apiField{
+			{Name: "memberGrn", In: "body", Kind: "string", Required: true, Help: ""},
+		},
+		BodyType: "application/json",
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.AddGroupMemberWithBody(ctx, path[0], path[1], contentType, body, edit)
+		},
+	},
+	{
+		ID: "removeGroupMember", Method: "DELETE", Path: "/orgs/{org}/groups/{group}/members/{member}",
+		Words: []string{"groups", "members"}, Verb: "remove", Short: "Remove a member from a group. Requires the `admin` role.",
+		Args: []string{"group", "member"}, FromOrg: true,
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.RemoveGroupMember(ctx, path[0], path[1], path[2], edit)
+		},
+	},
+	{
+		ID: "listProjects", Method: "GET", Path: "/orgs/{org}/projects",
+		Words: []string{"projects"}, Verb: "list", Short: "List an organization's projects. Requires the `member` role.",
+		Args: []string(nil), FromOrg: true,
+		Fields: []apiField{
+			{Name: "limit", In: "query", Kind: "integer", Required: false, Help: "Maximum entries to return; 0 means no limit."},
+			{Name: "offset", In: "query", Kind: "integer", Required: false, Help: ""},
+		},
+		Columns: []string{"grn", "name", "orgGrn"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.ListProjects(ctx, path[0], nil, edit)
+		},
+	},
+	{
+		ID: "createProject", Method: "POST", Path: "/orgs/{org}/projects",
+		Words: []string{"projects"}, Verb: "create", Short: "Create a project in an organization. Requires the `admin` role.",
+		Args: []string(nil), FromOrg: true,
+		Fields: []apiField{
+			{Name: "name", In: "body", Kind: "string", Required: true, Help: ""},
+			{Name: "roles", In: "body", Kind: "strings", Required: false, Help: "Roles a group or project grants its own members, scoped to that group or project alone."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"grn", "name", "orgGrn"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.CreateProjectWithBody(ctx, path[0], contentType, body, edit)
+		},
+	},
+	{
+		ID: "getProject", Method: "GET", Path: "/orgs/{org}/projects/{project}",
+		Words: []string{"projects"}, Verb: "get", Short: "Get a project. Requires the `member` role.",
+		Args: []string{"project"}, FromOrg: true,
+		Columns: []string{"grn", "name", "orgGrn"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.GetProject(ctx, path[0], path[1], edit)
+		},
+	},
+	{
+		ID: "updateProject", Method: "PATCH", Path: "/orgs/{org}/projects/{project}",
+		Words: []string{"projects"}, Verb: "update", Short: "Rename a project. Requires the `admin` role.",
+		Args: []string{"project"}, FromOrg: true,
+		Fields: []apiField{
+			{Name: "name", In: "body", Kind: "string", Required: false, Help: ""},
+			{Name: "roles", In: "body", Kind: "strings", Required: false, Help: "Roles a group or project grants its own members, scoped to that group or project alone."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"grn", "name", "orgGrn"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.UpdateProjectWithBody(ctx, path[0], path[1], contentType, body, edit)
+		},
+	},
+	{
+		ID: "deleteProject", Method: "DELETE", Path: "/orgs/{org}/projects/{project}",
+		Words: []string{"projects"}, Verb: "delete", Short: "Delete a project. Requires the `admin` role.",
+		Args: []string{"project"}, FromOrg: true,
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.DeleteProject(ctx, path[0], path[1], edit)
+		},
+	},
+	{
+		ID: "listProjectMembers", Method: "GET", Path: "/orgs/{org}/projects/{project}/members",
+		Words: []string{"projects", "members"}, Verb: "list", Short: "List a project's members. Requires the `member` role.",
+		Args: []string{"project"}, FromOrg: true,
+		Columns: []string{"memberGrn"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.ListProjectMembers(ctx, path[0], path[1], edit)
+		},
+	},
+	{
+		ID: "addProjectMember", Method: "POST", Path: "/orgs/{org}/projects/{project}/members",
+		Words: []string{"projects", "members"}, Verb: "add", Short: "Add a member to a project. Requires the `admin` role.",
+		Args: []string{"project"}, FromOrg: true,
+		Fields: []apiField{
+			{Name: "memberGrn", In: "body", Kind: "string", Required: true, Help: ""},
+		},
+		BodyType: "application/json",
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.AddProjectMemberWithBody(ctx, path[0], path[1], contentType, body, edit)
+		},
+	},
+	{
+		ID: "removeProjectMember", Method: "DELETE", Path: "/orgs/{org}/projects/{project}/members/{member}",
+		Words: []string{"projects", "members"}, Verb: "remove", Short: "Remove a member from a project. Requires the `admin` role.",
+		Args: []string{"project", "member"}, FromOrg: true,
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.RemoveProjectMember(ctx, path[0], path[1], path[2], edit)
+		},
+	},
+	{
 		ID: "listOperators", Method: "GET", Path: "/orgs/{org}/operators",
 		Words: []string{"operators"}, Verb: "list", Short: "List an organization's operators. Requires the `member` role.",
 		Args: []string(nil), FromOrg: true,
@@ -167,6 +416,40 @@ var apiOperations = []apiOperation{
 		Columns: []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint"},
 		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
 			return c.ClearOperatorControlEndpoint(ctx, path[0], path[1], nil, edit)
+		},
+	},
+	{
+		ID: "createInvitation", Method: "POST", Path: "/orgs/{org}/invitations",
+		Words: []string{"invitations"}, Verb: "create", Short: "Create an invitation. Requires the `admin` role.",
+		Args: []string(nil), FromOrg: true,
+		Fields: []apiField{
+			{Name: "role", In: "body", Kind: "string", Required: true, Help: "Owners are not transferable by invitation."},
+			{Name: "expiresInHours", In: "body", Kind: "integer", Required: false, Help: "Token lifetime in hours."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"orgGrn", "role", "expiresAt"},
+		Secrets:  []string{"token"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.CreateInvitationWithBody(ctx, path[0], contentType, body, edit)
+		},
+	},
+	{
+		ID: "getInvitation", Method: "GET", Path: "/invitations/{token}",
+		Words: []string{"invitations"}, Verb: "get", Short: "Read what an invitation would admit its holder to.",
+		Args: []string{"token"}, FromOrg: false,
+		Columns: []string{"org", "orgName", "role", "state", "expiresAt"},
+		Public:  true,
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.GetInvitation(ctx, path[0], edit)
+		},
+	},
+	{
+		ID: "acceptInvitation", Method: "POST", Path: "/invitations/{token}/accept",
+		Words: []string{"invitations"}, Verb: "accept", Short: "Accept an invitation.",
+		Args: []string{"token"}, FromOrg: false,
+		Columns: []string{"userGrn", "nickname", "role", "since"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.AcceptInvitation(ctx, path[0], edit)
 		},
 	},
 }

@@ -41,7 +41,7 @@ func signedInCLI(t *testing.T) string {
 	ctx := context.Background()
 	p := pool(t)
 	truncate(t, p)
-	_, engine := policyEngine(t, p)
+	policies, engine := policyEngine(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
@@ -56,7 +56,8 @@ func signedInCLI(t *testing.T) string {
 
 	srv := api.NewServer(users, orgs, agentpg.New(p), operatorpg.New(p), messagepg.New(p), nil,
 		sessions, nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil,
+		api.NewGRPCEvaluator(engine), api.NewGRPCPolicyManager(policyService(t, policies)), heldAuthorities{orgs},
+		cli.NewAuthorityService(p, engine), nil,
 		api.Config{SessionTTL: time.Hour, TokenURL: "https://machine.garam.test/oauth/token"})
 	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError})
 	browser := httptest.NewServer(http.StripPrefix("/api", handler))
@@ -129,4 +130,13 @@ func TestCLIOperators_RegisterIssueAKeyListRevokeAndDelete(t *testing.T) {
 	require.NoError(t, err)
 	_, err = runCLI(t, io.Discard, "operators", "get", "hosted")
 	require.Error(t, err, "a deleted operator is not found")
+}
+
+// heldAuthorities answers whether an organization holds a retired
+// certificate authority, as serve api's own adapter does, for the
+// deletion preview.
+type heldAuthorities struct{ orgs *orgpg.Store }
+
+func (h heldAuthorities) HasAuthority(ctx context.Context, g grn.GRN) (bool, error) {
+	return h.orgs.HoldsCertificateAuthority(ctx, g)
 }

@@ -165,7 +165,7 @@ func (s *fakeSessionStore) List(_ context.Context, user grn.GRN) ([]*authn.Sessi
 	defer s.mu.Unlock()
 	var out []*authn.Session
 	for _, sess := range s.byID {
-		if sess.User() == user {
+		if sess.User == user {
 			out = append(out, sess)
 		}
 	}
@@ -176,7 +176,7 @@ func (s *fakeSessionStore) Revoke(_ context.Context, user grn.GRN, id string) er
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for token, sess := range s.byID {
-		if sess.User() == user && sess.ID() == id {
+		if sess.User == user && sess.ID == id {
 			delete(s.byID, token)
 			return nil
 		}

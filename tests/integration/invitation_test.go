@@ -18,6 +18,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -52,9 +53,9 @@ func TestGetInvitation_ReadsEachStateFromPostgres(t *testing.T) {
 		org.NewInvitation(stale, acme, org.RoleAdmin, owner, time.Now().UTC().Add(-time.Minute))))
 
 	srv := api.NewServer(users, orgs, nil, nil, nil, nil,
-		authn.NewPostgresSessionStore(p), nil,
-		authn.NewPostgresPasswordCredentialStore(p),
-		authn.NewPostgresPasswordAttemptStore(p),
+		authnpg.NewSessionStore(p), nil,
+		authnpg.NewPasswordCredentialStore(p),
+		authnpg.NewPasswordAttemptStore(p),
 		nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	handler := apigen.Handler(srv)
 	read := func(token string) (int, apigen.InvitationPreview) {
@@ -137,9 +138,9 @@ func newInvitationStack(t *testing.T) *invitationStack {
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
 	require.NoError(t, users.Create(context.Background(), user.New(owner, "Owner")))
 	srv := api.NewServer(users, orgs, nil, nil, nil, nil,
-		authn.NewPostgresSessionStore(p), nil,
-		authn.NewPostgresPasswordCredentialStore(p),
-		authn.NewPostgresPasswordAttemptStore(p),
+		authnpg.NewSessionStore(p), nil,
+		authnpg.NewPasswordCredentialStore(p),
+		authnpg.NewPasswordAttemptStore(p),
 		nil, nil, nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	return &invitationStack{pool: p, handler: apigen.Handler(srv), users: users, orgs: orgs, owner: owner}
 }
@@ -179,7 +180,7 @@ func TestAcceptInvitation_TwoRacingAcceptsJoinOne(t *testing.T) {
 	st := newInvitationStack(t)
 	p := st.pool
 	ctx := context.Background()
-	sessions := authn.NewPostgresSessionStore(p)
+	sessions := authnpg.NewSessionStore(p)
 	var people []grn.GRN
 	var cookies []*http.Cookie
 	for _, id := range []string{"bob", "carol"} {
@@ -268,7 +269,7 @@ func TestInvitation_AnAcceptRacingARegistrationAdmitsOne(t *testing.T) {
 	require.NoError(t, st.users.Create(ctx, user.New(bob, "bob")))
 	session, err := authn.NewToken()
 	require.NoError(t, err)
-	require.NoError(t, authn.NewPostgresSessionStore(p).Create(ctx, session, authn.NewSession(bob, time.Hour)))
+	require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, session, authn.NewSession(bob, time.Hour)))
 
 	for round := range raceRounds {
 		orgGRN, token := st.invite(t, fmt.Sprintf("acme-%d", round))

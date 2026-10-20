@@ -13,6 +13,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 )
 
 // stubProvider drives /auth/login/{provider} without an issuer. The
@@ -48,7 +49,7 @@ func TestLogin_EndpointShedsPastTheLiveStateBound(t *testing.T) {
 	// dependencies its sibling handlers use stay nil rather than
 	// doubled.
 	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil,
-		authn.NewPostgresOAuthStateStore(p), nil, nil, []authn.Provider{stubProvider{}}, nil, nil, nil,
+		authnpg.NewOAuthStateStore(p), nil, nil, []authn.Provider{stubProvider{}}, nil, nil, nil,
 		nil, nil, api.Config{SessionTTL: time.Hour})
 	handler := apigen.Handler(srv)
 

@@ -192,22 +192,22 @@ func (s *Server) ListMySessions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	sessions, err := s.sessions.List(r.Context(), current.session.User())
+	sessions, err := s.sessions.List(r.Context(), current.session.User)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	out := make([]apigen.Session, 0, len(sessions))
 	for _, sess := range sessions {
-		expires := sess.ExpiresAt()
-		if sess.Kind() == authn.SessionCLI {
-			expires = sess.RefreshExpiresAt()
+		expires := sess.ExpiresAt
+		if sess.Kind == authn.SessionCLI {
+			expires = sess.RefreshExpiresAt
 		}
 		item := apigen.Session{
-			Id: sess.ID(), Kind: apigen.SessionKind(sess.Kind()), CreatedAt: sess.CreatedAt(),
-			ExpiresAt: expires, Current: sess.ID() == current.session.ID(),
+			Id: sess.ID, Kind: apigen.SessionKind(sess.Kind), CreatedAt: sess.CreatedAt,
+			ExpiresAt: expires, Current: sess.ID == current.session.ID,
 		}
-		if name := sess.Name(); name != "" {
+		if name := sess.Name; name != "" {
 			item.Name = &name
 		}
 		out = append(out, item)

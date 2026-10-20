@@ -18,6 +18,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
@@ -198,7 +199,7 @@ func TestAgentName_AMemberRenamesAnAgent(t *testing.T) {
 	require.NoError(t, s.orgs.AddMember(ctx, org.NewMembership(s.acme, g, org.RoleMember)))
 	token, err := authn.NewToken()
 	require.NoError(t, err)
-	require.NoError(t, authn.NewPostgresSessionStore(s.pool).Create(ctx, token, authn.NewSession(g, time.Hour)))
+	require.NoError(t, authnpg.NewSessionStore(s.pool).Create(ctx, token, authn.NewSession(g, time.Hour)))
 	member := &http.Cookie{Name: "garam_session", Value: token}
 
 	a := seedAgent(t, s.agents, s.acme)

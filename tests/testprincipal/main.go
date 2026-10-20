@@ -20,6 +20,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/user"
@@ -218,14 +219,14 @@ func seed(ctx context.Context, target *pgxpool.Config, dir string, ttl time.Dura
 		return nil, err
 	}
 	session := authn.NewSession(g, ttl)
-	if err := authn.NewPostgresSessionStore(pool).Create(ctx, token, session); err != nil {
+	if err := authnpg.NewSessionStore(pool).Create(ctx, token, session); err != nil {
 		return nil, errorx.Wrap(err, "sign the principal in")
 	}
 	return &Prepared{
 		Contract:  contractVersion,
 		UserGRN:   g.String(),
 		Session:   Session{Cookie: sessionCookie, Token: token},
-		ExpiresAt: session.ExpiresAt(),
+		ExpiresAt: session.ExpiresAt,
 	}, nil
 }
 

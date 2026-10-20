@@ -20,6 +20,7 @@ import (
 	"github.com/garamsh/garam/internal/api"
 	auditpg "github.com/garamsh/garam/internal/audit/postgres"
 	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	"github.com/garamsh/garam/internal/authz"
 	authzpg "github.com/garamsh/garam/internal/authz/postgres"
 	"github.com/garamsh/garam/internal/errorx"
@@ -119,10 +120,10 @@ func serveAPI(cmd *cobra.Command) error {
 		operatorpg.New(pool),
 		messagepg.New(pool),
 		watches,
-		authn.NewPostgresSessionStore(pool),
-		authn.NewPostgresOAuthStateStore(pool),
-		authn.NewPostgresPasswordCredentialStore(pool),
-		authn.NewPostgresPasswordAttemptStore(pool),
+		authnpg.NewSessionStore(pool),
+		authnpg.NewOAuthStateStore(pool),
+		authnpg.NewPasswordCredentialStore(pool),
+		authnpg.NewPasswordAttemptStore(pool),
 		providers,
 		api.NewGRPCEvaluator(conn),
 		api.NewGRPCPolicyManager(conn),
@@ -135,7 +136,7 @@ func serveAPI(cmd *cobra.Command) error {
 			TokenURL:     tokenURL,
 		},
 	).WithCredentialAudit(auditpg.NewCredentialStore(pool)).
-		WithDeviceGrant(authn.NewPostgresDeviceStore(pool))
+		WithDeviceGrant(authnpg.NewDeviceStore(pool))
 
 	addr := envOr(envHTTPAddr, ":8080")
 	// A request needs both to be served: rows out of the database, and

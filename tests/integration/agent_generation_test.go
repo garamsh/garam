@@ -15,7 +15,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/authn"
+	authnpg "github.com/garamsh/garam/internal/authn/postgres"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
 )
@@ -27,7 +27,7 @@ import (
 func agentReader(t *testing.T, s *executionStack, engine grpc.ClientConnInterface) string {
 	t.Helper()
 	srv := api.NewServer(userpg.New(s.pool), orgpg.New(s.pool), agentpg.New(s.pool), nil, nil, nil,
-		authn.NewPostgresSessionStore(s.pool), nil, nil, nil, nil,
+		authnpg.NewSessionStore(s.pool), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)

@@ -78,24 +78,24 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**Seven of the nine have this shape today: `internal/user`,
-`internal/watch`, `internal/org`, `internal/operator`, `internal/agent`,
-`internal/message` and `internal/authz`.** `internal/machine` persists
-through `internal/machine/postgres` and had no driver import to move.
-The other one, `authn`, keeps a store that imports `jackc/pgx` inside
-the domain package, and moves in its own pull request following #1083.
-Until then `go list -deps` on a domain package names `jackc/pgx` for
-`authn` alone, and the shape above describes seven of nine.
+**All nine have this shape today.** `internal/user`, `internal/watch`,
+`internal/org`, `internal/operator`, `internal/agent`,
+`internal/message`, `internal/authz` and `internal/authn` each keep
+their store in `internal/<domain>/postgres/` (#1083), and
+`internal/machine` persists through `internal/machine/postgres` and had
+no driver import to move. `go list -deps` on a domain package names no
+`jackc/pgx`.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,
 inside the same package, when one Postgres type carries the methods of
 more than one aggregate (`org`, `agent`, `authz`) or of more than one
 `Store` interface (`operator`, `message`). What splits is a receiver's
-methods and not a package's stores: `internal/authn` implements four
-`Store` interfaces on four Postgres types and keeps them in one
-`postgres.go`. `ls internal/*/postgres_*.go` names no package now:
-`org`'s, `operator`'s, `agent`'s, `message`'s and `authz`'s splits
-moved with their stores into `internal/<domain>/postgres/`. A split
+methods and not a package's stores: `internal/authn/postgres`
+implements five `Store` interfaces on five types, each named for what
+it stores (ADR-0069), and keeps them in one `postgres.go`.
+`ls internal/*/postgres_*.go` names no package now: `org`'s,
+`operator`'s, `agent`'s, `message`'s and `authz`'s splits moved with
+their stores into `internal/<domain>/postgres/`. A split
 stayed under the domain while its aggregates' fields were unexported,
 so whatever rehydrated one shared its package — a state the nine have
 been passing through rather than a position the project holds.
@@ -468,10 +468,11 @@ composition root does.
 |--------|-----------|----------|--------|-------|
 | org | yes (`store.go`) | yes (`postgres/postgres.go` + `postgres/postgres_<concept>.go`) | not planned | — |
 | user | yes (`store.go`) | yes (`postgres/postgres.go`) | not planned | — |
-| authn.SessionStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
-| authn.OAuthStateStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
-| authn.PasswordCredentialStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
-| authn.PasswordAttemptStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| authn.SessionStore | yes (`session_store.go`) | yes (`postgres/postgres.go`) | not planned | — |
+| authn.OAuthStateStore | yes (`oauth_state_store.go`) | yes (`postgres/postgres.go`) | not planned | — |
+| authn.PasswordCredentialStore | yes (`password_credential_store.go`) | yes (`postgres/postgres.go`) | not planned | — |
+| authn.PasswordAttemptStore | yes (`password_attempt_store.go`) | yes (`postgres/postgres.go`) | not planned | — |
+| authn.DeviceStore | yes (`device.go`) | yes (`postgres/postgres.go`) | not planned | — |
 | authz (policies) | yes (`store.go`) | yes (`postgres/postgres.go` + `postgres/postgres_<concept>.go`) | not planned | — |
 | operator | yes (`store.go`, `token_store.go`, `grant_store.go`, `authority_store.go`) | yes (`postgres/postgres.go` + `postgres/postgres_<concept>.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres/postgres.go` + `postgres/postgres_<concept>.go`) | not planned | — |

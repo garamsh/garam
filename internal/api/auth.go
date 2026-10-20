@@ -229,7 +229,7 @@ func (s *Server) currentSession(r *http.Request) (signedIn, error) {
 	if err != nil {
 		return signedIn{}, errorx.Wrap(err, "session", errorx.KindUnauthenticated)
 	}
-	u, err := s.users.Get(r.Context(), sess.User())
+	u, err := s.users.Get(r.Context(), sess.User)
 	if err != nil {
 		return signedIn{}, err
 	}

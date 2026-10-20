@@ -31,5 +31,5 @@ func TestSession_Expired(t *testing.T) {
 	s := authn.NewSession(g, time.Hour)
 	assert.False(t, s.Expired(time.Now()))
 	assert.True(t, s.Expired(time.Now().Add(2*time.Hour)))
-	assert.Equal(t, g, s.User())
+	assert.Equal(t, g, s.User)
 }

@@ -33,7 +33,7 @@ async function confirm() {
 }
 
 describe("action dialog", () => {
-  it("stays open and says nothing was saved when the request never reaches garam (#1631)", async () => {
+  it("stays open and says garam's answer did not arrive, claiming nothing either way (#1631)", async () => {
     renderDialog(() =>
       Promise.reject(
         new Error("An unexpected response was received from the server."),

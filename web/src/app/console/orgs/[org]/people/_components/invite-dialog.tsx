@@ -31,7 +31,8 @@ import { ROLE_LABEL } from "../../../../_components/org-role";
 
 const initialState: CreateInvitationState = { status: "idle" };
 
-// A request that never reached garam stays in the dialog (#1631).
+// A call garam's answer never came back from stays in the dialog
+// (#1631).
 const invite = refuseUnsent(createInvitation);
 
 /** The roles an invitation can carry; owners are not invited. */

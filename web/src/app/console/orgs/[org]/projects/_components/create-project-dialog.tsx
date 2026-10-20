@@ -24,7 +24,8 @@ import { refuseUnsent } from "@/lib/unsent-action";
 
 const initialState: CreateProjectState = { status: "idle" };
 
-// A request that never reached garam stays in the dialog (#1631).
+// A call garam's answer never came back from stays in the dialog
+// (#1631).
 const createProjectUnsent = refuseUnsent(createProject);
 
 /**

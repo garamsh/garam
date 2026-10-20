@@ -119,7 +119,7 @@ test.describe("operators", () => {
     await register.click();
 
     await expect(dialog.getByRole("alert")).toHaveText(
-      "Nothing was registered: the request didn't go through. Try again.",
+      "garam didn't answer, so the operator may or may not have been registered. Check the operator list before trying again.",
     );
     await expect(dialog).toBeVisible();
     expect(refused).toBe(1);

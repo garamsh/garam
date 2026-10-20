@@ -32,11 +32,11 @@ import { refuseUnsent } from "@/lib/unsent-action";
 
 const initialState: RegisterOperatorState = { status: "idle" };
 
-// A request that never reached garam stays in the dialog as a refusal
-// rather than closing it as if cancelled (#1631).
+// A call garam's answer never came back from stays in the dialog as a
+// refusal rather than closing it as if cancelled (#1631).
 const register = refuseUnsent(
   registerOperator,
-  "Nothing was registered: the request didn't go through. Try again.",
+  "garam didn't answer, so the operator may or may not have been registered. Check the operator list before trying again.",
 );
 
 function errorOf(parsed: Parsed<string>): string | undefined {

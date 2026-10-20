@@ -161,8 +161,9 @@ function ConfirmForm<S extends ActionState>({
   const [state, setState] = useState<S>(initialState);
   const [matched, setMatched] = useState(typed === undefined);
   const [pending, startTransition] = useTransition();
-  // A request that never reached garam: said here rather than thrown to
-  // a boundary, which would close the dialog as if cancelled (#1631).
+  // A call garam's answer never came back from: said here rather than
+  // thrown to a boundary, which would close the dialog as if cancelled
+  // (#1631).
   const [unsent, setUnsent] = useState(false);
   const formAction = (formData: FormData) =>
     startTransition(async () => {

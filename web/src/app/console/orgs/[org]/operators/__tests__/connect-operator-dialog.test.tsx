@@ -65,7 +65,7 @@ async function openDialog() {
 }
 
 describe("connect operator dialog", () => {
-  it("stays open and says nothing was registered when the request never reaches garam", async () => {
+  it("stays open and says the operator may or may not be registered when garam's answer does not arrive", async () => {
     const posted = recordRegistrations();
     transport.fails = true;
     try {
@@ -79,7 +79,7 @@ describe("connect operator dialog", () => {
       await user.click(dialog.getByRole("button", { name: "Register" }));
 
       expect(await dialog.findByRole("alert")).toHaveTextContent(
-        "Nothing was registered: the request didn't go through. Try again.",
+        "garam didn't answer, so the operator may or may not have been registered. Check the operator list before trying again.",
       );
       expect(
         screen.getByRole("dialog", { name: "Connect an operator" }),

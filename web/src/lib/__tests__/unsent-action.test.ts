@@ -7,14 +7,14 @@ const transportFailure = () =>
   new Error("An unexpected response was received from the server.");
 
 describe("refuseUnsent", () => {
-  it("answers a request that never reached garam as a refusal", async () => {
+  it("answers a call garam's answer never came back from as a refusal", async () => {
     const action = refuseUnsent(async (): Promise<{ status: "idle" }> => {
       throw transportFailure();
-    }, "Nothing was registered.");
+    }, "garam didn't answer.");
 
     await expect(action({ status: "idle" }, undefined)).resolves.toEqual({
       status: "error",
-      message: "Nothing was registered.",
+      message: "garam didn't answer.",
     });
   });
 

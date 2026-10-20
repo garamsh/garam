@@ -25,6 +25,7 @@ import (
 
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/authz"
+	authzpg "github.com/garamsh/garam/internal/authz/postgres"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -431,7 +432,7 @@ func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, cached.GetAllowed())
 	// Another process's write: it drops its own cache, not the engine's.
-	store := authz.NewPostgresStore(p)
+	store := authzpg.New(p)
 	elsewhere := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
 	attachPolicy(t, elsewhere, activePolicy(t, elsewhere, s.acme, "deny-agent",
 		statementDoc("deny-agent", wire.EffectDeny, "agent:activate", placed)), s.hosted)
@@ -456,7 +457,7 @@ func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
 func TestControllerProof_UnknownFreshnessRefusesAsUnavailable(t *testing.T) {
 	p := pool(t)
 	srv := grpc.NewServer()
-	current := authz.NewGRPCServer(authz.NewPolicyCache(authz.NewPostgresStore(p)))
+	current := authz.NewGRPCServer(authz.NewPolicyCache(authzpg.New(p)))
 	gate := &engineGate{current: current}
 	authzv1.RegisterAuthzServiceServer(srv, gate)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")

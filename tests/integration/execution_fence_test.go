@@ -32,6 +32,7 @@ import (
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
+	authzpg "github.com/garamsh/garam/internal/authz/postgres"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -800,7 +801,7 @@ func TestExecutionFence_EachContractFamilyAnswersItsOwnVersion(t *testing.T) {
 func TestExecutionFence_UnknownFreshnessRefusesAsUnavailable(t *testing.T) {
 	p := pool(t)
 	srv := grpc.NewServer()
-	gate := &engineGate{current: authz.NewGRPCServer(authz.NewPolicyCache(authz.NewPostgresStore(p)))}
+	gate := &engineGate{current: authz.NewGRPCServer(authz.NewPolicyCache(authzpg.New(p)))}
 	authzv1.RegisterAuthzServiceServer(srv, gate)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -902,7 +903,7 @@ func TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline(t *testing.
 func TestExecutionFence_AnAuthorityThatDoesNotAnswerIsBoundedByTheServersDeadline(t *testing.T) {
 	p := pool(t)
 	srv := grpc.NewServer()
-	engineSrv := &stalledEngine{current: authz.NewGRPCServer(authz.NewPolicyCache(authz.NewPostgresStore(p)))}
+	engineSrv := &stalledEngine{current: authz.NewGRPCServer(authz.NewPolicyCache(authzpg.New(p)))}
 	authzv1.RegisterAuthzServiceServer(srv, engineSrv)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)

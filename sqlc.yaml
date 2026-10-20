@@ -29,11 +29,11 @@ sql:
         omit_unused_structs: true
   - engine: postgresql
     schema: migrations
-    queries: internal/authz/queries.sql
+    queries: internal/authz/postgres/queries.sql
     gen:
       go:
         package: db
-        out: internal/authz/db
+        out: internal/authz/postgres/db
         sql_package: pgx/v5
         omit_unused_structs: true
   - engine: postgresql

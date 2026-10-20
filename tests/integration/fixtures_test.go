@@ -45,6 +45,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/authz"
+	authzpg "github.com/garamsh/garam/internal/authz/postgres"
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
@@ -390,7 +391,7 @@ func certificatePEM(c listenerCertificate) []byte {
 // serve machine` are, over one database.
 func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, *grpc.ClientConn) {
 	t.Helper()
-	store := authz.NewPostgresStore(p)
+	store := authzpg.New(p)
 	cache := authz.NewPolicyCache(store)
 
 	srv := grpc.NewServer()

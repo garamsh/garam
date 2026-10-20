@@ -79,7 +79,7 @@ func TestPolicyGRPCServer_CreatePolicyRejectsBadInput(t *testing.T) {
 	stored, err := store.ListPolicies(context.Background(), acme)
 	require.NoError(t, err)
 	require.Len(t, stored, 1)
-	assert.Equal(t, "n", stored[0].Name())
+	assert.Equal(t, "n", stored[0].Name)
 }
 
 // TestPolicyGRPCServer_AddPolicyVersion reads both halves of the RPC:
@@ -104,15 +104,15 @@ func TestPolicyGRPCServer_AddPolicyVersion(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, versions, 2)
 	stored := versions[1]
-	assert.Equal(t, documentOf(t, validDocument), stored.Document())
-	assert.Equal(t, ada, stored.CreatedBy())
+	assert.Equal(t, documentOf(t, validDocument), stored.Document)
+	assert.Equal(t, ada, stored.CreatedBy)
 
 	v := resp.GetVersion()
 	assert.Equal(t, g.String(), v.GetPolicyGrn())
 	assert.Equal(t, int32(2), v.GetVersion())
 	assert.Equal(t, ada.String(), v.GetCreatedBy())
-	assert.Equal(t, stored.CreatedAt(), v.GetCreatedAt().AsTime())
-	assert.Equal(t, stored.Document(), documentOf(t, v.GetDocument()))
+	assert.Equal(t, stored.CreatedAt, v.GetCreatedAt().AsTime())
+	assert.Equal(t, stored.Document, documentOf(t, v.GetDocument()))
 }
 
 // TestPolicyGRPCServer_ListPolicyVersions holds two versions of one
@@ -136,10 +136,10 @@ func TestPolicyGRPCServer_ListPolicyVersions(t *testing.T) {
 	require.Len(t, resp.GetVersions(), len(stored))
 	for i, got := range resp.GetVersions() {
 		assert.Equal(t, g.String(), got.GetPolicyGrn())
-		assert.Equal(t, int32(stored[i].Version()), got.GetVersion())
-		assert.Equal(t, stored[i].CreatedBy().String(), got.GetCreatedBy())
-		assert.Equal(t, stored[i].CreatedAt(), got.GetCreatedAt().AsTime())
-		assert.Equal(t, stored[i].Document(), documentOf(t, got.GetDocument()))
+		assert.Equal(t, int32(stored[i].Version), got.GetVersion())
+		assert.Equal(t, stored[i].CreatedBy.String(), got.GetCreatedBy())
+		assert.Equal(t, stored[i].CreatedAt, got.GetCreatedAt().AsTime())
+		assert.Equal(t, stored[i].Document, documentOf(t, got.GetDocument()))
 	}
 }
 
@@ -328,7 +328,7 @@ func TestPolicyGRPCServer_DetachRefusesTheLastAttachment(t *testing.T) {
 	left, err := store.ListPolicyAttachments(context.Background(), g)
 	require.NoError(t, err)
 	require.Len(t, left, 1)
-	assert.Equal(t, ada, left[0].Subject())
+	assert.Equal(t, ada, left[0].Subject)
 }
 
 // TestPolicyGRPCServer_AttachmentRejectsBadGRN reads the attach whose
@@ -376,8 +376,8 @@ func TestPolicyGRPCServer_ListPolicyAttachments(t *testing.T) {
 	require.Len(t, resp.GetAttachments(), 2)
 	for i, got := range resp.GetAttachments() {
 		assert.Equal(t, g.String(), got.GetPolicyGrn())
-		assert.Equal(t, stored[i].Subject().String(), got.GetSubjectGrn())
-		assert.Equal(t, stored[i].CreatedAt(), got.GetCreatedAt().AsTime())
+		assert.Equal(t, stored[i].Subject.String(), got.GetSubjectGrn())
+		assert.Equal(t, stored[i].CreatedAt, got.GetCreatedAt().AsTime())
 	}
 }
 

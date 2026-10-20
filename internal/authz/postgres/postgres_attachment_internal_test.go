@@ -1,6 +1,6 @@
-// Internal test package, for the reason postgres_policy_internal_test.go
-// states.
-package authz
+// Internal test package, for the reason
+// postgres_policy_internal_test.go states.
+package postgres
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/authz/db"
+	"github.com/garamsh/garam/internal/authz/postgres/db"
 	"github.com/garamsh/garam/internal/errorx"
 )
 
@@ -36,7 +36,7 @@ func activePolicyRow() db.ActivePoliciesRow {
 func TestRowToAttachment_CorruptFieldIsInternal(t *testing.T) {
 	ok, err := rowToAttachment(attachmentRow())
 	require.NoError(t, err, "the row that parses is the control")
-	require.Equal(t, "eng", ok.Subject().Identifier)
+	require.Equal(t, "eng", ok.Subject.Identifier)
 
 	corruptions := map[string]func(*db.PolicyAttachment){
 		"policy grn":  func(row *db.PolicyAttachment) { row.PolicyGrn = corrupt },

@@ -110,8 +110,8 @@ func TestNewPolicy_StartsAsADraftOnTheFirstVersion(t *testing.T) {
 	assert.Equal(t, authz.ServiceTypePolicy, g.ServiceType)
 
 	p := authz.NewPolicy(g, acme, "read-only")
-	assert.Equal(t, wire.PolicyStatusDraft, p.Status())
-	assert.Equal(t, 1, p.DefaultVersion())
-	assert.Equal(t, acme, p.Organization())
-	assert.Equal(t, "read-only", p.Name())
+	assert.Equal(t, wire.PolicyStatusDraft, p.Status)
+	assert.Equal(t, 1, p.DefaultVersion)
+	assert.Equal(t, acme, p.Organization)
+	assert.Equal(t, "read-only", p.Name)
 }

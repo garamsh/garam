@@ -515,7 +515,12 @@ it is under Roster.
   toasts. Every write confirmed in a dialog goes through
   `web/src/app/console/_components/action-dialog.tsx`, which stays
   open until garam answers, keeps a refusal until it closes and, for
-  an act nothing undoes, asks for a typed name. A read garam refused is
+  an act nothing undoes, asks for a typed name. A request that never
+  reaches garam, such as a Server Action's own POST answered 503, stays
+  in that dialog, and in every other dialog that submits through a
+  Server Action, as a refusal saying nothing was saved, instead of
+  closing it as if cancelled (`web/src/lib/unsent-action.ts`, #1631).
+  A read garam refused is
   said by `web/src/app/console/_components/refused-read.tsx`, in one
   wording.
 - **Component base.** shadcn/ui stays on Radix. Base UI is declined

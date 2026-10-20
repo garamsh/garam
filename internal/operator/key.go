@@ -183,6 +183,9 @@ func (k *IssuedKey) PrivatePEM() []byte { return k.privatePEM }
 // KID returns the key's thumbprint, which is also its fingerprint.
 func (k *IssuedKey) KID() string { return k.kid }
 
+// Public returns the key's public half, which garam keeps.
+func (k *IssuedKey) Public() *rsa.PublicKey { return k.public }
+
 // Operator returns the operator the key proves.
 func (k *IssuedKey) Operator() grn.GRN { return k.operator }
 

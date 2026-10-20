@@ -85,7 +85,7 @@ func (c *clock) advance(d time.Duration) {
 
 type delegationFixture struct {
 	pool       *pgxpool.Pool
-	store      *operator.PostgresStore
+	store      *operatorpg.Store
 	service    operator.AuthorityService
 	authority  *currentAuthority
 	placements *placements
@@ -107,7 +107,7 @@ func newDelegationFixture(t *testing.T) *delegationFixture {
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	actor := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "ada")
 	require.NoError(t, userpg.New(p).Create(ctx, user.New(actor, "Ada")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	hosted := register(t, store, "hosted")
 	controller := register(t, store, "controller")
 	other := register(t, store, "other")

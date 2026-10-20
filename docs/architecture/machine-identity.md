@@ -124,7 +124,7 @@ exchange's wire and refusals, and §machineBearer for the alias.
   other is waiting on (#1399). A refused assertion spends no jti.
 - **A store write acting for an operator takes that operator's
   registration row first, and a transaction holding several takes them
-  in GRN byte order** (`internal/operator` `PostgresStore`).
+  in GRN byte order** (`internal/operator/postgres` `Store`).
   - An exchange holds it `FOR KEY SHARE` for the client, and for the
     audience when the token names one.
   - An issuance, a withdrawal and a deletion hold it `FOR UPDATE`.

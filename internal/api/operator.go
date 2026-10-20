@@ -167,12 +167,12 @@ func (s *Server) ListOperators(w http.ResponseWriter, r *http.Request, orgSlug a
 // (ADR-0012).
 func operatorToAPI(o *operator.Operator) apigen.Operator {
 	out := apigen.Operator{
-		Grn:          o.GRN().String(),
+		Grn:          o.GRN.String(),
 		Name:         o.Name,
 		Description:  o.Description,
-		OrgGrn:       o.Organization().String(),
-		RegisteredBy: o.RegisteredBy().String(),
-		CreatedAt:    o.CreatedAt(),
+		OrgGrn:       o.Organization.String(),
+		RegisteredBy: o.RegisteredBy.String(),
+		CreatedAt:    o.CreatedAt,
 	}
 	if o.ControlEndpoint != nil {
 		endpoint := string(*o.ControlEndpoint)

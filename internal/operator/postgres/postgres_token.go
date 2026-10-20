@@ -1,4 +1,4 @@
-package operator
+package postgres
 
 import (
 	"context"
@@ -7,12 +7,13 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator/db"
+	"github.com/garamsh/garam/internal/operator"
+	"github.com/garamsh/garam/internal/operator/postgres/db"
 	"github.com/garamsh/garam/internal/pgxerr"
 )
 
-// Compile-time check that PostgresStore satisfies TokenStore.
-var _ TokenStore = (*PostgresStore)(nil)
+// Compile-time check that Store satisfies TokenStore.
+var _ operator.TokenStore = (*Store)(nil)
 
 // holdRegistrations holds the client's registration, and the
 // audience's when one is named, before an exchange touches any other
@@ -30,7 +31,7 @@ func holdRegistrations(ctx context.Context, q *db.Queries, client string, audien
 	}
 	holds := []hold{{client, "hold operator", refused}}
 	if audience != nil {
-		holds = append(holds, hold{audience.String(), "hold audience", ErrAudienceInvalid})
+		holds = append(holds, hold{audience.String(), "hold audience", operator.ErrAudienceInvalid})
 	}
 	slices.SortFunc(holds, func(a, b hold) int { return strings.Compare(a.grn, b.grn) })
 	for _, h := range holds {
@@ -63,20 +64,20 @@ func recordTokens(ctx context.Context, q *db.Queries, operatorGRN string, record
 // ResolveToken answers what a live token names. The statement joins
 // the registration and filters on expiry, so a deleted operator, a
 // withdrawn key and an expired token are one answer: none.
-func (s *PostgresStore) ResolveToken(ctx context.Context, tokenHash string) (TokenHolder, error) {
+func (s *Store) ResolveToken(ctx context.Context, tokenHash string) (operator.TokenHolder, error) {
 	row, err := s.q.ResolveOperatorToken(ctx, tokenHash)
 	if err != nil {
-		return TokenHolder{}, pgxerr.Classify(err, "resolve operator token", ErrTokenInvalid, nil)
+		return operator.TokenHolder{}, pgxerr.Classify(err, "resolve operator token", operator.ErrTokenInvalid, nil)
 	}
 	g, err := storedOperatorGRN(row.OperatorGrn)
 	if err != nil {
-		return TokenHolder{}, err
+		return operator.TokenHolder{}, err
 	}
-	holder := TokenHolder{Operator: g, ExpiresAt: row.ExpiresAt.Time}
+	holder := operator.TokenHolder{Operator: g, ExpiresAt: row.ExpiresAt.Time}
 	if row.AudienceGrn.Valid {
 		audience, err := storedOperatorGRN(row.AudienceGrn.String)
 		if err != nil {
-			return TokenHolder{}, err
+			return operator.TokenHolder{}, err
 		}
 		holder.Audience = &audience
 	}
@@ -90,8 +91,8 @@ func storedOperatorGRN(s string) (grn.GRN, error) {
 	if err != nil {
 		return grn.GRN{}, errorx.Wrap(err, "stored operator grn", errorx.KindInternal)
 	}
-	if g.ServiceType != ServiceType {
-		return grn.GRN{}, errorx.Wrap(ErrNotAnOperator, "stored operator grn", errorx.KindInternal)
+	if g.ServiceType != operator.ServiceType {
+		return grn.GRN{}, errorx.Wrap(operator.ErrNotAnOperator, "stored operator grn", errorx.KindInternal)
 	}
 	return g, nil
 }

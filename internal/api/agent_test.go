@@ -188,7 +188,7 @@ func registerOperator(t *testing.T, f *fixture, orgSlug, id string) grn.GRN {
 	require.NoError(t, err)
 	_, err = f.operators.Register(testCtx(t), o)
 	require.NoError(t, err)
-	return o.GRN()
+	return o.GRN
 }
 
 // operatorGRNOf names an operator of the org.

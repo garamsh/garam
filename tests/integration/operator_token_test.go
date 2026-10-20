@@ -18,13 +18,14 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
 
 // keyed registers an operator of acme, issues it its first key, and
 // answers its GRN and the private key the issuance showed (ADR-0102).
-func keyed(t *testing.T, s *operator.PostgresStore, id string) (grn.GRN, *rsa.PrivateKey) {
+func keyed(t *testing.T, s *operatorpg.Store, id string) (grn.GRN, *rsa.PrivateKey) {
 	t.Helper()
 	g := register(t, s, id)
 	private, _ := issueKey(t, s, g, operator.KeyRotationFirst)
@@ -66,7 +67,7 @@ func TestOperatorToken_ExpiredAndSweptAndAudienceKept(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject, key := keyed(t, store, "controller")
 	hosted := register(t, store, "control")
@@ -146,7 +147,7 @@ func TestOperatorToken_RefusedOnTheNextRequestOverAnOpenConnection(t *testing.T)
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	listener := machineListener(t, p, sealer, engine)
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 
 	deleted, deletedKey := keyed(t, store, "deleted")
 	kept, keptKey := keyed(t, store, "kept")
@@ -173,7 +174,7 @@ func TestOperatorToken_AKeyHoldsItsNewestFiveTokens(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject, key := keyed(t, store, "one")
 
@@ -204,7 +205,7 @@ func TestOperatorTokens_RestOnAKeyAlone(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	subject := register(t, store, "one")
 	_, key := issueKey(t, store, subject, operator.KeyRotationFirst)
 
@@ -256,7 +257,7 @@ func TestOperatorToken_AStalledResolutionIsBoundedByTheListenersDeadline(t *test
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	listener := machineListener(t, p, sealer, engine)
-	subject, key := keyed(t, operator.NewPostgresStore(p), "one")
+	subject, key := keyed(t, operatorpg.New(p), "one")
 	client, connections := tokenClient(t)
 	token := exchangeKey(t, client, listener, subject, key, nil)
 	require.Equal(t, http.StatusOK, identifiesWith(t, client, listener, token), "the connection is open and the token live")

@@ -22,7 +22,7 @@ import (
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
@@ -65,7 +65,7 @@ func newDeviceStack(t *testing.T) *deviceStack {
 	s.ada, s.adaGRN = session("ada")
 	s.eve, _ = session("eve")
 
-	srv := api.NewServer(users, orgs, agent.NewPostgresStore(p), operator.NewPostgresStore(p), message.NewPostgresStore(p), nil,
+	srv := api.NewServer(users, orgs, agent.NewPostgresStore(p), operatorpg.New(p), message.NewPostgresStore(p), nil,
 		sessions, nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil,
 		api.Config{SessionTTL: time.Hour}).WithDeviceGrant(authn.NewPostgresDeviceStore(p))

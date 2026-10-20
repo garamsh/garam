@@ -111,13 +111,14 @@ func (p DetailsPatch) Description() *string { return p.description }
 // It carries no state the operator reports and no credential. What an
 // operator does is reported against the agents it holds (ADR-0012), and
 // what it authenticates with is a token its key was exchanged for.
-// Name and Description are persisted on the row and exported, as
-// structure.md asks of what an aggregate persists (ADR-0074).
+// Every field is persisted on the row and exported: the type holds no
+// invariant over them, so it is a data carrier (ADR-0069, ADR-0074).
 type Operator struct {
-	grn          grn.GRN
-	orgGRN       grn.GRN
-	registeredBy grn.GRN
-	createdAt    time.Time
+	GRN          grn.GRN
+	Organization grn.GRN
+	// RegisteredBy is the member that registered the operator.
+	RegisteredBy grn.GRN
+	CreatedAt    time.Time
 
 	// Name is what the organization calls the operator. Two operators
 	// may share one; the GRN is what tells them apart (ADR-0074).
@@ -151,10 +152,10 @@ func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN, details Detail
 		description = *details.description
 	}
 	return &Operator{
-		grn:          g,
-		orgGRN:       orgGRN,
-		registeredBy: registeredBy,
-		createdAt:    time.Now().UTC(),
+		GRN:          g,
+		Organization: orgGRN,
+		RegisteredBy: registeredBy,
+		CreatedAt:    time.Now().UTC(),
 		Name:         name,
 		Description:  description,
 	}, nil
@@ -189,10 +190,3 @@ func validateOwnership(g, orgGRN grn.GRN) error {
 	}
 	return nil
 }
-
-func (o *Operator) GRN() grn.GRN          { return o.grn }
-func (o *Operator) Organization() grn.GRN { return o.orgGRN }
-
-// RegisteredBy returns the member that registered the operator.
-func (o *Operator) RegisteredBy() grn.GRN { return o.registeredBy }
-func (o *Operator) CreatedAt() time.Time  { return o.createdAt }

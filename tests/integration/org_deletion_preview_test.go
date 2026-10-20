@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
@@ -69,7 +70,7 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	p := pool(t)
 	orgs := orgpg.New(p)
 	agents := agent.NewPostgresStore(p)
-	operators := operator.NewPostgresStore(p)
+	operators := operatorpg.New(p)
 	consents := message.NewPostgresStore(p)
 	users := userpg.New(p)
 
@@ -137,7 +138,7 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound), "projects go")
 	_, err = orgs.GetInvitation(ctx, "preview-cascade-token")
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound), "invitations go")
-	_, err = operators.Get(ctx, op.GRN())
+	_, err = operators.Get(ctx, op.GRN)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound), "operators go")
 	_, err = agents.Get(ctx, agentGRN)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound), "agents go")

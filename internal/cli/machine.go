@@ -29,6 +29,7 @@ import (
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/message/transit"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/watch"
@@ -205,7 +206,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	}
 
 	// An operator exchanges its key for tokens here (ADR-0102).
-	operatorStore := operator.NewPostgresStore(pool)
+	operatorStore := operatorpg.New(pool)
 	operators := operator.NewService(operatorStore, operator.Config{TokenEndpoint: cfg.TokenURL})
 	// An agent token's start is backdated by tokenBackdate, and its
 	// audience is an operator the organization registered (ADR-0100).

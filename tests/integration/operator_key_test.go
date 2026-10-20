@@ -22,6 +22,7 @@ import (
 
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -31,13 +32,13 @@ const testSource = "192.0.2.10"
 
 // keyService is the operator service over the store alone, configured
 // with the token endpoint the listeners here are (ADR-0102).
-func keyService(s *operator.PostgresStore) operator.Service {
+func keyService(s *operatorpg.Store) operator.Service {
 	return operator.NewService(s, operator.Config{TokenEndpoint: testTokenURL})
 }
 
 // issueKey issues subject a key under rotation and answers the private
 // key the issuance would have shown, parsed as a holder parses the PEM.
-func issueKey(t *testing.T, s *operator.PostgresStore, subject grn.GRN, rotation operator.KeyRotation) (*rsa.PrivateKey, operator.Key) {
+func issueKey(t *testing.T, s *operatorpg.Store, subject grn.GRN, rotation operator.KeyRotation) (*rsa.PrivateKey, operator.Key) {
 	t.Helper()
 	issued, err := operator.NewIssuedKey(subject, scopedGRN(subject.Organization, "user", "ada"))
 	require.NoError(t, err)
@@ -140,7 +141,7 @@ func TestOperatorKey_AStockOAuthClientExchangesTheIssuedPEMOnTheShippedListener(
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	private, key := issueKey(t, store, subject, operator.KeyRotationFirst)
 	client, connections := tokenClient(t)
@@ -180,10 +181,10 @@ func TestOperatorKey_OneAssertionYieldsOneTokenAcrossReplicasAndRestarts(t *test
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	private, _ := issueKey(t, store, subject, operator.KeyRotationFirst)
-	replicas := []operator.Service{keyService(store), keyService(operator.NewPostgresStore(p))}
+	replicas := []operator.Service{keyService(store), keyService(operatorpg.New(p))}
 	signed := freshAssertion(t, private, subject)
 
 	const copies = 16
@@ -208,7 +209,7 @@ func TestOperatorKey_OneAssertionYieldsOneTokenAcrossReplicasAndRestarts(t *test
 	assert.Equal(t, 1, succeeded, "one assertion yields one token")
 	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE operator_grn = $1`, subject.String()))
 
-	restarted := keyService(operator.NewPostgresStore(p))
+	restarted := keyService(operatorpg.New(p))
 	_, err := restarted.ExchangeAssertion(ctx, testSource, subject, signed, nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "a restart forgets no spent assertion")
 	_, err = restarted.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, private, subject), nil)
@@ -225,7 +226,7 @@ func TestOperatorKey_ARevocationRacingExchangesLeavesNoTokenOfTheRevokedKey(t *t
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	revoked, revokedKey := issueKey(t, store, subject, operator.KeyRotationFirst)
@@ -286,7 +287,7 @@ func TestOperatorKey_PlannedRotationOverlapsForItsWindowAndRefusesAThirdKey(t *t
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	old, oldKey := issueKey(t, store, subject, operator.KeyRotationFirst)
@@ -339,7 +340,7 @@ func TestOperatorKey_WithdrawalRefusesTheNextRequestOnAnOpenConnection(t *testin
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	replaced := register(t, store, "replaced")
 	withdrawn := register(t, store, "withdrawn")
 	kept := register(t, store, "kept")
@@ -385,7 +386,7 @@ func TestOperatorKey_AReusedIdentifierRevivesNothingOfTheDeletedRegistration(t *
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	earlier, _ := issueKey(t, store, subject, operator.KeyRotationFirst)
@@ -421,7 +422,7 @@ func TestOperatorKey_RefusesAnotherTenantsIdentityOrAudience(t *testing.T) {
 	_, sealer := keyEncryptionKey(t)
 	_, engine := policyEngine(t, p)
 	url := machineListener(t, p, sealer, engine)
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	peer := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "control"))
@@ -462,7 +463,7 @@ func TestOperatorKey_AnExpiredTokenRecoversWithAFreshAssertionAndAWithdrawalStay
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	private, key := issueKey(t, store, subject, operator.KeyRotationFirst)
@@ -495,7 +496,7 @@ func TestOperatorKey_AnAssertionOutsideItsTimeBoundsSpendsNothing(t *testing.T) 
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	private, _ := issueKey(t, store, subject, operator.KeyRotationFirst)
@@ -524,7 +525,7 @@ func TestOperatorKey_AFirstIssuanceIsRefusedOnceAnyKeyWasIssued(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	fresh := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "control"))
 	_, key := issueKey(t, store, subject, operator.KeyRotationFirst)
@@ -554,7 +555,7 @@ func TestOperatorKey_AnImmediateRotationRacingExchangesLeavesNoTokenOfTheOldKey(
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	bystander := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "control"))
@@ -627,7 +628,7 @@ func TestOperatorKey_AnImmediateRotationWaitsForAnExchangeAlreadyHoldingTheKey(t
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	bystander := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "control"))
@@ -699,7 +700,7 @@ func TestOperatorKey_AWithdrawalAnswersErrKeyNotFoundForAKeyNeverIssued(t *testi
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	store := operator.NewPostgresStore(p)
+	store := operatorpg.New(p)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	_, key := issueKey(t, store, subject, operator.KeyRotationFirst)
 

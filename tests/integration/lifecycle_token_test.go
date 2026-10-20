@@ -19,6 +19,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/operator"
+	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 )
 
 // tokenStack is the managed execution stack, whose hosted control
@@ -348,7 +349,7 @@ func TestTokenContracts_ATokensAudienceIsAnOperatorTheOrganizationHolds(t *testi
 		require.Positive(t, toGaram, table)
 	}
 
-	require.NoError(t, operator.NewPostgresStore(s.pool).Delete(context.Background(), s.hosted))
+	require.NoError(t, operatorpg.New(s.pool).Delete(context.Background(), s.hosted))
 	for _, table := range []string{"operator_tokens", "agent_tokens"} {
 		toHosted, toGaram := shown(table)
 		assert.Zero(t, toHosted, "deleting the audience takes the tokens shown to it: %s", table)

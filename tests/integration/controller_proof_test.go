@@ -149,7 +149,7 @@ func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, polic
 	s.client, _ = tokenClient(t)
 	for _, g := range []grn.GRN{s.hosted, s.controller, s.other, s.globex} {
 		registerOperator(t, p, g)
-		s.keys[g], _ = issueKey(t, operator.NewPostgresStore(p), g, operator.KeyRotationFirst)
+		s.keys[g], _ = issueKey(t, operatorpg.New(p), g, operator.KeyRotationFirst)
 	}
 	s.hostedTLS = tokenPresenting(t, s.token(t, s.hosted, nil))
 	s.hostedExpiry = time.Now().Add(operator.TokenTTL)
@@ -349,7 +349,7 @@ func TestControllerProof_RefusesWithdrawalOnTheSameOpenConnection(t *testing.T) 
 
 	s.delegate(t, "g-2", nil, time.Now().Add(time.Hour), s.controller, s.other)
 	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "granted again")
-	require.NoError(t, operator.NewPostgresStore(p).Delete(ctx, s.controller))
+	require.NoError(t, operatorpg.New(p).Delete(ctx, s.controller))
 	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusUnprocessableEntity,
 		"controller deleted, and its tokens with it")
 
@@ -357,7 +357,7 @@ func TestControllerProof_RefusesWithdrawalOnTheSameOpenConnection(t *testing.T) 
 	// for the caller's own deletion: it answers on this connection until
 	// the caller goes.
 	onOpenConnection(t, s.prove(t, s.hostedTLS, s.other, s.otherShown, ""), http.StatusOK, "the other controller")
-	require.NoError(t, operator.NewPostgresStore(p).Delete(ctx, s.hosted))
+	require.NoError(t, operatorpg.New(p).Delete(ctx, s.hosted))
 	onOpenConnection(t, s.prove(t, s.hostedTLS, s.other, s.otherShown, ""), http.StatusUnauthorized,
 		"caller deleted, and its token with it")
 }

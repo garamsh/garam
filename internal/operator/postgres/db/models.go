@@ -27,6 +27,16 @@ type OperationAuthority struct {
 	DestinationGrn  pgtype.Text
 }
 
+type Operator struct {
+	Grn             string
+	OrgGrn          string
+	RegisteredBy    string
+	CreatedAt       pgtype.Timestamptz
+	Name            string
+	Description     string
+	ControlEndpoint pgtype.Text
+}
+
 type OperatorDelegation struct {
 	ID          string
 	OrgGrn      string
@@ -38,4 +48,17 @@ type OperatorDelegation struct {
 	GrantedBy   string
 	GrantedAt   pgtype.Timestamptz
 	EndedAt     pgtype.Timestamptz
+}
+
+type OperatorKey struct {
+	ID              int64
+	OperatorGrn     string
+	Kid             string
+	Algorithm       string
+	PublicJwk       string
+	IssuedBy        string
+	IssuedAt        pgtype.Timestamptz
+	RetiresAt       pgtype.Timestamptz
+	RevokedAt       pgtype.Timestamptz
+	LastExchangedAt pgtype.Timestamptz
 }

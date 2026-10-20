@@ -1243,10 +1243,10 @@ func (s *fakeOperatorStore) RevokeKey(_ context.Context, g grn.GRN, kid string) 
 func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator) (*operator.Operator, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.operators[o.GRN().String()]; ok {
+	if _, ok := s.operators[o.GRN.String()]; ok {
 		return nil, operator.ErrOperatorAlreadyRegistered
 	}
-	s.operators[o.GRN().String()] = o
+	s.operators[o.GRN.String()] = o
 	return o, nil
 }
 
@@ -1282,7 +1282,7 @@ func (s *fakeOperatorStore) UpdateDetails(_ context.Context, g grn.GRN, patch op
 	if err != nil {
 		return nil, err
 	}
-	updated, err := operator.New(o.Organization(), g.Identifier, o.RegisteredBy(), merged)
+	updated, err := operator.New(o.Organization, g.Identifier, o.RegisteredBy, merged)
 	if err != nil {
 		return nil, err
 	}
@@ -1321,12 +1321,12 @@ func (s *fakeOperatorStore) ListByOrg(_ context.Context, orgGRN grn.GRN) ([]*ope
 	defer s.mu.Unlock()
 	out := []*operator.Operator{}
 	for _, o := range s.operators {
-		if o.Organization() == orgGRN {
+		if o.Organization == orgGRN {
 			out = append(out, o)
 		}
 	}
 	slices.SortFunc(out, func(a, b *operator.Operator) int {
-		return strings.Compare(a.GRN().String(), b.GRN().String())
+		return strings.Compare(a.GRN.String(), b.GRN.String())
 	})
 	return out, nil
 }
@@ -1380,7 +1380,7 @@ func (s *fakeOperatorStore) CountByOrg(_ context.Context, orgGRN grn.GRN) (int, 
 	defer s.mu.Unlock()
 	n := 0
 	for _, o := range s.operators {
-		if o.Organization() == orgGRN {
+		if o.Organization == orgGRN {
 			n++
 		}
 	}

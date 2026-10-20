@@ -19,10 +19,10 @@ grants and authorities.
 
 | Type | Responsibility |
 |------|----------------|
-| `Operator` | an organization's record that it has an operator under this GRN: what it calls the operator and says it is for, who registered it and when, and the control endpoint the console sends its operations to |
+| `Operator` | an organization's record that it has an operator under this GRN: what it calls the operator and says it is for, who registered it and when, the control endpoint the console sends its operations to, and, for a control service, the manager it serves |
 | `ControlEndpoint` | a parsed `https` base URL a hosted operator's control service answers the console at |
 | `DetailsPatch` | a parsed name and description, each absent where the caller said nothing: what a registration starts with and what an update changes |
-| `Store` | registers one and answers what it stored, issues, lists and withdraws its keys, changes its name and description, sets or clears its control endpoint, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
+| `Store` | registers one, a control service under the manager it names, and answers what it stored, issues, lists and withdraws its keys, changes its name and description, sets or clears its control endpoint, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
 | `Service` | exchanges a client assertion a live key signed for a token, and verifies a token presented on another operator's behalf |
 | `Token` | a token an operator exchanged a key's assertion for: the operator, the audience it is accepted by, and when it expires |
 | `TokenHolder` | what a live token's row names, read beside the registration and the key it rests on |
@@ -88,6 +88,44 @@ registering grants nothing and this withdraws what an operator runs on
 the seams that admit a token, which are the one place either listener
 reads it to decide whether a caller is admitted.
 
+## An Operator's two identities
+
+An Operator is a manager and at most one control service, each
+registered as an operator of its own and issued its own key. The pair
+is recorded on the control service's record, which names its manager
+by GRN
+([ADR-0124](./adr/0124-a-control-service-names-its-manager-on-its-own-record-set-when-it-is-registered.md)).
+
+- **It is written once, at registration.** `registerOperator` takes
+  `manager`, and `Operator.ServeManager` refuses, as a 400, a value
+  that is not another operator of the organization. The store refuses,
+  each as a 409 and in the transaction that inserts, a manager the
+  organization holds no record of, one that is itself a control
+  service, one another control service already names, and a
+  registration naming a manager of an identity a control service names
+  as its own manager. The insert comes first and the manager's row is
+  held `FOR KEY SHARE` after it, so the transaction takes the
+  organization's row before any operator's, the order an
+  organization's deletion takes them in (#1424). No update route
+  writes it, so a pair registered before it is linked by registering
+  the control service again.
+- **It names the identity.** `migrations/000062` holds the column
+  without a foreign key, unique, and to an operator of the same
+  organization other than the row. Deleting a manager leaves its
+  control service naming it, and registering the identifier again
+  rejoins them.
+- **It is read on the list.** `ListByOrg` answers every record with
+  its manager, and the console joins them: each record naming no
+  manager is an Operator, the record naming it is its control service,
+  and a control service naming a manager garam no longer holds is an
+  Operator whose manager is not registered. Nothing pairs by name or by
+  grant: a grant is the authority a member hands a hosted operator
+  (§Delegated operation authority), not which identities are one
+  Operator.
+
+`api/openapi.yaml` §Operator and §OperatorRegistration are
+authoritative for the field's wire.
+
 ## Issued PEM identity
 
 **garam's half is built; no Operator release exchanges yet.**
@@ -108,8 +146,8 @@ ADR-0068).
   answer carries two secrets. The cost is a second step for an
   administrator: register, issue a key, place the PEM and `tokenUrl`,
   once per registered operator identity.
-  An Operator has two, its manager and its control service, and each
-  is issued its own key.
+  An Operator has two, its manager and its control service
+  (§An Operator's two identities), and each is issued its own key.
 - **The first key of an operator that has never been issued one is
   `operator:register`, as registering it was; any other is
   `operator:reissue`.** A withdrawn key still counts, so re-keying

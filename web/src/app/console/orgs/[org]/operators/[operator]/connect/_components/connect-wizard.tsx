@@ -125,6 +125,7 @@ export function ConnectWizard({
   problem,
   initialStep,
   canReplace,
+  isControlService = false,
   operatorHref,
   operatorsHref,
 }: {
@@ -142,6 +143,11 @@ export function ConnectWizard({
   initialStep: Exclude<ConnectStep, "register">;
   /** garam lets the caller issue a replacement (`operator:reissue`). */
   canReplace: boolean;
+  /**
+   * The identity is a control service, whose record names its manager
+   * (ADR-0124), so there is no second identity left to connect.
+   */
+  isControlService?: boolean;
   operatorHref: string;
   operatorsHref: string;
 }) {
@@ -343,9 +349,9 @@ export function ConnectWizard({
             </div>
           )}
           <div className="flex flex-wrap gap-2">
-            {verified && (
+            {verified && !isControlService && (
               <Button asChild>
-                <Link href={`${operatorsHref}?connect`}>
+                <Link href={`${operatorsHref}?connect=${operator}`}>
                   <Plus />
                   Connect the control service too
                 </Link>

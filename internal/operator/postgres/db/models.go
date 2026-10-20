@@ -35,6 +35,7 @@ type Operator struct {
 	Name            string
 	Description     string
 	ControlEndpoint pgtype.Text
+	ManagerGrn      pgtype.Text
 }
 
 type OperatorDelegation struct {

@@ -1025,3 +1025,8 @@ ADRs:
   CLI holds a server-side session of kind `cli` presented as a bearer
   wherever the cookie is accepted, refreshed by a token spent once, and
   kept in one owner-only file
+- [0124](./adr/0124-a-control-service-names-its-manager-on-its-own-record-set-when-it-is-registered.md)
+  — a control service's operator record names its manager by GRN, set
+  when it is registered and by nothing after, at most one per manager
+  and never a chain, and answered by `listOperators`, so the console
+  lists one row per Operator; the delegation stays authority alone

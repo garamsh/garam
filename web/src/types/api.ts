@@ -1799,6 +1799,11 @@ export interface components {
              * @example https://control.example.com
              */
             controlEndpoint?: string;
+            /**
+             * @description The GRN of the operator this one is the control service of, absent where this one is a manager or stands alone (ADR-0124). An Operator is a manager and at most one control service, so a list read pairs the two by this field alone. It is set by `registerOperator` and by nothing after, and it names the identity rather than a live record: it stays after that manager's registration is deleted.
+             * @example grn:acme:default:operator:field-one
+             */
+            manager?: string;
         };
         /** @description How an issued key stands beside the keys the operator holds (ADR-0102). */
         OperatorKeyIssuance: {
@@ -1866,6 +1871,11 @@ export interface components {
             identifier: string;
             name?: components["schemas"]["OperatorName"];
             description?: components["schemas"]["OperatorDescription"];
+            /**
+             * @description Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124). Absent registers a manager or a lone identity.
+             * @example grn:acme:default:operator:field-one
+             */
+            manager?: string;
         };
         /** @description A change to what the organization says about an operator. A field left out keeps its value; the identifier is not a field. */
         OperatorPatch: {

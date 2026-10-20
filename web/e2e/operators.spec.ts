@@ -129,6 +129,60 @@ test.describe("operators", () => {
     await expect(page).toHaveURL(`${operators}/aurora/connect`);
   });
 
+  test("registers a control service as part of its manager's Operator, and lists the two as one row (#1636)", async ({
+    page,
+    signedIn,
+  }) => {
+    const operators = `/console/orgs/${signedIn.orgSlug}/operators`;
+    const connect = async () => {
+      await page.goto(operators);
+      await expectHydrated(page);
+      await page
+        .getByRole("button", { name: "Connect an operator", exact: true })
+        .click();
+      return page.getByRole("dialog", { name: "Connect an operator" });
+    };
+
+    let dialog = await connect();
+    // The seeded operator is a manager with no control service, so the
+    // dialog asks; its default starts a new Operator.
+    await expect(dialog.getByRole("combobox", { name: "Identity" })).toHaveText(
+      "The manager of a new Operator",
+    );
+    await dialog.getByRole("textbox", { name: "Identifier" }).fill("aurora");
+    await dialog.getByRole("button", { name: "Register", exact: true }).click();
+    await expect(page).toHaveURL(`${operators}/aurora/connect`);
+
+    dialog = await connect();
+    await dialog.getByRole("combobox", { name: "Identity" }).click();
+    await page
+      .getByRole("option", { name: /^The control service of aurora/ })
+      .click();
+    expect(await axeViolations(page)).toEqual([]);
+    await dialog
+      .getByRole("textbox", { name: "Identifier" })
+      .fill("aurora-control");
+    await dialog.getByRole("button", { name: "Register", exact: true }).click();
+    await expect(page).toHaveURL(`${operators}/aurora-control/connect`);
+
+    await page.goto(operators);
+    await expectHydrated(page);
+    // The seeded operator and the pair: two Operators, not three.
+    await expect(
+      page.getByRole("heading", { level: 1, name: /Operators/ }),
+    ).toHaveText(/^Operators\s*2$/);
+    await expect(
+      page.getByRole("link", { name: "aurora-control", exact: true }),
+    ).toHaveCount(1);
+    const row = page
+      .getByRole("row")
+      .filter({ has: page.getByRole("link", { name: "aurora", exact: true }) });
+    await expect(
+      row.getByRole("link", { name: "aurora-control", exact: true }),
+    ).toHaveAttribute("href", `${operators}/aurora-control`);
+    await expect(row.getByText("Not connected")).toHaveCount(0);
+  });
+
   test("connects an operator: registers it, issues its key, places it and sees it sign in", async ({
     page,
     signedIn,

@@ -15,9 +15,14 @@ import { server } from "@/testing/setup";
 // `refresh` is how an opened dialog reads the preview again; the test
 // records each call.
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
-vi.mock("next/navigation", () => ({
+// The real `unstable_rethrow` tells a redirect from a failed request,
+// so the mocked one carries the digest a real redirect does.
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
   redirect: (url: string) => {
-    throw new Error(`NEXT_REDIRECT:${url}`);
+    throw Object.assign(new Error(`NEXT_REDIRECT:${url}`), {
+      digest: `NEXT_REDIRECT;push;${url};307;`,
+    });
   },
   useRouter: () => ({ refresh }),
 }));

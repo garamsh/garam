@@ -58,7 +58,7 @@ file the caller names, never to stdout.**
 
      | | Per operation, by hand | Derived |
      |---|---|---|
-     | Written once | none | 1,075 lines: `cligen` 554, `apicmd.go` 450, exit codes 71 |
+     | Written once | none | 1,108 lines: `cligen` 554, `apicmd.go` 483, exit codes 71 |
      | The 68 operations not served yet | about 2,400 lines | none; `commands.gen.go` is about 13 generated lines per operation |
      | A new operation | about 35 lines and its test | none, unless it is named, excluded or carries a secret: one line of `commands.yaml` |
 
@@ -104,9 +104,15 @@ file the caller names, never to stdout.**
 5. **A secret goes to a file alone.**
    - `commands.yaml` lists an answer's secret fields. The command then
      requires `--out <file>`.
-   - It writes the whole answer there, created at mode 0600, and never
-     over an existing file. It prints the answer without those fields,
-     and names the file on stderr.
+   - It creates the file at mode 0600, never over an existing one,
+     before it sends the request. A secret garam answers, such as an
+     issued key, therefore always has somewhere to go; a key issued
+     with `--rotation immediate` and then discarded would leave the
+     operator keyless.
+   - An existing file, a refusal, or a request that fails stops the
+     command, and a file it created is removed.
+   - On success it writes the whole answer there, prints the answer
+     without those fields, and names the file on stderr.
    - Without `--out` nothing is sent.
 6. **What the CLI does not serve, and why.**
    - **`login`, `loginWithReturnPath`, `oauthCallback`.** Browser

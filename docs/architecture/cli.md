@@ -64,10 +64,11 @@ holds current.
   failure.
 - **Secrets.** An answer `commands.yaml` lists a secret field of
   (`issueOperatorKey`, `createInvitation`, `mintOperationAuthority`) is
-  written whole to the file `--out` names, created at mode 0600 and
-  never over an existing file. The command prints it without the
-  secret and names the file on stderr; without `--out` it sends
-  nothing.
+  written whole to the file `--out` names. The file is created at mode
+  0600, never over an existing one, before the request is sent, and
+  removed if garam refuses or cannot be reached. The command prints the
+  answer without the secret and names the file on stderr; without
+  `--out`, or with a file already there, it sends nothing.
 - **Coverage.** Each of the 80 operations is derived, served by a
   hand-written command, excluded with its reason, or pending, and in
   exactly one of those. `cligen` refuses anything else, and so does

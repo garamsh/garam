@@ -161,9 +161,10 @@ func TestOperatorsKeysIssue_WritesTheKeyToAFileAndNoSecretToStdout(t *testing.T)
 }
 
 // TestOperatorsKeysIssue_RefusesWithoutAFileOrOverAnExistingOne: no
-// --out sends nothing, and an existing file is not overwritten, so a
-// key is never issued into nowhere or over another. The successful
-// issue above is the control that the server is reachable.
+// --out sends nothing, and an existing file sends nothing either and
+// is kept, so a key is never issued into nowhere: with --rotation
+// immediate that would leave the operator keyless. The successful issue
+// above is the control that the server is reachable.
 func TestOperatorsKeysIssue_RefusesWithoutAFileOrOverAnExistingOne(t *testing.T) {
 	srv, issued, _ := keyServer(t)
 	signedInTo(t, srv.URL)
@@ -179,9 +180,37 @@ func TestOperatorsKeysIssue_RefusesWithoutAFileOrOverAnExistingOne(t *testing.T)
 	_, _, cmd, err = runRoot(t, "operators", "keys", "issue", "hosted", "--rotation", "planned", "--out", out, "--endpoint", srv.URL)
 	require.Error(t, err)
 	assert.Equal(t, ExitConflict, ExitCode(cmd, err))
+	assert.EqualValues(t, 0, issued.Load(), "nothing is issued while the file it would go to exists")
 	kept, readErr := os.ReadFile(out)
 	require.NoError(t, readErr)
 	assert.Equal(t, "earlier", string(kept), "an existing file is never overwritten")
+}
+
+// TestOperatorsKeysIssue_LeavesNoFileWhereNoKeyWasIssued: the file is
+// created before the request and removed when garam refuses or cannot
+// be reached, so what --out names exists only holding an answer. The
+// issue that succeeds, above, is the control that the file is kept.
+func TestOperatorsKeysIssue_LeavesNoFileWhereNoKeyWasIssued(t *testing.T) {
+	refusing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"kind":"failed_precondition","message":"no token endpoint is configured","reason":"key_issuance_unconfigured"}`))
+	}))
+	t.Cleanup(refusing.Close)
+	gone := httptest.NewServer(http.NotFoundHandler())
+	goneURL := gone.URL
+	gone.Close()
+
+	for name, endpoint := range map[string]string{"refused": refusing.URL, "unreachable": goneURL} {
+		t.Run(name, func(t *testing.T) {
+			signedInTo(t, endpoint)
+			out := filepath.Join(t.TempDir(), "key.json")
+			_, _, _, err := runRoot(t, "operators", "keys", "issue", "hosted", "--rotation", "planned", "--out", out, "--endpoint", endpoint)
+			require.Error(t, err)
+			_, statErr := os.Stat(out)
+			assert.True(t, errors.Is(statErr, os.ErrNotExist), "no file is left where no key was issued: %v", statErr)
+		})
+	}
 }
 
 // TestAPICommand_ReadsAWrappedListAsRows: listOperatorKeys answers an

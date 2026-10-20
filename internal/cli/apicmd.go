@@ -196,6 +196,17 @@ func newAPICommand(op apiOperation, flags *userFlags) *cobra.Command {
 		if err != nil {
 			return err
 		}
+		// The file is created before anything is sent, so an answer
+		// carrying a secret, an issued key among them, is never
+		// discarded for want of somewhere to put it. Any failure from
+		// here on removes it.
+		var secret *secretFile
+		if len(op.Secrets) > 0 {
+			if secret, err = createSecretFile(out); err != nil {
+				return err
+			}
+			defer secret.discard()
+		}
 		resp, err := op.call(cmd.Context(), client.ClientInterface, path, op.BodyType, req.body, req.edit)
 		if err != nil {
 			return errorx.Wrap(err, op.ID, errorx.KindUnavailable)
@@ -208,8 +219,8 @@ func newAPICommand(op apiOperation, flags *userFlags) *cobra.Command {
 		if resp.StatusCode < 200 || resp.StatusCode > 299 {
 			return apiFailure(resp, answer)
 		}
-		if len(op.Secrets) > 0 {
-			if answer, err = writeSecret(out, answer, op.Secrets); err != nil {
+		if secret != nil {
+			if answer, err = secret.keep(answer, op.Secrets); err != nil {
 				return err
 			}
 			_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Wrote the answer to %s (mode 0600).\n", out)
@@ -335,35 +346,57 @@ func readValue(v string) ([]byte, error) {
 	return []byte(v), nil
 }
 
-// writeSecret writes the whole answer to path, created at mode 0600
-// and never over an existing file, and answers it without the secret
-// fields, which is all that reaches stdout.
-func writeSecret(path string, answer []byte, secrets []string) ([]byte, error) {
+// secretFile is the file an answer carrying a secret is written to:
+// created at mode 0600, and never over an existing file, before the
+// request is sent.
+type secretFile struct {
+	path string
+	f    *os.File
+	kept bool
+}
+
+// createSecretFile creates path for an answer not yet asked for.
+func createSecretFile(path string) (*secretFile, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, errorx.Wrap(err, path, errorx.KindFailedPrecondition)
 	}
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		if errors.Is(err, os.ErrExist) {
-			return nil, errorx.New(errorx.KindAlreadyExists, path+" exists; the answer is written to a new file only")
+			return nil, errorx.New(errorx.KindAlreadyExists, path+" exists; the answer is written to a new file only, and nothing was sent")
 		}
 		return nil, errorx.Wrap(err, path, errorx.KindFailedPrecondition)
 	}
-	if _, err := f.Write(answer); err != nil {
-		_ = f.Close()
-		return nil, errorx.Wrap(err, path, errorx.KindFailedPrecondition)
-	}
-	if err := f.Close(); err != nil {
-		return nil, errorx.Wrap(err, path, errorx.KindFailedPrecondition)
-	}
+	return &secretFile{path: path, f: f}, nil
+}
+
+// keep writes the whole answer to the file and answers it without the
+// secret fields, which is all that reaches stdout.
+func (s *secretFile) keep(answer []byte, secrets []string) ([]byte, error) {
 	var doc map[string]any
 	if err := json.Unmarshal(answer, &doc); err != nil {
 		return nil, errorx.Wrap(err, "the answer is not a JSON object", errorx.KindInternal)
 	}
-	for _, s := range secrets {
-		delete(doc, s)
+	if _, err := s.f.Write(answer); err != nil {
+		return nil, errorx.Wrap(err, s.path, errorx.KindFailedPrecondition)
+	}
+	if err := s.f.Close(); err != nil {
+		return nil, errorx.Wrap(err, s.path, errorx.KindFailedPrecondition)
+	}
+	s.kept = true
+	for _, field := range secrets {
+		delete(doc, field)
 	}
 	return json.Marshal(doc)
+}
+
+// discard removes the file unless keep wrote the answer to it.
+func (s *secretFile) discard() {
+	if s.kept {
+		return
+	}
+	_ = s.f.Close()
+	_ = os.Remove(s.path)
 }
 
 // renderAnswer prints an answer: as JSON it is the API's own, for

@@ -28,8 +28,16 @@ import {
   parseOperatorName,
 } from "@/lib/operator";
 import type { Parsed } from "@/lib/parsed";
+import { refuseUnsent } from "@/lib/unsent-action";
 
 const initialState: RegisterOperatorState = { status: "idle" };
+
+// A request that never reached garam stays in the dialog as a refusal
+// rather than closing it as if cancelled (#1631).
+const register = refuseUnsent(
+  registerOperator,
+  "Nothing was registered: the request didn't go through. Try again.",
+);
 
 function errorOf(parsed: Parsed<string>): string | undefined {
   return parsed.status === "error" ? parsed.message : undefined;
@@ -83,10 +91,7 @@ function RegisterStep({
   org: string;
   onCancel: () => void;
 }) {
-  const [state, formAction, pending] = useActionState(
-    registerOperator,
-    initialState,
-  );
+  const [state, formAction, pending] = useActionState(register, initialState);
   const hydrated = useHydrated();
   const [identifier, setIdentifier] = useState("");
   const [name, setName] = useState("");

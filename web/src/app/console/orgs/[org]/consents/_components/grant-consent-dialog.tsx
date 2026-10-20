@@ -19,8 +19,12 @@ import {
   grantOrgConsent,
   type GrantOrgConsentState,
 } from "@/features/orgs/actions";
+import { refuseUnsent } from "@/lib/unsent-action";
 
 const initialState: GrantOrgConsentState = { status: "idle" };
+
+// A request that never reached garam stays in the dialog (#1631).
+const grantOrgConsentUnsent = refuseUnsent(grantOrgConsent);
 
 /**
  * The list's primary action: a dialog that grants this organization's
@@ -39,7 +43,7 @@ export function GrantConsentDialog({ org }: { org: string }) {
   const [other, setOther] = useState("");
   const [state, formAction, pending] = useActionState(
     async (previous: GrantOrgConsentState, formData: FormData) => {
-      const next = await grantOrgConsent(previous, formData);
+      const next = await grantOrgConsentUnsent(previous, formData);
       if (next.status === "granted") {
         setOpen(false);
         setOther("");

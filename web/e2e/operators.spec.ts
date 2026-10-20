@@ -84,6 +84,51 @@ async function keepSecret(page: Page, title: string): Promise<string> {
 }
 
 test.describe("operators", () => {
+  test("keeps Connect an operator open when its request is answered 503, then registers on the retry (#1631)", async ({
+    page,
+    signedIn,
+  }) => {
+    const operators = `/console/orgs/${signedIn.orgSlug}/operators`;
+    // A proxy in front of the console answers the Server Action's own
+    // POST 503, as on aurora; the next attempt goes through.
+    let refused = 0;
+    await page.route(`**${operators}`, async (route) => {
+      if (route.request().method() === "POST" && refused === 0) {
+        refused += 1;
+        await route.fulfill({
+          status: 503,
+          contentType: "text/html",
+          body: "Service Unavailable",
+        });
+        return;
+      }
+      await route.continue();
+    });
+    await page.goto(operators);
+    await expectHydrated(page);
+
+    await page
+      .getByRole("button", { name: "Connect an operator", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", { name: "Connect an operator" });
+    await dialog.getByRole("textbox", { name: "Identifier" }).fill("aurora");
+    const register = dialog.getByRole("button", {
+      name: "Register",
+      exact: true,
+    });
+    await register.click();
+
+    await expect(dialog.getByRole("alert")).toHaveText(
+      "Nothing was registered: the request didn't go through. Try again.",
+    );
+    await expect(dialog).toBeVisible();
+    expect(refused).toBe(1);
+
+    // The control: the same dialog, its request let through, registers.
+    await register.click();
+    await expect(page).toHaveURL(`${operators}/aurora/connect`);
+  });
+
   test("connects an operator: registers it, issues its key, places it and sees it sign in", async ({
     page,
     signedIn,

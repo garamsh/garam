@@ -9,11 +9,32 @@ import { enter } from "@/testing/enter";
 import { API_URL, fieldOne } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
-vi.mock("next/navigation", () => ({
+vi.mock("next/navigation", async (importOriginal) => ({
+  // The real `unstable_rethrow`, so the dialog tells its own navigation
+  // from a failed request as it does in the browser.
+  ...(await importOriginal<typeof import("next/navigation")>()),
   redirect: (url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   },
 }));
+
+// The real action, unless a test makes its request fail before garam
+// answers: Next.js then rejects the call, as it did for a 503 on aurora
+// (#1631).
+const transport = vi.hoisted(() => ({ fails: false }));
+vi.mock("@/features/orgs/actions", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/features/orgs/actions")>();
+  return {
+    ...actual,
+    registerOperator: (...args: Parameters<typeof actual.registerOperator>) =>
+      transport.fails
+        ? Promise.reject(
+            new Error("An unexpected response was received from the server."),
+          )
+        : actual.registerOperator(...args),
+  };
+});
 
 // `revalidatePath` needs a request scope the test does not run in; the
 // action's own answer is what the dialog renders. A registration that
@@ -44,6 +65,34 @@ async function openDialog() {
 }
 
 describe("connect operator dialog", () => {
+  it("stays open and says nothing was registered when the request never reaches garam", async () => {
+    const posted = recordRegistrations();
+    transport.fails = true;
+    try {
+      const { user, dialog } = await openDialog();
+      await enter(
+        user,
+        dialog.getByRole("textbox", { name: "Identifier" }),
+        "aurora",
+      );
+
+      await user.click(dialog.getByRole("button", { name: "Register" }));
+
+      expect(await dialog.findByRole("alert")).toHaveTextContent(
+        "Nothing was registered: the request didn't go through. Try again.",
+      );
+      expect(
+        screen.getByRole("dialog", { name: "Connect an operator" }),
+      ).toBeVisible();
+      expect(dialog.getByRole("textbox", { name: "Identifier" })).toHaveValue(
+        "aurora",
+      );
+      expect(posted).toEqual([]);
+    } finally {
+      transport.fails = false;
+    }
+  });
+
   it("refuses an identifier outside the character rule beside its field, without a round trip", async () => {
     const posted = recordRegistrations();
     const { user, dialog } = await openDialog();

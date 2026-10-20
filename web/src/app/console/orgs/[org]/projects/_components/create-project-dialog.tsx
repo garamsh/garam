@@ -20,8 +20,12 @@ import {
   createProject,
   type CreateProjectState,
 } from "@/features/orgs/actions";
+import { refuseUnsent } from "@/lib/unsent-action";
 
 const initialState: CreateProjectState = { status: "idle" };
+
+// A request that never reached garam stays in the dialog (#1631).
+const createProjectUnsent = refuseUnsent(createProject);
 
 /**
  * The list's primary action: a dialog that creates a project, named by
@@ -39,7 +43,7 @@ export function CreateProjectDialog({ org }: { org: string }) {
   const [name, setName] = useState("");
   const [state, formAction, pending] = useActionState(
     async (previous: CreateProjectState, formData: FormData) => {
-      const next = await createProject(previous, formData);
+      const next = await createProjectUnsent(previous, formData);
       if (next.status === "created") {
         setOpen(false);
         setName("");

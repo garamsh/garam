@@ -25,10 +25,14 @@ import {
   createInvitation,
   type CreateInvitationState,
 } from "@/features/orgs/actions";
+import { refuseUnsent } from "@/lib/unsent-action";
 
 import { ROLE_LABEL } from "../../../../_components/org-role";
 
 const initialState: CreateInvitationState = { status: "idle" };
+
+// A request that never reached garam stays in the dialog (#1631).
+const invite = refuseUnsent(createInvitation);
 
 /** The roles an invitation can carry; owners are not invited. */
 type InvitedRole = "member" | "admin";
@@ -73,10 +77,7 @@ export function InviteDialog({ org }: { org: string }) {
  * refused role stays chosen.
  */
 function InviteForm({ org, onDone }: { org: string; onDone: () => void }) {
-  const [state, formAction, pending] = useActionState(
-    createInvitation,
-    initialState,
-  );
+  const [state, formAction, pending] = useActionState(invite, initialState);
   const [role, setRole] = useState<InvitedRole | "">("");
   const issued =
     state.status === "created" && role !== ""

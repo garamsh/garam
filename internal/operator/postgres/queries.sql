@@ -13,6 +13,18 @@ SELECT manager_grn FROM operators WHERE grn = $1 FOR KEY SHARE;
 -- name: OperatorIsManager :one
 SELECT EXISTS (SELECT 1 FROM operators WHERE manager_grn = $1);
 
+-- Holds a record its manager is being set on, and answers the manager
+-- it names. FOR UPDATE waits for a registration holding it as a
+-- manager, so that registration's control service is seen (ADR-0124).
+-- name: LockOperatorManager :one
+SELECT manager_grn FROM operators WHERE grn = $1 FOR UPDATE;
+
+-- Sets a record's manager once: a record already naming one is not
+-- written (ADR-0124).
+-- name: SetOperatorManager :execrows
+UPDATE operators SET manager_grn = sqlc.arg('manager_grn')
+WHERE grn = sqlc.arg('grn') AND manager_grn IS NULL;
+
 -- An absent argument keeps the column it would have written, so a
 -- caller changing one of the two leaves the other as it stands. The
 -- statement names no other column: the GRN, and the certificate and

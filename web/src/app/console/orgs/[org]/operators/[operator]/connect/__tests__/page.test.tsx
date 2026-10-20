@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   API_URL,
   answerPermissionChecks,
+  fieldOne,
   fieldOneKey,
 } from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
@@ -45,7 +46,47 @@ function currentStep() {
     .find((item) => item.getAttribute("aria-current") === "step");
 }
 
+/** Lists field-one beside a control service whose record names it. */
+function pairedWithControlService(controlKeys: unknown[] = []) {
+  server.use(
+    http.get(`${API_URL}/orgs/acme/operators`, () =>
+      HttpResponse.json([
+        fieldOne,
+        {
+          ...fieldOne,
+          grn: "grn:acme:default:operator:field-one-control",
+          name: "field-one-control",
+          manager: fieldOne.grn,
+        },
+      ]),
+    ),
+    http.get(`${API_URL}/orgs/acme/operators/field-one-control/keys`, () =>
+      HttpResponse.json({ keys: controlKeys }),
+    ),
+  );
+}
+
 describe("connect operator page", () => {
+  it("sets up a cluster manager and its control service as one Operator, issuing the key still missing (#1636)", async () => {
+    pairedWithControlService();
+
+    await renderPage();
+
+    expect(currentStep()).toHaveTextContent("Issue the keys");
+    expect(
+      screen.getByRole("button", { name: "Issue the control service's key" }),
+    ).toBeInTheDocument();
+  });
+
+  it("replaces one identity's key on its own when asked to rotate, though it has a control service", async () => {
+    // The control for the test above: the same pair, with `?rotate`.
+    pairedWithControlService();
+
+    await renderPage(true);
+
+    expect(currentStep()).toHaveTextContent("Issue a key");
+  });
+
   it("opens on issuing a key for an operator that holds none", async () => {
     keysAre();
 
@@ -105,7 +146,7 @@ describe("connect operator page", () => {
     await renderPage();
 
     expect(
-      screen.getByText("No policy lets you issue this operator a key"),
+      screen.getByText("No policy lets you issue this identity a key"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Issue key" })).toBeNull();
   });
@@ -123,7 +164,7 @@ describe("connect operator page", () => {
     await renderPage();
 
     expect(
-      screen.getByText("You can't view this operator or its keys"),
+      screen.getByText("You can't view this identity or its keys"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Issue key" })).toBeNull();
   });

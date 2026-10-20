@@ -636,6 +636,20 @@ func (q *Queries) LockCurrentDelegation(ctx context.Context, arg LockCurrentDele
 	return i, err
 }
 
+const lockOperatorManager = `-- name: LockOperatorManager :one
+SELECT manager_grn FROM operators WHERE grn = $1 FOR UPDATE
+`
+
+// Holds a record its manager is being set on, and answers the manager
+// it names. FOR UPDATE waits for a registration holding it as a
+// manager, so that registration's control service is seen (ADR-0124).
+func (q *Queries) LockOperatorManager(ctx context.Context, grn string) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, lockOperatorManager, grn)
+	var manager_grn pgtype.Text
+	err := row.Scan(&manager_grn)
+	return manager_grn, err
+}
+
 const lockOperatorRegistration = `-- name: LockOperatorRegistration :one
 SELECT grn FROM operators WHERE grn = $1 FOR UPDATE
 `
@@ -913,6 +927,26 @@ type SetOperatorControlEndpointParams struct {
 // delegating act, not renaming (#1170).
 func (q *Queries) SetOperatorControlEndpoint(ctx context.Context, arg SetOperatorControlEndpointParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setOperatorControlEndpoint, arg.ControlEndpoint, arg.Grn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setOperatorManager = `-- name: SetOperatorManager :execrows
+UPDATE operators SET manager_grn = $1
+WHERE grn = $2 AND manager_grn IS NULL
+`
+
+type SetOperatorManagerParams struct {
+	ManagerGrn pgtype.Text
+	Grn        string
+}
+
+// Sets a record's manager once: a record already naming one is not
+// written (ADR-0124).
+func (q *Queries) SetOperatorManager(ctx context.Context, arg SetOperatorManagerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setOperatorManager, arg.ManagerGrn, arg.Grn)
 	if err != nil {
 		return 0, err
 	}

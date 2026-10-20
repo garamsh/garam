@@ -45,6 +45,9 @@ var (
 	// ErrManagerHasControlService refuses a second control service for
 	// one manager (ADR-0124).
 	ErrManagerHasControlService = errorx.New(errorx.KindAlreadyExists, "the manager already has a control service")
+	// ErrManagerAlreadySet refuses setting the manager of a record that
+	// names one: the link is set once and never moves (ADR-0124).
+	ErrManagerAlreadySet = errorx.New(errorx.KindFailedPrecondition, "the record already names its manager")
 	// ErrIdentityIsManager refuses registering as a control service an
 	// identity a control service already names as its manager.
 	ErrIdentityIsManager = errorx.New(errorx.KindFailedPrecondition, "a control service names this identity as its manager")
@@ -152,22 +155,32 @@ type Operator struct {
 }
 
 // ServeManager makes o the control service of the operator manager
-// names, a GRN of another operator of o's organization (ADR-0124).
-// Whether that operator is registered, and free to take a control
-// service, is the store's to answer, read where it writes.
+// names (ADR-0124), as [ParseManager] reads it. Whether that operator is
+// registered, and free to take a control service, is the store's to
+// answer, read where it writes.
 func (o *Operator) ServeManager(manager string) error {
-	m, err := grn.Parse(manager)
+	m, err := ParseManager(o.GRN, manager)
 	if err != nil {
-		return errorx.Wrap(err, "operator: manager", errorx.KindInvalidArgument)
-	}
-	if want, err := GRNOf(o.Organization, m.Identifier); err != nil || want != m {
-		return errorx.New(errorx.KindInvalidArgument, "operator: manager is not an operator of this organization")
-	}
-	if m == o.GRN {
-		return errorx.New(errorx.KindInvalidArgument, "operator: an operator is not its own manager")
+		return err
 	}
 	o.Manager = &m
 	return nil
+}
+
+// ParseManager reads manager as the manager of the record under g: the
+// GRN of another operator of g's organization (ADR-0124).
+func ParseManager(g grn.GRN, manager string) (grn.GRN, error) {
+	m, err := grn.Parse(manager)
+	if err != nil {
+		return grn.GRN{}, errorx.Wrap(err, "operator: manager", errorx.KindInvalidArgument)
+	}
+	if want, err := GRNOf(grn.Org(g.Organization), m.Identifier); err != nil || want != m {
+		return grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "operator: manager is not an operator of this organization")
+	}
+	if m == g {
+		return grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "operator: an operator is not its own manager")
+	}
+	return m, nil
 }
 
 // New records that orgGRN has an operator under identifier.

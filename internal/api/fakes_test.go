@@ -1250,6 +1250,20 @@ func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator) (*
 	return o, nil
 }
 
+// RegisterPair records both or neither, as the transaction does.
+func (s *fakeOperatorStore) RegisterPair(_ context.Context, manager, control *operator.Operator) (*operator.Operator, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, o := range []*operator.Operator{manager, control} {
+		if _, ok := s.operators[o.GRN.String()]; ok {
+			return nil, operator.ErrOperatorAlreadyRegistered
+		}
+	}
+	s.operators[manager.GRN.String()] = manager
+	s.operators[control.GRN.String()] = control
+	return manager, nil
+}
+
 // Delete removes the record, as the statement does.
 func (s *fakeOperatorStore) Delete(_ context.Context, g grn.GRN) error {
 	s.mu.Lock()

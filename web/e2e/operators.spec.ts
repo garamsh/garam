@@ -111,7 +111,12 @@ test.describe("operators", () => {
       .getByRole("button", { name: "Connect an operator", exact: true })
       .click();
     const dialog = page.getByRole("dialog", { name: "Connect an operator" });
-    await dialog.getByRole("textbox", { name: "Identifier" }).fill("aurora");
+    await dialog
+      .getByRole("textbox", { name: "Cluster manager identifier" })
+      .fill("aurora");
+    await dialog
+      .getByRole("textbox", { name: "Control service identifier" })
+      .fill("aurora-control");
     const register = dialog.getByRole("button", {
       name: "Register",
       exact: true,
@@ -129,7 +134,7 @@ test.describe("operators", () => {
     await expect(page).toHaveURL(`${operators}/aurora/connect`);
   });
 
-  test("registers a control service as part of its manager's Operator, and lists the two as one row (#1636)", async ({
+  test("connects an Operator as one registration of its two identities, and adds a control service to an older one (#1636)", async ({
     page,
     signedIn,
   }) => {
@@ -144,46 +149,57 @@ test.describe("operators", () => {
     };
 
     let dialog = await connect();
-    // The seeded operator is a manager with no control service, so the
-    // dialog asks; its default starts a new Operator.
-    await expect(dialog.getByRole("combobox", { name: "Identity" })).toHaveText(
-      "The manager of a new Operator",
+    // The seeded identity is a cluster manager with no control service,
+    // so the dialog asks; its default is a new Operator.
+    await expect(dialog.getByRole("combobox", { name: "Register" })).toHaveText(
+      "A new Operator",
     );
-    await dialog.getByRole("textbox", { name: "Identifier" }).fill("aurora");
-    await dialog.getByRole("button", { name: "Register", exact: true }).click();
-    await expect(page).toHaveURL(`${operators}/aurora/connect`);
-
-    dialog = await connect();
-    await dialog.getByRole("combobox", { name: "Identity" }).click();
-    await page
-      .getByRole("option", { name: /^The control service of aurora/ })
-      .click();
-    expect(await axeViolations(page)).toEqual([]);
     await dialog
-      .getByRole("textbox", { name: "Identifier" })
+      .getByRole("textbox", { name: "Cluster manager identifier" })
+      .fill("aurora");
+    await dialog
+      .getByRole("textbox", { name: "Control service identifier" })
       .fill("aurora-control");
     await dialog.getByRole("button", { name: "Register", exact: true }).click();
-    await expect(page).toHaveURL(`${operators}/aurora-control/connect`);
+    await expect(page).toHaveURL(`${operators}/aurora/connect`);
+    await expect(
+      page.getByRole("button", { name: "Issue both keys", exact: true }),
+    ).toBeVisible();
+
+    // The seeded Operator predates registering both together; its
+    // control service joins it.
+    dialog = await connect();
+    await dialog.getByRole("combobox", { name: "Register" }).click();
+    await page
+      .getByRole("option", { name: /^The control service of / })
+      .click();
+    expect(await axeViolations(page)).toEqual([]);
+    const control = `${signedIn.operatorIdentifier}-control`;
+    await dialog
+      .getByRole("textbox", { name: "Control service identifier" })
+      .fill(control);
+    await dialog.getByRole("button", { name: "Register", exact: true }).click();
+    await expect(page).toHaveURL(`${operators}/${control}/connect`);
 
     await page.goto(operators);
     await expectHydrated(page);
-    // The seeded operator and the pair: two Operators, not three.
+    // The seeded Operator and aurora: two rows for four identities.
     await expect(
       page.getByRole("heading", { level: 1, name: /Operators/ }),
     ).toHaveText(/^Operators\s*2$/);
-    await expect(
-      page.getByRole("link", { name: "aurora-control", exact: true }),
-    ).toHaveCount(1);
     const row = page
       .getByRole("row")
       .filter({ has: page.getByRole("link", { name: "aurora", exact: true }) });
     await expect(
       row.getByRole("link", { name: "aurora-control", exact: true }),
     ).toHaveAttribute("href", `${operators}/aurora-control`);
-    await expect(row.getByText("Not connected")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: control, exact: true }),
+    ).toHaveCount(1);
+    await expect(page.getByText("Not connected")).toHaveCount(0);
   });
 
-  test("connects an operator: registers it, issues its key, places it and sees it sign in", async ({
+  test("connects an Operator: registers both identities, issues both keys, places them and sees both sign in", async ({
     page,
     signedIn,
   }) => {
@@ -197,7 +213,9 @@ test.describe("operators", () => {
       .getByRole("button", { name: "Connect an operator", exact: true })
       .click();
     const dialog = page.getByRole("dialog", { name: "Connect an operator" });
-    const identifier = dialog.getByRole("textbox", { name: "Identifier" });
+    const identifier = dialog.getByRole("textbox", {
+      name: "Cluster manager identifier",
+    });
     await identifier.fill("Field-Two");
     // The rule is refused beside its field, before a round trip.
     await expect(identifier).toHaveAttribute("aria-invalid", "true");
@@ -207,25 +225,44 @@ test.describe("operators", () => {
     expect(await axeViolations(page, ['[role="dialog"]'])).toEqual([]);
 
     await identifier.fill("field-two");
+    await dialog
+      .getByRole("textbox", { name: "Control service identifier" })
+      .fill("field-two-control");
     await dialog.getByRole("textbox", { name: "Name" }).fill("Field two");
     // Registering issues nothing, so it goes straight on to the setup
-    // page, where the key is issued (ADR-0117).
+    // page, where both keys are issued (ADR-0117, ADR-0124).
     await dialog.getByRole("button", { name: "Register", exact: true }).click();
 
     await expect(page).toHaveURL(`${operators}/field-two/connect`);
     await expectHydrated(page);
     expect(await axeViolations(page)).toEqual([]);
-    await page.getByRole("button", { name: "Issue key", exact: true }).click();
-    const pem = await keepSecret(page, "Save the private key");
+    await page
+      .getByRole("button", { name: "Issue both keys", exact: true })
+      .click();
+    const pem = await keepSecret(
+      page,
+      "Save the cluster manager's private key",
+    );
     expect(pem).toContain("-----BEGIN PRIVATE KEY-----");
+    const controlPem = await keepSecret(
+      page,
+      "Save the control service's private key",
+    );
+    expect(controlPem).toContain("-----BEGIN PRIVATE KEY-----");
+    expect(controlPem).not.toBe(pem);
 
     await expect(
-      page.getByRole("heading", { name: "Place the key", exact: true }),
+      page.getByRole("heading", { name: "Place the keys", exact: true }),
     ).toBeVisible();
-    // The local stack's token URL, and the private key only as a file.
-    const snippet = page.getByText(
-      /kubectl create secret generic garam-credential/,
-    );
+    // The local stack's token URL, and each private key only as its file.
+    await expect(
+      page
+        .getByRole("region", { name: "The control service's key" })
+        .getByText(/kubectl create secret generic/),
+    ).toContainText("private-key.pem=./field-two-control.pem");
+    const snippet = page
+      .getByRole("region", { name: "The cluster manager's key" })
+      .getByText(/kubectl create secret generic garam-credential/);
     await expect(snippet).toContainText(
       "token-url='https://machine.garam.localhost/oauth/token'",
     );
@@ -236,12 +273,15 @@ test.describe("operators", () => {
     // its content alone (#1511).
     expect(await axeViolations(page, ["main"])).toEqual([]);
 
-    await page.getByRole("button", { name: /placed the key/ }).click();
-    await expect(page.getByText("Waiting for its first sign-in")).toBeVisible();
+    await page.getByRole("button", { name: /placed both keys/ }).click();
+    await expect(page.getByText("Waiting for its first sign-in")).toHaveCount(
+      2,
+    );
     // The local stack runs no machine listener, so nothing exchanges
-    // the key; the test writes what an exchange leaves, and the step
+    // the keys; the test writes what an exchange leaves, and the step
     // finds it on its own next check.
     await seedKeyExchange(signedIn, "field-two");
+    await seedKeyExchange(signedIn, "field-two-control");
     await expect(page.getByText("Field two is connected")).toBeVisible({
       timeout: 15_000,
     });
@@ -332,7 +372,12 @@ test.describe("operators", () => {
       .getByRole("button", { name: "Connect an operator", exact: true })
       .click();
     const register = page.getByRole("dialog", { name: "Connect an operator" });
-    await register.getByRole("textbox", { name: "Identifier" }).fill("new");
+    await register
+      .getByRole("textbox", { name: "Cluster manager identifier" })
+      .fill("new");
+    await register
+      .getByRole("textbox", { name: "Control service identifier" })
+      .fill("new-control");
     await register
       .getByRole("button", { name: "Register", exact: true })
       .click();
@@ -356,7 +401,19 @@ test.describe("operators", () => {
       .getByRole("button", { name: "Delete operator", exact: true })
       .click();
     await expect(page).toHaveURL(operators);
-    await expect(page.getByText("new", { exact: true })).toBeHidden();
+    await expect(
+      page.getByRole("link", { name: "new", exact: true }),
+    ).toBeHidden();
+    // Its control service still names it, so it stands under a cluster
+    // manager that is not registered (ADR-0124).
+    await expect(
+      page
+        .getByRole("row")
+        .filter({
+          has: page.getByRole("link", { name: "new-control", exact: true }),
+        })
+        .getByText("Not registered"),
+    ).toBeVisible();
     await expect(
       page.getByRole("link", { name: "Staging cluster", exact: true }),
     ).toBeVisible();

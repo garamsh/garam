@@ -159,7 +159,7 @@ describe("connect wizard", () => {
     await user.click(screen.getByRole("button", { name: "Issue key" }));
 
     expect(
-      await screen.findByText("This garam doesn't issue operator keys"),
+      await screen.findByText("This garam doesn't issue keys"),
     ).toBeInTheDocument();
     // The control: it is not read as an outage.
     expect(screen.queryByText("garam couldn't issue a key")).toBeNull();
@@ -183,9 +183,7 @@ describe("connect wizard", () => {
     await user.click(screen.getByRole("button", { name: "Issue key" }));
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(
-      screen.queryByText("This garam doesn't issue operator keys"),
-    ).toBeNull();
+    expect(screen.queryByText("This garam doesn't issue keys")).toBeNull();
   });
 
   it.each([
@@ -211,9 +209,7 @@ describe("connect wizard", () => {
         await screen.findByText("garam couldn't issue a key"),
       ).toBeInTheDocument();
       // The control: the outage is not read as a garam with no keys.
-      expect(
-        screen.queryByText("This garam doesn't issue operator keys"),
-      ).toBeNull();
+      expect(screen.queryByText("This garam doesn't issue keys")).toBeNull();
       expect(currentStep()).toHaveTextContent("Issue a key");
     },
   );

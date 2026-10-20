@@ -1872,10 +1872,20 @@ export interface components {
             name?: components["schemas"]["OperatorName"];
             description?: components["schemas"]["OperatorDescription"];
             /**
-             * @description Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124). Absent registers a manager or a lone identity.
+             * @description Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124). It is how a control service joins a manager registered on its own, as every pair made before `controlService` was. Not given with `controlService`.
              * @example grn:acme:default:operator:field-one
              */
             manager?: string;
+            /** @description Registers this operator as a manager together with its control service, which names it, in one transaction (ADR-0124): both are recorded or neither is. The answer is the manager; the control service is the operator under this identifier, and each is issued its own key. Not given with `manager`. */
+            controlService?: {
+                /**
+                 * @description The control service's identifier, under the same rule as the manager's and different from it.
+                 * @example field-one-control
+                 */
+                identifier: string;
+                name?: components["schemas"]["OperatorName"];
+                description?: components["schemas"]["OperatorDescription"];
+            };
         };
         /** @description A change to what the organization says about an operator. A field left out keeps its value; the identifier is not a field. */
         OperatorPatch: {

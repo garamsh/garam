@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 
 import { Banner } from "@/components/banner";
-import { getOperator, listOperatorKeys } from "@/features/orgs";
+import {
+  getOperator,
+  listOperatorKeys,
+  lookupOperators,
+  slugFromGrn,
+  type OperatorKey,
+} from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
 import { ItemCrumb } from "../../../../../_components/item-crumb";
@@ -9,6 +15,7 @@ import { orgHref } from "../../../../../_components/navigation";
 import { PageHeader } from "../../../../../_components/page-header";
 import { liveKeys } from "../../_components/operator-status";
 import { ConnectWizard, type ConnectStep } from "./_components/connect-wizard";
+import { PairConnectWizard } from "./_components/pair-connect-wizard";
 
 /** Head metadata for an operator's setup; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Connect an operator — garam" };
@@ -37,14 +44,60 @@ export default async function ConnectOperatorPage({
     params,
     searchParams,
   ]);
-  const [record, keys, permissions] = await Promise.all([
+  const [record, keys, permissions, listed] = await Promise.all([
     getOperator(org, operator),
     listOperatorKeys(org, operator),
     checkPermissions(org, {
       register: { action: "operator:register" },
       reissue: { action: "operator:reissue" },
     }),
+    lookupOperators(org),
   ]);
+  // A cluster manager whose control service names it is set up as one
+  // Operator (ADR-0124), unless one key is being replaced, which is
+  // each identity's own setup.
+  const control =
+    rotate === undefined && record.status === "ok" && listed.status === "ok"
+      ? listed.data.find((o) => o.manager === record.data.grn)
+      : undefined;
+  if (control !== undefined && record.status === "ok") {
+    const controlKeys = await listOperatorKeys(org, slugFromGrn(control.grn));
+    return (
+      <>
+        <ItemCrumb label={record.data.name} />
+        <PairConnectWizard
+          org={org}
+          name={record.data.name}
+          identities={{
+            manager: {
+              operator,
+              name: record.data.name,
+              clientId: record.data.grn,
+              keys: keys.status === "ok" ? keys.data : [],
+            },
+            control: {
+              operator: slugFromGrn(control.grn),
+              name: control.name,
+              clientId: control.grn,
+              keys: controlKeys.status === "ok" ? controlKeys.data : [],
+            },
+          }}
+          problem={
+            keys.status !== "ok"
+              ? keys.status
+              : controlKeys.status !== "ok"
+                ? controlKeys.status
+                : null
+          }
+          initialStep={pairStep([
+            keys.status === "ok" ? keys.data : [],
+            controlKeys.status === "ok" ? controlKeys.data : [],
+          ])}
+          operatorsHref={orgHref(org, "operators")}
+        />
+      </>
+    );
+  }
 
   const header = <PageHeader title="Connect an operator" />;
 
@@ -86,7 +139,7 @@ export default async function ConnectOperatorPage({
         {header}
         <Banner
           tone="info"
-          title="No policy lets you issue this operator a key"
+          title="No policy lets you issue this identity a key"
         />
       </>
     );
@@ -113,4 +166,18 @@ export default async function ConnectOperatorPage({
       />
     </>
   );
+}
+
+/**
+ * Where a pair's setup resumes: issuing while either identity holds no
+ * live key, verifying once both have signed in, and placing between.
+ */
+function pairStep(
+  keys: [OperatorKey[], OperatorKey[]],
+): Exclude<ConnectStep, "register"> {
+  const latest = keys.map((held) => liveKeys(held).at(-1));
+  if (latest.some((key) => key === undefined)) return "issue";
+  return latest.every((key) => key?.lastExchangedAt !== undefined)
+    ? "verify"
+    : "place";
 }

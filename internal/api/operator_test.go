@@ -208,6 +208,52 @@ func TestOperatorRegister_RecordsAndListsTheManager(t *testing.T) {
 	}
 }
 
+// TestOperatorRegister_RecordsAPairInOneRegistration covers connecting
+// an Operator in one step (ADR-0124): a registration naming a control
+// service records it beside the cluster manager, naming it, and answers
+// the cluster manager. A registration naming both a manager and a
+// control service, or a control service under the cluster manager's own
+// identifier, is refused before the store is reached; the pair under
+// fresh identifiers is the control for both.
+func TestOperatorRegister_RecordsAPairInOneRegistration(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRead},
+	)
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+	manager := operatorGRNOf(slug, "aurora").String()
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators",
+		`{"identifier":"self","controlService":{"identifier":"self"}}`, admin)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "a control service under the cluster manager's identifier")
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators",
+		`{"identifier":"both","manager":"`+manager+`","controlService":{"identifier":"both-control"}}`, admin)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "a manager and a control service together")
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators",
+		`{"identifier":"aurora","controlService":{"identifier":"aurora-control","name":"Aurora control"}}`, admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	registered := decodeBody[apigen.Operator](t, rec)
+	assert.Equal(t, manager, registered.Grn)
+	assert.Nil(t, registered.Manager, "the answer is the cluster manager")
+
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators", "", admin)
+	require.Equal(t, http.StatusOK, rec.Code)
+	listed := map[string]apigen.Operator{}
+	for _, o := range decodeBody[[]apigen.Operator](t, rec) {
+		listed[o.Grn] = o
+	}
+	require.Len(t, listed, 2, "the refused registrations recorded nothing")
+	control := listed[operatorGRNOf(slug, "aurora-control").String()]
+	require.NotNil(t, control.Manager)
+	assert.Equal(t, manager, *control.Manager)
+	assert.Equal(t, "Aurora control", control.Name)
+}
+
 // fieldsOf answers the names of an object's fields, sorted.
 func fieldsOf(t *testing.T, object map[string]json.RawMessage) []string {
 	t.Helper()

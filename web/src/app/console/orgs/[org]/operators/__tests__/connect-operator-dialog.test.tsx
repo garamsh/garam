@@ -80,8 +80,13 @@ describe("connect operator dialog", () => {
       const { user, dialog } = await openDialog();
       await enter(
         user,
-        dialog.getByRole("textbox", { name: "Identifier" }),
+        dialog.getByRole("textbox", { name: "Cluster manager identifier" }),
         "aurora",
+      );
+      await enter(
+        user,
+        dialog.getByRole("textbox", { name: "Control service identifier" }),
+        "aurora-control",
       );
 
       await user.click(dialog.getByRole("button", { name: "Register" }));
@@ -92,9 +97,9 @@ describe("connect operator dialog", () => {
       expect(
         screen.getByRole("dialog", { name: "Connect an operator" }),
       ).toBeVisible();
-      expect(dialog.getByRole("textbox", { name: "Identifier" })).toHaveValue(
-        "aurora",
-      );
+      expect(
+        dialog.getByRole("textbox", { name: "Cluster manager identifier" }),
+      ).toHaveValue("aurora");
       expect(posted).toEqual([]);
     } finally {
       transport.fails = false;
@@ -104,7 +109,9 @@ describe("connect operator dialog", () => {
   it("refuses an identifier outside the character rule beside its field, without a round trip", async () => {
     const posted = recordRegistrations();
     const { user, dialog } = await openDialog();
-    const identifier = dialog.getByRole("textbox", { name: "Identifier" });
+    const identifier = dialog.getByRole("textbox", {
+      name: "Cluster manager identifier",
+    });
 
     await enter(user, identifier, "Field One");
 
@@ -125,7 +132,7 @@ describe("connect operator dialog", () => {
 
     expect(name).toHaveAttribute("aria-invalid", "true");
     expect(
-      dialog.getByRole("textbox", { name: "Identifier" }),
+      dialog.getByRole("textbox", { name: "Cluster manager identifier" }),
     ).not.toHaveAttribute("aria-invalid");
   });
 
@@ -141,8 +148,13 @@ describe("connect operator dialog", () => {
     const { user, dialog } = await openDialog();
     await enter(
       user,
-      dialog.getByRole("textbox", { name: "Identifier" }),
+      dialog.getByRole("textbox", { name: "Cluster manager identifier" }),
       "field-one",
+    );
+    await enter(
+      user,
+      dialog.getByRole("textbox", { name: "Control service identifier" }),
+      "field-one-control",
     );
 
     await user.click(dialog.getByRole("button", { name: "Register" }));
@@ -151,71 +163,110 @@ describe("connect operator dialog", () => {
       REFUSAL_COPY.alreadyExists,
     );
     expect(dialog.queryByText("operator exists")).not.toBeInTheDocument();
-    expect(dialog.getByRole("textbox", { name: "Identifier" })).toHaveValue(
-      "field-one",
-    );
+    expect(
+      dialog.getByRole("textbox", { name: "Cluster manager identifier" }),
+    ).toHaveValue("field-one");
   });
 
-  it("registers the identity as the control service of the manager chosen, so the pair is recorded from the start (#1636)", async () => {
+  it("registers a new Operator's cluster manager and control service in one registration (#1636)", async () => {
+    const posted = recordRegistrations();
+    const { user, dialog } = await openDialog();
+    await enter(
+      user,
+      dialog.getByRole("textbox", { name: "Cluster manager identifier" }),
+      "aurora",
+    );
+    await enter(
+      user,
+      dialog.getByRole("textbox", { name: "Control service identifier" }),
+      "aurora-control",
+    );
+
+    await user.click(dialog.getByRole("button", { name: "Register" }));
+
+    await vi.waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toEqual(
+      expect.objectContaining({
+        identifier: "aurora",
+        controlService: { identifier: "aurora-control" },
+      }),
+    );
+    expect(posted[0]).not.toHaveProperty("manager");
+  });
+
+  it("refuses a control service under the cluster manager's own identifier, without a round trip", async () => {
+    const posted = recordRegistrations();
+    const { user, dialog } = await openDialog();
+    await enter(
+      user,
+      dialog.getByRole("textbox", { name: "Cluster manager identifier" }),
+      "aurora",
+    );
+    const control = dialog.getByRole("textbox", {
+      name: "Control service identifier",
+    });
+
+    await enter(user, control, "aurora");
+
+    expect(control).toHaveAttribute("aria-invalid", "true");
+    expect(dialog.getByRole("button", { name: "Register" })).toBeDisabled();
+    expect(posted).toEqual([]);
+    // Control: an identifier of its own clears the mark.
+    await user.clear(control);
+    await enter(user, control, "aurora-control");
+    expect(control).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("registers a control service onto the cluster manager chosen, for an Operator connected before the two were registered together", async () => {
     const posted = recordRegistrations();
     const { user, dialog } = await openDialog({ managers: [fieldOneIdentity] });
-    const identity = dialog.getByRole("combobox", { name: "Identity" });
-    expect(identity).toHaveTextContent("The manager of a new Operator");
+    const choice = dialog.getByRole("combobox", { name: "Register" });
+    expect(choice).toHaveTextContent("A new Operator");
 
-    await user.click(identity);
+    await user.click(choice);
     await user.click(
       // Presence: the option's name goes on with the identifier.
       await screen.findByRole("option", {
         name: /^The control service of Field cluster one/,
       }),
     );
+    // One identity is registered, so the form asks for one identifier.
+    expect(
+      dialog.queryByRole("textbox", { name: "Cluster manager identifier" }),
+    ).toBeNull();
     await enter(
       user,
-      dialog.getByRole("textbox", { name: "Identifier" }),
+      dialog.getByRole("textbox", { name: "Control service identifier" }),
       "field-one-control",
     );
     await user.click(dialog.getByRole("button", { name: "Register" }));
 
-    await vi.waitFor(() =>
-      expect(posted).toEqual([
-        expect.objectContaining({
-          identifier: "field-one-control",
-          manager: fieldOne.grn,
-        }),
-      ]),
-    );
-  });
-
-  it("registers a manager, naming none, unless a control service is chosen", async () => {
-    // The control for the test above: the same dialog, left on its
-    // default, sends no manager.
-    const posted = recordRegistrations();
-    const { user, dialog } = await openDialog({ managers: [fieldOneIdentity] });
-    await enter(
-      user,
-      dialog.getByRole("textbox", { name: "Identifier" }),
-      "field-two",
-    );
-    await user.click(dialog.getByRole("button", { name: "Register" }));
-
     await vi.waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]).not.toHaveProperty("manager");
+    expect(posted[0]).toEqual(
+      expect.objectContaining({
+        identifier: "field-one-control",
+        manager: fieldOne.grn,
+      }),
+    );
+    expect(posted[0]).not.toHaveProperty("controlService");
   });
 
-  it("opens on the manager the address chose", async () => {
+  it("opens on the cluster manager the address chose", async () => {
     const { dialog } = await openDialog({
       managers: [fieldOneIdentity],
       defaultManager: fieldOne.grn,
     });
     expect(
-      dialog.getByRole("combobox", { name: "Identity" }),
+      dialog.getByRole("combobox", { name: "Register" }),
     ).toHaveTextContent("The control service of Field cluster one");
   });
 
-  it("asks no identity where every manager already has its control service", async () => {
+  it("asks nothing about an existing Operator where every cluster manager has its control service", async () => {
     const { dialog } = await openDialog();
-    expect(dialog.queryByRole("combobox", { name: "Identity" })).toBeNull();
+    expect(dialog.queryByRole("combobox", { name: "Register" })).toBeNull();
     // Control: the dialog is open with its form.
-    expect(dialog.getByRole("textbox", { name: "Identifier" })).toBeVisible();
+    expect(
+      dialog.getByRole("textbox", { name: "Control service identifier" }),
+    ).toBeVisible();
   });
 });

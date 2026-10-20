@@ -34,18 +34,23 @@ import { secretSnippet, type Identity } from "./secret-snippet";
 /** The wizard's steps, in order. */
 export type ConnectStep = "register" | "issue" | "place" | "verify";
 
-const STEPS = [
+export const STEPS = [
   { id: "register", title: "Register", description: "Its identity in garam." },
   { id: "issue", title: "Issue a key", description: "Shown once." },
   {
     id: "place",
     title: "Place the key",
-    description: "In the Operator's Secret.",
+    description: "In its Secret.",
   },
   { id: "verify", title: "Verify", description: "Its first sign-in." },
 ] as const;
 
-const ORDER: readonly ConnectStep[] = ["register", "issue", "place", "verify"];
+export const ORDER: readonly ConnectStep[] = [
+  "register",
+  "issue",
+  "place",
+  "verify",
+];
 
 /** How often the verify step asks again while it is on screen. */
 const POLL_MS = 5_000;
@@ -57,7 +62,7 @@ const initialState: IssueOperatorKeyState = { status: "idle" };
  * visible, so a key's first sign-in reaches the verify step without a
  * reload. It stops when the step leaves or the tab is hidden.
  */
-function useRefreshWhileVisible(active: boolean) {
+export function useRefreshWhileVisible(active: boolean) {
   const router = useRouter();
   useEffect(() => {
     if (!active) return;
@@ -82,7 +87,7 @@ function useRefreshWhileVisible(active: boolean) {
 }
 
 /** A command to copy, in mono, with its copy control. */
-function CodeBlock({ label, code }: { label: string; code: string }) {
+export function CodeBlock({ label, code }: { label: string; code: string }) {
   const { outcome, copy } = useCopy(code);
   return (
     <div className="relative">
@@ -203,18 +208,18 @@ export function ConnectWizard({
     >
       {problem === "unreachable" && (
         <Banner tone="warn" title={API_UNREACHABLE_TITLE}>
-          <ApiUnreachableReason subject="this operator's setup" />
+          <ApiUnreachableReason subject="this setup" />
         </Banner>
       )}
       {problem === "forbidden" && (
-        <RefusedRead subject="this operator or its keys" />
+        <RefusedRead subject="this identity or its keys" />
       )}
 
       {showSteps && step === "issue" && (
         <div className="flex flex-col gap-5">
           <h2 className="text-base">Issue a key</h2>
           {state.status === "unconfigured" && (
-            <Banner tone="info" title="This garam doesn't issue operator keys">
+            <Banner tone="info" title="This garam doesn't issue keys">
               <code>GARAM_MACHINE_TOKEN_URL</code> is not set. Ask whoever runs
               garam.
             </Banner>
@@ -230,7 +235,7 @@ export function ConnectWizard({
             {live.length > 0 ? (
               <fieldset className="flex flex-col gap-2">
                 <legend className="mb-1 font-medium">
-                  This operator already holds a key
+                  This identity already holds a key
                 </legend>
                 <label className="flex items-start gap-2.5 rounded-lg border px-3 py-2.5 has-checked:border-primary has-disabled:opacity-60">
                   <input
@@ -395,6 +400,29 @@ export function ConnectWizard({
   );
 }
 
+/** What a snippet shows where the token URL is not at hand. */
+export const TOKEN_URL_PLACEHOLDER =
+  "<token URL shown when the key was issued>";
+
+/** Where each identity mounts its Secret, under the snippet. */
+export const PLACEMENT_NOTES: Record<Identity, React.ReactNode> = {
+  manager: (
+    <>
+      Mounted read-only at{" "}
+      <code className="font-mono text-xs">/etc/garam/credential</code>.
+    </>
+  ),
+  control: (
+    <>
+      Mount it read-only and point{" "}
+      <code className="font-mono text-xs">--operator-private-key-file</code>,{" "}
+      <code className="font-mono text-xs">--operator-client-id-file</code> and{" "}
+      <code className="font-mono text-xs">--operator-token-url-file</code> at
+      its files.
+    </>
+  ),
+};
+
 /**
  * Where the key goes: the Secret each identity mounts read-only, from
  * garam-agent-operator `c730884` (ADR 0072). The private key goes in as
@@ -417,24 +445,7 @@ function PlaceStep({
   replaceHref: string | undefined;
   onPlaced: () => void;
 }) {
-  const shownTokenUrl = tokenUrl ?? "<token URL shown when the key was issued>";
-  const notes: Record<Identity, React.ReactNode> = {
-    manager: (
-      <>
-        Mounted read-only at{" "}
-        <code className="font-mono text-xs">/etc/garam/credential</code>.
-      </>
-    ),
-    control: (
-      <>
-        Mount it read-only and point{" "}
-        <code className="font-mono text-xs">--operator-private-key-file</code>,{" "}
-        <code className="font-mono text-xs">--operator-client-id-file</code> and{" "}
-        <code className="font-mono text-xs">--operator-token-url-file</code> at
-        its files.
-      </>
-    ),
-  };
+  const shownTokenUrl = tokenUrl ?? TOKEN_URL_PLACEHOLDER;
 
   return (
     <div className="flex flex-col gap-5">
@@ -471,7 +482,7 @@ function PlaceStep({
       <Tabs defaultValue="manager" className="gap-4">
         <TabsList variant="line" className="w-full justify-start border-b">
           <TabsTrigger value="manager" className="flex-none px-2">
-            Manager
+            Cluster manager
           </TabsTrigger>
           <TabsTrigger value="control" className="flex-none px-2">
             Control service
@@ -483,9 +494,9 @@ function PlaceStep({
             value={identity}
             className="flex flex-col gap-3"
           >
-            <p className="text-muted-foreground">{notes[identity]}</p>
+            <p className="text-muted-foreground">{PLACEMENT_NOTES[identity]}</p>
             <CodeBlock
-              label={`the ${identity === "manager" ? "manager" : "control service"} command`}
+              label={`the ${identity === "manager" ? "cluster manager" : "control service"} command`}
               code={secretSnippet(identity, {
                 keyFile,
                 clientId,

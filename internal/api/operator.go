@@ -4,14 +4,17 @@ import (
 	"net/http"
 
 	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 )
 
 // RegisterOperator records that the org has an operator under the
-// identifier given (ADR-0045). Requires the admin role. It issues
-// nothing: the operator enters by a key, which IssueOperatorKey issues
-// on the registration (ADR-0102, ADR-0117).
+// identifier given (ADR-0045), as a manager with its control service in
+// one write, or as the control service of a manager registered earlier
+// (ADR-0124). Requires the admin role. It issues nothing: each identity
+// enters by a key, which IssueOperatorKey issues on its registration
+// (ADR-0102, ADR-0117).
 func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -37,18 +40,55 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
+	if body.Manager != nil && body.ControlService != nil {
+		writeError(w, errorx.New(errorx.KindInvalidArgument, "operator: a registration names a manager or a control service, not both"))
+		return
+	}
 	if body.Manager != nil {
 		if err := o.ServeManager(*body.Manager); err != nil {
 			writeError(w, err)
 			return
 		}
 	}
-	registered, err := s.operators.Register(r.Context(), o)
-	if err != nil {
-		writeError(w, err)
-		return
+	var registered *operator.Operator
+	if body.ControlService != nil {
+		// The pair is recorded in one write, or neither is (ADR-0124).
+		control, err := controlServiceOf(o, body.ControlService.Identifier,
+			body.ControlService.Name, body.ControlService.Description)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		registered, err = s.operators.RegisterPair(r.Context(), o, control)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+	} else {
+		registered, err = s.operators.Register(r.Context(), o)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusCreated, operatorToAPI(registered))
+}
+
+// controlServiceOf builds the record of manager's control service under
+// identifier, naming manager, from what the registration says of it.
+func controlServiceOf(manager *operator.Operator, identifier string, name, description *string) (*operator.Operator, error) {
+	details, err := operator.NewDetailsPatch(name, description)
+	if err != nil {
+		return nil, err
+	}
+	control, err := operator.New(manager.Organization, identifier, manager.RegisteredBy, details)
+	if err != nil {
+		return nil, err
+	}
+	if err := control.ServeManager(manager.GRN.String()); err != nil {
+		return nil, err
+	}
+	return control, nil
 }
 
 // DeleteOperator removes the org's record of the operator, which stops

@@ -1320,13 +1320,25 @@ type OperatorPatch struct {
 
 // OperatorRegistration defines model for OperatorRegistration.
 type OperatorRegistration struct {
+	// ControlService Registers this operator as a manager together with its control service, which names it, in one transaction (ADR-0124): both are recorded or neither is. The answer is the manager; the control service is the operator under this identifier, and each is issued its own key. Not given with `manager`.
+	ControlService *struct {
+		// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+		Description *OperatorDescription `json:"description,omitempty"`
+
+		// Identifier The control service's identifier, under the same rule as the manager's and different from it.
+		Identifier string `json:"identifier"`
+
+		// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
+		Name *OperatorName `json:"name,omitempty"`
+	} `json:"controlService,omitempty"`
+
 	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
 	Description *OperatorDescription `json:"description,omitempty"`
 
 	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, and it is supplied rather than minted because the operator is configured with it before it is registered.
 	Identifier string `json:"identifier"`
 
-	// Manager Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124). Absent registers a manager or a lone identity.
+	// Manager Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124). It is how a control service joins a manager registered on its own, as every pair made before `controlService` was. Not given with `controlService`.
 	Manager *string `json:"manager,omitempty"`
 
 	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.

@@ -18,6 +18,20 @@ type Store interface {
 	// when the organization already has one under that GRN. It answers
 	// the operator as stored, read in the same transaction.
 	Register(ctx context.Context, o *Operator) (*Operator, error)
+	// RegisterPair records a manager and its control service, whose
+	// Manager names it, in one transaction, and answers the manager as
+	// stored (ADR-0124). Either GRN already registered is
+	// ErrOperatorAlreadyRegistered, and the control service is refused
+	// as Register refuses it; a refusal records neither.
+	RegisterPair(ctx context.Context, manager, control *Operator) (*Operator, error)
+	// SetManager makes the record under g the control service of
+	// manager, once, and answers it as stored (ADR-0124). A record that
+	// already names a manager is ErrManagerAlreadySet; manager is
+	// refused as Register refuses a control service's, and g as
+	// ErrIdentityIsManager where a record names it as its manager. It
+	// answers ErrOperatorNotFound where the organization holds no
+	// record under g.
+	SetManager(ctx context.Context, g, manager grn.GRN) (*Operator, error)
 	// IssueKey records k's public key for its operator as rotation
 	// says it stands beside the keys already held, and answers its
 	// public record (ADR-0102). KeyRotationImmediate withdraws every

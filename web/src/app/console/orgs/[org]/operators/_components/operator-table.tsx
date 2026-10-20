@@ -77,7 +77,7 @@ export function OperatorTable({
     {
       id: "manager",
       accessorFn: (row) => `${row.manager?.name ?? ""} ${row.identifier}`,
-      header: "Manager",
+      header: "Cluster manager",
       cell: ({ row }) =>
         row.original.manager ? (
           <IdentityCell

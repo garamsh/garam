@@ -19,10 +19,10 @@ grants and authorities.
 
 | Type | Responsibility |
 |------|----------------|
-| `Operator` | an organization's record that it has an operator under this GRN: what it calls the operator and says it is for, who registered it and when, the control endpoint the console sends its operations to, and, for a control service, the manager it serves |
+| `Operator` | an organization's record that it has an operator under this GRN: what it calls the operator and says it is for, who registered it and when, the control endpoint the console sends its operations to, and, for a control service, the cluster manager it belongs to |
 | `ControlEndpoint` | a parsed `https` base URL a hosted operator's control service answers the console at |
 | `DetailsPatch` | a parsed name and description, each absent where the caller said nothing: what a registration starts with and what an update changes |
-| `Store` | registers one, a control service under the manager it names, and answers what it stored, issues, lists and withdraws its keys, changes its name and description, sets or clears its control endpoint, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
+| `Store` | registers one, a cluster manager and its control service together, or a control service under the cluster manager it names, and answers what it stored; links a control service to its cluster manager once; issues, lists and withdraws its keys, changes its name and description, sets or clears its control endpoint, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
 | `Service` | exchanges a client assertion a live key signed for a token, and verifies a token presented on another operator's behalf |
 | `Token` | a token an operator exchanged a key's assertion for: the operator, the audience it is accepted by, and when it expires |
 | `TokenHolder` | what a live token's row names, read beside the registration and the key it rests on |
@@ -64,7 +64,9 @@ registered, which the console shows and `ListByOrg` exists for; and
 whether a presented token still names an operator this organization
 holds, which the machine listener asks through a seam of its own.
 
-The record's one update is to its name and description
+Apart from its control endpoint and the manager a control service
+names once (§An Operator's two identities), the record's one update is
+to its name and description
 ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)).
 Both are what the organization says about the operator and neither is
 an identity: a name is not unique, one left out of a registration is
@@ -90,41 +92,53 @@ reads it to decide whether a caller is admitted.
 
 ## An Operator's two identities
 
-An Operator is a manager and at most one control service, each
-registered as an operator of its own and issued its own key. The pair
-is recorded on the control service's record, which names its manager
-by GRN
-([ADR-0124](./adr/0124-a-control-service-names-its-manager-on-its-own-record-set-when-it-is-registered.md)).
+An Operator is a cluster manager and at most one control service,
+each a record of its own with its own key. The pair is recorded on the
+control service's record, which names its cluster manager by GRN
+([ADR-0124](./adr/0124-an-operator-is-registered-as-a-pair-in-one-step-and-its-control-service-names-its-manager.md)).
+That ADR's §Terms maps the API's names, `Operator` and `manager`
+among them, to these terms.
 
-- **It is written once, at registration.** `registerOperator` takes
-  `manager`, and `Operator.ServeManager` refuses, as a 400, a value
-  that is not another operator of the organization. The store refuses,
-  each as a 409 and in the transaction that inserts, a manager the
-  organization holds no record of, one that is itself a control
-  service, one another control service already names, and a
-  registration naming a manager of an identity a control service names
-  as its own manager. The insert comes first and the manager's row is
-  held `FOR KEY SHARE` after it, so the transaction takes the
-  organization's row before any operator's, the order an
-  organization's deletion takes them in (#1424). No update route
-  writes it, so a pair registered before it is linked by registering
-  the control service again.
+- **The pair is registered in one step.** `registerOperator` with
+  `controlService` records the cluster manager and its control service
+  in one transaction (`Store.RegisterPair`): both, or neither.
+- **A control service may join a cluster manager registered alone.**
+  It can be registered with `manager`, or an existing record naming no
+  manager can be linked once (`Store.SetManager`), authorized on
+  `operator:register`. After that the link never moves.
+- **Both paths refuse the same things.** `operator.ParseManager`
+  refuses, as a 400, a value that is not another record of the
+  organization. The store refuses each of the following as a 409, in
+  the transaction that writes:
+  - a cluster manager the organization holds no record of;
+  - one that is itself a control service;
+  - one another control service already names;
+  - a record a control service names as its cluster manager;
+  - for a link, a record that already names one.
+- **The rows are held in a fixed order.** A registration inserts
+  first and holds the cluster manager `FOR KEY SHARE` after, so it
+  takes the organization's row before any record's, as an
+  organization's deletion does (#1424). A link holds the record
+  `FOR UPDATE`, which waits for a registration holding it as a cluster
+  manager, and holds the two rows in GRN byte order.
 - **It names the identity.** `migrations/000062` holds the column
-  without a foreign key, unique, and to an operator of the same
-  organization other than the row. Deleting a manager leaves its
-  control service naming it, and registering the identifier again
+  unique, without a foreign key, and naming a record of the same
+  organization other than the row. Deleting a cluster manager leaves
+  its control service naming it, and registering that identifier again
   rejoins them.
 - **It is read on the list.** `ListByOrg` answers every record with
-  its manager, and the console joins them: each record naming no
-  manager is an Operator, the record naming it is its control service,
-  and a control service naming a manager garam no longer holds is an
-  Operator whose manager is not registered. Nothing pairs by name or by
-  grant: a grant is the authority a member hands a hosted operator
-  (§Delegated operation authority), not which identities are one
-  Operator.
+  its manager, and the console joins them:
+  - each record naming no manager is an Operator;
+  - the record naming it is its control service;
+  - a control service naming a cluster manager garam no longer holds
+    is an Operator whose cluster manager is not registered.
+
+  Nothing pairs by name or by grant. A grant is the authority a member
+  hands a hosted operator (§Delegated operation authority), not a
+  statement of which identities are one Operator.
 
 `api/openapi.yaml` §Operator and §OperatorRegistration are
-authoritative for the field's wire.
+authoritative for the pair's wire.
 
 ## Issued PEM identity
 

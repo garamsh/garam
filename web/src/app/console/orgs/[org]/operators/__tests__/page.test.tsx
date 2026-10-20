@@ -102,10 +102,14 @@ describe("operators list", () => {
     );
   }
 
-  it("shows a linked pair as one Operator: its manager and its control service", async () => {
+  it("shows a linked pair as one Operator: its cluster manager and its control service", async () => {
     listing(fieldOne, { ...control, manager: fieldOne.grn });
 
     await renderPage();
+
+    expect(
+      screen.getAllByRole("columnheader").map((header) => header.textContent),
+    ).toEqual(expect.arrayContaining(["Cluster manager", "Control service"]));
 
     expect(
       screen.getByRole("heading", { level: 1, name: /Operators/ }),
@@ -121,7 +125,7 @@ describe("operators list", () => {
     expect(within(row).queryByText("Not connected")).toBeNull();
   });
 
-  it("says a manager with no control service is not connected, and pairs nothing by name", async () => {
+  it("says a cluster manager with no control service is not connected, and pairs nothing by name", async () => {
     // The same two records with no `manager`: two Operators, neither
     // connected, though one is named like the other's control service.
     listing(fieldOne, control);
@@ -134,7 +138,7 @@ describe("operators list", () => {
     expect(screen.getAllByText("Not connected")).toHaveLength(2);
   });
 
-  it("shows a lone control service under the manager it names, which garam no longer holds", async () => {
+  it("shows a lone control service under the cluster manager it names, which garam no longer holds", async () => {
     listing({ ...control, manager: fieldOne.grn });
 
     await renderPage();
@@ -150,7 +154,7 @@ describe("operators list", () => {
     ).toBeNull();
   });
 
-  it("offers only managers without a control service to connect one to, choosing the one the address names", async () => {
+  it("offers only cluster managers without a control service to connect one to, choosing the one the address names", async () => {
     const fieldTwo = {
       ...fieldOne,
       grn: "grn:acme:default:operator:field-two",
@@ -161,7 +165,7 @@ describe("operators list", () => {
 
     await renderPage("acme", "field-two");
 
-    const identity = screen.getByRole("combobox", { name: "Identity" });
+    const identity = screen.getByRole("combobox", { name: "Register" });
     expect(identity).toHaveTextContent(
       "The control service of Field cluster two",
     );
@@ -171,7 +175,7 @@ describe("operators list", () => {
         (option) => option.textContent,
       ),
     ).toEqual([
-      "The manager of a new Operator",
+      "A new Operator",
       "The control service of Field cluster two field-two",
     ]);
   });

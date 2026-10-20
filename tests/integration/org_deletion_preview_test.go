@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
@@ -69,7 +70,7 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	orgs := orgpg.New(p)
-	agents := agent.NewPostgresStore(p)
+	agents := agentpg.New(p)
 	operators := operatorpg.New(p)
 	consents := message.NewPostgresStore(p)
 	users := userpg.New(p)

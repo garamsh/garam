@@ -19,7 +19,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
@@ -44,7 +44,7 @@ type listStack struct {
 	acme           grn.GRN
 	policies       *authz.PolicyGRPCServer
 	orgs           *orgpg.Store
-	agents         *agent.PostgresStore
+	agents         *agentpg.Store
 	ada, dan       *http.Cookie
 	adaGRN, danGRN grn.GRN
 }
@@ -67,7 +67,7 @@ func newListStack(t *testing.T) *listStack {
 		require.NoError(t, authn.NewPostgresSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
-	s := &listStack{pool: p, acme: acme, policies: policies, orgs: orgs, agents: agent.NewPostgresStore(p)}
+	s := &listStack{pool: p, acme: acme, policies: policies, orgs: orgs, agents: agentpg.New(p)}
 	s.ada, s.adaGRN = session("ada")
 	s.dan, s.danGRN = session("dan")
 

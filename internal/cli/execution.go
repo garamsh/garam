@@ -28,7 +28,7 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 	if now == nil {
 		now = time.Now
 	}
-	agents := agent.NewPostgresStore(pool)
+	agents := agentpg.New(pool)
 	return agent.NewExecutionService(agents, agentpg.New(pool),
 		lifecycleAuthorization{
 			grants:      operatorpg.New(pool),
@@ -45,7 +45,7 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 // admission (ADR-0102) over the database and the delegated operation
 // authority that reads a member's reference.
 func newAdmissionService(pool *pgxpool.Pool, authority operator.AuthorityService, now func() time.Time) agent.AdmissionService {
-	return agent.NewAdmissionService(agent.NewPostgresStore(pool), agentpg.New(pool), operationAuthorities{service: authority}, now)
+	return agent.NewAdmissionService(agentpg.New(pool), agentpg.New(pool), operationAuthorities{service: authority}, now)
 }
 
 // lifecycleAuthorization decides lifecycle authority over one agent

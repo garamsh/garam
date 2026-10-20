@@ -267,9 +267,9 @@ func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "1", first.Epoch)
 	assert.Equal(t, "acme", g.Organization)
-	assignment, err := agent.NewPostgresStore(s.pool).GetAssignment(context.Background(), g)
+	assignment, err := agentpg.New(s.pool).GetAssignment(context.Background(), g)
 	require.NoError(t, err)
-	assert.Equal(t, s.controller, assignment.Assignee(), "the assignment is the controller's, not the caller's")
+	assert.Equal(t, s.controller, assignment.Assignee, "the assignment is the controller's, not the caller's")
 
 	retried := s.createManaged(t, s.hostedTLS, s.controller, "create-1", ref)
 	assert.Equal(t, http.StatusOK, retried.status, retried.body)
@@ -458,7 +458,7 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 	t.Run("a moved assignment", func(t *testing.T) {
 		m, creation := enrolled(s.owner, "moved")
 		assert.Equal(t, http.StatusOK, retried(creation), "control")
-		_, err := agent.NewPostgresStore(s.pool).Assign(ctx, m.agent, s.controller)
+		_, err := agentpg.New(s.pool).Assign(ctx, m.agent, s.controller)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusConflict, retried(creation), "the stored answer no longer describes where the agent is")
 	})

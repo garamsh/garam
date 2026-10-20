@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
@@ -31,7 +32,7 @@ func reportBody(epoch int, state string) string {
 // not.
 func storedAgent(t *testing.T, p *pgxpool.Pool, g grn.GRN) *agent.Agent {
 	t.Helper()
-	a, err := agent.NewPostgresStore(p).Get(context.Background(), g)
+	a, err := agentpg.New(p).Get(context.Background(), g)
 	require.NoError(t, err)
 	return a
 }
@@ -67,9 +68,9 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 	// the agent once, so it is the first.
 	f, active, execution := lineaged(t, p, holds)
 	agentGRN, self := f.agent, f.client(t, execution)
-	assignment, err := agent.NewPostgresStore(p).GetAssignment(ctx, agentGRN)
+	assignment, err := agentpg.New(p).GetAssignment(ctx, agentGRN)
 	require.NoError(t, err)
-	epoch := assignment.Epoch()
+	epoch := assignment.Epoch
 	require.Equal(t, 1, epoch)
 	_, stranger := provisioned(t, url, holder)
 
@@ -79,24 +80,24 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 	// Before either party reports, garam cannot tell this agent from
 	// one that never started.
 	before := storedAgent(t, p, agentGRN)
-	require.Equal(t, agent.ProvisioningStatePending, before.ProvisioningState())
-	require.Equal(t, agent.RuntimeStateUnknown, before.RuntimeState())
+	require.Equal(t, agent.ProvisioningStatePending, before.ProvisioningState)
+	require.Equal(t, agent.RuntimeStateUnknown, before.RuntimeState)
 
 	// The operator reports the pod, and moves that fact alone.
 	status, body := machineSend(t, holder, http.MethodPost, provisioning, reportBody(epoch, "ready"))
 	require.Equal(t, http.StatusNoContent, status, string(body))
 	assert.Empty(t, body, "a recorded report answered with a body")
 	reported := storedAgent(t, p, agentGRN)
-	assert.Equal(t, agent.ProvisioningStateReady, reported.ProvisioningState())
-	assert.Equal(t, agent.RuntimeStateUnknown, reported.RuntimeState(),
+	assert.Equal(t, agent.ProvisioningStateReady, reported.ProvisioningState)
+	assert.Equal(t, agent.RuntimeStateUnknown, reported.RuntimeState,
 		"the operator's report moved the fact the agent reports about itself")
 
 	// The agent reports itself, presenting its own token, and leaves the operator's fact standing.
 	status, body = machineSend(t, self, http.MethodPost, runtime, reportBody(epoch, "connected"))
 	require.Equal(t, http.StatusNoContent, status, string(body))
 	running := storedAgent(t, p, agentGRN)
-	assert.Equal(t, agent.RuntimeStateConnected, running.RuntimeState())
-	assert.Equal(t, agent.ProvisioningStateReady, running.ProvisioningState(),
+	assert.Equal(t, agent.RuntimeStateConnected, running.RuntimeState)
+	assert.Equal(t, agent.ProvisioningStateReady, running.ProvisioningState,
 		"the agent's report moved the fact its operator reports")
 
 	// Each route answers one party, and each of these callers is
@@ -124,14 +125,14 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 		})
 	}
 	unmoved := storedAgent(t, p, agentGRN)
-	assert.Equal(t, agent.ProvisioningStateReady, unmoved.ProvisioningState(), "a refused report was recorded")
-	assert.Equal(t, agent.RuntimeStateConnected, unmoved.RuntimeState(), "a refused report was recorded")
+	assert.Equal(t, agent.ProvisioningStateReady, unmoved.ProvisioningState, "a refused report was recorded")
+	assert.Equal(t, agent.RuntimeStateConnected, unmoved.RuntimeState, "a refused report was recorded")
 
 	// The same operator is assigned the agent again, which raises the
 	// epoch and moves nothing else.
-	reassigned, err := agent.NewPostgresStore(p).Assign(ctx, agentGRN, holds)
+	reassigned, err := agentpg.New(p).Assign(ctx, agentGRN, holds)
 	require.NoError(t, err)
-	require.Equal(t, 2, reassigned.Epoch())
+	require.Equal(t, 2, reassigned.Epoch)
 
 	status, body = machineSend(t, holder, http.MethodPost, provisioning, reportBody(epoch, "failed"))
 	assert.Equal(t, http.StatusConflict, status, "the operator reporting at the epoch it has left")
@@ -140,7 +141,7 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 	// listener refuses it before any route reads the body (ADR-0080).
 	// Activated again and minted a token at the new epoch, the agent
 	// reporting the old one meets the route's own fence.
-	status, body = machineSend(t, self, http.MethodPost, runtime, reportBody(reassigned.Epoch(), "disconnected"))
+	status, body = machineSend(t, self, http.MethodPost, runtime, reportBody(reassigned.Epoch, "disconnected"))
 	assert.Equal(t, http.StatusUnauthorized, status, "a token minted at the epoch the agent has left")
 	_, execution = f.activate(t, "reassigned", generation(2), &active.ID, f.valid(t, "1"))
 	self = f.client(t, execution)
@@ -148,16 +149,16 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, status, "the agent reporting at the epoch it was told")
 	assert.Contains(t, string(body), `"kind":"failed_precondition"`)
 	stale := storedAgent(t, p, agentGRN)
-	assert.Equal(t, agent.ProvisioningStateReady, stale.ProvisioningState(), "a stale report was recorded")
-	assert.Equal(t, agent.RuntimeStateConnected, stale.RuntimeState(), "a stale report was recorded")
+	assert.Equal(t, agent.ProvisioningStateReady, stale.ProvisioningState, "a stale report was recorded")
+	assert.Equal(t, agent.RuntimeStateConnected, stale.RuntimeState, "a stale report was recorded")
 
 	// The control for the fence: the same two calls at the epoch the
 	// assignment is now on are answered.
-	status, body = machineSend(t, holder, http.MethodPost, provisioning, reportBody(reassigned.Epoch(), "failed"))
+	status, body = machineSend(t, holder, http.MethodPost, provisioning, reportBody(reassigned.Epoch, "failed"))
 	require.Equal(t, http.StatusNoContent, status, string(body))
-	status, body = machineSend(t, self, http.MethodPost, runtime, reportBody(reassigned.Epoch(), "disconnected"))
+	status, body = machineSend(t, self, http.MethodPost, runtime, reportBody(reassigned.Epoch, "disconnected"))
 	require.Equal(t, http.StatusNoContent, status, string(body))
 	current := storedAgent(t, p, agentGRN)
-	assert.Equal(t, agent.ProvisioningStateFailed, current.ProvisioningState())
-	assert.Equal(t, agent.RuntimeStateDisconnected, current.RuntimeState())
+	assert.Equal(t, agent.ProvisioningStateFailed, current.ProvisioningState)
+	assert.Equal(t, agent.RuntimeStateDisconnected, current.RuntimeState)
 }

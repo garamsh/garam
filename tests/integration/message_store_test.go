@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
@@ -320,7 +321,7 @@ func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
 	// activated: the execution fence admits it under that activation
 	// (ADR-0080).
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	agents := agent.NewPostgresStore(p)
+	agents := agentpg.New(p)
 	bot, ada := seedAgent(t, agents, orgRootGRN("acme")), grnOf("user", "ada")
 	controller := scopedGRN("acme", agent.ServiceTypeOperator, "controller")
 	_, err = agents.Assign(ctx, bot, controller)

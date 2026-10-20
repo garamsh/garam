@@ -25,7 +25,7 @@ import (
 // label, where the fence keeps them.
 type fence struct {
 	p          *pgxpool.Pool
-	agents     *agent.PostgresStore
+	agents     *agentpg.Store
 	exec       *agentpg.Store
 	agent      grn.GRN
 	controller grn.GRN
@@ -38,7 +38,7 @@ func newFence(t *testing.T) fence {
 	t.Helper()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
-	agents := agent.NewPostgresStore(p)
+	agents := agentpg.New(p)
 	g := seedAgent(t, agents, orgRootGRN("acme"))
 	controller := scopedGRN("acme", agent.ServiceTypeOperator, "controller")
 	_, err := agents.Assign(context.Background(), g, controller)
@@ -120,7 +120,7 @@ func (f fence) epoch(t *testing.T) int {
 	t.Helper()
 	a, err := f.agents.GetAssignment(context.Background(), f.agent)
 	require.NoError(t, err)
-	return a.Epoch()
+	return a.Epoch
 }
 
 // activate applies a fresh activation and answers it with its token.
@@ -673,7 +673,7 @@ func TestExecution_NoPathHoldsALockWhileAwaitingAnotherConnection(t *testing.T) 
 	require.NoError(t, err)
 	t.Cleanup(single.Close)
 	exec := agentpg.New(single)
-	agents := agent.NewPostgresStore(single)
+	agents := agentpg.New(single)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

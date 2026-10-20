@@ -719,7 +719,7 @@ func newFakeAgentStore() *fakeAgentStore {
 func (s *fakeAgentStore) Create(_ context.Context, a *agent.Agent) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.agents[a.GRN().String()] = a
+	s.agents[a.GRN.String()] = a
 	return nil
 }
 
@@ -738,12 +738,12 @@ func (s *fakeAgentStore) ListByOrg(_ context.Context, orgGRN grn.GRN, _ listfilt
 	defer s.mu.Unlock()
 	out := []*agent.Agent{}
 	for _, a := range s.agents {
-		if a.Organization() == orgGRN {
+		if a.Organization == orgGRN {
 			out = append(out, a)
 		}
 	}
 	slices.SortFunc(out, func(a, b *agent.Agent) int {
-		return strings.Compare(a.GRN().String(), b.GRN().String())
+		return strings.Compare(a.GRN.String(), b.GRN.String())
 	})
 	return out, nil
 }
@@ -756,7 +756,7 @@ func (s *fakeAgentStore) Assign(_ context.Context, agentGRN, operatorGRN grn.GRN
 	}
 	epoch := 1
 	if held, ok := s.assignments[agentGRN.String()]; ok {
-		epoch = held.Epoch() + 1
+		epoch = held.Epoch + 1
 	}
 	a := agent.NewAssignment(agentGRN, operatorGRN, epoch)
 	s.assignments[agentGRN.String()] = a
@@ -789,12 +789,12 @@ func (s *fakeAgentStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN)
 	defer s.mu.Unlock()
 	out := []*agent.Assignment{}
 	for key, a := range s.assignments {
-		if held, ok := s.agents[key]; ok && held.Organization() == orgGRN {
+		if held, ok := s.agents[key]; ok && held.Organization == orgGRN {
 			out = append(out, a)
 		}
 	}
 	slices.SortFunc(out, func(a, b *agent.Assignment) int {
-		return strings.Compare(a.Agent().String(), b.Agent().String())
+		return strings.Compare(a.Agent.String(), b.Agent.String())
 	})
 	return out, nil
 }
@@ -1367,7 +1367,7 @@ func (s *fakeAgentStore) CountByOrg(_ context.Context, orgGRN grn.GRN) (agent.Or
 	defer s.mu.Unlock()
 	var c agent.OrgCounts
 	for _, a := range s.agents {
-		if a.Organization() == orgGRN {
+		if a.Organization == orgGRN {
 			c.Agents++
 		}
 	}

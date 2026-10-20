@@ -129,15 +129,15 @@ func (s *Server) searchAgents(r *http.Request, c *caller, n listfilter.Needle) (
 		return nil, err
 	}
 	agents, err = visible(s, r, c, org.ActionAgentRead, agents, func(a *agent.Agent) BatchObject {
-		return onItself(a.GRN())
+		return onItself(a.GRN)
 	})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]apigen.FoundObject, 0, len(agents))
 	for _, a := range agents {
-		found := apigen.FoundObject{Grn: a.GRN().String()}
-		if name, ok := a.Name(); ok {
+		found := apigen.FoundObject{Grn: a.GRN.String()}
+		if name := a.Name; name != "" {
 			n := string(name)
 			found.Name = &n
 		}

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	machinepg "github.com/garamsh/garam/internal/machine/postgres"
@@ -191,7 +191,7 @@ func TestMachineEvidence_TheInventoryNamesEveryCallerAndTheIdleOnes(t *testing.T
 	require.Equal(t, http.StatusOK, identifiesWith(t, client, url, token))
 
 	idle := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "idle"))
-	quiet := seedAgent(t, agent.NewPostgresStore(p), orgRootGRN("acme"))
+	quiet := seedAgent(t, agentpg.New(p), orgRootGRN("acme"))
 
 	found := inventory(t, p)
 	require.Contains(t, found, certifiedGRN.String())

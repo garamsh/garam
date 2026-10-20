@@ -75,7 +75,7 @@ func (s *standaloneService) Approve(ctx context.Context, in ApprovalInput) (*Enr
 	}
 	object := in.Org
 	if r := in.Replaces; r != nil {
-		if err := validateOwnership(r.Agent, in.Org); err != nil {
+		if err := ValidateOwnership(r.Agent, in.Org); err != nil {
 			return nil, false, err
 		}
 		if r.Assignee.ServiceType != ServiceTypeSupervisor || r.Assignee.Organization != in.Org.Identifier || r.Epoch < 1 {

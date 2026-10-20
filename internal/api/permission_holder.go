@@ -129,7 +129,7 @@ func (s *Server) holderCandidates(r *http.Request, c *caller) ([]holderCandidate
 		return nil, err
 	}
 	for _, a := range agents {
-		candidates = append(candidates, holderCandidate{grn: a.GRN()})
+		candidates = append(candidates, holderCandidate{grn: a.GRN})
 	}
 	return candidates, nil
 }

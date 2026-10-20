@@ -106,17 +106,19 @@ type OrgCounts struct {
 }
 
 // Agent is an autonomous actor owned by an organization. Which operator
-// runs it is an Assignment, not part of the Agent.
+// runs it is an Assignment, not part of the Agent. Every field is
+// persisted on the row and exported: the type holds no invariant over
+// them, so it is a data carrier (ADR-0069).
 type Agent struct {
-	grn          grn.GRN
-	orgGRN       grn.GRN
-	provisioning ProvisioningState
-	runtime      RuntimeState
-	createdAt    time.Time
-	updatedAt    time.Time
-	// name is what the organization calls the agent, "" where it calls
-	// it nothing (ADR-0119).
-	name Name
+	GRN               grn.GRN
+	Organization      grn.GRN
+	ProvisioningState ProvisioningState
+	RuntimeState      RuntimeState
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	// Name is what the organization calls the agent, "" where it calls
+	// it nothing and the agent is known by its identifier (ADR-0119).
+	Name Name
 }
 
 // New constructs an Agent owned by orgGRN, before an operator has
@@ -124,23 +126,23 @@ type Agent struct {
 // agent of that organization: ADR-0014 rests tenancy on the
 // organization segment of the GRN a certificate carries.
 func New(g, orgGRN grn.GRN) (*Agent, error) {
-	if err := validateOwnership(g, orgGRN); err != nil {
+	if err := ValidateOwnership(g, orgGRN); err != nil {
 		return nil, err
 	}
 	now := time.Now().UTC()
 	return &Agent{
-		grn:          g,
-		orgGRN:       orgGRN,
-		provisioning: ProvisioningStatePending,
-		runtime:      RuntimeStateUnknown,
-		createdAt:    now,
-		updatedAt:    now,
+		GRN:               g,
+		Organization:      orgGRN,
+		ProvisioningState: ProvisioningStatePending,
+		RuntimeState:      RuntimeStateUnknown,
+		CreatedAt:         now,
+		UpdatedAt:         now,
 	}, nil
 }
 
-// validateOwnership returns nil if g names an agent of the organization
+// ValidateOwnership returns nil if g names an agent of the organization
 // orgGRN identifies.
-func validateOwnership(g, orgGRN grn.GRN) error {
+func ValidateOwnership(g, orgGRN grn.GRN) error {
 	switch {
 	case g.ServiceType != ServiceType:
 		return errorx.New(errorx.KindInvalidArgument, "agent: grn does not name an agent")
@@ -149,17 +151,6 @@ func validateOwnership(g, orgGRN grn.GRN) error {
 	}
 	return nil
 }
-
-func (a *Agent) GRN() grn.GRN                         { return a.grn }
-func (a *Agent) Organization() grn.GRN                { return a.orgGRN }
-func (a *Agent) ProvisioningState() ProvisioningState { return a.provisioning }
-func (a *Agent) RuntimeState() RuntimeState           { return a.runtime }
-func (a *Agent) CreatedAt() time.Time                 { return a.createdAt }
-func (a *Agent) UpdatedAt() time.Time                 { return a.updatedAt }
-
-// Name answers what the organization calls the agent, and false where
-// it calls it nothing and the agent is known by its identifier.
-func (a *Agent) Name() (Name, bool) { return a.name, a.name != "" }
 
 // NewGRN mints the GRN of an agent owned by orgGRN from eight random
 // bytes. Agents belong to the org, not to a project (ADR-0001), and the

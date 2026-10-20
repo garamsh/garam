@@ -1,11 +1,12 @@
-package agent
+package postgres
 
 import (
 	"context"
 	"errors"
 	"time"
 
-	"github.com/garamsh/garam/internal/agent/db"
+	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/internal/agent/postgres/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
@@ -19,7 +20,7 @@ import (
 //
 // The execution row is locked before the assignment is written: that
 // is the order every transaction taking both follows (ADR-0080).
-func (s *PostgresStore) Assign(ctx context.Context, agentGRN, assigneeGRN grn.GRN) (*Assignment, error) {
+func (s *Store) Assign(ctx context.Context, agentGRN, assigneeGRN grn.GRN) (*agent.Assignment, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
@@ -28,7 +29,7 @@ func (s *PostgresStore) Assign(ctx context.Context, agentGRN, assigneeGRN grn.GR
 
 	q := s.q.WithTx(tx)
 	if _, err := q.LockAgentExecution(ctx, agentGRN.String()); err != nil {
-		return nil, pgxerr.Classify(err, "assign", ErrAgentNotFound, nil)
+		return nil, pgxerr.Classify(err, "assign", agent.ErrAgentNotFound, nil)
 	}
 	now := pgxtype.Timestamptz(time.Now().UTC())
 	row, err := q.AssignAgent(ctx, db.AssignAgentParams{
@@ -38,7 +39,7 @@ func (s *PostgresStore) Assign(ctx context.Context, agentGRN, assigneeGRN grn.GR
 		UpdatedAt:   now,
 	})
 	if err != nil {
-		return nil, pgxerr.Classify(err, "assign", ErrAgentNotFound, nil)
+		return nil, pgxerr.Classify(err, "assign", agent.ErrAgentNotFound, nil)
 	}
 	if err := q.EndReassignedActivation(ctx, db.EndReassignedActivationParams{
 		AgentGrn:  agentGRN.String(),
@@ -54,22 +55,22 @@ func (s *PostgresStore) Assign(ctx context.Context, agentGRN, assigneeGRN grn.GR
 
 // GetAssignment returns the assignee the agent is assigned to and the
 // epoch it is assigned at, or ErrAssignmentNotFound.
-func (s *PostgresStore) GetAssignment(ctx context.Context, agentGRN grn.GRN) (*Assignment, error) {
+func (s *Store) GetAssignment(ctx context.Context, agentGRN grn.GRN) (*agent.Assignment, error) {
 	row, err := s.q.GetAgentAssignment(ctx, agentGRN.String())
 	if err != nil {
-		return nil, pgxerr.Classify(err, "get assignment", ErrAssignmentNotFound, nil)
+		return nil, pgxerr.Classify(err, "get assignment", agent.ErrAssignmentNotFound, nil)
 	}
 	return rowToAssignment(row)
 }
 
 // ListAssignmentsByOrg returns the assignments of the organization's
 // agents. An unassigned agent contributes none.
-func (s *PostgresStore) ListAssignmentsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Assignment, error) {
+func (s *Store) ListAssignmentsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*agent.Assignment, error) {
 	rows, err := s.q.ListAgentAssignmentsByOrg(ctx, orgGRN.String())
 	if err != nil {
 		return nil, pgxerr.Classify(err, "list assignments", nil, nil)
 	}
-	assignments := make([]*Assignment, 0, len(rows))
+	assignments := make([]*agent.Assignment, 0, len(rows))
 	for _, row := range rows {
 		a, err := rowToAssignment(row)
 		if err != nil {
@@ -86,7 +87,7 @@ var errNeverActivated = errorx.New(errorx.KindNotFound, "agent never activated")
 
 // LatestGeneration reads the generation of the agent's most recent
 // activation.
-func (s *PostgresStore) LatestGeneration(ctx context.Context, agentGRN grn.GRN) (*Generation, error) {
+func (s *Store) LatestGeneration(ctx context.Context, agentGRN grn.GRN) (*agent.Generation, error) {
 	raw, err := s.q.GetLatestGeneration(ctx, agentGRN.String())
 	if err != nil {
 		err = pgxerr.Classify(err, "get latest generation", errNeverActivated, nil)
@@ -95,7 +96,7 @@ func (s *PostgresStore) LatestGeneration(ctx context.Context, agentGRN grn.GRN) 
 		}
 		return nil, err
 	}
-	g, err := ParseGeneration(raw)
+	g, err := agent.ParseGeneration(raw)
 	if err != nil {
 		return nil, errorx.Wrap(err, "stored generation", errorx.KindInternal)
 	}
@@ -104,18 +105,18 @@ func (s *PostgresStore) LatestGeneration(ctx context.Context, agentGRN grn.GRN) 
 
 // LatestGenerationsByOrg reads the generation of each of the
 // organization's agents' most recent activation.
-func (s *PostgresStore) LatestGenerationsByOrg(ctx context.Context, orgGRN grn.GRN) (map[grn.GRN]Generation, error) {
+func (s *Store) LatestGenerationsByOrg(ctx context.Context, orgGRN grn.GRN) (map[grn.GRN]agent.Generation, error) {
 	rows, err := s.q.ListLatestGenerationsByOrg(ctx, orgGRN.String())
 	if err != nil {
 		return nil, pgxerr.Classify(err, "list latest generations", nil, nil)
 	}
-	out := make(map[grn.GRN]Generation, len(rows))
+	out := make(map[grn.GRN]agent.Generation, len(rows))
 	for _, row := range rows {
 		agentGRN, err := grn.Parse(row.AgentGrn)
 		if err != nil {
 			return nil, errorx.Wrap(err, "stored activation agent grn", errorx.KindInternal)
 		}
-		g, err := ParseGeneration(row.Generation)
+		g, err := agent.ParseGeneration(row.Generation)
 		if err != nil {
 			return nil, errorx.Wrap(err, "stored generation", errorx.KindInternal)
 		}
@@ -124,7 +125,7 @@ func (s *PostgresStore) LatestGenerationsByOrg(ctx context.Context, orgGRN grn.G
 	return out, nil
 }
 
-func rowToAssignment(row db.AgentAssignment) (*Assignment, error) {
+func rowToAssignment(row db.AgentAssignment) (*agent.Assignment, error) {
 	agentGRN, err := grn.Parse(row.AgentGrn)
 	if err != nil {
 		return nil, errorx.Wrap(err, "assignment agent grn", errorx.KindInternal)
@@ -133,11 +134,11 @@ func rowToAssignment(row db.AgentAssignment) (*Assignment, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "assignment assignee grn", errorx.KindInternal)
 	}
-	return &Assignment{
-		agentGRN:    agentGRN,
-		assigneeGRN: assigneeGRN,
-		epoch:       int(row.Epoch),
-		createdAt:   row.CreatedAt.Time,
-		updatedAt:   row.UpdatedAt.Time,
+	return &agent.Assignment{
+		Agent:     agentGRN,
+		Assignee:  assigneeGRN,
+		Epoch:     int(row.Epoch),
+		CreatedAt: row.CreatedAt.Time,
+		UpdatedAt: row.UpdatedAt.Time,
 	}, nil
 }

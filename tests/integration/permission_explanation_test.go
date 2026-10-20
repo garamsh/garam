@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
@@ -50,7 +50,7 @@ func newExplainStack(t *testing.T) *explainStack {
 	policies, engine := policyEngine(t, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
-	agents := agent.NewPostgresStore(p)
+	agents := agentpg.New(p)
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	session := func(id string, role org.Role) (*http.Cookie, grn.GRN) {

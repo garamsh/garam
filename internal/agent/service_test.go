@@ -35,10 +35,10 @@ func newMemoryStore() *memoryStore {
 }
 
 func (s *memoryStore) Create(_ context.Context, a *Agent) error {
-	if _, held := s.agents[a.grn]; held {
+	if _, held := s.agents[a.GRN]; held {
 		return ErrAgentAlreadyExists
 	}
-	s.agents[a.grn] = a
+	s.agents[a.GRN] = a
 	return nil
 }
 
@@ -53,7 +53,7 @@ func (s *memoryStore) Get(_ context.Context, g grn.GRN) (*Agent, error) {
 func (s *memoryStore) ListByOrg(_ context.Context, orgGRN grn.GRN, _ listfilter.Filter) ([]*Agent, error) {
 	agents := make([]*Agent, 0, len(s.agents))
 	for _, a := range s.agents {
-		if a.orgGRN == orgGRN {
+		if a.Organization == orgGRN {
 			agents = append(agents, a)
 		}
 	}
@@ -66,9 +66,9 @@ func (s *memoryStore) Assign(_ context.Context, agentGRN, operatorGRN grn.GRN) (
 	}
 	epoch := 1
 	if prior, held := s.assignments[agentGRN]; held {
-		epoch = prior.epoch + 1
+		epoch = prior.Epoch + 1
 	}
-	assignment := &Assignment{agentGRN: agentGRN, assigneeGRN: operatorGRN, epoch: epoch}
+	assignment := &Assignment{Agent: agentGRN, Assignee: operatorGRN, Epoch: epoch}
 	s.assignments[agentGRN] = assignment
 	return assignment, nil
 }
@@ -84,7 +84,7 @@ func (s *memoryStore) GetAssignment(_ context.Context, agentGRN grn.GRN) (*Assig
 func (s *memoryStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN) ([]*Assignment, error) {
 	assignments := make([]*Assignment, 0, len(s.assignments))
 	for agentGRN, assignment := range s.assignments {
-		if a, held := s.agents[agentGRN]; held && a.orgGRN == orgGRN {
+		if a, held := s.agents[agentGRN]; held && a.Organization == orgGRN {
 			assignments = append(assignments, assignment)
 		}
 	}
@@ -96,7 +96,7 @@ func (s *memoryStore) ReportProvisioningState(_ context.Context, agentGRN grn.GR
 	if err != nil {
 		return nil, err
 	}
-	a.provisioning = state
+	a.ProvisioningState = state
 	return a, nil
 }
 
@@ -105,7 +105,7 @@ func (s *memoryStore) ReportRuntimeState(_ context.Context, agentGRN grn.GRN, ep
 	if err != nil {
 		return nil, err
 	}
-	a.runtime = state
+	a.RuntimeState = state
 	return a, nil
 }
 
@@ -118,7 +118,7 @@ func (s *memoryStore) reportable(agentGRN grn.GRN, epoch int) (*Agent, error) {
 		return nil, ErrAgentNotFound
 	}
 	assignment, assigned := s.assignments[agentGRN]
-	if !assigned || assignment.epoch != epoch {
+	if !assigned || assignment.Epoch != epoch {
 		return nil, ErrStaleEpoch
 	}
 	return a, nil
@@ -163,11 +163,11 @@ func TestService_ReportProvisioningStateIsAcceptedFromTheHolderAtTheCurrentEpoch
 
 	held := place(t, store, holder)
 
-	require.NoError(t, svc.ReportProvisioningState(ctx, holder, held.Agent(), 1, ProvisioningStateReady))
-	stored, err := store.Get(ctx, held.Agent())
+	require.NoError(t, svc.ReportProvisioningState(ctx, holder, held.Agent, 1, ProvisioningStateReady))
+	stored, err := store.Get(ctx, held.Agent)
 	require.NoError(t, err)
-	assert.Equal(t, ProvisioningStateReady, stored.ProvisioningState())
-	assert.Equal(t, RuntimeStateUnknown, stored.RuntimeState(),
+	assert.Equal(t, ProvisioningStateReady, stored.ProvisioningState)
+	assert.Equal(t, RuntimeStateUnknown, stored.RuntimeState,
 		"the operator's report moved the fact the agent reports about itself")
 
 	refused := map[string]struct {
@@ -175,32 +175,32 @@ func TestService_ReportProvisioningStateIsAcceptedFromTheHolderAtTheCurrentEpoch
 		agent  grn.GRN
 		err    error
 	}{
-		"another operator of the same organization": {sibling, held.Agent(), ErrNotAssigned},
-		"an operator of another organization":       {stranger, held.Agent(), ErrNotAssigned},
+		"another operator of the same organization": {sibling, held.Agent, ErrNotAssigned},
+		"an operator of another organization":       {stranger, held.Agent, ErrNotAssigned},
 		"an agent that does not exist":              {holder, grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), ErrNotAssigned},
-		"the agent reporting on its own pod":        {held.Agent(), held.Agent(), ErrNotAnOperator},
+		"the agent reporting on its own pod":        {held.Agent, held.Agent, ErrNotAnOperator},
 	}
 	for name, tt := range refused {
 		t.Run(name, func(t *testing.T) {
 			assert.ErrorIs(t, svc.ReportProvisioningState(ctx, tt.caller, tt.agent, 1, ProvisioningStateFailed), tt.err)
 		})
 	}
-	stored, err = store.Get(ctx, held.Agent())
+	stored, err = store.Get(ctx, held.Agent)
 	require.NoError(t, err)
-	assert.Equal(t, ProvisioningStateReady, stored.ProvisioningState(), "a refused report was recorded")
+	assert.Equal(t, ProvisioningStateReady, stored.ProvisioningState, "a refused report was recorded")
 
 	// Reassigning the agent to the operator already holding it raises
 	// the epoch and changes nothing else, so the earlier epoch is
 	// refused by the fence rather than by the operator comparison.
-	reassigned, err := store.Assign(ctx, held.Agent(), holder)
+	reassigned, err := store.Assign(ctx, held.Agent, holder)
 	require.NoError(t, err)
-	require.Equal(t, 2, reassigned.Epoch())
-	assert.ErrorIs(t, svc.ReportProvisioningState(ctx, holder, held.Agent(), 1, ProvisioningStateFailed), ErrStaleEpoch)
-	require.NoError(t, svc.ReportProvisioningState(ctx, holder, held.Agent(), 2, ProvisioningStateFailed),
+	require.Equal(t, 2, reassigned.Epoch)
+	assert.ErrorIs(t, svc.ReportProvisioningState(ctx, holder, held.Agent, 1, ProvisioningStateFailed), ErrStaleEpoch)
+	require.NoError(t, svc.ReportProvisioningState(ctx, holder, held.Agent, 2, ProvisioningStateFailed),
 		"the same call at the current epoch")
-	stored, err = store.Get(ctx, held.Agent())
+	stored, err = store.Get(ctx, held.Agent)
 	require.NoError(t, err)
-	assert.Equal(t, ProvisioningStateFailed, stored.ProvisioningState())
+	assert.Equal(t, ProvisioningStateFailed, stored.ProvisioningState)
 }
 
 // TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself is the
@@ -218,11 +218,11 @@ func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T
 	held := place(t, store, operator)
 	sibling := place(t, store, operator)
 
-	require.NoError(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 1, RuntimeStateConnected, Fencing{Agent: held.Agent()}))
-	stored, err := store.Get(ctx, held.Agent())
+	require.NoError(t, svc.ReportRuntimeState(ctx, held.Agent, held.Agent, 1, RuntimeStateConnected, Fencing{Agent: held.Agent}))
+	stored, err := store.Get(ctx, held.Agent)
 	require.NoError(t, err)
-	assert.Equal(t, RuntimeStateConnected, stored.RuntimeState())
-	assert.Equal(t, ProvisioningStatePending, stored.ProvisioningState(),
+	assert.Equal(t, RuntimeStateConnected, stored.RuntimeState)
+	assert.Equal(t, ProvisioningStatePending, stored.ProvisioningState,
 		"the agent's report moved the fact its operator reports")
 
 	refused := map[string]struct {
@@ -230,8 +230,8 @@ func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T
 		agent  grn.GRN
 		err    error
 	}{
-		"an agent of the same organization": {sibling.Agent(), held.Agent(), ErrNotTheAgent},
-		"the operator that holds the agent": {operator, held.Agent(), ErrNotTheAgent},
+		"an agent of the same organization": {sibling.Agent, held.Agent, ErrNotTheAgent},
+		"the operator that holds the agent": {operator, held.Agent, ErrNotTheAgent},
 		"an agent garam has no record of":   {grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), ErrAgentNotFound},
 	}
 	for name, tt := range refused {
@@ -239,22 +239,22 @@ func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T
 			assert.ErrorIs(t, svc.ReportRuntimeState(ctx, tt.caller, tt.agent, 1, RuntimeStateDisconnected, Fencing{Agent: tt.agent}), tt.err)
 		})
 	}
-	stored, err = store.Get(ctx, held.Agent())
+	stored, err = store.Get(ctx, held.Agent)
 	require.NoError(t, err)
-	assert.Equal(t, RuntimeStateConnected, stored.RuntimeState(), "a refused report was recorded")
+	assert.Equal(t, RuntimeStateConnected, stored.RuntimeState, "a refused report was recorded")
 
 	// The epoch the agent carries is its assignment's, and a
 	// reassignment moves it: the agent is still the only caller this
 	// route answers, and it is answered at the current epoch alone.
-	reassigned, err := store.Assign(ctx, held.Agent(), operator)
+	reassigned, err := store.Assign(ctx, held.Agent, operator)
 	require.NoError(t, err)
-	require.Equal(t, 2, reassigned.Epoch())
-	assert.ErrorIs(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 1, RuntimeStateDisconnected, Fencing{Agent: held.Agent()}), ErrStaleEpoch)
-	require.NoError(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 2, RuntimeStateDisconnected, Fencing{Agent: held.Agent()}),
+	require.Equal(t, 2, reassigned.Epoch)
+	assert.ErrorIs(t, svc.ReportRuntimeState(ctx, held.Agent, held.Agent, 1, RuntimeStateDisconnected, Fencing{Agent: held.Agent}), ErrStaleEpoch)
+	require.NoError(t, svc.ReportRuntimeState(ctx, held.Agent, held.Agent, 2, RuntimeStateDisconnected, Fencing{Agent: held.Agent}),
 		"the same call at the current epoch")
-	stored, err = store.Get(ctx, held.Agent())
+	stored, err = store.Get(ctx, held.Agent)
 	require.NoError(t, err)
-	assert.Equal(t, RuntimeStateDisconnected, stored.RuntimeState())
+	assert.Equal(t, RuntimeStateDisconnected, stored.RuntimeState)
 }
 
 // mustService is the service over store with the default

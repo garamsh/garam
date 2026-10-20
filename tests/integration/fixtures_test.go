@@ -235,14 +235,14 @@ func tokenless(g grn.GRN) agent.Fencing {
 func activatedFence(t *testing.T, p *pgxpool.Pool, g, assignee grn.GRN, requestID string, gen int, replaces *agent.ActivationID) (agent.Fencing, agent.ActivationID) {
 	t.Helper()
 	withLineage(t, p, g)
-	f := fence{p: p, agents: agent.NewPostgresStore(p), exec: agentpg.New(p), agent: g, controller: assignee}
+	f := fence{p: p, agents: agentpg.New(p), exec: agentpg.New(p), agent: g, controller: assignee}
 	c := f.valid(t, "1")
 	a, token := f.activate(t, requestID, generation(gen), replaces, c)
 	return fencing(g, &token, c), a.ID
 }
 
 // seedAgent mints an agent of the org and stores it.
-func seedAgent(t *testing.T, s *agent.PostgresStore, orgGRN grn.GRN) grn.GRN {
+func seedAgent(t *testing.T, s *agentpg.Store, orgGRN grn.GRN) grn.GRN {
 	t.Helper()
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
@@ -561,7 +561,7 @@ func (f fence) client(t *testing.T, execution agent.Token) *http.Client {
 // answers the agent's fence and the current activation with its token.
 func lineaged(t *testing.T, p *pgxpool.Pool, operator grn.GRN) (fence, *agent.Activation, agent.Token) {
 	t.Helper()
-	agents := agent.NewPostgresStore(p)
+	agents := agentpg.New(p)
 	g := seedAgent(t, agents, grn.Org(operator.Organization))
 	_, err := agents.Assign(context.Background(), g, operator)
 	require.NoError(t, err)

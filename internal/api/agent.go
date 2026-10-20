@@ -35,7 +35,7 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apig
 		writeError(w, err)
 		return
 	}
-	agents, err = visible(s, r, c, org.ActionAgentRead, agents, func(a *agent.Agent) BatchObject { return onItself(a.GRN()) })
+	agents, err = visible(s, r, c, org.ActionAgentRead, agents, func(a *agent.Agent) BatchObject { return onItself(a.GRN) })
 	if err != nil {
 		writeError(w, err)
 		return
@@ -53,10 +53,10 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apig
 	out := make([]apigen.Agent, 0, len(agents))
 	for _, a := range agents {
 		var generation *agent.Generation
-		if g, ok := generations[a.GRN()]; ok {
+		if g, ok := generations[a.GRN]; ok {
 			generation = &g
 		}
-		out = append(out, agentToAPI(a, assignments[a.GRN().String()], generation))
+		out = append(out, agentToAPI(a, assignments[a.GRN.String()], generation))
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -147,7 +147,7 @@ func (s *Server) assignmentsOf(ctx context.Context, orgGRN grn.GRN) (map[string]
 	}
 	byAgent := make(map[string]*agent.Assignment, len(assignments))
 	for _, a := range assignments {
-		byAgent[a.Agent().String()] = a
+		byAgent[a.Agent.String()] = a
 	}
 	return byAgent, nil
 }
@@ -179,14 +179,14 @@ func agentGRN(orgSlug, agentSlug string) grn.GRN {
 // separate fields: different parties report them (ADR-0012).
 func agentToAPI(a *agent.Agent, assignment *agent.Assignment, generation *agent.Generation) apigen.Agent {
 	out := apigen.Agent{
-		Grn:               a.GRN().String(),
-		OrgGrn:            a.Organization().String(),
-		ProvisioningState: apigen.AgentProvisioningState(a.ProvisioningState()),
-		RuntimeState:      apigen.AgentRuntimeState(a.RuntimeState()),
-		CreatedAt:         a.CreatedAt(),
-		UpdatedAt:         a.UpdatedAt(),
+		Grn:               a.GRN.String(),
+		OrgGrn:            a.Organization.String(),
+		ProvisioningState: apigen.AgentProvisioningState(a.ProvisioningState),
+		RuntimeState:      apigen.AgentRuntimeState(a.RuntimeState),
+		CreatedAt:         a.CreatedAt,
+		UpdatedAt:         a.UpdatedAt,
 	}
-	if name, ok := a.Name(); ok {
+	if name := a.Name; name != "" {
 		n := string(name)
 		out.Name = &n
 	}
@@ -196,9 +196,9 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment, generation *agent.
 	}
 	if assignment != nil {
 		out.Assignment = &apigen.AgentAssignment{
-			AssigneeGrn: assignment.Assignee().String(),
-			Epoch:       assignment.Epoch(),
-			Since:       assignment.UpdatedAt(),
+			AssigneeGrn: assignment.Assignee.String(),
+			Epoch:       assignment.Epoch,
+			Since:       assignment.UpdatedAt,
 		}
 	}
 	return out

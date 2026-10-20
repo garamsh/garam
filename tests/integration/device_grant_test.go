@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/cli"
@@ -65,7 +65,7 @@ func newDeviceStack(t *testing.T) *deviceStack {
 	s.ada, s.adaGRN = session("ada")
 	s.eve, _ = session("eve")
 
-	srv := api.NewServer(users, orgs, agent.NewPostgresStore(p), operatorpg.New(p), message.NewPostgresStore(p), nil,
+	srv := api.NewServer(users, orgs, agentpg.New(p), operatorpg.New(p), message.NewPostgresStore(p), nil,
 		sessions, nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil,
 		api.Config{SessionTTL: time.Hour}).WithDeviceGrant(authn.NewPostgresDeviceStore(p))

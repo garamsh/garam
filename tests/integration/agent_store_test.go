@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
@@ -24,7 +25,7 @@ import (
 func TestAgentStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := agent.NewPostgresStore(p)
+	s := agentpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 
@@ -36,13 +37,13 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 
 	got, err := s.Get(ctx, g)
 	require.NoError(t, err)
-	assert.Equal(t, orgGRN, got.Organization())
-	assert.Equal(t, agent.ProvisioningStatePending, got.ProvisioningState())
-	assert.Equal(t, agent.RuntimeStateUnknown, got.RuntimeState())
+	assert.Equal(t, orgGRN, got.Organization)
+	assert.Equal(t, agent.ProvisioningStatePending, got.ProvisioningState)
+	assert.Equal(t, agent.RuntimeStateUnknown, got.RuntimeState)
 	// The stamps read back are the ones New set, to the microsecond
 	// Postgres keeps them at.
-	assert.WithinDuration(t, a.CreatedAt(), got.CreatedAt(), time.Microsecond)
-	assert.WithinDuration(t, a.UpdatedAt(), got.UpdatedAt(), time.Microsecond)
+	assert.WithinDuration(t, a.CreatedAt, got.CreatedAt, time.Microsecond)
+	assert.WithinDuration(t, a.UpdatedAt, got.UpdatedAt, time.Microsecond)
 
 	_, err = s.Get(ctx, grnOf("agent", "missing"))
 	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
@@ -63,65 +64,65 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	first := grnOf(agent.ServiceTypeOperator, "one")
 	assigned, err := s.Assign(ctx, g, first)
 	require.NoError(t, err)
-	assert.Equal(t, first, assigned.Assignee())
-	assert.Equal(t, 1, assigned.Epoch())
-	assert.True(t, assigned.CreatedAt().After(a.CreatedAt()), "the assignment is stamped when it is written, after the agent it binds")
+	assert.Equal(t, first, assigned.Assignee)
+	assert.Equal(t, 1, assigned.Epoch)
+	assert.True(t, assigned.CreatedAt.After(a.CreatedAt), "the assignment is stamped when it is written, after the agent it binds")
 
 	// The operator reports the pod; the agent reports itself. Neither
 	// report moves the other's state.
-	provisioned, err := s.ReportProvisioningState(ctx, g, assigned.Epoch(), agent.ProvisioningStateReady)
+	provisioned, err := s.ReportProvisioningState(ctx, g, assigned.Epoch, agent.ProvisioningStateReady)
 	require.NoError(t, err)
-	assert.Equal(t, agent.ProvisioningStateReady, provisioned.ProvisioningState())
-	assert.Equal(t, agent.RuntimeStateUnknown, provisioned.RuntimeState())
+	assert.Equal(t, agent.ProvisioningStateReady, provisioned.ProvisioningState)
+	assert.Equal(t, agent.RuntimeStateUnknown, provisioned.RuntimeState)
 	// A report moves the update stamp and leaves the create stamp, so
 	// each is read from its own column.
-	assert.WithinDuration(t, a.CreatedAt(), provisioned.CreatedAt(), time.Microsecond)
-	assert.True(t, provisioned.UpdatedAt().After(a.UpdatedAt()), "a report moves the update stamp")
+	assert.WithinDuration(t, a.CreatedAt, provisioned.CreatedAt, time.Microsecond)
+	assert.True(t, provisioned.UpdatedAt.After(a.UpdatedAt), "a report moves the update stamp")
 
 	firstFence, firstActivation := activatedFence(t, p, g, first, "r1", 1, nil)
-	running, err := s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateConnected, firstFence)
+	running, err := s.ReportRuntimeState(ctx, g, assigned.Epoch, agent.RuntimeStateConnected, firstFence)
 	require.NoError(t, err)
-	assert.Equal(t, agent.RuntimeStateConnected, running.RuntimeState())
-	assert.Equal(t, agent.ProvisioningStateReady, running.ProvisioningState())
+	assert.Equal(t, agent.RuntimeStateConnected, running.RuntimeState)
+	assert.Equal(t, agent.ProvisioningStateReady, running.ProvisioningState)
 
 	second := grnOf(agent.ServiceTypeOperator, "two")
 	reassigned, err := s.Assign(ctx, g, second)
 	require.NoError(t, err)
-	assert.Equal(t, second, reassigned.Assignee())
-	assert.Equal(t, 2, reassigned.Epoch(), "a reassignment raises the epoch")
+	assert.Equal(t, second, reassigned.Assignee)
+	assert.Equal(t, 2, reassigned.Epoch, "a reassignment raises the epoch")
 	// A reassignment writes onto the row the first one left, so the
 	// create stamp is still the first one's.
-	assert.Equal(t, assigned.CreatedAt(), reassigned.CreatedAt())
-	assert.True(t, reassigned.UpdatedAt().After(assigned.UpdatedAt()), "and moves the update stamp")
+	assert.Equal(t, assigned.CreatedAt, reassigned.CreatedAt)
+	assert.True(t, reassigned.UpdatedAt.After(assigned.UpdatedAt), "and moves the update stamp")
 
 	stored, err := s.GetAssignment(ctx, g)
 	require.NoError(t, err)
-	assert.Equal(t, second, stored.Assignee())
-	assert.Equal(t, 2, stored.Epoch())
+	assert.Equal(t, second, stored.Assignee)
+	assert.Equal(t, 2, stored.Epoch)
 
 	// A pod left running by the replaced operator still holds epoch 1.
 	// The new assignee activates the agent, so the epoch alone is what
 	// refuses it.
 	secondFence, _ := activatedFence(t, p, g, second, "r2", 2, &firstActivation)
-	_, err = s.ReportProvisioningState(ctx, g, assigned.Epoch(), agent.ProvisioningStateFailed)
+	_, err = s.ReportProvisioningState(ctx, g, assigned.Epoch, agent.ProvisioningStateFailed)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
-	_, err = s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateDisconnected, secondFence)
+	_, err = s.ReportRuntimeState(ctx, g, assigned.Epoch, agent.RuntimeStateDisconnected, secondFence)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 
 	// An epoch too wide for the column shares its low 32 bits with the
 	// live one and is stale all the same.
-	_, err = s.ReportRuntimeState(ctx, g, stored.Epoch()+1<<32, agent.RuntimeStateDisconnected, secondFence)
+	_, err = s.ReportRuntimeState(ctx, g, stored.Epoch+1<<32, agent.RuntimeStateDisconnected, secondFence)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 
 	after, err := s.Get(ctx, g)
 	require.NoError(t, err)
-	assert.Equal(t, agent.ProvisioningStateReady, after.ProvisioningState(), "the fenced write left the row alone")
-	assert.Equal(t, agent.RuntimeStateConnected, after.RuntimeState())
+	assert.Equal(t, agent.ProvisioningStateReady, after.ProvisioningState, "the fenced write left the row alone")
+	assert.Equal(t, agent.RuntimeStateConnected, after.RuntimeState)
 
 	// The current epoch still writes.
-	current, err := s.ReportRuntimeState(ctx, g, stored.Epoch(), agent.RuntimeStateDisconnected, secondFence)
+	current, err := s.ReportRuntimeState(ctx, g, stored.Epoch, agent.RuntimeStateDisconnected, secondFence)
 	require.NoError(t, err)
-	assert.Equal(t, agent.RuntimeStateDisconnected, current.RuntimeState())
+	assert.Equal(t, agent.RuntimeStateDisconnected, current.RuntimeState)
 
 	_, err = s.ReportRuntimeState(ctx, grnOf("agent", "missing"), 1, agent.RuntimeStateConnected, tokenless(grnOf("agent", "missing")))
 	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
@@ -144,7 +145,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := agent.NewPostgresStore(p)
+	s := agentpg.New(p)
 	orgs := orgpg.New(p)
 	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
@@ -157,10 +158,10 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 	operator := scopedGRN(acme.Identifier, agent.ServiceTypeOperator, "field-one")
 	assigned, err := s.Assign(ctx, held, operator)
 	require.NoError(t, err)
-	_, err = s.ReportProvisioningState(ctx, held, assigned.Epoch(), agent.ProvisioningStateReady)
+	_, err = s.ReportProvisioningState(ctx, held, assigned.Epoch, agent.ProvisioningStateReady)
 	require.NoError(t, err)
 	heldFence, _ := activatedFence(t, p, held, operator, "r1", 1, nil)
-	_, err = s.ReportRuntimeState(ctx, held, assigned.Epoch(), agent.RuntimeStateConnected, heldFence)
+	_, err = s.ReportRuntimeState(ctx, held, assigned.Epoch, agent.RuntimeStateConnected, heldFence)
 	require.NoError(t, err)
 	_, err = s.Assign(ctx, elsewhere, scopedGRN(globex.Identifier, agent.ServiceTypeOperator, "field-two"))
 	require.NoError(t, err)
@@ -168,49 +169,49 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 	listed, err := s.ListByOrg(ctx, acme, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, listed, 2, "the org's own agents and no other org's")
-	assert.ElementsMatch(t, []grn.GRN{held, loose}, []grn.GRN{listed[0].GRN(), listed[1].GRN()})
-	assert.Less(t, listed[0].GRN().String(), listed[1].GRN().String(), "ordered by GRN")
+	assert.ElementsMatch(t, []grn.GRN{held, loose}, []grn.GRN{listed[0].GRN, listed[1].GRN})
+	assert.Less(t, listed[0].GRN.String(), listed[1].GRN.String(), "ordered by GRN")
 
 	page, err := s.ListByOrg(ctx, acme, listfilter.Filter{Limit: 1})
 	require.NoError(t, err)
-	assert.Equal(t, []grn.GRN{listed[0].GRN()}, []grn.GRN{page[0].GRN()}, "the limit takes the first page and stops")
+	assert.Equal(t, []grn.GRN{listed[0].GRN}, []grn.GRN{page[0].GRN}, "the limit takes the first page and stops")
 	require.Len(t, page, 1)
 
 	page, err = s.ListByOrg(ctx, acme, listfilter.Filter{Offset: 1})
 	require.NoError(t, err)
 	require.Len(t, page, 1)
-	assert.Equal(t, listed[1].GRN(), page[0].GRN(), "the offset skips the first agent")
+	assert.Equal(t, listed[1].GRN, page[0].GRN, "the offset skips the first agent")
 
 	byGRN := map[grn.GRN]*agent.Agent{}
 	for _, a := range listed {
-		byGRN[a.GRN()] = a
+		byGRN[a.GRN] = a
 	}
 	// Each reported state comes back in its own field, and the agent
 	// nobody reported on keeps the initial pair.
-	assert.Equal(t, agent.ProvisioningStateReady, byGRN[held].ProvisioningState())
-	assert.Equal(t, agent.RuntimeStateConnected, byGRN[held].RuntimeState())
-	assert.Equal(t, agent.ProvisioningStatePending, byGRN[loose].ProvisioningState())
-	assert.Equal(t, agent.RuntimeStateUnknown, byGRN[loose].RuntimeState())
+	assert.Equal(t, agent.ProvisioningStateReady, byGRN[held].ProvisioningState)
+	assert.Equal(t, agent.RuntimeStateConnected, byGRN[held].RuntimeState)
+	assert.Equal(t, agent.ProvisioningStatePending, byGRN[loose].ProvisioningState)
+	assert.Equal(t, agent.RuntimeStateUnknown, byGRN[loose].RuntimeState)
 
 	// An unassigned agent contributes no assignment, so the list is not
 	// one per agent.
 	assignments, err := s.ListAssignmentsByOrg(ctx, acme)
 	require.NoError(t, err)
 	require.Len(t, assignments, 1)
-	assert.Equal(t, held, assignments[0].Agent())
-	assert.Equal(t, operator, assignments[0].Assignee())
-	assert.Equal(t, 1, assignments[0].Epoch())
+	assert.Equal(t, held, assignments[0].Agent)
+	assert.Equal(t, operator, assignments[0].Assignee)
+	assert.Equal(t, 1, assignments[0].Epoch)
 
 	// The other org holds its own agent and its own assignment, so the
 	// scoping refuses a pairing rather than every pairing.
 	listed, err = s.ListByOrg(ctx, globex, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, listed, 1)
-	assert.Equal(t, elsewhere, listed[0].GRN())
+	assert.Equal(t, elsewhere, listed[0].GRN)
 	assignments, err = s.ListAssignmentsByOrg(ctx, globex)
 	require.NoError(t, err)
 	require.Len(t, assignments, 1)
-	assert.Equal(t, elsewhere, assignments[0].Agent())
+	assert.Equal(t, elsewhere, assignments[0].Agent)
 
 	// An org that holds none reads as empty rather than as everyone's.
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("initech"), "initech")))
@@ -231,7 +232,7 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 func TestAgent_GRNNamesAnAgentOfItsOrg(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := agent.NewPostgresStore(p)
+	s := agentpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 
@@ -272,7 +273,7 @@ func TestAgent_GRNNamesAnAgentOfItsOrg(t *testing.T) {
 func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := agent.NewPostgresStore(p)
+	s := agentpg.New(p)
 	orgGRN := grnOf("org", "acme")
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 
@@ -304,7 +305,7 @@ func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 	operator := grnOf(agent.ServiceTypeOperator, "one")
 	assigned, err := s.Assign(ctx, g, operator)
 	require.NoError(t, err)
-	assert.Equal(t, operator, assigned.Assignee())
+	assert.Equal(t, operator, assigned.Assignee)
 
 	// A reassignment writes onto the row the agent already has, and it
 	// leaves the org the same way an assignment does.
@@ -312,6 +313,6 @@ func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 	stored, err := s.GetAssignment(ctx, g)
 	require.NoError(t, err)
-	assert.Equal(t, operator, stored.Assignee(), "the rejected reassignment left the row alone")
-	assert.Equal(t, 1, stored.Epoch())
+	assert.Equal(t, operator, stored.Assignee, "the rejected reassignment left the row alone")
+	assert.Equal(t, 1, stored.Epoch)
 }

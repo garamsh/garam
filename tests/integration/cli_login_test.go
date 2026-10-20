@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 )
@@ -65,7 +65,7 @@ func TestCLI_LogsInByTheDeviceGrantAndReadsTheOrgsObjects(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", config)
 	t.Setenv("GARAM_ENDPOINT", s.url)
 	operatorGRN := registerOperator(t, s.pool, grn.New("acme", grn.DefaultProject, "operator", "hosted"))
-	agentGRN := seedAgent(t, agent.NewPostgresStore(s.pool), s.acme)
+	agentGRN := seedAgent(t, agentpg.New(s.pool), s.acme)
 
 	_, err := runCLI(t, io.Discard, "whoami")
 	require.Error(t, err)

@@ -15,6 +15,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -109,7 +110,7 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 		secondToken, operator.TokenContractVersion, `{}`)
 	assert.Equal(t, http.StatusForbidden, status, "an operator mints only for an agent it holds")
 
-	_, err := agent.NewPostgresStore(p).Assign(ctx, bot, second)
+	_, err := agentpg.New(p).Assign(ctx, bot, second)
 	require.NoError(t, err)
 
 	status = agentCall(t, client, http.MethodPost, claims, minted.Token, execution)
@@ -131,7 +132,7 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 
 	// A reassignment to the same operator moves the epoch alone, and
 	// that refuses the token minted at the earlier one.
-	_, err = agent.NewPostgresStore(p).Assign(ctx, bot, second)
+	_, err = agentpg.New(p).Assign(ctx, bot, second)
 	require.NoError(t, err)
 	status = agentCall(t, client, http.MethodPost, claims, again.Token, execution)
 	assert.Equal(t, http.StatusUnauthorized, status, "a token minted at an earlier epoch is refused")

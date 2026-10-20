@@ -13,6 +13,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 )
@@ -247,7 +248,7 @@ func TestAgentReplacement_AStaleEpochIsRefused(t *testing.T) {
 	// Moved by hand to a controller the reference does not name, the
 	// agent is at neither assignment the reference holds.
 	third := registerOperator(t, s.pool, scopedGRN("acme", operator.ServiceType, "third"))
-	_, err := agent.NewPostgresStore(s.pool).Assign(t.Context(), g, third)
+	_, err := agentpg.New(s.pool).Assign(t.Context(), g, third)
 	require.NoError(t, err)
 	got = s.admit(t, backApproval, backBody)
 	assert.Equal(t, http.StatusForbidden, got.status, "a reference the agent moved away from: %s", got.body)

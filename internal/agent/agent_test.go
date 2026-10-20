@@ -33,10 +33,10 @@ func TestNew_StartsBeforeProvisioningAndBeforeRunning(t *testing.T) {
 
 	a, err := agent.New(g, orgGRN)
 	require.NoError(t, err)
-	assert.Equal(t, g, a.GRN())
-	assert.Equal(t, orgGRN, a.Organization())
-	assert.Equal(t, agent.ProvisioningStatePending, a.ProvisioningState())
-	assert.Equal(t, agent.RuntimeStateUnknown, a.RuntimeState())
+	assert.Equal(t, g, a.GRN)
+	assert.Equal(t, orgGRN, a.Organization)
+	assert.Equal(t, agent.ProvisioningStatePending, a.ProvisioningState)
+	assert.Equal(t, agent.RuntimeStateUnknown, a.RuntimeState)
 }
 
 func TestNew_RejectsAGRNTheOrganizationDoesNotOwn(t *testing.T) {

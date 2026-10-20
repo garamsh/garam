@@ -7,7 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 
-	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -22,7 +22,7 @@ import (
 // in Postgres, where an agent runs read from its assignment, and the
 // hosted operator's current policy decided by CheckCurrent.
 func newProofService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, now func() time.Time) operator.ProofService {
-	return operator.NewProofService(operatorpg.New(pool), agentPlacements{store: agent.NewPostgresStore(pool)},
+	return operator.NewProofService(operatorpg.New(pool), agentPlacements{store: agentpg.New(pool)},
 		audienceAuthorization{groups: memberGroups{store: orgpg.New(pool)},
 			engine: authzv1.NewAuthzServiceClient(engine)},
 		operator.Config{Now: now})

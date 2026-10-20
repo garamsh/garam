@@ -132,9 +132,21 @@ func NewRootCommand() *cobra.Command {
 	}
 	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(),
 		newAdapterCommand(), newStandaloneCommand(),
-		newCopyMemoryCommand(), newRetireMessageSigningKeyCommand(),
+		newCopyMemoryCommand(), newRetireMessageSigningKeyCommand())
+	for _, user := range []*cobra.Command{
 		newLoginCommand(), newLogoutCommand(), newWhoamiCommand(),
-		newOrgsCommand(), newOperatorsCommand(), newAgentsCommand())
+		newOrgsCommand(), newAgentsCommand(),
+	} {
+		root.AddCommand(user)
+	}
+	addAPICommands(root, apiOperations)
+	for _, name := range userCommandNames(root) {
+		for _, c := range root.Commands() {
+			if c.Name() == name {
+				markUserCommands(c)
+			}
+		}
+	}
 	silenceUsageOnRun(root)
 	return root
 }

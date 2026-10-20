@@ -8,6 +8,7 @@ it does not decide. The server commands the same binary carries are
 
 ## Contents
 - What it is
+- The commands it derives
 - Signing in
 - What it keeps
 - What it calls
@@ -30,13 +31,48 @@ The user commands sit at the top level:
 | `garam whoami` | names the user the session is for |
 | `garam orgs list` | the organizations the user belongs to |
 | `garam orgs use <org>` | saves the organization later commands act in |
-| `garam operators list` | the organization's operators |
+| `garam operators ...` | the organization's operators, their keys, delegation and control endpoint, derived (§The commands it derives) |
 | `garam agents list`, `garam agents get <agent>` | the organization's agents, with each one's name |
 | `garam agents rename <agent> <name>`, `--clear` | names an agent, or clears its name ([ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)) |
 
 Every one of them takes `--endpoint`, `--org` and `--output`
 (`-o table`, the default, or `-o json`, which writes the API's own
 objects).
+
+## The commands it derives
+
+Every browser API operation becomes a command derived from
+`api/openapi.yaml` ([ADR-0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)). `internal/cli/cligen` writes
+`internal/cli/commands.gen.go` from the specification and
+`internal/cli/commands.yaml`, which `make gen` runs and `make check-gen`
+holds current.
+
+- **Grammar.** `garam <noun>... <verb> [arguments]`:
+  - the nouns are the path's static segments;
+  - the verb is the operationId's first word;
+  - the path parameters are the arguments, and an argument beginning
+    with `-` follows `--`;
+  - query parameters and body properties are kebab-case flags, an
+    object one as JSON or `@file`, and `--body` sends the whole body.
+  - `commands.yaml` renames the few whose derived name reads badly.
+- **Output.** `-o json` is the API's own answer. A table shows the
+  answer's scalar properties in declared order, and an answer with none
+  prints as JSON.
+- **Exit codes.** 0 success, 2 usage, 3 not signed in, 4 permission
+  denied, 5 not found, 6 conflict, 7 invalid argument, 8 unavailable,
+  and 1 for anything else. A server command ends with 1 on any
+  failure.
+- **Secrets.** An answer `commands.yaml` lists a secret field of
+  (`issueOperatorKey`, `createInvitation`, `mintOperationAuthority`) is
+  written whole to the file `--out` names. The file is created at mode
+  0600, never over an existing one, before the request is sent, and
+  removed if garam refuses or cannot be reached. The command prints the
+  answer without the secret and names the file on stderr; without
+  `--out`, or with a file already there, it sends nothing.
+- **Coverage.** Each of the 80 operations is derived, served by a
+  hand-written command, excluded with its reason, or pending, and in
+  exactly one of those. `cligen` refuses anything else, and so does
+  `TestAPIOperations_PlaceEveryOperationOfTheSpecification`.
 
 ## Signing in
 
@@ -77,7 +113,7 @@ out.
 
 - **The browser API alone.** The CLI calls the browser API through the
   client `api/client-codegen.yaml` generates from `api/openapi.yaml`,
-  limited to the operations a command calls.
+  for every operation.
 - **The endpoint.** It comes from `--endpoint`, else `GARAM_ENDPOINT`,
   else `https://garam.sh`, and is an origin. It is `https`, or `http` to
   a loopback address alone, because a session's tokens cross it. The
@@ -96,8 +132,10 @@ API's message under its kind.
 
 ## Not established
 
-- **Writes.** An agent's rename is the one write the CLI makes. It
-  creates and deletes nothing yet.
+- **Most resource groups.** The operators group is derived. Every other
+  operation `commands.yaml` lists under `pending` has no command yet,
+  and is enabled a resource group at a time (#1632), until the list is
+  empty.
 - **Other platforms.** The file lock is `flock(2)`, which builds where
   `syscall.Flock` does. No release publishes the binary for a platform
   without it.
@@ -111,3 +149,6 @@ API's message under its kind.
 - [ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)
   — the CLI signs in by the device grant, holds a session as a bearer,
   and keeps it in one owner-only file
+- [ADR-0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)
+  — every browser API operation is a command derived from the
+  specification, and a secret is written to a file alone

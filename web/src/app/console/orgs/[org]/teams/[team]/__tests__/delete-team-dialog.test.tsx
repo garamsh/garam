@@ -9,9 +9,14 @@ import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
-vi.mock("next/navigation", () => ({
+// The real `unstable_rethrow` tells a redirect from a failed request,
+// so the mocked one carries the digest a real redirect does.
+vi.mock("next/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/navigation")>()),
   redirect: (url: string) => {
-    throw new Error(`NEXT_REDIRECT:${url}`);
+    throw Object.assign(new Error(`NEXT_REDIRECT:${url}`), {
+      digest: `NEXT_REDIRECT;push;${url};307;`,
+    });
   },
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));

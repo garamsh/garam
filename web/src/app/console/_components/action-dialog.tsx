@@ -15,6 +15,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { UNSENT_COPY, isUnsent } from "@/lib/unsent-action";
 
 import { useReportOutcome, type OutcomeArea } from "./outcome";
 import { usePageAction } from "./page-actions";
@@ -160,9 +161,21 @@ function ConfirmForm<S extends ActionState>({
   const [state, setState] = useState<S>(initialState);
   const [matched, setMatched] = useState(typed === undefined);
   const [pending, startTransition] = useTransition();
+  // A call garam's answer never came back from: said here rather than
+  // thrown to a boundary, which would close the dialog as if cancelled
+  // (#1631).
+  const [unsent, setUnsent] = useState(false);
   const formAction = (formData: FormData) =>
     startTransition(async () => {
-      const next = await action(state, formData);
+      setUnsent(false);
+      let next: S;
+      try {
+        next = await action(state, formData);
+      } catch (error) {
+        if (!isUnsent(error)) throw error;
+        startTransition(() => setUnsent(true));
+        return;
+      }
       // State set after an await is its own transition (React 19).
       startTransition(() => {
         setState(next);
@@ -189,7 +202,11 @@ function ConfirmForm<S extends ActionState>({
       {typed !== undefined && !blocked && (
         <TypedConfirm {...typed} onMatch={setMatched} />
       )}
-      {refused && <Refusal>{state.message}</Refusal>}
+      {unsent ? (
+        <Refusal>{UNSENT_COPY}</Refusal>
+      ) : (
+        refused && <Refusal>{state.message}</Refusal>
+      )}
       <AlertDialogFooter>
         <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
         <Button

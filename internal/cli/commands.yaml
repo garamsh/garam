@@ -1,0 +1,109 @@
+# How the browser API's operations reach the garam CLI (ADR-0122).
+#
+# Every operation in api/openapi.yaml becomes a command named from its
+# path and operationId unless this file says otherwise. cligen reads
+# both files and writes commands.gen.go; an operation it can place
+# nowhere fails the generation, and a name below that is not an
+# operation fails it too, so this file cannot drift from the spec.
+
+# Operations no derived command serves, each with the reason.
+exclude:
+  login: a browser redirect to the provider; the CLI signs in by the device grant (ADR-0120)
+  loginWithReturnPath: the same redirect, with the console path it lands on
+  oauthCallback: the provider's redirect back to the browser
+  loginPassword: the CLI never sees a password (ADR-0120)
+  registerPassword: the CLI never sees a password (ADR-0120)
+  watchAgent: a server-sent event stream the console renders, not an answer a command prints
+
+# Operations a hand-written command already serves.
+hand:
+  requestDeviceCode: garam login
+  deviceToken: garam login
+  logout: garam logout
+  me: garam whoami
+
+# Fields of an answer that are a secret. The command requires --out,
+# writes the whole answer there at mode 0600, and prints the answer
+# without these fields.
+secrets:
+  issueOperatorKey: [privateKeyPem]
+  createInvitation: [token]
+  mintOperationAuthority: [authority]
+
+# Command names where the derived one reads badly.
+names:
+  searchOrg: search
+  checkPermissions: permissions check
+  explainPermission: permissions explain
+  listPermissionHolders: permissions holders list
+  getOrgDeletionPreview: orgs deletion-preview
+  listOrgMembers: members list
+  listMySessions: sessions list
+  revokeMySession: sessions revoke
+  decideDeviceCode: device decide
+  listProviders: providers list
+
+# Header parameters the CLI sends with a fixed value.
+headers:
+  Garam-Contract-Version: operation-authority.v1
+
+# Operations whose commands are not generated yet, enabled a resource
+# group at a time (#1632). This list only shrinks.
+pending:
+  - createOrg
+  - listOrgs
+  - getOrg
+  - updateOrg
+  - deleteOrg
+  - getOrgDeletionPreview
+  - checkPermissions
+  - explainPermission
+  - listPermissionHolders
+  - searchOrg
+  - listOrgMembers
+  - createGroup
+  - listGroups
+  - getGroup
+  - updateGroup
+  - deleteGroup
+  - listGroupMembers
+  - addGroupMember
+  - removeGroupMember
+  - createProject
+  - listProjects
+  - getProject
+  - updateProject
+  - deleteProject
+  - listProjectMembers
+  - addProjectMember
+  - removeProjectMember
+  - listAgents
+  - getAgent
+  - renameAgent
+  - listAgentEnrollments
+  - approveAgentEnrollment
+  - withdrawAgentEnrollment
+  - listAgentSupervisors
+  - revokeAgentSupervisor
+  - listCredentialEvents
+  - mintOperationAuthority
+  - createPolicy
+  - listPolicies
+  - listPolicyVersions
+  - addPolicyVersion
+  - activatePolicy
+  - deletePolicy
+  - rollbackPolicy
+  - listPolicyAttachments
+  - attachPolicy
+  - detachPolicy
+  - listOrgConsents
+  - grantOrgConsent
+  - withdrawOrgConsent
+  - createInvitation
+  - getInvitation
+  - acceptInvitation
+  - listProviders
+  - listMySessions
+  - revokeMySession
+  - decideDeviceCode

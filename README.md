@@ -16,6 +16,7 @@ Documentation lives in [`docs/`](./docs/).
 - Build and test
 - Searching this repository
 - Local stack
+- The garam CLI
 - Web frontend
 - Development images
 - Test image
@@ -75,6 +76,23 @@ The same compose file provides the dev/e2e Postgres: `make db-up`
 starts only its `postgres` service. The stack and the tests get a
 database each on it — the stack's `garam`, and `garam_test` for `make
 integration` and `make e2e`, the first of which truncates.
+
+## The garam CLI
+
+The `garam` binary is also the CLI a person or a program administers
+garam with ([docs/architecture/cli.md](./docs/architecture/cli.md)).
+
+```sh
+garam login --endpoint https://garam.example   # device grant (ADR-0120)
+garam orgs use acme                            # the org later commands act in
+garam operators list -o json                   # the API's own answer
+garam operators keys issue hosted --rotation planned --out hosted-key.json
+```
+
+Every browser API operation becomes a command derived from
+`api/openapi.yaml` by `go run ./internal/cli/cligen`, which `make gen`
+runs (ADR-0122). An answer carrying a secret, such as an issued key, is
+written to the file `--out` names at mode 0600 and never printed.
 
 ## Web frontend
 

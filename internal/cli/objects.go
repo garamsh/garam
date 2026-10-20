@@ -85,48 +85,6 @@ func newOrgsCommand() *cobra.Command {
 	return orgs
 }
 
-// newOperatorsCommand lists an organization's operators.
-func newOperatorsCommand() *cobra.Command {
-	flags := &userFlags{}
-	operators := &cobra.Command{Use: "operators", Short: "An organization's operators"}
-	flags.bind(operators)
-	operators.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List the organization's operators",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			c, err := newUserCommand(cmd, flags)
-			if err != nil {
-				return err
-			}
-			org, err := c.org()
-			if err != nil {
-				return err
-			}
-			client, err := c.signedIn(cmd.Context())
-			if err != nil {
-				return err
-			}
-			resp, err := client.ListOperatorsWithResponse(cmd.Context(), org)
-			if err != nil {
-				return errorx.Wrap(err, "list operators", errorx.KindUnavailable)
-			}
-			if resp.JSON200 == nil {
-				return apiFailure(resp.HTTPResponse, resp.Body)
-			}
-			list := *resp.JSON200
-			return c.render(list, []string{"OPERATOR", "NAME", "DESCRIPTION", "CREATED"}, func() [][]string {
-				rows := make([][]string, 0, len(list))
-				for _, o := range list {
-					rows = append(rows, []string{lastSegment(o.Grn), o.Name, o.Description, stamp(o.CreatedAt)})
-				}
-				return rows
-			})
-		},
-	})
-	return operators
-}
-
 // newAgentsCommand lists, reads and renames an organization's agents.
 func newAgentsCommand() *cobra.Command {
 	flags := &userFlags{}

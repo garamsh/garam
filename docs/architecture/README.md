@@ -1025,3 +1025,7 @@ ADRs:
   CLI holds a server-side session of kind `cli` presented as a bearer
   wherever the cookie is accepted, refreshed by a token spent once, and
   kept in one owner-only file
+- [0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)
+  — the CLI derives a command for every browser API operation from
+  `api/openapi.yaml`, with one grammar, output contract and set of exit
+  codes, and writes a secret answer to a file at mode 0600 alone

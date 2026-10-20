@@ -120,16 +120,16 @@ const (
 // garam's own refusal stands in for a crossing it refused, so its event
 // is that send's, with the parties swapped back and no message: the
 // one stored is the refusal, not what was sent.
-func sent(submitted, stored *Message) audit.Send {
-	if submitted.author == AuthorGaram {
-		return audit.Refused(submitted.recipient, submitted.sender)
+func Sent(submitted, stored *Message) audit.Send {
+	if submitted.Author == AuthorGaram {
+		return audit.Refused(submitted.Recipient, submitted.Sender)
 	}
-	return audit.Authorized(submitted.sender, submitted.recipient, string(stored.id), stored.createdAt)
+	return audit.Authorized(submitted.Sender, submitted.Recipient, string(stored.ID), stored.CreatedAt)
 }
 
-// parseAuthor reads an author. The set is closed, so anything else is a
+// ParseAuthor reads an author. The set is closed, so anything else is a
 // caller or a row this process does not understand.
-func parseAuthor(s string) (Author, error) {
+func ParseAuthor(s string) (Author, error) {
 	switch Author(s) {
 	case AuthorSender, AuthorGaram:
 		return Author(s), nil
@@ -141,15 +141,26 @@ func parseAuthor(s string) (Author, error) {
 // Message is one message addressed to a recipient. The body is opaque:
 // the queue carries it and never reads it. It is dropped at completion
 // (ADR-0034), so a message read back after delivery carries none.
+//
+// Every field is persisted on the row and exported: the type holds no
+// invariant over them once built, so it is a data carrier (ADR-0069).
 type Message struct {
-	id             ID
-	recipient      grn.GRN
-	sender         grn.GRN
-	idempotencyKey string
-	body           string
-	author         Author
-	createdAt      time.Time
-	attempts       int
+	ID             ID
+	Recipient      grn.GRN
+	Sender         grn.GRN
+	IdempotencyKey string
+	Body           string
+	Author         Author
+	// CreatedAt is when the queue stored the message, on the database's
+	// clock — the one the retention sweep measures with — and the zero
+	// time on a message not stored yet.
+	CreatedAt time.Time
+	// Attempts is how many times the message has been handed to a
+	// reader, the hold the caller is reading it through included.
+	// Delivery is at-least-once (ADR-0018), so this is what tells a first
+	// delivery from a repeat; the count is bounded, and a message that
+	// spends it is not handed out again.
+	Attempts int
 }
 
 // New builds a message from what a sender supplied. The recipient is
@@ -163,7 +174,7 @@ func New(recipient, sender grn.GRN, idempotencyKey, body string) (*Message, erro
 
 // newAuthored is New for a message whose author is given.
 func newAuthored(recipient, sender grn.GRN, idempotencyKey, body string, author Author) (*Message, error) {
-	if _, err := parseAuthor(string(author)); err != nil {
+	if _, err := ParseAuthor(string(author)); err != nil {
 		return nil, err
 	}
 	if err := recipient.Validate(); err != nil {
@@ -188,52 +199,28 @@ func newAuthored(recipient, sender grn.GRN, idempotencyKey, body string, author 
 		return nil, err
 	}
 	return &Message{
-		id:             id,
-		recipient:      recipient,
-		sender:         sender,
-		idempotencyKey: idempotencyKey,
-		body:           body,
-		author:         author,
+		ID:             id,
+		Recipient:      recipient,
+		Sender:         sender,
+		IdempotencyKey: idempotencyKey,
+		Body:           body,
+		Author:         author,
 	}, nil
 }
 
-func (m *Message) ID() ID                 { return m.id }
-func (m *Message) Recipient() grn.GRN     { return m.recipient }
-func (m *Message) Sender() grn.GRN        { return m.sender }
-func (m *Message) IdempotencyKey() string { return m.idempotencyKey }
-func (m *Message) Body() string           { return m.body }
-func (m *Message) Author() Author         { return m.author }
-
-// CreatedAt is when the queue stored the message, on the database's
-// clock — the one the retention sweep measures with — and the zero time
-// on a message not stored yet.
-func (m *Message) CreatedAt() time.Time { return m.createdAt }
-
-// Attempts is how many times the message has been handed to a reader,
-// the hold the caller is reading it through included. Delivery is
-// at-least-once (ADR-0018), so this is what tells a first delivery from
-// a repeat; the count is bounded, and a message that spends it is not
-// handed out again.
-func (m *Message) Attempts() int { return m.attempts }
-
 // Claim is a message handed to one reader and the token that proves the
 // reader still holds it. It expires: a reader that dies leaves the
-// message claimable instead of stranded.
+// message claimable instead of stranded. It is a data carrier, its
+// fields exported (ADR-0069).
 type Claim struct {
-	message   *Message
-	id        ClaimID
-	claimedAt time.Time
-	expiresAt time.Time
+	Message *Message
+	ID      ClaimID
+	// ClaimedAt is when the claim was taken, on the database's clock.
+	// The lease ceiling is measured from it, and so is a hand-out's
+	// signature (ADR-0101).
+	ClaimedAt time.Time
+	ExpiresAt time.Time
 }
-
-func (c *Claim) Message() *Message    { return c.message }
-func (c *Claim) ID() ClaimID          { return c.id }
-func (c *Claim) ExpiresAt() time.Time { return c.expiresAt }
-
-// ClaimedAt is when the claim was taken, on the database's clock. The
-// lease ceiling is measured from it, and so is a hand-out's signature
-// (ADR-0101).
-func (c *Claim) ClaimedAt() time.Time { return c.claimedAt }
 
 // State is how far a message has got, as its sender may observe it
 // (ADR-0055). The four are exhaustive over a stored message: what is
@@ -259,25 +246,16 @@ const (
 // knows about it that the sender does not. It carries no body — the
 // sender wrote it, and a completed message no longer has one
 // (ADR-0034) — and no recipient or key, which were the submission's.
+// The state is the store's to decide: the lease it rests on is measured
+// where the queue measures every other one, so no process's clock
+// decides whether a claim still stands. It is a data carrier, its
+// fields exported (ADR-0069).
 type Status struct {
-	id        ID
-	state     State
-	attempts  int
-	createdAt time.Time
+	ID        ID
+	State     State
+	Attempts  int
+	CreatedAt time.Time
 }
-
-// NewStatus builds the answer to a sender's read from what the queue
-// holds. The state is the store's to decide: the lease it rests on is
-// measured where the queue measures every other one, so no process's
-// clock decides whether a claim still stands.
-func NewStatus(id ID, state State, attempts int, createdAt time.Time) *Status {
-	return &Status{id: id, state: state, attempts: attempts, createdAt: createdAt}
-}
-
-func (s *Status) ID() ID               { return s.id }
-func (s *Status) State() State         { return s.state }
-func (s *Status) Attempts() int        { return s.attempts }
-func (s *Status) CreatedAt() time.Time { return s.createdAt }
 
 // newID mints a message identifier. A message is a queue entry rather
 // than a resource a policy names, so it carries an opaque identifier
@@ -290,8 +268,8 @@ func newID() (ID, error) {
 	return ID(s), nil
 }
 
-// newClaimID mints the token one claim is fenced by.
-func newClaimID() (ClaimID, error) {
+// NewClaimID mints the token one claim is fenced by.
+func NewClaimID() (ClaimID, error) {
 	s, err := randomHex()
 	if err != nil {
 		return "", err

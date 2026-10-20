@@ -70,7 +70,7 @@ func signedBy(t *testing.T, ring Keyring, keys *clockedKeys) map[string]string {
 	require.NoError(t, err)
 	m, err := New(recipient, sender, "key-1", "hello")
 	require.NoError(t, err)
-	signed, err := signer.Sign(context.Background(), &Claim{message: m, id: "claim-1", claimedAt: keys.now, expiresAt: keys.now.Add(time.Minute)})
+	signed, err := signer.Sign(context.Background(), &Claim{Message: m, ID: "claim-1", ClaimedAt: keys.now, ExpiresAt: keys.now.Add(time.Minute)})
 	require.NoError(t, err)
 	encoded, _, ok := strings.Cut(signed.Signature, ".")
 	require.True(t, ok)

@@ -3,7 +3,8 @@
 The durable queue a message reaches an agent through (ADR-0013), the
 consent that lets one cross an organization boundary (ADR-0035), and
 the signature garam puts on every message it hands out (ADR-0101).
-Implemented by `internal/message`.
+Implemented by `internal/message`, which persists through
+`internal/message/postgres` (ADR-0069).
 
 **garam announces nothing to a sender, and one of the two reports it
 owes is built.** It answers a post no consent relation carries across

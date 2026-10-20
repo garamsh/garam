@@ -267,5 +267,5 @@ func TestSendAudit_ARefusedSubmissionWritesNoEvent(t *testing.T) {
 	require.Len(t, events, 1, "a refused submission recorded a send")
 	assert.Equal(t, "authorized", events[0].decision)
 	require.NotNil(t, events[0].messageID)
-	assert.Equal(t, string(stored.ID()), *events[0].messageID)
+	assert.Equal(t, string(stored.ID), *events[0].messageID)
 }

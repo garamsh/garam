@@ -19,7 +19,7 @@ import (
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
@@ -59,7 +59,7 @@ func newCheckStack(t *testing.T) *checkStack {
 	owner, ownerGRN := session("ada", org.RoleOwner)
 	member, _ := session("bob", org.RoleMember)
 
-	srv := api.NewServer(users, orgs, nil, nil, message.NewPostgresStore(p), nil,
+	srv := api.NewServer(users, orgs, nil, nil, messagepg.New(p), nil,
 		authn.NewPostgresSessionStore(p), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))

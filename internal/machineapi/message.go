@@ -389,11 +389,11 @@ func fencedParties(w http.ResponseWriter, r *http.Request, agentGRN machinegen.A
 // the cheap one (ADR-0022).
 func claimBody(c *message.Claim, watchers int) machinegen.Claim {
 	return machinegen.Claim{
-		Id:        string(c.ID()),
-		ExpiresAt: c.ExpiresAt(),
-		Attempt:   c.Message().Attempts(),
+		Id:        string(c.ID),
+		ExpiresAt: c.ExpiresAt,
+		Attempt:   c.Message.Attempts,
 		Watchers:  watchers,
-		Message:   messageBody(c.Message()),
+		Message:   messageBody(c.Message),
 	}
 }
 
@@ -402,21 +402,21 @@ func claimBody(c *message.Claim, watchers int) machinegen.Claim {
 // message no longer carries one (ADR-0034).
 func statusBody(s *message.Status) machinegen.MessageStatus {
 	return machinegen.MessageStatus{
-		Id:        string(s.ID()),
-		State:     machinegen.MessageState(s.State()),
-		Attempts:  s.Attempts(),
-		CreatedAt: s.CreatedAt(),
+		Id:        string(s.ID),
+		State:     machinegen.MessageState(s.State),
+		Attempts:  s.Attempts,
+		CreatedAt: s.CreatedAt,
 	}
 }
 
 // messageBody renders a stored message as the spec's Message.
 func messageBody(m *message.Message) machinegen.Message {
 	return machinegen.Message{
-		Id:             string(m.ID()),
-		Recipient:      m.Recipient().String(),
-		Sender:         m.Sender().String(),
-		IdempotencyKey: m.IdempotencyKey(),
-		Body:           m.Body(),
-		CreatedAt:      m.CreatedAt(),
+		Id:             string(m.ID),
+		Recipient:      m.Recipient.String(),
+		Sender:         m.Sender.String(),
+		IdempotencyKey: m.IdempotencyKey,
+		Body:           m.Body,
+		CreatedAt:      m.CreatedAt,
 	}
 }

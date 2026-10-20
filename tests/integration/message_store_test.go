@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -26,7 +27,7 @@ import (
 func TestMessageStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := message.NewPostgresStore(p)
+	s := messagepg.New(p)
 	bot, elsewhere := grnOf("agent", "bot"), grnOf("agent", "elsewhere")
 	ada := grnOf("user", "ada")
 	// Wide enough that nothing here is refused for want of attempts;
@@ -37,26 +38,26 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	stored, err := s.Enqueue(ctx, m, nil)
 	require.NoError(t, err)
-	assert.Equal(t, m.ID(), stored.ID())
-	assert.Equal(t, "key-1", stored.IdempotencyKey(), "the key the sender suppressed duplicates with comes back")
+	assert.Equal(t, m.ID, stored.ID)
+	assert.Equal(t, "key-1", stored.IdempotencyKey, "the key the sender suppressed duplicates with comes back")
 
 	retried, err := message.New(bot, ada, "key-1", "hello again")
 	require.NoError(t, err)
 	again, err := s.Enqueue(ctx, retried, nil)
 	require.NoError(t, err)
-	assert.Equal(t, m.ID(), again.ID(), "a repeated sender key returns the stored message")
-	assert.Equal(t, "hello", again.Body(), "and stores nothing new")
+	assert.Equal(t, m.ID, again.ID, "a repeated sender key returns the stored message")
+	assert.Equal(t, "hello", again.Body, "and stores nothing new")
 
 	// The queue is a table, not a connection: a store sharing no state
 	// with the one that enqueued claims the message, and dropping every
 	// pooled connection afterwards leaves the claim standing.
-	reader := message.NewPostgresStore(p)
+	reader := messagepg.New(p)
 	claim, err := reader.Claim(ctx, bot, time.Minute, attempts, nil, nil)
 	require.NoError(t, err)
-	assert.Equal(t, m.ID(), claim.Message().ID())
-	assert.Equal(t, "hello", claim.Message().Body())
-	assert.Equal(t, ada, claim.Message().Sender())
-	assert.Equal(t, 1, claim.Message().Attempts(), "handing the message out is the first attempt")
+	assert.Equal(t, m.ID, claim.Message.ID)
+	assert.Equal(t, "hello", claim.Message.Body)
+	assert.Equal(t, ada, claim.Message.Sender)
+	assert.Equal(t, 1, claim.Message.Attempts, "handing the message out is the first attempt")
 	p.Reset()
 
 	_, err = s.Claim(ctx, bot, time.Minute, attempts, nil, nil)
@@ -66,12 +67,12 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 
 	// The claim is a fence rather than a secret: another recipient's
 	// queue does not complete under it even where its token is known.
-	assert.ErrorIs(t, s.Complete(ctx, elsewhere, claim.ID(), nil), message.ErrStaleClaim)
+	assert.ErrorIs(t, s.Complete(ctx, elsewhere, claim.ID, nil), message.ErrStaleClaim)
 
-	require.NoError(t, reader.Complete(ctx, bot, claim.ID(), nil))
+	require.NoError(t, reader.Complete(ctx, bot, claim.ID, nil))
 	// A reader retries what it could not confirm, so completing twice
 	// reports the same delivery rather than failing.
-	require.NoError(t, reader.Complete(ctx, bot, claim.ID(), nil))
+	require.NoError(t, reader.Complete(ctx, bot, claim.ID, nil))
 	_, err = s.Claim(ctx, bot, time.Minute, attempts, nil, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady, "a delivered message is not handed out again")
 
@@ -81,7 +82,7 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	afterDelivery, err := s.Enqueue(ctx, late, nil)
 	require.NoError(t, err)
-	assert.Equal(t, m.ID(), afterDelivery.ID())
+	assert.Equal(t, m.ID, afterDelivery.ID)
 	_, err = s.Claim(ctx, bot, time.Minute, attempts, nil, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady)
 }
@@ -95,7 +96,7 @@ func TestMessageStore_ClaimIsExclusive(t *testing.T) {
 	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
 
 	const queued, readers = 8, 8
-	writer := message.NewPostgresStore(p)
+	writer := messagepg.New(p)
 	for i := range queued {
 		m, err := message.New(bot, ada, fmt.Sprintf("key-%d", i), "hello")
 		require.NoError(t, err)
@@ -115,7 +116,7 @@ func TestMessageStore_ClaimIsExclusive(t *testing.T) {
 	for range readers {
 		go func() {
 			defer wg.Done()
-			s := message.NewPostgresStore(p)
+			s := messagepg.New(p)
 			<-start
 			for {
 				// The attempt bound is wide enough to hand every message
@@ -129,7 +130,7 @@ func TestMessageStore_ClaimIsExclusive(t *testing.T) {
 					return
 				}
 				mu.Lock()
-				claimed = append(claimed, c.Message().ID())
+				claimed = append(claimed, c.Message.ID)
 				mu.Unlock()
 			}
 		}()
@@ -151,7 +152,7 @@ func TestMessageStore_ClaimIsExclusive(t *testing.T) {
 func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := message.NewPostgresStore(p)
+	s := messagepg.New(p)
 	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
 
 	m, err := message.New(bot, ada, "key-1", "hello")
@@ -176,16 +177,16 @@ func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
 	}, 5*time.Second, 10*time.Millisecond, "a lapsed claim leaves the message claimable")
 
 	require.NotNil(t, handedOn)
-	assert.Equal(t, m.ID(), handedOn.Message().ID())
-	assert.NotEqual(t, lapsing.ID(), handedOn.ID(), "the message is handed on under a claim of its own")
-	assert.Equal(t, 2, handedOn.Message().Attempts(), "the hand-on is the second attempt")
+	assert.Equal(t, m.ID, handedOn.Message.ID)
+	assert.NotEqual(t, lapsing.ID, handedOn.ID, "the message is handed on under a claim of its own")
+	assert.Equal(t, 2, handedOn.Message.Attempts, "the hand-on is the second attempt")
 
-	_, err = s.Renew(ctx, bot, lapsing.ID(), time.Minute, time.Hour, nil)
+	_, err = s.Renew(ctx, bot, lapsing.ID, time.Minute, time.Hour, nil)
 	assert.ErrorIs(t, err, message.ErrStaleClaim,
 		"the reader the message was taken from renews nothing")
-	assert.ErrorIs(t, s.Complete(ctx, bot, lapsing.ID(), nil), message.ErrStaleClaim,
+	assert.ErrorIs(t, s.Complete(ctx, bot, lapsing.ID, nil), message.ErrStaleClaim,
 		"the reader the message was taken from completes nothing")
-	require.NoError(t, s.Complete(ctx, bot, handedOn.ID(), nil))
+	require.NoError(t, s.Complete(ctx, bot, handedOn.ID, nil))
 }
 
 // TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling
@@ -198,7 +199,7 @@ func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
 func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := message.NewPostgresStore(p)
+	s := messagepg.New(p)
 	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
 	// The lease is what the claim would lapse under; the ceiling is how
 	// far renewals may carry it. Both are wide enough that a stalled
@@ -222,13 +223,13 @@ func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *test
 	renewedUntil := time.Now().Add(lease + 500*time.Millisecond)
 	var renewed *message.Claim
 	for time.Now().Before(renewedUntil) {
-		renewed, err = s.Renew(ctx, bot, held.ID(), lease, ceiling, nil)
+		renewed, err = s.Renew(ctx, bot, held.ID, lease, ceiling, nil)
 		require.NoError(t, err, "a claim renewed inside its lease is still the holder's")
 		time.Sleep(200 * time.Millisecond)
 	}
 	require.NotNil(t, renewed)
-	assert.True(t, renewed.ExpiresAt().After(held.ExpiresAt()), "renewal carried the claim past where it started")
-	assert.Equal(t, held.ID(), renewed.ID(), "renewal keeps the hold rather than taking a new one")
+	assert.True(t, renewed.ExpiresAt.After(held.ExpiresAt), "renewal carried the claim past where it started")
+	assert.Equal(t, held.ID, renewed.ID, "renewal keeps the hold rather than taking a new one")
 
 	_, err = s.Claim(ctx, bot, time.Minute, 4, nil, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady,
@@ -238,7 +239,7 @@ func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *test
 	// claim lapses on schedule anyway.
 	var handedOn *message.Claim
 	require.Eventually(t, func() bool {
-		_, _ = s.Renew(ctx, bot, held.ID(), lease, ceiling, nil)
+		_, _ = s.Renew(ctx, bot, held.ID, lease, ceiling, nil)
 		c, err := s.Claim(ctx, bot, time.Minute, 4, nil, nil)
 		if err != nil {
 			return false
@@ -248,8 +249,8 @@ func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *test
 	}, 10*time.Second, 200*time.Millisecond, "the ceiling holds a renewal that would carry the claim forever")
 
 	require.NotNil(t, handedOn)
-	assert.Equal(t, m.ID(), handedOn.Message().ID())
-	_, err = s.Renew(ctx, bot, held.ID(), lease, ceiling, nil)
+	assert.Equal(t, m.ID, handedOn.Message.ID)
+	_, err = s.Renew(ctx, bot, held.ID, lease, ceiling, nil)
 	assert.ErrorIs(t, err, message.ErrStaleClaim, "a claim carried past its ceiling renews nothing")
 }
 
@@ -261,7 +262,7 @@ func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *test
 func TestMessageStore_StopsRedeliveringAnExhaustedMessage(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := message.NewPostgresStore(p)
+	s := messagepg.New(p)
 	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
 	const attempts = 2
 	const lease = 200 * time.Millisecond
@@ -273,7 +274,7 @@ func TestMessageStore_StopsRedeliveringAnExhaustedMessage(t *testing.T) {
 
 	first, err := s.Claim(ctx, bot, lease, attempts, nil, nil)
 	require.NoError(t, err)
-	assert.Equal(t, 1, first.Message().Attempts())
+	assert.Equal(t, 1, first.Message.Attempts)
 
 	// Nobody completes it, so the lease is what ends each attempt.
 	var second *message.Claim
@@ -286,7 +287,7 @@ func TestMessageStore_StopsRedeliveringAnExhaustedMessage(t *testing.T) {
 		return true
 	}, 5*time.Second, 20*time.Millisecond, "a lapsed claim leaves the message claimable")
 	require.NotNil(t, second)
-	assert.Equal(t, 2, second.Message().Attempts())
+	assert.Equal(t, 2, second.Message.Attempts)
 
 	// Its attempts spent, the message is handed to nobody however long
 	// anyone waits — and the second claim's lease runs out inside this
@@ -300,8 +301,8 @@ func TestMessageStore_StopsRedeliveringAnExhaustedMessage(t *testing.T) {
 	// it was the count and not anything else about the row.
 	third, err := s.Claim(ctx, bot, time.Minute, attempts+1, nil, nil)
 	require.NoError(t, err)
-	assert.Equal(t, m.ID(), third.Message().ID())
-	assert.Equal(t, 3, third.Message().Attempts())
+	assert.Equal(t, m.ID, third.Message.ID)
+	assert.Equal(t, 3, third.Message.Attempts)
 }
 
 // TestMessageService_ClaimWaitsForTheMessageThatArrives drives the long
@@ -313,7 +314,7 @@ func TestMessageStore_StopsRedeliveringAnExhaustedMessage(t *testing.T) {
 func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	store := message.NewPostgresStore(p)
+	store := messagepg.New(p)
 	cfg := briefDelivery()
 	s, err := message.NewService(store, cfg)
 	require.NoError(t, err)
@@ -360,8 +361,8 @@ func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
 	case got := <-answered:
 		require.NoError(t, got.err)
 		require.NotNil(t, got.claim)
-		assert.Equal(t, sent.ID(), got.claim.Message().ID())
-		assert.Equal(t, "hello", got.claim.Message().Body())
+		assert.Equal(t, sent.ID, got.claim.Message.ID)
+		assert.Equal(t, "hello", got.claim.Message.Body)
 		assert.Less(t, time.Since(start), cfg.Wait,
 			"the poll waited its whole wait out rather than answering with the message that arrived")
 	case <-time.After(cfg.Wait + 5*time.Second):
@@ -379,7 +380,7 @@ func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
 func TestMessageStore_CompletionDropsTheBodyAndKeepsTheKey(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := message.NewPostgresStore(p)
+	s := messagepg.New(p)
 	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
 
 	m, err := message.New(bot, ada, "key-1", "hello")
@@ -389,11 +390,11 @@ func TestMessageStore_CompletionDropsTheBodyAndKeepsTheKey(t *testing.T) {
 
 	claim, err := s.Claim(ctx, bot, time.Minute, 4, nil, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "hello", claim.Message().Body(), "the body is there to be dropped")
-	require.NoError(t, s.Complete(ctx, bot, claim.ID(), nil))
+	assert.Equal(t, "hello", claim.Message.Body, "the body is there to be dropped")
+	require.NoError(t, s.Complete(ctx, bot, claim.ID, nil))
 
 	assert.Equal(t, 1, countRows(t, p,
-		"SELECT count(*) FROM messages WHERE id = $1 AND body IS NULL", string(m.ID())),
+		"SELECT count(*) FROM messages WHERE id = $1 AND body IS NULL", string(m.ID)),
 		"the row stays and its body is gone")
 
 	// The key outlives the body, so a retry after delivery neither
@@ -402,7 +403,7 @@ func TestMessageStore_CompletionDropsTheBodyAndKeepsTheKey(t *testing.T) {
 	require.NoError(t, err)
 	afterDelivery, err := s.Enqueue(ctx, late, nil)
 	require.NoError(t, err)
-	assert.Equal(t, m.ID(), afterDelivery.ID(), "a retry after completion is still suppressed")
+	assert.Equal(t, m.ID, afterDelivery.ID, "a retry after completion is still suppressed")
 	_, err = s.Claim(ctx, bot, time.Minute, 4, nil, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady)
 }
@@ -417,7 +418,7 @@ func TestMessageStore_CompletionDropsTheBodyAndKeepsTheKey(t *testing.T) {
 func TestMessageStore_EnqueueSweepsWhatOutlivedTheWindow(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := message.NewPostgresStore(p)
+	s := messagepg.New(p)
 	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
 
 	post := func(key string) message.ID {
@@ -425,7 +426,7 @@ func TestMessageStore_EnqueueSweepsWhatOutlivedTheWindow(t *testing.T) {
 		require.NoError(t, err)
 		stored, err := s.Enqueue(ctx, m, nil)
 		require.NoError(t, err)
-		return stored.ID()
+		return stored.ID
 	}
 	// age backdates the row, because the window is thirty days and the
 	// test is not.
@@ -444,8 +445,8 @@ func TestMessageStore_EnqueueSweepsWhatOutlivedTheWindow(t *testing.T) {
 	delivered := post("key-delivered")
 	claim, err := s.Claim(ctx, bot, time.Minute, 4, nil, nil)
 	require.NoError(t, err)
-	require.Equal(t, delivered, claim.Message().ID(), "the oldest message is the one claimed")
-	require.NoError(t, s.Complete(ctx, bot, claim.ID(), nil))
+	require.Equal(t, delivered, claim.Message.ID, "the oldest message is the one claimed")
+	require.NoError(t, s.Complete(ctx, bot, claim.ID, nil))
 
 	expired := post("key-expired")
 	standing := post("key-standing")
@@ -477,7 +478,7 @@ func TestMessageStore_EnqueueSweepsWhatOutlivedTheWindow(t *testing.T) {
 func TestMessageStore_RetentionRunsOnTheDatabaseClock(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := message.NewPostgresStore(p)
+	s := messagepg.New(p)
 	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
 	const lag, margin = time.Second, time.Hour
 
@@ -510,17 +511,17 @@ func TestMessageStore_RetentionRunsOnTheDatabaseClock(t *testing.T) {
 	for _, m := range []*message.Message{inside, past} {
 		stored, err := s.Enqueue(ctx, m, nil)
 		require.NoError(t, err)
-		assert.WithinRange(t, stored.CreatedAt(), before, dbNow(),
+		assert.WithinRange(t, stored.CreatedAt, before, dbNow(),
 			"the stamp is the database's at storing, not the process's at building")
 	}
 
-	age(inside.ID(), message.RetentionWindow-margin)
-	age(past.ID(), message.RetentionWindow+margin)
+	age(inside.ID, message.RetentionWindow-margin)
+	age(past.ID, message.RetentionWindow+margin)
 	_, err := s.Enqueue(ctx, build("key-sweep"), nil)
 	require.NoError(t, err)
 
-	assert.Equal(t, 1, present(inside.ID()), "a message inside the window on the database's clock outlives the sweep")
-	assert.Equal(t, 0, present(past.ID()), "a message past it is swept")
+	assert.Equal(t, 1, present(inside.ID), "a message inside the window on the database's clock outlives the sweep")
+	assert.Equal(t, 0, present(past.ID), "a message past it is swept")
 }
 
 // TestMessage_BodyAndCompletionAreOneState covers the schema's copy of
@@ -560,6 +561,6 @@ func TestMessage_BodyAndCompletionAreOneState(t *testing.T) {
 	// constraint rejects a half-state rather than every row.
 	m, err := message.New(bot, ada, "key-whole", "hello")
 	require.NoError(t, err)
-	_, err = message.NewPostgresStore(p).Enqueue(ctx, m, nil)
+	_, err = messagepg.New(p).Enqueue(ctx, m, nil)
 	require.NoError(t, err)
 }

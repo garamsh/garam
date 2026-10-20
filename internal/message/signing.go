@@ -204,7 +204,7 @@ func (r *keyring) Signer(ctx context.Context) (Signer, error) {
 }
 
 func (s *openKey) Sign(ctx context.Context, c *Claim) (Signed, error) {
-	m := c.Message()
+	m := c.Message
 	body, err := Content(m)
 	if err != nil {
 		return Signed{}, err
@@ -217,12 +217,12 @@ func (s *openKey) Sign(ctx context.Context, c *Claim) (Signed, error) {
 	signature, err := compactJWS(ctx, s.signer, s.id, signedClaims{
 		Iss:           string(s.issuer),
 		Sub:           sub,
-		Aud:           m.recipient.String(),
-		Org:           m.recipient.Organization,
-		MessageID:     string(m.id),
+		Aud:           m.Recipient.String(),
+		Org:           m.Recipient.Organization,
+		MessageID:     string(m.ID),
 		ContentSHA256: encode(digest[:]),
-		Iat:           c.claimedAt.Unix(),
-		Exp:           c.claimedAt.Add(s.validity).Unix(),
+		Iat:           c.ClaimedAt.Unix(),
+		Exp:           c.ClaimedAt.Add(s.validity).Unix(),
 	})
 	if err != nil {
 		return Signed{}, err
@@ -233,13 +233,13 @@ func (s *openKey) Sign(ctx context.Context, c *Claim) (Signed, error) {
 // vouchedSender is the sender garam vouches for: the identity that
 // posted the message, or garam itself for a message no caller posted.
 func (s *openKey) vouchedSender(m *Message) (string, error) {
-	switch m.author {
+	switch m.Author {
 	case AuthorSender:
-		return m.sender.String(), nil
+		return m.Sender.String(), nil
 	case AuthorGaram:
 		return string(s.issuer), nil
 	default:
-		return "", errorx.New(errorx.KindInternal, "message: unknown author "+string(m.author))
+		return "", errorx.New(errorx.KindInternal, "message: unknown author "+string(m.Author))
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
-	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/operator"
 	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
 	"github.com/garamsh/garam/internal/org"
@@ -72,7 +72,7 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	orgs := orgpg.New(p)
 	agents := agentpg.New(p)
 	operators := operatorpg.New(p)
-	consents := message.NewPostgresStore(p)
+	consents := messagepg.New(p)
 	users := userpg.New(p)
 
 	orgGRN := orgRootGRN("preview-cascade")
@@ -159,7 +159,7 @@ func TestOrgDeletionPreview_ConsentGoesForBothSides(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	orgs := orgpg.New(p)
-	consents := message.NewPostgresStore(p)
+	consents := messagepg.New(p)
 
 	deleted := orgRootGRN("preview-consent-deleted")
 	survivor := orgRootGRN("preview-consent-survivor")

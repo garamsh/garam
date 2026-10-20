@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 )
 
 // newRetireMessageSigningKeyCommand constructs `garam
@@ -31,7 +32,7 @@ func retireMessageSigningKey(cmd *cobra.Command, id message.KeyID) error {
 		return err
 	}
 	defer pool.Close()
-	if err := message.NewPostgresStore(pool).WithdrawSigningKey(ctx, id); err != nil {
+	if err := messagepg.New(pool).WithdrawSigningKey(ctx, id); err != nil {
 		return err
 	}
 	cmd.Println("retired message signing key " + string(id))

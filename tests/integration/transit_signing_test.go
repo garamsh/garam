@@ -27,6 +27,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/message/transit"
 )
 
@@ -321,7 +322,7 @@ func TestTransitSigning_RotationMakesTheNextVersionAndRetirementWithdrawsIt(t *t
 	require.Len(t, set.Keys, 2, "the next key is announced")
 	assert.Contains(t, kidsOf(set), key.thumbprint(t, "3"), "as the version rotate made")
 
-	require.NoError(t, message.NewPostgresStore(s.pool).WithdrawSigningKey(ctx, message.KeyID(first)))
+	require.NoError(t, messagepg.New(s.pool).WithdrawSigningKey(ctx, message.KeyID(first)))
 	status, answer := machineSend(t, s.sender, http.MethodPost, s.url+"/messages",
 		`{"recipient":"`+s.recipientGRN.String()+`","idempotencyKey":"key-2","body":"two"}`)
 	require.Equal(t, http.StatusCreated, status, string(answer))

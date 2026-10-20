@@ -19,6 +19,7 @@ import (
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -27,12 +28,12 @@ import (
 // database's clock, and the rows a key holds.
 type outbox struct {
 	p *pgxpool.Pool
-	s *message.PostgresStore
+	s *messagepg.Store
 }
 
 func newOutbox(t *testing.T, p *pgxpool.Pool) outbox {
 	t.Helper()
-	return outbox{p: p, s: message.NewPostgresStore(p)}
+	return outbox{p: p, s: messagepg.New(p)}
 }
 
 // clock reads the database's clock, the one the budget is judged on.
@@ -83,15 +84,15 @@ func TestOutbox_AnEntryInsideItsBudgetIsStoredOnceAndEveryRetryIsAnsweredWithIt(
 	created := before.Add(-time.Minute)
 	first, err := o.submit(t, bot, ada, "entry-1", "hello", created, nil)
 	require.NoError(t, err)
-	assert.WithinRange(t, first.CreatedAt(), before, o.clock(t), "the receipt is the decision instant, not createdAt")
-	assert.Equal(t, bot, first.Sender())
-	assert.Equal(t, ada, first.Recipient())
-	assert.Equal(t, "entry-1", first.IdempotencyKey())
+	assert.WithinRange(t, first.CreatedAt, before, o.clock(t), "the receipt is the decision instant, not createdAt")
+	assert.Equal(t, bot, first.Sender)
+	assert.Equal(t, ada, first.Recipient)
+	assert.Equal(t, "entry-1", first.IdempotencyKey)
 
 	retried, err := o.submit(t, bot, ada, "entry-1", "hello", created, nil)
 	require.NoError(t, err)
-	assert.Equal(t, first.ID(), retried.ID(), "the retry is answered with the message the first attempt stored")
-	assert.True(t, first.CreatedAt().Equal(retried.CreatedAt()))
+	assert.Equal(t, first.ID, retried.ID, "the retry is answered with the message the first attempt stored")
+	assert.True(t, first.CreatedAt.Equal(retried.CreatedAt))
 
 	_, err = o.submit(t, bot, eve, "entry-1", "hello", created, nil)
 	assert.ErrorIs(t, err, message.ErrKeyHoldsAnotherMessage, "another recipient under the key")
@@ -117,7 +118,7 @@ func TestOutbox_TheBudgetIsJudgedOnTheDatabaseClockWhicheverWayTheHostIsSkewed(t
 
 	inside, err := o.submit(t, bot, ada, "behind-inside", "hello", now.Add(-message.SubmissionBudget+time.Minute), nil)
 	require.NoError(t, err, "control: a host behind by less than the budget is stored")
-	assert.False(t, inside.CreatedAt().Before(now), "the receipt is the database's clock, not the host's")
+	assert.False(t, inside.CreatedAt.Before(now), "the receipt is the database's clock, not the host's")
 
 	_, err = o.submit(t, bot, ada, "behind-past", "hello", now.Add(-message.SubmissionBudget-time.Second), nil)
 	assert.ErrorIs(t, err, message.ErrSubmissionExpired)
@@ -147,13 +148,13 @@ func TestOutbox_AStoredResultIsAnsweredAfterTheBudget(t *testing.T) {
 	require.NoError(t, err)
 	claim, err := o.s.Claim(ctx, ada, time.Minute, 3, nil, nil)
 	require.NoError(t, err)
-	require.Equal(t, delivered.ID(), claim.Message().ID())
-	require.NoError(t, o.s.Complete(ctx, ada, claim.ID(), nil))
+	require.Equal(t, delivered.ID, claim.Message.ID)
+	require.NoError(t, o.s.Complete(ctx, ada, claim.ID, nil))
 	waiting, err := o.submit(t, bot, ada, "waiting", "hello", created, nil)
 	require.NoError(t, err)
 
-	o.age(t, waiting.ID(), elapsed)
-	o.age(t, delivered.ID(), elapsed)
+	o.age(t, waiting.ID, elapsed)
+	o.age(t, delivered.ID, elapsed)
 	created = created.Add(-elapsed)
 
 	_, err = o.submit(t, bot, ada, "never-stored", "hello", created, nil)
@@ -161,16 +162,16 @@ func TestOutbox_AStoredResultIsAnsweredAfterTheBudget(t *testing.T) {
 
 	answered, err := o.submit(t, bot, ada, "waiting", "hello", created, nil)
 	require.NoError(t, err)
-	assert.Equal(t, waiting.ID(), answered.ID())
-	assert.Equal(t, "hello", answered.Body())
+	assert.Equal(t, waiting.ID, answered.ID)
+	assert.Equal(t, "hello", answered.Body)
 
 	answered, err = o.submit(t, bot, ada, "delivered", "hello", created, nil)
 	require.NoError(t, err)
-	assert.Equal(t, delivered.ID(), answered.ID())
-	assert.Empty(t, answered.Body(), "a completed message has dropped its body")
+	assert.Equal(t, delivered.ID, answered.ID)
+	assert.Empty(t, answered.Body, "a completed message has dropped its body")
 	answered, err = o.submit(t, bot, ada, "delivered", "a body the completed message no longer holds", created, nil)
 	require.NoError(t, err, "a cleared body binds the retry by key and recipient")
-	assert.Equal(t, delivered.ID(), answered.ID())
+	assert.Equal(t, delivered.ID, answered.ID)
 	_, err = o.submit(t, bot, eve, "delivered", "hello", created, nil)
 	assert.ErrorIs(t, err, message.ErrKeyHoldsAnotherMessage)
 
@@ -191,7 +192,7 @@ func TestOutbox_AKeyTheSweepEmptiedStoresNothingAgain(t *testing.T) {
 	created := o.clock(t).Add(-time.Minute)
 	first, err := o.submit(t, bot, ada, "entry-1", "hello", created, nil)
 	require.NoError(t, err)
-	o.age(t, first.ID(), elapsed)
+	o.age(t, first.ID, elapsed)
 	created = created.Add(-elapsed)
 	require.Equal(t, 1, o.stored(t, bot, "entry-1"))
 
@@ -263,7 +264,7 @@ func TestOutbox_ARequestDelayedAtTheWriteBoundaryIsJudgedWhenItWrites(t *testing
 				return
 			}
 			require.NoError(t, got.err)
-			assert.False(t, got.m.CreatedAt().Before(released), "the receipt is the instant it wrote, after the wait")
+			assert.False(t, got.m.CreatedAt.Before(released), "the receipt is the instant it wrote, after the wait")
 		})
 	}
 }
@@ -322,9 +323,9 @@ func TestOutbox_TheRouteRefusesWithoutItsContractOrCreationInstantBeforeAnyWrite
 	require.NoError(t, err)
 	witness, err = o.s.Enqueue(ctx, witness, nil)
 	require.NoError(t, err)
-	o.age(t, witness.ID(), message.RetentionWindow+time.Hour)
+	o.age(t, witness.ID, message.RetentionWindow+time.Hour)
 	witnessed := func() int {
-		return countRows(t, p, "SELECT count(*) FROM messages WHERE id = $1", string(witness.ID()))
+		return countRows(t, p, "SELECT count(*) FROM messages WHERE id = $1", string(witness.ID))
 	}
 
 	created := o.clock(t).Add(-time.Minute).UTC().Format(time.RFC3339Nano)

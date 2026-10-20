@@ -25,7 +25,7 @@ import (
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 	"github.com/garamsh/garam/internal/user"
@@ -71,7 +71,7 @@ func newListStack(t *testing.T) *listStack {
 	s.ada, s.adaGRN = session("ada")
 	s.dan, s.danGRN = session("dan")
 
-	srv := api.NewServer(users, orgs, s.agents, nil, message.NewPostgresStore(p), nil,
+	srv := api.NewServer(users, orgs, s.agents, nil, messagepg.New(p), nil,
 		authn.NewPostgresSessionStore(p), nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), api.NewGRPCPolicyManager(policyService(t, policies)), nil, cli.NewAuthorityService(p, engine), nil,
 		api.Config{SessionTTL: time.Hour})

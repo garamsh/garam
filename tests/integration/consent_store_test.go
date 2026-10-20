@@ -10,7 +10,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
+	messagepg "github.com/garamsh/garam/internal/message/postgres"
 	"github.com/garamsh/garam/internal/org"
 	orgpg "github.com/garamsh/garam/internal/org/postgres"
 )
@@ -25,7 +25,7 @@ import (
 func TestConsentStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	s := message.NewPostgresStore(p)
+	s := messagepg.New(p)
 	orgs := orgpg.New(p)
 	acme, globex, initech := orgRootGRN("acme"), orgRootGRN("globex"), orgRootGRN("initech")
 	for _, o := range []struct {
@@ -177,7 +177,7 @@ func TestConsentStore_ClassifiesAGrantTowardAnOrgThatIsNotThere(t *testing.T) {
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
 
-	consents := message.NewPostgresStore(p)
+	consents := messagepg.New(p)
 	_, err := consents.Grant(ctx, acme, globex)
 	require.NoError(t, err, "a grant between two organizations that exist stands")
 

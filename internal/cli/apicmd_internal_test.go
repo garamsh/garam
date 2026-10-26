@@ -283,3 +283,73 @@ func TestAPICommand_TakesAnArgumentBeginningWithADashAfterTheSeparator(t *testin
 	require.NoError(t, err, stderr)
 	assert.Equal(t, "/api/orgs/acme/operators/hosted/keys/-plRY5S", revoked)
 }
+
+// TestAPICommand_UnderAHandWrittenNounReadsItsFlags: orgs is a
+// hand-written noun (it holds orgs use), and the derived orgs get
+// beside it reads the --endpoint and --org that noun binds. Answered at
+// the endpoint named is the property; a command reading its own unbound
+// flags would have gone to the default endpoint instead.
+func TestAPICommand_UnderAHandWrittenNounReadsItsFlags(t *testing.T) {
+	var asked string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"grn":"grn:root:default:org:globex","name":"Globex","createdAt":"2026-10-20T00:00:00Z"}`))
+	}))
+	t.Cleanup(srv.Close)
+	signedInTo(t, srv.URL)
+
+	stdout, stderr, _, err := runRoot(t, "orgs", "get", "globex", "--endpoint", srv.URL)
+	require.NoError(t, err, stderr)
+	assert.Equal(t, "/api/orgs/globex", asked)
+	assert.Regexp(t, `(?m)^NAME\s+Globex$`, stdout)
+}
+
+// TestInvitationsCreate_WritesTheTokenToAFileAlone: an invitation's
+// token is a credential (ADR-0122), so it reaches the file --out names
+// and no output; the role it grants is the control that the answer was
+// printed at all.
+func TestInvitationsCreate_WritesTheTokenToAFileAlone(t *testing.T) {
+	const token = "inv_9f2ac1b40d8e7a35c0ffee"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/api/orgs/acme/invitations", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"token":"` + token + `","orgGrn":"grn:root:default:org:acme","role":"member",` +
+			`"expiresAt":"2026-10-27T00:00:00Z","createdAt":"2026-10-20T00:00:00Z"}`))
+	}))
+	t.Cleanup(srv.Close)
+	signedInTo(t, srv.URL)
+	out := filepath.Join(t.TempDir(), "invitation.json")
+
+	stdout, stderr, _, err := runRoot(t, "invitations", "create", "--role", "member", "--out", out, "--endpoint", srv.URL, "-o", "json")
+	require.NoError(t, err, stderr)
+	written, err := os.ReadFile(out)
+	require.NoError(t, err)
+	assert.Contains(t, string(written), token)
+	assert.Contains(t, stdout, `"role": "member"`)
+	assert.NotContains(t, stdout, token)
+	assert.NotContains(t, stderr, token)
+}
+
+// TestInvitationsGet_SendsNoSession: reading an invitation asks for no
+// session (security: [] in the specification), so the command sends
+// none and runs signed out. orgs get beside it, which does, is the
+// control that the session would have been sent.
+func TestInvitationsGet_SendsNoSession(t *testing.T) {
+	presented := map[string]string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		presented[r.URL.Path] = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"org":"grn:root:default:org:acme","orgName":"Acme","role":"member","state":"pending","expiresAt":"2026-10-27T00:00:00Z"}`))
+	}))
+	t.Cleanup(srv.Close)
+	signedInTo(t, srv.URL)
+
+	_, stderr, _, err := runRoot(t, "invitations", "get", "--endpoint", srv.URL, "--", "inv_token")
+	require.NoError(t, err, stderr)
+	_, _, _, err = runRoot(t, "orgs", "get", "acme", "--endpoint", srv.URL)
+	require.NoError(t, err)
+	assert.Empty(t, presented["/api/invitations/inv_token"], "no session is sent where none is asked for")
+	assert.Equal(t, "Bearer access", presented["/api/orgs/acme"])
+}

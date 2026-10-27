@@ -397,7 +397,8 @@ SELECT manager_grn FROM operators WHERE grn = $1 FOR KEY SHARE
 
 // Holds the manager a control service is being registered for, and
 // answers whom it serves itself (ADR-0124). KEY SHARE waits for the
-// manager's deletion and for nothing else, as a token's hold does.
+// manager's deletion and for a FOR UPDATE on its row:
+// LockOperatorRegistration and LockOperatorManager.
 func (q *Queries) HoldOperatorManager(ctx context.Context, grn string) (pgtype.Text, error) {
 	row := q.db.QueryRow(ctx, holdOperatorManager, grn)
 	var manager_grn pgtype.Text

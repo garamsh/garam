@@ -1263,7 +1263,7 @@ type Operator struct {
 	Description string `json:"description"`
 	Grn         string `json:"grn"`
 
-	// Manager The GRN of the operator this one is the control service of, absent where this one is a manager or stands alone (ADR-0124). An Operator is a manager and at most one control service, so a list read pairs the two by this field alone. It is set by `registerOperator` and by nothing after, and it names the identity rather than a live record: it stays after that manager's registration is deleted.
+	// Manager The GRN of the operator this one is the control service of, absent where this one is a manager or stands alone (ADR-0124). An Operator is a manager and at most one control service, so a list read pairs the two by this field alone. It is set by `registerOperator`, or once by `setOperatorManager` on a record naming none, and it names the identity rather than a live record: it stays after that manager's registration is deleted.
 	Manager *string `json:"manager,omitempty"`
 
 	// Name What the organization calls the operator. It is not unique and not an identity: two operators may share one, and the GRN is what tells them apart. A registration that named none, including every one made before names existed, is called by its identifier.

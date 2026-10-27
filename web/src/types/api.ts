@@ -1820,7 +1820,7 @@ export interface components {
              */
             controlEndpoint?: string;
             /**
-             * @description The GRN of the operator this one is the control service of, absent where this one is a manager or stands alone (ADR-0124). An Operator is a manager and at most one control service, so a list read pairs the two by this field alone. It is set by `registerOperator` and by nothing after, and it names the identity rather than a live record: it stays after that manager's registration is deleted.
+             * @description The GRN of the operator this one is the control service of, absent where this one is a manager or stands alone (ADR-0124). An Operator is a manager and at most one control service, so a list read pairs the two by this field alone. It is set by `registerOperator`, or once by `setOperatorManager` on a record naming none, and it names the identity rather than a live record: it stays after that manager's registration is deleted.
              * @example grn:acme:default:operator:field-one
              */
             manager?: string;

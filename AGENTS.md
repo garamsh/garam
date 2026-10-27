@@ -91,10 +91,9 @@ In either state the PM may merge on a local run that:
 the diff until `steps=0` and the annotation are read off that run.
 Both lines have named `dev` since #1657, so a pull request into `dev`
 dispatches a run, and that run is the verdict on it. Each permission
-ends by itself, the first the moment a run is
-dispatched and the second the moment a `branches:` line names the base,
-and (iv) is owed again by every pull request merged under it rather
-than settled once.
+ends by itself, the first the moment a run is dispatched and the second
+the moment a `branches:` line names the base, and (iv) is owed again by
+every pull request merged under it rather than settled once.
 
 **A rule you could follow and do not is debt; a rule you cannot follow
 is a gap in the rule.** Which of the two a case is gets measured and not

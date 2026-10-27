@@ -99,6 +99,8 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 
 		{org.ActionCoworkPageRead, "cowork:page-read"},
 		{org.ActionCoworkPageWrite, "cowork:page-write"},
+		{org.ActionCoworkChannelRead, "cowork:channel-read"},
+		{org.ActionCoworkChannelPost, "cowork:channel-post"},
 	}
 	for _, c := range cases {
 		t.Run(c.want, func(t *testing.T) {
@@ -130,6 +132,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead,
 			org.ActionAgentReplace,
 			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
+			org.ActionCoworkChannelRead, org.ActionCoworkChannelPost,
 		},
 		org.RoleOwner.Actions())
 	assert.Equal(t,
@@ -144,6 +147,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead,
 			org.ActionAgentReplace,
 			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
+			org.ActionCoworkChannelRead, org.ActionCoworkChannelPost,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -155,6 +159,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
 			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
+			org.ActionCoworkChannelRead, org.ActionCoworkChannelPost,
 		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
@@ -259,6 +264,16 @@ func TestRoleActions_EveryRoleReadsAndWritesCoworkPages(t *testing.T) {
 	}
 }
 
+// TestRoleActions_EveryRoleReadsAndPostsInCoworkChannels pins the
+// same default for messaging (ADR-0127, ADR-0128): a member reads and
+// posts in the organization's channels, and a policy narrows that.
+func TestRoleActions_EveryRoleReadsAndPostsInCoworkChannels(t *testing.T) {
+	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
+		assert.Contains(t, r.Actions(), org.ActionCoworkChannelRead, string(r))
+		assert.Contains(t, r.Actions(), org.ActionCoworkChannelPost, string(r))
+	}
+}
+
 func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 	assert.Equal(t,
 		[]string{
@@ -269,6 +284,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
 			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
+			org.ActionCoworkChannelRead, org.ActionCoworkChannelPost,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,

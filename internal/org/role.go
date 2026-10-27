@@ -166,6 +166,14 @@ const (
 	// listing and creating pages, and on a cowork page that page.
 	ActionCoworkPageRead  = "cowork:page-read"
 	ActionCoworkPageWrite = "cowork:page-write"
+
+	// Reading and posting in the organization's cowork channels
+	// (ADR-0127, ADR-0128). On the organization they cover listing and
+	// searching its channels and creating one, and on a cowork channel
+	// that channel. A private channel or a direct message narrows them
+	// further to its participants, which cowork keeps.
+	ActionCoworkChannelRead = "cowork:channel-read"
+	ActionCoworkChannelPost = "cowork:channel-post"
 )
 
 // actions is every action above: the ones a browser-facing operation
@@ -185,6 +193,7 @@ var actions = []string{
 	ActionAgentTemplateRead, ActionAgentTemplatePublish,
 	ActionExecutionProfileRead, ActionAgentExecutionRead,
 	ActionCoworkPageRead, ActionCoworkPageWrite,
+	ActionCoworkChannelRead, ActionCoworkChannelPost,
 }
 
 // Actions returns every action garam defines.
@@ -256,11 +265,14 @@ func machineActionsHeld(member bool) []string {
 // that like any other action (ADR-0127). They are named one at a time
 // and never as `cowork:*`, so an action a later milestone adds is
 // granted when it is decided and not before.
-var coworkActions = []string{ActionCoworkPageRead, ActionCoworkPageWrite}
+var coworkActions = []string{
+	ActionCoworkPageRead, ActionCoworkPageWrite,
+	ActionCoworkChannelRead, ActionCoworkChannelPost,
+}
 
 // Actions returns the action patterns the role grants on an org and
-// on the groups, projects, operators, agents and cowork pages it
-// contains. The
+// on the groups, projects, operators, agents, cowork pages and cowork
+// channels it contains. The
 // patterns feed IAM-style Allow statements; the evaluator resolves
 // wildcards.
 func (r Role) Actions() []string {

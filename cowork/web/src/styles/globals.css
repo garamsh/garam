@@ -41,8 +41,11 @@
 }
 .collaboration-carets__caret {
   @apply relative -mx-px border-x;
+  border-color: var(--caret-color);
   word-break: normal;
 }
-.collaboration-carets__label {
+.collaboration-carets__caret::after {
   @apply absolute -top-5 left-[-1px] rounded px-1 text-xs whitespace-nowrap text-white;
+  background-color: var(--caret-color);
+  content: attr(data-name);
 }

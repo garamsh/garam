@@ -29,14 +29,17 @@ import (
 )
 
 // checkStack is the browser-facing listener over real Postgres and a
-// real policy engine, with an owner and a member of acme signed in.
+// real policy engine, with an owner and a member of acme signed in,
+// and an outsider signed in who belongs to no organization.
 type checkStack struct {
-	url      string
-	acme     grn.GRN
-	owner    *http.Cookie
-	ownerGRN grn.GRN
-	member   *http.Cookie
-	policies *authz.PolicyGRPCServer
+	url       string
+	acme      grn.GRN
+	owner     *http.Cookie
+	ownerGRN  grn.GRN
+	member    *http.Cookie
+	memberGRN grn.GRN
+	outsider  *http.Cookie
+	policies  *authz.PolicyGRPCServer
 }
 
 func newCheckStack(t *testing.T) *checkStack {
@@ -51,14 +54,17 @@ func newCheckStack(t *testing.T) *checkStack {
 	session := func(id string, role org.Role) (*http.Cookie, grn.GRN) {
 		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
-		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, role)))
+		if role != "" {
+			require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, role)))
+		}
 		token, err := authn.NewToken()
 		require.NoError(t, err)
 		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}, g
 	}
 	owner, ownerGRN := session("ada", org.RoleOwner)
-	member, _ := session("bob", org.RoleMember)
+	member, memberGRN := session("bob", org.RoleMember)
+	outsider, _ := session("eve", "")
 
 	srv := api.NewServer(users, orgs, nil, nil, messagepg.New(p), nil,
 		authnpg.NewSessionStore(p), nil, nil, nil, nil,
@@ -66,7 +72,7 @@ func newCheckStack(t *testing.T) *checkStack {
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	return &checkStack{url: browser.URL, acme: acme, owner: owner, ownerGRN: ownerGRN, member: member,
-		policies: policies}
+		memberGRN: memberGRN, outsider: outsider, policies: policies}
 }
 
 // send makes one request as cookie and answers the status and body.

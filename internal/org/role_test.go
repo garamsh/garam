@@ -96,6 +96,9 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionAgentTemplatePublish, "agent-template:publish"},
 		{org.ActionExecutionProfileRead, "execution-profile:read"},
 		{org.ActionAgentExecutionRead, "agent:execution-read"},
+
+		{org.ActionCoworkPageRead, "cowork:page-read"},
+		{org.ActionCoworkPageWrite, "cowork:page-write"},
 	}
 	for _, c := range cases {
 		t.Run(c.want, func(t *testing.T) {
@@ -126,6 +129,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionAgentTemplatePublish,
 			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead,
 			org.ActionAgentReplace,
+			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
 		},
 		org.RoleOwner.Actions())
 	assert.Equal(t,
@@ -139,6 +143,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionAgentTemplatePublish,
 			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead,
 			org.ActionAgentReplace,
+			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -149,6 +154,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorRead, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
+			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
 		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
@@ -240,6 +246,19 @@ func TestRoleActions_OnlyOwnerAndAdminPublishOrReadExecution(t *testing.T) {
 	}
 }
 
+// TestRoleActions_EveryRoleReadsAndWritesCoworkPages pins ADR-0127's
+// default: a member of the organization reads and writes its cowork
+// pages, and a policy narrows that like any other action. Each is
+// named rather than granted as `cowork:*`, so an action a later
+// milestone adds is granted when it is decided and not before.
+func TestRoleActions_EveryRoleReadsAndWritesCoworkPages(t *testing.T) {
+	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
+		assert.Contains(t, r.Actions(), org.ActionCoworkPageRead, string(r))
+		assert.Contains(t, r.Actions(), org.ActionCoworkPageWrite, string(r))
+		assert.NotContains(t, r.Actions(), "cowork:*", string(r))
+	}
+}
+
 func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 	assert.Equal(t,
 		[]string{
@@ -249,6 +268,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOperatorRead, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
+			org.ActionCoworkPageRead, org.ActionCoworkPageWrite,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,

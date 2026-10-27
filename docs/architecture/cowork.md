@@ -55,8 +55,9 @@ The document moves to `cowork/docs/` with the service
 
 - `me`, and `getIdentity` on the machine listener: who a caller is.
 - `checkPermissions`: whether the caller may take a cowork action on a
-  cowork resource. The platform's table gains cowork's actions and
-  kinds in #1663.
+  cowork resource. The platform answers `cowork:page-read` and
+  `cowork:page-write` on the organization and on a `cowork-page`, and
+  every role grants both (#1663).
 - `postMessage`: delivery to an agent, under a service principal the
   platform issues in #1664.
 - An agent principal on the browser API: #1633.

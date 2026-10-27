@@ -1,33 +1,33 @@
-// Package memory implements collab.Hub inside one process: every
-// connection to a page reaches every other through this instance. A
+// Package memory implements fanout.Hub inside one process: every
+// connection to a room reaches every other through this instance. A
 // deployment of several instances needs the postgres hub instead.
 package memory
 
 import (
 	"sync"
 
-	"github.com/garamsh/garam/cowork/internal/collab"
+	"github.com/garamsh/garam/cowork/internal/fanout"
 )
 
 // Hub holds each room's peers behind one lock.
 type Hub struct {
 	mu    sync.Mutex
-	rooms map[string]map[collab.Peer]struct{}
+	rooms map[string]map[fanout.Peer]struct{}
 }
 
-var _ collab.Hub = (*Hub)(nil)
+var _ fanout.Hub = (*Hub)(nil)
 
 // New answers a hub with no rooms.
 func New() *Hub {
-	return &Hub{rooms: map[string]map[collab.Peer]struct{}{}}
+	return &Hub{rooms: map[string]map[fanout.Peer]struct{}{}}
 }
 
-// Join implements collab.Hub.
-func (h *Hub) Join(room string, peer collab.Peer) func() {
+// Join implements fanout.Hub.
+func (h *Hub) Join(room string, peer fanout.Peer) func() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.rooms[room] == nil {
-		h.rooms[room] = map[collab.Peer]struct{}{}
+		h.rooms[room] = map[fanout.Peer]struct{}{}
 	}
 	h.rooms[room][peer] = struct{}{}
 	return func() {
@@ -40,9 +40,9 @@ func (h *Hub) Join(room string, peer collab.Peer) func() {
 	}
 }
 
-// Publish implements collab.Hub. Deliver does not block, so the lock
+// Publish implements fanout.Hub. Deliver does not block, so the lock
 // is held across the room.
-func (h *Hub) Publish(room string, from collab.Peer, msg []byte) {
+func (h *Hub) Publish(room string, from fanout.Peer, msg []byte) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for p := range h.rooms[room] {

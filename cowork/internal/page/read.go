@@ -26,7 +26,7 @@ func (s *service) List(ctx context.Context, caller platform.Caller, org string) 
 		batch := pages[start:min(start+maxChecksPerAsk, len(pages))]
 		checks := make([]platform.Check, len(batch))
 		for i, p := range batch {
-			checks[i] = platform.Check{Action: platform.ActionPageRead, Page: p.ID}
+			checks[i] = platform.OnPage(platform.ActionPageRead, p.ID)
 		}
 		allowed, err := s.platform.Allowed(ctx, caller, org, checks)
 		if err != nil {
@@ -62,7 +62,7 @@ func (s *service) List(ctx context.Context, caller platform.Caller, org string) 
 
 // Get answers one page the caller may read.
 func (s *service) Get(ctx context.Context, caller platform.Caller, org, id string) (Page, error) {
-	if err := platform.Require(ctx, s.platform, caller, org, platform.Check{Action: platform.ActionPageRead, Page: id}); err != nil {
+	if err := platform.Require(ctx, s.platform, caller, org, platform.OnPage(platform.ActionPageRead, id)); err != nil {
 		return Page{}, err
 	}
 	return s.repo.Get(ctx, org, id)

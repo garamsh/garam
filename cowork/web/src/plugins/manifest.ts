@@ -2,6 +2,7 @@ import { codePlugin } from "./core/code";
 import { dividerPlugin } from "./core/divider";
 import { headingsPlugin } from "./core/headings";
 import { imagePlugin } from "./core/image";
+import { linkPlugin } from "./core/link";
 import { listsPlugin } from "./core/lists";
 import { quotePlugin } from "./core/quote";
 import { textPlugin } from "./core/text";
@@ -20,6 +21,7 @@ export const plugins: Plugin[] = [
   codePlugin,
   dividerPlugin,
   imagePlugin,
+  linkPlugin,
 ];
 
 export const registry = createRegistry();

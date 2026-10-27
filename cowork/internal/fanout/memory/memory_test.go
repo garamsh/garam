@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/garamsh/garam/cowork/internal/collab/memory"
+	"github.com/garamsh/garam/cowork/internal/fanout/memory"
 )
 
 type inbox struct{ got [][]byte }

@@ -46,12 +46,12 @@ func pool(t *testing.T) *pgxpool.Pool {
 	p, err := pgxpool.New(context.Background(), url)
 	require.NoError(t, err)
 	t.Cleanup(p.Close)
-	_, err = p.Exec(context.Background(), "TRUNCATE pages CASCADE")
+	_, err = p.Exec(context.Background(), "TRUNCATE pages, channels CASCADE")
 	require.NoError(t, err)
 	return p
 }
 
-// fakePlatform answers for three people: ada and bob, members of
+// fakePlatform answers for four people: ada, bob and carol, members of
 // acme, and eve, a member of none. A session cookie's value is the
 // person's name. It allows every check a member asks except those deny
 // names, as `action` or `action@page`, for everyone, or prefixed with
@@ -69,7 +69,7 @@ func (f *fakePlatform) denyCheck(key string) {
 
 func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	c, err := r.Cookie("garam_session")
-	if err != nil || (c.Value != "ada" && c.Value != "bob" && c.Value != "eve") {
+	if err != nil || (c.Value != "ada" && c.Value != "bob" && c.Value != "carol" && c.Value != "eve") {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}

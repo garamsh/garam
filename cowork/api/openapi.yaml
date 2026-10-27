@@ -22,6 +22,15 @@ info:
     as `getPage` is answered, and edits on it are refused, with
     y-websocket's permission-denied message, to a caller without
     `cowork:page-write` on the page.
+
+    Channels are messaging (ADR-0128). Reading one needs
+    `cowork:channel-read` on it, and posting `cowork:channel-post`; a
+    private channel or a direct message also needs the caller on its
+    participant list, which only narrows what the platform allows. A
+    channel's messages arrive live over a WebSocket at
+    `GET /orgs/{org}/channels/{channel}/live`, one text frame of the
+    `Message` schema per message posted, server to client only; its
+    upgrade is answered as `getChannel` is answered.
 servers:
   - url: /
 paths:
@@ -148,6 +157,262 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/channels:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+    get:
+      operationId: listChannels
+      tags: [channels]
+      summary: List the channels the caller may read.
+      description: >-
+        Requires `cowork:channel-read` on the organization. Answers the
+        public channels and those whose participant list holds the
+        caller, less any the platform denies the caller reading.
+      responses:
+        '200':
+          description: The channels.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createChannel
+      tags: [channels]
+      summary: Create a channel or start a direct message.
+      description: >-
+        Requires `cowork:channel-post` on the organization. A public or
+        private channel takes a name the organization has no other
+        channel by, 409 otherwise. A private channel's list starts with
+        its creator and `members`; a direct message takes no name and
+        is between its creator and `members`, at least one other.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelCreate'
+      responses:
+        '201':
+          description: The channel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Channel'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/channels/{channel}:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/channelPath'
+    get:
+      operationId: getChannel
+      tags: [channels]
+      summary: Read a channel the caller may read.
+      responses:
+        '200':
+          description: The channel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Channel'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/channels/{channel}/members:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/channelPath'
+    post:
+      operationId: addChannelMember
+      tags: [channels]
+      summary: Add a participant to a private channel.
+      description: >-
+        Requires `cowork:channel-post` on the channel and a place on its
+        list. A public channel keeps no list and a direct message's is
+        fixed, and either is answered 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberAdd'
+      responses:
+        '204':
+          description: Added, or already there.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/channels/{channel}/members/me:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/channelPath'
+    delete:
+      operationId: leaveChannel
+      tags: [channels]
+      summary: Take the caller off a channel's list.
+      responses:
+        '204':
+          description: Left.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/channels/{channel}/messages:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/channelPath'
+    get:
+      operationId: listMessages
+      tags: [messages]
+      summary: Read a channel's messages, oldest first.
+      description: >-
+        The last 200 messages that are not replies, before `before`
+        where it is given, each with its reply count.
+      parameters:
+        - name: before
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The messages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: postMessage
+      tags: [messages]
+      summary: Post a message, or reply in a thread.
+      description: >-
+        Requires `cowork:channel-post` on the channel, and
+        `cowork:page-read` on every page it links: a message shows a
+        linked page's title, so it links only what its author may read.
+        A reply to a reply joins the first message's thread. An agent
+        it mentions is answered in `undeliveredMentions` until cowork
+        reaches agents' runtimes (#1664).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessagePost'
+      responses:
+        '201':
+          description: The message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/messages:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+    get:
+      operationId: searchMessages
+      tags: [messages]
+      summary: Search the messages of every channel the caller may read.
+      description: >-
+        `q` is read as a web search reads one: words, "quoted
+        phrases", and -exclusions. The newest 200 matches first.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The matches.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/messages/{message}/thread:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/messagePath'
+    get:
+      operationId: getThread
+      tags: [messages]
+      summary: Read the thread a message starts or is in, oldest first.
+      responses:
+        '200':
+          description: The thread's first message, then its replies.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/pages/{page}/messages:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/pagePath'
+    get:
+      operationId: listPageMessages
+      tags: [messages]
+      summary: Read the messages that link a page, newest first.
+      description: >-
+        Requires `cowork:page-read` on the page, and answers only
+        messages in channels the caller may read.
+      responses:
+        '200':
+          description: The messages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
 components:
   parameters:
     orgPath:
@@ -159,6 +424,18 @@ components:
         type: string
     pagePath:
       name: page
+      in: path
+      required: true
+      schema:
+        type: string
+    channelPath:
+      name: channel
+      in: path
+      required: true
+      schema:
+        type: string
+    messagePath:
+      name: message
       in: path
       required: true
       schema:
@@ -223,6 +500,130 @@ components:
         position:
           type: integer
           minimum: 0
+    Channel:
+      type: object
+      required: [id, grn, org, kind, name, createdBy, createdAt, members]
+      properties:
+        id:
+          type: string
+        grn:
+          type: string
+          description: The name the platform's permission checks know the channel by.
+          example: grn:acme:default:cowork-channel:k3v7q2m9x4ab
+        org:
+          type: string
+        kind:
+          type: string
+          enum: [public, private, direct]
+        name:
+          type: string
+          description: Empty for a direct message.
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        members:
+          type: array
+          description: A private channel's or a direct message's participants, by GRN. Empty for a public channel.
+          items:
+            type: string
+    ChannelList:
+      type: object
+      required: [channels]
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/Channel'
+    ChannelCreate:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [public, private, direct]
+        name:
+          type: string
+          maxLength: 80
+        members:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            description: A person's or an agent's GRN.
+    MemberAdd:
+      type: object
+      required: [member]
+      properties:
+        member:
+          type: string
+          description: The GRN of the person or agent to add.
+    Message:
+      type: object
+      required: [id, channel, thread, author, body, mentions, undeliveredMentions, pages, createdAt, replies]
+      properties:
+        id:
+          type: string
+        channel:
+          type: string
+        thread:
+          type: string
+          description: The ID of the message whose thread this replies in, empty for one that is not a reply.
+        author:
+          type: string
+          description: The author's GRN.
+        body:
+          type: string
+        mentions:
+          type: array
+          description: The people and agents the message names, by GRN.
+          items:
+            type: string
+        undeliveredMentions:
+          type: array
+          description: The agents among `mentions` whose runtime the message has not reached.
+          items:
+            type: string
+        pages:
+          type: array
+          description: The IDs of the pages the message links.
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        replies:
+          type: integer
+          description: How many replies its thread holds, where the message is listed in its channel; 0 elsewhere.
+    MessageList:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+    MessagePost:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          maxLength: 40000
+        thread:
+          type: string
+          description: The message to reply to.
+        mentions:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+        pages:
+          type: array
+          maxItems: 20
+          items:
+            type: string
     Error:
       type: object
       required: [kind, message]

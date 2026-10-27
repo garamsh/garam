@@ -37,12 +37,27 @@ type Caller struct {
 	Credential Credential
 }
 
-// Check is one action to decide, on the organization where Page is
-// empty and on that page otherwise.
+// The kinds of resource cowork asks about, as the platform's
+// `PermissionResourceType` names them.
+const (
+	KindPage    = "cowork-page"
+	KindChannel = "cowork-channel"
+)
+
+// Check is one action to decide: on the organization where Kind is
+// empty, and on the resource of that kind named ID otherwise.
 type Check struct {
 	Action string
-	Page   string
+	Kind   string
+	ID     string
 }
+
+// OnPage is a check of action on one page.
+func OnPage(action, id string) Check { return Check{Action: action, Kind: KindPage, ID: id} }
+
+// OnChannel is a check of action on one channel, a direct message
+// included.
+func OnChannel(action, id string) Check { return Check{Action: action, Kind: KindChannel, ID: id} }
 
 // Platform answers for the platform. Identify answers unauthenticated
 // for a credential it does not accept. Allowed answers one decision per

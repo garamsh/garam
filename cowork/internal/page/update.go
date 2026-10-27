@@ -15,12 +15,12 @@ func (s *service) Update(ctx context.Context, caller platform.Caller, org, id st
 	if in.Position != nil && *in.Position < 0 {
 		return Page{}, ErrPositionNegative
 	}
-	checks := []platform.Check{{Action: platform.ActionPageWrite, Page: id}}
+	checks := []platform.Check{platform.OnPage(platform.ActionPageWrite, id)}
 	if in.Parent != nil && *in.Parent != "" {
 		if *in.Parent == id {
 			return Page{}, ErrPageCycle
 		}
-		checks = append(checks, platform.Check{Action: platform.ActionPageWrite, Page: *in.Parent})
+		checks = append(checks, platform.OnPage(platform.ActionPageWrite, *in.Parent))
 	}
 	if err := platform.Require(ctx, s.platform, caller, org, checks...); err != nil {
 		return Page{}, err

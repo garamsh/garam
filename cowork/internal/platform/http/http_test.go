@@ -114,8 +114,8 @@ func TestAllowed_AnswersEachCheckInOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	got, err := c.Allowed(context.Background(), caller, "acme", []platform.Check{
-		{Action: platform.ActionPageWrite, Page: "p-1"},
-		{Action: platform.ActionPageWrite, Page: "p-2"},
+		platform.OnPage(platform.ActionPageWrite, "p-1"),
+		platform.OnPage(platform.ActionPageWrite, "p-2"),
 		{Action: platform.ActionPageRead},
 	})
 	require.NoError(t, err)

@@ -56,7 +56,7 @@ func (s *Server) SyncPage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, err)
 		return
 	}
-	allowed, err := s.platform.Allowed(r.Context(), c, org, []platform.Check{{Action: platform.ActionPageWrite, Page: id}})
+	allowed, err := s.platform.Allowed(r.Context(), c, org, []platform.Check{platform.OnPage(platform.ActionPageWrite, id)})
 	if err != nil {
 		writeError(w, r, err)
 		return

@@ -6,6 +6,7 @@
 package api
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -13,11 +14,135 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ChannelKind.
+const (
+	ChannelKindDirect  ChannelKind = "direct"
+	ChannelKindPrivate ChannelKind = "private"
+	ChannelKindPublic  ChannelKind = "public"
+)
+
+// Valid indicates whether the value is a known member of the ChannelKind enum.
+func (e ChannelKind) Valid() bool {
+	switch e {
+	case ChannelKindDirect:
+		return true
+	case ChannelKindPrivate:
+		return true
+	case ChannelKindPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ChannelCreateKind.
+const (
+	ChannelCreateKindDirect  ChannelCreateKind = "direct"
+	ChannelCreateKindPrivate ChannelCreateKind = "private"
+	ChannelCreateKindPublic  ChannelCreateKind = "public"
+)
+
+// Valid indicates whether the value is a known member of the ChannelCreateKind enum.
+func (e ChannelCreateKind) Valid() bool {
+	switch e {
+	case ChannelCreateKindDirect:
+		return true
+	case ChannelCreateKindPrivate:
+		return true
+	case ChannelCreateKindPublic:
+		return true
+	default:
+		return false
+	}
+}
+
+// Channel defines model for Channel.
+type Channel struct {
+	CreatedAt time.Time `json:"createdAt"`
+	CreatedBy string    `json:"createdBy"`
+
+	// Grn The name the platform's permission checks know the channel by.
+	Grn  string      `json:"grn"`
+	Id   string      `json:"id"`
+	Kind ChannelKind `json:"kind"`
+
+	// Members A private channel's or a direct message's participants, by GRN. Empty for a public channel.
+	Members []string `json:"members"`
+
+	// Name Empty for a direct message.
+	Name string `json:"name"`
+	Org  string `json:"org"`
+}
+
+// ChannelKind defines model for Channel.Kind.
+type ChannelKind string
+
+// ChannelCreate defines model for ChannelCreate.
+type ChannelCreate struct {
+	Kind    ChannelCreateKind `json:"kind"`
+	Members *[]string         `json:"members,omitempty"`
+	Name    *string           `json:"name,omitempty"`
+}
+
+// ChannelCreateKind defines model for ChannelCreate.Kind.
+type ChannelCreateKind string
+
+// ChannelList defines model for ChannelList.
+type ChannelList struct {
+	Channels []Channel `json:"channels"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
+}
+
+// MemberAdd defines model for MemberAdd.
+type MemberAdd struct {
+	// Member The GRN of the person or agent to add.
+	Member string `json:"member"`
+}
+
+// Message defines model for Message.
+type Message struct {
+	// Author The author's GRN.
+	Author    string    `json:"author"`
+	Body      string    `json:"body"`
+	Channel   string    `json:"channel"`
+	CreatedAt time.Time `json:"createdAt"`
+	Id        string    `json:"id"`
+
+	// Mentions The people and agents the message names, by GRN.
+	Mentions []string `json:"mentions"`
+
+	// Pages The IDs of the pages the message links.
+	Pages []string `json:"pages"`
+
+	// Replies How many replies its thread holds, where the message is listed in its channel; 0 elsewhere.
+	Replies int `json:"replies"`
+
+	// Thread The ID of the message whose thread this replies in, empty for one that is not a reply.
+	Thread string `json:"thread"`
+
+	// UndeliveredMentions The agents among `mentions` whose runtime the message has not reached.
+	UndeliveredMentions []string `json:"undeliveredMentions"`
+}
+
+// MessageList defines model for MessageList.
+type MessageList struct {
+	Messages []Message `json:"messages"`
+}
+
+// MessagePost defines model for MessagePost.
+type MessagePost struct {
+	Body     string    `json:"body"`
+	Mentions *[]string `json:"mentions,omitempty"`
+	Pages    *[]string `json:"pages,omitempty"`
+
+	// Thread The message to reply to.
+	Thread *string `json:"thread,omitempty"`
 }
 
 // Page defines model for Page.
@@ -60,11 +185,36 @@ type PageUpdate struct {
 	Title    *string `json:"title,omitempty"`
 }
 
+// ChannelPath defines model for channelPath.
+type ChannelPath = string
+
+// MessagePath defines model for messagePath.
+type MessagePath = string
+
 // OrgPath defines model for orgPath.
 type OrgPath = string
 
 // PagePath defines model for pagePath.
 type PagePath = string
+
+// ListMessagesParams defines parameters for ListMessages.
+type ListMessagesParams struct {
+	Before *string `form:"before,omitempty" json:"before,omitempty"`
+}
+
+// SearchMessagesParams defines parameters for SearchMessages.
+type SearchMessagesParams struct {
+	Q string `form:"q" json:"q"`
+}
+
+// CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
+type CreateChannelJSONRequestBody = ChannelCreate
+
+// AddChannelMemberJSONRequestBody defines body for AddChannelMember for application/json ContentType.
+type AddChannelMemberJSONRequestBody = MemberAdd
+
+// PostMessageJSONRequestBody defines body for PostMessage for application/json ContentType.
+type PostMessageJSONRequestBody = MessagePost
 
 // CreatePageJSONRequestBody defines body for CreatePage for application/json ContentType.
 type CreatePageJSONRequestBody = PageCreate
@@ -74,6 +224,33 @@ type UpdatePageJSONRequestBody = PageUpdate
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListChannels List the channels the caller may read.
+	// (GET /orgs/{org}/channels)
+	ListChannels(w http.ResponseWriter, r *http.Request, org OrgPath)
+	// CreateChannel Create a channel or start a direct message.
+	// (POST /orgs/{org}/channels)
+	CreateChannel(w http.ResponseWriter, r *http.Request, org OrgPath)
+	// GetChannel Read a channel the caller may read.
+	// (GET /orgs/{org}/channels/{channel})
+	GetChannel(w http.ResponseWriter, r *http.Request, org OrgPath, channel ChannelPath)
+	// AddChannelMember Add a participant to a private channel.
+	// (POST /orgs/{org}/channels/{channel}/members)
+	AddChannelMember(w http.ResponseWriter, r *http.Request, org OrgPath, channel ChannelPath)
+	// LeaveChannel Take the caller off a channel's list.
+	// (DELETE /orgs/{org}/channels/{channel}/members/me)
+	LeaveChannel(w http.ResponseWriter, r *http.Request, org OrgPath, channel ChannelPath)
+	// ListMessages Read a channel's messages, oldest first.
+	// (GET /orgs/{org}/channels/{channel}/messages)
+	ListMessages(w http.ResponseWriter, r *http.Request, org OrgPath, channel ChannelPath, params ListMessagesParams)
+	// PostMessage Post a message, or reply in a thread.
+	// (POST /orgs/{org}/channels/{channel}/messages)
+	PostMessage(w http.ResponseWriter, r *http.Request, org OrgPath, channel ChannelPath)
+	// SearchMessages Search the messages of every channel the caller may read.
+	// (GET /orgs/{org}/messages)
+	SearchMessages(w http.ResponseWriter, r *http.Request, org OrgPath, params SearchMessagesParams)
+	// GetThread Read the thread a message starts or is in, oldest first.
+	// (GET /orgs/{org}/messages/{message}/thread)
+	GetThread(w http.ResponseWriter, r *http.Request, org OrgPath, message MessagePath)
 	// ListPages List the pages of an organization the caller may read.
 	// (GET /orgs/{org}/pages)
 	ListPages(w http.ResponseWriter, r *http.Request, org OrgPath)
@@ -89,6 +266,9 @@ type ServerInterface interface {
 	// UpdatePage Rename or move a page.
 	// (PATCH /orgs/{org}/pages/{page})
 	UpdatePage(w http.ResponseWriter, r *http.Request, org OrgPath, page PagePath)
+	// ListPageMessages Read the messages that link a page, newest first.
+	// (GET /orgs/{org}/pages/{page}/messages)
+	ListPageMessages(w http.ResponseWriter, r *http.Request, org OrgPath, page PagePath)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -99,6 +279,326 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListChannels operation middleware
+func (siw *ServerInterfaceWrapper) ListChannels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListChannels(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateChannel operation middleware
+func (siw *ServerInterfaceWrapper) CreateChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateChannel(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetChannel operation middleware
+func (siw *ServerInterfaceWrapper) GetChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "channel" -------------
+	var channel ChannelPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channel", r.PathValue("channel"), &channel, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channel", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetChannel(w, r, org, channel)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddChannelMember operation middleware
+func (siw *ServerInterfaceWrapper) AddChannelMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "channel" -------------
+	var channel ChannelPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channel", r.PathValue("channel"), &channel, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channel", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddChannelMember(w, r, org, channel)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LeaveChannel operation middleware
+func (siw *ServerInterfaceWrapper) LeaveChannel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "channel" -------------
+	var channel ChannelPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channel", r.PathValue("channel"), &channel, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channel", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LeaveChannel(w, r, org, channel)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMessages operation middleware
+func (siw *ServerInterfaceWrapper) ListMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "channel" -------------
+	var channel ChannelPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channel", r.PathValue("channel"), &channel, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channel", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListMessagesParams
+
+	// ------------- Optional query parameter "before" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "before", r.URL.Query(), &params.Before, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "before"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "before", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMessages(w, r, org, channel, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostMessage operation middleware
+func (siw *ServerInterfaceWrapper) PostMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "channel" -------------
+	var channel ChannelPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "channel", r.PathValue("channel"), &channel, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "channel", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostMessage(w, r, org, channel)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SearchMessages operation middleware
+func (siw *ServerInterfaceWrapper) SearchMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchMessagesParams
+
+	// ------------- Required query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "q", r.URL.Query(), &params.Q, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SearchMessages(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetThread operation middleware
+func (siw *ServerInterfaceWrapper) GetThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var message MessagePath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &message, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetThread(w, r, org, message)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListPages operation middleware
 func (siw *ServerInterfaceWrapper) ListPages(w http.ResponseWriter, r *http.Request) {
@@ -257,6 +757,41 @@ func (siw *ServerInterfaceWrapper) UpdatePage(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ListPageMessages operation middleware
+func (siw *ServerInterfaceWrapper) ListPageMessages(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "page" -------------
+	var page PagePath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "page", r.PathValue("page"), &page, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "page", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListPageMessages(w, r, org, page)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -382,6 +917,16 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/pages/{page}", wrapper.DeletePage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/pages/{page}", wrapper.GetPage)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/pages/{page}", wrapper.UpdatePage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/channels", wrapper.ListChannels)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/channels", wrapper.CreateChannel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/channels/{channel}", wrapper.GetChannel)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/channels/{channel}/members", wrapper.AddChannelMember)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/channels/{channel}/members/me", wrapper.LeaveChannel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/channels/{channel}/messages", wrapper.ListMessages)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/channels/{channel}/messages", wrapper.PostMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/messages", wrapper.SearchMessages)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/messages/{message}/thread", wrapper.GetThread)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/pages/{page}/messages", wrapper.ListPageMessages)
 
 	return m
 }

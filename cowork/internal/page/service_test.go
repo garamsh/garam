@@ -34,8 +34,8 @@ func (p *policy) Allowed(_ context.Context, _ platform.Caller, org string, check
 	out := make([]bool, len(checks))
 	for i, c := range checks {
 		k := c.Action
-		if c.Page != "" {
-			k += "@" + c.Page
+		if c.ID != "" {
+			k += "@" + c.ID
 		}
 		out[i] = !p.deny[k]
 	}

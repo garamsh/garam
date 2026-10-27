@@ -1401,14 +1401,14 @@ export interface components {
             action: string;
             resource?: components["schemas"]["PermissionResource"];
         };
-        /** @description A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page` or a `cowork-channel` is named as cowork names it (ADR-0127): garam keeps neither, and answers only what may be done to one. */
+        /** @description A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page`, a `cowork-channel`, a `cowork-task` or a `cowork-artifact` is named as cowork names it (ADR-0127): garam keeps none of them, and answers only what may be done to one. */
         PermissionResource: {
             type: components["schemas"]["PermissionResourceType"];
             /** @example eng */
             id: string;
         };
         /** @enum {string} */
-        PermissionResourceType: "group" | "project" | "agent" | "policy" | "cowork-page" | "cowork-channel";
+        PermissionResourceType: "group" | "project" | "agent" | "policy" | "cowork-page" | "cowork-channel" | "cowork-task" | "cowork-artifact";
         PermissionCheckAnswer: {
             results: components["schemas"]["PermissionCheckResult"][];
         };

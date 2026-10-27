@@ -51,6 +51,8 @@ const PermissionResourceParser = z.object({
     "policy",
     "cowork-page",
     "cowork-channel",
+    "cowork-task",
+    "cowork-artifact",
   ]),
   id: z.string(),
 });

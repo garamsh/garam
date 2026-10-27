@@ -51,9 +51,10 @@ are that, and each is read off an artifact rather than judged:
   are read off the run.
 - **No workflow watches the base.** Every workflow that runs on
   `pull_request` — `ci.yml` and `images.yml` — carries
-  `branches: [main]`, which selects a pull request by the branch it
-  targets, so a pull request into any other branch starts nothing. The
-  filter is read off those two files and the base off the pull request.
+  `branches: [main, dev]`, which selects a pull request by the branch
+  it targets, so a pull request into any other branch starts nothing.
+  The filter is read off those two files and the base off the pull
+  request.
 
 In either state the PM may merge on a local run that:
 
@@ -67,10 +68,9 @@ In either state the PM may merge on a local run that:
 "CI is unavailable" is a judgement and reaches neither state: where a
 `branches:` line names the base, the run it dispatched is a verdict on
 the diff until `steps=0` and the annotation are read off that run.
-Adding `dev` to those two lines is what would make a run exist for a
-pull request into `dev`, at the price of the runs the filter exists to
-exclude — the measurement the paragraph below asks of a clause of this
-shape. Each permission ends by itself, the first the moment a run is
+Both lines have named `dev` since #1657, so a pull request into `dev`
+dispatches a run, and that run is the verdict on it. Each permission
+ends by itself, the first the moment a run is
 dispatched and the second the moment a `branches:` line names the base,
 and (iv) is owed again by every pull request merged under it rather
 than settled once.

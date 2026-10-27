@@ -265,17 +265,19 @@ naming the account's payments. That ended once the repository went
 public on 2026-10-18: attempt 2 of run 39084547402 started its jobs
 on hosted runners.
 
-- `.github/workflows/ci.yml` triggers on `pull_request` into `main` and
-  on nothing else; `.github/workflows/images.yml` on the same event and
-  base except where a pull request changes only `docs/`;
+- `.github/workflows/ci.yml` triggers on `pull_request` into `main` or
+  `dev` and on nothing else; `.github/workflows/images.yml` on the
+  same event and bases except where a pull request changes only
+  `docs/`;
   `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
   No workflow publishes the test image; an operator pushes it with
   `make test-image-push` and `make test-image-pin` (ADR-0093).
   `dev` is the default branch, and every pull request but the
   promotion pull request targets it
-  (`docs/convention/git.md` §Promotion), so the base filter selects the
-  promotion pull request and no pull request into `dev` starts a runner
-  (#1059).
+  (`docs/convention/git.md` §Promotion). The base filter names both
+  `main` and `dev`, so every pull request into either starts both
+  workflows (#1657). It named `main` alone from #1059 until then, on
+  the owner's decision that verification ran on the promotion.
 - **A superseded run is cancelled; a release run is not.** `ci.yml` and
   `images.yml` each declare a concurrency group keyed on
   `github.workflow` and `github.ref` — under their one trigger that ref

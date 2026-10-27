@@ -3,10 +3,12 @@
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import { EditorContent, useEditor } from "@tiptap/react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 
+import { ArtifactEmbed } from "@/features/artifacts/components/artifact-embed";
+import { EmbedContext, type Embed } from "@/plugins/embed";
 import { registry } from "@/plugins/manifest";
 
 type Props = {
@@ -61,14 +63,25 @@ export function PageEditor({ org, page, syncUrl, user }: Props) {
     };
   }, [org, page, syncUrl]);
 
+  // What a plugin's embed block renders: the workspace's artifact, read
+  // as the viewer.
+  const embed: Embed = useCallback(
+    ({ id }: { kind: "artifact"; id: string }) => (
+      <ArtifactEmbed org={org} id={id} />
+    ),
+    [org],
+  );
+
   return session ? (
-    <CollaborativeEditor
-      doc={session.doc}
-      provider={session.provider}
-      user={user}
-      status={status}
-      readOnly={readOnly}
-    />
+    <EmbedContext.Provider value={embed}>
+      <CollaborativeEditor
+        doc={session.doc}
+        provider={session.provider}
+        user={user}
+        status={status}
+        readOnly={readOnly}
+      />
+    </EmbedContext.Provider>
   ) : (
     <p className="text-sm text-neutral-500" data-testid="sync-status">
       connecting

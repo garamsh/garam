@@ -164,6 +164,60 @@ func TestCheckPermissions_AsksACoworkChannelAsItsGRN(t *testing.T) {
 	assert.Equal(t, apigen.DecisionDeny, results[1].Decision)
 }
 
+// TestCheckPermissions_AsksACoworkTaskAsItsGRN holds the same for a
+// cowork task: the engine allows writing one task and not another.
+func TestCheckPermissions_AsksACoworkTaskAsItsGRN(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	allowed := grn.New(slug, grn.DefaultProject, org.ServiceTypeCoworkTask, "t-1")
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
+			return in.Object == allowed, nil
+		})
+	task := func(id string) *apigen.PermissionResource {
+		return &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkTask, Id: id}
+	}
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionCoworkTaskWrite, Resource: task("t-1")},
+		apigen.PermissionCheck{Action: org.ActionCoworkTaskWrite, Resource: task("t-2")},
+	), owner)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
+	require.Len(t, results, 2)
+	assert.Equal(t, apigen.DecisionAllow, results[0].Decision)
+	assert.Equal(t, apigen.DecisionDeny, results[1].Decision)
+}
+
+// TestCheckPermissions_AsksACoworkArtifactAsItsGRN holds the same for
+// a cowork artifact.
+func TestCheckPermissions_AsksACoworkArtifactAsItsGRN(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	allowed := grn.New(slug, grn.DefaultProject, org.ServiceTypeCoworkArtifact, "a-1")
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
+			return in.Object == allowed, nil
+		})
+	artifact := func(id string) *apigen.PermissionResource {
+		return &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkArtifact, Id: id}
+	}
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionCoworkArtifactWrite, Resource: artifact("a-1")},
+		apigen.PermissionCheck{Action: org.ActionCoworkArtifactWrite, Resource: artifact("a-2")},
+	), owner)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
+	require.Len(t, results, 2)
+	assert.Equal(t, apigen.DecisionAllow, results[0].Decision)
+	assert.Equal(t, apigen.DecisionDeny, results[1].Decision)
+}
+
 // TestCheckPermissions_BoundsTheRequest accepts fifty pairs and
 // refuses fifty-one and none. Fifty is the control: the same pairs,
 // one fewer, are answered, so the refusal is the bound's.
@@ -432,6 +486,7 @@ func TestCheckPermissions_EveryActionPairsWithSomething(t *testing.T) {
 		apigen.PermissionResourceTypeGroup, apigen.PermissionResourceTypeProject,
 		apigen.PermissionResourceTypeAgent, apigen.PermissionResourceTypePolicy,
 		apigen.PermissionResourceTypeCoworkPage, apigen.PermissionResourceTypeCoworkChannel,
+		apigen.PermissionResourceTypeCoworkTask, apigen.PermissionResourceTypeCoworkArtifact,
 	} {
 		resources = append(resources, &apigen.PermissionResource{Type: kind, Id: "x"})
 	}

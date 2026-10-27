@@ -181,6 +181,8 @@ func (t *Tools) register() {
 		"A channel's messages, oldest first: the latest, or those before a message.", true, t.readMessages)
 	tool(t, "post_message", "Post a message",
 		"Posts a message to a channel, or a reply in a thread. Everyone reading the channel sees it arrive.", false, t.postMessage)
+	t.registerTasks()
+	t.registerArtifacts()
 }
 
 func (t *Tools) listWorkspaces(ctx context.Context, c platform.Caller, _ struct{}) (workspacesOut, error) {

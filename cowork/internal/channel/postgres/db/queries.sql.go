@@ -50,7 +50,7 @@ func (q *Queries) GetChannel(ctx context.Context, arg GetChannelParams) (Channel
 }
 
 const getMessage = `-- name: GetMessage :one
-SELECT org, id, channel_id, thread_id, author, body, mentions, pages, created_at FROM messages
+SELECT org, id, channel_id, thread_id, author, body, mentions, pages, artifacts, created_at FROM messages
 WHERE org = $1 AND id = $2
 `
 
@@ -68,6 +68,7 @@ type GetMessageRow struct {
 	Body      string
 	Mentions  []string
 	Pages     []string
+	Artifacts []string
 	CreatedAt pgtype.Timestamptz
 }
 
@@ -83,6 +84,7 @@ func (q *Queries) GetMessage(ctx context.Context, arg GetMessageParams) (GetMess
 		&i.Body,
 		&i.Mentions,
 		&i.Pages,
+		&i.Artifacts,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -130,8 +132,8 @@ func (q *Queries) InsertMember(ctx context.Context, arg InsertMemberParams) erro
 }
 
 const insertMessage = `-- name: InsertMessage :exec
-INSERT INTO messages (org, id, channel_id, thread_id, author, body, mentions, pages, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO messages (org, id, channel_id, thread_id, author, body, mentions, pages, artifacts, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 `
 
 type InsertMessageParams struct {
@@ -143,6 +145,7 @@ type InsertMessageParams struct {
 	Body      string
 	Mentions  []string
 	Pages     []string
+	Artifacts []string
 	CreatedAt pgtype.Timestamptz
 }
 
@@ -156,6 +159,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 		arg.Body,
 		arg.Mentions,
 		arg.Pages,
+		arg.Artifacts,
 		arg.CreatedAt,
 	)
 	return err
@@ -204,7 +208,7 @@ func (q *Queries) ListChannels(ctx context.Context, arg ListChannelsParams) ([]C
 }
 
 const listLinking = `-- name: ListLinking :many
-SELECT org, id, channel_id, thread_id, author, body, mentions, pages, created_at FROM messages
+SELECT org, id, channel_id, thread_id, author, body, mentions, pages, artifacts, created_at FROM messages
 WHERE org = $1 AND channel_id = ANY($2::text[]) AND pages @> ARRAY[$3::text]
 ORDER BY created_at DESC, id DESC
 LIMIT $4
@@ -226,6 +230,7 @@ type ListLinkingRow struct {
 	Body      string
 	Mentions  []string
 	Pages     []string
+	Artifacts []string
 	CreatedAt pgtype.Timestamptz
 }
 
@@ -252,6 +257,7 @@ func (q *Queries) ListLinking(ctx context.Context, arg ListLinkingParams) ([]Lis
 			&i.Body,
 			&i.Mentions,
 			&i.Pages,
+			&i.Artifacts,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -330,7 +336,7 @@ func (q *Queries) ListMembersOf(ctx context.Context, arg ListMembersOfParams) ([
 }
 
 const listMessages = `-- name: ListMessages :many
-SELECT m.org, m.id, m.channel_id, m.thread_id, m.author, m.body, m.mentions, m.pages, m.created_at,
+SELECT m.org, m.id, m.channel_id, m.thread_id, m.author, m.body, m.mentions, m.pages, m.artifacts, m.created_at,
        (SELECT count(*) FROM messages r WHERE r.org = m.org AND r.thread_id = m.id)::int AS replies
 FROM messages m
 WHERE m.org = $1 AND m.channel_id = $2 AND m.thread_id IS NULL
@@ -355,6 +361,7 @@ type ListMessagesRow struct {
 	Body      string
 	Mentions  []string
 	Pages     []string
+	Artifacts []string
 	CreatedAt pgtype.Timestamptz
 	Replies   int32
 }
@@ -385,6 +392,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]L
 			&i.Body,
 			&i.Mentions,
 			&i.Pages,
+			&i.Artifacts,
 			&i.CreatedAt,
 			&i.Replies,
 		); err != nil {
@@ -399,7 +407,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]L
 }
 
 const listThread = `-- name: ListThread :many
-SELECT org, id, channel_id, thread_id, author, body, mentions, pages, created_at FROM messages
+SELECT org, id, channel_id, thread_id, author, body, mentions, pages, artifacts, created_at FROM messages
 WHERE org = $1 AND (id = $2 OR thread_id = $2)
 ORDER BY (thread_id IS NOT NULL), created_at, id
 `
@@ -418,6 +426,7 @@ type ListThreadRow struct {
 	Body      string
 	Mentions  []string
 	Pages     []string
+	Artifacts []string
 	CreatedAt pgtype.Timestamptz
 }
 
@@ -439,6 +448,7 @@ func (q *Queries) ListThread(ctx context.Context, arg ListThreadParams) ([]ListT
 			&i.Body,
 			&i.Mentions,
 			&i.Pages,
+			&i.Artifacts,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -452,7 +462,7 @@ func (q *Queries) ListThread(ctx context.Context, arg ListThreadParams) ([]ListT
 }
 
 const searchMessages = `-- name: SearchMessages :many
-SELECT org, id, channel_id, thread_id, author, body, mentions, pages, created_at FROM messages
+SELECT org, id, channel_id, thread_id, author, body, mentions, pages, artifacts, created_at FROM messages
 WHERE org = $1 AND channel_id = ANY($2::text[])
   AND search @@ websearch_to_tsquery('simple', $3::text)
 ORDER BY created_at DESC, id DESC
@@ -475,6 +485,7 @@ type SearchMessagesRow struct {
 	Body      string
 	Mentions  []string
 	Pages     []string
+	Artifacts []string
 	CreatedAt pgtype.Timestamptz
 }
 
@@ -501,6 +512,7 @@ func (q *Queries) SearchMessages(ctx context.Context, arg SearchMessagesParams) 
 			&i.Body,
 			&i.Mentions,
 			&i.Pages,
+			&i.Artifacts,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

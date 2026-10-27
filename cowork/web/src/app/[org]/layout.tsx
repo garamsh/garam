@@ -26,6 +26,12 @@ export default async function WorkspaceLayout({
           <Link href={`/${org}/channels`} className="underline">
             Channels
           </Link>
+          <Link href={`/${org}/tasks`} className="underline">
+            Tasks
+          </Link>
+          <Link href={`/${org}/artifacts`} className="underline">
+            Artifacts
+          </Link>
           <Link href={`/${org}/search`} className="underline">
             Search
           </Link>

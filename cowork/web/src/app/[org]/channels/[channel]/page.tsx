@@ -8,7 +8,13 @@ import {
 } from "@/features/messaging/components/channel-forms";
 import { Composer } from "@/features/messaging/components/composer";
 import { LiveMessages } from "@/features/messaging/components/live-messages";
-import { getChannel, getThread, listMessages, listPages } from "@/lib/cowork";
+import {
+  getChannel,
+  getThread,
+  listArtifacts,
+  listMessages,
+  listPages,
+} from "@/lib/cowork";
 import { listParticipants, me } from "@/lib/platform";
 
 /**
@@ -26,13 +32,20 @@ export default async function ChannelPage({
     params,
     searchParams,
   ]);
-  const [ch, messages, participants, pages, viewer] = await Promise.all([
-    getChannel(org, channel),
-    listMessages(org, channel),
-    listParticipants(org),
-    listPages(org),
-    me(),
-  ]);
+  const [ch, messages, participants, pages, viewer, artifacts] =
+    await Promise.all([
+      getChannel(org, channel),
+      listMessages(org, channel),
+      listParticipants(org),
+      listPages(org),
+      me(),
+      listArtifacts(org),
+    ]);
+  // A server without a blob store answers no artifacts; the composer
+  // then offers none.
+  const artifactList = artifacts.ok
+    ? artifacts.value.map((a) => ({ id: a.id, title: a.title }))
+    : [];
   if (!ch.ok && ch.status === 404) notFound();
   if (!ch.ok || !messages.ok) {
     return (
@@ -90,6 +103,7 @@ export default async function ChannelPage({
           channel={channel}
           participants={participants}
           pages={pageList}
+          artifacts={artifactList}
         />
       </section>
       {thread && (
@@ -124,6 +138,7 @@ export default async function ChannelPage({
                 thread={thread}
                 participants={participants}
                 pages={pageList}
+                artifacts={artifactList}
               />
             </>
           ) : (

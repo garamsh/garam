@@ -6,6 +6,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { env } from "@/env";
 import { getSession } from "@/features/auth";
 import { redirectToSignIn } from "@/lib/sign-in-redirect";
 
@@ -47,7 +48,7 @@ export async function ConsoleSidebar() {
         <OrgSwitcher orgs={list} />
       </SidebarHeader>
       <SidebarContent>
-        <ConsoleNav orgs={list} />
+        <ConsoleNav orgs={list} cowork={env.COWORK_WEB_URL} />
       </SidebarContent>
       <SidebarFooter>
         <UserMenu

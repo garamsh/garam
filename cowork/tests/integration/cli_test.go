@@ -150,3 +150,28 @@ func TestCLI_BridgesStdioToTheTools(t *testing.T) {
 	call, _ := json.Marshal(replies[3]["result"])
 	assert.Contains(t, string(call), "acme")
 }
+
+// TestCLI_WorksTasks creates a task for bob, has bob move it with a
+// comment, and lists it by status.
+func TestCLI_WorksTasks(t *testing.T) {
+	s := newStack(t)
+	s.signIn(t, "ada")
+	out, code := cowork(t, "", "tasks", "create", "--title", "Review the plan", "--assignee", userGRN("bob"), "--due", "2026-11-02", "-o", "json")
+	require.Equal(t, 0, code, out)
+	var created struct{ ID string }
+	require.NoError(t, json.Unmarshal([]byte(out), &created))
+
+	s.signIn(t, "bob")
+	out, code = cowork(t, "", "tasks", "update", created.ID, "--status", "doing", "--comment", "reading it")
+	require.Equal(t, 0, code, out)
+	assert.Contains(t, out, "doing")
+	out, code = cowork(t, "", "tasks", "list", "--status", "doing", "--assignee", "me")
+	require.Equal(t, 0, code, out)
+	assert.Contains(t, out, "Review the plan")
+	out, code = cowork(t, "", "tasks", "show", created.ID)
+	require.Equal(t, 0, code, out)
+	assert.Contains(t, out, "reading it")
+
+	_, code = cowork(t, "", "tasks", "update", created.ID, "--status", "blocked")
+	assert.Equal(t, cli.ExitInvalid, code)
+}

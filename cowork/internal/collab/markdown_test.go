@@ -21,7 +21,8 @@ func TestMarkdown_RendersEveryBlockType(t *testing.T) {
 		{Type: "blockquote", Text: "one\ntwo"},
 		{Type: "horizontalRule"},
 		{Type: "image", Attrs: map[string]any{"src": "https://example.com/a.png", "alt": "a"}},
+		{Type: "artifact", Attrs: map[string]any{"artifact": "k3v7q2m9x4ab"}},
 	})
 	assert.Equal(t, "## Plan\n\nBody\n\n- a\n- b\n\n1. first\n2. second\n\n- [x] done\n- [ ] todo\n\n"+
-		"```go\nx := 1\n```\n\n> one\n> two\n\n---\n\n![a](https://example.com/a.png)\n", got)
+		"```go\nx := 1\n```\n\n> one\n> two\n\n---\n\n![a](https://example.com/a.png)\n\n[artifact k3v7q2m9x4ab]\n", got)
 }

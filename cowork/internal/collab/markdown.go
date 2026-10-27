@@ -54,6 +54,8 @@ func markdownOf(b Block) string {
 		return "---"
 	case "image":
 		return fmt.Sprintf("![%s](%s)", attr("alt"), attr("src"))
+	case "artifact":
+		return "[artifact " + attr("artifact") + "]"
 	}
 	return b.Text
 }

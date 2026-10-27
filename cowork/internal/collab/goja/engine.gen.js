@@ -8537,6 +8537,7 @@ ${err.toString()}`);
         return wrap("blockquote", [paragraph(block.text)], attrs);
       case "horizontalRule":
       case "image":
+      case "artifact":
         return wrap(block.type, [], attrs);
       default:
         return wrap(block.type, [text2(block.text)], attrs);

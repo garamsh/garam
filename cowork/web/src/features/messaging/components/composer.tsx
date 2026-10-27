@@ -12,6 +12,8 @@ type Props = {
   thread?: string;
   participants: Participant[];
   pages: { id: string; title: string }[];
+  /** Artifacts the writer may embed. */
+  artifacts?: { id: string; title: string }[];
 };
 
 /**
@@ -24,6 +26,7 @@ export function Composer({
   thread = "",
   participants,
   pages,
+  artifacts = [],
 }: Props) {
   const [state, action, pending] = useActionState(
     postMessageAction.bind(null, org, channel, thread),
@@ -76,6 +79,23 @@ export function Composer({
             ))}
           </select>
         </label>
+        {artifacts.length > 0 && (
+          <label className="flex items-center gap-1">
+            Embed an artifact
+            <select
+              name="artifact"
+              className="rounded border border-neutral-300 px-1"
+              defaultValue=""
+            >
+              <option value="">None</option>
+              {artifacts.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <button
           type="submit"
           disabled={pending}

@@ -8,22 +8,26 @@ import (
 	"net/http"
 
 	apigen "github.com/garamsh/garam/cowork/api"
+	"github.com/garamsh/garam/cowork/internal/artifact"
 	"github.com/garamsh/garam/cowork/internal/channel"
 	"github.com/garamsh/garam/cowork/internal/collab"
 	"github.com/garamsh/garam/cowork/internal/mcp"
 	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/platform"
+	"github.com/garamsh/garam/cowork/internal/task"
 	"github.com/garamsh/garam/platform/sdk/errorx"
 )
 
 // Server implements the generated apigen.ServerInterface and the sync
 // endpoint beside it.
 type Server struct {
-	pages    page.Service
-	collab   collab.Service
-	channels channel.Service
-	platform platform.Platform
-	tools    *mcp.Tools
+	pages     page.Service
+	collab    collab.Service
+	channels  channel.Service
+	tasks     task.Service
+	artifacts artifact.Service
+	platform  platform.Platform
+	tools     *mcp.Tools
 	// origins are the host patterns a browser may open a sync
 	// WebSocket from, besides cowork's own host.
 	origins []string
@@ -32,10 +36,10 @@ type Server struct {
 var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer answers the surface over its services.
-func NewServer(pages page.Service, collabs collab.Service, channels channel.Service, p platform.Platform, origins []string) *Server {
+func NewServer(pages page.Service, collabs collab.Service, channels channel.Service, tasks task.Service, artifacts artifact.Service, p platform.Platform, origins []string) *Server {
 	return &Server{
-		pages: pages, collab: collabs, channels: channels, platform: p, origins: origins,
-		tools: mcp.New(pages, collabs, channels, p),
+		pages: pages, collab: collabs, channels: channels, tasks: tasks, artifacts: artifacts, platform: p, origins: origins,
+		tools: mcp.New(pages, collabs, channels, tasks, artifacts, p),
 	}
 }
 

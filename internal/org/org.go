@@ -58,6 +58,11 @@ const (
 	// ServiceTypeCoworkChannel is a cowork channel's, a direct message
 	// included (ADR-0128), on the same terms.
 	ServiceTypeCoworkChannel = "cowork-channel"
+	// ServiceTypeCoworkTask is a cowork task's, on the same terms.
+	ServiceTypeCoworkTask = "cowork-task"
+	// ServiceTypeCoworkArtifact is a cowork artifact's, on the same
+	// terms.
+	ServiceTypeCoworkArtifact = "cowork-artifact"
 )
 
 // Organization is the top-level tenancy boundary. Every field is one

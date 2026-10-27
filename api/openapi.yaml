@@ -3154,9 +3154,10 @@ components:
       description: >-
         A resource of the organization, named by its kind and the last
         segment of its identifier, as the paths under `/orgs/{org}`
-        name it. A `cowork-page` or a `cowork-channel` is named as
-        cowork names it (ADR-0127): garam keeps neither, and answers
-        only what may be done to one.
+        name it. A `cowork-page`, a `cowork-channel`, a `cowork-task`
+        or a `cowork-artifact` is named as cowork names it (ADR-0127):
+        garam keeps none of them, and answers only what may be done to
+        one.
       required: [type, id]
       properties:
         type:
@@ -3166,7 +3167,7 @@ components:
           example: eng
     PermissionResourceType:
       type: string
-      enum: [group, project, agent, policy, cowork-page, cowork-channel]
+      enum: [group, project, agent, policy, cowork-page, cowork-channel, cowork-task, cowork-artifact]
     PermissionCheckAnswer:
       type: object
       required: [results]

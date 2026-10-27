@@ -17,6 +17,7 @@ const required = (name: string): string => {
 
 const WEB_URL = "http://localhost:3100";
 const COWORK_PORT = "8091";
+const USERCONTENT_URL = "http://localhost:8093";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -37,6 +38,14 @@ export default defineConfig({
         COWORK_MIGRATIONS_DIR: required("COWORK_MIGRATIONS_DIR"),
         COWORK_LISTEN_ADDR: `localhost:${COWORK_PORT}`,
         COWORK_WEB_ORIGINS: new URL(WEB_URL).host,
+        // Artifacts kept in memory, and served from an origin of their
+        // own: another port, as development runs it (ADR-0127 §8).
+        COWORK_BLOB_STORE: "memory",
+        COWORK_USERCONTENT_ORIGIN: USERCONTENT_URL,
+        COWORK_USERCONTENT_ADDR: `localhost:${new URL(USERCONTENT_URL).port}`,
+        // A key for this suite's server alone, which signs nothing a
+        // deployment trusts.
+        COWORK_USERCONTENT_SECRET: "e2e-only-usercontent-signing-key-32b",
       },
       url: `http://localhost:${COWORK_PORT}/readyz`,
       reuseExistingServer: false,

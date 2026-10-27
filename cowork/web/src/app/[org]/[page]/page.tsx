@@ -8,7 +8,8 @@ import {
   NewPageForm,
   RenamePageForm,
 } from "@/features/pages/components/page-forms";
-import { getPage, listPageMessages } from "@/lib/cowork";
+import { TaskList } from "@/features/tasks/components/task-views";
+import { getPage, listPageMessages, listTasks } from "@/lib/cowork";
 import { me } from "@/lib/platform";
 
 /**
@@ -27,10 +28,11 @@ export default async function PageView({
   params: Promise<{ org: string; page: string }>;
 }) {
   const { org, page } = await params;
-  const [p, viewer, linking] = await Promise.all([
+  const [p, viewer, linking, tasks] = await Promise.all([
     getPage(org, page),
     me(),
     listPageMessages(org, page),
+    listTasks(org, { page }),
   ]);
   if (!p.ok && p.status === 404) notFound();
   if (!p.ok) {
@@ -77,6 +79,18 @@ export default async function PageView({
           </ul>
         </section>
       )}
+      <section
+        aria-label="Linked tasks"
+        className="flex flex-col gap-1 text-sm"
+      >
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-semibold">Linked tasks</h2>
+          <Link href={`/${org}/tasks?page=${p.value.id}`} className="underline">
+            Add a task for this page
+          </Link>
+        </div>
+        {tasks.ok && <TaskList org={org} tasks={tasks.value} names={{}} />}
+      </section>
       <div className="flex items-center justify-between gap-4">
         <NewPageForm org={org} parent={p.value.id} />
         <DeletePageButton org={org} id={p.value.id} />

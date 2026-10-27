@@ -16,6 +16,9 @@ import (
 const (
 	ActionPageRead  = "cowork:page-read"
 	ActionPageWrite = "cowork:page-write"
+	// ActionArtifactRead is asked of an artifact a message embeds, as
+	// the artifact package asks it of one it shows.
+	ActionArtifactRead = "cowork:artifact-read"
 )
 
 // Credential is what a caller presented, passed on as presented: the
@@ -40,8 +43,10 @@ type Caller struct {
 // The kinds of resource cowork asks about, as the platform's
 // `PermissionResourceType` names them.
 const (
-	KindPage    = "cowork-page"
-	KindChannel = "cowork-channel"
+	KindPage     = "cowork-page"
+	KindChannel  = "cowork-channel"
+	KindTask     = "cowork-task"
+	KindArtifact = "cowork-artifact"
 )
 
 // Check is one action to decide: on the organization where Kind is
@@ -58,6 +63,9 @@ func OnPage(action, id string) Check { return Check{Action: action, Kind: KindPa
 // OnChannel is a check of action on one channel, a direct message
 // included.
 func OnChannel(action, id string) Check { return Check{Action: action, Kind: KindChannel, ID: id} }
+
+// OnTask is a check of action on one task.
+func OnTask(action, id string) Check { return Check{Action: action, Kind: KindTask, ID: id} }
 
 // Platform answers for the platform. Identify answers unauthenticated
 // for a credential it does not accept. Allowed answers one decision per

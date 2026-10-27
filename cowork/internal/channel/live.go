@@ -20,6 +20,7 @@ type liveMessage struct {
 	Mentions            []string `json:"mentions"`
 	UndeliveredMentions []string `json:"undeliveredMentions"`
 	Pages               []string `json:"pages"`
+	Artifacts           []string `json:"artifacts"`
 	CreatedAt           string   `json:"createdAt"`
 	Replies             int      `json:"replies"`
 }
@@ -39,6 +40,7 @@ func Live(m Message) []byte {
 		Mentions:            strs(len(m.Mentions), func(i int) string { return m.Mentions[i].String() }),
 		UndeliveredMentions: strs(len(undelivered), func(i int) string { return undelivered[i].String() }),
 		Pages:               append([]string{}, m.Pages...),
+		Artifacts:           append([]string{}, m.Artifacts...),
 		CreatedAt:           m.CreatedAt.UTC().Format("2006-01-02T15:04:05.999999999Z07:00"),
 		Replies:             m.Replies,
 	})

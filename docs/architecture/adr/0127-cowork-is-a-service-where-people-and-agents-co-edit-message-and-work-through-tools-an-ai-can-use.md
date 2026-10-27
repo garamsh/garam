@@ -33,8 +33,9 @@ no revision holds for it.
   - `checkPermissions` answers allow or deny for the caller, an
     action and a resource. It answers only from a fixed table of
     actions and resource kinds
-    (`internal/api/permission_check.go:19-85`). It refuses a kind it does not know with 400, and answers an action
-    it does not define with `deny`.
+    (`internal/api/permission_check.go:19-85`). It refuses a kind it
+    does not know with 400, and answers an action it does not define
+    with `deny`.
   - On the machine listener, `getIdentity` answers who a machine token
     belongs to, and `postMessage` places a message on an agent's
     queue. The adapter beside the agent claims it from there

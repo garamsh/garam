@@ -1,5 +1,6 @@
 "use client";
 
+import { MessagesSquare } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Fragment } from "react";
 
@@ -81,15 +82,44 @@ function HiddenNote({ labels }: { labels: readonly string[] }) {
 }
 
 /**
+ * The organization's workspace in cowork, where its people and agents
+ * write, message and keep their tasks: another app, so a plain link
+ * rather than a section (ADR-0127 §10).
+ */
+function CoworkLink({ url, org }: { url: string; org: string }) {
+  return (
+    <SidebarGroup className="pt-3 pb-0 group-data-[collapsible=icon]:pt-2">
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton asChild tooltip="Cowork">
+            <a href={`${url.replace(/\/$/, "")}/${encodeURIComponent(org)}`}>
+              <MessagesSquare />
+              <span>Cowork</span>
+            </a>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    </SidebarGroup>
+  );
+}
+
+/**
  * The sections of the selected organization, in the groups
- * `CONSOLE_NAV` declares (ADR-0116). A section whose read the server
+ * `CONSOLE_NAV` declares (ADR-0116), and the link to its cowork
+ * workspace where `cowork` names where cowork is served. A section whose read the server
  * denies the caller is left out, and the sidebar says so once; until
  * the answer arrives, or where it never does, every section stays.
  * Nothing is offered for an organization the caller's list does not
  * hold, since every link would lead to the same not-found page; `orgs`
  * is null when the list was not answered, and the sections stay.
  */
-export function ConsoleNav({ orgs }: { orgs: readonly ConsoleOrg[] | null }) {
+export function ConsoleNav({
+  orgs,
+  cowork,
+}: {
+  orgs: readonly ConsoleOrg[] | null;
+  cowork?: string;
+}) {
   const location = parseConsolePath(usePathname());
   const hidden = new Set(useOrgShell()?.hidden);
   if (location.kind !== "org" || isUnknownOrg(location, orgs)) return null;
@@ -139,6 +169,7 @@ export function ConsoleNav({ orgs }: { orgs: readonly ConsoleOrg[] | null }) {
             </SidebarGroup>
           </Fragment>
         ))}
+      {cowork && <CoworkLink url={cowork} org={location.org} />}
       {left.length > 0 && <HiddenNote labels={left} />}
     </nav>
   );

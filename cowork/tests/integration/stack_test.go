@@ -52,10 +52,10 @@ func pool(t *testing.T) *pgxpool.Pool {
 }
 
 // fakePlatform answers for four people: ada, bob and carol, members of
-// acme, and eve, a member of none. A session cookie's value is the
-// person's name. It allows every check a member asks except those deny
-// names, as `action` or `action@page`, for everyone, or prefixed with
-// a name and a space, for that person alone.
+// acme, and eve, a member of none. A session cookie's value, or a
+// bearer, is the person's name. It allows every check a member asks
+// except those deny names, as `action` or `action@page`, for everyone,
+// or prefixed with a name and a space, for that person alone.
 type fakePlatform struct {
 	mu   sync.Mutex
 	deny map[string]bool
@@ -68,13 +68,21 @@ func (f *fakePlatform) denyCheck(key string) {
 }
 
 func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	c, err := r.Cookie("garam_session")
-	if err != nil || (c.Value != "ada" && c.Value != "bob" && c.Value != "carol" && c.Value != "eve") {
+	who, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok {
+		if c, err := r.Cookie("garam_session"); err == nil {
+			who = c.Value
+		}
+	}
+	if who != "ada" && who != "bob" && who != "carol" && who != "eve" {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	who := c.Value
 	switch {
+	case r.URL.Path == "/orgs" && who != "eve":
+		_ = json.NewEncoder(w).Encode([]map[string]string{{"grn": "grn:root:default:org:acme", "name": "Acme"}})
+	case r.URL.Path == "/orgs":
+		_ = json.NewEncoder(w).Encode([]map[string]string{})
 	case r.URL.Path == "/me":
 		_ = json.NewEncoder(w).Encode(map[string]string{"grn": "grn:root:default:user:" + who, "nickname": who})
 	case r.URL.Path == "/orgs/acme/permission-checks" && who != "eve":

@@ -10,6 +10,7 @@ import (
 	apigen "github.com/garamsh/garam/cowork/api"
 	"github.com/garamsh/garam/cowork/internal/channel"
 	"github.com/garamsh/garam/cowork/internal/collab"
+	"github.com/garamsh/garam/cowork/internal/mcp"
 	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/platform"
 	"github.com/garamsh/garam/platform/sdk/errorx"
@@ -22,6 +23,7 @@ type Server struct {
 	collab   collab.Service
 	channels channel.Service
 	platform platform.Platform
+	tools    *mcp.Tools
 	// origins are the host patterns a browser may open a sync
 	// WebSocket from, besides cowork's own host.
 	origins []string
@@ -31,12 +33,25 @@ var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer answers the surface over its services.
 func NewServer(pages page.Service, collabs collab.Service, channels channel.Service, p platform.Platform, origins []string) *Server {
-	return &Server{pages: pages, collab: collabs, channels: channels, platform: p, origins: origins}
+	return &Server{
+		pages: pages, collab: collabs, channels: channels, platform: p, origins: origins,
+		tools: mcp.New(pages, collabs, channels, p),
+	}
 }
 
 // caller identifies the request's caller with the platform.
 func (s *Server) caller(r *http.Request) (platform.Caller, error) {
 	return s.platform.Identify(r.Context(), credentialOf(r))
+}
+
+// bearerCaller identifies the request's caller by its bearer alone,
+// and answers unauthenticated for a request that carries none.
+func (s *Server) bearerCaller(r *http.Request) (platform.Caller, error) {
+	cred := credentialOf(r)
+	if cred.Bearer == "" {
+		return platform.Caller{}, errorx.New(errorx.KindUnauthenticated, "the tools take a bearer token: run `cowork login`, or give your client the token it prints")
+	}
+	return s.platform.Identify(r.Context(), cred)
 }
 
 func pageToAPI(p page.Page) apigen.Page {

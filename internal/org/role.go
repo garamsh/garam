@@ -159,6 +159,13 @@ const (
 	// (#1170). Reading an agent is reading its identity, and grants
 	// none of this.
 	ActionAgentExecutionRead = "agent:execution-read"
+
+	// Reading and writing the organization's cowork pages (ADR-0127).
+	// cowork asks for them through checkPermissions; nothing here
+	// enforces them. On the organization they cover its page tree,
+	// listing and creating pages, and on a cowork page that page.
+	ActionCoworkPageRead  = "cowork:page-read"
+	ActionCoworkPageWrite = "cowork:page-write"
 )
 
 // actions is every action above: the ones a browser-facing operation
@@ -177,6 +184,7 @@ var actions = []string{
 	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentReplace,
 	ActionAgentTemplateRead, ActionAgentTemplatePublish,
 	ActionExecutionProfileRead, ActionAgentExecutionRead,
+	ActionCoworkPageRead, ActionCoworkPageWrite,
 }
 
 // Actions returns every action garam defines.
@@ -243,8 +251,16 @@ func machineActionsHeld(member bool) []string {
 	return actions
 }
 
+// coworkActions is every cowork action, which every role holds: a
+// member of the organization works in its cowork, and a policy narrows
+// that like any other action (ADR-0127). They are named one at a time
+// and never as `cowork:*`, so an action a later milestone adds is
+// granted when it is decided and not before.
+var coworkActions = []string{ActionCoworkPageRead, ActionCoworkPageWrite}
+
 // Actions returns the action patterns the role grants on an org and
-// on the groups, projects, operators and agents it contains. The
+// on the groups, projects, operators, agents and cowork pages it
+// contains. The
 // patterns feed IAM-style Allow statements; the evaluator resolves
 // wildcards.
 func (r Role) Actions() []string {
@@ -252,18 +268,18 @@ func (r Role) Actions() []string {
 	case RoleOwner:
 		return slices.Concat([]string{
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
-		}, machineActionsHeld(false))
+		}, machineActionsHeld(false), coworkActions)
 	case RoleAdmin:
 		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
-		}, machineActionsHeld(false))
+		}, machineActionsHeld(false), coworkActions)
 	case RoleMember:
 		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgMemberList,
 			ActionGroupRead, ActionGroupMemberList,
 			ActionProjectRead, ActionProjectMemberList,
-		}, machineActionsHeld(true))
+		}, machineActionsHeld(true), coworkActions)
 	}
 	return nil
 }

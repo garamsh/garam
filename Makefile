@@ -71,6 +71,7 @@ PNPM := pnpm --dir web
 # cowork's Yjs bundle is built by its own package, which holds only the
 # bundler and Yjs (ADR-0127).
 PNPM_COWORK_ENGINE := pnpm --dir cowork/engine
+PNPM_COWORK_WEB := pnpm --dir cowork/web
 
 # Where the api and the dev Postgres are published on this host, asked
 # of compose at the moment each is used. GARAM_LOCAL_API_PORT and
@@ -98,6 +99,7 @@ COWORK_TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOS
 # and overridable on the same terms as the line above.
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
+.PHONY: cowork-web-lint cowork-web-format cowork-web-test cowork-web-build cowork-web-check-gen cowork-web-ci cowork-web-e2e
 .PHONY: lint format test build gen check-gen check-toolchain integration e2e workload-integration standalone-e2e mutation db-up db-down db-prune backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
@@ -423,7 +425,7 @@ mutation:
 # The whole set, both toolchains, under one name (#789). `web-ci` runs
 # last so the cheaper Go half fails first, and it puts pnpm and the node
 # version web/.nvmrc names on every contributor's path.
-ci: format lint test build check-gen check-toolchain chart web-ci
+ci: format lint test build check-gen check-toolchain chart web-ci cowork-web-ci
 
 # ---------------------------------------------------------------------
 # web/ — the Next.js frontend (ADR-0009). It keeps its own toolchain and
@@ -433,6 +435,7 @@ ci: format lint test build check-gen check-toolchain chart web-ci
 web-install:
 	$(PNPM) install --frozen-lockfile
 	$(PNPM_COWORK_ENGINE) install --frozen-lockfile
+	$(PNPM_COWORK_WEB) install --frozen-lockfile
 
 # eslint prints nothing and exits 0 both when it covered the tree and
 # when its ignore patterns left it a fraction of it, so what it covered
@@ -948,3 +951,62 @@ minikube-forward: minikube-context
 # material, and leaves the cluster and the operator up.
 minikube-down:
 	$(KUBECTL_MINIKUBE) delete -f $(MINIKUBE_DIR)/namespace.yaml --ignore-not-found
+
+# ---------------------------------------------------------------------
+# cowork/web — cowork's Next.js app (ADR-0127). Its own toolchain and
+# lockfile, as web/'s; `cowork-web-ci` is the half of `ci` that covers
+# it, and `web-install` installs it beside web/.
+# ---------------------------------------------------------------------
+
+COWORK_WEB_FILES = $(shell git -C cowork/web ls-files --cached --others --exclude-standard)
+
+cowork-web-lint:
+	@echo 'cowork-web-lint: $(words $(filter %.ts %.tsx %.mjs %.mts,$(COWORK_WEB_FILES))) files under cowork/web (eslint, tsc)'
+	@test -n '$(filter %.ts %.tsx,$(COWORK_WEB_FILES))' || { echo 'cowork-web-lint: nothing to lint — git lists no TypeScript under cowork/web'; exit 1; }
+	$(PNPM_COWORK_WEB) lint
+	$(PNPM_COWORK_WEB) typecheck
+
+cowork-web-format:
+	@echo 'cowork-web-format: $(words $(COWORK_WEB_FILES)) files under cowork/web (prettier, less its ignore files)'
+	@test -n '$(COWORK_WEB_FILES)' || { echo 'cowork-web-format: nothing to check — git lists no file under cowork/web'; exit 1; }
+	$(PNPM_COWORK_WEB) format
+
+cowork-web-test:
+	$(PNPM_COWORK_WEB) test
+
+# `next build` runs with NODE_ENV=production, where env.ts requires
+# every URL. Nothing calls them during the build, so placeholders do.
+cowork-web-build:
+	COWORK_API_URL=http://localhost:8090 COWORK_SYNC_URL=ws://localhost:8090 \
+		GARAM_API_URL=http://localhost:8080 GARAM_CONSOLE_URL=http://localhost:3000 $(PNPM_COWORK_WEB) build
+
+COWORK_WEB_GEN_PATHS = $(shell sed -n 's|.*"gen:api": ".* -o \([^" ]*\)".*|cowork/web/\1|p' cowork/web/package.json)
+
+cowork-web-check-gen:
+	$(PNPM_COWORK_WEB) gen:api
+	@echo 'cowork-web-check-gen: $(words $(COWORK_WEB_GEN_PATHS)) generated paths compared'
+	@test -n '$(COWORK_WEB_GEN_PATHS)' && git ls-files --error-unmatch -- $(COWORK_WEB_GEN_PATHS) >/dev/null 2>&1 \
+		|| { echo 'cowork-web-check-gen: nothing to compare — package.json names no gen:api output, or git tracks none of "$(COWORK_WEB_GEN_PATHS)"'; exit 1; }
+	@git diff --exit-code -- $(COWORK_WEB_GEN_PATHS)
+
+cowork-web-ci: cowork-web-format cowork-web-lint cowork-web-test cowork-web-build cowork-web-check-gen
+
+# cowork-web-e2e drives the built app and the built cowork binary in a
+# real browser, against the platform `make backend-up` starts. cowork
+# keeps its own database on the stack's Postgres, created here where
+# absent; the seed writes sessions into the platform's.
+COWORK_E2E_DB_NAME = cowork_e2e
+COWORK_E2E_DATABASE_URL = $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(COWORK_E2E_DB_NAME)?sslmode=disable)
+
+cowork-web-e2e:
+	@test -n "$(API_HOST_ADDR)" || { echo "cowork-web-e2e: no api published on this host — run make backend-up" >&2; exit 1; }
+	@test -n '$(COWORK_E2E_DATABASE_URL)' || { echo "cowork-web-e2e: no postgres published on this host — run make backend-up" >&2; exit 1; }
+	@present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
+		"SELECT 1 FROM pg_database WHERE datname='$(COWORK_E2E_DB_NAME)'")" \
+		|| { echo "cowork-web-e2e: could not ask postgres whether $(COWORK_E2E_DB_NAME) exists" >&2; exit 1; }; \
+		test -n "$$present" || $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $(COWORK_E2E_DB_NAME)
+	cd cowork && go build -o bin/cowork ./cmd/cowork
+	$(PNPM_COWORK_WEB) exec playwright install chromium
+	COWORK_BIN='$(CURDIR)/cowork/bin/cowork' COWORK_MIGRATIONS_DIR='$(CURDIR)/cowork/migrations' \
+		COWORK_E2E_DATABASE_URL='$(COWORK_E2E_DATABASE_URL)' GARAM_API_URL=http://$(API_HOST_ADDR) \
+		GARAM_E2E_DATABASE_URL='$(WEB_E2E_DATABASE_URL)' $(PNPM_COWORK_WEB) e2e

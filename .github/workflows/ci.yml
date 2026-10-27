@@ -76,6 +76,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: scripts/record-runner-image.sh
+      # cowork-web-e2e builds the cowork binary it drives.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
       - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
           package-json-file: web/package.json
@@ -96,3 +100,4 @@ jobs:
         env:
           IMAGE_BUILD_CACHE: gha
       - run: make web-e2e
+      - run: make cowork-web-e2e

@@ -1035,3 +1035,8 @@ ADRs:
   top-level folder one responsibility, joined by committed `go.work`
   and pnpm workspaces and meeting only through published contracts;
   supersedes 0009 in part, on the frontend's location
+- [0126](./adr/0126-agents-reach-models-through-an-ai-gateway-on-openrouter-routed-by-jev.md)
+  — proposed: agents reach models only through an `ai-gateway` that
+  speaks the OpenAI protocol, calls OpenRouter with the platform's or
+  the organization's key, and routes by `typesafe/jev-router`;
+  supersedes 0036 in part, on where a provider key may be held

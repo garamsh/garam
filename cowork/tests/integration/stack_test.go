@@ -131,8 +131,8 @@ type stack struct {
 	platformURL string
 	// contentURL is the user-content origin's root.
 	contentURL string
-	pool        *pgxpool.Pool
-	platform    *fakePlatform
+	pool       *pgxpool.Pool
+	platform   *fakePlatform
 }
 
 func newStack(t *testing.T) *stack {

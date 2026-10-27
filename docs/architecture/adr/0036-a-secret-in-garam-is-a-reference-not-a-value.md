@@ -1,6 +1,7 @@
 # ADR 0036: A secret in garam is a reference, not a value
 
-> Status: accepted
+> Status: accepted; where a provider key may be held is superseded by
+> [ADR-0126](./0126-agents-reach-models-through-an-ai-gateway-on-openrouter-routed-by-jev.md)
 > Date: 2026-08-19
 
 ## Contents

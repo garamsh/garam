@@ -455,6 +455,9 @@ Responsibility documents:
   must plan for that no manifest carries: readiness, termination,
   migration failure, key-material enforcement, and what is not
   established
+- [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
+  gateway, the keys it holds, how it routes and what it records; not
+  yet built
 - [web-app.md](./web-app.md) — what the application a person uses garam
   through is responsible for, the one seam it reaches the backend
   through, the design system its pages are built on, and what it does
@@ -1030,3 +1033,8 @@ ADRs:
   — the CLI derives a command for every browser API operation from
   `api/openapi.yaml`, with one grammar, output contract and set of exit
   codes, and writes a secret answer to a file at mode 0600 alone
+- [0126](./adr/0126-agents-reach-models-through-an-ai-gateway-on-openrouter-routed-by-jev.md)
+  — agents reach models only through an `ai-gateway` that speaks the
+  OpenAI protocol, calls OpenRouter with the platform's or the
+  organization's key, and routes by `typesafe/jev-router`; not yet
+  built; supersedes 0036 in part, on where a provider key may be held

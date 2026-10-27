@@ -312,6 +312,12 @@ garam's retired templates and the browser's `operatorGrn`
 
 ## Module boundaries
 
+**The layout ADR-0125 decides is not built.** #1659 moves this tree
+into `platform/`, `console/` and `tooling/`, and
+[structure.md](./structure.md) §Services holds the rules that layout
+keeps. The list below is today's tree
+([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)).
+
 - `api/` — OpenAPI specs (source of truth) + generated servers: the
   browser-facing listener's and the machine listener's (ADR-0019).
 - `proto/` — authz gRPC service definition + buf-generated code.

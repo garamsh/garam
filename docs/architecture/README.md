@@ -1035,6 +1035,12 @@ ADRs:
   — the CLI derives a command for every browser API operation from
   `api/openapi.yaml`, with one grammar, output contract and set of exit
   codes, and writes a secret answer to a file at mode 0600 alone
+- [0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
+  — the repository is a monorepo of services, each top-level folder
+  one responsibility, joined by committed `go.work` and pnpm
+  workspaces and meeting only through published contracts; not yet
+  built (#1659); supersedes 0003 in part, on the binary's path, and
+  0009 in part, on the frontend's location
 - [0126](./adr/0126-agents-reach-models-through-an-ai-gateway-on-openrouter-routed-by-jev.md)
   — agents reach models only through an `ai-gateway` that speaks the
   OpenAI protocol, calls OpenRouter with the platform's or the

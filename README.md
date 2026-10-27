@@ -12,6 +12,7 @@ Documentation lives in [`docs/`](./docs/).
 - [docs/convention/](./docs/convention/) — how we write code here
 
 ## Contents
+- Repository layout
 - Module path
 - Build and test
 - Searching this repository
@@ -21,6 +22,17 @@ Documentation lives in [`docs/`](./docs/).
 - Development images
 - Test image
 - Development model
+
+## Repository layout
+
+garam is becoming an agent-based collaboration platform, and this
+repository a monorepo of its services
+([#1655](https://github.com/garamsh/garam/issues/1655)).
+[ADR-0125](./docs/architecture/adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
+decides the layout: `platform/`, `console/`, `site/`, `design/`,
+`tooling/` and `deploy/`, with a folder for each new service. None of
+it is built yet. Until #1659 moves the tree, every path below is
+today's.
 
 ## Module path
 

@@ -15,12 +15,12 @@ name: images
 #
 # `dev` is the default branch and every pull request but the
 # promotion pull request targets it (`docs/convention/git.md`
-# §Promotion), so `branches` selects the promotion pull request and a
-# pull request into `dev` starts no runner at all, the property the
-# paragraph above buys for `docs/**`.
+# §Promotion). Both are named, so every pull request into either is
+# verified on the forge before it lands (#1657). A pull request into
+# any other branch starts nothing.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
     paths-ignore:
       - "docs/**"
 

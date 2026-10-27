@@ -83,7 +83,10 @@ service names each cluster manager, and `listOperators` answers it.**
    cluster manager. Both are recorded, or neither is. The answer is
    the cluster manager's record. The control service is the record
    under the identifier the caller gave, so the console reads it from
-   there.
+   there. The console's new Operator always registers both, because
+   an Operator it connects is the pair; a lone cluster manager stays
+   registrable through the API and the CLI, which keep the field
+   optional.
 2. **The pairing is on the control service's record.**
    `operators.manager_grn` (`migrations/000062`) is nullable and
    unique. It names a record of the same organization other than the
@@ -92,8 +95,9 @@ service names each cluster manager, and `listOperators` answers it.**
 3. **Each identity keeps its own key.** Registering issues none
    (ADR-0117). The key route is per record, so `issueOperatorKey` is
    called once for each. The setup that follows the registration
-   issues both in one flow and hands over two files. The CLI does the
-   same with `--out` (#1632).
+   issues both in one flow and hands over two files. The CLI issues
+   each by its own `operators keys issue` call, writing each answer
+   to its own file with `--out` (ADR-0122).
 4. **A control service still joins an existing cluster manager.**
    `registerOperator` also takes `manager`: the GRN of a cluster
    manager already registered. It records the new identity as that

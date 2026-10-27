@@ -173,7 +173,15 @@ export default async function OperatorPage({ params, searchParams }: Params) {
   const o = record.data;
   const allowed = (name: Parameters<typeof permissions.get>[0]) =>
     permissions.get(name) !== "denied";
-  const setupHref = `${orgHref(org, "operators")}/${operator}/connect`;
+  // A cluster manager whose control service names it is set up as one
+  // Operator (ADR-0124); the setup reads that from its address.
+  const control =
+    operators.status === "ok"
+      ? operators.data.find((other) => other.manager === o.grn)
+      : undefined;
+  const setupHref = `${orgHref(org, "operators")}/${operator}/connect${
+    control === undefined ? "" : `?pair=${slugFromGrn(control.grn)}`
+  }`;
   const registeredBy =
     members.status === "ok"
       ? members.data.find((member) => member.userGrn === o.registeredBy)

@@ -148,16 +148,17 @@ type Operator struct {
 	ControlEndpoint *ControlEndpoint
 	// Manager is the operator this one is the control service of, nil
 	// where it is a manager or stands alone (ADR-0124). It is written
-	// when the control service is registered and by nothing after. It
-	// names the identity and not a live record: deleting the manager
-	// leaves it naming a GRN the organization no longer holds.
+	// when the control service is registered, or once by
+	// Store.SetManager on a record naming none. It names the identity
+	// and not a live record: deleting the manager leaves it naming a
+	// GRN the organization no longer holds.
 	Manager *grn.GRN
 }
 
 // ServeManager makes o the control service of the operator manager
-// names (ADR-0124), as [ParseManager] reads it. Whether that operator is
-// registered, and free to take a control service, is the store's to
-// answer, read where it writes.
+// names (ADR-0124), as [ParseManager] reads it. Whether that operator
+// is registered, and free to take a control service, is the store's
+// to answer, read where it writes.
 func (o *Operator) ServeManager(manager string) error {
 	m, err := ParseManager(o.GRN, manager)
 	if err != nil {

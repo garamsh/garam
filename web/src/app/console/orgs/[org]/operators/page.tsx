@@ -27,7 +27,8 @@ type Params = {
 /**
  * The organization's Operators, one row each: a manager and the control
  * service whose record names it (ADR-0124), each identity opening a
- * page of its own, and the way to connect one more (ADR-0074, ADR-0102).
+ * page of its own, and the way to connect one more (ADR-0074,
+ * ADR-0102).
  *
  * Every role reads the list; connecting starts by registering, which is
  * `operator:register`. The page asks the server once and leaves the
@@ -62,7 +63,7 @@ export default async function OperatorsPage({ params, searchParams }: Params) {
   return (
     <ListPage
       title="Operators"
-      description="Each connects two identities: its manager and its control service."
+      description="Each connects two identities: its cluster manager and its control service."
       count={operators.status === "ok" ? rows.length : undefined}
       primaryAction={
         permissions.get("register") !== "denied" && (

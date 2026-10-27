@@ -25,7 +25,9 @@ function host(endpoint: string): string {
   }
 }
 
-/** An identity by name, opening its own page, its identifier under it. */
+/**
+ * An identity by name, opening its own page, its identifier under it.
+ */
 function IdentityCell({
   identity,
   operatorsHref,
@@ -58,10 +60,10 @@ function IdentityCell({
  * control service that names it (ADR-0124), each by name and opening
  * its own page. A name is what the organization calls an identity and
  * two may share one, so the identifier stands under every name, with
- * the host its control endpoint answers on where it has one. Where `reports` is
- * given, each row also says what images the operator reported and
- * when it last made contact; a page passes null where the server
- * denies the caller that read.
+ * the host its control endpoint answers on where it has one. Where
+ * `reports` is given, each row also says what images the operator
+ * reported and when it last made contact; a page passes null where the
+ * server denies the caller that read.
  */
 export function OperatorTable({
   operatorsHref,

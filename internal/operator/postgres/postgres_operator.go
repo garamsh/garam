@@ -308,8 +308,9 @@ func (s *Store) CountByOrg(ctx context.Context, orgGRN grn.GRN) (int, error) {
 const managerUnique = "operators_manager_unique"
 
 // violates reports whether err is postgres refusing a statement on the
-// named constraint. pgxerr maps a unique violation to one conflict, and
-// a registration has two: its own GRN and its manager's control service.
+// named constraint. pgxerr maps a unique violation to one conflict,
+// and a registration has two: its own GRN and its manager's control
+// service.
 func violates(err error, constraint string) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.ConstraintName == constraint

@@ -36,8 +36,9 @@ const Schema = z.object({
 /**
  * Registers an Operator's cluster manager and control service in one
  * write, or the control service of the cluster manager the form names
- * (ADR-0124), and opens the setup page of what it registered, where its key is issued: registering issues nothing, and
- * an operator enters by a key alone (ADR-0102, ADR-0117).
+ * (ADR-0124), and opens the setup page of what it registered, where
+ * each identity's key is issued: registering issues nothing, and an
+ * operator enters by a key alone (ADR-0102, ADR-0117).
  */
 export async function registerOperator(
   _state: RegisterOperatorState,
@@ -99,7 +100,11 @@ export async function registerOperator(
 
   revalidatePath(`/console/orgs/${org}/operators`, "layout");
   revalidatePath(`/console/orgs/${org}/agents`);
+  // A pair's setup is one page for both identities, named by its
+  // address so a re-render cannot swap it (ADR-0124).
   redirect(
-    `/console/orgs/${org}/operators/${slugFromGrn(registered.grn)}/connect`,
+    `/console/orgs/${org}/operators/${slugFromGrn(registered.grn)}/connect${
+      control === undefined ? "" : `?pair=${control.value}`
+    }`,
   );
 }

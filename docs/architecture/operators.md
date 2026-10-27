@@ -81,9 +81,10 @@ away (ADR-0070). It leaves the identifier holding nothing: its keys and
 their tokens go by `migrations/000043`'s foreign keys.
 
 The record's surface is the browser-facing listener, on the
-organization's own paths: it registers, reads and renames one, and
-deletes one, which the console reaches on the operator's own page
-(ADR-0074). Deleting is authorized on
+organization's own paths: it registers, reads and renames one, links
+a control service to its cluster manager once (`setOperatorManager`,
+ADR-0124), and deletes one, which the console reaches on the
+operator's own page (ADR-0074). Deleting is authorized on
 `operator:delete` rather than on the action that registers, because
 registering grants nothing and this withdraws what an operator runs on
 (ADR-0070). The record is read on the machine listener too, through

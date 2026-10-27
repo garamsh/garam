@@ -83,6 +83,7 @@ export function PairConnectWizard({
   identities,
   problem,
   initialStep,
+  canIssue,
   operatorsHref,
 }: {
   org: string;
@@ -92,6 +93,11 @@ export function PairConnectWizard({
   /** Why an identity or its keys were not read, if they were not. */
   problem: "unreachable" | "forbidden" | null;
   initialStep: Exclude<ConnectStep, "register">;
+  /**
+   * Whether a policy lets the caller issue a key to an identity holding
+   * no live one, which is every key this setup issues.
+   */
+  canIssue: boolean;
   operatorsHref: string;
 }) {
   const [issued, setIssued] = useState<Partial<Record<Identity, Issued>>>({});
@@ -206,7 +212,12 @@ export function PairConnectWizard({
           )}
           {refusal?.status === "error" && <Refusal>{refusal.message}</Refusal>}
           <div>
-            {unkeyed.length > 0 ? (
+            {unkeyed.length > 0 && !canIssue ? (
+              <Banner
+                tone="info"
+                title="No policy lets you issue these identities a key"
+              />
+            ) : unkeyed.length > 0 ? (
               <Button
                 type="button"
                 disabled={!hydrated || pending}

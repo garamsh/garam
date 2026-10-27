@@ -254,7 +254,8 @@ test.describe("operators", () => {
     await expect(
       page.getByRole("heading", { name: "Place the keys", exact: true }),
     ).toBeVisible();
-    // The local stack's token URL, and each private key only as its file.
+    // The local stack's token URL, and each private key only as its
+    // file.
     await expect(
       page
         .getByRole("region", { name: "The control service's key" })

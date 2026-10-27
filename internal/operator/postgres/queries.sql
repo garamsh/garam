@@ -4,7 +4,8 @@ VALUES ($1, $2, $3, $4, $5, $6, sqlc.narg('manager_grn'));
 
 -- Holds the manager a control service is being registered for, and
 -- answers whom it serves itself (ADR-0124). KEY SHARE waits for the
--- manager's deletion and for nothing else, as a token's hold does.
+-- manager's deletion and for a FOR UPDATE on its row:
+-- LockOperatorRegistration and LockOperatorManager.
 -- name: HoldOperatorManager :one
 SELECT manager_grn FROM operators WHERE grn = $1 FOR KEY SHARE;
 

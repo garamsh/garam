@@ -74,3 +74,37 @@ func TestCheckPermissions_NarrowsACoworkPageByPolicy(t *testing.T) {
 			coworkPage(org.ActionCoworkPageWrite, "open"),
 		))
 }
+
+// coworkChannel is a pair asking action on the cowork channel id.
+func coworkChannel(action, id string) apigen.PermissionCheck {
+	return apigen.PermissionCheck{Action: action,
+		Resource: &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkChannel, Id: id}}
+}
+
+// TestCheckPermissions_AllowsAMemberCoworkChannels holds the default
+// for messaging over the real engine (ADR-0128): a member reads and
+// posts in the organization's channels by role alone, and a Deny on
+// one channel, attached to the member, turns that channel's post to
+// deny while another channel, the control, stays allowed.
+func TestCheckPermissions_AllowsAMemberCoworkChannels(t *testing.T) {
+	s := newCheckStack(t)
+	require.Equal(t,
+		[]apigen.PermissionDecision{apigen.DecisionAllow, apigen.DecisionAllow, apigen.DecisionAllow},
+		checkedDecisions(t, s.url, s.member,
+			apigen.PermissionCheck{Action: org.ActionCoworkChannelRead},
+			coworkChannel(org.ActionCoworkChannelRead, "general"),
+			coworkChannel(org.ActionCoworkChannelPost, "general"),
+		))
+
+	locked := grn.New(s.acme.Identifier, grn.DefaultProject, org.ServiceTypeCoworkChannel, "announcements")
+	deny := activePolicy(t, s.policies, s.acme, "read-only-announcements",
+		statementDoc("read-only-announcements", wire.EffectDeny, org.ActionCoworkChannelPost, locked.String()))
+	attachPolicy(t, s.policies, deny, s.memberGRN)
+
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionAllow, apigen.DecisionAllow},
+		checkedDecisions(t, s.url, s.member,
+			coworkChannel(org.ActionCoworkChannelPost, "announcements"),
+			coworkChannel(org.ActionCoworkChannelRead, "announcements"),
+			coworkChannel(org.ActionCoworkChannelPost, "general"),
+		))
+}

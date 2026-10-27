@@ -27,6 +27,9 @@ const (
 	// kindCoworkPage is a page cowork keeps (ADR-0127). No operation
 	// here addresses one; cowork asks before it acts on one.
 	kindCoworkPage = apigen.PermissionResourceTypeCoworkPage
+	// kindCoworkChannel is a channel cowork keeps (ADR-0128), on the
+	// same terms.
+	kindCoworkChannel = apigen.PermissionResourceTypeCoworkChannel
 )
 
 // decidedBy is what enforcement reads to decide an action.
@@ -117,6 +120,9 @@ var actionRules = map[string]actionRule{
 
 	org.ActionCoworkPageRead:  {on: []apigen.PermissionResourceType{onOrg, kindCoworkPage}},
 	org.ActionCoworkPageWrite: {on: []apigen.PermissionResourceType{onOrg, kindCoworkPage}},
+
+	org.ActionCoworkChannelRead: {on: []apigen.PermissionResourceType{onOrg, kindCoworkChannel}},
+	org.ActionCoworkChannelPost: {on: []apigen.PermissionResourceType{onOrg, kindCoworkChannel}},
 }
 
 // CheckPermissions answers, for each pair asked, whether enforcement
@@ -268,6 +274,8 @@ func permissionTarget(orgSlug string, check apigen.PermissionCheck) (grn.GRN, er
 		g = policyGRN(orgSlug, id)
 	case kindCoworkPage:
 		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkPage, id)
+	case kindCoworkChannel:
+		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkChannel, id)
 	default:
 		return grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "unknown resource type")
 	}

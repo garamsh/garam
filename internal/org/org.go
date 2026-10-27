@@ -55,6 +55,9 @@ const (
 	// mints the identifier and keeps the page; garam builds the GRN
 	// only to answer what may be done to it.
 	ServiceTypeCoworkPage = "cowork-page"
+	// ServiceTypeCoworkChannel is a cowork channel's, a direct message
+	// included (ADR-0128), on the same terms.
+	ServiceTypeCoworkChannel = "cowork-channel"
 )
 
 // Organization is the top-level tenancy boundary. Every field is one

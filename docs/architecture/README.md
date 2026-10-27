@@ -1056,3 +1056,8 @@ ADRs:
   messages, tasks and artifacts to a pluggable web app, a CLI and an
   MCP server; it asks the platform who a caller is and what it may do,
   and keeps the rest behind ports; not yet built
+- [0128](./adr/0128-a-cowork-channels-participants-narrow-what-the-platform-allows-and-grant-nothing.md)
+  — a cowork channel's participant list only narrows: reading or
+  posting needs the platform's allow and, for a private channel or a
+  direct message, a place on the list; supersedes 0127 in part, on
+  keeping a list

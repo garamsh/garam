@@ -80,8 +80,8 @@ func (c *Client) Allowed(ctx context.Context, caller platform.Caller, org string
 	}{Checks: make([]permissionCheck, len(checks))}
 	for i, ch := range checks {
 		req.Checks[i] = permissionCheck{Action: ch.Action}
-		if ch.Page != "" {
-			req.Checks[i].Resource = &permissionResource{Type: "cowork-page", ID: ch.Page}
+		if ch.Kind != "" {
+			req.Checks[i].Resource = &permissionResource{Type: ch.Kind, ID: ch.ID}
 		}
 	}
 	var answer struct {

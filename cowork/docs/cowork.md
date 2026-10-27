@@ -5,12 +5,12 @@ other, and keep the record of their work, with tools an AI can use at
 its centre
 ([ADR-0127](../../docs/architecture/adr/0127-cowork-is-a-service-where-people-and-agents-co-edit-message-and-work-through-tools-an-ai-can-use.md)).
 
-**Built so far: the server's pages and real-time editing (#1663).**
-The binary serves the page tree and each page's sync; there is no web
-app yet, no image, and nothing deploys it. Messaging (#1664), MCP and
-the client CLI (#1665), tasks and the console's link (#1666), and
-artifacts and the blob store (#1667) are not built. Each milestone's
-pull request updates this document.
+**Built so far: pages and real-time editing (#1663), and messaging
+between people (#1664).** Delivery to agents waits on the owner's
+decision on cowork's principal (#1655). MCP and the client CLI
+(#1665), tasks and the console's link (#1666), and artifacts and the
+blob store (#1667) are not built, there is no image, and nothing
+deploys cowork. Each milestone's pull request updates this document.
 
 ## Contents
 - What is built
@@ -33,6 +33,10 @@ pull request updates this document.
 - **Real-time editing** (`internal/collab`). Each page is a Yjs
   document, synced over a WebSocket in y-websocket's protocol, kept as
   an update log compacted into a snapshot.
+- **Messaging** (`internal/channel`). Public and private channels,
+  direct messages, threads, mentions of people and agents, links to
+  pages, full-text search, and each channel's messages live over a
+  WebSocket.
 - **Not yet:** the web app and its plugin registry, the Postgres hub
   several instances need, and the image.
 
@@ -42,7 +46,8 @@ pull request updates this document.
 |---|---|---|
 | `page.Repository` | `internal/page` | `postgres/`, `memory/` |
 | `collab.UpdateLog` | `internal/collab` | `postgres/` |
-| `collab.Hub` | `internal/collab` | `memory/` (one instance) |
+| `channel.Repository` | `internal/channel` | `postgres/`, `memory/` |
+| `fanout.Hub` | `internal/fanout` | `memory/` (one instance) |
 | `collab.DocEngine` | `internal/collab` | `goja/` |
 | `platform.Platform` | `internal/platform` | `http/` |
 
@@ -60,9 +65,14 @@ need them.
   `cowork-page` for one page. Every role grants both (#1663).
 - cowork answers 503 whenever the platform cannot be reached, and
   decides nothing alone.
-- Not yet: `postMessage` to an agent's queue (#1664), and an agent
-  principal on the browser API (#1633). Until #1633, no agent acts in
-  cowork as itself.
+- `checkPermissions` for messaging: `cowork:channel-read` and
+  `cowork:channel-post` on the organization and on a
+  `cowork-channel` (ADR-0128).
+- Not yet: `postMessage` to an agent's queue, under a principal the
+  owner has yet to decide (#1655), and an agent principal on the
+  browser API (#1633). Until then a message's agent mentions are kept
+  and answered as `undeliveredMentions`, and no agent acts in cowork
+  as itself.
 
 ## Real-time editing
 
@@ -92,6 +102,26 @@ need them.
   Yjs's update functions, which decode no document. Reading a page's
   blocks, and the edits the server will make for MCP (#1665), decode
   one.
+
+## Messaging
+
+- **Who reads what** (ADR-0128). The platform's allow first, then,
+  for a private channel or a direct message, the participant list,
+  which only narrows. A private channel's participants add others; a
+  direct message's are fixed when it starts; leaving takes the caller
+  off.
+- **Threads.** A reply names the message that starts its thread, and
+  a reply to a reply joins the same thread. A channel lists the
+  messages that start threads, each with its reply count.
+- **Links.** A message links pages its author may read, and a page
+  lists the messages that link it, in channels the reader may read. A
+  page links a message by its address, as it links anything.
+- **Search** is Postgres full-text search over message bodies, in its
+  language-neutral configuration, within the channels the caller may
+  read.
+- **Live.** `GET /orgs/{org}/channels/{channel}/live` carries each
+  message posted there as one text frame, the API's `Message`. Reading
+  is decided at the upgrade, as for a page's sync.
 
 ## Running it
 

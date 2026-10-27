@@ -79,3 +79,102 @@ export function deletePage(org: string, id: string): Promise<Result<void>> {
     method: "DELETE",
   });
 }
+
+export type Channel = components["schemas"]["Channel"];
+export type ChannelCreate = components["schemas"]["ChannelCreate"];
+export type Message = components["schemas"]["Message"];
+export type MessagePost = components["schemas"]["MessagePost"];
+
+const channelsOf = (org: string) => `/orgs/${encodeURIComponent(org)}/channels`;
+const channelOf = (org: string, id: string) =>
+  `${channelsOf(org)}/${encodeURIComponent(id)}`;
+
+const messagesOnly = (r: Result<{ messages: Message[] }>): Result<Message[]> =>
+  r.ok ? { ok: true, value: r.value.messages } : r;
+
+export async function listChannels(org: string): Promise<Result<Channel[]>> {
+  const r = await call<{ channels: Channel[] }>(channelsOf(org));
+  return r.ok ? { ok: true, value: r.value.channels } : r;
+}
+
+export function createChannel(
+  org: string,
+  body: ChannelCreate,
+): Promise<Result<Channel>> {
+  return call<Channel>(channelsOf(org), {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function getChannel(org: string, id: string): Promise<Result<Channel>> {
+  return call<Channel>(channelOf(org, id));
+}
+
+export function addChannelMember(
+  org: string,
+  id: string,
+  member: string,
+): Promise<Result<void>> {
+  return call<void>(`${channelOf(org, id)}/members`, {
+    method: "POST",
+    body: JSON.stringify({ member }),
+  });
+}
+
+export function leaveChannel(org: string, id: string): Promise<Result<void>> {
+  return call<void>(`${channelOf(org, id)}/members/me`, { method: "DELETE" });
+}
+
+export async function listMessages(
+  org: string,
+  id: string,
+): Promise<Result<Message[]>> {
+  return messagesOnly(
+    await call<{ messages: Message[] }>(`${channelOf(org, id)}/messages`),
+  );
+}
+
+export function postMessage(
+  org: string,
+  id: string,
+  body: MessagePost,
+): Promise<Result<Message>> {
+  return call<Message>(`${channelOf(org, id)}/messages`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getThread(
+  org: string,
+  message: string,
+): Promise<Result<Message[]>> {
+  return messagesOnly(
+    await call<{ messages: Message[] }>(
+      `/orgs/${encodeURIComponent(org)}/messages/${encodeURIComponent(message)}/thread`,
+    ),
+  );
+}
+
+export async function searchMessages(
+  org: string,
+  q: string,
+): Promise<Result<Message[]>> {
+  return messagesOnly(
+    await call<{ messages: Message[] }>(
+      `/orgs/${encodeURIComponent(org)}/messages?q=${encodeURIComponent(q)}`,
+    ),
+  );
+}
+
+export async function listPageMessages(
+  org: string,
+  page: string,
+): Promise<Result<Message[]>> {
+  return messagesOnly(
+    await call<{ messages: Message[] }>(
+      `${pagesOf(org)}/${encodeURIComponent(page)}/messages`,
+    ),
+  );
+}

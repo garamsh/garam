@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	apigen "github.com/garamsh/garam/cowork/api"
+	"github.com/garamsh/garam/cowork/internal/channel"
 	"github.com/garamsh/garam/cowork/internal/collab"
 	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/platform"
@@ -19,6 +20,7 @@ import (
 type Server struct {
 	pages    page.Service
 	collab   collab.Service
+	channels channel.Service
 	platform platform.Platform
 	// origins are the host patterns a browser may open a sync
 	// WebSocket from, besides cowork's own host.
@@ -28,8 +30,8 @@ type Server struct {
 var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer answers the surface over its services.
-func NewServer(pages page.Service, collabs collab.Service, p platform.Platform, origins []string) *Server {
-	return &Server{pages: pages, collab: collabs, platform: p, origins: origins}
+func NewServer(pages page.Service, collabs collab.Service, channels channel.Service, p platform.Platform, origins []string) *Server {
+	return &Server{pages: pages, collab: collabs, channels: channels, platform: p, origins: origins}
 }
 
 // caller identifies the request's caller with the platform.

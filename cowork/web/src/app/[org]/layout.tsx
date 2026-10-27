@@ -22,6 +22,14 @@ export default async function WorkspaceLayout({
         <Link href={`/${org}`} className="font-semibold">
           {org}
         </Link>
+        <nav aria-label="Workspace" className="flex flex-col gap-1 text-sm">
+          <Link href={`/${org}/channels`} className="underline">
+            Channels
+          </Link>
+          <Link href={`/${org}/search`} className="underline">
+            Search
+          </Link>
+        </nav>
         {pages.ok ? (
           <PageTree org={org} pages={pages.value} />
         ) : (

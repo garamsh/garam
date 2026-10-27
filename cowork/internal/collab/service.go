@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sync"
 
+	"github.com/garamsh/garam/cowork/internal/fanout"
 	"github.com/garamsh/garam/platform/sdk/errorx"
 )
 
@@ -27,7 +28,7 @@ type Room struct {
 }
 
 // key names the page across organizations, as the hub's room.
-func (r Room) key() string { return r.Org + "/" + r.Page }
+func (r Room) key() string { return "page/" + r.Org + "/" + r.Page }
 
 // ErrTooSlow ends a connection that fell outboundBuffer messages
 // behind.
@@ -42,12 +43,12 @@ type Service interface {
 
 type service struct {
 	log    UpdateLog
-	hub    Hub
+	hub    fanout.Hub
 	engine DocEngine
 }
 
 // NewService answers the relay over log, hub and engine.
-func NewService(log UpdateLog, hub Hub, engine DocEngine) Service {
+func NewService(log UpdateLog, hub fanout.Hub, engine DocEngine) Service {
 	return &service{log: log, hub: hub, engine: engine}
 }
 

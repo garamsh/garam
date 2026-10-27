@@ -23,6 +23,7 @@ func (s *Server) Handler(ready func(context.Context) error) http.Handler {
 	mux := http.NewServeMux()
 	apigen.HandlerWithOptions(s, apigen.StdHTTPServerOptions{BaseRouter: mux, ErrorHandlerFunc: BindingError})
 	mux.HandleFunc(SyncPath, s.SyncPage)
+	mux.HandleFunc(ChannelLivePath, s.ChannelLive)
 	mux.HandleFunc(LivePath, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc(ReadyPath, func(w http.ResponseWriter, r *http.Request) {
 		if err := ready(r.Context()); err != nil {

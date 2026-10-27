@@ -60,6 +60,195 @@ export interface paths {
         patch: operations["updatePage"];
         trace?: never;
     };
+    "/orgs/{org}/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the channels the caller may read.
+         * @description Requires `cowork:channel-read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
+         */
+        get: operations["listChannels"];
+        put?: never;
+        /**
+         * Create a channel or start a direct message.
+         * @description Requires `cowork:channel-post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
+         */
+        post: operations["createChannel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/channels/{channel}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                channel: components["parameters"]["channelPath"];
+            };
+            cookie?: never;
+        };
+        /** Read a channel the caller may read. */
+        get: operations["getChannel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/channels/{channel}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                channel: components["parameters"]["channelPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a participant to a private channel.
+         * @description Requires `cowork:channel-post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
+         */
+        post: operations["addChannelMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/channels/{channel}/members/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                channel: components["parameters"]["channelPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take the caller off a channel's list. */
+        delete: operations["leaveChannel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/channels/{channel}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                channel: components["parameters"]["channelPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read a channel's messages, oldest first.
+         * @description The last 200 messages that are not replies, before `before` where it is given, each with its reply count.
+         */
+        get: operations["listMessages"];
+        put?: never;
+        /**
+         * Post a message, or reply in a thread.
+         * @description Requires `cowork:channel-post` on the channel, and `cowork:page-read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
+         */
+        post: operations["postMessage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Search the messages of every channel the caller may read.
+         * @description `q` is read as a web search reads one: words, "quoted phrases", and -exclusions. The newest 200 matches first.
+         */
+        get: operations["searchMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/messages/{message}/thread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                message: components["parameters"]["messagePath"];
+            };
+            cookie?: never;
+        };
+        /** Read the thread a message starts or is in, oldest first. */
+        get: operations["getThread"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/pages/{page}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                page: components["parameters"]["pagePath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Read the messages that link a page, newest first.
+         * @description Requires `cowork:page-read` on the page, and answers only messages in channels the caller may read.
+         */
+        get: operations["listPageMessages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -98,6 +287,66 @@ export interface components {
             parent?: string;
             position?: number;
         };
+        Channel: {
+            id: string;
+            /**
+             * @description The name the platform's permission checks know the channel by.
+             * @example grn:acme:default:cowork-channel:k3v7q2m9x4ab
+             */
+            grn: string;
+            org: string;
+            /** @enum {string} */
+            kind: "public" | "private" | "direct";
+            /** @description Empty for a direct message. */
+            name: string;
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description A private channel's or a direct message's participants, by GRN. Empty for a public channel. */
+            members: string[];
+        };
+        ChannelList: {
+            channels: components["schemas"]["Channel"][];
+        };
+        ChannelCreate: {
+            /** @enum {string} */
+            kind: "public" | "private" | "direct";
+            name?: string;
+            members?: string[];
+        };
+        MemberAdd: {
+            /** @description The GRN of the person or agent to add. */
+            member: string;
+        };
+        Message: {
+            id: string;
+            channel: string;
+            /** @description The ID of the message whose thread this replies in, empty for one that is not a reply. */
+            thread: string;
+            /** @description The author's GRN. */
+            author: string;
+            body: string;
+            /** @description The people and agents the message names, by GRN. */
+            mentions: string[];
+            /** @description The agents among `mentions` whose runtime the message has not reached. */
+            undeliveredMentions: string[];
+            /** @description The IDs of the pages the message links. */
+            pages: string[];
+            /** Format: date-time */
+            createdAt: string;
+            /** @description How many replies its thread holds, where the message is listed in its channel; 0 elsewhere. */
+            replies: number;
+        };
+        MessageList: {
+            messages: components["schemas"]["Message"][];
+        };
+        MessagePost: {
+            body: string;
+            /** @description The message to reply to. */
+            thread?: string;
+            mentions?: string[];
+            pages?: string[];
+        };
         Error: {
             /** @description errorx kind, e.g. `not_found`, `permission_denied`. */
             kind: string;
@@ -119,6 +368,8 @@ export interface components {
         /** @description The organization's identifier, the last segment of its GRN. */
         orgPath: string;
         pagePath: string;
+        channelPath: string;
+        messagePath: string;
     };
     requestBodies: never;
     headers: never;
@@ -273,6 +524,287 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    listChannels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The channels. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelList"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    createChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelCreate"];
+            };
+        };
+        responses: {
+            /** @description The channel. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    getChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                channel: components["parameters"]["channelPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The channel. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Channel"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    addChannelMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                channel: components["parameters"]["channelPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberAdd"];
+            };
+        };
+        responses: {
+            /** @description Added, or already there. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    leaveChannel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                channel: components["parameters"]["channelPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Left. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    listMessages: {
+        parameters: {
+            query?: {
+                before?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                channel: components["parameters"]["channelPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The messages. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageList"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    postMessage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                channel: components["parameters"]["channelPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MessagePost"];
+            };
+        };
+        responses: {
+            /** @description The message. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Message"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    searchMessages: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The matches. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageList"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    getThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                message: components["parameters"]["messagePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The thread's first message, then its replies. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageList"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listPageMessages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                page: components["parameters"]["pagePath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The messages. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MessageList"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
         };
     };
 }

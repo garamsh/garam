@@ -14,10 +14,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/garamsh/garam/cowork/internal/api"
+	"github.com/garamsh/garam/cowork/internal/channel"
+	channelpg "github.com/garamsh/garam/cowork/internal/channel/postgres"
 	"github.com/garamsh/garam/cowork/internal/collab"
 	collabgoja "github.com/garamsh/garam/cowork/internal/collab/goja"
-	collabmemory "github.com/garamsh/garam/cowork/internal/collab/memory"
 	collabpg "github.com/garamsh/garam/cowork/internal/collab/postgres"
+	fanoutmemory "github.com/garamsh/garam/cowork/internal/fanout/memory"
 	"github.com/garamsh/garam/cowork/internal/page"
 	pagepg "github.com/garamsh/garam/cowork/internal/page/postgres"
 	platformhttp "github.com/garamsh/garam/cowork/internal/platform/http"
@@ -49,9 +51,13 @@ func NewHandler(cfg Config, pool *pgxpool.Pool) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
+	// One hub serves every room: a page's sync and a channel's readers
+	// name theirs apart.
+	hub := fanoutmemory.New()
 	pages := page.NewService(pagepg.New(pool), p)
-	collabs := collab.NewService(collabpg.New(pool), collabmemory.New(), engine)
-	return api.NewServer(pages, collabs, p, cfg.WebOrigins).Handler(pool.Ping), nil
+	collabs := collab.NewService(collabpg.New(pool), hub, engine)
+	channels := channel.NewService(channelpg.New(pool), p, hub)
+	return api.NewServer(pages, collabs, channels, p, cfg.WebOrigins).Handler(pool.Ping), nil
 }
 
 func newServeCommand() *cobra.Command {

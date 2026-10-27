@@ -6,9 +6,12 @@ import { redirect } from "next/navigation";
 import {
   addChannelMember,
   createChannel,
+  getThread,
   leaveChannel,
+  listMessages,
   postMessage,
   type ChannelCreate,
+  type Message,
 } from "@/lib/cowork";
 
 /** What a messaging form shows after an action: the server's refusal, if any. */
@@ -81,4 +84,20 @@ export async function leaveChannelAction(
   if (!r.ok) return { error: r.message };
   revalidatePath(`/${org}`, "layout");
   redirect(`/${org}/channels`);
+}
+
+/**
+ * Reads a channel's messages, or a thread's, again: what a live list
+ * missed between the page's read and its feed opening. A refusal reads
+ * as nothing new.
+ */
+export async function readMessagesAction(
+  org: string,
+  channel: string,
+  thread?: string,
+): Promise<Message[]> {
+  const r = thread
+    ? await getThread(org, thread)
+    : await listMessages(org, channel);
+  return r.ok ? r.value : [];
 }

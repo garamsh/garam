@@ -9,6 +9,13 @@ vi.mock("@/features/artifacts/actions", () => ({
   embedAction: () => new Promise(() => {}),
 }));
 
+// What reading the channel again answers once the feed opens, which a
+// test sets.
+const read = vi.hoisted(() => ({ messages: [] as Message[] }));
+vi.mock("@/features/messaging/actions", () => ({
+  readMessagesAction: async () => read.messages,
+}));
+
 import { LiveMessages } from "../live-messages";
 import { MessageItem } from "../message-item";
 
@@ -70,6 +77,9 @@ class FakeSocket {
     FakeSocket.last = this;
   }
   close() {}
+  async open() {
+    await act(async () => this.onopen?.());
+  }
   deliver(m: Message) {
     act(() => this.onmessage?.({ data: JSON.stringify(m) }));
   }
@@ -105,6 +115,33 @@ describe("LiveMessages", () => {
       "href",
       "/acme/channels/c1?thread=m1",
     );
+  });
+
+  it("reads the channel again once live, keeping what the feed already brought", async () => {
+    vi.stubGlobal("WebSocket", FakeSocket);
+    render(
+      <LiveMessages
+        org="acme"
+        channel="c1"
+        initial={[message({})]}
+        syncUrl="ws://cowork"
+        names={names}
+        pages={{}}
+      />,
+    );
+    // m2 was posted after the page's read and before the feed opened;
+    // m3 arrives on the feed before the read answers.
+    read.messages = [message({}), message({ id: "m2", body: "missed" })];
+    FakeSocket.last.deliver(message({ id: "m3", body: "on the feed" }));
+    await FakeSocket.last.open();
+
+    const list = screen.getByRole("list", { name: "Messages" });
+    expect(
+      within(list)
+        .getAllByTestId("message")
+        .map((li) => li.dataset.messageId),
+    ).toEqual(["m1", "m2", "m3"]);
+    read.messages = [];
   });
 
   it("in a thread, appends that thread's replies alone", () => {

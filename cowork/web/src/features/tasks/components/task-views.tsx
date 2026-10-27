@@ -2,7 +2,8 @@ import Link from "next/link";
 
 import { TASK_STATUSES, type Task } from "@/lib/cowork";
 
-import { MoveTask, STATUS_LABEL } from "./task-forms";
+import { STATUS_LABEL } from "../status";
+import { MoveTask } from "./task-forms";
 
 export type Names = Record<string, string>;
 

@@ -5,6 +5,8 @@ import { useActionState } from "react";
 import type { Task, TaskStatus } from "@/lib/cowork";
 import type { Participant } from "@/lib/platform";
 
+import { STATUS_LABEL } from "../status";
+
 import {
   commentTaskAction,
   createTaskAction,
@@ -14,12 +16,6 @@ import {
 
 const field = "rounded border border-neutral-300 px-2 py-1";
 const button = "rounded bg-neutral-900 px-2 py-1 text-white";
-
-export const STATUS_LABEL: Record<TaskStatus, string> = {
-  todo: "To do",
-  doing: "Doing",
-  done: "Done",
-};
 
 function Refusal({ error }: { error?: string }) {
   return error ? (

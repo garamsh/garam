@@ -48,7 +48,7 @@ test.describe("messaging", () => {
     }
 
     await ada.getByRole("textbox", { name: "Message" }).fill("hello bob");
-    await ada.getByText("Mention").click();
+    await ada.locator("summary", { hasText: "Mention" }).click();
     await ada.getByRole("checkbox", { name: "bob" }).check();
     await ada.getByRole("button", { name: "Send" }).click();
     await expect(messages(bob)).toContainText("hello bob");

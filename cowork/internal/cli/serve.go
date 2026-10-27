@@ -23,6 +23,8 @@ import (
 	"github.com/garamsh/garam/cowork/internal/page"
 	pagepg "github.com/garamsh/garam/cowork/internal/page/postgres"
 	platformhttp "github.com/garamsh/garam/cowork/internal/platform/http"
+	"github.com/garamsh/garam/cowork/internal/task"
+	taskpg "github.com/garamsh/garam/cowork/internal/task/postgres"
 	"github.com/garamsh/garam/platform/sdk/errorx"
 )
 
@@ -57,7 +59,8 @@ func NewHandler(cfg Config, pool *pgxpool.Pool) (http.Handler, error) {
 	pages := page.NewService(pagepg.New(pool), p)
 	collabs := collab.NewService(collabpg.New(pool), hub, engine)
 	channels := channel.NewService(channelpg.New(pool), p, hub)
-	return api.NewServer(pages, collabs, channels, p, cfg.WebOrigins).Handler(pool.Ping), nil
+	tasks := task.NewService(taskpg.New(pool), p, pages, channels)
+	return api.NewServer(pages, collabs, channels, tasks, p, cfg.WebOrigins).Handler(pool.Ping), nil
 }
 
 func newServeCommand() *cobra.Command {

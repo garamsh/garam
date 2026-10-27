@@ -42,6 +42,7 @@ type Caller struct {
 const (
 	KindPage    = "cowork-page"
 	KindChannel = "cowork-channel"
+	KindTask    = "cowork-task"
 )
 
 // Check is one action to decide: on the organization where Kind is
@@ -58,6 +59,9 @@ func OnPage(action, id string) Check { return Check{Action: action, Kind: KindPa
 // OnChannel is a check of action on one channel, a direct message
 // included.
 func OnChannel(action, id string) Check { return Check{Action: action, Kind: KindChannel, ID: id} }
+
+// OnTask is a check of action on one task.
+func OnTask(action, id string) Check { return Check{Action: action, Kind: KindTask, ID: id} }
 
 // Platform answers for the platform. Identify answers unauthenticated
 // for a credential it does not accept. Allowed answers one decision per

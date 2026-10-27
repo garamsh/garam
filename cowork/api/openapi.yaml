@@ -31,6 +31,12 @@ info:
     `GET /orgs/{org}/channels/{channel}/live`, one text frame of the
     `Message` schema per message posted, server to client only; its
     upgrade is answered as `getChannel` is answered.
+
+    Tasks are the record of work. Listing and creating them needs
+    `cowork:task-read` and `cowork:task-write` on the organization,
+    and reading or changing one, its comments included, the same on
+    the task. A task links only pages and messages its writer may
+    read.
 servers:
   - url: /
 paths:
@@ -413,6 +419,172 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List the tasks the caller may read, newest first.
+      description: >-
+        At most 500, narrowed to those matching every filter given:
+        a status, an assignee's GRN, or a page or a message the task
+        links.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/TaskStatus'
+        - name: assignee
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: message
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The tasks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskList'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+      responses:
+        '201':
+          description: The task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/tasks/{task}:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/taskPath'
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Read a task.
+      responses:
+        '200':
+          description: The task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Change a task.
+      description: >-
+        Changes what the body sets. An empty `assignee` takes the
+        assignee off and an empty `due` the due date; `pages` and
+        `messages` replace what the task links.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdate'
+      responses:
+        '200':
+          description: The task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/tasks/{task}/comments:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/taskPath'
+    get:
+      operationId: listTaskComments
+      tags: [tasks]
+      summary: Read a task's comments, oldest first.
+      responses:
+        '200':
+          description: The comments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCommentList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: postTaskComment
+      tags: [tasks]
+      summary: Comment on a task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCommentPost'
+      responses:
+        '201':
+          description: The comment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskComment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
 components:
   parameters:
     orgPath:
@@ -436,6 +608,12 @@ components:
         type: string
     messagePath:
       name: message
+      in: path
+      required: true
+      schema:
+        type: string
+    taskPath:
+      name: task
       in: path
       required: true
       schema:
@@ -632,6 +810,134 @@ components:
           type: string
           description: errorx kind, e.g. `not_found`, `permission_denied`.
         message:
+          type: string
+    TaskStatus:
+      type: string
+      enum: [todo, doing, done]
+    Task:
+      type: object
+      required: [id, grn, org, title, description, status, assignee, due, pages, messages, createdBy, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        grn:
+          type: string
+          description: The name the platform's permission checks know the task by.
+          example: grn:acme:default:cowork-task:k3v7q2m9x4ab
+        org:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        assignee:
+          type: string
+          description: The GRN of the person or agent assigned, empty for no one.
+        due:
+          type: string
+          description: The due date as YYYY-MM-DD, empty for none.
+        pages:
+          type: array
+          description: The IDs of the pages the task links.
+          items:
+            type: string
+        messages:
+          type: array
+          description: The IDs of the messages the task links.
+          items:
+            type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TaskList:
+      type: object
+      required: [tasks]
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+    TaskCreate:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        assignee:
+          type: string
+        due:
+          type: string
+        pages:
+          type: array
+          items:
+            type: string
+        messages:
+          type: array
+          items:
+            type: string
+    TaskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        assignee:
+          type: string
+        due:
+          type: string
+        pages:
+          type: array
+          items:
+            type: string
+        messages:
+          type: array
+          items:
+            type: string
+    TaskComment:
+      type: object
+      required: [id, task, author, body, createdAt]
+      properties:
+        id:
+          type: string
+        task:
+          type: string
+        author:
+          type: string
+          description: The author's GRN.
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    TaskCommentList:
+      type: object
+      required: [comments]
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskComment'
+    TaskCommentPost:
+      type: object
+      required: [body]
+      properties:
+        body:
           type: string
   responses:
     Error:

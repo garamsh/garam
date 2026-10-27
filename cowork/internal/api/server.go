@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/cowork/internal/mcp"
 	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/platform"
+	"github.com/garamsh/garam/cowork/internal/task"
 	"github.com/garamsh/garam/platform/sdk/errorx"
 )
 
@@ -22,6 +23,7 @@ type Server struct {
 	pages    page.Service
 	collab   collab.Service
 	channels channel.Service
+	tasks    task.Service
 	platform platform.Platform
 	tools    *mcp.Tools
 	// origins are the host patterns a browser may open a sync
@@ -32,10 +34,10 @@ type Server struct {
 var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer answers the surface over its services.
-func NewServer(pages page.Service, collabs collab.Service, channels channel.Service, p platform.Platform, origins []string) *Server {
+func NewServer(pages page.Service, collabs collab.Service, channels channel.Service, tasks task.Service, p platform.Platform, origins []string) *Server {
 	return &Server{
-		pages: pages, collab: collabs, channels: channels, platform: p, origins: origins,
-		tools: mcp.New(pages, collabs, channels, p),
+		pages: pages, collab: collabs, channels: channels, tasks: tasks, platform: p, origins: origins,
+		tools: mcp.New(pages, collabs, channels, tasks, p),
 	}
 }
 

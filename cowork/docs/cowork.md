@@ -6,12 +6,12 @@ its centre
 ([ADR-0127](../../docs/architecture/adr/0127-cowork-is-a-service-where-people-and-agents-co-edit-message-and-work-through-tools-an-ai-can-use.md)).
 
 **Built so far: pages and real-time editing (#1663), messaging
-between people (#1664), and MCP and the client CLI (#1665).**
-Delivery to agents waits on the owner's decision on cowork's principal
-(#1655), and an agent acting as itself on #1633. Tasks and the
-console's link (#1666), and artifacts and the blob store (#1667), are
-not built, there is no image, and nothing deploys cowork. Each
-milestone's pull request updates this document.
+between people (#1664), MCP and the client CLI (#1665), and tasks
+(#1666).** Delivery to agents waits on the owner's decision on
+cowork's principal (#1655), and an agent acting as itself on #1633.
+Artifacts and the blob store (#1667) are not built, there is no image,
+and nothing deploys cowork. Each milestone's pull request updates this
+document.
 
 ## Contents
 - What is built
@@ -19,6 +19,7 @@ milestone's pull request updates this document.
 - What it asks of the platform
 - Real-time editing
 - Messaging
+- Tasks
 - MCP
 - The client CLI
 - Connecting an AI client
@@ -42,8 +43,11 @@ milestone's pull request updates this document.
   direct messages, threads, mentions of people and agents, links to
   pages, full-text search, and each channel's messages live over a
   WebSocket.
+- **Tasks** (`internal/task`). Tasks with an assignee, a status, a
+  due date, comments, and links to pages and messages, as a list and a
+  board.
 - **MCP** (`internal/mcp`). The tools an AI uses to read and edit
-  pages and to read and post messages, as its caller.
+  pages, to read and post messages, and to work tasks, as its caller.
 - **The client CLI** (`internal/cli`). The tools as commands, and
   `cowork mcp`, a stdio bridge for local MCP clients.
 - **The web app** (`web/`). Every block type is a plugin in its
@@ -57,6 +61,7 @@ milestone's pull request updates this document.
 | `page.Repository` | `internal/page` | `postgres/`, `memory/` |
 | `collab.UpdateLog` | `internal/collab` | `postgres/` |
 | `channel.Repository` | `internal/channel` | `postgres/`, `memory/` |
+| `task.Repository` | `internal/task` | `postgres/`, `memory/` |
 | `fanout.Hub` | `internal/fanout` | `memory/` (one instance) |
 | `collab.DocEngine` | `internal/collab` | `goja/` |
 | `platform.Platform` | `internal/platform` | `http/` |
@@ -78,6 +83,8 @@ need them.
 - `checkPermissions` for messaging: `cowork:channel-read` and
   `cowork:channel-post` on the organization and on a
   `cowork-channel` (ADR-0128).
+- `checkPermissions` for tasks: `cowork:task-read` and
+  `cowork:task-write` on the organization and on a `cowork-task`.
 - Not yet: `postMessage` to an agent's queue, under a principal the
   owner has yet to decide (#1655), and an agent principal on the
   browser API (#1633). Until then a message's agent mentions are kept
@@ -132,6 +139,26 @@ need them.
   message posted there as one text frame, the API's `Message`. Reading
   is decided at the upgrade, as for a page's sync.
 
+## Tasks
+
+- **A task** has a title, a description, a status (`todo`, `doing`,
+  `done`), an assignee, a person's or an agent's GRN, and a due date.
+  Each change is the caller's `cowork:task-write` on the task, and a
+  comment is the same act.
+- **Links.** A task links pages and messages its writer may read: a
+  page as `getPage` reads it, a message as reading its thread does.
+  The task lists what it links, and `listTasks` with `page` or
+  `message` lists the tasks that link one. A link is kept by ID and
+  read when followed, so a reader who may not read its target sees
+  that it is there and nothing of it.
+- **Views.** `/{org}/tasks` lists them, and `?view=board` shows a
+  column per status; a page and a message link to the tasks that link
+  them, and a task made from either links it.
+- **Agents.** An agent works a task through `list_tasks` (`assignee:
+  me`) and `update_task`, which takes a comment with the change.
+  Notifying an agent of an assignment waits on delivery to agents
+  (#1664).
+
 ## MCP
 
 - **The endpoint**, `POST /mcp`, in MCP's streamable HTTP transport,
@@ -154,9 +181,14 @@ need them.
   | `list_channels` | the channels and direct messages the caller may read | `cowork:channel-read` |
   | `read_messages` | a channel's messages | `cowork:channel-read` |
   | `post_message` | a message or a reply | `cowork:channel-post` |
+  | `list_tasks` | tasks by status, assignee (`me` for the caller) or link | `cowork:task-read` |
+  | `read_task` | a task and its comments | `cowork:task-read` |
+  | `create_task` | a task, assigned and linked | `cowork:task-write` |
+  | `update_task` | changes to a task, with a comment | `cowork:task-write` |
+  | `comment_task` | a comment | `cowork:task-write` |
 
   Every tool but `list_workspaces` takes the workspace as `org`. The
-  task and artifact tools come with #1666 and #1667.
+  artifact tools come with #1667.
 - **Each asks what the HTTP API asks**, through the same services, so
   the platform decides a tool call exactly as the call it mirrors.
 - **An edit is a client's.** `update_page` opens the page in the
@@ -182,8 +214,8 @@ need them.
   refused to any host but loopback.
 - **The workspace** is `--org`, or the one `garam orgs use` saved.
 - **The commands.** `login`, `logout`, `whoami`, `workspaces`, `pages
-  list|read|create`, `channels`, `messages list|post`, `search` and
-  `mcp`. Each but the first three calls the tool of its name, so the
+  list|read|create`, `channels`, `messages list|post`, `tasks
+  list|show|create|update|comment`, `search` and `mcp`. Each but the first three calls the tool of its name, so the
   CLI does what an AI client may, as the same caller.
 - **ADR-0122's contract.** `-o json` prints what the tool answered,
   messages go to stderr, and a command exits 3 not signed in, 4

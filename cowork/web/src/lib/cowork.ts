@@ -178,3 +178,78 @@ export async function listPageMessages(
     ),
   );
 }
+
+export type Task = components["schemas"]["Task"];
+export type TaskStatus = components["schemas"]["TaskStatus"];
+export type TaskCreate = components["schemas"]["TaskCreate"];
+export type TaskUpdate = components["schemas"]["TaskUpdate"];
+export type TaskComment = components["schemas"]["TaskComment"];
+
+/** A board's columns, in order. */
+export const TASK_STATUSES: readonly TaskStatus[] = ["todo", "doing", "done"];
+
+const tasksOf = (org: string) => `/orgs/${encodeURIComponent(org)}/tasks`;
+const taskOf = (org: string, id: string) =>
+  `${tasksOf(org)}/${encodeURIComponent(id)}`;
+
+/** What a listing narrows to: every field set must match. */
+export type TaskFilter = Partial<
+  Record<"status" | "assignee" | "page" | "message", string>
+>;
+
+export async function listTasks(
+  org: string,
+  filter: TaskFilter = {},
+): Promise<Result<Task[]>> {
+  const q = new URLSearchParams(
+    Object.entries(filter).filter((e): e is [string, string] => !!e[1]),
+  ).toString();
+  const r = await call<{ tasks: Task[] }>(`${tasksOf(org)}${q ? `?${q}` : ""}`);
+  return r.ok ? { ok: true, value: r.value.tasks } : r;
+}
+
+export function getTask(org: string, id: string): Promise<Result<Task>> {
+  return call<Task>(taskOf(org, id));
+}
+
+export function createTask(
+  org: string,
+  body: TaskCreate,
+): Promise<Result<Task>> {
+  return call<Task>(tasksOf(org), {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateTask(
+  org: string,
+  id: string,
+  body: TaskUpdate,
+): Promise<Result<Task>> {
+  return call<Task>(taskOf(org, id), {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function listTaskComments(
+  org: string,
+  id: string,
+): Promise<Result<TaskComment[]>> {
+  const r = await call<{ comments: TaskComment[] }>(
+    `${taskOf(org, id)}/comments`,
+  );
+  return r.ok ? { ok: true, value: r.value.comments } : r;
+}
+
+export function postTaskComment(
+  org: string,
+  id: string,
+  body: string,
+): Promise<Result<TaskComment>> {
+  return call<TaskComment>(`${taskOf(org, id)}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}

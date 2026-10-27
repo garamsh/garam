@@ -249,6 +249,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * List the tasks the caller may read, newest first.
+         * @description At most 500, narrowed to those matching every filter given: a status, an assignee's GRN, or a page or a message the task links.
+         */
+        get: operations["listTasks"];
+        put?: never;
+        /** Create a task. */
+        post: operations["createTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/tasks/{task}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                task: components["parameters"]["taskPath"];
+            };
+            cookie?: never;
+        };
+        /** Read a task. */
+        get: operations["getTask"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Change a task.
+         * @description Changes what the body sets. An empty `assignee` takes the assignee off and an empty `due` the due date; `pages` and `messages` replace what the task links.
+         */
+        patch: operations["updateTask"];
+        trace?: never;
+    };
+    "/orgs/{org}/tasks/{task}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                task: components["parameters"]["taskPath"];
+            };
+            cookie?: never;
+        };
+        /** Read a task's comments, oldest first. */
+        get: operations["listTaskComments"];
+        put?: never;
+        /** Comment on a task. */
+        post: operations["postTaskComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -352,6 +423,69 @@ export interface components {
             kind: string;
             message: string;
         };
+        /** @enum {string} */
+        TaskStatus: "todo" | "doing" | "done";
+        Task: {
+            id: string;
+            /**
+             * @description The name the platform's permission checks know the task by.
+             * @example grn:acme:default:cowork-task:k3v7q2m9x4ab
+             */
+            grn: string;
+            org: string;
+            title: string;
+            description: string;
+            status: components["schemas"]["TaskStatus"];
+            /** @description The GRN of the person or agent assigned, empty for no one. */
+            assignee: string;
+            /** @description The due date as YYYY-MM-DD, empty for none. */
+            due: string;
+            /** @description The IDs of the pages the task links. */
+            pages: string[];
+            /** @description The IDs of the messages the task links. */
+            messages: string[];
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        TaskList: {
+            tasks: components["schemas"]["Task"][];
+        };
+        TaskCreate: {
+            title: string;
+            description?: string;
+            status?: components["schemas"]["TaskStatus"];
+            assignee?: string;
+            due?: string;
+            pages?: string[];
+            messages?: string[];
+        };
+        TaskUpdate: {
+            title?: string;
+            description?: string;
+            status?: components["schemas"]["TaskStatus"];
+            assignee?: string;
+            due?: string;
+            pages?: string[];
+            messages?: string[];
+        };
+        TaskComment: {
+            id: string;
+            task: string;
+            /** @description The author's GRN. */
+            author: string;
+            body: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TaskCommentList: {
+            comments: components["schemas"]["TaskComment"][];
+        };
+        TaskCommentPost: {
+            body: string;
+        };
     };
     responses: {
         /** @description Error response. */
@@ -370,6 +504,7 @@ export interface components {
         pagePath: string;
         channelPath: string;
         messagePath: string;
+        taskPath: string;
     };
     requestBodies: never;
     headers: never;
@@ -805,6 +940,186 @@ export interface operations {
             };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+        };
+    };
+    listTasks: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["TaskStatus"];
+                assignee?: string;
+                page?: string;
+                message?: string;
+            };
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tasks. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskList"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
+    createTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCreate"];
+            };
+        };
+        responses: {
+            /** @description The task. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                task: components["parameters"]["taskPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    updateTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                task: components["parameters"]["taskPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskUpdate"];
+            };
+        };
+        responses: {
+            /** @description The task. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Task"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listTaskComments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                task: components["parameters"]["taskPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The comments. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskCommentList"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    postTaskComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The organization's identifier, the last segment of its GRN. */
+                org: components["parameters"]["orgPath"];
+                task: components["parameters"]["taskPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TaskCommentPost"];
+            };
+        };
+        responses: {
+            /** @description The comment. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TaskComment"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
 }

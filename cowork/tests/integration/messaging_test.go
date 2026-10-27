@@ -29,6 +29,7 @@ type apiMessage struct {
 	Mentions            []string `json:"mentions"`
 	UndeliveredMentions []string `json:"undeliveredMentions"`
 	Pages               []string `json:"pages"`
+	Artifacts           []string `json:"artifacts"`
 	Replies             int      `json:"replies"`
 }
 

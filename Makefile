@@ -87,6 +87,11 @@ DB_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port postgres 5432 2>/dev/null | sed 's/
 # root token the dev server generated.
 OPENBAO_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port openbao 8200 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
 OPENBAO_CONTAINER = $(shell $(COMPOSE_LOCAL) ps -q openbao 2>/dev/null)
+# The RustFS cowork's blob store is tested against, and the keys
+# deploy/local/docker-compose.yml gives it.
+COWORK_S3_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port rustfs 9000 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
+COWORK_S3_ACCESS_KEY := cowork
+COWORK_S3_SECRET_KEY := cowork-local-secret
 
 # Empty rather than half a URL when no Postgres is published, so
 # `integration` and `e2e` have one thing to test. Set it in the
@@ -285,14 +290,15 @@ export SEARCH_Q = $(Q)
 search:
 	@scripts/search.sh
 
-# db-up starts postgres and the openbao `integration` signs against, and
+# db-up starts postgres, the openbao `integration` signs against and the
+# rustfs cowork's blob store is tested against, and
 # creates the two test databases, the platform's and cowork's, beside
 # `garam` where absent: Postgres has no
 # CREATE DATABASE IF NOT EXISTS, so it asks psql first. Output and exit
 # status are read apart, because one non-zero status cannot tell a
 # failed query from a clean negative (#344).
 db-up:
-	$(COMPOSE_LOCAL) up -d --wait postgres openbao
+	$(COMPOSE_LOCAL) up -d --wait postgres openbao rustfs
 	@for db in $(TEST_DB_NAME) $(COWORK_TEST_DB_NAME); do \
 		present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
 			"SELECT 1 FROM pg_database WHERE datname='$$db'")" \
@@ -301,7 +307,7 @@ db-up:
 	done
 
 db-down:
-	$(COMPOSE_LOCAL) rm -sf postgres openbao
+	$(COMPOSE_LOCAL) rm -sf postgres openbao rustfs
 
 # db-prune drops the per-worktree databases db-up created for worktrees
 # that are gone. It is in no whole-set name and no workflow: a runner
@@ -332,12 +338,15 @@ E2E_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range 
 # dev OpenBao (see db-up). cowork's suite runs beside the platform's,
 # against cowork's own database.
 integration:
-	@echo 'integration: $(words $(INTEGRATION_PKGS)) packages, $(words $(INTEGRATION_TEST_FILES)) test files, against $(TEST_DB_NAME), $(COWORK_TEST_DB_NAME) and the openbao at $(OPENBAO_HOST_ADDR)'
+	@echo 'integration: $(words $(INTEGRATION_PKGS)) packages, $(words $(INTEGRATION_TEST_FILES)) test files, against $(TEST_DB_NAME), $(COWORK_TEST_DB_NAME), the openbao at $(OPENBAO_HOST_ADDR) and the rustfs at $(COWORK_S3_HOST_ADDR)'
 	@test -n '$(INTEGRATION_PKGS)' || { echo 'integration: nothing to run — no package under ./tests/integration/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "integration: no postgres published on this host — run make db-up" >&2; exit 1; }
 	@test -n '$(OPENBAO_HOST_ADDR)' && test -n '$(OPENBAO_CONTAINER)' || { echo "integration: no openbao published on this host — run make db-up" >&2; exit 1; }
+	@test -n '$(COWORK_S3_HOST_ADDR)' || { echo "integration: no rustfs published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' GARAM_TEST_OPENBAO_ADDR='https://$(OPENBAO_HOST_ADDR)' \
 		GARAM_TEST_OPENBAO_CONTAINER='$(OPENBAO_CONTAINER)' COWORK_TEST_DATABASE_URL='$(COWORK_TEST_DATABASE_URL)' \
+		COWORK_TEST_S3_ENDPOINT='http://$(COWORK_S3_HOST_ADDR)' COWORK_TEST_S3_ACCESS_KEY='$(COWORK_S3_ACCESS_KEY)' \
+		COWORK_TEST_S3_SECRET_KEY='$(COWORK_S3_SECRET_KEY)' \
 		go test -count=1 $(INTEGRATION_PKGS)
 
 # e2e runs the built binary as the processes a deployment runs, against

@@ -20,7 +20,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 
+	blobmemory "github.com/garamsh/garam/cowork/internal/blob/memory"
 	"github.com/garamsh/garam/cowork/internal/cli"
+	"github.com/garamsh/garam/cowork/internal/usercontent"
 )
 
 // migrationsDir is cowork/migrations, found from this file.
@@ -46,7 +48,7 @@ func pool(t *testing.T) *pgxpool.Pool {
 	p, err := pgxpool.New(context.Background(), url)
 	require.NoError(t, err)
 	t.Cleanup(p.Close)
-	_, err = p.Exec(context.Background(), "TRUNCATE pages, channels, tasks CASCADE")
+	_, err = p.Exec(context.Background(), "TRUNCATE pages, channels, tasks, artifacts CASCADE")
 	require.NoError(t, err)
 	return p
 }
@@ -127,6 +129,8 @@ type stack struct {
 	// platformURL is the fake platform's root, which a CLI session is
 	// kept under.
 	platformURL string
+	// contentURL is the user-content origin's root.
+	contentURL string
 	pool        *pgxpool.Pool
 	platform    *fakePlatform
 }
@@ -137,11 +141,22 @@ func newStack(t *testing.T) *stack {
 	fake := &fakePlatform{deny: map[string]bool{}}
 	platformSrv := httptest.NewServer(fake)
 	t.Cleanup(platformSrv.Close)
-	h, err := cli.NewHandler(cli.Config{PlatformURL: platformSrv.URL}, p)
+	// The user-content origin listens before it is signed for, so the
+	// signer knows the address browsers reach it at.
+	content := httptest.NewUnstartedServer(nil)
+	content.Start()
+	t.Cleanup(content.Close)
+	signer, err := usercontent.NewSigner(content.URL, []byte(strings.Repeat("k", 32)))
 	require.NoError(t, err)
+	cfg := cli.Config{PlatformURL: platformSrv.URL, Blobs: blobmemory.New(), UserContent: signer, WebOrigins: []string{"localhost:3100"}}
+	h, err := cli.NewHandler(cfg, p)
+	require.NoError(t, err)
+	contentHandler, err := cli.NewUserContentHandler(cfg, p)
+	require.NoError(t, err)
+	content.Config.Handler = contentHandler
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return &stack{url: srv.URL, platformURL: platformSrv.URL, pool: p, platform: fake}
+	return &stack{url: srv.URL, platformURL: platformSrv.URL, contentURL: content.URL, pool: p, platform: fake}
 }
 
 // call makes one request as who and answers the status and body.

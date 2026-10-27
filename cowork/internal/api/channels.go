@@ -42,7 +42,7 @@ func messageToAPI(m channel.Message) apigen.Message {
 	return apigen.Message{
 		Id: m.ID, Channel: m.Channel, Thread: m.Thread, Author: m.Author.String(), Body: m.Body,
 		Mentions: grnStrings(m.Mentions), UndeliveredMentions: grnStrings(m.UndeliveredMentions()),
-		Pages: append([]string{}, m.Pages...), CreatedAt: m.CreatedAt, Replies: m.Replies,
+		Pages: append([]string{}, m.Pages...), Artifacts: append([]string{}, m.Artifacts...), CreatedAt: m.CreatedAt, Replies: m.Replies,
 	}
 }
 
@@ -199,6 +199,9 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request, org apigen.
 	}
 	if body.Pages != nil {
 		in.Pages = *body.Pages
+	}
+	if body.Artifacts != nil {
+		in.Artifacts = *body.Artifacts
 	}
 	m, err := s.channels.Post(r.Context(), c, org, id, in)
 	if err != nil {

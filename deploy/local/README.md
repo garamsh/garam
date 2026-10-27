@@ -14,9 +14,10 @@ local Kubernetes stack in `minikube/`, which generates that key material
 and hands the process a file it owns.
 
 This compose file is also what the test gates run against. `make db-up`
-starts only its `postgres` and `openbao` services for the Go suites
-`make integration` and `make e2e`, and `make db-down` removes them
-again; `make
+starts only its `postgres`, `openbao` and `rustfs` services for the Go
+suites `make integration` and `make e2e`, and `make db-down` removes
+them again; `rustfs` is the S3 API cowork's blob store is tested
+against, under keys that are this stack's alone; `make
 backend-up` starts everything but the profile-gated `web` service, which
 is the backend `make web-e2e` drives. Every concern shares the one
 compose project `garam-local` and its `postgres-data` volume — there is

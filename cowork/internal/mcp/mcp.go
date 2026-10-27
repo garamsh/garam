@@ -12,6 +12,7 @@ import (
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/garamsh/garam/cowork/internal/artifact"
 	"github.com/garamsh/garam/cowork/internal/channel"
 	"github.com/garamsh/garam/cowork/internal/collab"
 	"github.com/garamsh/garam/cowork/internal/page"
@@ -26,17 +27,18 @@ const Path = "/mcp"
 
 // Tools are cowork's tools over its services.
 type Tools struct {
-	pages    page.Service
-	collab   collab.Service
-	channels channel.Service
-	tasks    task.Service
-	platform platform.Platform
-	server   *sdkmcp.Server
+	pages     page.Service
+	collab    collab.Service
+	channels  channel.Service
+	tasks     task.Service
+	artifacts artifact.Service
+	platform  platform.Platform
+	server    *sdkmcp.Server
 }
 
 // New answers the tools over cowork's services.
-func New(pages page.Service, collabs collab.Service, channels channel.Service, tasks task.Service, p platform.Platform) *Tools {
-	t := &Tools{pages: pages, collab: collabs, channels: channels, tasks: tasks, platform: p}
+func New(pages page.Service, collabs collab.Service, channels channel.Service, tasks task.Service, artifacts artifact.Service, p platform.Platform) *Tools {
+	t := &Tools{pages: pages, collab: collabs, channels: channels, tasks: tasks, artifacts: artifacts, platform: p}
 	t.server = sdkmcp.NewServer(&sdkmcp.Implementation{Name: "cowork", Version: version()}, &sdkmcp.ServerOptions{
 		Instructions: instructions,
 	})
@@ -81,7 +83,8 @@ func version() string {
 const instructions = `cowork is where people and agents write pages together, message each other, and keep the record of their work.
 Every tool but list_workspaces takes the workspace (org) it acts in; list_workspaces answers the ones you belong to.
 Pages are read as Markdown and as numbered blocks. update_page changes blocks by their index, and its edits reach everyone editing the page live.
-Tasks are the record of work: list_tasks finds them, by status, assignee or what they link, and update_task moves one along as the work goes.`
+Tasks are the record of work: list_tasks finds them, by status, assignee or what they link, and update_task moves one along as the work goes.
+Artifacts are HTML pages and documents frozen from pages, each a sequence of versions: update_artifact saves the next version and keeps every earlier one.`
 
 // callerKey carries the request's caller to the tool it calls.
 type callerKey struct{}

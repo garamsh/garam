@@ -36,3 +36,12 @@ sql:
         out: internal/task/postgres/db
         sql_package: pgx/v5
         omit_unused_structs: true
+  - engine: postgresql
+    schema: migrations
+    queries: internal/artifact/postgres/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/artifact/postgres/db
+        sql_package: pgx/v5
+        omit_unused_structs: true

@@ -30,6 +30,12 @@ const (
 	// kindCoworkChannel is a channel cowork keeps (ADR-0128), on the
 	// same terms.
 	kindCoworkChannel = apigen.PermissionResourceTypeCoworkChannel
+	// kindCoworkTask is a task cowork keeps (ADR-0127), on the same
+	// terms.
+	kindCoworkTask = apigen.PermissionResourceTypeCoworkTask
+	// kindCoworkArtifact is an artifact cowork keeps (ADR-0127), on
+	// the same terms.
+	kindCoworkArtifact = apigen.PermissionResourceTypeCoworkArtifact
 )
 
 // decidedBy is what enforcement reads to decide an action.
@@ -123,6 +129,12 @@ var actionRules = map[string]actionRule{
 
 	org.ActionCoworkChannelRead: {on: []apigen.PermissionResourceType{onOrg, kindCoworkChannel}},
 	org.ActionCoworkChannelPost: {on: []apigen.PermissionResourceType{onOrg, kindCoworkChannel}},
+
+	org.ActionCoworkTaskRead:  {on: []apigen.PermissionResourceType{onOrg, kindCoworkTask}},
+	org.ActionCoworkTaskWrite: {on: []apigen.PermissionResourceType{onOrg, kindCoworkTask}},
+
+	org.ActionCoworkArtifactRead:  {on: []apigen.PermissionResourceType{onOrg, kindCoworkArtifact}},
+	org.ActionCoworkArtifactWrite: {on: []apigen.PermissionResourceType{onOrg, kindCoworkArtifact}},
 }
 
 // CheckPermissions answers, for each pair asked, whether enforcement
@@ -276,6 +288,10 @@ func permissionTarget(orgSlug string, check apigen.PermissionCheck) (grn.GRN, er
 		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkPage, id)
 	case kindCoworkChannel:
 		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkChannel, id)
+	case kindCoworkTask:
+		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkTask, id)
+	case kindCoworkArtifact:
+		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkArtifact, id)
 	default:
 		return grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "unknown resource type")
 	}

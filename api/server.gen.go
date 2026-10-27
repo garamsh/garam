@@ -651,12 +651,14 @@ func (e PermissionHolderType) Valid() bool {
 
 // Defines values for PermissionResourceType.
 const (
-	PermissionResourceTypeAgent         PermissionResourceType = "agent"
-	PermissionResourceTypeCoworkChannel PermissionResourceType = "cowork-channel"
-	PermissionResourceTypeCoworkPage    PermissionResourceType = "cowork-page"
-	PermissionResourceTypeGroup         PermissionResourceType = "group"
-	PermissionResourceTypePolicy        PermissionResourceType = "policy"
-	PermissionResourceTypeProject       PermissionResourceType = "project"
+	PermissionResourceTypeAgent          PermissionResourceType = "agent"
+	PermissionResourceTypeCoworkArtifact PermissionResourceType = "cowork-artifact"
+	PermissionResourceTypeCoworkChannel  PermissionResourceType = "cowork-channel"
+	PermissionResourceTypeCoworkPage     PermissionResourceType = "cowork-page"
+	PermissionResourceTypeCoworkTask     PermissionResourceType = "cowork-task"
+	PermissionResourceTypeGroup          PermissionResourceType = "group"
+	PermissionResourceTypePolicy         PermissionResourceType = "policy"
+	PermissionResourceTypeProject        PermissionResourceType = "project"
 )
 
 // Valid indicates whether the value is a known member of the PermissionResourceType enum.
@@ -664,9 +666,13 @@ func (e PermissionResourceType) Valid() bool {
 	switch e {
 	case PermissionResourceTypeAgent:
 		return true
+	case PermissionResourceTypeCoworkArtifact:
+		return true
 	case PermissionResourceTypeCoworkChannel:
 		return true
 	case PermissionResourceTypeCoworkPage:
+		return true
+	case PermissionResourceTypeCoworkTask:
 		return true
 	case PermissionResourceTypeGroup:
 		return true
@@ -1435,7 +1441,7 @@ type PermissionBasis string
 type PermissionCheck struct {
 	Action string `json:"action"`
 
-	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page` or a `cowork-channel` is named as cowork names it (ADR-0127): garam keeps neither, and answers only what may be done to one.
+	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page`, a `cowork-channel`, a `cowork-task` or a `cowork-artifact` is named as cowork names it (ADR-0127): garam keeps none of them, and answers only what may be done to one.
 	Resource *PermissionResource `json:"resource,omitempty"`
 }
 
@@ -1456,7 +1462,7 @@ type PermissionCheckResult struct {
 	// Decision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide: a minted action whose caller check allows, leaving the delegation grant this operation does not read to decide, or an action whose enforcement this operation does not ask at all. Render the control and let the operation answer.
 	Decision PermissionDecision `json:"decision"`
 
-	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page` or a `cowork-channel` is named as cowork names it (ADR-0127): garam keeps neither, and answers only what may be done to one.
+	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page`, a `cowork-channel`, a `cowork-task` or a `cowork-artifact` is named as cowork names it (ADR-0127): garam keeps none of them, and answers only what may be done to one.
 	Resource *PermissionResource `json:"resource,omitempty"`
 }
 
@@ -1473,7 +1479,7 @@ type PermissionExplanation struct {
 	// Decision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide: a minted action whose caller check allows, leaving the delegation grant this operation does not read to decide, or an action whose enforcement this operation does not ask at all. Render the control and let the operation answer.
 	Decision PermissionDecision `json:"decision"`
 
-	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page` or a `cowork-channel` is named as cowork names it (ADR-0127): garam keeps neither, and answers only what may be done to one.
+	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page`, a `cowork-channel`, a `cowork-task` or a `cowork-artifact` is named as cowork names it (ADR-0127): garam keeps none of them, and answers only what may be done to one.
 	Resource *PermissionResource `json:"resource,omitempty"`
 
 	// Statements The statements that decided, where `basis` is `statements`; empty otherwise, and where nothing allows the action.
@@ -1500,7 +1506,7 @@ type PermissionHolders struct {
 	NextOffset *int `json:"nextOffset,omitempty"`
 }
 
-// PermissionResource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page` or a `cowork-channel` is named as cowork names it (ADR-0127): garam keeps neither, and answers only what may be done to one.
+// PermissionResource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it. A `cowork-page`, a `cowork-channel`, a `cowork-task` or a `cowork-artifact` is named as cowork names it (ADR-0127): garam keeps none of them, and answers only what may be done to one.
 type PermissionResource struct {
 	Id   string                 `json:"id"`
 	Type PermissionResourceType `json:"type"`

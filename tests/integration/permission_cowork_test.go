@@ -108,3 +108,62 @@ func TestCheckPermissions_AllowsAMemberCoworkChannels(t *testing.T) {
 			coworkChannel(org.ActionCoworkChannelPost, "general"),
 		))
 }
+
+// coworkTask is a pair asking action on the cowork task id.
+func coworkTask(action, id string) apigen.PermissionCheck {
+	return apigen.PermissionCheck{Action: action,
+		Resource: &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkTask, Id: id}}
+}
+
+// TestCheckPermissions_AllowsAMemberCoworkTasks holds the default for
+// tasks over the real engine (ADR-0127): a member reads and writes the
+// organization's tasks by role alone, and a Deny on one task, attached
+// to the member, turns that task's write to deny while another task,
+// the control, stays allowed.
+func TestCheckPermissions_AllowsAMemberCoworkTasks(t *testing.T) {
+	s := newCheckStack(t)
+	require.Equal(t,
+		[]apigen.PermissionDecision{apigen.DecisionAllow, apigen.DecisionAllow, apigen.DecisionAllow},
+		checkedDecisions(t, s.url, s.member,
+			apigen.PermissionCheck{Action: org.ActionCoworkTaskWrite},
+			coworkTask(org.ActionCoworkTaskRead, "launch"),
+			coworkTask(org.ActionCoworkTaskWrite, "launch"),
+		))
+
+	locked := grn.New(s.acme.Identifier, grn.DefaultProject, org.ServiceTypeCoworkTask, "audit")
+	deny := activePolicy(t, s.policies, s.acme, "read-only-audit",
+		statementDoc("read-only-audit", wire.EffectDeny, org.ActionCoworkTaskWrite, locked.String()))
+	attachPolicy(t, s.policies, deny, s.memberGRN)
+
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionAllow, apigen.DecisionAllow},
+		checkedDecisions(t, s.url, s.member,
+			coworkTask(org.ActionCoworkTaskWrite, "audit"),
+			coworkTask(org.ActionCoworkTaskRead, "audit"),
+			coworkTask(org.ActionCoworkTaskWrite, "launch"),
+		))
+}
+
+// TestCheckPermissions_AllowsAMemberCoworkArtifacts holds the default
+// for artifacts over the real engine (ADR-0127): a member reads and
+// writes them by role alone, and a Deny on one artifact turns its
+// write to deny while another, the control, stays allowed.
+func TestCheckPermissions_AllowsAMemberCoworkArtifacts(t *testing.T) {
+	s := newCheckStack(t)
+	artifact := func(action, id string) apigen.PermissionCheck {
+		return apigen.PermissionCheck{Action: action,
+			Resource: &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkArtifact, Id: id}}
+	}
+	locked := grn.New(s.acme.Identifier, grn.DefaultProject, org.ServiceTypeCoworkArtifact, "brand")
+	deny := activePolicy(t, s.policies, s.acme, "read-only-brand",
+		statementDoc("read-only-brand", wire.EffectDeny, org.ActionCoworkArtifactWrite, locked.String()))
+	attachPolicy(t, s.policies, deny, s.memberGRN)
+
+	assert.Equal(t,
+		[]apigen.PermissionDecision{apigen.DecisionAllow, apigen.DecisionDeny, apigen.DecisionAllow, apigen.DecisionAllow},
+		checkedDecisions(t, s.url, s.member,
+			apigen.PermissionCheck{Action: org.ActionCoworkArtifactWrite},
+			artifact(org.ActionCoworkArtifactWrite, "brand"),
+			artifact(org.ActionCoworkArtifactRead, "brand"),
+			artifact(org.ActionCoworkArtifactWrite, "report"),
+		))
+}

@@ -82,8 +82,8 @@ updates:
     schedule:
       interval: "weekly"
 
-  # deploy/local/docker-compose.yml's postgres image, which the entry
-  # above does not read.
+  # deploy/local/docker-compose.yml's images — postgres, openbao and
+  # rustfs — which the entry above does not read.
   #
   # Covers a newer tag, rewriting the tag and the digest together. It
   # runs the docker ecosystem's own update checker, so the two cases

@@ -14,12 +14,16 @@ import (
 // link would show its title to the channel.
 var ErrPageNotReadable = errorx.New(errorx.KindPermissionDenied, "a message links only pages its author may read")
 
+// ErrArtifactNotReadable is embedding an artifact the caller may not
+// read, which would show it to the channel.
+var ErrArtifactNotReadable = errorx.New(errorx.KindPermissionDenied, "a message embeds only artifacts its author may read")
+
 // Post adds a message to a channel the caller may post in, and
 // delivers it to the channel's listeners. Every page it links is one
 // the caller may read.
 func (s *service) Post(ctx context.Context, caller platform.Caller, org, id string, in PostInput) (Message, error) {
 	body := strings.TrimSpace(in.Body)
-	if body == "" || len(body) > maxBody || len(in.Mentions) > maxMentions || len(in.Pages) > maxPages {
+	if body == "" || len(body) > maxBody || len(in.Mentions) > maxMentions || len(in.Pages) > maxPages || len(in.Artifacts) > maxArtifacts {
 		return Message{}, ErrInvalidMessage
 	}
 	for _, m := range in.Mentions {
@@ -44,6 +48,19 @@ func (s *service) Post(ctx context.Context, caller platform.Caller, org, id stri
 			return Message{}, err
 		}
 	}
+	artifacts := slices.Compact(slices.Sorted(slices.Values(in.Artifacts)))
+	if len(artifacts) > 0 {
+		checks := make([]platform.Check, len(artifacts))
+		for i, a := range artifacts {
+			checks[i] = platform.Check{Action: platform.ActionArtifactRead, Kind: platform.KindArtifact, ID: a}
+		}
+		if err := platform.Require(ctx, s.platform, caller, org, checks...); err != nil {
+			if errorx.IsKind(err, errorx.KindPermissionDenied) {
+				return Message{}, ErrArtifactNotReadable
+			}
+			return Message{}, err
+		}
+	}
 	m, err := s.repo.Post(ctx, Message{
 		ID:        newID(),
 		Org:       org,
@@ -53,6 +70,7 @@ func (s *service) Post(ctx context.Context, caller platform.Caller, org, id stri
 		Body:      body,
 		Mentions:  unique(in.Mentions),
 		Pages:     pages,
+		Artifacts: artifacts,
 		CreatedAt: time.Now(),
 	})
 	if err != nil {

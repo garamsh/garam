@@ -5,13 +5,11 @@ other, and keep the record of their work, with tools an AI can use at
 its centre
 ([ADR-0127](../../docs/architecture/adr/0127-cowork-is-a-service-where-people-and-agents-co-edit-message-and-work-through-tools-an-ai-can-use.md)).
 
-**Built so far: pages and real-time editing (#1663), messaging
-between people (#1664), MCP and the client CLI (#1665), and tasks
-(#1666).** Delivery to agents waits on the owner's decision on
-cowork's principal (#1655), and an agent acting as itself on #1633.
-Artifacts and the blob store (#1667) are not built, there is no image,
-and nothing deploys cowork. Each milestone's pull request updates this
-document.
+**Built: pages and real-time editing (#1663), messaging between
+people (#1664), MCP and the client CLI (#1665), tasks (#1666), and
+artifacts and the blob store (#1667).** Delivery to agents waits on
+the owner's decision on cowork's principal (#1655), and an agent acting
+as itself on #1633. There is no image, and nothing deploys cowork.
 
 ## Contents
 - What is built
@@ -20,6 +18,7 @@ document.
 - Real-time editing
 - Messaging
 - Tasks
+- Artifacts
 - MCP
 - The client CLI
 - Connecting an AI client
@@ -46,8 +45,13 @@ document.
 - **Tasks** (`internal/task`). Tasks with an assignee, a status, a
   due date, comments, and links to pages and messages, as a list and a
   board.
+- **Artifacts** (`internal/artifact`, `internal/blob`,
+  `internal/usercontent`). HTML pages and documents frozen from
+  pages, each a sequence of immutable versions in the blob store, an
+  HTML one served only from the user-content origin.
 - **MCP** (`internal/mcp`). The tools an AI uses to read and edit
-  pages, to read and post messages, and to work tasks, as its caller.
+  pages, to read and post messages, to work tasks and to publish
+  artifacts, as its caller.
 - **The client CLI** (`internal/cli`). The tools as commands, and
   `cowork mcp`, a stdio bridge for local MCP clients.
 - **The web app** (`web/`). Every block type is a plugin in its
@@ -62,13 +66,15 @@ document.
 | `collab.UpdateLog` | `internal/collab` | `postgres/` |
 | `channel.Repository` | `internal/channel` | `postgres/`, `memory/` |
 | `task.Repository` | `internal/task` | `postgres/`, `memory/` |
+| `artifact.Repository` | `internal/artifact` | `postgres/`, `memory/` |
+| `blob.Store` | `internal/blob` | `s3/` (RustFS, AWS S3, MinIO), `memory/` |
 | `fanout.Hub` | `internal/fanout` | `memory/` (one instance) |
 | `collab.DocEngine` | `internal/collab` | `goja/` |
 | `platform.Platform` | `internal/platform` | `http/` |
 
-`internal/cli` (`NewHandler`) is the one place they are wired. The
-`BlobStore` and `AgentDelivery` ports come with the milestones that
-need them.
+`internal/cli` (`NewHandler`, `NewUserContentHandler`) is the one
+place they are wired. The `AgentDelivery` port comes with delivery to
+agents.
 
 ## What it asks of the platform
 
@@ -84,7 +90,9 @@ need them.
   `cowork:channel-post` on the organization and on a
   `cowork-channel` (ADR-0128).
 - `checkPermissions` for tasks: `cowork:task-read` and
-  `cowork:task-write` on the organization and on a `cowork-task`.
+  `cowork:task-write` on the organization and on a `cowork-task`; for
+  artifacts, `cowork:artifact-read` and `cowork:artifact-write` on the
+  organization and on a `cowork-artifact`.
 - Not yet: `postMessage` to an agent's queue, under a principal the
   owner has yet to decide (#1655), and an agent principal on the
   browser API (#1633). Until then a message's agent mentions are kept
@@ -159,6 +167,33 @@ need them.
   Notifying an agent of an assignment waits on delivery to agents
   (#1664).
 
+## Artifacts
+
+- **Kinds.** An `html` artifact is a page of HTML, of at most 5 MiB. A
+  `document` is a page's blocks, frozen as they stood when saved;
+  saving again freezes the page again.
+- **Versions.** Every save is a version of its own, numbered from 1,
+  and none replaces another. A version's bytes are a blob under a key
+  of its own, written once; the blob store refuses a second write to a
+  key, so nothing kept is replaced even by a bug.
+- **Where HTML is served** (ADR-0127 §8). Never from cowork's own
+  origin. `viewArtifact` asks `cowork:artifact-read` as the viewer and
+  answers an address on the user-content origin, signed for that
+  version and good for ten minutes. The second listener `serve` starts
+  there serves that version and nothing else. The web app loads it in
+  an iframe sandboxed with `allow-scripts` alone, so the page runs in
+  an opaque origin: no cookie, no storage, no reach into its parent.
+  Its policy is `default-src 'none'`, with inline script and style,
+  `data:` images and fonts, `connect-src 'none'` and `form-action
+  'none'`, framed only by `COWORK_WEB_ORIGINS`. A script in it can
+  call nothing, cowork's API included.
+- **Embeds.** A page embeds an artifact as a block (`core/artifact`),
+  and a message as one of its `artifacts`, each only one its author
+  may read; each reader sees it as they may read it.
+- **Agents** publish and revise through `create_artifact`,
+  `update_artifact` and `read_artifact`, which reads an HTML version's
+  source as data, never as a page.
+
 ## MCP
 
 - **The endpoint**, `POST /mcp`, in MCP's streamable HTTP transport,
@@ -187,8 +222,12 @@ need them.
   | `update_task` | changes to a task, with a comment | `cowork:task-write` |
   | `comment_task` | a comment | `cowork:task-write` |
 
-  Every tool but `list_workspaces` takes the workspace as `org`. The
-  artifact tools come with #1667.
+  | `list_artifacts` | the artifacts the caller may read | `cowork:artifact-read` |
+  | `read_artifact` | a version: an html one's source, a document's Markdown | `cowork:artifact-read` |
+  | `create_artifact` | an html page, or a page frozen as a document | `cowork:artifact-write` |
+  | `update_artifact` | the next version | `cowork:artifact-write` |
+
+  Every tool but `list_workspaces` takes the workspace as `org`.
 - **Each asks what the HTTP API asks**, through the same services, so
   the platform decides a tool call exactly as the call it mirrors.
 - **An edit is a client's.** `update_page` opens the page in the
@@ -252,12 +291,39 @@ orgs use <org>` or tell the AI which one `list_workspaces` answers.
 | `COWORK_LISTEN_ADDR` | default `:8090` |
 | `COWORK_WEB_ORIGINS` | comma-separated host patterns allowed to open the sync WebSocket |
 | `COWORK_MIGRATIONS_DIR` | default `migrations` |
+| `COWORK_BLOB_STORE` | `s3`, or `memory` for a development server whose artifacts go when it stops; unset keeps no artifacts |
+| `COWORK_S3_ENDPOINT` | the store's URL; empty for AWS S3 itself |
+| `COWORK_S3_REGION` | default `us-east-1` |
+| `COWORK_S3_BUCKET` | the bucket (required for `s3`) |
+| `COWORK_S3_ACCESS_KEY`, `COWORK_S3_SECRET_KEY` | the store's keys (required for `s3`) |
+| `COWORK_S3_PATH_STYLE` | `true` to name the bucket in the path, as RustFS and MinIO expect |
+| `COWORK_S3_CREATE_BUCKET` | `true` to create the bucket where it is missing |
+| `COWORK_USERCONTENT_ORIGIN` | the user-content origin as browsers reach it; unset views no HTML artifact |
+| `COWORK_USERCONTENT_ADDR` | where that origin listens, default `:8092` |
+| `COWORK_USERCONTENT_SECRET` | the key its addresses are signed with, at least 32 bytes; the same on every instance |
+
+Swapping the store is configuration alone. RustFS, as the deployment
+runs it:
+
+```sh
+COWORK_BLOB_STORE=s3
+COWORK_S3_ENDPOINT=http://rustfs:9000
+COWORK_S3_BUCKET=cowork
+COWORK_S3_PATH_STYLE=true
+COWORK_S3_ACCESS_KEY=… COWORK_S3_SECRET_KEY=…
+```
+
+AWS S3 drops the endpoint and the path style and names its region
+(`COWORK_S3_REGION=ap-northeast-2`); MinIO is RustFS's settings with
+its own endpoint and keys.
 
 `/healthz` answers while the process runs, and `/readyz` while its
 database answers.
 
 `make integration` runs `cowork/tests/integration` against its own
-database, `cowork_test`, which `make db-up` creates. It drives the
+database, `cowork_test`, which `make db-up` creates, and the blob
+store's contract against both adapters, the `s3` one over the RustFS
+`make db-up` starts. It drives the
 server `NewHandler` wires against a substitute platform, with Yjs
 editors in their own engines over real WebSockets.
 
@@ -283,5 +349,6 @@ editors in their own engines over real WebSockets.
   authorization server. Not scheduled.
 - **Loading plugins at runtime.** Plugins are bundled at build time
   until a later decision.
-- **The production user-content domain.** The owner chooses it.
+- **The production user-content domain.** The owner chooses it, and
+  registers it apart from garam's, so no cookie of garam's reaches it.
   `COWORK_USERCONTENT_ORIGIN` names it.

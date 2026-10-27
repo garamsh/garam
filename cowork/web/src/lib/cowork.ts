@@ -253,3 +253,80 @@ export function postTaskComment(
     body: JSON.stringify({ body }),
   });
 }
+
+export type Artifact = components["schemas"]["Artifact"];
+export type ArtifactVersion = components["schemas"]["ArtifactVersion"];
+export type ArtifactDocument = components["schemas"]["ArtifactDocument"];
+export type ArtifactCreate = components["schemas"]["ArtifactCreate"];
+
+const artifactsOf = (org: string) =>
+  `/orgs/${encodeURIComponent(org)}/artifacts`;
+const artifactOf = (org: string, id: string) =>
+  `${artifactsOf(org)}/${encodeURIComponent(id)}`;
+const versionQuery = (version?: number) =>
+  version ? `?version=${version}` : "";
+
+export async function listArtifacts(org: string): Promise<Result<Artifact[]>> {
+  const r = await call<{ artifacts: Artifact[] }>(artifactsOf(org));
+  return r.ok ? { ok: true, value: r.value.artifacts } : r;
+}
+
+export function getArtifact(
+  org: string,
+  id: string,
+): Promise<Result<Artifact>> {
+  return call<Artifact>(artifactOf(org, id));
+}
+
+export function createArtifact(
+  org: string,
+  body: ArtifactCreate,
+): Promise<Result<Artifact>> {
+  return call<Artifact>(artifactsOf(org), {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function saveArtifactVersion(
+  org: string,
+  id: string,
+  body: { html?: string; page?: string },
+): Promise<Result<Artifact>> {
+  return call<Artifact>(`${artifactOf(org, id)}/versions`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function listArtifactVersions(
+  org: string,
+  id: string,
+): Promise<Result<ArtifactVersion[]>> {
+  const r = await call<{ versions: ArtifactVersion[] }>(
+    `${artifactOf(org, id)}/versions`,
+  );
+  return r.ok ? { ok: true, value: r.value.versions } : r;
+}
+
+/**
+ * Where an HTML version is viewed: an address on the user-content
+ * origin, good for a few minutes, which only a sandboxed iframe loads.
+ */
+export function viewArtifact(
+  org: string,
+  id: string,
+  version?: number,
+): Promise<Result<{ url: string; version: number }>> {
+  return call(`${artifactOf(org, id)}/view${versionQuery(version)}`);
+}
+
+export function getArtifactDocument(
+  org: string,
+  id: string,
+  version?: number,
+): Promise<Result<ArtifactDocument>> {
+  return call<ArtifactDocument>(
+    `${artifactOf(org, id)}/document${versionQuery(version)}`,
+  );
+}

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 
 import type { Message } from "@/lib/cowork";
 
+import { readMessagesAction } from "../actions";
+
 import { MessageItem, type Names } from "./message-item";
 
 type Props = {
@@ -18,9 +20,20 @@ type Props = {
 };
 
 /**
+ * Joins what a read answered to what the feed already delivered: the
+ * read's messages in its order, then any it did not yet hold.
+ */
+function merge(read: Message[], current: Message[]): Message[] {
+  const ids = new Set(read.map((m) => m.id));
+  return [...read, ...current.filter((m) => !ids.has(m.id))];
+}
+
+/**
  * A channel's messages, or one thread's, as posted: the server's read
  * first, then every message that arrives on the channel's live feed,
- * with no reload.
+ * with no reload. Once the feed is open the list is read again, so a
+ * message posted between the page's read and the feed opening is not
+ * missed.
  */
 export function LiveMessages({
   org,
@@ -38,7 +51,13 @@ export function LiveMessages({
     const ws = new WebSocket(
       `${syncUrl}/orgs/${encodeURIComponent(org)}/channels/${encodeURIComponent(channel)}/live`,
     );
-    ws.onopen = () => setLive(true);
+    let open = true;
+    ws.onopen = () => {
+      setLive(true);
+      void readMessagesAction(org, channel, thread).then(
+        (read) => open && setMessages((current) => merge(read, current)),
+      );
+    };
     ws.onclose = () => setLive(false);
     ws.onmessage = (event) => {
       const m = JSON.parse(String(event.data)) as Message;
@@ -57,7 +76,10 @@ export function LiveMessages({
         return current.some((c) => c.id === m.id) ? current : [...current, m];
       });
     };
-    return () => ws.close();
+    return () => {
+      open = false;
+      ws.close();
+    };
   }, [org, channel, thread, syncUrl]);
 
   return (

@@ -14,6 +14,24 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ArtifactKind.
+const (
+	Document ArtifactKind = "document"
+	Html     ArtifactKind = "html"
+)
+
+// Valid indicates whether the value is a known member of the ArtifactKind enum.
+func (e ArtifactKind) Valid() bool {
+	switch e {
+	case Document:
+		return true
+	case Html:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ChannelKind.
 const (
 	ChannelKindDirect  ChannelKind = "direct"
@@ -77,6 +95,71 @@ func (e TaskStatus) Valid() bool {
 	}
 }
 
+// Artifact defines model for Artifact.
+type Artifact struct {
+	CreatedAt time.Time    `json:"createdAt"`
+	CreatedBy string       `json:"createdBy"`
+	Grn       string       `json:"grn"`
+	Id        string       `json:"id"`
+	Kind      ArtifactKind `json:"kind"`
+
+	// Latest The number of the newest version.
+	Latest    int       `json:"latest"`
+	Org       string    `json:"org"`
+	Title     string    `json:"title"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ArtifactContent An `html` version's page, or the `page` a `document` version freezes.
+type ArtifactContent struct {
+	Html *string `json:"html,omitempty"`
+	Page *string `json:"page,omitempty"`
+}
+
+// ArtifactCreate defines model for ArtifactCreate.
+type ArtifactCreate struct {
+	Html  *string      `json:"html,omitempty"`
+	Kind  ArtifactKind `json:"kind"`
+	Page  *string      `json:"page,omitempty"`
+	Title string       `json:"title"`
+}
+
+// ArtifactDocument defines model for ArtifactDocument.
+type ArtifactDocument struct {
+	Blocks []map[string]interface{} `json:"blocks"`
+	Page   string                   `json:"page"`
+	Title  string                   `json:"title"`
+}
+
+// ArtifactKind defines model for ArtifactKind.
+type ArtifactKind string
+
+// ArtifactList defines model for ArtifactList.
+type ArtifactList struct {
+	Artifacts []Artifact `json:"artifacts"`
+}
+
+// ArtifactVersion defines model for ArtifactVersion.
+type ArtifactVersion struct {
+	CreatedAt time.Time `json:"createdAt"`
+	CreatedBy string    `json:"createdBy"`
+	Number    int       `json:"number"`
+	Sha256    string    `json:"sha256"`
+	Size      int64     `json:"size"`
+}
+
+// ArtifactVersionList defines model for ArtifactVersionList.
+type ArtifactVersionList struct {
+	Versions []ArtifactVersion `json:"versions"`
+}
+
+// ArtifactView defines model for ArtifactView.
+type ArtifactView struct {
+	// Url The version's address on the user-content origin, good for ten minutes.
+	Url     string `json:"url"`
+	Version int    `json:"version"`
+}
+
 // Channel defines model for Channel.
 type Channel struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -128,6 +211,9 @@ type MemberAdd struct {
 
 // Message defines model for Message.
 type Message struct {
+	// Artifacts The IDs of the artifacts the message embeds.
+	Artifacts []string `json:"artifacts"`
+
 	// Author The author's GRN.
 	Author    string    `json:"author"`
 	Body      string    `json:"body"`
@@ -158,9 +244,11 @@ type MessageList struct {
 
 // MessagePost defines model for MessagePost.
 type MessagePost struct {
-	Body     string    `json:"body"`
-	Mentions *[]string `json:"mentions,omitempty"`
-	Pages    *[]string `json:"pages,omitempty"`
+	// Artifacts Artifacts to embed; each needs `cowork:artifact-read` of the author.
+	Artifacts *[]string `json:"artifacts,omitempty"`
+	Body      string    `json:"body"`
+	Mentions  *[]string `json:"mentions,omitempty"`
+	Pages     *[]string `json:"pages,omitempty"`
 
 	// Thread The message to reply to.
 	Thread *string `json:"thread,omitempty"`
@@ -282,6 +370,9 @@ type TaskUpdate struct {
 	Title       *string     `json:"title,omitempty"`
 }
 
+// ArtifactPath defines model for artifactPath.
+type ArtifactPath = string
+
 // ChannelPath defines model for channelPath.
 type ChannelPath = string
 
@@ -296,6 +387,21 @@ type PagePath = string
 
 // TaskPath defines model for taskPath.
 type TaskPath = string
+
+// VersionQuery defines model for versionQuery.
+type VersionQuery = int
+
+// GetArtifactDocumentParams defines parameters for GetArtifactDocument.
+type GetArtifactDocumentParams struct {
+	// Version A version's number, from 1; the latest where it is absent.
+	Version *VersionQuery `form:"version,omitempty" json:"version,omitempty"`
+}
+
+// ViewArtifactParams defines parameters for ViewArtifact.
+type ViewArtifactParams struct {
+	// Version A version's number, from 1; the latest where it is absent.
+	Version *VersionQuery `form:"version,omitempty" json:"version,omitempty"`
+}
 
 // ListMessagesParams defines parameters for ListMessages.
 type ListMessagesParams struct {
@@ -314,6 +420,12 @@ type ListTasksParams struct {
 	Page     *string     `form:"page,omitempty" json:"page,omitempty"`
 	Message  *string     `form:"message,omitempty" json:"message,omitempty"`
 }
+
+// CreateArtifactJSONRequestBody defines body for CreateArtifact for application/json ContentType.
+type CreateArtifactJSONRequestBody = ArtifactCreate
+
+// SaveArtifactVersionJSONRequestBody defines body for SaveArtifactVersion for application/json ContentType.
+type SaveArtifactVersionJSONRequestBody = ArtifactContent
 
 // CreateChannelJSONRequestBody defines body for CreateChannel for application/json ContentType.
 type CreateChannelJSONRequestBody = ChannelCreate
@@ -341,6 +453,27 @@ type PostTaskCommentJSONRequestBody = TaskCommentPost
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// ListArtifacts List the artifacts the caller may read, newest first.
+	// (GET /orgs/{org}/artifacts)
+	ListArtifacts(w http.ResponseWriter, r *http.Request, org OrgPath)
+	// CreateArtifact Create an artifact with its first version.
+	// (POST /orgs/{org}/artifacts)
+	CreateArtifact(w http.ResponseWriter, r *http.Request, org OrgPath)
+	// GetArtifact Read an artifact.
+	// (GET /orgs/{org}/artifacts/{artifact})
+	GetArtifact(w http.ResponseWriter, r *http.Request, org OrgPath, artifact ArtifactPath)
+	// GetArtifactDocument Read a document version, the latest where none is named.
+	// (GET /orgs/{org}/artifacts/{artifact}/document)
+	GetArtifactDocument(w http.ResponseWriter, r *http.Request, org OrgPath, artifact ArtifactPath, params GetArtifactDocumentParams)
+	// ListArtifactVersions List an artifact's versions, oldest first.
+	// (GET /orgs/{org}/artifacts/{artifact}/versions)
+	ListArtifactVersions(w http.ResponseWriter, r *http.Request, org OrgPath, artifact ArtifactPath)
+	// SaveArtifactVersion Save the artifact's next version.
+	// (POST /orgs/{org}/artifacts/{artifact}/versions)
+	SaveArtifactVersion(w http.ResponseWriter, r *http.Request, org OrgPath, artifact ArtifactPath)
+	// ViewArtifact Where an HTML version is viewed.
+	// (GET /orgs/{org}/artifacts/{artifact}/view)
+	ViewArtifact(w http.ResponseWriter, r *http.Request, org OrgPath, artifact ArtifactPath, params ViewArtifactParams)
 	// ListChannels List the channels the caller may read.
 	// (GET /orgs/{org}/channels)
 	ListChannels(w http.ResponseWriter, r *http.Request, org OrgPath)
@@ -414,6 +547,265 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// ListArtifacts operation middleware
+func (siw *ServerInterfaceWrapper) ListArtifacts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArtifacts(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateArtifact operation middleware
+func (siw *ServerInterfaceWrapper) CreateArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateArtifact(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifact operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifact" -------------
+	var artifact ArtifactPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifact", r.PathValue("artifact"), &artifact, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifact", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifact(w, r, org, artifact)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetArtifactDocument operation middleware
+func (siw *ServerInterfaceWrapper) GetArtifactDocument(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifact" -------------
+	var artifact ArtifactPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifact", r.PathValue("artifact"), &artifact, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifact", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetArtifactDocumentParams
+
+	// ------------- Optional query parameter "version" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetArtifactDocument(w, r, org, artifact, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListArtifactVersions operation middleware
+func (siw *ServerInterfaceWrapper) ListArtifactVersions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifact" -------------
+	var artifact ArtifactPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifact", r.PathValue("artifact"), &artifact, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifact", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListArtifactVersions(w, r, org, artifact)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SaveArtifactVersion operation middleware
+func (siw *ServerInterfaceWrapper) SaveArtifactVersion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifact" -------------
+	var artifact ArtifactPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifact", r.PathValue("artifact"), &artifact, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifact", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SaveArtifactVersion(w, r, org, artifact)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ViewArtifact operation middleware
+func (siw *ServerInterfaceWrapper) ViewArtifact(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org OrgPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "artifact" -------------
+	var artifact ArtifactPath
+
+	err = runtime.BindStyledParameterWithOptions("simple", "artifact", r.PathValue("artifact"), &artifact, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "artifact", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ViewArtifactParams
+
+	// ------------- Optional query parameter "version" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "version", r.URL.Query(), &params.Version, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "version"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "version", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ViewArtifact(w, r, org, artifact, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // ListChannels operation middleware
 func (siw *ServerInterfaceWrapper) ListChannels(w http.ResponseWriter, r *http.Request) {
@@ -1315,6 +1707,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/tasks/{task}", wrapper.UpdateTask)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/tasks/{task}/comments", wrapper.ListTaskComments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/tasks/{task}/comments", wrapper.PostTaskComment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts", wrapper.ListArtifacts)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/artifacts", wrapper.CreateArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{artifact}", wrapper.GetArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{artifact}/versions", wrapper.ListArtifactVersions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/artifacts/{artifact}/versions", wrapper.SaveArtifactVersion)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{artifact}/view", wrapper.ViewArtifact)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/artifacts/{artifact}/document", wrapper.GetArtifactDocument)
 
 	return m
 }

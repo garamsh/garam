@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ArtifactEmbed } from "@/features/artifacts/components/artifact-embed";
 import type { Message } from "@/lib/cowork";
 
 export type Names = Record<string, string>;
@@ -61,6 +62,9 @@ export function MessageItem({ org, message, names, pages, threadHref }: Props) {
           ))}
         </div>
       )}
+      {message.artifacts.map((a) => (
+        <ArtifactEmbed key={a} org={org} id={a} />
+      ))}
       <div className="flex gap-3 text-xs text-neutral-600">
         {threadHref && (
           <Link href={threadHref} className="underline">

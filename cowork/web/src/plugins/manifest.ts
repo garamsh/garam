@@ -1,3 +1,4 @@
+import { artifactPlugin } from "./core/artifact";
 import { codePlugin } from "./core/code";
 import { dividerPlugin } from "./core/divider";
 import { headingsPlugin } from "./core/headings";
@@ -21,6 +22,7 @@ export const plugins: Plugin[] = [
   codePlugin,
   dividerPlugin,
   imagePlugin,
+  artifactPlugin,
   linkPlugin,
 ];
 

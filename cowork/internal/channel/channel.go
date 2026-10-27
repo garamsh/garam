@@ -73,7 +73,9 @@ type Message struct {
 	// Mentions are the people and agents the message names.
 	Mentions []grn.GRN
 	// Pages are the IDs of the pages the message links.
-	Pages     []string
+	Pages []string
+	// Artifacts are the IDs of the artifacts the message embeds.
+	Artifacts []string
 	CreatedAt time.Time
 	// Replies is how many messages its thread holds, for a message
 	// listed in its channel.
@@ -104,10 +106,11 @@ type CreateInput struct {
 // PostInput is a new message. Thread names the message to reply to;
 // a reply to a reply joins the same thread.
 type PostInput struct {
-	Body     string
-	Thread   string
-	Mentions []grn.GRN
-	Pages    []string
+	Body      string
+	Thread    string
+	Mentions  []grn.GRN
+	Pages     []string
+	Artifacts []string
 }
 
 // Limits on what a caller sends.
@@ -116,6 +119,8 @@ const (
 	maxBody     = 40000
 	maxMentions = 50
 	maxPages    = 20
+	// maxArtifacts is the most artifacts one message embeds.
+	maxArtifacts = 10
 	// maxListed is the most messages one read answers.
 	maxListed = 200
 )
@@ -125,7 +130,7 @@ var (
 	ErrMessageNotFound = errorx.New(errorx.KindNotFound, "message not found")
 	ErrNameTaken       = errorx.New(errorx.KindAlreadyExists, "a channel of the organization has that name")
 	ErrInvalidChannel  = errorx.New(errorx.KindInvalidArgument, "a channel has a name of 1 to 80 bytes, and a direct message has none and names who it is with")
-	ErrInvalidMessage  = errorx.New(errorx.KindInvalidArgument, "a message has a body of 1 to 40000 bytes, at most 50 mentions and 20 pages")
+	ErrInvalidMessage  = errorx.New(errorx.KindInvalidArgument, "a message has a body of 1 to 40000 bytes, at most 50 mentions, 20 pages and 10 artifacts")
 	// ErrNotParticipant is a caller the platform allows who is not on
 	// the channel's list (ADR-0128).
 	ErrNotParticipant = errorx.New(errorx.KindPermissionDenied, "not a participant of this channel")

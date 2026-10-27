@@ -98,6 +98,7 @@ type row struct {
 	thread           pgtype.Text
 	author, body     string
 	mentions, pages  []string
+	artifacts        []string
 	createdAt        pgtype.Timestamptz
 	replies          int32
 }
@@ -113,7 +114,7 @@ func messageOf(r row) (channel.Message, error) {
 	}
 	return channel.Message{
 		ID: r.id, Org: r.org, Channel: r.channel, Thread: r.thread.String, Author: author, Body: r.body,
-		Mentions: mentions, Pages: r.pages, CreatedAt: r.createdAt.Time, Replies: int(r.replies),
+		Mentions: mentions, Pages: r.pages, Artifacts: r.artifacts, CreatedAt: r.createdAt.Time, Replies: int(r.replies),
 	}, nil
 }
 
@@ -224,7 +225,7 @@ func (r *Repository) Post(ctx context.Context, m channel.Message) (channel.Messa
 		return q.InsertMessage(ctx, db.InsertMessageParams{
 			Org: m.Org, ID: m.ID, ChannelID: m.Channel,
 			ThreadID: pgtype.Text{String: m.Thread, Valid: m.Thread != ""},
-			Author:   m.Author.String(), Body: m.Body, Mentions: strs(m.Mentions), Pages: append([]string{}, m.Pages...),
+			Author:   m.Author.String(), Body: m.Body, Mentions: strs(m.Mentions), Pages: append([]string{}, m.Pages...), Artifacts: append([]string{}, m.Artifacts...),
 			CreatedAt: pgtype.Timestamptz{Time: m.CreatedAt, Valid: true},
 		})
 	})
@@ -240,7 +241,7 @@ func (r *Repository) GetMessage(ctx context.Context, org, id string) (channel.Me
 	if err != nil {
 		return channel.Message{}, translate(err, "get message", channel.ErrMessageNotFound)
 	}
-	return messageOf(row{m.Org, m.ID, m.ChannelID, m.ThreadID, m.Author, m.Body, m.Mentions, m.Pages, m.CreatedAt, 0})
+	return messageOf(row{m.Org, m.ID, m.ChannelID, m.ThreadID, m.Author, m.Body, m.Mentions, m.Pages, m.Artifacts, m.CreatedAt, 0})
 }
 
 // Messages implements channel.Repository. The query reads newest
@@ -253,7 +254,7 @@ func (r *Repository) Messages(ctx context.Context, org, id, before string, limit
 	}
 	out := make([]row, len(rows))
 	for i, m := range rows {
-		out[i] = row{m.Org, m.ID, m.ChannelID, m.ThreadID, m.Author, m.Body, m.Mentions, m.Pages, m.CreatedAt, m.Replies}
+		out[i] = row{m.Org, m.ID, m.ChannelID, m.ThreadID, m.Author, m.Body, m.Mentions, m.Pages, m.Artifacts, m.CreatedAt, m.Replies}
 	}
 	slices.Reverse(out)
 	return messagesOf(out)
@@ -270,7 +271,7 @@ func (r *Repository) Thread(ctx context.Context, org, id string) ([]channel.Mess
 	}
 	out := make([]row, len(rows))
 	for i, m := range rows {
-		out[i] = row{m.Org, m.ID, m.ChannelID, m.ThreadID, m.Author, m.Body, m.Mentions, m.Pages, m.CreatedAt, 0}
+		out[i] = row{m.Org, m.ID, m.ChannelID, m.ThreadID, m.Author, m.Body, m.Mentions, m.Pages, m.Artifacts, m.CreatedAt, 0}
 	}
 	return messagesOf(out)
 }
@@ -285,7 +286,7 @@ func (r *Repository) Search(ctx context.Context, org string, channels []string, 
 	}
 	out := make([]row, len(rows))
 	for i, m := range rows {
-		out[i] = row{m.Org, m.ID, m.ChannelID, m.ThreadID, m.Author, m.Body, m.Mentions, m.Pages, m.CreatedAt, 0}
+		out[i] = row{m.Org, m.ID, m.ChannelID, m.ThreadID, m.Author, m.Body, m.Mentions, m.Pages, m.Artifacts, m.CreatedAt, 0}
 	}
 	return messagesOf(out)
 }
@@ -298,7 +299,7 @@ func (r *Repository) Linking(ctx context.Context, org string, channels []string,
 	}
 	out := make([]row, len(rows))
 	for i, m := range rows {
-		out[i] = row{m.Org, m.ID, m.ChannelID, m.ThreadID, m.Author, m.Body, m.Mentions, m.Pages, m.CreatedAt, 0}
+		out[i] = row{m.Org, m.ID, m.ChannelID, m.ThreadID, m.Author, m.Body, m.Mentions, m.Pages, m.Artifacts, m.CreatedAt, 0}
 	}
 	return messagesOf(out)
 }

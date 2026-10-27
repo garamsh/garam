@@ -5,6 +5,10 @@ go 1.27.2
 replace github.com/garamsh/garam/platform/sdk => ../platform/sdk
 
 require (
+	github.com/aws/aws-sdk-go-v2 v1.47.5
+	github.com/aws/aws-sdk-go-v2/credentials v1.20.12
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.6
+	github.com/aws/smithy-go v1.28.7
 	github.com/coder/websocket v1.8.14
 	github.com/dop251/goja v0.0.0-20261027145915-d535508610d2
 	github.com/garamsh/garam/platform/sdk v0.0.0-00010101000000-000000000000
@@ -19,6 +23,14 @@ require (
 require (
 	github.com/Microsoft/go-winio v0.6.3 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.25 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.8 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.8 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.8 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.23 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.9 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.8 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.8 // indirect
 	github.com/dlclark/regexp2/v2 v2.11.0 // indirect
 	github.com/docker/go-connections v0.8.2 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect

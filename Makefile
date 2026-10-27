@@ -53,6 +53,9 @@ HELM := go run helm.sh/helm/v4/cmd/helm@v4.2.4
 # suite truncates every table, so no worktree shares another's.
 TEST_DB_NAME ?= garam_test$(shell git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')
 export TEST_DB_NAME
+# cowork owns its database (ADR-0125), so its suite has one of its own
+# on the same server, named on the same terms.
+COWORK_TEST_DB_NAME ?= cowork_test$(shell git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')
 
 # IMAGE_BUILD_CACHE=gha has `backend-up` and `image-build` read and
 # write their layers in the GitHub Actions cache, which only a CI run
@@ -65,6 +68,9 @@ endif
 COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml$(if $(IMAGE_BUILD_CACHE), -f deploy/local/docker-compose.gha-cache.yml)
 export COMPOSE_LOCAL
 PNPM := pnpm --dir web
+# cowork's Yjs bundle is built by its own package, which holds only the
+# bundler and Yjs (ADR-0127).
+PNPM_COWORK_ENGINE := pnpm --dir cowork/engine
 
 # Where the api and the dev Postgres are published on this host, asked
 # of compose at the moment each is used. GARAM_LOCAL_API_PORT and
@@ -85,6 +91,7 @@ OPENBAO_CONTAINER = $(shell $(COMPOSE_LOCAL) ps -q openbao 2>/dev/null)
 # `integration` and `e2e` have one thing to test. Set it in the
 # environment to run them against a database outside compose.
 TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(TEST_DB_NAME)?sslmode=disable)
+COWORK_TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(COWORK_TEST_DB_NAME)?sslmode=disable)
 
 # The Playwright suite seeds sessions for the api it drives, so its URL
 # names the stack's own `garam` rather than a database of its own. Empty
@@ -204,6 +211,9 @@ gen:
 	$(MOCKERY)
 	$(BUF) generate
 	$(GOIMPORTS) -w proto/gen
+	cd cowork && $(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
+	cd cowork && $(SQLC) generate
+	$(PNPM_COWORK_ENGINE) build
 
 # The output each generator owns, read from its config, since no
 # generator answers "what do I own" and none deletes what it stops
@@ -215,7 +225,10 @@ GEN_PATHS := $(shell { sed -n 's/^output: //p' api/oapi-codegen.yaml api/client-
 	sed -n 's/^        out: //p' sqlc.yaml; \
 	sed -n 's/^    out: //p' buf.gen.yaml; \
 	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; \
-	sed -n 's/^\toutPath *= "\(.*\)"$$/\1/p' internal/cli/cligen/main.go; } | sort -u)
+	sed -n 's/^\toutPath *= "\(.*\)"$$/\1/p' internal/cli/cligen/main.go; \
+	sed -n 's|^output: |cowork/|p' cowork/api/oapi-codegen.yaml; \
+	sed -n 's|^        out: |cowork/|p' cowork/sqlc.yaml; \
+	sed -n 's|.*outfile: "\.\./\(.*\)".*|cowork/\1|p' cowork/engine/build.mjs; } | sort -u)
 
 # check-gen fails on owned output that is modified, untracked or
 # deleted, and on tracked output carrying the "Code generated ... DO
@@ -271,16 +284,19 @@ search:
 	@scripts/search.sh
 
 # db-up starts postgres and the openbao `integration` signs against, and
-# creates the test database beside `garam` if absent: Postgres has no
+# creates the two test databases, the platform's and cowork's, beside
+# `garam` where absent: Postgres has no
 # CREATE DATABASE IF NOT EXISTS, so it asks psql first. Output and exit
 # status are read apart, because one non-zero status cannot tell a
 # failed query from a clean negative (#344).
 db-up:
 	$(COMPOSE_LOCAL) up -d --wait postgres openbao
-	@present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
-		"SELECT 1 FROM pg_database WHERE datname='$(TEST_DB_NAME)'")" \
-		|| { echo "db-up: could not ask postgres whether $(TEST_DB_NAME) exists" >&2; exit 1; }; \
-		test -n "$$present" || $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $(TEST_DB_NAME)
+	@for db in $(TEST_DB_NAME) $(COWORK_TEST_DB_NAME); do \
+		present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
+			"SELECT 1 FROM pg_database WHERE datname='$$db'")" \
+			|| { echo "db-up: could not ask postgres whether $$db exists" >&2; exit 1; }; \
+		test -n "$$present" || $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $$db || exit 1; \
+	done
 
 db-down:
 	$(COMPOSE_LOCAL) rm -sf postgres openbao
@@ -304,21 +320,23 @@ backend-up:
 # 0 with `[no test files]` on one holding none — a build tag that
 # stopped matching reads like the run that did the work. That condition
 # then empties a list and fails below.
-INTEGRATION_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/integration/...)
-INTEGRATION_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/integration/...)
+INTEGRATION_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/integration/... ./cowork/tests/integration/...)
+INTEGRATION_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/integration/... ./cowork/tests/integration/...)
 E2E_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/e2e/...)
 E2E_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/e2e/...)
 
 # integration runs the store round-trips and the services over them in
 # process, against real Postgres, and the Transit custodian against the
-# dev OpenBao (see db-up).
+# dev OpenBao (see db-up). cowork's suite runs beside the platform's,
+# against cowork's own database.
 integration:
-	@echo 'integration: $(words $(INTEGRATION_PKGS)) packages, $(words $(INTEGRATION_TEST_FILES)) test files, against $(TEST_DB_NAME) and the openbao at $(OPENBAO_HOST_ADDR)'
+	@echo 'integration: $(words $(INTEGRATION_PKGS)) packages, $(words $(INTEGRATION_TEST_FILES)) test files, against $(TEST_DB_NAME), $(COWORK_TEST_DB_NAME) and the openbao at $(OPENBAO_HOST_ADDR)'
 	@test -n '$(INTEGRATION_PKGS)' || { echo 'integration: nothing to run — no package under ./tests/integration/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "integration: no postgres published on this host — run make db-up" >&2; exit 1; }
 	@test -n '$(OPENBAO_HOST_ADDR)' && test -n '$(OPENBAO_CONTAINER)' || { echo "integration: no openbao published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' GARAM_TEST_OPENBAO_ADDR='https://$(OPENBAO_HOST_ADDR)' \
-		GARAM_TEST_OPENBAO_CONTAINER='$(OPENBAO_CONTAINER)' go test -count=1 $(INTEGRATION_PKGS)
+		GARAM_TEST_OPENBAO_CONTAINER='$(OPENBAO_CONTAINER)' COWORK_TEST_DATABASE_URL='$(COWORK_TEST_DATABASE_URL)' \
+		go test -count=1 $(INTEGRATION_PKGS)
 
 # e2e runs the built binary as the processes a deployment runs, against
 # the same Postgres (see db-up).
@@ -414,6 +432,7 @@ ci: format lint test build check-gen check-toolchain chart web-ci
 
 web-install:
 	$(PNPM) install --frozen-lockfile
+	$(PNPM_COWORK_ENGINE) install --frozen-lockfile
 
 # eslint prints nothing and exits 0 both when it covered the tree and
 # when its ignore patterns left it a fraction of it, so what it covered

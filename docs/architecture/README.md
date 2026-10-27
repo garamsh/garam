@@ -460,10 +460,11 @@ Responsibility documents:
 - [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
   gateway, the keys it holds, how it routes and what it records; not
   yet built
-- [cowork.md](./cowork.md) — where people and agents co-edit pages,
-  message each other and keep the record of their work, through tools
-  an AI can use: its binary, its ports and what it asks of the
-  platform; not yet built
+- [cowork.md](../../cowork/docs/cowork.md) — where people and agents
+  co-edit pages, message each other and keep the record of their work,
+  through tools an AI can use: its binary, its ports and what it asks
+  of the platform; the server's pages and real-time editing are built,
+  the rest is not
 - [web-app.md](./web-app.md) — what the application a person uses garam
   through is responsible for, the one seam it reaches the backend
   through, the design system its pages are built on, and what it does

@@ -1,0 +1,252 @@
+openapi: 3.1.0
+info:
+  title: cowork API
+  version: 0.1.0
+  description: >-
+    The page tree of cowork, where people and agents co-edit pages in
+    real time (ADR-0127). An organization's pages are its workspace.
+
+    A caller presents what garam's platform issued it: the
+    `garam_session` cookie, or a CLI session's bearer (ADR-0120).
+    cowork passes it to the platform as presented, asks who it
+    belongs to, and asks the platform's `checkPermissions` before every
+    read and write: `cowork:page-read` and `cowork:page-write`, on the
+    organization for its page tree and on a page for that page. A
+    caller the platform does not accept is answered 401, one it denies
+    403, and every operation answers 503 when the platform cannot be
+    reached: cowork refuses rather than decide alone.
+
+    A page's content is not here. It is a Yjs document, edited over a
+    WebSocket at `GET /orgs/{org}/pages/{page}/sync` in y-websocket's
+    protocol, which OpenAPI does not describe. Its upgrade is answered
+    as `getPage` is answered, and edits on it are refused, with
+    y-websocket's permission-denied message, to a caller without
+    `cowork:page-write` on the page.
+servers:
+  - url: /
+paths:
+  /orgs/{org}/pages:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+    get:
+      operationId: listPages
+      tags: [pages]
+      summary: List the pages of an organization the caller may read.
+      description: >-
+        Requires `cowork:page-read` on the organization. A page the
+        caller may not read is left out, and so is every page beneath
+        it.
+      responses:
+        '200':
+          description: The pages, by parent and then position.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createPage
+      tags: [pages]
+      summary: Create a page after its last sibling.
+      description: >-
+        Requires `cowork:page-write` on the organization, and on the
+        parent where one is named.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageCreate'
+      responses:
+        '201':
+          description: The page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          description: The parent does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orgs/{org}/pages/{page}:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/pagePath'
+    get:
+      operationId: getPage
+      tags: [pages]
+      summary: Read a page. Requires `cowork:page-read` on it.
+      responses:
+        '200':
+          description: The page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updatePage
+      tags: [pages]
+      summary: Rename or move a page.
+      description: >-
+        Requires `cowork:page-write` on the page, and on the parent it
+        moves under. A field left out is left as it is. `parent` set to
+        an empty string moves the page to the top of the tree, and
+        `position` places it among its new siblings, moving those from
+        that place on down by one. A page cannot go under itself or a
+        page beneath it: that is answered 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageUpdate'
+      responses:
+        '200':
+          description: The page as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePage
+      tags: [pages]
+      summary: Delete a page and every page beneath it.
+      description: Requires `cowork:page-write` on the page.
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+components:
+  parameters:
+    orgPath:
+      name: org
+      in: path
+      required: true
+      description: The organization's identifier, the last segment of its GRN.
+      schema:
+        type: string
+    pagePath:
+      name: page
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    Page:
+      type: object
+      required: [id, grn, org, parent, title, position, createdBy, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          example: k3v7q2m9x4ab
+        grn:
+          type: string
+          description: The name the platform's permission checks know the page by.
+          example: grn:acme:default:cowork-page:k3v7q2m9x4ab
+        org:
+          type: string
+        parent:
+          type: string
+          description: The ID of the page this one sits under, empty at the top of the tree.
+        title:
+          type: string
+        position:
+          type: integer
+          description: The page's place among its siblings, from zero.
+        createdBy:
+          type: string
+          description: The GRN of whoever created it.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PageList:
+      type: object
+      required: [pages]
+      properties:
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Page'
+    PageCreate:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        parent:
+          type: string
+          description: The page to create it under. Left out, the top of the tree.
+    PageUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        parent:
+          type: string
+        position:
+          type: integer
+          minimum: 0
+    Error:
+      type: object
+      required: [kind, message]
+      properties:
+        kind:
+          type: string
+          description: errorx kind, e.g. `not_found`, `permission_denied`.
+        message:
+          type: string
+  responses:
+    Error:
+      description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: garam_session
+    sessionBearer:
+      type: http
+      scheme: bearer
+security:
+  - sessionCookie: []
+  - sessionBearer: []

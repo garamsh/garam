@@ -16,19 +16,35 @@ function renderNav(
   pathname: string,
   orgs: { slug: string; name: string }[] | null = ORGS,
   hidden?: string[],
+  cowork?: string,
 ) {
   route.pathname = pathname;
   return render(
     <TooltipProvider>
       <SidebarProvider>
         {hidden && <ReportOrgShell org="acme" role={null} hidden={hidden} />}
-        <ConsoleNav orgs={orgs} />
+        <ConsoleNav orgs={orgs} cowork={cowork} />
       </SidebarProvider>
     </TooltipProvider>,
   );
 }
 
 describe("console navigation", () => {
+  it("links the organization's cowork workspace where cowork is served (ADR-0127)", () => {
+    renderNav("/console/orgs/acme", ORGS, undefined, "https://cowork.example/");
+
+    expect(screen.getByRole("link", { name: "Cowork" })).toHaveAttribute(
+      "href",
+      "https://cowork.example/acme",
+    );
+  });
+
+  it("offers no cowork link where cowork is not served", () => {
+    renderNav("/console/orgs/acme");
+
+    expect(screen.queryByRole("link", { name: "Cowork" })).toBeNull();
+  });
+
   it("links every section of the selected organization", () => {
     renderNav("/console/orgs/acme");
 

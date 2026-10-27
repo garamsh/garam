@@ -24,6 +24,18 @@ const (
 	kindProject = apigen.PermissionResourceTypeProject
 	kindAgent   = apigen.PermissionResourceTypeAgent
 	kindPolicy  = apigen.PermissionResourceTypePolicy
+	// kindCoworkPage is a page cowork keeps (ADR-0127). No operation
+	// here addresses one; cowork asks before it acts on one.
+	kindCoworkPage = apigen.PermissionResourceTypeCoworkPage
+	// kindCoworkChannel is a channel cowork keeps (ADR-0128), on the
+	// same terms.
+	kindCoworkChannel = apigen.PermissionResourceTypeCoworkChannel
+	// kindCoworkTask is a task cowork keeps (ADR-0127), on the same
+	// terms.
+	kindCoworkTask = apigen.PermissionResourceTypeCoworkTask
+	// kindCoworkArtifact is an artifact cowork keeps (ADR-0127), on
+	// the same terms.
+	kindCoworkArtifact = apigen.PermissionResourceTypeCoworkArtifact
 )
 
 // decidedBy is what enforcement reads to decide an action.
@@ -55,8 +67,9 @@ type actionRule struct {
 }
 
 // actionRules holds one rule per action org.Actions defines, read off
-// the operations that enforce it. An action with no rule pairs with
-// nothing, so every pair naming it is refused.
+// the operations that enforce it, or for a cowork action, off the
+// operations cowork asks it for (ADR-0127). An action with no rule
+// pairs with nothing, so every pair naming it is refused.
 var actionRules = map[string]actionRule{
 	org.ActionOrgRead:       {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionOrgUpdate:     {on: []apigen.PermissionResourceType{onOrg}},
@@ -110,6 +123,18 @@ var actionRules = map[string]actionRule{
 	org.ActionAgentTemplateRead:    {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionAgentTemplatePublish: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},
 	org.ActionExecutionProfileRead: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByGrant},
+
+	org.ActionCoworkPageRead:  {on: []apigen.PermissionResourceType{onOrg, kindCoworkPage}},
+	org.ActionCoworkPageWrite: {on: []apigen.PermissionResourceType{onOrg, kindCoworkPage}},
+
+	org.ActionCoworkChannelRead: {on: []apigen.PermissionResourceType{onOrg, kindCoworkChannel}},
+	org.ActionCoworkChannelPost: {on: []apigen.PermissionResourceType{onOrg, kindCoworkChannel}},
+
+	org.ActionCoworkTaskRead:  {on: []apigen.PermissionResourceType{onOrg, kindCoworkTask}},
+	org.ActionCoworkTaskWrite: {on: []apigen.PermissionResourceType{onOrg, kindCoworkTask}},
+
+	org.ActionCoworkArtifactRead:  {on: []apigen.PermissionResourceType{onOrg, kindCoworkArtifact}},
+	org.ActionCoworkArtifactWrite: {on: []apigen.PermissionResourceType{onOrg, kindCoworkArtifact}},
 }
 
 // CheckPermissions answers, for each pair asked, whether enforcement
@@ -259,6 +284,14 @@ func permissionTarget(orgSlug string, check apigen.PermissionCheck) (grn.GRN, er
 		g = agentGRN(orgSlug, id)
 	case kindPolicy:
 		g = policyGRN(orgSlug, id)
+	case kindCoworkPage:
+		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkPage, id)
+	case kindCoworkChannel:
+		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkChannel, id)
+	case kindCoworkTask:
+		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkTask, id)
+	case kindCoworkArtifact:
+		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkArtifact, id)
 	default:
 		return grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "unknown resource type")
 	}

@@ -11,7 +11,10 @@ FROM mirror.gcr.io/library/golang:1.27.2-alpine3.24@sha256:f92b6ef800e499660581e
 
 WORKDIR /src
 
+# go.mod replaces platform/sdk with its folder (ADR-0125), so that
+# module's manifests come along.
 COPY go.mod go.sum ./
+COPY platform/sdk/go.mod platform/sdk/go.sum ./platform/sdk/
 RUN go mod download
 
 COPY . .

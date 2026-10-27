@@ -1,0 +1,1269 @@
+openapi: 3.1.0
+info:
+  title: cowork API
+  version: 0.1.0
+  description: >-
+    The page tree of cowork, where people and agents co-edit pages in
+    real time (ADR-0127). An organization's pages are its workspace.
+
+    A caller presents what garam's platform issued it: the
+    `garam_session` cookie, or a CLI session's bearer (ADR-0120).
+    cowork passes it to the platform as presented, asks who it
+    belongs to, and asks the platform's `checkPermissions` before every
+    read and write: `cowork:page-read` and `cowork:page-write`, on the
+    organization for its page tree and on a page for that page. A
+    caller the platform does not accept is answered 401, one it denies
+    403, and every operation answers 503 when the platform cannot be
+    reached: cowork refuses rather than decide alone.
+
+    A page's content is not here. It is a Yjs document, edited over a
+    WebSocket at `GET /orgs/{org}/pages/{page}/sync` in y-websocket's
+    protocol, which OpenAPI does not describe. Its upgrade is answered
+    as `getPage` is answered, and edits on it are refused, with
+    y-websocket's permission-denied message, to a caller without
+    `cowork:page-write` on the page.
+
+    Channels are messaging (ADR-0128). Reading one needs
+    `cowork:channel-read` on it, and posting `cowork:channel-post`; a
+    private channel or a direct message also needs the caller on its
+    participant list, which only narrows what the platform allows. A
+    channel's messages arrive live over a WebSocket at
+    `GET /orgs/{org}/channels/{channel}/live`, one text frame of the
+    `Message` schema per message posted, server to client only; its
+    upgrade is answered as `getChannel` is answered.
+
+    Tasks are the record of work. Listing and creating them needs
+    `cowork:task-read` and `cowork:task-write` on the organization,
+    and reading or changing one, its comments included, the same on
+    the task. A task links only pages and messages its writer may
+    read.
+
+    Artifacts are HTML pages and documents, each a sequence of
+    immutable versions. Listing and creating them needs
+    `cowork:artifact-read` and `cowork:artifact-write` on the
+    organization, and reading one or saving a version the same on the
+    artifact. An HTML version is never served from cowork's own origin:
+    `viewArtifact` answers a short-lived address on the user-content
+    origin, to load in an iframe sandboxed without its origin.
+servers:
+  - url: /
+paths:
+  /orgs/{org}/pages:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+    get:
+      operationId: listPages
+      tags: [pages]
+      summary: List the pages of an organization the caller may read.
+      description: >-
+        Requires `cowork:page-read` on the organization. A page the
+        caller may not read is left out, and so is every page beneath
+        it.
+      responses:
+        '200':
+          description: The pages, by parent and then position.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createPage
+      tags: [pages]
+      summary: Create a page after its last sibling.
+      description: >-
+        Requires `cowork:page-write` on the organization, and on the
+        parent where one is named.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageCreate'
+      responses:
+        '201':
+          description: The page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          description: The parent does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /orgs/{org}/pages/{page}:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/pagePath'
+    get:
+      operationId: getPage
+      tags: [pages]
+      summary: Read a page. Requires `cowork:page-read` on it.
+      responses:
+        '200':
+          description: The page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updatePage
+      tags: [pages]
+      summary: Rename or move a page.
+      description: >-
+        Requires `cowork:page-write` on the page, and on the parent it
+        moves under. A field left out is left as it is. `parent` set to
+        an empty string moves the page to the top of the tree, and
+        `position` places it among its new siblings, moving those from
+        that place on down by one. A page cannot go under itself or a
+        page beneath it: that is answered 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageUpdate'
+      responses:
+        '200':
+          description: The page as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Page'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deletePage
+      tags: [pages]
+      summary: Delete a page and every page beneath it.
+      description: Requires `cowork:page-write` on the page.
+      responses:
+        '204':
+          description: Deleted.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/channels:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+    get:
+      operationId: listChannels
+      tags: [channels]
+      summary: List the channels the caller may read.
+      description: >-
+        Requires `cowork:channel-read` on the organization. Answers the
+        public channels and those whose participant list holds the
+        caller, less any the platform denies the caller reading.
+      responses:
+        '200':
+          description: The channels.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChannelList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createChannel
+      tags: [channels]
+      summary: Create a channel or start a direct message.
+      description: >-
+        Requires `cowork:channel-post` on the organization. A public or
+        private channel takes a name the organization has no other
+        channel by, 409 otherwise. A private channel's list starts with
+        its creator and `members`; a direct message takes no name and
+        is between its creator and `members`, at least one other.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelCreate'
+      responses:
+        '201':
+          description: The channel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Channel'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/channels/{channel}:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/channelPath'
+    get:
+      operationId: getChannel
+      tags: [channels]
+      summary: Read a channel the caller may read.
+      responses:
+        '200':
+          description: The channel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Channel'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/channels/{channel}/members:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/channelPath'
+    post:
+      operationId: addChannelMember
+      tags: [channels]
+      summary: Add a participant to a private channel.
+      description: >-
+        Requires `cowork:channel-post` on the channel and a place on its
+        list. A public channel keeps no list and a direct message's is
+        fixed, and either is answered 409.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberAdd'
+      responses:
+        '204':
+          description: Added, or already there.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/channels/{channel}/members/me:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/channelPath'
+    delete:
+      operationId: leaveChannel
+      tags: [channels]
+      summary: Take the caller off a channel's list.
+      responses:
+        '204':
+          description: Left.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/channels/{channel}/messages:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/channelPath'
+    get:
+      operationId: listMessages
+      tags: [messages]
+      summary: Read a channel's messages, oldest first.
+      description: >-
+        The last 200 messages that are not replies, before `before`
+        where it is given, each with its reply count.
+      parameters:
+        - name: before
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The messages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: postMessage
+      tags: [messages]
+      summary: Post a message, or reply in a thread.
+      description: >-
+        Requires `cowork:channel-post` on the channel, and
+        `cowork:page-read` on every page it links: a message shows a
+        linked page's title, so it links only what its author may read.
+        A reply to a reply joins the first message's thread. An agent
+        it mentions is answered in `undeliveredMentions` until cowork
+        reaches agents' runtimes (#1664).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessagePost'
+      responses:
+        '201':
+          description: The message.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/messages:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+    get:
+      operationId: searchMessages
+      tags: [messages]
+      summary: Search the messages of every channel the caller may read.
+      description: >-
+        `q` is read as a web search reads one: words, "quoted
+        phrases", and -exclusions. The newest 200 matches first.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The matches.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/messages/{message}/thread:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/messagePath'
+    get:
+      operationId: getThread
+      tags: [messages]
+      summary: Read the thread a message starts or is in, oldest first.
+      responses:
+        '200':
+          description: The thread's first message, then its replies.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/pages/{page}/messages:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/pagePath'
+    get:
+      operationId: listPageMessages
+      tags: [messages]
+      summary: Read the messages that link a page, newest first.
+      description: >-
+        Requires `cowork:page-read` on the page, and answers only
+        messages in channels the caller may read.
+      responses:
+        '200':
+          description: The messages.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/tasks:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List the tasks the caller may read, newest first.
+      description: >-
+        At most 500, narrowed to those matching every filter given:
+        a status, an assignee's GRN, or a page or a message the task
+        links.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/TaskStatus'
+        - name: assignee
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: message
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The tasks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskList'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCreate'
+      responses:
+        '201':
+          description: The task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/tasks/{task}:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/taskPath'
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Read a task.
+      responses:
+        '200':
+          description: The task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Change a task.
+      description: >-
+        Changes what the body sets. An empty `assignee` takes the
+        assignee off and an empty `due` the due date; `pages` and
+        `messages` replace what the task links.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskUpdate'
+      responses:
+        '200':
+          description: The task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/tasks/{task}/comments:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/taskPath'
+    get:
+      operationId: listTaskComments
+      tags: [tasks]
+      summary: Read a task's comments, oldest first.
+      responses:
+        '200':
+          description: The comments.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskCommentList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: postTaskComment
+      tags: [tasks]
+      summary: Comment on a task.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskCommentPost'
+      responses:
+        '201':
+          description: The comment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskComment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/artifacts:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+    get:
+      operationId: listArtifacts
+      tags: [artifacts]
+      summary: List the artifacts the caller may read, newest first.
+      responses:
+        '200':
+          description: The artifacts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: createArtifact
+      tags: [artifacts]
+      summary: Create an artifact with its first version.
+      description: >-
+        An `html` artifact takes `html`; a `document` takes `page`, the
+        page to freeze, which the caller must be able to read.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArtifactCreate'
+      responses:
+        '201':
+          description: The artifact.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/artifacts/{artifact}:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/artifactPath'
+    get:
+      operationId: getArtifact
+      tags: [artifacts]
+      summary: Read an artifact.
+      responses:
+        '200':
+          description: The artifact.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/artifacts/{artifact}/versions:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/artifactPath'
+    get:
+      operationId: listArtifactVersions
+      tags: [artifacts]
+      summary: List an artifact's versions, oldest first.
+      responses:
+        '200':
+          description: The versions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactVersionList'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: saveArtifactVersion
+      tags: [artifacts]
+      summary: Save the artifact's next version.
+      description: >-
+        Every save is kept as a version of its own, and none replaces
+        another.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArtifactContent'
+      responses:
+        '201':
+          description: The artifact, its latest version the one saved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Artifact'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '503':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/artifacts/{artifact}/view:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/artifactPath'
+      - $ref: '#/components/parameters/versionQuery'
+    get:
+      operationId: viewArtifact
+      tags: [artifacts]
+      summary: Where an HTML version is viewed.
+      description: >-
+        A short-lived address on the user-content origin for one
+        version, the latest where none is named.
+      responses:
+        '200':
+          description: The address.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactView'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/artifacts/{artifact}/document:
+    parameters:
+      - $ref: '#/components/parameters/orgPath'
+      - $ref: '#/components/parameters/artifactPath'
+      - $ref: '#/components/parameters/versionQuery'
+    get:
+      operationId: getArtifactDocument
+      tags: [artifacts]
+      summary: Read a document version, the latest where none is named.
+      responses:
+        '200':
+          description: The page the version froze.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArtifactDocument'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+components:
+  parameters:
+    orgPath:
+      name: org
+      in: path
+      required: true
+      description: The organization's identifier, the last segment of its GRN.
+      schema:
+        type: string
+    pagePath:
+      name: page
+      in: path
+      required: true
+      schema:
+        type: string
+    channelPath:
+      name: channel
+      in: path
+      required: true
+      schema:
+        type: string
+    messagePath:
+      name: message
+      in: path
+      required: true
+      schema:
+        type: string
+    taskPath:
+      name: task
+      in: path
+      required: true
+      schema:
+        type: string
+    artifactPath:
+      name: artifact
+      in: path
+      required: true
+      schema:
+        type: string
+    versionQuery:
+      name: version
+      in: query
+      required: false
+      description: A version's number, from 1; the latest where it is absent.
+      schema:
+        type: integer
+        minimum: 1
+  schemas:
+    Page:
+      type: object
+      required: [id, grn, org, parent, title, position, createdBy, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          example: k3v7q2m9x4ab
+        grn:
+          type: string
+          description: The name the platform's permission checks know the page by.
+          example: grn:acme:default:cowork-page:k3v7q2m9x4ab
+        org:
+          type: string
+        parent:
+          type: string
+          description: The ID of the page this one sits under, empty at the top of the tree.
+        title:
+          type: string
+        position:
+          type: integer
+          description: The page's place among its siblings, from zero.
+        createdBy:
+          type: string
+          description: The GRN of whoever created it.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PageList:
+      type: object
+      required: [pages]
+      properties:
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Page'
+    PageCreate:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        parent:
+          type: string
+          description: The page to create it under. Left out, the top of the tree.
+    PageUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        parent:
+          type: string
+        position:
+          type: integer
+          minimum: 0
+    Channel:
+      type: object
+      required: [id, grn, org, kind, name, createdBy, createdAt, members]
+      properties:
+        id:
+          type: string
+        grn:
+          type: string
+          description: The name the platform's permission checks know the channel by.
+          example: grn:acme:default:cowork-channel:k3v7q2m9x4ab
+        org:
+          type: string
+        kind:
+          type: string
+          enum: [public, private, direct]
+        name:
+          type: string
+          description: Empty for a direct message.
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        members:
+          type: array
+          description: A private channel's or a direct message's participants, by GRN. Empty for a public channel.
+          items:
+            type: string
+    ChannelList:
+      type: object
+      required: [channels]
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/Channel'
+    ChannelCreate:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [public, private, direct]
+        name:
+          type: string
+          maxLength: 80
+        members:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            description: A person's or an agent's GRN.
+    MemberAdd:
+      type: object
+      required: [member]
+      properties:
+        member:
+          type: string
+          description: The GRN of the person or agent to add.
+    Message:
+      type: object
+      required: [id, channel, thread, author, body, mentions, undeliveredMentions, pages, artifacts, createdAt, replies]
+      properties:
+        id:
+          type: string
+        channel:
+          type: string
+        thread:
+          type: string
+          description: The ID of the message whose thread this replies in, empty for one that is not a reply.
+        author:
+          type: string
+          description: The author's GRN.
+        body:
+          type: string
+        mentions:
+          type: array
+          description: The people and agents the message names, by GRN.
+          items:
+            type: string
+        undeliveredMentions:
+          type: array
+          description: The agents among `mentions` whose runtime the message has not reached.
+          items:
+            type: string
+        pages:
+          type: array
+          description: The IDs of the pages the message links.
+          items:
+            type: string
+        artifacts:
+          type: array
+          description: The IDs of the artifacts the message embeds.
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        replies:
+          type: integer
+          description: How many replies its thread holds, where the message is listed in its channel; 0 elsewhere.
+    MessageList:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+    MessagePost:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          maxLength: 40000
+        thread:
+          type: string
+          description: The message to reply to.
+        mentions:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+        pages:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+        artifacts:
+          type: array
+          description: Artifacts to embed; each needs `cowork:artifact-read` of the author.
+          maxItems: 10
+          items:
+            type: string
+    Error:
+      type: object
+      required: [kind, message]
+      properties:
+        kind:
+          type: string
+          description: errorx kind, e.g. `not_found`, `permission_denied`.
+        message:
+          type: string
+    TaskStatus:
+      type: string
+      enum: [todo, doing, done]
+    Task:
+      type: object
+      required: [id, grn, org, title, description, status, assignee, due, pages, messages, createdBy, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        grn:
+          type: string
+          description: The name the platform's permission checks know the task by.
+          example: grn:acme:default:cowork-task:k3v7q2m9x4ab
+        org:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        assignee:
+          type: string
+          description: The GRN of the person or agent assigned, empty for no one.
+        due:
+          type: string
+          description: The due date as YYYY-MM-DD, empty for none.
+        pages:
+          type: array
+          description: The IDs of the pages the task links.
+          items:
+            type: string
+        messages:
+          type: array
+          description: The IDs of the messages the task links.
+          items:
+            type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TaskList:
+      type: object
+      required: [tasks]
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+    TaskCreate:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        assignee:
+          type: string
+        due:
+          type: string
+        pages:
+          type: array
+          items:
+            type: string
+        messages:
+          type: array
+          items:
+            type: string
+    TaskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 500
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+        assignee:
+          type: string
+        due:
+          type: string
+        pages:
+          type: array
+          items:
+            type: string
+        messages:
+          type: array
+          items:
+            type: string
+    TaskComment:
+      type: object
+      required: [id, task, author, body, createdAt]
+      properties:
+        id:
+          type: string
+        task:
+          type: string
+        author:
+          type: string
+          description: The author's GRN.
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    TaskCommentList:
+      type: object
+      required: [comments]
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TaskComment'
+    TaskCommentPost:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+    ArtifactKind:
+      type: string
+      enum: [html, document]
+    Artifact:
+      type: object
+      required: [id, grn, org, kind, title, latest, createdBy, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        grn:
+          type: string
+          example: grn:acme:default:cowork-artifact:k3v7q2m9x4ab
+        org:
+          type: string
+        kind:
+          $ref: '#/components/schemas/ArtifactKind'
+        title:
+          type: string
+        latest:
+          type: integer
+          description: The number of the newest version.
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ArtifactList:
+      type: object
+      required: [artifacts]
+      properties:
+        artifacts:
+          type: array
+          items:
+            $ref: '#/components/schemas/Artifact'
+    ArtifactContent:
+      type: object
+      description: An `html` version's page, or the `page` a `document` version freezes.
+      properties:
+        html:
+          type: string
+        page:
+          type: string
+    ArtifactCreate:
+      type: object
+      required: [kind, title]
+      properties:
+        kind:
+          $ref: '#/components/schemas/ArtifactKind'
+        title:
+          type: string
+          maxLength: 500
+        html:
+          type: string
+        page:
+          type: string
+    ArtifactVersion:
+      type: object
+      required: [number, size, sha256, createdBy, createdAt]
+      properties:
+        number:
+          type: integer
+        size:
+          type: integer
+          format: int64
+        sha256:
+          type: string
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    ArtifactVersionList:
+      type: object
+      required: [versions]
+      properties:
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ArtifactVersion'
+    ArtifactView:
+      type: object
+      required: [url, version]
+      properties:
+        url:
+          type: string
+          description: The version's address on the user-content origin, good for ten minutes.
+        version:
+          type: integer
+    ArtifactDocument:
+      type: object
+      required: [title, page, blocks]
+      properties:
+        title:
+          type: string
+        page:
+          type: string
+        blocks:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+  responses:
+    Error:
+      description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: garam_session
+    sessionBearer:
+      type: http
+      scheme: bearer
+security:
+  - sessionCookie: []
+  - sessionBearer: []

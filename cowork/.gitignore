@@ -1,0 +1,2 @@
+# What `go build -o bin/cowork` writes for the e2e suite.
+/bin/

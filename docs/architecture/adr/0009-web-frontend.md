@@ -1,6 +1,6 @@
 # ADR 0009: Web frontend — Next.js in `web/`, Tailwind + shadcn/ui, Playwright e2e
 
-> Status: accepted
+> Status: accepted; the location `web/` is superseded by [ADR-0125](./0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
 > Date: 2026-08-02
 
 ## Context

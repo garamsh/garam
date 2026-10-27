@@ -10,11 +10,14 @@ import {
 import { getPage } from "@/lib/cowork";
 import { me } from "@/lib/platform";
 
-/** A colour from a GRN, so each person's caret reads the same everywhere. */
+/**
+ * A colour from a GRN, so each person's caret reads the same
+ * everywhere. Hex, the only form the caret extension accepts.
+ */
 function colorOf(grn: string): string {
   let h = 0;
-  for (const c of grn) h = (h * 31 + c.charCodeAt(0)) % 360;
-  return `hsl(${h} 70% 40%)`;
+  for (const c of grn) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return `#${(h & 0x7f7f7f).toString(16).padStart(6, "0")}`;
 }
 
 export default async function PageView({

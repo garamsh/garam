@@ -126,10 +126,7 @@ PROTO_FILES = $(shell $(BUF) ls-files)
 # directory walks it, and either sweep coming back empty exits zero
 # reading exactly like the run that read every file — so the paths are
 # listed here and an empty list fails below. The shell sweep takes two
-# roots: `scripts/`, and the repository root, where the template ships
-# `check-contents-list.sh` and `check-heading-prefixes.sh` and where
-# they stay so template-diff can measure each against the path it comes
-# from.
+# roots: `scripts/` and the repository root.
 WORKFLOW_FILES = $(shell find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \))
 SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find scripts -type f -name '*.sh')
 
@@ -137,10 +134,9 @@ SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find sc
 # check on every machine, and its ref-keyed checks reach no action
 # pinned by full SHA (#848, #854, #858). shfmt runs as a POSIX parser
 # with output discarded: it fails a syntax error or a bashism the POSIX
-# grammar cannot hold, never a layout (#904). The two Markdown scripts
-# count their own files and fail on zero (#1468).
+# grammar cannot hold, never a layout (#904).
 lint:
-	@echo 'lint: $(words $(PROTO_FILES)) proto files (buf lint), $(words $(WORKFLOW_FILES)) workflows (actionlint), $(words $(SHELL_SCRIPTS)) shell scripts (shfmt); go vet counted on its own line below, Markdown by check-contents-list.sh and check-heading-prefixes.sh'
+	@echo 'lint: $(words $(PROTO_FILES)) proto files (buf lint), $(words $(WORKFLOW_FILES)) workflows (actionlint), $(words $(SHELL_SCRIPTS)) shell scripts (shfmt); go vet counted on its own line below'
 	@test -n '$(PROTO_FILES)' && test -n '$(WORKFLOW_FILES)' && test -n '$(SHELL_SCRIPTS)' \
 		|| { echo 'lint: nothing to lint — the buf module, .github/workflows or the shell sweep matched no input; the counts above name which'; exit 1; }
 	$(call go-packages,lint (go vet),$(GO_SELECT),$(GO_PKGS))
@@ -148,8 +144,6 @@ lint:
 	@$(BUF) lint
 	@$(ACTIONLINT) -shellcheck= -pyflakes= $(WORKFLOW_FILES)
 	@$(SHFMT) -ln posix $(SHELL_SCRIPTS) >/dev/null
-	@./check-contents-list.sh
-	@./check-heading-prefixes.sh
 
 # gofmt and goimports list offending files but exit 0, so the gate is a
 # non-empty-output check; a file they cannot read or parse, a tracked

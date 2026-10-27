@@ -103,6 +103,26 @@ func (c *Client) Allowed(ctx context.Context, caller platform.Caller, org string
 	return allowed, nil
 }
 
+// Organizations implements platform.Platform with `listOrgs`.
+func (c *Client) Organizations(ctx context.Context, caller platform.Caller) ([]platform.Organization, error) {
+	var orgs []struct {
+		GRN  string `json:"grn"`
+		Name string `json:"name"`
+	}
+	if err := c.do(ctx, caller.Credential, nethttp.MethodGet, "/orgs", nil, &orgs); err != nil {
+		return nil, err
+	}
+	out := make([]platform.Organization, 0, len(orgs))
+	for _, o := range orgs {
+		g, err := grn.Parse(o.GRN)
+		if err != nil {
+			return nil, errorx.Wrap(err, "platform: listOrgs answered a malformed GRN", errorx.KindUnavailable)
+		}
+		out = append(out, platform.Organization{ID: g.Identifier, Name: o.Name})
+	}
+	return out, nil
+}
+
 // do sends one request as cred and decodes a 200 into out. The
 // platform's refusals keep their meaning: 401 unauthenticated, and 403
 // and 404, which it answers a caller outside the organization,

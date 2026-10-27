@@ -26,6 +26,10 @@ func (p *policy) Identify(context.Context, platform.Credential) (platform.Caller
 	return platform.Caller{}, nil
 }
 
+func (p *policy) Organizations(context.Context, platform.Caller) ([]platform.Organization, error) {
+	return []platform.Organization{{ID: "acme", Name: "Acme"}}, nil
+}
+
 func (p *policy) Allowed(_ context.Context, _ platform.Caller, org string, checks []platform.Check) ([]bool, error) {
 	if org != "acme" {
 		return nil, errorx.New(errorx.KindPermissionDenied, "not a member")

@@ -67,6 +67,16 @@ func OnChannel(action, id string) Check { return Check{Action: action, Kind: Kin
 type Platform interface {
 	Identify(ctx context.Context, cred Credential) (Caller, error)
 	Allowed(ctx context.Context, caller Caller, org string, checks []Check) ([]bool, error)
+	// Organizations answers the organizations the caller belongs to:
+	// the workspaces it has.
+	Organizations(ctx context.Context, caller Caller) ([]Organization, error)
+}
+
+// Organization is one the caller belongs to: its identifier, the last
+// segment of its GRN, and what it is called.
+type Organization struct {
+	ID   string
+	Name string
 }
 
 // ErrNotAllowed is a check the platform denied.

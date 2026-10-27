@@ -83,6 +83,8 @@ func TestTasks_LinkPagesAndMessagesBothWays(t *testing.T) {
 	tk := s.createTask(t, "ada", `{"title":"Launch","pages":["`+pg+`"],"messages":["`+m.ID+`"]}`)
 	assert.Equal(t, []string{pg}, tk.Pages)
 	assert.Equal(t, []string{m.ID}, tk.Messages)
+	// The control: a task that links neither, which no filter answers.
+	s.createTask(t, "ada", `{"title":"Unlinked"}`)
 
 	byPage := s.tasks(t, "bob", "?page="+pg)
 	require.Len(t, byPage, 1)

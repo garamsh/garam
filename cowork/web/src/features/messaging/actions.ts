@@ -51,6 +51,7 @@ export async function postMessageAction(
     ...(thread ? { thread } : {}),
     mentions: form.getAll("mention").map(String),
     pages: form.getAll("page").map(String).filter(Boolean),
+    artifacts: form.getAll("artifact").map(String).filter(Boolean),
   });
   if (!r.ok) return { error: r.message, sent: prev.sent };
   return { sent: (prev.sent ?? 0) + 1 };

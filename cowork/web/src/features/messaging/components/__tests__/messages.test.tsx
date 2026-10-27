@@ -3,6 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Message } from "@/lib/cowork";
 
+// An embed reads its artifact through a server action, which a test
+// renders no server for.
+vi.mock("@/features/artifacts/actions", () => ({
+  embedAction: () => new Promise(() => {}),
+}));
+
 import { LiveMessages } from "../live-messages";
 import { MessageItem } from "../message-item";
 
@@ -15,6 +21,7 @@ const message = (over: Partial<Message>): Message => ({
   mentions: [],
   undeliveredMentions: [],
   pages: [],
+  artifacts: [],
   createdAt: "2026-10-27T10:00:00Z",
   replies: 0,
   ...over,

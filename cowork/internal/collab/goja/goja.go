@@ -33,7 +33,8 @@ var _ collab.DocEngine = (*Engine)(nil)
 // globalThis.engine that this package calls.
 var engineFunctions = []string{
 	"merge", "stateVector", "diff", "blocks",
-	"open", "close", "apply", "state", "clientStateVector", "appendBlock", "insertText",
+	"open", "close", "apply", "state", "clientStateVector",
+	"appendBlock", "insertBlock", "replaceBlock", "deleteBlock", "insertText",
 }
 
 // New loads the bundle into a fresh runtime.
@@ -200,6 +201,11 @@ func (e *Engine) NewClient(state []byte) (*Client, error) {
 	return &Client{e: e, handle: h}, nil
 }
 
+// Open implements collab.DocEngine.
+func (e *Engine) Open(state []byte) (collab.Editor, error) { return e.NewClient(state) }
+
+var _ collab.Editor = (*Client)(nil)
+
 // Close releases the document.
 func (c *Client) Close() {
 	c.e.mu.Lock()
@@ -239,29 +245,49 @@ func (c *Client) handleCall(name string) ([]byte, error) {
 	return c.e.copyOut(out), nil
 }
 
-// AppendBlock adds b after the last block and answers the update.
-func (c *Client) AppendBlock(b collab.Block) ([]byte, error) {
+// blockCall runs a block edit whose last argument is b as JSON.
+func (c *Client) blockCall(name string, b collab.Block, args ...any) ([]byte, error) {
 	raw, err := json.Marshal(b)
 	if err != nil {
-		return nil, errorx.Wrap(err, "yjs appendBlock", errorx.KindInvalidArgument)
+		return nil, errorx.Wrap(err, "yjs "+name, errorx.KindInvalidArgument)
 	}
+	return c.editCall(name, append(args, string(raw))...)
+}
+
+// editCall runs an edit on the client's document and answers the
+// update it made.
+func (c *Client) editCall(name string, args ...any) ([]byte, error) {
 	c.e.mu.Lock()
 	defer c.e.mu.Unlock()
-	out, err := c.e.call("appendBlock", c.handle, c.e.vm.ToValue(string(raw)))
+	values := []goja.Value{c.handle}
+	for _, a := range args {
+		values = append(values, c.e.vm.ToValue(a))
+	}
+	out, err := c.e.call(name, values...)
 	if err != nil {
 		return nil, err
 	}
 	return c.e.copyOut(out), nil
 }
 
+// AppendBlock adds b after the last block and answers the update.
+func (c *Client) AppendBlock(b collab.Block) ([]byte, error) { return c.blockCall("appendBlock", b) }
+
+// InsertBlock puts b at index, moving the blocks from there on down.
+func (c *Client) InsertBlock(index int, b collab.Block) ([]byte, error) {
+	return c.blockCall("insertBlock", b, index)
+}
+
+// ReplaceBlock puts b in place of the block at index.
+func (c *Client) ReplaceBlock(index int, b collab.Block) ([]byte, error) {
+	return c.blockCall("replaceBlock", b, index)
+}
+
+// DeleteBlock removes the block at index.
+func (c *Client) DeleteBlock(index int) ([]byte, error) { return c.editCall("deleteBlock", index) }
+
 // InsertText inserts text into the block at index, offset characters
 // in, and answers the update.
 func (c *Client) InsertText(index, offset int, text string) ([]byte, error) {
-	c.e.mu.Lock()
-	defer c.e.mu.Unlock()
-	out, err := c.e.call("insertText", c.handle, c.e.vm.ToValue(index), c.e.vm.ToValue(offset), c.e.vm.ToValue(text))
-	if err != nil {
-		return nil, err
-	}
-	return c.e.copyOut(out), nil
+	return c.editCall("insertText", index, offset, text)
 }

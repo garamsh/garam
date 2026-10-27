@@ -61,6 +61,8 @@ func (f *fakePlatform) ServeHTTP(w nethttp.ResponseWriter, r *nethttp.Request) {
 			results[i] = map[string]string{"decision": decision}
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"results": results})
+	case "/orgs":
+		_ = json.NewEncoder(w).Encode([]map[string]string{{"grn": "grn:root:default:org:acme", "name": "Acme"}})
 	case "/orgs/globex/permission-checks":
 		w.WriteHeader(nethttp.StatusForbidden)
 	default:
@@ -148,6 +150,15 @@ func TestAllowed_KeepsThePlatformsRefusals(t *testing.T) {
 	require.NoError(t, err)
 	_, err = gone.Allowed(context.Background(), caller, "acme", read)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "%v", err)
+}
+
+// TestOrganizations_AnswersTheCallersByIdentifier reads acme back by
+// the last segment of its GRN, as cowork's paths name it.
+func TestOrganizations_AnswersTheCallersByIdentifier(t *testing.T) {
+	c := newClient(t, &fakePlatform{})
+	orgs, err := c.Organizations(context.Background(), platform.Caller{Credential: platform.Credential{Session: "ada"}})
+	require.NoError(t, err)
+	assert.Equal(t, []platform.Organization{{ID: "acme", Name: "Acme"}}, orgs)
 }
 
 // TestRequire_RefusesWhenAnyCheckIsDenied holds that one denied check

@@ -5443,7 +5443,7 @@ ${err.toString()}`);
     }
     return negatedAttributes;
   };
-  var insertText = (transaction, parent, currPos, text2, attributes) => {
+  var insertText = (transaction, parent, currPos, text3, attributes) => {
     currPos.currentAttributes.forEach((_val, key) => {
       if (attributes[key] === void 0) {
         attributes[key] = null;
@@ -5453,10 +5453,10 @@ ${err.toString()}`);
     const ownClientId = doc2.clientID;
     minimizeAttributeChanges(currPos, attributes);
     const negatedAttributes = insertAttributes(transaction, parent, currPos, attributes);
-    const content = text2.constructor === String ? new ContentString(
+    const content = text3.constructor === String ? new ContentString(
       /** @type {string} */
-      text2
-    ) : text2 instanceof AbstractType ? new ContentType(text2) : new ContentEmbed(text2);
+      text3
+    ) : text3 instanceof AbstractType ? new ContentType(text3) : new ContentEmbed(text3);
     let { left, right, index } = currPos;
     if (parent._searchMarker) {
       updateMarkerChanges(parent._searchMarker, currPos.index, content.getLength());
@@ -5985,9 +5985,9 @@ ${err.toString()}`);
      * @return {YText}
      */
     clone() {
-      const text2 = new _YText();
-      text2.applyDelta(this.toDelta());
-      return text2;
+      const text3 = new _YText();
+      text3.applyDelta(this.toDelta());
+      return text3;
     }
     /**
      * Creates YTextEvent and calls observers.
@@ -6184,8 +6184,8 @@ ${err.toString()}`);
      *                                    Text.
      * @public
      */
-    insert(index, text2, attributes) {
-      if (text2.length <= 0) {
+    insert(index, text3, attributes) {
+      if (text3.length <= 0) {
         return;
       }
       const y = this.doc;
@@ -6198,10 +6198,10 @@ ${err.toString()}`);
               attributes[k] = v;
             });
           }
-          insertText(transaction, this, pos, text2, attributes);
+          insertText(transaction, this, pos, text3, attributes);
         });
       } else {
-        this._pending.push(() => this.insert(index, text2, attributes));
+        this._pending.push(() => this.insert(index, text3, attributes));
       }
     }
     /**
@@ -7049,9 +7049,9 @@ ${err.toString()}`);
      * @return {YXmlText}
      */
     clone() {
-      const text2 = new _YXmlText();
-      text2.applyDelta(this.toDelta());
-      return text2;
+      const text3 = new _YXmlText();
+      text3.applyDelta(this.toDelta());
+      return text3;
     }
     /**
      * Creates a Dom Element that mirrors this YXmlText.
@@ -8511,15 +8511,53 @@ ${err.toString()}`);
     }
     return node.toArray().map(textOf).join("");
   }
-  function element2(block) {
-    const el = new YXmlElement(block.type);
-    for (const [k, v] of Object.entries(block.attrs || {})) el.setAttribute(k, v);
-    if (block.text) {
-      const t = new YXmlText();
-      t.insert(0, block.text);
-      el.insert(0, [t]);
-    }
+  function text2(value) {
+    const t = new YXmlText();
+    if (value) t.insert(0, value);
+    return t;
+  }
+  function wrap(name, children, attrs = {}) {
+    const el = new YXmlElement(name);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    if (children.length > 0) el.insert(0, children);
     return el;
+  }
+  var paragraph = (value) => wrap("paragraph", [text2(value)]);
+  var LISTS = { bulletList: "listItem", orderedList: "listItem", taskList: "taskItem" };
+  function element2(block) {
+    const attrs = block.attrs || {};
+    if (block.type in LISTS) {
+      const items = (block.items || []).map(
+        (item) => wrap(LISTS[block.type], [paragraph(item.text)], block.type === "taskList" ? { checked: !!item.checked } : {})
+      );
+      return wrap(block.type, items, attrs);
+    }
+    switch (block.type) {
+      case "blockquote":
+        return wrap("blockquote", [paragraph(block.text)], attrs);
+      case "horizontalRule":
+      case "image":
+        return wrap(block.type, [], attrs);
+      default:
+        return wrap(block.type, [text2(block.text)], attrs);
+    }
+  }
+  function read(node) {
+    if (!(node instanceof YXmlElement)) return { type: "text", attrs: {}, text: textOf(node) };
+    const out = { type: node.nodeName, attrs: node.getAttributes(), text: "" };
+    if (node.nodeName in LISTS) {
+      out.items = node.toArray().map((item) => {
+        const entry = { text: textOf(item) };
+        if (node.nodeName === "taskList") entry.checked = item.getAttribute("checked") === true;
+        return entry;
+      });
+      out.text = out.items.map((i) => i.text).join("\n");
+    } else if (node.nodeName === "blockquote") {
+      out.text = node.toArray().map(textOf).join("\n");
+    } else {
+      out.text = textOf(node);
+    }
+    return out;
   }
   var clients = /* @__PURE__ */ new Map();
   var nextClient = 1;
@@ -8533,17 +8571,9 @@ ${err.toString()}`);
     merge: (updates) => mergeUpdates(updates),
     stateVector: (state) => encodeStateVectorFromUpdate(state),
     diff: (state, stateVector) => diffUpdate(state, stateVector),
-    // blocks answers a JSON array of the page's top-level blocks, each
-    // its type, attributes and text.
+    // blocks answers a JSON array of the page's top-level blocks.
     blocks(state) {
-      const fragment = load(state).getXmlFragment(FIELD);
-      return JSON.stringify(
-        fragment.toArray().map((node) => ({
-          type: node instanceof YXmlElement ? node.nodeName : "text",
-          attrs: node instanceof YXmlElement ? node.getAttributes() : {},
-          text: textOf(node)
-        }))
-      );
+      return JSON.stringify(load(state).getXmlFragment(FIELD).toArray().map(read));
     },
     open(state) {
       const handle = nextClient++;
@@ -8559,19 +8589,37 @@ ${err.toString()}`);
     state: (handle) => encodeStateAsUpdate(client(handle)),
     clientStateVector: (handle) => encodeStateVector(client(handle)),
     // The edits answer the update each made, for the caller to send.
+    // An index past the last block is refused, as Yjs refuses one.
     appendBlock(handle, blockJSON) {
-      const doc2 = client(handle);
-      const before = encodeStateVector(doc2);
-      doc2.getXmlFragment(FIELD).push([element2(JSON.parse(blockJSON))]);
-      return encodeStateAsUpdate(doc2, before);
+      return edit(handle, (f) => f.push([element2(JSON.parse(blockJSON))]));
     },
-    insertText(handle, blockIndex, offset, text2) {
-      const doc2 = client(handle);
-      const before = encodeStateVector(doc2);
-      const block = doc2.getXmlFragment(FIELD).get(blockIndex);
-      const t = block.toArray().find((n) => n instanceof YXmlText);
-      t.insert(offset, text2);
-      return encodeStateAsUpdate(doc2, before);
+    insertBlock(handle, index, blockJSON) {
+      return edit(handle, (f) => f.insert(index, [element2(JSON.parse(blockJSON))]));
+    },
+    replaceBlock(handle, index, blockJSON) {
+      return edit(handle, (f) => {
+        if (index >= f.length) throw new Error("no block " + index);
+        f.delete(index, 1);
+        f.insert(index, [element2(JSON.parse(blockJSON))]);
+      });
+    },
+    deleteBlock(handle, index) {
+      return edit(handle, (f) => {
+        if (index >= f.length) throw new Error("no block " + index);
+        f.delete(index, 1);
+      });
+    },
+    insertText(handle, blockIndex, offset, value) {
+      return edit(handle, (f) => {
+        const t = f.get(blockIndex).toArray().find((n) => n instanceof YXmlText);
+        t.insert(offset, value);
+      });
     }
   };
+  function edit(handle, change) {
+    const doc2 = client(handle);
+    const before = encodeStateVector(doc2);
+    doc2.transact(() => change(doc2.getXmlFragment(FIELD)));
+    return encodeStateAsUpdate(doc2, before);
+  }
 })();

@@ -39,6 +39,11 @@ type Service interface {
 	// Serve speaks the sync protocol on conn until the client leaves,
 	// ctx ends, or the connection fails, and answers why it ended.
 	Serve(ctx context.Context, room Room, conn Conn) error
+	// Read answers the page's blocks.
+	Read(ctx context.Context, room Room) ([]Block, error)
+	// Apply makes edits to the page as a client would, and answers its
+	// blocks after them.
+	Apply(ctx context.Context, room Room, edits []Edit) ([]Block, error)
 }
 
 type service struct {
@@ -175,7 +180,7 @@ func (s *service) read(ctx context.Context, room Room, conn Conn, p *peer) error
 // apply keeps one update and sends it on to the page's other
 // connections. An update that does not decode is refused before it is
 // kept, since every later reader would fail on it.
-func (s *service) apply(ctx context.Context, room Room, p *peer, update []byte) error {
+func (s *service) apply(ctx context.Context, room Room, p fanout.Peer, update []byte) error {
 	if _, err := s.engine.StateVector(update); err != nil {
 		return err
 	}

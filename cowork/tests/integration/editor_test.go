@@ -30,6 +30,11 @@ type editor struct {
 	mu     sync.Mutex
 	conn   *websocket.Conn
 	denied bool
+
+	// placing is held while a remote update is applied, and while an
+	// edit reads the document to find where it goes, so the place it
+	// read is still the place when it is made.
+	placing sync.Mutex
 }
 
 func newEditor(t *testing.T, s *stack, who, page string) *editor {
@@ -106,7 +111,9 @@ func (e *editor) read(c *websocket.Conn) {
 			}
 			e.send(collab.Message{Kind: collab.MessageKindSync, Sync: collab.SyncKindStep2, Payload: missing})
 		default:
+			e.placing.Lock()
 			_ = e.doc.Apply(m.Payload)
+			e.placing.Unlock()
 		}
 	}
 }
@@ -144,6 +151,17 @@ func (e *editor) appendBlock(b collab.Block) { e.t.Helper(); e.edit(e.doc.Append
 func (e *editor) insertText(block, offset int, text string) {
 	e.t.Helper()
 	e.edit(e.doc.InsertText(block, offset, text))
+}
+
+// typeAtEnd types text at the end of a block, as a person whose caret
+// is there does: where the end is and the insertion are one step, so
+// an update arriving between them cannot move the end.
+func (e *editor) typeAtEnd(block int, text string) {
+	e.t.Helper()
+	e.placing.Lock()
+	update, err := e.doc.InsertText(block, len(e.blocks()[block].Text), text)
+	e.placing.Unlock()
+	e.edit(update, err)
 }
 
 func (e *editor) blocks() []collab.Block {

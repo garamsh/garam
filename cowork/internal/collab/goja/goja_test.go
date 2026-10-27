@@ -138,3 +138,60 @@ func TestBlocks_ReadsTextThatLooksLikeMarkup(t *testing.T) {
 		assert.Equal(t, text, blocks[0].Text)
 	}
 }
+
+// TestBlocks_ListsHoldTheirItems writes each list type with two items
+// and reads the items back, a to-do's checked state included, and the
+// list's text as its items' joined.
+func TestBlocks_ListsHoldTheirItems(t *testing.T) {
+	e := newEngine(t)
+	c := newClient(t, e, nil)
+	for _, typ := range []string{"bulletList", "orderedList", "taskList"} {
+		_, err := c.AppendBlock(collab.Block{Type: typ, Items: []collab.Item{{Text: "one", Checked: true}, {Text: "two"}}})
+		require.NoError(t, err)
+	}
+	state, err := c.State()
+	require.NoError(t, err)
+	blocks, err := e.Blocks(state)
+	require.NoError(t, err)
+	require.Len(t, blocks, 3)
+	for _, b := range blocks {
+		assert.Equal(t, "one\ntwo", b.Text, b.Type)
+		require.Len(t, b.Items, 2)
+	}
+	assert.Equal(t, []collab.Item{{Text: "one"}, {Text: "two"}}, blocks[0].Items, "a bullet item has no checked state")
+	assert.Equal(t, []collab.Item{{Text: "one", Checked: true}, {Text: "two"}}, blocks[2].Items)
+}
+
+// TestEdits_InsertReplaceAndDeleteByIndex places a block before the
+// first, replaces the second and deletes the third, and reads the
+// order back. An index past the last block is refused, and the page is
+// unchanged by it.
+func TestEdits_InsertReplaceAndDeleteByIndex(t *testing.T) {
+	e := newEngine(t)
+	c := newClient(t, e, nil)
+	for _, text := range []string{"a", "b", "c"} {
+		_, err := c.AppendBlock(collab.Block{Type: "paragraph", Text: text})
+		require.NoError(t, err)
+	}
+	_, err := c.InsertBlock(0, collab.Block{Type: "heading", Attrs: map[string]any{"level": float64(1)}, Text: "title"})
+	require.NoError(t, err)
+	_, err = c.ReplaceBlock(1, collab.Block{Type: "blockquote", Text: "A"})
+	require.NoError(t, err)
+	_, err = c.DeleteBlock(2)
+	require.NoError(t, err)
+
+	_, err = c.DeleteBlock(9)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "%v", err)
+	_, err = c.ReplaceBlock(9, collab.Block{Type: "paragraph", Text: "x"})
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "%v", err)
+
+	state, err := c.State()
+	require.NoError(t, err)
+	blocks, err := e.Blocks(state)
+	require.NoError(t, err)
+	var got []string
+	for _, b := range blocks {
+		got = append(got, b.Type+":"+b.Text)
+	}
+	assert.Equal(t, []string{"heading:title", "blockquote:A", "paragraph:c"}, got)
+}

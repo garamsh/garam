@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	apigen "github.com/garamsh/garam/cowork/api"
+	"github.com/garamsh/garam/cowork/internal/mcp"
 	"github.com/garamsh/garam/platform/sdk/errorx"
 )
 
@@ -24,6 +25,10 @@ func (s *Server) Handler(ready func(context.Context) error) http.Handler {
 	apigen.HandlerWithOptions(s, apigen.StdHTTPServerOptions{BaseRouter: mux, ErrorHandlerFunc: BindingError})
 	mux.HandleFunc(SyncPath, s.SyncPage)
 	mux.HandleFunc(ChannelLivePath, s.ChannelLive)
+	// The tools are a client's, sent a bearer; a browser's cookie is
+	// not taken there, so a page on another site cannot call them as
+	// its visitor.
+	mux.Handle(mcp.Path, s.tools.Handler(s.bearerCaller, writeError))
 	mux.HandleFunc(LivePath, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	mux.HandleFunc(ReadyPath, func(w http.ResponseWriter, r *http.Request) {
 		if err := ready(r.Context()); err != nil {

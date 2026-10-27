@@ -45,7 +45,7 @@ func TestSync_InterleavedEditsConverge(t *testing.T) {
 		a, b := fmt.Sprintf("<a%d>", i), fmt.Sprintf("<b%d>", i)
 		tokens = append(tokens, a, b)
 		ada.insertText(0, 0, a)
-		bob.insertText(0, len(bob.text()), b)
+		bob.typeAtEnd(0, b)
 	}
 
 	eventually(t, "both documents converge on every edit", func() bool {
@@ -97,9 +97,9 @@ func TestSync_KeepsEveryBlockTypeInOrder(t *testing.T) {
 	want := []collab.Block{
 		{Type: "paragraph", Text: "body"},
 		{Type: "heading", Attrs: map[string]any{"level": float64(1)}, Text: "title"},
-		{Type: "bulletList", Text: "bullet"},
-		{Type: "orderedList", Text: "first"},
-		{Type: "taskList", Text: "to do"},
+		{Type: "bulletList", Text: "bullet", Items: []collab.Item{{Text: "bullet"}}},
+		{Type: "orderedList", Text: "first", Items: []collab.Item{{Text: "first"}}},
+		{Type: "taskList", Text: "to do", Items: []collab.Item{{Text: "to do", Checked: true}}},
 		{Type: "codeBlock", Attrs: map[string]any{"language": "go"}, Text: "x := 1"},
 		{Type: "blockquote", Text: "quoted"},
 		{Type: "horizontalRule"},
@@ -119,6 +119,7 @@ func TestSync_KeepsEveryBlockTypeInOrder(t *testing.T) {
 		for k, v := range b.Attrs {
 			assert.Equal(t, v, got[i].Attrs[k], "block %d attribute %s", i, k)
 		}
+		assert.Equal(t, b.Items, got[i].Items, "block %d items", i)
 	}
 }
 

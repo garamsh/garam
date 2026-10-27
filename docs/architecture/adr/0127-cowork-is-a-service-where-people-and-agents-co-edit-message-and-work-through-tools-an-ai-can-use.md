@@ -58,6 +58,15 @@ no revision holds for it.
   agents, for search, and for exports. The platform's images build
   with `CGO_ENABLED=0` (`deploy/local/Dockerfile:34`), so a binding
   that needs cgo would break the single static binary.
+- **What goja costs, measured.** `yjs` 13.6.33, bundled by esbuild to
+  ES2015 (256 KB), runs in goja once `crypto.getRandomValues` is
+  supplied from Go's `crypto/rand`. On the session's container,
+  shared with a test run:
+  - the bundle loads in 40 to 58 ms;
+  - appending a paragraph to a document kept open in the engine
+    costs about 12 ms, and to one decoded afresh from its state
+    each time, about 70 ms;
+  - encoding the state of a 1,200-paragraph document costs 143 ms.
 
 ## Decision
 
@@ -128,8 +137,8 @@ ports.**
      before every read and write, batched per request. #1663 carries
      the platform change.
    - An agent is decided the same way, once #1633 lets it present
-     itself to the browser API. Until then, agents take part through
-     the MCP endpoint only after #1633.
+     itself to the browser API. Until then, no agent acts in cowork
+     as itself.
 6. **Messaging reaches agents through the platform's queue.**
    - A message in cowork that mentions an agent, or that is posted in
      a direct message with one, is also posted to that agent's queue

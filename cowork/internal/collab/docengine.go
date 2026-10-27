@@ -15,4 +15,17 @@ type DocEngine interface {
 	Diff(state, stateVector []byte) ([]byte, error)
 	// Blocks answers the page's top-level blocks, in order.
 	Blocks(state []byte) ([]Block, error)
+	// Open answers an editor of a document holding state, which edits
+	// it as a client would.
+	Open(state []byte) (Editor, error)
+}
+
+// Editor edits one document. Each edit answers the update it made, to
+// be kept and sent on as a client's would be.
+type Editor interface {
+	AppendBlock(b Block) ([]byte, error)
+	InsertBlock(index int, b Block) ([]byte, error)
+	ReplaceBlock(index int, b Block) ([]byte, error)
+	DeleteBlock(index int) ([]byte, error)
+	Close()
 }

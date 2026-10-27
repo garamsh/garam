@@ -27,15 +27,64 @@ function textOf(node) {
   return node.toArray().map(textOf).join("");
 }
 
-function element(block) {
-  const el = new Y.XmlElement(block.type);
-  for (const [k, v] of Object.entries(block.attrs || {})) el.setAttribute(k, v);
-  if (block.text) {
-    const t = new Y.XmlText();
-    t.insert(0, block.text);
-    el.insert(0, [t]);
-  }
+function text(value) {
+  const t = new Y.XmlText();
+  if (value) t.insert(0, value);
+  return t;
+}
+
+function wrap(name, children, attrs = {}) {
+  const el = new Y.XmlElement(name);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  if (children.length > 0) el.insert(0, children);
   return el;
+}
+
+const paragraph = (value) => wrap("paragraph", [text(value)]);
+
+// LISTS name the list types and what each of their items is.
+const LISTS = { bulletList: "listItem", orderedList: "listItem", taskList: "taskItem" };
+
+// element builds a block as the editor's schema nests it: a list holds
+// items that hold paragraphs, and a quote holds paragraphs, so a block
+// written here opens in the editor as one typed there.
+function element(block) {
+  const attrs = block.attrs || {};
+  if (block.type in LISTS) {
+    const items = (block.items || []).map((item) =>
+      wrap(LISTS[block.type], [paragraph(item.text)], block.type === "taskList" ? { checked: !!item.checked } : {}),
+    );
+    return wrap(block.type, items, attrs);
+  }
+  switch (block.type) {
+    case "blockquote":
+      return wrap("blockquote", [paragraph(block.text)], attrs);
+    case "horizontalRule":
+    case "image":
+      return wrap(block.type, [], attrs);
+    default:
+      return wrap(block.type, [text(block.text)], attrs);
+  }
+}
+
+// read is a block as a reader takes it: its type, attributes and text,
+// and for a list, its items.
+function read(node) {
+  if (!(node instanceof Y.XmlElement)) return { type: "text", attrs: {}, text: textOf(node) };
+  const out = { type: node.nodeName, attrs: node.getAttributes(), text: "" };
+  if (node.nodeName in LISTS) {
+    out.items = node.toArray().map((item) => {
+      const entry = { text: textOf(item) };
+      if (node.nodeName === "taskList") entry.checked = item.getAttribute("checked") === true;
+      return entry;
+    });
+    out.text = out.items.map((i) => i.text).join("\n");
+  } else if (node.nodeName === "blockquote") {
+    out.text = node.toArray().map(textOf).join("\n");
+  } else {
+    out.text = textOf(node);
+  }
+  return out;
 }
 
 // Clients the server edits through, and tests drive as editors would.
@@ -55,17 +104,9 @@ globalThis.engine = {
   stateVector: (state) => Y.encodeStateVectorFromUpdate(state),
   diff: (state, stateVector) => Y.diffUpdate(state, stateVector),
 
-  // blocks answers a JSON array of the page's top-level blocks, each
-  // its type, attributes and text.
+  // blocks answers a JSON array of the page's top-level blocks.
   blocks(state) {
-    const fragment = load(state).getXmlFragment(FIELD);
-    return JSON.stringify(
-      fragment.toArray().map((node) => ({
-        type: node instanceof Y.XmlElement ? node.nodeName : "text",
-        attrs: node instanceof Y.XmlElement ? node.getAttributes() : {},
-        text: textOf(node),
-      })),
-    );
+    return JSON.stringify(load(state).getXmlFragment(FIELD).toArray().map(read));
   },
 
   open(state) {
@@ -82,18 +123,42 @@ globalThis.engine = {
   state: (handle) => Y.encodeStateAsUpdate(client(handle)),
   clientStateVector: (handle) => Y.encodeStateVector(client(handle)),
   // The edits answer the update each made, for the caller to send.
+  // An index past the last block is refused, as Yjs refuses one.
   appendBlock(handle, blockJSON) {
-    const doc = client(handle);
-    const before = Y.encodeStateVector(doc);
-    doc.getXmlFragment(FIELD).push([element(JSON.parse(blockJSON))]);
-    return Y.encodeStateAsUpdate(doc, before);
+    return edit(handle, (f) => f.push([element(JSON.parse(blockJSON))]));
   },
-  insertText(handle, blockIndex, offset, text) {
-    const doc = client(handle);
-    const before = Y.encodeStateVector(doc);
-    const block = doc.getXmlFragment(FIELD).get(blockIndex);
-    const t = block.toArray().find((n) => n instanceof Y.XmlText);
-    t.insert(offset, text);
-    return Y.encodeStateAsUpdate(doc, before);
+  insertBlock(handle, index, blockJSON) {
+    return edit(handle, (f) => f.insert(index, [element(JSON.parse(blockJSON))]));
+  },
+  replaceBlock(handle, index, blockJSON) {
+    return edit(handle, (f) => {
+      if (index >= f.length) throw new Error("no block " + index);
+      f.delete(index, 1);
+      f.insert(index, [element(JSON.parse(blockJSON))]);
+    });
+  },
+  deleteBlock(handle, index) {
+    return edit(handle, (f) => {
+      if (index >= f.length) throw new Error("no block " + index);
+      f.delete(index, 1);
+    });
+  },
+  insertText(handle, blockIndex, offset, value) {
+    return edit(handle, (f) => {
+      const t = f
+        .get(blockIndex)
+        .toArray()
+        .find((n) => n instanceof Y.XmlText);
+      t.insert(offset, value);
+    });
   },
 };
+
+// edit runs change on a client's page in one transaction and answers
+// the update it made.
+function edit(handle, change) {
+  const doc = client(handle);
+  const before = Y.encodeStateVector(doc);
+  doc.transact(() => change(doc.getXmlFragment(FIELD)));
+  return Y.encodeStateAsUpdate(doc, before);
+}

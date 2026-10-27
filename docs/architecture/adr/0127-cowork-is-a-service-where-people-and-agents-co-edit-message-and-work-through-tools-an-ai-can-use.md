@@ -1,6 +1,7 @@
 # ADR 0127: cowork is a service where people and agents co-edit, message and work through tools an AI can use
 
-> Status: accepted
+> Status: accepted; ruling out a participant list is superseded by
+> [ADR-0128](./0128-a-cowork-channels-participants-narrow-what-the-platform-allows-and-grant-nothing.md)
 > Date: 2026-10-27
 
 Drafted for #1662, which reserves this number. The direction is the

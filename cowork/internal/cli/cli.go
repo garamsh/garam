@@ -41,10 +41,20 @@ func listOf(v string) []string {
 func NewRootCommand() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "cowork",
-		Short:         "Pages people and agents edit together, served from one binary",
+		Short:         "Pages, messages and tools people and agents share: the server and its client in one binary",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand())
+	flags := &clientFlags{}
+	client := []*cobra.Command{
+		newLoginCommand(flags), newLogoutCommand(flags), newWhoamiCommand(flags), newWorkspacesCommand(flags),
+		newPagesCommand(flags), newChannelsCommand(flags), newMessagesCommand(flags), newSearchCommand(flags),
+		newMCPCommand(flags),
+	}
+	for _, cmd := range client {
+		flags.bind(cmd)
+	}
+	root.AddCommand(client...)
 	return root
 }

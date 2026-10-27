@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/cowork/internal/collab"
+	"github.com/garamsh/garam/cowork/internal/mcp"
 )
 
 // bearer sends every request with who's bearer, as a client holding
@@ -194,6 +195,7 @@ func TestMCP_ARefusalIsAToolErrorAndNoData(t *testing.T) {
 	bob := s.agent(t, "bob")
 	res := bob.call("read_page", map[string]any{"org": "acme", "page": id})
 	assert.True(t, res.IsError)
+	assert.Equal(t, "permission_denied", res.Meta[mcp.KindKey], "the error names its kind")
 	assert.NotContains(t, textOf(res), "launch date")
 	assert.Nil(t, res.StructuredContent)
 

@@ -10,8 +10,9 @@ import (
 )
 
 func main() {
-	if err := cli.NewRootCommand().Execute(); err != nil {
+	cmd, err := cli.NewRootCommand().ExecuteC()
+	if err != nil {
 		slog.Error("cowork exited", slog.String("error", err.Error()))
-		os.Exit(cli.ExitCode(err))
+		os.Exit(cli.ExitCode(cmd, err))
 	}
 }

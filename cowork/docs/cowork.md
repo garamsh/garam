@@ -5,18 +5,23 @@ other, and keep the record of their work, with tools an AI can use at
 its centre
 ([ADR-0127](../../docs/architecture/adr/0127-cowork-is-a-service-where-people-and-agents-co-edit-message-and-work-through-tools-an-ai-can-use.md)).
 
-**Built so far: pages and real-time editing (#1663), and messaging
-between people (#1664).** Delivery to agents waits on the owner's
-decision on cowork's principal (#1655). MCP and the client CLI
-(#1665), tasks and the console's link (#1666), and artifacts and the
-blob store (#1667) are not built, there is no image, and nothing
-deploys cowork. Each milestone's pull request updates this document.
+**Built so far: pages and real-time editing (#1663), messaging
+between people (#1664), and MCP and the client CLI (#1665).**
+Delivery to agents waits on the owner's decision on cowork's principal
+(#1655), and an agent acting as itself on #1633. Tasks and the
+console's link (#1666), and artifacts and the blob store (#1667), are
+not built, there is no image, and nothing deploys cowork. Each
+milestone's pull request updates this document.
 
 ## Contents
 - What is built
 - Ports
 - What it asks of the platform
 - Real-time editing
+- Messaging
+- MCP
+- The client CLI
+- Connecting an AI client
 - Running it
 - Rationale
 - Open questions
@@ -24,9 +29,9 @@ deploys cowork. Each milestone's pull request updates this document.
 ## What is built
 
 - **One binary**, `cowork` (`cmd/cowork`). `cowork serve` runs the
-  HTTP API and the sync endpoint, `cowork migrate` applies
-  `migrations/`, and `cowork probe <url>` is the healthcheck. The
-  client commands and `cowork mcp` come with #1665.
+  HTTP API, the sync and live endpoints, and the MCP endpoint;
+  `cowork migrate` applies `migrations/`; `cowork probe <url>` is the
+  healthcheck. The rest are client commands, `cowork mcp` among them.
 - **The page tree** (`internal/page`, `api/openapi.yaml`). A page sits
   under at most one parent and is ordered among its siblings; deleting
   one deletes the pages beneath it and every page's content.
@@ -37,8 +42,13 @@ deploys cowork. Each milestone's pull request updates this document.
   direct messages, threads, mentions of people and agents, links to
   pages, full-text search, and each channel's messages live over a
   WebSocket.
-- **Not yet:** the web app and its plugin registry, the Postgres hub
-  several instances need, and the image.
+- **MCP** (`internal/mcp`). The tools an AI uses to read and edit
+  pages and to read and post messages, as its caller.
+- **The client CLI** (`internal/cli`). The tools as commands, and
+  `cowork mcp`, a stdio bridge for local MCP clients.
+- **The web app** (`web/`). Every block type is a plugin in its
+  registry.
+- **Not yet:** the Postgres hub several instances need, and the image.
 
 ## Ports
 
@@ -100,8 +110,7 @@ need them.
   `internal/collab/goja/engine.gen.js`, which `make gen` rebuilds and
   `make check-gen` holds to its source. The relay's path runs only
   Yjs's update functions, which decode no document. Reading a page's
-  blocks, and the edits the server will make for MCP (#1665), decode
-  one.
+  blocks, and the edits the server makes for MCP, decode one.
 
 ## Messaging
 
@@ -122,6 +131,85 @@ need them.
 - **Live.** `GET /orgs/{org}/channels/{channel}/live` carries each
   message posted there as one text frame, the API's `Message`. Reading
   is decided at the upgrade, as for a page's sync.
+
+## MCP
+
+- **The endpoint**, `POST /mcp`, in MCP's streamable HTTP transport,
+  stateless: every request is identified on its own, and answers as
+  JSON.
+- **It takes a bearer**, a person's CLI session (ADR-0120), and not
+  the session cookie, so a page on another site cannot call the tools
+  as the browser's visitor. A request without one is answered 401
+  before any tool runs.
+- **The tools.**
+
+  | Tool | What it does | Asks |
+  |---|---|---|
+  | `list_workspaces` | the organizations the caller belongs to | `listOrgs` |
+  | `list_pages` | the page tree the caller may read | `cowork:page-read` |
+  | `search` | page titles and messages | `cowork:page-read`, `cowork:channel-read` |
+  | `read_page` | a page as Markdown and as numbered blocks | `cowork:page-read` |
+  | `create_page` | a page, with its blocks | `cowork:page-write` |
+  | `update_page` | a new title, and edits to blocks by index | `cowork:page-write` |
+  | `list_channels` | the channels and direct messages the caller may read | `cowork:channel-read` |
+  | `read_messages` | a channel's messages | `cowork:channel-read` |
+  | `post_message` | a message or a reply | `cowork:channel-post` |
+
+  Every tool but `list_workspaces` takes the workspace as `org`. The
+  task and artifact tools come with #1666 and #1667.
+- **Each asks what the HTTP API asks**, through the same services, so
+  the platform decides a tool call exactly as the call it mirrors.
+- **An edit is a client's.** `update_page` opens the page in the
+  server's engine, makes each edit, and keeps and relays its update as
+  it would a browser's, so everyone with the page open sees it as it
+  is made.
+- **A refusal is the tool's error**, holding none of the resource.
+  Its `_meta` names the error's kind under `garam.sh/kind`, which the
+  CLI exits by. A failure of cowork's own names no cause; the cause is
+  logged.
+
+## The client CLI
+
+- **The session is garam's CLI session.** `cowork login` signs in by
+  the platform's device grant and keeps the session in garam's
+  credentials file (`$XDG_CONFIG_HOME/garam/credentials`, mode 0600),
+  so `garam login` and `cowork login` sign the same session in, and
+  `cowork logout` signs both out. `platform/sdk/clisession` holds the
+  file's format, its lock, and the grant.
+- **Where it talks.** `--endpoint` or `COWORK_ENDPOINT` names cowork
+  (default `https://cowork.garam.sh`), and `--platform` or
+  `GARAM_ENDPOINT` the platform (default `https://garam.sh`). http is
+  refused to any host but loopback.
+- **The workspace** is `--org`, or the one `garam orgs use` saved.
+- **The commands.** `login`, `logout`, `whoami`, `workspaces`, `pages
+  list|read|create`, `channels`, `messages list|post`, `search` and
+  `mcp`. Each but the first three calls the tool of its name, so the
+  CLI does what an AI client may, as the same caller.
+- **ADR-0122's contract.** `-o json` prints what the tool answered,
+  messages go to stderr, and a command exits 3 not signed in, 4
+  refused, 5 not found, 6 a conflict, 7 an invalid argument, 8
+  unavailable, 2 used wrongly, and 1 otherwise.
+
+## Connecting an AI client
+
+Sign in first, with `cowork login`, and name the workspace with `garam
+orgs use <org>` or tell the AI which one `list_workspaces` answers.
+
+- **Claude Code.** `claude mcp add cowork -- cowork mcp`.
+- **Claude Desktop**, in `claude_desktop_config.json`:
+
+  ```json
+  {"mcpServers": {"cowork": {"command": "cowork", "args": ["mcp"]}}}
+  ```
+
+- **A client that takes a remote server and a header.** The endpoint
+  is `https://cowork.garam.sh/mcp` with `Authorization: Bearer
+  <token>`. A session's access token lives an hour, so the stdio
+  bridge, which refreshes it, is the one to use where the client can
+  run a command.
+- **Claude's and ChatGPT's remote connectors.** Both sign in to a
+  remote server by OAuth, which needs the platform as an authorization
+  server. Neither connects until that is built (Open questions).
 
 ## Running it
 
@@ -158,7 +246,8 @@ editors in their own engines over real WebSockets.
   host-only, so it reaches cowork on `localhost` at any port, but not
   `cowork.garam.sh` from `console.garam.sh`. Scoping it to the parent
   domain is #1660's.
-- **OAuth for remote AI services.** Needs the platform as an
+- **OAuth for remote AI services.** Claude's and ChatGPT's remote
+  connectors sign in by OAuth, which needs the platform as an
   authorization server. Not scheduled.
 - **Loading plugins at runtime.** Plugins are bundled at build time
   until a later decision.

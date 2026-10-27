@@ -38,8 +38,28 @@ func New(pages page.Service, collabs collab.Service, channels channel.Service, p
 	t.server = sdkmcp.NewServer(&sdkmcp.Implementation{Name: "cowork", Version: version()}, &sdkmcp.ServerOptions{
 		Instructions: instructions,
 	})
+	t.server.AddReceivingMiddleware(kindOfErrors)
 	t.register()
 	return t
+}
+
+// KindKey is the key of a tool error's `_meta` that names its errorx
+// kind, so a client such as cowork's CLI branches on what failed
+// rather than on its words.
+const KindKey = "garam.sh/kind"
+
+// kindOfErrors names the kind of every tool error in its `_meta`.
+func kindOfErrors(next sdkmcp.MethodHandler) sdkmcp.MethodHandler {
+	return func(ctx context.Context, method string, req sdkmcp.Request) (sdkmcp.Result, error) {
+		res, err := next(ctx, method, req)
+		if r, ok := res.(*sdkmcp.CallToolResult); ok && r.IsError {
+			if r.Meta == nil {
+				r.Meta = sdkmcp.Meta{}
+			}
+			r.Meta[KindKey] = errorx.KindOf(r.GetError()).String()
+		}
+		return res, err
+	}
 }
 
 // version names the build serving the tools: its commit where the

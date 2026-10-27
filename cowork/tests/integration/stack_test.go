@@ -68,6 +68,8 @@ func (f *fakePlatform) denyCheck(key string) {
 }
 
 func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// The CLI reaches the API under /api, as the console serves it.
+	r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api")
 	who, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok {
 		if c, err := r.Cookie("garam_session"); err == nil {
@@ -121,9 +123,12 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // stack is cowork's server over real Postgres and the fake platform.
 type stack struct {
-	url      string
-	pool     *pgxpool.Pool
-	platform *fakePlatform
+	url string
+	// platformURL is the fake platform's root, which a CLI session is
+	// kept under.
+	platformURL string
+	pool        *pgxpool.Pool
+	platform    *fakePlatform
 }
 
 func newStack(t *testing.T) *stack {
@@ -136,7 +141,7 @@ func newStack(t *testing.T) *stack {
 	require.NoError(t, err)
 	srv := httptest.NewServer(h)
 	t.Cleanup(srv.Close)
-	return &stack{url: srv.URL, pool: p, platform: fake}
+	return &stack{url: srv.URL, platformURL: platformSrv.URL, pool: p, platform: fake}
 }
 
 // call makes one request as who and answers the status and body.

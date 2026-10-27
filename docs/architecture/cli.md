@@ -74,7 +74,7 @@ holds current.
   removed if garam refuses or cannot be reached. The command prints the
   answer without the secret and names the file on stderr; without
   `--out`, or with a file already there, it sends nothing.
-- **Coverage.** Each of the 80 operations is derived, served by a
+- **Coverage.** Each of the 81 operations is derived, served by a
   hand-written command, excluded with its reason, or pending, and in
   exactly one of those. `cligen` refuses anything else, and so does
   `TestAPIOperations_PlaceEveryOperationOfTheSpecification`.

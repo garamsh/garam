@@ -45,7 +45,7 @@ func TestSync_InterleavedEditsConverge(t *testing.T) {
 		a, b := fmt.Sprintf("<a%d>", i), fmt.Sprintf("<b%d>", i)
 		tokens = append(tokens, a, b)
 		ada.insertText(0, 0, a)
-		bob.insertText(0, len(bob.text()), b)
+		bob.typeAtEnd(0, b)
 	}
 
 	eventually(t, "both documents converge on every edit", func() bool {

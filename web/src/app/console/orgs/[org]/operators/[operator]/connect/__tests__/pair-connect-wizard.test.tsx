@@ -77,6 +77,7 @@ function wizard(
         }}
         problem={null}
         initialStep={initialStep}
+        canIssue
         operatorsHref="/console/orgs/acme/operators"
       />
     </TooltipProvider>

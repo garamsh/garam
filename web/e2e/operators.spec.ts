@@ -131,7 +131,9 @@ test.describe("operators", () => {
 
     // The control: the same dialog, its request let through, registers.
     await register.click();
-    await expect(page).toHaveURL(`${operators}/aurora/connect`);
+    await expect(page).toHaveURL(
+      `${operators}/aurora/connect?pair=aurora-control`,
+    );
   });
 
   test("connects an Operator as one registration of its two identities, and adds a control service to an older one (#1636)", async ({
@@ -161,7 +163,9 @@ test.describe("operators", () => {
       .getByRole("textbox", { name: "Control service identifier" })
       .fill("aurora-control");
     await dialog.getByRole("button", { name: "Register", exact: true }).click();
-    await expect(page).toHaveURL(`${operators}/aurora/connect`);
+    await expect(page).toHaveURL(
+      `${operators}/aurora/connect?pair=aurora-control`,
+    );
     await expect(
       page.getByRole("button", { name: "Issue both keys", exact: true }),
     ).toBeVisible();

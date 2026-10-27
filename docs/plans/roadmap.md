@@ -10,6 +10,7 @@ workflow last. Each tier depends only on the tier below it.
 - Web console (in progress)
 - P3 — Workflow core (not started)
 - P4 — Operational (partly done)
+- Collaboration platform (decided, not started)
 - Sequencing rules
 
 ## MVP — Authentication + org permissions (done)
@@ -106,6 +107,23 @@ already expose, built in parallel rather than gating P3.
   `garam-dev/garam-web` under a commit-derived or prerelease tag:
   `make image-build` builds one locally and a person pushes it
   (ADR-0071, ADR-0097).
+
+## Collaboration platform (decided, not started)
+
+The owner decided on 2026-10-27 that garam grows into an agent-based
+collaboration platform: a document service ("cowork"), product
+management, agents working beside people, and organization-level
+model configuration. #1655 records the decisions and orders the work.
+
+- The repository becomes a monorepo of services (ADR-0125). #1659
+  moves today's tree, #1661 runs CI per affected module, and #1660
+  splits the web app into `site/` and `console/`.
+- Agents reach models through an AI gateway (#1658).
+- `ai-gateway/` and `cowork/` are filed once those decisions are
+  recorded. Product management has no design yet.
+
+P3's workflow core is not dropped. Where it lands among these
+services is decided when its work starts.
 
 ## Sequencing rules
 

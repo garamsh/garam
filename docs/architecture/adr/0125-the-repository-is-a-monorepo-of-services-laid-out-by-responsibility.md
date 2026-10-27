@@ -1,6 +1,6 @@
 # ADR 0125: The repository is a monorepo of services laid out by responsibility
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-27
 
 Drafted for #1656, which reserves this number. The direction is the
@@ -62,8 +62,8 @@ contracts.**
 3. **Workspaces are committed at the root.** `go.work` names every Go
    module and `pnpm-workspace.yaml` every web package. The root holds
    no Go package.
-4. **Boundaries.** Each is stated in `structure.md` §Boundaries and
-   dependency direction as a rule a reviewer checks a diff against:
+4. **Boundaries.** Each is stated in `structure.md` §Services as a
+   rule a reviewer checks a diff against:
    - a service owns its database, and no table is read or written by
      another service;
    - a service calls another through that service's published API
@@ -81,15 +81,16 @@ contracts.**
    that users publish is served from a separately registered domain,
    so that it never sits inside the session cookie's scope.
 6. **What earlier ADRs keep.**
-   - ADR-0003: one binary for the platform's processes, now at
-     `platform/cmd/garam`. Other services have binaries of their own.
+   - ADR-0003: one binary for the platform's processes. Its path
+     becomes `platform/cmd/garam`, and other services have binaries
+     of their own.
    - ADR-0009: each web app reaches its backend through a same-origin
      `/api/*` rewrite. Its location (`web/`) is superseded: the app
      becomes `console/` and `site/`.
-   - ADR-0042: the chart describes a deployment of `platform/` and
-     its web apps, and moves with `deploy/`. A new service adds what
-     it deploys to the chart, or a chart of its own, in its first
-     pull request.
+   - ADR-0042, unchanged: the chart describes a deployment, and it
+     stays at `deploy/charts/garam/`. A new service adds what it
+     deploys to the chart, or a chart of its own, in its first pull
+     request.
 
 None of this is built. #1659 moves today's tree, #1660 splits the web
 app, and #1661 makes CI run per affected module.

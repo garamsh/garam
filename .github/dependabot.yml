@@ -82,8 +82,8 @@ updates:
     schedule:
       interval: "weekly"
 
-  # deploy/local/docker-compose.yml's postgres image, which the entry
-  # above does not read.
+  # deploy/local/docker-compose.yml's images — postgres, openbao and
+  # rustfs — which the entry above does not read.
   #
   # Covers a newer tag, rewriting the tag and the digest together. It
   # runs the docker ecosystem's own update checker, so the two cases
@@ -159,3 +159,12 @@ updates:
       - dependency-name: "golang.org/x/tools"
       - dependency-name: "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
       - dependency-name: "mvdan.cc/sh/v3"
+
+  # platform/sdk's requirements (ADR-0125): its tests' assertion
+  # library. The root module replaces platform/sdk with its folder and
+  # requires testify itself, so the two entries move it apart; whichever
+  # lands second takes the other's version with `go work sync`.
+  - package-ecosystem: "gomod"
+    directory: "/platform/sdk"
+    schedule:
+      interval: "weekly"

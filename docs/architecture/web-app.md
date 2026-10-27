@@ -130,7 +130,12 @@ each one is placed, with a link only for a route that exists, and
 adding one is an entry there, a place in a group and a route folder.
 Consents is a section in no group: Settings links it and the palette
 finds it. Activity is not listed: garam records nothing it would show
-(§Not established).
+(§Not established). Below the groups the sidebar links the
+organization's workspace in cowork, at `COWORK_WEB_URL/{org}`, where
+that variable is set; cowork is another app, so it is a plain link and
+no section
+([ADR-0127](./adr/0127-cowork-is-a-service-where-people-and-agents-co-edit-message-and-work-through-tools-an-ai-can-use.md)
+§10).
 
 A section is left out of the sidebar and the palette where the server
 denies the caller its read. The organization's layout asks once for

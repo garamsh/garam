@@ -265,17 +265,19 @@ naming the account's payments. That ended once the repository went
 public on 2026-10-18: attempt 2 of run 39084547402 started its jobs
 on hosted runners.
 
-- `.github/workflows/ci.yml` triggers on `pull_request` into `main` and
-  on nothing else; `.github/workflows/images.yml` on the same event and
-  base except where a pull request changes only `docs/`;
+- `.github/workflows/ci.yml` triggers on `pull_request` into `main` or
+  `dev` and on nothing else; `.github/workflows/images.yml` on the
+  same event and bases except where a pull request changes only
+  `docs/`;
   `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
   No workflow publishes the test image; an operator pushes it with
   `make test-image-push` and `make test-image-pin` (ADR-0093).
   `dev` is the default branch, and every pull request but the
   promotion pull request targets it
-  (`docs/convention/git.md` §Promotion), so the base filter selects the
-  promotion pull request and no pull request into `dev` starts a runner
-  (#1059).
+  (`docs/convention/git.md` §Promotion). The base filter names both
+  `main` and `dev`, so every pull request into either starts both
+  workflows (#1657). It named `main` alone from #1059 until then, on
+  the owner's decision that verification ran on the promotion.
 - **A superseded run is cancelled; a release run is not.** `ci.yml` and
   `images.yml` each declare a concurrency group keyed on
   `github.workflow` and `github.ref` — under their one trigger that ref
@@ -455,6 +457,14 @@ Responsibility documents:
   must plan for that no manifest carries: readiness, termination,
   migration failure, key-material enforcement, and what is not
   established
+- [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
+  gateway, the keys it holds, how it routes and what it records; not
+  yet built
+- [cowork.md](../../cowork/docs/cowork.md) — where people and agents
+  co-edit pages, message each other and keep the record of their work,
+  through tools an AI can use: its binary, its ports and what it asks
+  of the platform; the server's pages and real-time editing are built,
+  the rest is not
 - [web-app.md](./web-app.md) — what the application a person uses garam
   through is responsible for, the one seam it reaches the backend
   through, the design system its pages are built on, and what it does
@@ -1040,3 +1050,24 @@ ADRs:
   `listOperators`, so the console lists one row per Operator; the
   console's three terms and the API names they map to; the delegation
   stays authority alone
+- [0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
+  — the repository is a monorepo of services, each top-level folder
+  one responsibility, joined by committed `go.work` and pnpm
+  workspaces and meeting only through published contracts; not yet
+  built (#1659); supersedes 0003 in part, on the binary's path, and
+  0009 in part, on the frontend's location
+- [0126](./adr/0126-agents-reach-models-through-an-ai-gateway-on-openrouter-routed-by-jev.md)
+  — agents reach models only through an `ai-gateway` that speaks the
+  OpenAI protocol, calls OpenRouter with the platform's or the
+  organization's key, and routes by `typesafe/jev-router`; not yet
+  built; supersedes 0036 in part, on where a provider key may be held
+- [0127](./adr/0127-cowork-is-a-service-where-people-and-agents-co-edit-message-and-work-through-tools-an-ai-can-use.md)
+  — cowork is one Go binary serving pages co-edited through Yjs,
+  messages, tasks and artifacts to a pluggable web app, a CLI and an
+  MCP server; it asks the platform who a caller is and what it may do,
+  and keeps the rest behind ports; not yet built
+- [0128](./adr/0128-a-cowork-channels-participants-narrow-what-the-platform-allows-and-grant-nothing.md)
+  — a cowork channel's participant list only narrows: reading or
+  posting needs the platform's allow and, for a private channel or a
+  direct message, a place on the list; supersedes 0127 in part, on
+  keeping a list

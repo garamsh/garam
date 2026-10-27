@@ -53,6 +53,9 @@ HELM := go run helm.sh/helm/v4/cmd/helm@v4.2.4
 # suite truncates every table, so no worktree shares another's.
 TEST_DB_NAME ?= garam_test$(shell git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')
 export TEST_DB_NAME
+# cowork owns its database (ADR-0125), so its suite has one of its own
+# on the same server, named on the same terms.
+COWORK_TEST_DB_NAME ?= cowork_test$(shell git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')
 
 # IMAGE_BUILD_CACHE=gha has `backend-up` and `image-build` read and
 # write their layers in the GitHub Actions cache, which only a CI run
@@ -65,6 +68,10 @@ endif
 COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml$(if $(IMAGE_BUILD_CACHE), -f deploy/local/docker-compose.gha-cache.yml)
 export COMPOSE_LOCAL
 PNPM := pnpm --dir web
+# cowork's Yjs bundle is built by its own package, which holds only the
+# bundler and Yjs (ADR-0127).
+PNPM_COWORK_ENGINE := pnpm --dir cowork/engine
+PNPM_COWORK_WEB := pnpm --dir cowork/web
 
 # Where the api and the dev Postgres are published on this host, asked
 # of compose at the moment each is used. GARAM_LOCAL_API_PORT and
@@ -80,17 +87,24 @@ DB_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port postgres 5432 2>/dev/null | sed 's/
 # root token the dev server generated.
 OPENBAO_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port openbao 8200 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
 OPENBAO_CONTAINER = $(shell $(COMPOSE_LOCAL) ps -q openbao 2>/dev/null)
+# The RustFS cowork's blob store is tested against, and the keys
+# deploy/local/docker-compose.yml gives it.
+COWORK_S3_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port rustfs 9000 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
+COWORK_S3_ACCESS_KEY := cowork
+COWORK_S3_SECRET_KEY := cowork-local-secret
 
 # Empty rather than half a URL when no Postgres is published, so
 # `integration` and `e2e` have one thing to test. Set it in the
 # environment to run them against a database outside compose.
 TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(TEST_DB_NAME)?sslmode=disable)
+COWORK_TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(COWORK_TEST_DB_NAME)?sslmode=disable)
 
 # The Playwright suite seeds sessions for the api it drives, so its URL
 # names the stack's own `garam` rather than a database of its own. Empty
 # and overridable on the same terms as the line above.
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
+.PHONY: cowork-web-lint cowork-web-format cowork-web-test cowork-web-build cowork-web-check-gen cowork-web-ci cowork-web-e2e
 .PHONY: lint format test build gen check-gen check-toolchain integration e2e workload-integration standalone-e2e mutation db-up db-down db-prune backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
@@ -98,14 +112,20 @@ WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_AD
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
 
-# The module's packages, listed once so the targets below report the set
+# Every Go module go.work names, as one ./... pattern each relative to
+# the root, so a module joins every Go entry point below by joining the
+# workspace (ci.md: until changes select modules, the whole set is
+# every module).
+GO_PATTERNS = $(addsuffix /...,$(patsubst $(CURDIR)%,.%,$(shell go list -m -f '{{.Dir}}')))
+
+# The modules' packages, listed once so the targets below report the set
 # they covered rather than name a ./... pattern whose match nobody sees.
 # An empty list is never passed on, and each target says so itself
 # rather than resting on what a tool does with no argument: `go test`
 # given none reads the current directory, which fails only while no .go
 # file sits at the module root — a doc.go there is an ordinary idiom and
 # would make an empty list a run of zero tests exiting 0 (#870).
-GO_SELECT = go list ./...
+GO_SELECT = go list $(GO_PATTERNS)
 GO_PKGS = $(shell $(GO_SELECT))
 
 # The one way a Go entry point reports its packages: the count beside
@@ -180,11 +200,11 @@ test:
 
 # `go build ./...` exits 0 having done nothing should that pattern ever
 # resolve to no package, so build counts the packages it selects first.
-# It runs the pattern rather than the list: go build skips a test-only
+# It runs the patterns rather than the list: go build skips a test-only
 # package swept in by ./... and fails on one named directly.
 build:
 	$(call go-packages,build,$(GO_SELECT),$(GO_PKGS))
-	@go build ./...
+	@go build $(GO_PATTERNS)
 
 # gen regenerates everything derived from a source of truth: the
 # OpenAPI server, the CLI's client of it and the commands cligen derives
@@ -198,6 +218,9 @@ gen:
 	$(MOCKERY)
 	$(BUF) generate
 	$(GOIMPORTS) -w proto/gen
+	cd cowork && $(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
+	cd cowork && $(SQLC) generate
+	$(PNPM_COWORK_ENGINE) build
 
 # The output each generator owns, read from its config, since no
 # generator answers "what do I own" and none deletes what it stops
@@ -209,7 +232,10 @@ GEN_PATHS := $(shell { sed -n 's/^output: //p' api/oapi-codegen.yaml api/client-
 	sed -n 's/^        out: //p' sqlc.yaml; \
 	sed -n 's/^    out: //p' buf.gen.yaml; \
 	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; \
-	sed -n 's/^\toutPath *= "\(.*\)"$$/\1/p' internal/cli/cligen/main.go; } | sort -u)
+	sed -n 's/^\toutPath *= "\(.*\)"$$/\1/p' internal/cli/cligen/main.go; \
+	sed -n 's|^output: |cowork/|p' cowork/api/oapi-codegen.yaml; \
+	sed -n 's|^        out: |cowork/|p' cowork/sqlc.yaml; \
+	sed -n 's|.*outfile: "\.\./\(.*\)".*|cowork/\1|p' cowork/engine/build.mjs; } | sort -u)
 
 # check-gen fails on owned output that is modified, untracked or
 # deleted, and on tracked output carrying the "Code generated ... DO
@@ -264,20 +290,24 @@ export SEARCH_Q = $(Q)
 search:
 	@scripts/search.sh
 
-# db-up starts postgres and the openbao `integration` signs against, and
-# creates the test database beside `garam` if absent: Postgres has no
+# db-up starts postgres, the openbao `integration` signs against and the
+# rustfs cowork's blob store is tested against, and
+# creates the two test databases, the platform's and cowork's, beside
+# `garam` where absent: Postgres has no
 # CREATE DATABASE IF NOT EXISTS, so it asks psql first. Output and exit
 # status are read apart, because one non-zero status cannot tell a
 # failed query from a clean negative (#344).
 db-up:
-	$(COMPOSE_LOCAL) up -d --wait postgres openbao
-	@present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
-		"SELECT 1 FROM pg_database WHERE datname='$(TEST_DB_NAME)'")" \
-		|| { echo "db-up: could not ask postgres whether $(TEST_DB_NAME) exists" >&2; exit 1; }; \
-		test -n "$$present" || $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $(TEST_DB_NAME)
+	$(COMPOSE_LOCAL) up -d --wait postgres openbao rustfs
+	@for db in $(TEST_DB_NAME) $(COWORK_TEST_DB_NAME); do \
+		present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
+			"SELECT 1 FROM pg_database WHERE datname='$$db'")" \
+			|| { echo "db-up: could not ask postgres whether $$db exists" >&2; exit 1; }; \
+		test -n "$$present" || $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $$db || exit 1; \
+	done
 
 db-down:
-	$(COMPOSE_LOCAL) rm -sf postgres openbao
+	$(COMPOSE_LOCAL) rm -sf postgres openbao rustfs
 
 # db-prune drops the per-worktree databases db-up created for worktrees
 # that are gone. It is in no whole-set name and no workflow: a runner
@@ -298,21 +328,26 @@ backend-up:
 # 0 with `[no test files]` on one holding none — a build tag that
 # stopped matching reads like the run that did the work. That condition
 # then empties a list and fails below.
-INTEGRATION_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/integration/...)
-INTEGRATION_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/integration/...)
+INTEGRATION_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/integration/... ./cowork/tests/integration/...)
+INTEGRATION_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/integration/... ./cowork/tests/integration/...)
 E2E_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/e2e/...)
 E2E_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/e2e/...)
 
 # integration runs the store round-trips and the services over them in
 # process, against real Postgres, and the Transit custodian against the
-# dev OpenBao (see db-up).
+# dev OpenBao (see db-up). cowork's suite runs beside the platform's,
+# against cowork's own database.
 integration:
-	@echo 'integration: $(words $(INTEGRATION_PKGS)) packages, $(words $(INTEGRATION_TEST_FILES)) test files, against $(TEST_DB_NAME) and the openbao at $(OPENBAO_HOST_ADDR)'
+	@echo 'integration: $(words $(INTEGRATION_PKGS)) packages, $(words $(INTEGRATION_TEST_FILES)) test files, against $(TEST_DB_NAME), $(COWORK_TEST_DB_NAME), the openbao at $(OPENBAO_HOST_ADDR) and the rustfs at $(COWORK_S3_HOST_ADDR)'
 	@test -n '$(INTEGRATION_PKGS)' || { echo 'integration: nothing to run — no package under ./tests/integration/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "integration: no postgres published on this host — run make db-up" >&2; exit 1; }
 	@test -n '$(OPENBAO_HOST_ADDR)' && test -n '$(OPENBAO_CONTAINER)' || { echo "integration: no openbao published on this host — run make db-up" >&2; exit 1; }
+	@test -n '$(COWORK_S3_HOST_ADDR)' || { echo "integration: no rustfs published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' GARAM_TEST_OPENBAO_ADDR='https://$(OPENBAO_HOST_ADDR)' \
-		GARAM_TEST_OPENBAO_CONTAINER='$(OPENBAO_CONTAINER)' go test -count=1 $(INTEGRATION_PKGS)
+		GARAM_TEST_OPENBAO_CONTAINER='$(OPENBAO_CONTAINER)' COWORK_TEST_DATABASE_URL='$(COWORK_TEST_DATABASE_URL)' \
+		COWORK_TEST_S3_ENDPOINT='http://$(COWORK_S3_HOST_ADDR)' COWORK_TEST_S3_ACCESS_KEY='$(COWORK_S3_ACCESS_KEY)' \
+		COWORK_TEST_S3_SECRET_KEY='$(COWORK_S3_SECRET_KEY)' \
+		go test -count=1 $(INTEGRATION_PKGS)
 
 # e2e runs the built binary as the processes a deployment runs, against
 # the same Postgres (see db-up).
@@ -399,7 +434,7 @@ mutation:
 # The whole set, both toolchains, under one name (#789). `web-ci` runs
 # last so the cheaper Go half fails first, and it puts pnpm and the node
 # version web/.nvmrc names on every contributor's path.
-ci: format lint test build check-gen check-toolchain chart web-ci
+ci: format lint test build check-gen check-toolchain chart web-ci cowork-web-ci
 
 # ---------------------------------------------------------------------
 # web/ — the Next.js frontend (ADR-0009). It keeps its own toolchain and
@@ -408,6 +443,8 @@ ci: format lint test build check-gen check-toolchain chart web-ci
 
 web-install:
 	$(PNPM) install --frozen-lockfile
+	$(PNPM_COWORK_ENGINE) install --frozen-lockfile
+	$(PNPM_COWORK_WEB) install --frozen-lockfile
 
 # eslint prints nothing and exits 0 both when it covered the tree and
 # when its ignore patterns left it a fraction of it, so what it covered
@@ -923,3 +960,62 @@ minikube-forward: minikube-context
 # material, and leaves the cluster and the operator up.
 minikube-down:
 	$(KUBECTL_MINIKUBE) delete -f $(MINIKUBE_DIR)/namespace.yaml --ignore-not-found
+
+# ---------------------------------------------------------------------
+# cowork/web — cowork's Next.js app (ADR-0127). Its own toolchain and
+# lockfile, as web/'s; `cowork-web-ci` is the half of `ci` that covers
+# it, and `web-install` installs it beside web/.
+# ---------------------------------------------------------------------
+
+COWORK_WEB_FILES = $(shell git -C cowork/web ls-files --cached --others --exclude-standard)
+
+cowork-web-lint:
+	@echo 'cowork-web-lint: $(words $(filter %.ts %.tsx %.mjs %.mts,$(COWORK_WEB_FILES))) files under cowork/web (eslint, tsc)'
+	@test -n '$(filter %.ts %.tsx,$(COWORK_WEB_FILES))' || { echo 'cowork-web-lint: nothing to lint — git lists no TypeScript under cowork/web'; exit 1; }
+	$(PNPM_COWORK_WEB) lint
+	$(PNPM_COWORK_WEB) typecheck
+
+cowork-web-format:
+	@echo 'cowork-web-format: $(words $(COWORK_WEB_FILES)) files under cowork/web (prettier, less its ignore files)'
+	@test -n '$(COWORK_WEB_FILES)' || { echo 'cowork-web-format: nothing to check — git lists no file under cowork/web'; exit 1; }
+	$(PNPM_COWORK_WEB) format
+
+cowork-web-test:
+	$(PNPM_COWORK_WEB) test
+
+# `next build` runs with NODE_ENV=production, where env.ts requires
+# every URL. Nothing calls them during the build, so placeholders do.
+cowork-web-build:
+	COWORK_API_URL=http://localhost:8090 COWORK_SYNC_URL=ws://localhost:8090 \
+		GARAM_API_URL=http://localhost:8080 GARAM_CONSOLE_URL=http://localhost:3000 $(PNPM_COWORK_WEB) build
+
+COWORK_WEB_GEN_PATHS = $(shell sed -n 's|.*"gen:api": ".* -o \([^" ]*\)".*|cowork/web/\1|p' cowork/web/package.json)
+
+cowork-web-check-gen:
+	$(PNPM_COWORK_WEB) gen:api
+	@echo 'cowork-web-check-gen: $(words $(COWORK_WEB_GEN_PATHS)) generated paths compared'
+	@test -n '$(COWORK_WEB_GEN_PATHS)' && git ls-files --error-unmatch -- $(COWORK_WEB_GEN_PATHS) >/dev/null 2>&1 \
+		|| { echo 'cowork-web-check-gen: nothing to compare — package.json names no gen:api output, or git tracks none of "$(COWORK_WEB_GEN_PATHS)"'; exit 1; }
+	@git diff --exit-code -- $(COWORK_WEB_GEN_PATHS)
+
+cowork-web-ci: cowork-web-format cowork-web-lint cowork-web-test cowork-web-build cowork-web-check-gen
+
+# cowork-web-e2e drives the built app and the built cowork binary in a
+# real browser, against the platform `make backend-up` starts. cowork
+# keeps its own database on the stack's Postgres, created here where
+# absent; the seed writes sessions into the platform's.
+COWORK_E2E_DB_NAME = cowork_e2e
+COWORK_E2E_DATABASE_URL = $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(COWORK_E2E_DB_NAME)?sslmode=disable)
+
+cowork-web-e2e:
+	@test -n "$(API_HOST_ADDR)" || { echo "cowork-web-e2e: no api published on this host — run make backend-up" >&2; exit 1; }
+	@test -n '$(COWORK_E2E_DATABASE_URL)' || { echo "cowork-web-e2e: no postgres published on this host — run make backend-up" >&2; exit 1; }
+	@present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
+		"SELECT 1 FROM pg_database WHERE datname='$(COWORK_E2E_DB_NAME)'")" \
+		|| { echo "cowork-web-e2e: could not ask postgres whether $(COWORK_E2E_DB_NAME) exists" >&2; exit 1; }; \
+		test -n "$$present" || $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $(COWORK_E2E_DB_NAME)
+	cd cowork && go build -o bin/cowork ./cmd/cowork
+	$(PNPM_COWORK_WEB) exec playwright install chromium
+	COWORK_BIN='$(CURDIR)/cowork/bin/cowork' COWORK_MIGRATIONS_DIR='$(CURDIR)/cowork/migrations' \
+		COWORK_E2E_DATABASE_URL='$(COWORK_E2E_DATABASE_URL)' GARAM_API_URL=http://$(API_HOST_ADDR) \
+		GARAM_E2E_DATABASE_URL='$(WEB_E2E_DATABASE_URL)' $(PNPM_COWORK_WEB) e2e

@@ -104,6 +104,120 @@ func TestCheckPermissions_AsksAboutTheNamedResource(t *testing.T) {
 	assert.Equal(t, apigen.DecisionDeny, results[1].Decision)
 }
 
+// TestCheckPermissions_AsksACoworkPageAsItsGRN holds that a cowork
+// page is checked as the GRN cowork names it by, under the org that
+// asks (ADR-0127): the engine here allows one page and not another,
+// and the same action on each is answered apart. The org itself, which
+// a page-tree read targets, is asked too, and the engine allows it.
+func TestCheckPermissions_AsksACoworkPageAsItsGRN(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	allowedPage := grn.New(slug, grn.DefaultProject, org.ServiceTypeCoworkPage, "p-1")
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
+			return in.Object == allowedPage || in.Object == grn.Org(slug), nil
+		})
+	page := func(id string) *apigen.PermissionResource {
+		return &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkPage, Id: id}
+	}
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionCoworkPageWrite, Resource: page("p-1")},
+		apigen.PermissionCheck{Action: org.ActionCoworkPageWrite, Resource: page("p-2")},
+		apigen.PermissionCheck{Action: org.ActionCoworkPageRead},
+	), owner)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
+	require.Len(t, results, 3)
+	assert.Equal(t, apigen.DecisionAllow, results[0].Decision, "the page the engine allows")
+	assert.Equal(t, apigen.DecisionDeny, results[1].Decision, "another page")
+	assert.Equal(t, apigen.DecisionAllow, results[2].Decision, "the org's page tree")
+}
+
+// TestCheckPermissions_AsksACoworkChannelAsItsGRN holds the same for
+// a cowork channel (ADR-0128): the engine allows posting in one
+// channel and not another.
+func TestCheckPermissions_AsksACoworkChannelAsItsGRN(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	allowed := grn.New(slug, grn.DefaultProject, org.ServiceTypeCoworkChannel, "c-1")
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
+			return in.Object == allowed, nil
+		})
+	channel := func(id string) *apigen.PermissionResource {
+		return &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkChannel, Id: id}
+	}
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionCoworkChannelPost, Resource: channel("c-1")},
+		apigen.PermissionCheck{Action: org.ActionCoworkChannelPost, Resource: channel("c-2")},
+	), owner)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
+	require.Len(t, results, 2)
+	assert.Equal(t, apigen.DecisionAllow, results[0].Decision)
+	assert.Equal(t, apigen.DecisionDeny, results[1].Decision)
+}
+
+// TestCheckPermissions_AsksACoworkTaskAsItsGRN holds the same for a
+// cowork task: the engine allows writing one task and not another.
+func TestCheckPermissions_AsksACoworkTaskAsItsGRN(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	allowed := grn.New(slug, grn.DefaultProject, org.ServiceTypeCoworkTask, "t-1")
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
+			return in.Object == allowed, nil
+		})
+	task := func(id string) *apigen.PermissionResource {
+		return &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkTask, Id: id}
+	}
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionCoworkTaskWrite, Resource: task("t-1")},
+		apigen.PermissionCheck{Action: org.ActionCoworkTaskWrite, Resource: task("t-2")},
+	), owner)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
+	require.Len(t, results, 2)
+	assert.Equal(t, apigen.DecisionAllow, results[0].Decision)
+	assert.Equal(t, apigen.DecisionDeny, results[1].Decision)
+}
+
+// TestCheckPermissions_AsksACoworkArtifactAsItsGRN holds the same for
+// a cowork artifact.
+func TestCheckPermissions_AsksACoworkArtifactAsItsGRN(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	allowed := grn.New(slug, grn.DefaultProject, org.ServiceTypeCoworkArtifact, "a-1")
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
+			return in.Object == allowed, nil
+		})
+	artifact := func(id string) *apigen.PermissionResource {
+		return &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkArtifact, Id: id}
+	}
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
+		apigen.PermissionCheck{Action: org.ActionCoworkArtifactWrite, Resource: artifact("a-1")},
+		apigen.PermissionCheck{Action: org.ActionCoworkArtifactWrite, Resource: artifact("a-2")},
+	), owner)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
+	require.Len(t, results, 2)
+	assert.Equal(t, apigen.DecisionAllow, results[0].Decision)
+	assert.Equal(t, apigen.DecisionDeny, results[1].Decision)
+}
+
 // TestCheckPermissions_BoundsTheRequest accepts fifty pairs and
 // refuses fifty-one and none. Fifty is the control: the same pairs,
 // one fewer, are answered, so the refusal is the bound's.
@@ -371,6 +485,8 @@ func TestCheckPermissions_EveryActionPairsWithSomething(t *testing.T) {
 	for _, kind := range []apigen.PermissionResourceType{
 		apigen.PermissionResourceTypeGroup, apigen.PermissionResourceTypeProject,
 		apigen.PermissionResourceTypeAgent, apigen.PermissionResourceTypePolicy,
+		apigen.PermissionResourceTypeCoworkPage, apigen.PermissionResourceTypeCoworkChannel,
+		apigen.PermissionResourceTypeCoworkTask, apigen.PermissionResourceTypeCoworkArtifact,
 	} {
 		resources = append(resources, &apigen.PermissionResource{Type: kind, Id: "x"})
 	}

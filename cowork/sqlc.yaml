@@ -1,0 +1,47 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: internal/page/postgres/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/page/postgres/db
+        sql_package: pgx/v5
+        omit_unused_structs: true
+  - engine: postgresql
+    schema: migrations
+    queries: internal/collab/postgres/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/collab/postgres/db
+        sql_package: pgx/v5
+        omit_unused_structs: true
+  - engine: postgresql
+    schema: migrations
+    queries: internal/channel/postgres/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/channel/postgres/db
+        sql_package: pgx/v5
+        omit_unused_structs: true
+  - engine: postgresql
+    schema: migrations
+    queries: internal/task/postgres/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/task/postgres/db
+        sql_package: pgx/v5
+        omit_unused_structs: true
+  - engine: postgresql
+    schema: migrations
+    queries: internal/artifact/postgres/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/artifact/postgres/db
+        sql_package: pgx/v5
+        omit_unused_structs: true

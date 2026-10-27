@@ -159,3 +159,12 @@ updates:
       - dependency-name: "golang.org/x/tools"
       - dependency-name: "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
       - dependency-name: "mvdan.cc/sh/v3"
+
+  # platform/sdk's requirements (ADR-0125): its tests' assertion
+  # library. The root module replaces platform/sdk with its folder and
+  # requires testify itself, so the two entries move it apart; whichever
+  # lands second takes the other's version with `go work sync`.
+  - package-ecosystem: "gomod"
+    directory: "/platform/sdk"
+    schedule:
+      interval: "weekly"

@@ -30,11 +30,22 @@ decision, and the same partitioning serves one deployable or many.
 
 ## Services
 
-**None of this section is built.** The repository is still the one
-module this document's other sections describe, and #1659 moves it
-into the layout below
+**Little of this section is built.** The platform is still the
+module at the root that this document's other sections describe, and
+#1659 moves it into the layout below
 ([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)). Until then these rules bind
-what a pull request adds, and the tree reads in today's shape.
+what a pull request adds, and the tree reads in today's shape. What
+exists:
+
+- **`platform/sdk/`**, a library module holding `errorx` and `grn`,
+  created because cowork is the second module to need them. The root
+  module requires it through a `replace` to its folder, and its own
+  `internal/errorx` and `internal/grn` forward to it until #1659
+  rewrites their importers and deletes them.
+- **`go.work`** at the root, naming the root module and
+  `platform/sdk/`. Every Go entry point in the `Makefile` covers every
+  module it names. The root still holds the platform's packages until
+  #1659.
 
 Above the boundaries inside garam sits a coarser unit: the service.
 Each top-level folder is one service or one supporting

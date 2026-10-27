@@ -159,6 +159,35 @@ const (
 	// (#1170). Reading an agent is reading its identity, and grants
 	// none of this.
 	ActionAgentExecutionRead = "agent:execution-read"
+
+	// Reading and writing the organization's cowork pages (ADR-0127).
+	// cowork asks for them through checkPermissions; nothing here
+	// enforces them. On the organization they cover its page tree,
+	// listing and creating pages, and on a cowork page that page.
+	ActionCoworkPageRead  = "cowork:page-read"
+	ActionCoworkPageWrite = "cowork:page-write"
+
+	// Reading and posting in the organization's cowork channels
+	// (ADR-0127, ADR-0128). On the organization they cover listing and
+	// searching its channels and creating one, and on a cowork channel
+	// that channel. A private channel or a direct message narrows them
+	// further to its participants, which cowork keeps.
+	ActionCoworkChannelRead = "cowork:channel-read"
+	ActionCoworkChannelPost = "cowork:channel-post"
+
+	// Reading and writing the organization's cowork tasks (ADR-0127).
+	// On the organization they cover listing tasks and creating one,
+	// and on a cowork task that task: its fields, its comments and its
+	// links.
+	ActionCoworkTaskRead  = "cowork:task-read"
+	ActionCoworkTaskWrite = "cowork:task-write"
+
+	// Reading and writing the organization's cowork artifacts
+	// (ADR-0127). On the organization they cover listing artifacts and
+	// creating one, and on a cowork artifact that artifact: its
+	// versions, each saved one, and its embeds.
+	ActionCoworkArtifactRead  = "cowork:artifact-read"
+	ActionCoworkArtifactWrite = "cowork:artifact-write"
 )
 
 // actions is every action above: the ones a browser-facing operation
@@ -177,6 +206,10 @@ var actions = []string{
 	ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentReplace,
 	ActionAgentTemplateRead, ActionAgentTemplatePublish,
 	ActionExecutionProfileRead, ActionAgentExecutionRead,
+	ActionCoworkPageRead, ActionCoworkPageWrite,
+	ActionCoworkChannelRead, ActionCoworkChannelPost,
+	ActionCoworkTaskRead, ActionCoworkTaskWrite,
+	ActionCoworkArtifactRead, ActionCoworkArtifactWrite,
 }
 
 // Actions returns every action garam defines.
@@ -243,8 +276,21 @@ func machineActionsHeld(member bool) []string {
 	return actions
 }
 
+// coworkActions is every cowork action, which every role holds: a
+// member of the organization works in its cowork, and a policy narrows
+// that like any other action (ADR-0127). They are named one at a time
+// and never as `cowork:*`, so an action a later milestone adds is
+// granted when it is decided and not before.
+var coworkActions = []string{
+	ActionCoworkPageRead, ActionCoworkPageWrite,
+	ActionCoworkChannelRead, ActionCoworkChannelPost,
+	ActionCoworkTaskRead, ActionCoworkTaskWrite,
+	ActionCoworkArtifactRead, ActionCoworkArtifactWrite,
+}
+
 // Actions returns the action patterns the role grants on an org and
-// on the groups, projects, operators and agents it contains. The
+// on the groups, projects, operators, agents, and the cowork pages,
+// channels, tasks and artifacts it contains. The
 // patterns feed IAM-style Allow statements; the evaluator resolves
 // wildcards.
 func (r Role) Actions() []string {
@@ -252,18 +298,18 @@ func (r Role) Actions() []string {
 	case RoleOwner:
 		return slices.Concat([]string{
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
-		}, machineActionsHeld(false))
+		}, machineActionsHeld(false), coworkActions)
 	case RoleAdmin:
 		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
-		}, machineActionsHeld(false))
+		}, machineActionsHeld(false), coworkActions)
 	case RoleMember:
 		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgMemberList,
 			ActionGroupRead, ActionGroupMemberList,
 			ActionProjectRead, ActionProjectMemberList,
-		}, machineActionsHeld(true))
+		}, machineActionsHeld(true), coworkActions)
 	}
 	return nil
 }

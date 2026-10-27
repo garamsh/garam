@@ -1,0 +1,16 @@
+{
+  "name": "@garam/cowork-engine",
+  "private": true,
+  "description": "The Yjs bundle cowork runs inside goja (ADR-0127). `pnpm build` writes it beside the Go adapter that embeds it.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "yjs": "13.6.33"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  },
+  "packageManager": "pnpm@11.11.0"
+}

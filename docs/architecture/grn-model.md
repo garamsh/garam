@@ -1,8 +1,9 @@
 # GRN Model
 
 Garam Resource Names — one identifier for every resource in garam.
-Implementation: [`internal/grn/grn.go`](../../internal/grn/grn.go),
-whose doc comments are authoritative for constructing, rendering,
+Implementation:
+[`platform/sdk/grn/grn.go`](../../platform/sdk/grn/grn.go), whose doc
+comments are authoritative for constructing, rendering,
 parsing and validating a GRN, and for `GRN` being a value type.
 
 ## Contents

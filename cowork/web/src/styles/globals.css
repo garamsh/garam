@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+/* The editor's own content: TipTap renders plain elements, which the
+   reset leaves unstyled. */
+.page-content {
+  outline: none;
+  min-height: 14rem;
+}
+.page-content h1 {
+  @apply text-3xl font-bold mt-4;
+}
+.page-content h2 {
+  @apply text-2xl font-semibold mt-3;
+}
+.page-content h3 {
+  @apply text-xl font-semibold mt-2;
+}
+.page-content ul {
+  @apply list-disc pl-6;
+}
+.page-content ol {
+  @apply list-decimal pl-6;
+}
+.page-content ul[data-type="taskList"] {
+  @apply list-none pl-0;
+}
+.page-content ul[data-type="taskList"] li {
+  @apply flex gap-2;
+}
+.page-content blockquote {
+  @apply border-l-4 border-neutral-300 pl-3 text-neutral-700;
+}
+.page-content pre {
+  @apply rounded bg-neutral-100 p-3 font-mono text-sm;
+}
+.page-content hr {
+  @apply my-4 border-neutral-300;
+}
+.page-content img {
+  @apply max-w-full;
+}
+.collaboration-carets__caret {
+  @apply relative -mx-px border-x;
+  border-color: var(--caret-color);
+  word-break: normal;
+}
+.collaboration-carets__caret::after {
+  @apply absolute -top-5 left-[-1px] rounded px-1 text-xs whitespace-nowrap text-white;
+  background-color: var(--caret-color);
+  content: attr(data-name);
+}

@@ -312,6 +312,12 @@ garam's retired templates and the browser's `operatorGrn`
 
 ## Module boundaries
 
+**The layout ADR-0125 decides is not built.** #1659 moves this tree
+into `platform/`, `console/` and `tooling/`, and
+[structure.md](./structure.md) §Services holds the rules that layout
+keeps. The list below is today's tree
+([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)).
+
 - `api/` — OpenAPI specs (source of truth) + generated servers: the
   browser-facing listener's and the machine listener's (ADR-0019).
 - `proto/` — authz gRPC service definition + buf-generated code.
@@ -347,8 +353,10 @@ garam's retired templates and the browser's `operatorGrn`
   `minikube/README.md` §What this proves and what it does not is
   authoritative for what
   running it establishes about a real deployment.
-- `internal/grn/` — identifier; shared primitive.
-- `internal/errorx/` — typed errors; shared primitive.
+- `internal/grn/` — identifier; shared primitive. It forwards to
+  `platform/sdk/grn/` (ADR-0125) until #1659.
+- `internal/errorx/` — typed errors; shared primitive. It forwards to
+  `platform/sdk/errorx/` (ADR-0125) until #1659.
 - `internal/wire/` — the conversions onto the wire formats the request
   surfaces share: the statement `Effect` and a policy's status with
   their authz-proto mappings, a statement rendered onto the authz

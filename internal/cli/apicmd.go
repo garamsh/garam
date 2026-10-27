@@ -45,7 +45,10 @@ type apiOperation struct {
 	Rows string
 	// Secrets are fields of the answer that never reach stdout.
 	Secrets []string
-	call    func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error)
+	// Public is an operation that asks for no session, so the command
+	// sends none and runs signed out.
+	Public bool
+	call   func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error)
 }
 
 // apiField is a query or header parameter, or a body property, as a
@@ -99,9 +102,7 @@ func nounCommand(parent *cobra.Command, word string, top bool) *cobra.Command {
 	}
 	c := &cobra.Command{Use: word, Short: "The browser API's " + word}
 	if top {
-		flags := &userFlags{}
-		flags.bind(c)
-		userFlagsOf[c] = flags
+		(&userFlags{}).bind(c)
 	}
 	parent.AddCommand(c)
 	return c
@@ -192,7 +193,12 @@ func newAPICommand(op apiOperation, flags *userFlags) *cobra.Command {
 			}
 			path = append([]string{org}, args...)
 		}
-		client, err := c.signedIn(cmd.Context())
+		var client *apigen.ClientWithResponses
+		if op.Public {
+			client, err = c.anonymous()
+		} else {
+			client, err = c.signedIn(cmd.Context())
+		}
 		if err != nil {
 			return err
 		}

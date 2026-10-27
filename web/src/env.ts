@@ -10,6 +10,10 @@ const schema = z.object({
     process.env.NODE_ENV === "production"
       ? z.url()
       : z.url().default("http://localhost:8080"),
+  // Where cowork's web app is served (ADR-0127 §10). The sidebar links
+  // to it only where it is set, so a console without cowork offers no
+  // link to nowhere.
+  COWORK_WEB_URL: z.url().optional(),
 });
 
 /**
@@ -18,4 +22,5 @@ const schema = z.object({
  */
 export const env = schema.parse({
   GARAM_API_URL: process.env.GARAM_API_URL,
+  COWORK_WEB_URL: process.env.COWORK_WEB_URL || undefined,
 });

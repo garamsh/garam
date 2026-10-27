@@ -5,6 +5,7 @@ new boundary is earned.
 
 ## Contents
 - The shape
+- Services
 - Boundaries and dependency direction
 - Where the composition root lives
 - When a new boundary is earned
@@ -26,6 +27,56 @@ Nothing here states what goes *inside* a boundary, or how the system is
 deployed. The first divides by stack, not by architecture, and a
 boundary owns whichever parts it needs; the second is a separate
 decision, and the same partitioning serves one deployable or many.
+
+## Services
+
+**Little of this section is built.** The platform is still the
+module at the root that this document's other sections describe, and
+#1659 moves it into the layout below
+([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)). Until then these rules bind
+what a pull request adds, and the tree reads in today's shape. What
+exists:
+
+- **`platform/sdk/`**, a library module holding `errorx` and `grn`,
+  created because cowork is the second module to need them. The root
+  module requires it through a `replace` to its folder, and its own
+  `internal/errorx` and `internal/grn` forward to it until #1659
+  rewrites their importers and deletes them.
+- **`cowork/`**, the first service in its own folder: its module,
+  binary, database and documents
+  ([cowork.md](../../cowork/docs/cowork.md)).
+- **`go.work`** at the root, naming the root module, `cowork/` and
+  `platform/sdk/`. Every Go entry point in the `Makefile` covers every
+  module it names. The root still holds the platform's packages until
+  #1659.
+
+Above the boundaries inside garam sits a coarser unit: the service.
+Each top-level folder is one service or one supporting
+responsibility, and the boundaries this document describes from here
+on are boundaries inside a service.
+
+- **A top-level folder is one responsibility.** `platform/`,
+  `console/`, `site/`, `design/`, `tooling/`, `deploy/` and
+  `docs/convention/` are the folders ADR-0125 names. No folder holds
+  code without an owner: there is no `shared/`, `libs/` or `common/`.
+- **A service's folder is created by its first pull request**, and not
+  before.
+- **A service owns its database.** No table is read or written by a
+  service other than the one that owns it.
+- **A service reaches another only through what that service
+  publishes**: its API specification, or `platform/sdk/`. Reaching
+  into another service's `internal/` or its database is a defect, even
+  where it builds.
+- **Dependencies point toward `platform/`**, and none points back.
+- **Services authenticate to one another with tokens `platform/`
+  issues**, never by network position.
+- **`console/` calls only the services' public management APIs.**
+- **Management and runtime endpoints are separate deployments.** The
+  console and the services' management APIs are one kind; the machine
+  listener and the model gateway are the other.
+- **Workspaces are committed at the root.** `go.work` names every Go
+  module and `pnpm-workspace.yaml` every web package, and the root
+  holds no Go package.
 
 ## Boundaries and dependency direction
 
@@ -254,6 +305,12 @@ behaviour rather than convert one does not.
   `docs/convention/stack-go.md` and into
   §Where the composition root lives, which leaves that file only the
   Go path of the site.
+
+- [ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
+  — the repository is a monorepo of services laid out by
+  responsibility. §Services carries its boundary rules, which sit
+  above every rule in this document because they divide the
+  repository before this document divides a service.
 
 ## Open questions
 

@@ -21,8 +21,11 @@ WORKDIR /src
 # source-only edits. The proxy has dropped a read mid-download (#1622),
 # so the download is tried three times, 10 and 20 seconds apart. Each
 # attempt fetches only what the last left missing, and verifies every
-# module against go.sum as the first did.
+# module against go.sum as the first did. go.mod replaces
+# platform/sdk with its folder (ADR-0125), so that module's manifests
+# come along.
 COPY go.mod go.sum ./
+COPY platform/sdk/go.mod platform/sdk/go.sum ./platform/sdk/
 RUN for attempt in 1 2 3; do \
       go mod download && exit 0; \
       [ "$attempt" = 3 ] && exit 1; \

@@ -108,10 +108,11 @@ procedure.
 - **The PM promotes.** No other role moves `main`.
 - **Due** before any release, and at least after each verified
   milestone.
-- **The gate:** a PR from `dev` into `main`, which is what starts
-  `ci.yml` and `images.yml` on the forge. Every job of both passes on
-  the head being promoted. A run that was never dispatched is handled
-  as `AGENTS.md` §Roles states.
+- **The gate:** a PR from `dev` into `main`. `ci.yml` and `images.yml`
+  run on it as they run on every pull request into `dev`, and on it
+  every module runs. Every job of both passes on the head being
+  promoted. A run that was never dispatched is handled as `AGENTS.md`
+  §Roles states.
 - **The steps**, with `<n>` the promotion PR and `<head>` the commit
   its runs tested:
   1. Open the PR with base `main` and head `dev`.

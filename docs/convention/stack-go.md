@@ -165,6 +165,24 @@ Not every package under `internal/` is a domain. The boundary binds a
 test as it binds shipped code: one surface's test package does not
 import another surface.
 
+### Monorepo envelope
+
+This section states how modules sit beside each other where the
+repository holds several of them, joined by a `go.work` at its root.
+
+- **Each service folder is one module**, and takes the service layout.
+  Every rule above holds inside it, with the folder standing for the
+  module root.
+- **A module that ships no binary takes the library layout.**
+- **A module reaches another only through what that module
+  publishes**: a package outside its `internal/`, or its API
+  specification. The toolchain enforces `internal/` across modules as
+  it does inside one.
+- **The repository root holds `go.work`, `go.work.sum`, and no Go
+  package.**
+- **`go mod tidy` runs per module**, and `go work sync` follows a
+  change to any module's requirements.
+
 ## 2. Module / package boundary
 
 §1 owns the per-domain file inventory. This section states which Go

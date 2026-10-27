@@ -31,6 +31,15 @@ commands behind them.
   is the contract, so it arrives with the command and not ahead of it.
 - **One name for the whole set.** A single name runs those names in
   order, so "run the checks" is one command locally and one step in CI.
+- **Where the repository holds several modules, the whole set for a
+  change is every module the change can affect.** It is chosen from the
+  dependency graph the repository's workspaces declare: the modules
+  whose files the change touches, every module that depends on one of
+  those, and every module when the change touches a file the repository
+  root owns. The selection is an entry point of its own, and it prints
+  each module it chose with its reason, as every entry point reports
+  what it did. A change into the branch releases are cut from runs
+  every module.
 - **A change shows that the whole set ran before it landed.** Once the
   project has a pipeline, every change that can land on the default
   branch carries, on the change itself, the record of a run of the

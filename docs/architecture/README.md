@@ -457,6 +457,13 @@ Responsibility documents:
   must plan for that no manifest carries: readiness, termination,
   migration failure, key-material enforcement, and what is not
   established
+- [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
+  gateway, the keys it holds, how it routes and what it records; not
+  yet built
+- [cowork.md](./cowork.md) — where people and agents co-edit pages,
+  message each other and keep the record of their work, through tools
+  an AI can use: its binary, its ports and what it asks of the
+  platform; not yet built
 - [web-app.md](./web-app.md) — what the application a person uses garam
   through is responsible for, the one seam it reaches the backend
   through, the design system its pages are built on, and what it does
@@ -1032,3 +1039,19 @@ ADRs:
   — the CLI derives a command for every browser API operation from
   `api/openapi.yaml`, with one grammar, output contract and set of exit
   codes, and writes a secret answer to a file at mode 0600 alone
+- [0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
+  — the repository is a monorepo of services, each top-level folder
+  one responsibility, joined by committed `go.work` and pnpm
+  workspaces and meeting only through published contracts; not yet
+  built (#1659); supersedes 0003 in part, on the binary's path, and
+  0009 in part, on the frontend's location
+- [0126](./adr/0126-agents-reach-models-through-an-ai-gateway-on-openrouter-routed-by-jev.md)
+  — agents reach models only through an `ai-gateway` that speaks the
+  OpenAI protocol, calls OpenRouter with the platform's or the
+  organization's key, and routes by `typesafe/jev-router`; not yet
+  built; supersedes 0036 in part, on where a provider key may be held
+- [0127](./adr/0127-cowork-is-a-service-where-people-and-agents-co-edit-message-and-work-through-tools-an-ai-can-use.md)
+  — cowork is one Go binary serving pages co-edited through Yjs,
+  messages, tasks and artifacts to a pluggable web app, a CLI and an
+  MCP server; it asks the platform who a caller is and what it may do,
+  and keeps the rest behind ports; not yet built

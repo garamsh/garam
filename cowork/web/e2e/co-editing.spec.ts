@@ -49,7 +49,9 @@ test.describe("co-editing", () => {
     await expect(editorOf(ada)).toContainText("hello from ada and bob");
 
     // A block from the insert menu reaches the other browser as the
-    // block it is, not as its text.
+    // block it is, not as its text. Ada's caret stayed where Ada last
+    // typed, before bob's words, so Ada moves to the end first.
+    await ada.keyboard.press("Control+End");
     await ada.keyboard.press("Enter");
     await ada.getByRole("button", { name: "Heading 1" }).click();
     await ada.keyboard.type("Decisions");

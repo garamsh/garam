@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/platform/sdk/grn"
 )
 
 func TestNewAndString(t *testing.T) {

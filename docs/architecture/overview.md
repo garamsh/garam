@@ -353,8 +353,10 @@ keeps. The list below is today's tree
   `minikube/README.md` §What this proves and what it does not is
   authoritative for what
   running it establishes about a real deployment.
-- `internal/grn/` — identifier; shared primitive.
-- `internal/errorx/` — typed errors; shared primitive.
+- `internal/grn/` — identifier; shared primitive. It forwards to
+  `platform/sdk/grn/` (ADR-0125) until #1659.
+- `internal/errorx/` — typed errors; shared primitive. It forwards to
+  `platform/sdk/errorx/` (ADR-0125) until #1659.
 - `internal/wire/` — the conversions onto the wire formats the request
   surfaces share: the statement `Effect` and a policy's status with
   their authz-proto mappings, a statement rendered onto the authz

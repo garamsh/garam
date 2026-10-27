@@ -98,14 +98,20 @@ WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_AD
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
 
-# The module's packages, listed once so the targets below report the set
+# Every Go module go.work names, as one ./... pattern each relative to
+# the root, so a module joins every Go entry point below by joining the
+# workspace (ci.md: until changes select modules, the whole set is
+# every module).
+GO_PATTERNS = $(addsuffix /...,$(patsubst $(CURDIR)%,.%,$(shell go list -m -f '{{.Dir}}')))
+
+# The modules' packages, listed once so the targets below report the set
 # they covered rather than name a ./... pattern whose match nobody sees.
 # An empty list is never passed on, and each target says so itself
 # rather than resting on what a tool does with no argument: `go test`
 # given none reads the current directory, which fails only while no .go
 # file sits at the module root — a doc.go there is an ordinary idiom and
 # would make an empty list a run of zero tests exiting 0 (#870).
-GO_SELECT = go list ./...
+GO_SELECT = go list $(GO_PATTERNS)
 GO_PKGS = $(shell $(GO_SELECT))
 
 # The one way a Go entry point reports its packages: the count beside
@@ -180,11 +186,11 @@ test:
 
 # `go build ./...` exits 0 having done nothing should that pattern ever
 # resolve to no package, so build counts the packages it selects first.
-# It runs the pattern rather than the list: go build skips a test-only
+# It runs the patterns rather than the list: go build skips a test-only
 # package swept in by ./... and fails on one named directly.
 build:
 	$(call go-packages,build,$(GO_SELECT),$(GO_PKGS))
-	@go build ./...
+	@go build $(GO_PATTERNS)
 
 # gen regenerates everything derived from a source of truth: the
 # OpenAPI server, the CLI's client of it and the commands cligen derives

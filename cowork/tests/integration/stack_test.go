@@ -46,7 +46,7 @@ func pool(t *testing.T) *pgxpool.Pool {
 	p, err := pgxpool.New(context.Background(), url)
 	require.NoError(t, err)
 	t.Cleanup(p.Close)
-	_, err = p.Exec(context.Background(), "TRUNCATE pages, channels CASCADE")
+	_, err = p.Exec(context.Background(), "TRUNCATE pages, channels, tasks CASCADE")
 	require.NoError(t, err)
 	return p
 }

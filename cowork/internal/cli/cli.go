@@ -49,7 +49,8 @@ func NewRootCommand() *cobra.Command {
 	flags := &clientFlags{}
 	client := []*cobra.Command{
 		newLoginCommand(flags), newLogoutCommand(flags), newWhoamiCommand(flags), newWorkspacesCommand(flags),
-		newPagesCommand(flags), newChannelsCommand(flags), newMessagesCommand(flags), newSearchCommand(flags),
+		newPagesCommand(flags), newChannelsCommand(flags), newMessagesCommand(flags), newTasksCommand(flags),
+		newSearchCommand(flags),
 		newMCPCommand(flags),
 	}
 	for _, cmd := range client {

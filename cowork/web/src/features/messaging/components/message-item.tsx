@@ -61,13 +61,21 @@ export function MessageItem({ org, message, names, pages, threadHref }: Props) {
           ))}
         </div>
       )}
-      {threadHref && (
-        <Link href={threadHref} className="text-xs text-neutral-600 underline">
-          {message.replies > 0
-            ? `${message.replies} ${message.replies === 1 ? "reply" : "replies"}`
-            : "Reply"}
+      <div className="flex gap-3 text-xs text-neutral-600">
+        {threadHref && (
+          <Link href={threadHref} className="underline">
+            {message.replies > 0
+              ? `${message.replies} ${message.replies === 1 ? "reply" : "replies"}`
+              : "Reply"}
+          </Link>
+        )}
+        <Link
+          href={`/${org}/tasks?message=${message.id}`}
+          className="underline"
+        >
+          Tasks
         </Link>
-      )}
+      </div>
     </li>
   );
 }

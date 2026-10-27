@@ -10,41 +10,13 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 )
 
-// newOrgsCommand lists organizations and saves the default one.
+// newOrgsCommand saves the default organization; the derived orgs
+// commands sit beside it (ADR-0122).
 func newOrgsCommand() *cobra.Command {
 	flags := &userFlags{}
 	orgs := &cobra.Command{Use: "orgs", Short: "Organizations you are a member of"}
 	flags.bind(orgs)
 	orgs.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List your organizations",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, _ []string) error {
-			c, err := newUserCommand(cmd, flags)
-			if err != nil {
-				return err
-			}
-			client, err := c.signedIn(cmd.Context())
-			if err != nil {
-				return err
-			}
-			resp, err := client.ListOrgsWithResponse(cmd.Context(), nil)
-			if err != nil {
-				return errorx.Wrap(err, "list orgs", errorx.KindUnavailable)
-			}
-			if resp.JSON200 == nil {
-				return apiFailure(resp.HTTPResponse, resp.Body)
-			}
-			list := *resp.JSON200
-			return c.render(list, []string{"ORG", "NAME", "CREATED"}, func() [][]string {
-				rows := make([][]string, 0, len(list))
-				for _, o := range list {
-					rows = append(rows, []string{lastSegment(o.Grn), o.Name, stamp(o.CreatedAt)})
-				}
-				return rows
-			})
-		},
-	}, &cobra.Command{
 		Use:   "use <org>",
 		Short: "Save the organization commands act in when --org is not passed",
 		Args:  cobra.ExactArgs(1),

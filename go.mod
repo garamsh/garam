@@ -5,6 +5,7 @@ go 1.27.2
 require (
 	github.com/containerd/errdefs v1.0.0
 	github.com/coreos/go-oidc/v3 v3.21.0
+	github.com/garamsh/garam/platform/sdk v0.0.0-00010101000000-000000000000
 	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/google/uuid v1.6.0
@@ -217,3 +218,5 @@ tool (
 	google.golang.org/protobuf/cmd/protoc-gen-go
 	mvdan.cc/sh/v3/cmd/shfmt
 )
+
+replace github.com/garamsh/garam/platform/sdk => ./platform/sdk

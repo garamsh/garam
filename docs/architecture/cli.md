@@ -29,8 +29,8 @@ The user commands sit at the top level:
 | `garam login [--no-browser]` | signs the CLI in by the device grant |
 | `garam logout` | revokes the CLI's session and forgets its tokens |
 | `garam whoami` | names the user the session is for |
-| `garam orgs list` | the organizations the user belongs to |
 | `garam orgs use <org>` | saves the organization later commands act in |
+| `garam orgs ...`, `groups ...`, `projects ...`, `members list`, `invitations ...` | organizations, their teams (the API's groups), projects, members and invitations, derived (§The commands it derives) |
 | `garam operators ...` | the organization's operators, their keys, delegation and control endpoint, derived (§The commands it derives) |
 | `garam agents list`, `garam agents get <agent>` | the organization's agents, with each one's name |
 | `garam agents rename <agent> <name>`, `--clear` | names an agent, or clears its name ([ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)) |
@@ -52,9 +52,14 @@ holds current.
   - the verb is the operationId's first word;
   - the path parameters are the arguments, and an argument beginning
     with `-` follows `--`;
+  - a path that ends in its own verb names it once
+    (`invitations accept <token>`);
   - query parameters and body properties are kebab-case flags, an
     object one as JSON or `@file`, and `--body` sends the whole body.
   - `commands.yaml` renames the few whose derived name reads badly.
+- **Sessions.** An operation the specification lets a caller reach
+  with none (`security: []`, as `getInvitation` is) sends no session,
+  so it runs signed out.
 - **Output.** `-o json` is the API's own answer. A table shows the
   answer's scalar properties in declared order, and an answer with none
   prints as JSON.
@@ -132,10 +137,10 @@ API's message under its kind.
 
 ## Not established
 
-- **Most resource groups.** The operators group is derived. Every other
-  operation `commands.yaml` lists under `pending` has no command yet,
-  and is enabled a resource group at a time (#1632), until the list is
-  empty.
+- **Most resource groups.** The operators and orgs groups are derived.
+  Every other operation `commands.yaml` lists under `pending` has no
+  command yet, and is enabled a resource group at a time (#1632), until
+  the list is empty.
 - **Other platforms.** The file lock is `flock(2)`, which builds where
   `syscall.Flock` does. No release publishes the binary for a platform
   without it.

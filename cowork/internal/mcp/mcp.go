@@ -1,0 +1,118 @@
+// Package mcp serves cowork's tools to AI clients over the Model
+// Context Protocol (ADR-0127): reading and editing pages, and reading
+// and posting messages, each as the caller who presented the request's
+// credential. A tool asks the services the HTTP API asks, so the
+// platform decides every call exactly as it decides the API's.
+package mcp
+
+import (
+	"context"
+	"net/http"
+	"runtime/debug"
+
+	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/garamsh/garam/cowork/internal/artifact"
+	"github.com/garamsh/garam/cowork/internal/channel"
+	"github.com/garamsh/garam/cowork/internal/collab"
+	"github.com/garamsh/garam/cowork/internal/page"
+	"github.com/garamsh/garam/cowork/internal/platform"
+	"github.com/garamsh/garam/cowork/internal/task"
+	"github.com/garamsh/garam/platform/sdk/errorx"
+)
+
+// Path is where the tools are served, in the protocol's streamable
+// HTTP transport.
+const Path = "/mcp"
+
+// Tools are cowork's tools over its services.
+type Tools struct {
+	pages     page.Service
+	collab    collab.Service
+	channels  channel.Service
+	tasks     task.Service
+	artifacts artifact.Service
+	platform  platform.Platform
+	server    *sdkmcp.Server
+}
+
+// New answers the tools over cowork's services.
+func New(pages page.Service, collabs collab.Service, channels channel.Service, tasks task.Service, artifacts artifact.Service, p platform.Platform) *Tools {
+	t := &Tools{pages: pages, collab: collabs, channels: channels, tasks: tasks, artifacts: artifacts, platform: p}
+	t.server = sdkmcp.NewServer(&sdkmcp.Implementation{Name: "cowork", Version: version()}, &sdkmcp.ServerOptions{
+		Instructions: instructions,
+	})
+	t.server.AddReceivingMiddleware(kindOfErrors)
+	t.register()
+	return t
+}
+
+// KindKey is the key of a tool error's `_meta` that names its errorx
+// kind, so a client such as cowork's CLI branches on what failed
+// rather than on its words.
+const KindKey = "garam.sh/kind"
+
+// kindOfErrors names the kind of every tool error in its `_meta`.
+func kindOfErrors(next sdkmcp.MethodHandler) sdkmcp.MethodHandler {
+	return func(ctx context.Context, method string, req sdkmcp.Request) (sdkmcp.Result, error) {
+		res, err := next(ctx, method, req)
+		if r, ok := res.(*sdkmcp.CallToolResult); ok && r.IsError {
+			if r.Meta == nil {
+				r.Meta = sdkmcp.Meta{}
+			}
+			r.Meta[KindKey] = errorx.KindOf(r.GetError()).String()
+		}
+		return res, err
+	}
+}
+
+// version names the build serving the tools: its commit where the
+// build recorded one.
+func version() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" {
+				return s.Value
+			}
+		}
+	}
+	return "dev"
+}
+
+// instructions is what a client is told about the tools as a whole.
+const instructions = `cowork is where people and agents write pages together, message each other, and keep the record of their work.
+Every tool but list_workspaces takes the workspace (org) it acts in; list_workspaces answers the ones you belong to.
+Pages are read as Markdown and as numbered blocks. update_page changes blocks by their index, and its edits reach everyone editing the page live.
+Tasks are the record of work: list_tasks finds them, by status, assignee or what they link, and update_task moves one along as the work goes.
+Artifacts are HTML pages and documents frozen from pages, each a sequence of versions: update_artifact saves the next version and keeps every earlier one.`
+
+// callerKey carries the request's caller to the tool it calls.
+type callerKey struct{}
+
+// callerOf answers the caller the request presented.
+func callerOf(ctx context.Context) (platform.Caller, error) {
+	c, ok := ctx.Value(callerKey{}).(platform.Caller)
+	if !ok {
+		return platform.Caller{}, errorx.New(errorx.KindUnauthenticated, "no caller")
+	}
+	return c, nil
+}
+
+// Handler serves the tools. identify answers the request's caller, as
+// the HTTP API identifies one, and a request it refuses is answered
+// 401 before any tool runs. The transport is stateless: every request
+// is identified on its own, so each tool call is its own caller's.
+func (t *Tools) Handler(identify func(*http.Request) (platform.Caller, error), refuse func(http.ResponseWriter, *http.Request, error)) http.Handler {
+	h := sdkmcp.NewStreamableHTTPHandler(func(*http.Request) *sdkmcp.Server { return t.server }, &sdkmcp.StreamableHTTPOptions{
+		Stateless:    true,
+		JSONResponse: true,
+	})
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := identify(r)
+		if err != nil {
+			refuse(w, r, err)
+			return
+		}
+		h.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), callerKey{}, c)))
+	})
+}

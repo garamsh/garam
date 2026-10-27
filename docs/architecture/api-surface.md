@@ -475,6 +475,15 @@ and not in the same place on every surface.
   when it arrives, so an answer is a hint the console renders by and
   not a grant
   ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md) §Role-aware UI).
+  A `cowork-page`, a `cowork-channel`, a `cowork-task` and a
+  `cowork-artifact` are the kinds no path here addresses: cowork keeps
+  them and names them, and asks `cowork:page-read` and
+  `cowork:page-write`, `cowork:channel-read` and
+  `cowork:channel-post`, `cowork:task-read` and `cowork:task-write`,
+  or `cowork:artifact-read` and `cowork:artifact-write`, on the
+  organization or on one of them, before it acts. Every role grants
+  all eight, and a policy narrows them like any other action
+  ([ADR-0127](./adr/0127-cowork-is-a-service-where-people-and-agents-co-edit-message-and-work-through-tools-an-ai-can-use.md)).
   Each pair is answered allow, deny or unknown:
   - **allow or deny**, where enforcement is the engine's `Check` alone:
     the same statements and groups, put to the same `Check`. It never

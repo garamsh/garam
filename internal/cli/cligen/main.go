@@ -110,6 +110,9 @@ type operation struct {
 	// table's rows, empty where the answer itself is the array or one
 	// row.
 	Rows string
+	// Public is an operation that declares `security: []`, which a
+	// caller reaches with no session.
+	Public bool
 }
 
 func get(n *yaml.Node, key string) *yaml.Node {
@@ -177,6 +180,9 @@ func (s spec) operations() ([]operation, error) {
 				o.Body = s.properties(schema, "body")
 			}
 			o.Columns, o.Rows = s.columns(op)
+			if sec := get(op, "security"); sec != nil && sec.Kind == yaml.SequenceNode && len(sec.Content) == 0 {
+				o.Public = true
+			}
 			ops = append(ops, o)
 		}
 	}
@@ -407,6 +413,11 @@ func derive(o operation, cfg config) command {
 		}
 		c.Words = append(c.Words, seg)
 	}
+	// A path that ends in its own verb, as /invitations/{token}/accept
+	// does, names the verb once.
+	if n := len(c.Words); n > 1 && c.Words[n-1] == c.Verb {
+		c.Words = c.Words[:n-1]
+	}
 	if name, ok := cfg.Names[o.ID]; ok {
 		words := strings.Fields(name)
 		c.Words, c.Verb = words[:len(words)-1], words[len(words)-1]
@@ -483,6 +494,9 @@ var apiOperations = []apiOperation{
 		}
 		if len(cols) > 0 {
 			fmt.Fprintf(&b, "\t\tColumns: %#v,\n", cols)
+		}
+		if c.Public {
+			b.WriteString("\t\tPublic: true,\n")
 		}
 		if c.Rows != "" {
 			fmt.Fprintf(&b, "\t\tRows: %q,\n", c.Rows)

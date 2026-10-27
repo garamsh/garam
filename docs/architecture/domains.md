@@ -368,6 +368,11 @@ organization, which ADR-0001 makes root-owned (#1150). It depends on
 the `Error` interface, and `New` / `Wrap` / `IsKind` / `KindOf`. It has
 no dependency of its own.
 
+Both are implemented in `platform/sdk/` since cowork became a second
+module needing them (ADR-0125). The two packages above forward to it,
+so the counts in the table still read through them, until #1659
+rewrites their importers to the new paths.
+
 `internal/pgxerr` maps a postgres driver error to an `errorx` error by
 reading the sql state the driver carries, or, where it carries none,
 whether the driver lost its connection (#1165), and labels it with the

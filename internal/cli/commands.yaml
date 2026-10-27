@@ -50,33 +50,10 @@ headers:
 # Operations whose commands are not generated yet, enabled a resource
 # group at a time (#1632). This list only shrinks.
 pending:
-  - createOrg
-  - listOrgs
-  - getOrg
-  - updateOrg
-  - deleteOrg
-  - getOrgDeletionPreview
   - checkPermissions
   - explainPermission
   - listPermissionHolders
   - searchOrg
-  - listOrgMembers
-  - createGroup
-  - listGroups
-  - getGroup
-  - updateGroup
-  - deleteGroup
-  - listGroupMembers
-  - addGroupMember
-  - removeGroupMember
-  - createProject
-  - listProjects
-  - getProject
-  - updateProject
-  - deleteProject
-  - listProjectMembers
-  - addProjectMember
-  - removeProjectMember
   - listAgents
   - getAgent
   - renameAgent
@@ -100,9 +77,6 @@ pending:
   - listOrgConsents
   - grantOrgConsent
   - withdrawOrgConsent
-  - createInvitation
-  - getInvitation
-  - acceptInvitation
   - listProviders
   - listMySessions
   - revokeMySession

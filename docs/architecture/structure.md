@@ -42,7 +42,10 @@ exists:
   module requires it through a `replace` to its folder, and its own
   `internal/errorx` and `internal/grn` forward to it until #1659
   rewrites their importers and deletes them.
-- **`go.work`** at the root, naming the root module and
+- **`cowork/`**, the first service in its own folder: its module,
+  binary, database and documents
+  ([cowork.md](../../cowork/docs/cowork.md)).
+- **`go.work`** at the root, naming the root module, `cowork/` and
   `platform/sdk/`. Every Go entry point in the `Makefile` covers every
   module it names. The root still holds the platform's packages until
   #1659.

@@ -58,7 +58,7 @@ suites: install e2e
 # writes sessions into the platform's.
 E2E_DB_NAME = cowork_e2e
 E2E_DATABASE_URL = $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(E2E_DB_NAME)?sslmode=disable)
-COWORK_DIR := $(abspath ..)
+COWORK_DIR := $(abspath ../cowork)
 
 e2e:
 	@test -n "$(API_HOST_ADDR)" || { echo "e2e: no api published on this host — run make -C cowork-web stack-up" >&2; exit 1; }

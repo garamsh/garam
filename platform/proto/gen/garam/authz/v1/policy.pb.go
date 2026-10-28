@@ -1447,8 +1447,8 @@ const file_garam_authz_v1_policy_proto_rawDesc = "" +
 	"\x0eRollbackPolicy\x12%.garam.authz.v1.RollbackPolicyRequest\x1a&.garam.authz.v1.RollbackPolicyResponse\x12Y\n" +
 	"\fAttachPolicy\x12#.garam.authz.v1.AttachPolicyRequest\x1a$.garam.authz.v1.AttachPolicyResponse\x12Y\n" +
 	"\fDetachPolicy\x12#.garam.authz.v1.DetachPolicyRequest\x1a$.garam.authz.v1.DetachPolicyResponse\x12t\n" +
-	"\x15ListPolicyAttachments\x12,.garam.authz.v1.ListPolicyAttachmentsRequest\x1a-.garam.authz.v1.ListPolicyAttachmentsResponseB\xb6\x01\n" +
-	"\x12com.garam.authz.v1B\vPolicyProtoP\x01Z9github.com/garamsh/garam/platform/proto/gen/garam/authz/v1;authzv1\xa2\x02\x03GAX\xaa\x02\x0eGaram.Authz.V1\xca\x02\x0eGaram\\Authz\\V1\xe2\x02\x1aGaram\\Authz\\V1\\GPBMetadata\xea\x02\x10Garam::Authz::V1b\x06proto3"
+	"\x15ListPolicyAttachments\x12,.garam.authz.v1.ListPolicyAttachmentsRequest\x1a-.garam.authz.v1.ListPolicyAttachmentsResponseB\xbf\x01\n" +
+	"\x12com.garam.authz.v1B\vPolicyProtoP\x01ZBgithub.com/garamsh/garam/platform/proto/gen/garam/authz/v1;authzv1\xa2\x02\x03GAX\xaa\x02\x0eGaram.Authz.V1\xca\x02\x0eGaram\\Authz\\V1\xe2\x02\x1aGaram\\Authz\\V1\\GPBMetadata\xea\x02\x10Garam::Authz::V1b\x06proto3"
 
 var (
 	file_garam_authz_v1_policy_proto_rawDescOnce sync.Once

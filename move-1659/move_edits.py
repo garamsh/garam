@@ -158,3 +158,6 @@ edit(C, 'path.join(REPO_ROOT, "migrations")', 'path.join(REPO_ROOT, "platform/mi
 edit(C, 'path.join(REPO_ROOT, "migrations", file)', 'path.join(REPO_ROOT, "platform/migrations", file)')
 # A claim that a path is gone names where it would now be.
 edit(C, 'path: "internal/adapter", exists: false', 'path: "platform/internal/adapter", exists: false', 2)
+
+# gen:api runs in console/, so the spec it reads is one level up and then into platform/.
+edit("console/package.json", '"openapi-typescript ../api/openapi.yaml', '"openapi-typescript ../platform/api/openapi.yaml')

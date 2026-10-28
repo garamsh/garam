@@ -11,7 +11,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
-} from "@/components/ui/sidebar";
+} from "@garam/design/ui/sidebar";
 
 import { IntentLink } from "./intent-link";
 import {

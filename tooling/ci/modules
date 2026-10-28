@@ -26,6 +26,7 @@ deploy/charts platform console
 # The stack has no gate of its own; the suites of the modules naming it
 # check it.
 deploy/local
+design
 # The console generates its API types from the platform's OpenAPI spec,
 # and its browser suite drives the platform's api.
 console platform deploy/local

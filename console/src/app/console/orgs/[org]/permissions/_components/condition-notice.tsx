@@ -1,4 +1,4 @@
-import { Banner } from "@/components/banner";
+import { Banner } from "@garam/design/components/banner";
 
 /**
  * Says that a document's Condition restricts nothing. garam stores it

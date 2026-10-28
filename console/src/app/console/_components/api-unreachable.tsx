@@ -1,7 +1,7 @@
 import {
   API_UNREACHABLE_TITLE,
   ApiUnreachableReason,
-} from "@/components/api-unreachable";
+} from "@garam/design/components/api-unreachable";
 
 /**
  * The unreachable-API notice as a console page shows it: a region that

@@ -4,9 +4,9 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@garam/design/ui/tooltip";
 import { formatTime } from "@/lib/format-time";
-import { cn } from "@/lib/utils";
+import { cn } from "@garam/design/lib/utils";
 
 /**
  * An instant from the API: relative in the text, exact with its zone in

@@ -2,9 +2,9 @@
 
 import { useActionState, useState } from "react";
 
-import { FormField } from "@/components/form-field";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FormField } from "@garam/design/components/form-field";
+import { Button } from "@garam/design/ui/button";
+import { Input } from "@garam/design/ui/input";
 import {
   updateProject,
   type UpdateProjectState,

@@ -2,8 +2,8 @@
 
 import { useRouter } from "next/navigation";
 
-import { Banner } from "@/components/banner";
-import { Button } from "@/components/ui/button";
+import { Banner } from "@garam/design/components/banner";
+import { Button } from "@garam/design/ui/button";
 import type { OrgDeletionPreview } from "@/features/orgs";
 import { deleteOrg, type DeleteOrgState } from "@/features/orgs/actions";
 import { useHydrated } from "@/hooks/use-hydrated";

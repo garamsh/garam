@@ -6,7 +6,7 @@ import { ControlNotice, NO_FIX } from "@/components/control-notice";
 import { MemberMark } from "@/components/member-mark";
 import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import {
   agentDisplayName,
   getOrg,

@@ -3,9 +3,9 @@
 import { UserPlus } from "lucide-react";
 import { useActionState, useState } from "react";
 
-import { FormField } from "@/components/form-field";
+import { FormField } from "@garam/design/components/form-field";
 import { SecretReveal } from "@/components/secret-reveal";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,14 +13,14 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@garam/design/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@garam/design/ui/select";
 import {
   createInvitation,
   type CreateInvitationState,

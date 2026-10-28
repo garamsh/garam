@@ -3,9 +3,9 @@
 import { useActionState, useState } from "react";
 
 import { JsonDiff } from "@/components/json-diff";
-import { Refusal } from "@/components/refusal";
+import { Refusal } from "@garam/design/components/refusal";
 import { StatusDot } from "@/components/status-dot";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import {
   addPolicyVersion,
   publishPolicyVersion,

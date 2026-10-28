@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton } from "@garam/design/ui/skeleton";
 
 const LIST_ROWS = [0, 1, 2, 3, 4];
 const DETAIL_FACTS = [0, 1, 2, 3];

@@ -7,7 +7,7 @@ import {
   applyTheme,
   parseThemePreference,
   type ThemePreference,
-} from "@/lib/theme";
+} from "@garam/design/lib/theme";
 
 // `storage` fires in other tabs only; this one is dispatched here.
 const CHANGE_EVENT = "garam-theme-change";

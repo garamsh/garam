@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { Banner } from "@/components/banner";
-import { Button } from "@/components/ui/button";
+import { Banner } from "@garam/design/components/banner";
+import { Button } from "@garam/design/ui/button";
 import { DELEGATED_OPERATION_LABEL } from "@/lib/delegated-operations";
 import type { components } from "@/types/api";
 

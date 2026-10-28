@@ -2,10 +2,10 @@
 
 import { useActionState, useState } from "react";
 
-import { FormField } from "@/components/form-field";
-import { Refusal } from "@/components/refusal";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FormField } from "@garam/design/components/form-field";
+import { Refusal } from "@garam/design/components/refusal";
+import { Button } from "@garam/design/ui/button";
+import { Input } from "@garam/design/ui/input";
 import {
   PASSWORD_MIN_LENGTH,
   USERNAME_MAX_LENGTH,

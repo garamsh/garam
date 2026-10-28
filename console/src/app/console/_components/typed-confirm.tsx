@@ -2,9 +2,9 @@
 
 import { useId, useState } from "react";
 
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { Input } from "@garam/design/ui/input";
+import { Label } from "@garam/design/ui/label";
+import { cn } from "@garam/design/lib/utils";
 
 /**
  * The field an act nothing undoes is confirmed in: the person types

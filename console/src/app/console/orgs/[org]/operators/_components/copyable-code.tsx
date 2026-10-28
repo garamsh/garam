@@ -2,7 +2,7 @@
 
 import { Check, Copy } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import { useCopy } from "@/hooks/use-copy";
 
 /**

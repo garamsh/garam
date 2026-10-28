@@ -3,8 +3,8 @@ import Link from "next/link";
 import {
   API_UNREACHABLE_TITLE,
   ApiUnreachableReason,
-} from "@/components/api-unreachable";
-import { Card, CardFooter, CardHeader } from "@/components/ui/card";
+} from "@garam/design/components/api-unreachable";
+import { Card, CardFooter, CardHeader } from "@garam/design/ui/card";
 
 /**
  * What a sign-in shell route shows in place of its form when the API

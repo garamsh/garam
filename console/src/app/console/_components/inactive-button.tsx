@@ -2,12 +2,12 @@
 
 import { useId } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "@garam/design/ui/tooltip";
 
 /**
  * An action the caller cannot take here, kept on the page rather than

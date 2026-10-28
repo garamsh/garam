@@ -21,8 +21,8 @@ import {
   CommandGroup,
   CommandItem,
   CommandList,
-} from "@/components/ui/command";
-import { Kbd } from "@/components/ui/kbd";
+} from "@garam/design/ui/command";
+import { Kbd } from "@garam/design/ui/kbd";
 import { MemberMark } from "@/components/member-mark";
 import {
   searchOrgObjects,

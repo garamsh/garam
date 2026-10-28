@@ -3,7 +3,7 @@
 import { Check, Copy, Download } from "lucide-react";
 import { useId, useState } from "react";
 
-import { Refusal } from "@/components/refusal";
+import { Refusal } from "@garam/design/components/refusal";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -11,8 +11,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from "@garam/design/ui/alert-dialog";
+import { Button } from "@garam/design/ui/button";
 import { useCopy } from "@/hooks/use-copy";
 
 type SecretRevealProps = {

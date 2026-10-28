@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { JsonEditorHandle } from "@/lib/codemirror";
-import { cn } from "@/lib/utils";
+import { cn } from "@garam/design/lib/utils";
 
 /** What the editable element says about itself to assistive technology. */
 function contentAttributes(

@@ -2,8 +2,8 @@ import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { useTheme } from "@/hooks/use-theme";
-import { THEME_STORAGE_KEY } from "@/lib/theme";
-import { stubLocalStorage } from "@/testing/storage";
+import { THEME_STORAGE_KEY } from "@garam/design/lib/theme";
+import { stubLocalStorage } from "@garam/design/testing/storage";
 
 beforeEach(() => {
   stubLocalStorage();

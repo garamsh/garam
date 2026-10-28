@@ -2,7 +2,7 @@ import { Building2, FileStack, Fingerprint, FolderTree } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 
 import { PolicyAttachments } from "./_components/policy-attachments";
 import { SectionHeading } from "./_components/section-heading";

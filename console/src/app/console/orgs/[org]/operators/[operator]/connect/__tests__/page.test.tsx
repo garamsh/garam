@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import ConnectOperatorPage from "@/app/console/orgs/[org]/operators/[operator]/connect/page";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import {
   API_URL,
   answerPermissionChecks,

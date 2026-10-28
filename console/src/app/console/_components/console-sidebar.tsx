@@ -4,8 +4,8 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-} from "@/components/ui/sidebar";
-import { Skeleton } from "@/components/ui/skeleton";
+} from "@garam/design/ui/sidebar";
+import { Skeleton } from "@garam/design/ui/skeleton";
 import { env } from "@/env";
 import { getSession } from "@/features/auth";
 import { redirectToSignIn } from "@/lib/sign-in-redirect";

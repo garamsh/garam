@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { CopyId } from "@/components/copy-id";
 import { DataTable, type ColumnDef } from "@/components/data-table";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@garam/design/ui/badge";
 import type { Project } from "@/features/orgs";
 
 import { EmptyState } from "../../../../_components/empty-state";

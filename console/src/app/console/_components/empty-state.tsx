@@ -6,7 +6,7 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@/components/ui/empty";
+} from "@garam/design/ui/empty";
 
 /**
  * What a console section shows instead of an empty list: one line, and

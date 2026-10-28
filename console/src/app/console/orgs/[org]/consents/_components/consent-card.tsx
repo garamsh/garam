@@ -1,7 +1,7 @@
 import { CopyField } from "@/components/copy-field";
 import { DescriptionList } from "@/components/description-list";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Card } from "@/components/ui/card";
+import { Card } from "@garam/design/ui/card";
 
 import { grantOrgConsent, withdrawOrgConsent } from "@/features/orgs/actions";
 

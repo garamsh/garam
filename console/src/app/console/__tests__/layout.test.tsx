@@ -2,7 +2,7 @@ import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ConsoleLayout from "@/app/console/layout";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@garam/design/ui/sidebar";
 
 // react-dom cannot render the shell's async Server Components under
 // Testing Library. A thrown promise stands in for their pending reads

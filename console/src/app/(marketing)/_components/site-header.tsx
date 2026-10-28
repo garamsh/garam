@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { BrandMark } from "@/components/brand-mark";
-import { Button } from "@/components/ui/button";
+import { BrandMark } from "@garam/design/components/brand-mark";
+import { Button } from "@garam/design/ui/button";
 
 import { SECTIONS } from "./sections";
 

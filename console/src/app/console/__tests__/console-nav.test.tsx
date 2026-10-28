@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ConsoleNav } from "@/app/console/_components/console-nav";
 import { ReportOrgShell } from "@/app/console/_components/org-shell";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { SidebarProvider } from "@garam/design/ui/sidebar";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 
 const route = vi.hoisted(() => ({ pathname: "/console/orgs" }));
 

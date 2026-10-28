@@ -1,5 +1,5 @@
-# console — the Next.js frontend (ADR-0009). It keeps its own toolchain
-# and lockfile. Its verbs are every module's (#1661); `make -C console
+# console — the Next.js frontend (ADR-0009). It installs from the
+# workspace's lockfile at the root. Its verbs are every module's (#1661); `make -C console
 # ci` is its fast gate, and `stack-up suites` the half that needs
 # Docker.
 

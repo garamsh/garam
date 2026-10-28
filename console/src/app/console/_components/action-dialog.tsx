@@ -3,7 +3,7 @@
 import { Check } from "lucide-react";
 import { useState, useTransition } from "react";
 
-import { Refusal } from "@/components/refusal";
+import { Refusal } from "@garam/design/components/refusal";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -13,8 +13,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+} from "@garam/design/ui/alert-dialog";
+import { Button } from "@garam/design/ui/button";
 import { UNSENT_COPY, isUnsent } from "@/lib/unsent-action";
 
 import { useReportOutcome, type OutcomeArea } from "./outcome";

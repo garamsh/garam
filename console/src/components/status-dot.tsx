@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@garam/design/lib/utils";
 
 /** What a status means; the colour follows from it and never alone. */
 export type StatusTone = "ok" | "warn" | "danger" | "info" | "neutral";

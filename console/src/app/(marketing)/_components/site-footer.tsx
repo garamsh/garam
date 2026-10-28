@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark } from "@garam/design/components/brand-mark";
 
 import { SECTIONS } from "./sections";
 

@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { DelegationForm } from "@/app/console/orgs/[org]/operators/[operator]/_components/delegation-form";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import type { Delegation } from "@/features/orgs";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
 import { API_URL } from "@/testing/mocks/handlers";

@@ -1,5 +1,5 @@
-# cowork/web — cowork's Next.js app (ADR-0127). Its own toolchain and
-# lockfile, as console's. Its verbs are every module's (#1661); `make
+# cowork/web — cowork's Next.js app (ADR-0127). It installs from the
+# workspace's lockfile at the root, as console does. Its verbs are every module's (#1661); `make
 # -C cowork/web ci` is its fast gate, and `stack-up suites` the half
 # that needs Docker.
 

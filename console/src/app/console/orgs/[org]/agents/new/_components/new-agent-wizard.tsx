@@ -10,7 +10,7 @@ import {
 } from "@/components/control-notice";
 import type { DelegatedOperator, HostedOperator } from "@/features/orgs";
 import { CopyField } from "@/components/copy-field";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import { parseGrn } from "@/lib/grn";
 
 import { orgHref } from "../../../../../_components/navigation";

@@ -7,7 +7,7 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
-} from "@/components/ui/card";
+} from "@garam/design/ui/card";
 import {
   GoogleSignInButton,
   PasswordSignInForm,

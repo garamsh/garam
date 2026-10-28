@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@garam/design/lib/utils";
 
 /** One term and what the page says about it. */
 export type DescriptionItem = { term: string; description: React.ReactNode };

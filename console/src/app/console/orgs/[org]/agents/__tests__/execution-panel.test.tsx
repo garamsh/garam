@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { ExecutionPanel } from "@/app/console/orgs/[org]/agents/_components/execution-panel";
 import type { DelegatedOperator } from "@/features/orgs";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { server } from "@/testing/setup";
 
 // The authority is minted by a Server Action; what the panel does with

@@ -2,10 +2,10 @@
 
 import { useActionState } from "react";
 
-import { Refusal } from "@/components/refusal";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Refusal } from "@garam/design/components/refusal";
+import { Button } from "@garam/design/ui/button";
+import { Input } from "@garam/design/ui/input";
+import { Label } from "@garam/design/ui/label";
 import { createOrg, type CreateOrgState } from "@/features/orgs/actions";
 
 const initialState: CreateOrgState = { status: "idle" };

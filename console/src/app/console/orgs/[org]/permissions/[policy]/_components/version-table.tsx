@@ -6,7 +6,7 @@ import { DataTable, type ColumnDef } from "@/components/data-table";
 import { JsonDiff } from "@/components/json-diff";
 import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@garam/design/ui/dialog";
 
 import { EmptyState } from "../../../../../_components/empty-state";
 import { MakeDefaultDialog } from "./make-default-dialog";

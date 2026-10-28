@@ -4,11 +4,11 @@ import Link from "next/link";
 import {
   API_UNREACHABLE_TITLE,
   ApiUnreachableReason,
-} from "@/components/api-unreachable";
-import { Banner } from "@/components/banner";
+} from "@garam/design/components/api-unreachable";
+import { Banner } from "@garam/design/components/banner";
 import { CopyId } from "@/components/copy-id";
 import { DescriptionList } from "@/components/description-list";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import { getOrg, getOrgDeletionPreview } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 

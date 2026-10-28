@@ -9,7 +9,7 @@ import {
   type MemberRow,
 } from "@/app/console/_components/member-list";
 import PeoplePage from "@/app/console/orgs/[org]/people/page";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
 import { API_URL, answerPermissionChecks } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";

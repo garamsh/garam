@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import OperatorPage from "@/app/console/orgs/[org]/operators/[operator]/page";
 import OperatorsPage from "@/app/console/orgs/[org]/operators/page";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { CONTROL_UNAVAILABLE } from "@/lib/control-refusal-copy";
 import {
   API_URL,

@@ -7,7 +7,7 @@ import { useState } from "react";
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import {
   revokeOperatorKey,
   type RevokeOperatorKeyState,

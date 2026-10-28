@@ -4,8 +4,8 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { ConsoleSidebar } from "@/app/console/_components/console-sidebar";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { SidebarProvider } from "@garam/design/ui/sidebar";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { API_URL } from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
 import { RETURN_PATH_HEADER } from "@/lib/return-path";

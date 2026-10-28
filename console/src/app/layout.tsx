@@ -7,8 +7,8 @@ import { Geist_Mono } from "next/font/google";
 // text needs.
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
-import { THEME_SCRIPT } from "@/lib/theme";
-import "@/styles/globals.css";
+import { THEME_SCRIPT } from "@garam/design/lib/theme";
+import "@garam/design/styles/globals.css";
 
 // `--font-geist-mono` is the variable the theme block in globals.css
 // reads for `font-mono`.

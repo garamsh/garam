@@ -1,4 +1,4 @@
-import { BrandMark } from "@/components/brand-mark";
+import { BrandMark } from "@garam/design/components/brand-mark";
 
 /** Facts a visitor at the door can verify once inside. */
 const ASSURANCES = [

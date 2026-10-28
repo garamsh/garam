@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import AttachmentsPage from "@/app/console/orgs/[org]/permissions/attachments/page";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
 import {
   API_URL,

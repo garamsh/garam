@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { Banner } from "@/components/banner";
+import { Banner } from "@garam/design/components/banner";
 import { checkPermissions } from "@/lib/permission-check";
 
 import { SettingsPage } from "../../../../_components/templates/settings-page";

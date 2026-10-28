@@ -7,7 +7,7 @@ import {
   ConnectWizard,
   type ConnectStep,
 } from "@/app/console/orgs/[org]/operators/[operator]/connect/_components/connect-wizard";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import type { OperatorKey } from "@/features/orgs";
 import { REFUSAL_COPY } from "@/lib/refusal-copy";
 import { API_URL, fieldOneKey } from "@/testing/mocks/handlers";

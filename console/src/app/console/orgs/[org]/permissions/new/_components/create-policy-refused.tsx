@@ -1,4 +1,4 @@
-import { Banner } from "@/components/banner";
+import { Banner } from "@garam/design/components/banner";
 
 /** What stands in for the form where the server denies creating one. */
 export function CreatePolicyRefused() {

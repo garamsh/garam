@@ -1,4 +1,4 @@
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@garam/design/ui/badge";
 
 /** The identities one stored policy is attached to. */
 const SUBJECTS = [

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Building2, Link2, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-import { Banner } from "@/components/banner";
+import { Banner } from "@garam/design/components/banner";
 import {
   KIND_LABEL,
   slugFromGrn,

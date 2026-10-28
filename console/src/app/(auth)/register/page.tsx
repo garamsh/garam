@@ -7,7 +7,7 @@ import {
   CardContent,
   CardFooter,
   CardHeader,
-} from "@/components/ui/card";
+} from "@garam/design/ui/card";
 import { PasswordRegisterForm, getSession } from "@/features/auth";
 import {
   RETURN_PARAM,

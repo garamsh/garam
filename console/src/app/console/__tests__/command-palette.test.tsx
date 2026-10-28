@@ -6,10 +6,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ActionDialog } from "@/app/console/_components/action-dialog";
 import { CommandPalette } from "@/app/console/_components/command-palette";
 import { ReportOrgShell } from "@/app/console/_components/org-shell";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { stubLocalStorage } from "@/testing/storage";
+import { stubLocalStorage } from "@garam/design/testing/storage";
 
 const route = vi.hoisted(() => ({
   pathname: "/console/orgs/acme",

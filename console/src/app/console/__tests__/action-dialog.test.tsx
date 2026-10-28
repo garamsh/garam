@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
 import { ActionDialog } from "@/app/console/_components/action-dialog";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import { UNSENT_COPY } from "@/lib/unsent-action";
 
 type State = { status: "idle" } | { status: "error"; message: string };

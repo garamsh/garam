@@ -2,16 +2,16 @@
 
 import { useId, useState } from "react";
 
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Input } from "@garam/design/ui/input";
+import { Label } from "@garam/design/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+} from "@garam/design/ui/select";
+import { Textarea } from "@garam/design/ui/textarea";
 import {
   approveAgentEnrollment,
   type ApproveAgentEnrollmentState,

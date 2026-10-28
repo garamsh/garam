@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import {
   getOrg,
   lookupAgentEnrollments,

@@ -82,6 +82,8 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+	// garam's SDK decodes only an answer declared as JSON.
+	w.Header().Set("Content-Type", "application/json")
 	switch {
 	case r.URL.Path == "/orgs" && who != "eve":
 		_ = json.NewEncoder(w).Encode([]map[string]string{{"grn": "grn:root:default:org:acme", "name": "Acme"}})

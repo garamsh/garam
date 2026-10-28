@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
+# The Go client of cowork's HTTP API (ADR-0132, ADR-0133), generated
+# from cowork/api/openapi.yaml with the types it answers, for every
+# operation: garam-cli's cligen derives a command for each that its
+# cowork.yaml does not place otherwise.
+package: coworksdk
+output: client.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  skip-prune: true

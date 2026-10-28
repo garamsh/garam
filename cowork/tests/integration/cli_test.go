@@ -3,22 +3,63 @@ package integration_test
 import (
 	"bytes"
 	"encoding/json"
-	"io"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/garamsh/garam/cowork/internal/cli"
-	"github.com/garamsh/garam/lib/clisession"
 )
 
+// The codes garam's client commands exit with (ADR-0122).
+const (
+	exitUsage            = 2
+	exitUnauthenticated  = 3
+	exitPermissionDenied = 4
+	exitNotFound         = 5
+	exitInvalid          = 7
+)
+
+// The client binary cowork's client commands are in (ADR-0133), built
+// once for the run.
+var (
+	garamOnce sync.Once
+	garamBin  string
+	garamErr  error
+)
+
+// garamCLI builds garam-cli's garam from the module beside this one,
+// once per run, and answers its path.
+func garamCLI(t *testing.T) string {
+	t.Helper()
+	garamOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "garam-cli-")
+		if err != nil {
+			garamErr = err
+			return
+		}
+		garamBin = filepath.Join(dir, "garam")
+		build := exec.Command("go", "build", "-o", garamBin, "./cmd/garam")
+		build.Dir = filepath.Join("..", "..", "..", "garam-cli")
+		if out, err := build.CombinedOutput(); err != nil {
+			garamErr = fmt.Errorf("go build: %w: %s", err, out)
+		}
+	})
+	require.NoError(t, garamErr)
+	return garamBin
+}
+
 // signIn keeps who's CLI session for the stack's platform in a fresh
-// credentials file, as `garam login` or `cowork login` leaves one, with
-// acme saved as the workspace.
+// credentials file, as `garam login` leaves one, with acme saved as the
+// workspace, and points the CLI at the stack. The file is written in
+// the format the CLI has kept since ADR-0120, which is the contract
+// between the two.
 func (s *stack) signIn(t *testing.T, who string) {
 	t.Helper()
 	dir := t.TempDir()
@@ -29,98 +70,108 @@ func (s *stack) signIn(t *testing.T, who string) {
 		return
 	}
 	later := time.Now().Add(time.Hour)
-	require.NoError(t, clisession.Store{Path: filepath.Join(dir, "garam", "credentials")}.Update(func(f *clisession.File) (bool, error) {
-		f.Endpoints[s.platformURL] = &clisession.Entry{
-			AccessToken: who, AccessExpiresAt: later, RefreshToken: "unused", RefreshExpiresAt: later, Org: "acme",
-		}
-		return true, nil
-	}))
+	file, err := json.Marshal(map[string]any{"endpoints": map[string]any{s.platformURL: map[string]any{
+		"accessToken": who, "accessExpiresAt": later, "refreshToken": "unused", "refreshExpiresAt": later, "org": "acme",
+	}}})
+	require.NoError(t, err)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "garam"), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "garam", "credentials"), file, 0o600))
 }
 
-// cowork runs the binary's command tree with args and stdin, and
-// answers what it printed and the code it exits with.
-func cowork(t *testing.T, stdin string, args ...string) (string, int) {
+// garam runs the built client with args and stdin, and answers what it
+// printed and the code it exits with.
+func garam(t *testing.T, stdin string, args ...string) (string, int) {
 	t.Helper()
-	root := cli.NewRootCommand()
-	root.SetArgs(args)
-	var out bytes.Buffer
-	root.SetOut(&out)
-	root.SetErr(io.Discard)
-	root.SetIn(strings.NewReader(stdin))
-	cmd, err := root.ExecuteC()
-	return out.String(), cli.ExitCode(cmd, err)
+	cmd := exec.Command(garamCLI(t), args...)
+	cmd.Stdin = strings.NewReader(stdin)
+	var out, failure bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &failure
+	err := cmd.Run()
+	var exit *exec.ExitError
+	switch {
+	case err == nil:
+		return out.String(), 0
+	case errors.As(err, &exit):
+		return out.String() + failure.String(), exit.ExitCode()
+	}
+	require.NoError(t, err)
+	return "", -1
 }
 
-// TestCLI_WorksInAWorkspaceAsItsSession has the CLI, as ada, create a
-// page, read it as Markdown, find it, and post about it, each as the
-// tool of its name would.
+// TestCLI_WorksInAWorkspaceAsItsSession has garam, as ada, create a
+// page with its content, read it as Markdown, find it, and post about
+// it, each as cowork answers the caller.
 func TestCLI_WorksInAWorkspaceAsItsSession(t *testing.T) {
 	s := newStack(t)
 	s.signIn(t, "ada")
 	general := s.createChannel(t, "ada", `{"kind":"public","name":"general"}`)
 
-	out, code := cowork(t, "", "whoami", "-o", "json")
+	out, code := garam(t, "", "whoami", "-o", "json")
 	require.Equal(t, 0, code, out)
 	assert.Contains(t, out, `"grn": "grn:root:default:user:ada"`)
 
-	out, code = cowork(t, "", "workspaces")
+	out, code = garam(t, "", "orgs", "list")
 	require.Equal(t, 0, code, out)
 	assert.Contains(t, out, "acme")
 
-	out, code = cowork(t, "", "pages", "create", "--title", "Retro", "--paragraph", "What went well", "-o", "json")
+	out, code = garam(t, "", "cowork", "pages", "create", "--title", "Retro", "--paragraph", "What went well", "-o", "json")
 	require.Equal(t, 0, code, out)
 	var created struct {
 		Page struct{ ID string } `json:"page"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(out), &created))
 
-	out, code = cowork(t, "", "pages", "read", created.Page.ID)
+	out, code = garam(t, "", "cowork", "pages", "read", created.Page.ID)
 	require.Equal(t, 0, code, out)
 	assert.Equal(t, "What went well\n", out)
 
-	out, code = cowork(t, "", "pages", "list")
+	out, code = garam(t, "", "cowork", "pages", "list")
 	require.Equal(t, 0, code, out)
 	assert.Contains(t, out, "Retro")
 
-	out, code = cowork(t, "", "messages", "post", general.ID, "retro notes are up")
+	out, code = garam(t, "", "cowork", "channels", "messages", "post", general.ID, "--body", "retro notes are up")
 	require.Equal(t, 0, code, out)
-	out, code = cowork(t, "", "messages", "list", general.ID)
+	out, code = garam(t, "", "cowork", "channels", "messages", "list", general.ID)
 	require.Equal(t, 0, code, out)
 	assert.Contains(t, out, "retro notes are up")
 
-	out, code = cowork(t, "", "channels")
+	out, code = garam(t, "", "cowork", "channels", "list")
 	require.Equal(t, 0, code, out)
 	assert.Contains(t, out, "general")
 
-	out, code = cowork(t, "", "search", "retro")
+	out, code = garam(t, "", "cowork", "search", "retro")
 	require.Equal(t, 0, code, out)
 	assert.Contains(t, out, "page")
 	assert.Contains(t, out, "message")
 }
 
-// TestCLI_ExitsWithTheCodeOfWhatFailed holds the client commands to
+// TestCLI_ExitsWithTheCodeOfWhatFailed holds cowork's commands to
 // ADR-0122's codes: 3 not signed in, 4 refused, 5 not found, 2 used
-// wrongly.
+// wrongly, through a derived command and one calling a tool.
 func TestCLI_ExitsWithTheCodeOfWhatFailed(t *testing.T) {
 	s := newStack(t)
 	id := s.createPage(t, "secret")
 
 	s.signIn(t, "")
-	_, code := cowork(t, "", "pages", "list", "--org", "acme")
-	assert.Equal(t, cli.ExitUnauthenticated, code)
+	_, code := garam(t, "", "cowork", "pages", "list", "--org", "acme")
+	assert.Equal(t, exitUnauthenticated, code)
 
 	s.signIn(t, "bob")
 	s.platform.denyCheck("bob cowork:page-read@" + id)
-	_, code = cowork(t, "", "pages", "read", id)
-	assert.Equal(t, cli.ExitPermissionDenied, code)
-	_, code = cowork(t, "", "pages", "read", "01JAAAAAAAAAAAAAAAAAAAAAAA")
-	assert.Equal(t, cli.ExitNotFound, code)
-	_, code = cowork(t, "", "pages", "read")
-	assert.Equal(t, cli.ExitUsage, code)
+	for _, read := range []string{"get", "read"} {
+		_, code = garam(t, "", "cowork", "pages", read, id)
+		assert.Equal(t, exitPermissionDenied, code, read)
+		_, code = garam(t, "", "cowork", "pages", read, "01JAAAAAAAAAAAAAAAAAAAAAAA")
+		assert.Equal(t, exitNotFound, code, read)
+		_, code = garam(t, "", "cowork", "pages", read)
+		assert.Equal(t, exitUsage, code, read)
+	}
 }
 
 // TestCLI_BridgesStdioToTheTools has a local MCP client, speaking the
-// stdio transport, list the tools and call one through `cowork mcp`.
+// stdio transport, list the tools and call one through
+// `garam mcp cowork`.
 func TestCLI_BridgesStdioToTheTools(t *testing.T) {
 	s := newStack(t)
 	s.signIn(t, "ada")
@@ -130,7 +181,7 @@ func TestCLI_BridgesStdioToTheTools(t *testing.T) {
 		`{"jsonrpc":"2.0","id":2,"method":"tools/list"}`,
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"list_workspaces","arguments":{}}}`,
 	}, "\n") + "\n"
-	out, code := cowork(t, stdin, "mcp")
+	out, code := garam(t, stdin, "mcp", "cowork")
 	require.Equal(t, 0, code, out)
 
 	replies := map[float64]map[string]any{}
@@ -151,27 +202,29 @@ func TestCLI_BridgesStdioToTheTools(t *testing.T) {
 	assert.Contains(t, string(call), "acme")
 }
 
-// TestCLI_WorksTasks creates a task for bob, has bob move it with a
-// comment, and lists it by status.
+// TestCLI_WorksTasks creates a task for bob, has bob move it and
+// comment on it, and lists it by status and assignee.
 func TestCLI_WorksTasks(t *testing.T) {
 	s := newStack(t)
 	s.signIn(t, "ada")
-	out, code := cowork(t, "", "tasks", "create", "--title", "Review the plan", "--assignee", userGRN("bob"), "--due", "2026-11-02", "-o", "json")
+	out, code := garam(t, "", "cowork", "tasks", "create", "--title", "Review the plan", "--assignee", userGRN("bob"), "--due", "2026-11-02", "-o", "json")
 	require.Equal(t, 0, code, out)
 	var created struct{ ID string }
 	require.NoError(t, json.Unmarshal([]byte(out), &created))
 
 	s.signIn(t, "bob")
-	out, code = cowork(t, "", "tasks", "update", created.ID, "--status", "doing", "--comment", "reading it")
+	out, code = garam(t, "", "cowork", "tasks", "update", created.ID, "--status", "doing")
 	require.Equal(t, 0, code, out)
 	assert.Contains(t, out, "doing")
-	out, code = cowork(t, "", "tasks", "list", "--status", "doing", "--assignee", "me")
+	out, code = garam(t, "", "cowork", "tasks", "comments", "post", created.ID, "--body", "reading it")
+	require.Equal(t, 0, code, out)
+	out, code = garam(t, "", "cowork", "tasks", "list", "--status", "doing", "--assignee", userGRN("bob"))
 	require.Equal(t, 0, code, out)
 	assert.Contains(t, out, "Review the plan")
-	out, code = cowork(t, "", "tasks", "show", created.ID)
+	out, code = garam(t, "", "cowork", "tasks", "comments", "list", created.ID)
 	require.Equal(t, 0, code, out)
 	assert.Contains(t, out, "reading it")
 
-	_, code = cowork(t, "", "tasks", "update", created.ID, "--status", "blocked")
-	assert.Equal(t, cli.ExitInvalid, code)
+	_, code = garam(t, "", "cowork", "tasks", "update", created.ID, "--status", "blocked")
+	assert.Equal(t, exitInvalid, code)
 }

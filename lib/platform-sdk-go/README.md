@@ -4,7 +4,7 @@ The Go client of the platform's browser API, with the types it answers,
 generated from `platform/api/openapi.yaml` by oapi-codegen (ADR-0132).
 Nothing in it is written by hand.
 
-- **Imported by** `platform-cli/`, which reaches the platform through
+- **Imported by** `garam-cli/`, which reaches the platform through
   it alone ([cli.md](../../docs/architecture/cli.md)).
 - **Regenerate** with `make -C lib/platform-sdk-go gen`, which reads
   `oapi-codegen.yaml` and writes `client.gen.go`. A change to

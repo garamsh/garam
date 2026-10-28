@@ -31,7 +31,7 @@ var (
 	cliErr  error
 )
 
-// garamCLI builds platform-cli's garam (ADR-0132) from the module
+// garamCLI builds garam-cli's garam (ADR-0132) from the module
 // beside this one, once per run, and answers its path.
 func garamCLI(t *testing.T) string {
 	t.Helper()
@@ -42,7 +42,7 @@ func garamCLI(t *testing.T) string {
 		}
 		cliBin = filepath.Join(cliDir, "garam")
 		build := exec.Command("go", "build", "-o", cliBin, "./cmd/garam")
-		build.Dir = filepath.Join(filepath.Dir(migrationsDir(t)), "..", "platform-cli")
+		build.Dir = filepath.Join(filepath.Dir(migrationsDir(t)), "..", "garam-cli")
 		if out, err := build.CombinedOutput(); err != nil {
 			cliErr = fmt.Errorf("go build: %w: %s", err, out)
 		}

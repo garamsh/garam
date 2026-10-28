@@ -29,10 +29,23 @@ garam is becoming an agent-based collaboration platform, and this
 repository a monorepo of its services
 ([#1655](https://github.com/garamsh/garam/issues/1655)).
 [ADR-0125](./docs/architecture/adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
-decides the layout: `platform/`, `platform-web/`, `site-web/`,
-`lib/design/`, `tooling/` and `deploy/`, with a folder for each new
-service. None of it is built yet. Until #1659 moves the tree, every path
-below is today's.
+decides it, and
+[ADR-0132](./docs/architecture/adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)
+and
+[ADR-0133](./docs/architecture/adr/0133-garam-is-the-one-client-cli-and-carries-every-services-commands-from-garam-cli.md)
+refine it. The tree is laid out that way:
+
+- `platform/` and `cowork/` — a service each, its server binary under
+  `cmd/`;
+- `platform-web/`, `site-web/` and `cowork-web/` — the console, the
+  site and cowork's web app;
+- `garam-cli/` — `garam`, the one client CLI, carrying every service's
+  client commands;
+- `lib/` — the code libraries more than one of them links;
+- `tooling/`, `deploy/` and `docs/` — what supports the rest.
+
+[docs/architecture/structure.md](./docs/architecture/structure.md)
+§Services states the rules the layout follows.
 
 ## Module path
 
@@ -95,20 +108,24 @@ integration` and `make e2e`, the first of which truncates.
 
 ## The garam CLI
 
-`platform-cli/` builds the `garam` a person or a program administers
-garam with ([docs/architecture/cli.md](./docs/architecture/cli.md)),
-a client binary apart from the server's (ADR-0132).
+`garam-cli/` builds the `garam` a person or a program administers
+garam and works in its services with
+([docs/architecture/cli.md](./docs/architecture/cli.md)), a client
+binary apart from the servers' (ADR-0132, ADR-0133).
 
 ```sh
 garam login --endpoint https://garam.example   # device grant (ADR-0120)
 garam orgs use acme                            # the org later commands act in
 garam operators list -o json                   # the API's own answer
 garam operators keys issue hosted --rotation planned --out hosted-key.json
+garam cowork pages list                        # cowork's commands (ADR-0133)
+garam mcp cowork                               # cowork's tools over stdio
 ```
 
-Every browser API operation becomes a command derived from
-`platform/api/openapi.yaml` by `go run ./internal/cli/cligen` in
-`platform-cli/`, which `make gen` runs (ADR-0122). An answer carrying a
+Every browser API operation, and every operation of cowork's API under
+`garam cowork`, becomes a command derived from its specification by
+`go run ./internal/cli/cligen` in `garam-cli/`, which `make gen` runs
+(ADR-0122). An answer carrying a
 secret, such as an issued key, is written to the file `--out` names at
 mode 0600 and never printed.
 

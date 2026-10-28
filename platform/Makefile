@@ -39,7 +39,7 @@ build:
 # gen regenerates everything derived from a source of truth: the
 # OpenAPI servers, sqlc queries, protobuf code, and mocks. The client of
 # the browser API is lib/platform-sdk-go's, and the commands derived
-# from it platform-cli's (ADR-0132).
+# from it garam-cli's (ADR-0132).
 gen:
 	$(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
 	$(OAPI_CODEGEN) --config api/machine-codegen.yaml api/machine.yaml

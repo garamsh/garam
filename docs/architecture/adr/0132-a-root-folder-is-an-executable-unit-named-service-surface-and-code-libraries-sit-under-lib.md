@@ -1,6 +1,9 @@
 # ADR 0132: A root folder is an executable unit named `<service>-<surface>`, and code libraries sit under `lib/`
 
-> Status: accepted
+> Status: accepted; `platform-cli/` as the platform's client alone
+> (point 1) and `lib/clisession` as a library (point 2) are
+> superseded by
+> [ADR-0133](./0133-garam-is-the-one-client-cli-and-carries-every-services-commands-from-garam-cli.md)
 > Date: 2026-10-28
 
 Drafted for #1700, which reserves this number. The direction is the

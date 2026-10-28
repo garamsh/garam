@@ -454,7 +454,8 @@ Responsibility documents:
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam
 - [machine-identity.md](./machine-identity.md) — who is calling on the
-  listener a machine identity authenticates on
+  listener a machine identity authenticates on, and what an agent
+  presents to the browser-facing one
 - [messaging.md](./messaging.md) — the durable queue a message reaches
   an agent through, the consent that lets one cross an organization
   boundary, and the signature on every message garam hands out
@@ -469,7 +470,8 @@ Responsibility documents:
 - [adapter.md](./adapter.md) — what the adapter garam ships must do, and
   what it rests on
 - [cli.md](./cli.md) — the user commands of the `garam` binary: how a
-  person signs one in, what it keeps between runs, and what it calls
+  person signs one in, how an agent runs it, what it keeps between
+  runs, and what it calls
 - [deployment-contract.md](./deployment-contract.md) — what a deployment
   must plan for that no manifest carries: readiness, termination,
   migration failure, key-material enforcement, and what is not
@@ -1059,6 +1061,14 @@ ADRs:
   — the CLI derives a command for every browser API operation from
   `platform/api/openapi.yaml`, with one grammar, output contract and set
   of exit codes, and writes a secret answer to a file at mode 0600 alone
+- [0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
+  — an agent calls the browser API and the garam CLI as itself, with an
+  agent token its assignee mints for the browser API's audience, read
+  on every request; it is authorized by the engine on its GRN and its
+  teams with no role statements, inside a floor no policy lifts: its
+  own organization only, and no operation that issues a key, an
+  invitation or an operation authority or approves an enrollment; not
+  yet built
 - [0124](./adr/0124-an-operator-is-registered-as-a-pair-in-one-step-and-its-control-service-names-its-manager.md)
   — an Operator is registered as a pair in one step, its cluster
   manager and its control service in one transaction, each keeping its

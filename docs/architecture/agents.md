@@ -136,6 +136,32 @@ release of its peer in both upgrade orders, and unsupported semantics
 are refused by name. None of it is built, so garam still publishes no
 release of that contract and no compatibility window (ADR-0049).
 
+## Acting on the browser-facing listener
+
+**Unbuilt.** Today an agent reaches the machine listener alone, and
+the browser-facing one serves people.
+[ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
+lets an agent call it, and the garam CLI, as itself:
+
+- **`Service` mints the token.** The agent's assignee asks
+  `mintAgentToken` for one whose audience is the browser API, beside
+  the agent's garam and control-service tokens, under the same
+  assignment, epoch and lineage rules. The live-token bound per agent
+  grows to three audiences' worth.
+- **It stays a non-member.** The agent is decided on the policies
+  that reach its GRN and its groups, holds no role, and is never
+  written to `org_members`
+  ([authz.md](./authz.md) §An agent on the browser-facing listener).
+- **It cannot extend itself through that listener.** It reaches no
+  operation that issues an operator key, an invitation or an
+  operation authority, or approves an enrollment, so it creates no
+  agent and mints no credential there
+  ([api-surface.md](./api-surface.md) §An agent on the browser-facing
+  listener).
+- **How the token reaches the agent** is its assignee's: the Operator
+  hands it over as it hands over the agent's other tokens, which is
+  the Operator's to build.
+
 ## Common managed and direct enrollment
 
 **Built for both placements, over two wires.**

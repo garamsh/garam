@@ -1,15 +1,16 @@
 # CLI
 
 What the user commands of the `garam` binary are responsible for: how a
-person signs one in, what it keeps between runs, what it calls, and what
-it does not decide. The server commands the same binary carries are
-[overview.md](./overview.md)'s module list and
+person signs one in, how an agent runs it, what it keeps between runs,
+what it calls, and what it does not decide. The server commands the
+same binary carries are [overview.md](./overview.md)'s module list and
 [deployment-contract.md](./deployment-contract.md)'s.
 
 ## Contents
 - What it is
 - The commands it derives
 - Signing in
+- Running as an agent
 - What it keeps
 - What it calls
 - What it does not decide
@@ -105,6 +106,27 @@ and a refused refresh answers "not signed in; run garam login".
 from the file. A session already revoked elsewhere is treated as signed
 out.
 
+## Running as an agent
+
+**Unbuilt.**
+[ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
+lets an agent run the CLI as itself, with no sign-in and no browser
+step. Today every command presents a person's session.
+
+- **`GARAM_TOKEN_FILE`** names a file holding the agent's browser
+  token ([machine-identity.md](./machine-identity.md) §Browser tokens).
+  Where it is set, every command reads that file, presents the token
+  as a bearer and sends nothing from the credentials file.
+- **Read per command, never written.** The CLI refreshes nothing; the
+  agent's assignee replaces the file atomically before the token
+  lapses. A file anyone but its owner can read is refused, as the
+  credentials file is.
+- **No session commands.** `garam login` and `garam logout` refuse
+  while it is set, and a refused token exits 3, not signed in.
+- **The API still decides.** The organization comes from `--org` as
+  for anyone. garam refuses any but the agent's own, as it refuses the
+  operations ADR-0123 keeps from an agent whatever its policies say.
+
 ## What it keeps
 
 - **The file.** `$XDG_CONFIG_HOME/garam/credentials`, or
@@ -164,6 +186,9 @@ API's message under its kind.
 - [ADR-0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)
   — every browser API operation is a command derived from the
   specification, and a secret is written to a file alone
+- [ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
+  — an agent runs the CLI from a token file its assignee keeps
+  current; unbuilt
 - [ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)
   — the user commands become a client binary of their own,
   `platform-cli/`, calling the platform through a generated SDK; not

@@ -1,7 +1,8 @@
 # Machine Identity
 
 Who is calling on the listener a machine identity authenticates on
-(ADR-0100), and the evidence of how each caller authenticated
+(ADR-0100), what an agent presents to the browser-facing listener
+(ADR-0123), and the evidence of how each caller authenticated
 (ADR-0109). Implemented by `platform/internal/machine`.
 
 Every machine caller authenticates by a token it presents, and the
@@ -272,6 +273,34 @@ credential, and an agent holds the tokens its assignee mints for it
   serial refuses an operator's token, and `ConfineSupervisors` keeps a
   supervisor to its identity, its lifecycle routes and its agent's mint
   ([agents.md](./agents.md) §Standalone hosts).
+
+## Browser tokens
+
+**Unbuilt.**
+[ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
+lets an agent call the browser-facing listener as itself; today that
+listener admits a session alone. What an agent will be authorized to
+do there is [authz.md](./authz.md) §An agent on the browser-facing
+listener.
+
+- **An agent token whose audience is the browser API.** The agent's
+  assignee mints it on `mintAgentToken` beside the agent's other
+  tokens. A token of one audience is accepted by that audience alone:
+  a browser token reaches no machine operation, and the token the
+  adapter holds reaches no browser operation.
+- **Presented as `Authorization: Bearer <token>`.** Its shape tells it
+  from a session's token, and a value of either shape is looked up as
+  that shape only.
+- **Read on every request, beside the record it rests on**, as §Tokens
+  reads an agent's token here: a reassignment, a recovery, deleting
+  the operator holding the agent or deleting its organization refuses
+  it from the next request. Its lifetime is the agent token's, and it
+  carries no execution token.
+- **Agents alone.** The mechanism is a machine token with the browser
+  audience, resolved to a subject GRN; ADR-0123 admits agents to it,
+  and an operator's or a supervisor's token takes no browser audience.
+- **Its mint is a credential event of its own kind** (§Credential
+  events), with the agent's GRN as subject.
 
 ## Authentication evidence
 

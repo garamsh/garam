@@ -31,8 +31,9 @@ design
 # OpenAPI spec, and its tests read the return-path vectors the Go rule
 # is tested against.
 platform/client platform
-# The console's browser suite drives the platform's api.
-console platform deploy/local
+# The console's browser suite drives the platform's api, and starts the
+# site it sends a signed-out visitor to.
+console platform deploy/local site
 # cowork/web generates its API types from cowork's spec, and its browser
 # suite drives the cowork binary and signs in through the platform.
 cowork/web cowork platform deploy/local

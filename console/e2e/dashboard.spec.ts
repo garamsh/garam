@@ -162,7 +162,10 @@ test.describe("signed in", () => {
   });
 
   test("skips the login page once signed in", async ({ page, signedIn }) => {
-    expect(signedIn.sessionToken).toBeTruthy();
+    // The console's old `/login` forwards to the site's, which reads the
+    // site's own cookie (ADR-0131): a sign-in held there is what skips
+    // the page and hands the visitor back here.
+    await holdSession(page.context(), SITE_URL, signedIn.sessionToken);
 
     await page.goto("/login");
 

@@ -1,5 +1,10 @@
 import { CopyField } from "@/components/copy-field";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@garam/design/ui/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@garam/design/ui/tabs";
 
 import { DangerZone, type DangerAction } from "./danger-zone";
 

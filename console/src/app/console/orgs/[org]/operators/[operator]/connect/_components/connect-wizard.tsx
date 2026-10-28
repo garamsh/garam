@@ -16,7 +16,12 @@ import { SecretReveal } from "@/components/secret-reveal";
 import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
 import { Button } from "@garam/design/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@garam/design/ui/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@garam/design/ui/tabs";
 import {
   issueOperatorKey,
   type IssueOperatorKeyState,

@@ -28,6 +28,12 @@ ARG APP
 ARG GARAM_API_URL=http://api:8080
 ENV GARAM_API_URL=$GARAM_API_URL
 
+# The site's env.ts requires the console's address in production, and
+# the build evaluates it. Nothing the build emits holds it: the site
+# reads it again when a request arrives, so this stage's value stops
+# here and the runtime's is the one served.
+ENV GARAM_CONSOLE_URL=http://console.invalid
+
 COPY . .
 RUN test -n "$APP" || { echo "APP names the app's folder: console or site" >&2; exit 1; }; \
   pnpm install --offline --frozen-lockfile --filter "{./$APP}..." && \

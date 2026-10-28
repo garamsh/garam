@@ -1,17 +1,14 @@
 /**
  * The auth feature's surface for a Server Component: who is signed in
- * and the ways in; nothing else under `features/auth/` is public. The
- * way out is a Server Action, declared in `actions.ts` — reaching this
- * file from a client module would pull the server-only backend client
- * into the browser bundle.
+ * and their sessions; nothing else under `features/auth/` is public.
+ * The ways in are the site's (ADR-0131). The way out is a Server
+ * Action, declared in `actions.ts` — reaching this file from a client
+ * module would pull the server-only backend client into the browser
+ * bundle.
  */
 export { getSession, type User } from "./api/get-session";
-export { listProviders } from "./api/list-providers";
 export {
   listMySessions,
   type Session,
   type SessionsRead,
 } from "./api/sessions";
-export { GoogleSignInButton } from "./components/google-sign-in-button";
-export { PasswordRegisterForm } from "./components/password-register-form";
-export { PasswordSignInForm } from "./components/password-sign-in-form";

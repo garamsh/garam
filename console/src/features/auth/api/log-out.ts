@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { garamRequest, isUnauthenticated } from "@/lib/garam";
+import { siteUrl } from "@/lib/site-url";
 import { clearSessionCookie } from "@garam/platform-client/session-cookie";
 
 /**
@@ -24,5 +25,5 @@ export async function logOut() {
     // so a failed revocation cannot leave the cookie behind.
     await clearSessionCookie(response);
   }
-  redirect("/login");
+  redirect(siteUrl("/login"));
 }

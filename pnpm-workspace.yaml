@@ -7,6 +7,7 @@ packages:
   - cowork/web
   - design
   - platform/client
+  - site
 # sharp backs Next.js image optimisation; unrs-resolver backs the ESLint
 # import resolver; esbuild bundles cowork/engine. Each ships a native
 # binary through an install script, which has to run.

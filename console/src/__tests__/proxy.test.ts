@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { describe, expect, it } from "vitest";
 
-import { proxy } from "@/proxy";
+import { config, proxy } from "@/proxy";
 import { RETURN_PATH_HEADER } from "@garam/platform-client/return-path";
 import { SESSION_COOKIE } from "@garam/platform-client/session";
 
@@ -14,12 +15,45 @@ function request(path: string, { signedIn = false } = {}) {
 }
 
 describe("proxy", () => {
-  it("sends a visitor without a session cookie to the login page, carrying where they were going", () => {
+  it("sends a visitor without a session cookie to the site's login page, carrying where they were going", () => {
     const response = proxy(request("/console/orgs?subject=team"));
+
+    // Sign-in is the site's (ADR-0131), on its own origin.
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3001/login?next=%2Fconsole%2Forgs%3Fsubject%3Dteam",
+    );
+  });
+
+  it.each([
+    "/login",
+    "/login?next=%2Fconsole%2Finvitations%2Ftok-123",
+    "/register?next=%2Fconsole%2Finvitations%2Ftok-123",
+  ])("sends %s, which the site now answers, to the site", (path) => {
+    expect(
+      unstable_doesMiddlewareMatch({
+        config,
+        url: `http://localhost:3000${path}`,
+      }),
+    ).toBe(true);
+
+    const response = proxy(request(path, { signedIn: true }));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3000/login?next=%2Fconsole%2Forgs%3Fsubject%3Dteam",
+      `http://localhost:3001${path}`,
+    );
+  });
+
+  it("opens the console at its own root", () => {
+    expect(
+      unstable_doesMiddlewareMatch({ config, url: "http://localhost:3000/" }),
+    ).toBe(true);
+
+    const response = proxy(request("/"));
+
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/console",
     );
   });
 
@@ -27,6 +61,7 @@ describe("proxy", () => {
     const response = proxy(request("/console/invitations/tok-123"));
 
     const location = new URL(response.headers.get("location") ?? "");
+    expect(location.origin).toBe("http://localhost:3001");
     expect(location.pathname).toBe("/login");
     expect(location.searchParams.get("next")).toBe(
       "/console/invitations/tok-123",

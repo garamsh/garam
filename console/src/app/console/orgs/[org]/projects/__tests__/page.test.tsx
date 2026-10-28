@@ -136,6 +136,6 @@ describe("projects section", () => {
 
     await expect(
       renderServerComponent(ProjectsPage(params("acme"))),
-    ).rejects.toThrow("NEXT_REDIRECT:/login");
+    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3001/login");
   });
 });

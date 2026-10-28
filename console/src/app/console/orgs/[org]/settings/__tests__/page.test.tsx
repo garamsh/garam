@@ -164,6 +164,6 @@ describe("organization settings", () => {
 
     await expect(
       renderServerComponent(OrgSettingsPage(params("acme"))),
-    ).rejects.toThrow("NEXT_REDIRECT:/login");
+    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3001/login");
   });
 });

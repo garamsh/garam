@@ -6,7 +6,12 @@ import { JsonEditor } from "@/components/json-editor";
 import { Banner } from "@garam/design/components/banner";
 import { Button } from "@garam/design/ui/button";
 import { FieldDescription, FieldError } from "@garam/design/ui/field";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@garam/design/ui/tabs";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@garam/design/ui/tabs";
 import {
   hasCondition,
   parsePolicyDocument,

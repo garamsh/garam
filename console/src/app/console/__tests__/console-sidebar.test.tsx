@@ -73,7 +73,7 @@ describe("console sidebar", () => {
     requestHeaders.set(RETURN_PATH_HEADER, "/console/invitations/tok-123");
 
     await expect(renderSidebar()).rejects.toThrow(
-      /^NEXT_REDIRECT:\/login\?next=%2Fconsole%2Finvitations%2Ftok-123$/,
+      /^NEXT_REDIRECT:http:\/\/localhost:3001\/login\?next=%2Fconsole%2Finvitations%2Ftok-123$/,
     );
   });
 

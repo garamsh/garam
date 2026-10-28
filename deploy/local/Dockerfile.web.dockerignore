@@ -9,6 +9,7 @@
 !cowork/engine
 !cowork/web
 !design
+!platform/client
 !site
 **/node_modules
 **/.next

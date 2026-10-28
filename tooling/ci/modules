@@ -36,3 +36,6 @@ console platform deploy/local
 # cowork/web generates its API types from cowork's spec, and its browser
 # suite drives the cowork binary and signs in through the platform.
 cowork/web cowork platform deploy/local
+# The site's browser suite drives the platform's api, and signs in to
+# the console it hands a visitor to.
+site platform deploy/local console

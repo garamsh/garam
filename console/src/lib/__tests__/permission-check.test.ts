@@ -111,7 +111,7 @@ describe("checkPermissions", () => {
 
     await expect(
       checkPermissions("acme", { register: { action: "operator:register" } }),
-    ).rejects.toThrow("NEXT_REDIRECT:/login");
+    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3001/login");
   });
 
   it.each([

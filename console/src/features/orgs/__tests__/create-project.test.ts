@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 import { createProject } from "@/features/orgs/api/create-project";
 import { API_URL, frontend } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY, unmappedRefusalCopy } from "@garam/platform-client/refusal-copy";
+import {
+  REFUSAL_COPY,
+  unmappedRefusalCopy,
+} from "@garam/platform-client/refusal-copy";
 
 // `revalidatePath` only works inside a Next.js request store.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));

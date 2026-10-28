@@ -368,6 +368,8 @@ describe("operator page", () => {
   it("sends a rejected session to the login page", async () => {
     server.use(...signedOut());
 
-    await expect(renderOperator()).rejects.toThrow("NEXT_REDIRECT:/login");
+    await expect(renderOperator()).rejects.toThrow(
+      "NEXT_REDIRECT:http://localhost:3001/login",
+    );
   });
 });

@@ -1,7 +1,7 @@
 import type { BrowserContext } from "@playwright/test";
 
 import { axeViolations, expectHydrated, useTheme } from "./axe";
-import { expect, test } from "./fixtures";
+import { expect, holdSession, test } from "./fixtures";
 import { seedMember } from "./seed";
 
 /** Signs the browser in as `token`'s session at the run's origin. */
@@ -11,15 +11,7 @@ async function signInAs(
   token: string,
 ) {
   await context.clearCookies();
-  await context.addCookies([
-    {
-      name: "garam_session",
-      value: token,
-      url: baseURL!,
-      httpOnly: true,
-      sameSite: "Lax",
-    },
-  ]);
+  await holdSession(context, baseURL, token);
 }
 
 test.describe("Home", () => {

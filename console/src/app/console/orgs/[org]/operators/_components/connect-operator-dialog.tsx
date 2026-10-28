@@ -3,9 +3,9 @@
 import { Plus } from "lucide-react";
 import { useActionState, useState } from "react";
 
-import { FormField } from "@/components/form-field";
-import { Refusal } from "@/components/refusal";
-import { Button } from "@/components/ui/button";
+import { FormField } from "@garam/design/components/form-field";
+import { Refusal } from "@garam/design/components/refusal";
+import { Button } from "@garam/design/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -14,16 +14,16 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+} from "@garam/design/ui/dialog";
+import { Input } from "@garam/design/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+} from "@garam/design/ui/select";
+import { Textarea } from "@garam/design/ui/textarea";
 import {
   registerOperator,
   type RegisterOperatorState,
@@ -34,7 +34,7 @@ import {
   parseOperatorIdentifier,
   parseOperatorName,
 } from "@/lib/operator";
-import type { Parsed } from "@/lib/parsed";
+import type { Parsed } from "@garam/platform-client/parsed";
 import { refuseUnsent } from "@/lib/unsent-action";
 
 import type { OperatorIdentity } from "./operator-pairs";

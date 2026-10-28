@@ -13,6 +13,8 @@ exclude:
   oauthCallback: the provider's redirect back to the browser
   loginPassword: the CLI never sees a password (ADR-0120)
   registerPassword: the CLI never sees a password (ADR-0120)
+  issueSessionHandoff: hands a browser's sign-in to another app's host; a bearer is refused (ADR-0131)
+  redeemSessionHandoff: the receiving app's server redeems it for a browser (ADR-0131)
   watchAgent: a server-sent event stream the console renders, not an answer a command prints
 
 # Operations a hand-written command already serves.

@@ -2,7 +2,7 @@ import type { APIRequestContext, Locator, Page } from "@playwright/test";
 import { z } from "zod";
 
 import { axeViolations, expectHydrated, useTheme } from "./axe";
-import { expect, test } from "./fixtures";
+import { expect, holdSession, test } from "./fixtures";
 import { seedMember, type Seed } from "./seed";
 
 /** Opens a tab of the page and waits until it is the one shown. */
@@ -485,15 +485,7 @@ test.describe("permissions", () => {
 
     const member = await seedMember(signedIn);
     await context.clearCookies();
-    await context.addCookies([
-      {
-        name: "garam_session",
-        value: member.sessionToken,
-        url: baseURL!,
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+    await holdSession(context, baseURL, member.sessionToken);
 
     await page.goto(permissions);
     await expect(

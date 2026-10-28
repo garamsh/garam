@@ -20,7 +20,7 @@ modules-with = $(strip $(foreach m,$(MODULES),$(if $(shell grep -q '^$(1):' $(m)
 VERBS := ci install format lint test build gen check-gen stack-up suites integration
 
 .PHONY: $(VERBS) affected e2e web-e2e cowork-web-e2e db-up db-down db-prune backend-up
-.PHONY: template-diff search image-build web-image-e2e test-image test-image-e2e test-image-push test-image-pin
+.PHONY: template-diff search image-build web-image-e2e site-image-e2e test-image test-image-e2e test-image-push test-image-pin
 
 $(VERBS):
 	@test -n '$(call modules-with,$@)' || { echo '$@: no module defines it — tooling/ci/modules or a module Makefile is misread'; exit 1; }
@@ -36,12 +36,15 @@ affected:
 
 # The names these were run by before each module had its own Makefile,
 # kept while CI's goal commands and the documents use them: the
-# platform's binary suite, and the two browser suites.
+# platform's binary suite, and the browser suites. `web-e2e` was the
+# one web app's and is now both of the apps it split into (ADR-0131),
+# the console's and the site's.
 e2e:
 	@$(MAKE) --no-print-directory -C platform e2e
 
 web-e2e:
 	@$(MAKE) --no-print-directory -C console e2e
+	@$(MAKE) --no-print-directory -C site e2e
 
 cowork-web-e2e:
 	@$(MAKE) --no-print-directory -C cowork/web e2e
@@ -77,11 +80,12 @@ IMAGE_BUILD_ARGS = $(if $(IMAGE_REGISTRY),--registry '$(IMAGE_REGISTRY)') $(if $
 image-build:
 	tooling/image-build.sh $(IMAGE_BUILD_ARGS)
 
-# What image-build tagged the web image, asked of the script that tags
-# it by the build context, so a rename in release.yml cannot leave this
-# naming an image an earlier run built (#870). Empty when the release
-# builds none from the web context, which the target reports.
-WEB_IMAGE = $(shell tooling/image-build.sh --names $(IMAGE_BUILD_ARGS) | sed -n 's|^console ||p')
+# What image-build tagged the console's image, asked of the script that
+# tags it, so a tag rule in release.yml cannot leave this naming an
+# image an earlier run built (#870). Both images build from the root, so
+# the console's is told apart by its repository, garam-web. Empty when
+# the release builds none into it, which the target reports.
+WEB_IMAGE = $(shell tooling/image-build.sh --names $(IMAGE_BUILD_ARGS) | awk '$$2 ~ /(^|\/)garam-web:/ { print $$2 }')
 
 # web-image-e2e checks the built image rather than the app: that the
 # standalone server starts, answers both probes and reaches the baked
@@ -91,8 +95,14 @@ WEB_IMAGE = $(shell tooling/image-build.sh --names $(IMAGE_BUILD_ARGS) | sed -n 
 # verified, and then nothing is built here.
 web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
 	@image='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))'; \
-		test -n "$$image" || { echo 'web-image-e2e: nothing names the image to check — .github/workflows/release.yml builds none from the web context'; exit 1; }; \
+		test -n "$$image" || { echo 'web-image-e2e: nothing names the image to check — .github/workflows/release.yml builds none into garam-web'; exit 1; }; \
 		GARAM_WEB_IMAGE="$$image" platform/tests/image/web.sh
+
+# site-image-e2e is the same check of the site's image (ADR-0131),
+# built here from deploy/local/Dockerfile.web: no release publishes
+# one yet, so there is no image-build output to take.
+site-image-e2e:
+	APP=site platform/tests/image/web.sh
 
 # test-image builds the test image another repository's CI copies
 # garam, testprincipal and the migrations out of (ADR-0092), tagged

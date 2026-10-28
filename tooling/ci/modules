@@ -20,15 +20,23 @@ platform deploy/local
 cowork/engine
 # cowork's gen builds cowork/engine's bundle into internal/.
 cowork cowork/engine deploy/local
-# The chart's checks read the environment names the platform and the
-# console declare.
-deploy/charts platform console
+# The chart's checks read the environment names the platform, the
+# console and the site declare.
+deploy/charts platform console site
 # The stack has no gate of its own; the suites of the modules naming it
 # check it.
 deploy/local
-# The console generates its API types from the platform's OpenAPI spec,
-# and its browser suite drives the platform's api.
-console platform deploy/local
+design
+# The platform's client generates its API types from the platform's
+# OpenAPI spec, and its tests read the return-path vectors the Go rule
+# is tested against.
+platform/client platform
+# The console's browser suite drives the platform's api, and starts the
+# site it sends a signed-out visitor to.
+console platform deploy/local site
 # cowork/web generates its API types from cowork's spec, and its browser
 # suite drives the cowork binary and signs in through the platform.
 cowork/web cowork platform deploy/local
+# The site's browser suite drives the platform's api, and signs in to
+# the console it hands a visitor to.
+site platform deploy/local console

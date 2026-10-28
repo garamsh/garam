@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { garamFetchAuthenticated } from "@/lib/garam";
-import { RETURN_PATH_HEADER } from "@/lib/return-path";
+import { RETURN_PATH_HEADER } from "@garam/platform-client/return-path";
 import { API_URL } from "@/testing/mocks/handlers";
 import { requestHeaders, server } from "@/testing/setup";
 
@@ -30,7 +30,7 @@ describe("a session the backend rejects", () => {
     requestHeaders.set(RETURN_PATH_HEADER, "/console/invitations/tok-123");
 
     await expect(garamFetchAuthenticated("/me", z.unknown())).rejects.toThrow(
-      /^NEXT_REDIRECT:\/login\?next=%2Fconsole%2Finvitations%2Ftok-123$/,
+      /^NEXT_REDIRECT:\/auth\/sign-in\?next=%2Fconsole%2Finvitations%2Ftok-123$/,
     );
   });
 
@@ -42,7 +42,7 @@ describe("a session the backend rejects", () => {
     requestHeaders.set(RETURN_PATH_HEADER, "//evil.example/console");
 
     await expect(garamFetchAuthenticated("/me", z.unknown())).rejects.toThrow(
-      /^NEXT_REDIRECT:\/login$/,
+      /^NEXT_REDIRECT:\/auth\/sign-in$/,
     );
   });
 });

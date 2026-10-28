@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { InviteDialog } from "@/app/console/orgs/[org]/people/_components/invite-dialog";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {

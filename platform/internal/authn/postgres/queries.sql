@@ -30,14 +30,49 @@ SELECT * FROM sessions
 WHERE user_grn = $1 AND (expires_at > now() OR refresh_expires_at > now())
 ORDER BY created_at DESC, id;
 
+-- Revoking a session ends the sign-in it belongs to: the sign-in's row
+-- goes, and every session handed off from it with it (ADR-0131).
 -- name: RevokeUserSession :execrows
-DELETE FROM sessions WHERE user_grn = $1 AND id = $2;
+DELETE FROM sessions WHERE id = (
+    SELECT coalesce(s.handed_off_from, s.id) FROM sessions s
+    WHERE s.user_grn = $1 AND s.id = $2);
 
 -- name: GetSession :one
 SELECT * FROM sessions WHERE token_hash = $1 AND expires_at > now();
 
+-- Signing out ends the sign-in, on whichever host it is asked on.
 -- name: DeleteSession :exec
-DELETE FROM sessions WHERE token_hash = $1;
+DELETE FROM sessions WHERE id = (
+    SELECT coalesce(s.handed_off_from, s.id) FROM sessions s WHERE s.token_hash = $1);
+
+-- A handoff is issued from a live browser session and hands off the
+-- sign-in that session belongs to, so every handed-off session is one
+-- step from a sign-in. A token naming no live browser session writes
+-- nothing.
+-- name: IssueSessionHandoff :execrows
+WITH pruned AS (
+    DELETE FROM session_handoffs WHERE expires_at <= now()
+)
+INSERT INTO session_handoffs (code_hash, state_hash, session_id, expires_at)
+SELECT sqlc.arg('code_hash'), sqlc.arg('state_hash'), coalesce(s.handed_off_from, s.id), sqlc.arg('expires_at')
+FROM sessions s
+WHERE s.token_hash = sqlc.arg('token_hash') AND s.expires_at > now() AND s.kind = 'browser';
+
+-- Redeeming deletes the handoff and creates the session in one
+-- statement, so two redemptions of one code leave one session between
+-- them. The new session expires with the sign-in it was handed off
+-- from, and a handoff whose sign-in has lapsed buys nothing.
+-- name: RedeemSessionHandoff :one
+WITH spent AS (
+    DELETE FROM session_handoffs
+    WHERE code_hash = sqlc.arg('code_hash') AND state_hash = sqlc.arg('state_hash') AND expires_at > now()
+    RETURNING session_id
+)
+INSERT INTO sessions (token_hash, user_grn, created_at, expires_at, handed_off_from)
+SELECT sqlc.arg('token_hash'), s.user_grn, sqlc.arg('created_at'), s.expires_at, s.id
+FROM spent JOIN sessions s ON s.id = spent.session_id
+WHERE s.expires_at > now()
+RETURNING *;
 
 -- Issuing writes nothing once max_live states are live, which is what
 -- bounds the write rate an unauthenticated caller can drive on

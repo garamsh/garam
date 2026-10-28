@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, test } from "./fixtures";
+import { SITE_URL, expect, holdSession, test } from "./fixtures";
 
 /**
  * Adds the session cookie the way the fixture does, at the origin the
@@ -12,15 +12,7 @@ async function addSessionCookie(
   baseURL: string | undefined,
   token: string,
 ): Promise<void> {
-  await page.context().addCookies([
-    {
-      name: "garam_session",
-      value: token,
-      url: baseURL ?? "http://localhost:3000",
-      httpOnly: true,
-      sameSite: "Lax",
-    },
-  ]);
+  await holdSession(page.context(), baseURL, token);
 }
 
 test.describe("signed in", () => {
@@ -170,14 +162,17 @@ test.describe("signed in", () => {
   });
 
   test("skips the login page once signed in", async ({ page, signedIn }) => {
-    expect(signedIn.sessionToken).toBeTruthy();
+    // The console's old `/login` forwards to the site's, which reads the
+    // site's own cookie (ADR-0131): a sign-in held there is what skips
+    // the page and hands the visitor back here.
+    await holdSession(page.context(), SITE_URL, signedIn.sessionToken);
 
     await page.goto("/login");
 
     await expect(page).toHaveURL("/console/orgs");
   });
 
-  test("signs out back to the login page", async ({
+  test("signs out back to the site's login page", async ({
     page,
     baseURL,
     signedIn,
@@ -194,7 +189,8 @@ test.describe("signed in", () => {
     await page.getByRole("button", { name: "Open account menu" }).click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
 
-    await expect(page).toHaveURL("/login");
+    // Sign-in is the site's (ADR-0131), on its own origin.
+    await expect(page).toHaveURL(`${SITE_URL}/login`);
     // The heading rather than a provider button: which buttons the page
     // offers is the backend's answer (ADR-0010), and this stack
     // registers no provider.
@@ -207,6 +203,39 @@ test.describe("signed in", () => {
     // The rejected session is sent to sign in carrying where it was.
     await addSessionCookie(page, baseURL, signedIn.sessionToken);
     await page.goto("/console/orgs");
-    await expect(page).toHaveURL("/login?next=%2Fconsole%2Forgs");
+    await expect(page).toHaveURL(`${SITE_URL}/login?next=%2Fconsole%2Forgs`);
+  });
+
+  test("is handed the site's sign-in, and signing out ends it there too", async ({
+    page,
+    baseURL,
+    signedIn,
+  }) => {
+    // Signed in on the site alone: the console holds nothing yet.
+    await page.context().clearCookies();
+    await holdSession(page.context(), SITE_URL, signedIn.sessionToken);
+
+    await page.goto("/console/orgs");
+
+    // No second sign-in: the console was handed a session of its own
+    // (ADR-0131), host-only to it and not the site's.
+    await expect(page).toHaveURL("/console/orgs");
+    const consoleHost = new URL(baseURL ?? page.url()).hostname;
+    const handed = (await page.context().cookies()).find(
+      (cookie) =>
+        cookie.name === "garam_session" && cookie.domain === consoleHost,
+    );
+    expect(handed?.value).toBeTruthy();
+    expect(handed?.value).not.toBe(signedIn.sessionToken);
+
+    await page.getByRole("button", { name: "Open account menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    await expect(page).toHaveURL(`${SITE_URL}/login`);
+
+    // The site's cookie is still in the browser, but the sign-in it
+    // names ended with the console's: the handoff is refused and the
+    // visitor signs in again.
+    await page.goto("/console/orgs");
+    await expect(page).toHaveURL(`${SITE_URL}/login?next=%2Fconsole%2Forgs`);
   });
 });

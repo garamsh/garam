@@ -5,12 +5,12 @@ import { ArrowRight } from "lucide-react";
 import {
   API_UNREACHABLE_TITLE,
   ApiUnreachableReason,
-} from "@/components/api-unreachable";
-import { Banner } from "@/components/banner";
+} from "@garam/design/components/api-unreachable";
+import { Banner } from "@garam/design/components/banner";
 import { DescriptionList } from "@/components/description-list";
 import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import {
   getOperator,
   getOperatorDelegation,

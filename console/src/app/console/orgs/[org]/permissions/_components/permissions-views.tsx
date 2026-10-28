@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@garam/design/lib/utils";
 
 import { orgHref } from "../../../../_components/navigation";
 

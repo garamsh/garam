@@ -163,6 +163,65 @@ paths:
           description: Session revoked.
         '401':
           $ref: '#/components/responses/Error'
+  /auth/handoff:
+    post:
+      operationId: issueSessionHandoff
+      tags: [auth]
+      summary: Hand the current sign-in to another of garam's apps.
+      description: >-
+        Issues a one-time code that hands the caller's sign-in to
+        another app garam serves on a host of its own (ADR-0131). The
+        session cookie is host-only, so the site, where a person signs
+        in, issues the code and redirects to the app that asked; that
+        app redeems it with `POST /auth/handoff/redeem` and receives a
+        session of its own. `state` is what the receiving app holds in
+        a cookie of its own, so a code redeems only in the browser that
+        asked for it. The code lives a minute and redeems once. Only a
+        browser's session hands off: one presented as a bearer is
+        refused with 401, so a CLI's session buys no browser session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionHandoffRequest'
+      responses:
+        '201':
+          description: The code, shown once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionHandoff'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+  /auth/handoff/redeem:
+    post:
+      operationId: redeemSessionHandoff
+      tags: [auth]
+      summary: Redeem a handoff code for a session on this host.
+      description: >-
+        Spends a code `POST /auth/handoff` issued, with the state it was
+        issued for, and sets the `garam_session` cookie for a new
+        session of the same person (ADR-0131). The new session ends with
+        the sign-in it was handed off from, and signing out of either
+        ends both. A code that is unknown, lapsed, already redeemed or
+        presented with another state is refused with one 401.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionHandoffRedemption'
+      responses:
+        '204':
+          description: The session cookie is set.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
   /auth/providers:
     get:
       operationId: listProviders
@@ -3004,6 +3063,38 @@ components:
             Sent on this request only. It is never returned by any
             endpoint, never logged, and never placed in an error
             message (ADR-0041).
+    SessionHandoffRequest:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          minLength: 32
+          maxLength: 128
+          description: >-
+            The value the app receiving the handoff holds in a cookie of
+            its own. Only its hash is stored.
+    SessionHandoff:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+          description: >-
+            The one-time code, redeemable once within a minute. Only its
+            hash is stored.
+    SessionHandoffRedemption:
+      type: object
+      required: [code, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 128
+        state:
+          type: string
+          minLength: 32
+          maxLength: 128
     PasswordRegistration:
       type: object
       required: [invitationToken, username, password]

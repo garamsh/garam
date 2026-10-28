@@ -1,10 +1,14 @@
-# Build context for deploy/local/Dockerfile, the only Dockerfile built
-# from this root. An entry belongs below when the build stage does not
+# Build context for deploy/local/Dockerfile. Dockerfile.web builds from
+# this root as well, and reads Dockerfile.web.dockerignore instead of
+# this file. An entry belongs below when the build stage does not
 # compile it and the runtime stage does not ship it.
 .git
 .github
 docs
 console
+design
+site
+**/node_modules
 deploy
 platform/tests
 *.md

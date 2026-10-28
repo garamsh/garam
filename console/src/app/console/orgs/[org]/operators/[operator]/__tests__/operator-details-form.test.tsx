@@ -8,7 +8,7 @@ import { OperatorDetailsForm } from "@/app/console/orgs/[org]/operators/[operato
 import { enter } from "@/testing/enter";
 import { API_URL, fieldOne } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 // `revalidatePath` needs a request scope the test does not run in; the
 // action's own answer is what the form renders.

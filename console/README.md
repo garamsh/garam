@@ -1,6 +1,8 @@
-# web
+# console
 
-The garam frontend: Next.js App Router, TypeScript strict, Tailwind CSS
+The signed-in garam application, on its own origin beside
+[`site/`](../site/README.md), which serves the landing page and the way
+in (ADR-0131): Next.js App Router, TypeScript strict, Tailwind CSS
 v4, shadcn/ui. Decisions are recorded in
 [ADR-0009](../docs/architecture/adr/0009-web-frontend.md); conventions
 in [stack-nextjs.md](../docs/convention/stack-nextjs.md) and
@@ -11,13 +13,11 @@ Setup, the dev server, and the Playwright run command live in the
 
 ## Layout
 
-- `src/app/(auth)/` — signed-out routes: `/login` takes a username and
-  a password beside the buttons that start the backend OAuth flow, and
-  `/register` turns an invitation into an account.
 - `src/app/console/` — the authenticated shell and the org dashboard.
-- `src/proxy.ts` — redirects visitors without a session cookie to
-  `/login`; the shell re-verifies the session against `/me`.
-- `src/features/` — vertical slices (`auth`, `orgs`): API calls,
+- `src/proxy.ts` — redirects visitors without a session cookie to the
+  site's `/login`, and `/`, `/login` and `/register` to the site; the
+  shell re-verifies the session against `/me`.
+- `src/features/` — vertical slices (`auth`, `orgs`, …): API calls,
   components, helpers.
 - `src/lib/garam.ts` — server-side API client; attaches the session
   cookie and maps backend errors.

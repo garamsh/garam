@@ -37,6 +37,18 @@ Accounts minted this way take the reserved `local-` prefix in the user
 identifier space, which a provider subject may not claim, so a password
 account and a provider account can never resolve to one user row.
 
+Every cookie the api sets is host-only (ADR-0131). A person signs in
+on the site, and another of garam's apps is handed a session of its
+own: the site asks `POST /auth/handoff` for a one-time code bound to a
+state the app drew and holds in a cookie, and the app's server redeems
+it through `POST /auth/handoff/redeem` with that state
+(`platform/internal/api/handoff.go`). A code lives one minute, redeems
+once, and is issued only on a browser's session, never on a bearer.
+The session a redemption creates records the sign-in it came from
+(`sessions.handed_off_from`) and expires with it, and signing out or
+revoking any session of that family deletes the sign-in, which takes
+every handed-off session with it.
+
 A wrong password and a username no credential belongs to are one
 refusal, in message and in the work done: the second verifies against a
 verifier derived from random bytes rather than returning early.

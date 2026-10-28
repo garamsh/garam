@@ -3,10 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UserMenu } from "@/app/console/_components/user-menu";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { THEME_STORAGE_KEY } from "@/lib/theme";
-import { stubLocalStorage } from "@/testing/storage";
+import { SidebarProvider } from "@garam/design/ui/sidebar";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
+import { THEME_STORAGE_KEY } from "@garam/design/lib/theme";
+import { stubLocalStorage } from "@garam/design/testing/storage";
 
 // The Server Action revokes the session and redirects; the menu's own
 // contract is that submitting the control reaches it.

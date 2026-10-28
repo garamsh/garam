@@ -74,7 +74,8 @@ on are boundaries inside a service.
   cowork call `policy/`, and `policy/` calls no service.
 - **Services authenticate to one another with tokens `platform/`
   issues**, never by network position.
-- **`console/` calls only the services' public management APIs.**
+- **`console/` and `site/` call only the services' public management
+  APIs.**
 - **Management and runtime endpoints are separate deployments.** The
   console and the services' management APIs are one kind; the machine
   listener and the model gateway are the other.

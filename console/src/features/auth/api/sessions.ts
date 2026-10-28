@@ -5,7 +5,7 @@ import {
   garamFetchAuthenticated,
   parserFor,
 } from "@/lib/garam";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 /** One of the person's sessions, browser or CLI (ADR-0120). */
 export type Session = components["schemas"]["Session"];

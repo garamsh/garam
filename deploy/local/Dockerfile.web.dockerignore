@@ -1,0 +1,17 @@
+# Build context for deploy/local/Dockerfile.web, the repository root.
+# The build reads the workspace files at the root and the web packages;
+# a package's installed or built output is rebuilt inside, never copied.
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!console
+!cowork/engine
+!cowork/web
+!design
+!platform/client
+!site
+**/node_modules
+**/.next
+**/playwright-report
+**/test-results

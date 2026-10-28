@@ -1,5 +1,5 @@
 import { diffLines, diffStat } from "@/lib/line-diff";
-import { cn } from "@/lib/utils";
+import { cn } from "@garam/design/lib/utils";
 
 const MARK = { same: " ", added: "+", removed: "−" } as const;
 const SPOKEN = { same: "", added: "Added: ", removed: "Removed: " } as const;

@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { describe, expect, it } from "vitest";
 
-import { proxy } from "@/proxy";
-import { RETURN_PATH_HEADER } from "@/lib/return-path";
-import { SESSION_COOKIE } from "@/lib/session";
+import { config, proxy } from "@/proxy";
+import { RETURN_PATH_HEADER } from "@garam/platform-client/return-path";
+import { SESSION_COOKIE } from "@garam/platform-client/session";
 
 function request(path: string, { signedIn = false } = {}) {
   const req = new NextRequest(new URL(path, "http://localhost:3000"));
@@ -14,12 +15,46 @@ function request(path: string, { signedIn = false } = {}) {
 }
 
 describe("proxy", () => {
-  it("sends a visitor without a session cookie to the login page, carrying where they were going", () => {
+  it("starts a sign-in handoff for a visitor without a session cookie, carrying where they were going", () => {
     const response = proxy(request("/console/orgs?subject=team"));
+
+    // The cookie is host-only (ADR-0131): this host starts the handoff
+    // that brings a session from the site.
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/auth/sign-in?next=%2Fconsole%2Forgs%3Fsubject%3Dteam",
+    );
+  });
+
+  it.each([
+    "/login",
+    "/login?next=%2Fconsole%2Finvitations%2Ftok-123",
+    "/register?next=%2Fconsole%2Finvitations%2Ftok-123",
+  ])("sends %s, which the site now answers, to the site", (path) => {
+    expect(
+      unstable_doesMiddlewareMatch({
+        config,
+        url: `http://localhost:3000${path}`,
+      }),
+    ).toBe(true);
+
+    const response = proxy(request(path, { signedIn: true }));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3000/login?next=%2Fconsole%2Forgs%3Fsubject%3Dteam",
+      `http://garam.localhost:3001${path}`,
+    );
+  });
+
+  it("opens the console at its own root", () => {
+    expect(
+      unstable_doesMiddlewareMatch({ config, url: "http://localhost:3000/" }),
+    ).toBe(true);
+
+    const response = proxy(request("/"));
+
+    expect(response.headers.get("location")).toBe(
+      "http://localhost:3000/console",
     );
   });
 
@@ -27,7 +62,8 @@ describe("proxy", () => {
     const response = proxy(request("/console/invitations/tok-123"));
 
     const location = new URL(response.headers.get("location") ?? "");
-    expect(location.pathname).toBe("/login");
+    expect(location.origin).toBe("http://localhost:3000");
+    expect(location.pathname).toBe("/auth/sign-in");
     expect(location.searchParams.get("next")).toBe(
       "/console/invitations/tok-123",
     );

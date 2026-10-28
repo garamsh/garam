@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 
-import { Separator } from "@/components/ui/separator";
-import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
-import { Skeleton } from "@/components/ui/skeleton";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { Separator } from "@garam/design/ui/separator";
+import { SidebarInset, SidebarTrigger } from "@garam/design/ui/sidebar";
+import { Skeleton } from "@garam/design/ui/skeleton";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 
 import { CommandPalette } from "./_components/command-palette";
 import { ConsoleBreadcrumb } from "./_components/console-breadcrumb";

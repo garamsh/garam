@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 
-import { Banner } from "@/components/banner";
+import { Banner } from "@garam/design/components/banner";
 import { listHostedOperators, lookupOperators } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
 import {
   API_UNREACHABLE_TITLE,
   ApiUnreachableReason,
-} from "@/components/api-unreachable";
+} from "@garam/design/components/api-unreachable";
 import { orgHref } from "../../../_components/navigation";
 import { RefusedRead } from "../../../_components/refused-read";
 import { ListPage } from "../../../_components/templates/list-page";

@@ -11,15 +11,15 @@ import {
 } from "@/components/control-notice";
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { DescriptionList } from "@/components/description-list";
-import { Refusal } from "@/components/refusal";
-import { Button } from "@/components/ui/button";
+import { Refusal } from "@garam/design/components/refusal";
+import { Button } from "@garam/design/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+} from "@garam/design/ui/dialog";
 import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import type { DelegatedOperation, HostedOperator } from "@/features/orgs";
 import {

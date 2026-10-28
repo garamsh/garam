@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { ConsoleSidebarProvider } from "@/app/console/_components/console-sidebar-provider";
-import { Sidebar } from "@/components/ui/sidebar";
+import { Sidebar } from "@garam/design/ui/sidebar";
 import { renderServerComponent } from "@/testing/render";
 
 const stored = vi.hoisted(() => ({ value: undefined as string | undefined }));

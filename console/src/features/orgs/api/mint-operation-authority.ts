@@ -14,7 +14,7 @@ import {
   type MintInput,
   type MintResult,
 } from "@/lib/operation-authority";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 import { orgPath } from "./orgs";
 

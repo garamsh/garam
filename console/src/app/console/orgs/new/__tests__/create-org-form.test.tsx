@@ -7,7 +7,7 @@ import { CreateOrgForm } from "@/app/console/orgs/new/_components/create-org-for
 import { enter } from "@/testing/enter";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {

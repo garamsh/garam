@@ -10,8 +10,8 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
   BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { cn } from "@/lib/utils";
+} from "@garam/design/ui/breadcrumb";
+import { cn } from "@garam/design/lib/utils";
 
 import { IntentLink } from "./intent-link";
 import { useItemCrumb } from "./item-crumb";

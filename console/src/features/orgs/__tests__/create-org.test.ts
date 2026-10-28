@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createOrg } from "@/features/orgs/api/create-org";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { unmappedRefusalCopy } from "@/lib/refusal-copy";
+import { unmappedRefusalCopy } from "@garam/platform-client/refusal-copy";
 
 // `redirect()` throws a control-flow error the router catches; the
 // test only needs to observe where it was sent.

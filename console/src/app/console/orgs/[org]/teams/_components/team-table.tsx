@@ -5,7 +5,7 @@ import { UsersRound } from "lucide-react";
 
 import { CopyId } from "@/components/copy-id";
 import { DataTable, type ColumnDef } from "@/components/data-table";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "@garam/design/ui/badge";
 
 import { EmptyState } from "../../../../_components/empty-state";
 import { orgHref } from "../../../../_components/navigation";

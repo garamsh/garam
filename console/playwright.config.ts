@@ -1,7 +1,19 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const BASE_URL = process.env.GARAM_E2E_BASE_URL ?? "http://localhost:3000";
+// The console and the site on two hosts (ADR-0131), the shape
+// a deployment has: a browser resolves every `.localhost` name to this
+// machine, and each host holds a host-only session of its own.
+const BASE_URL =
+  process.env.GARAM_E2E_BASE_URL ?? "http://console.garam.localhost:3000";
+const SITE_URL =
+  process.env.GARAM_E2E_SITE_URL ?? "http://garam.localhost:3001";
 const served = new URL(BASE_URL);
+const site = new URL(SITE_URL);
+
+/** The port a URL is served on, its scheme's where it names none. */
+function portOf(url: URL): string {
+  return url.port || (url.protocol === "https:" ? "443" : "80");
+}
 
 /**
  * The e2e suite drives the built app against the real backend: the Go
@@ -43,24 +55,39 @@ export default defineConfig({
       testMatch: /\.mobile\.spec\.ts$/,
     },
   ],
-  webServer: {
-    // The app is served as the image ships it (deploy/local/
-    // Dockerfile.web): the standalone server `output: "standalone"`
-    // emits, beside the static and public assets it does not carry.
-    // `next start` is not that server, and warns that it does not work
-    // with standalone output. The server binds HOSTNAME and PORT, so
-    // both come from the address the suite reaches, never from a
-    // HOSTNAME the shell happens to export.
-    command: "pnpm build && pnpm start",
-    env: {
-      HOSTNAME: served.hostname,
-      PORT: served.port || (served.protocol === "https:" ? "443" : "80"),
+  // Both apps: the console is what this suite tests, and the site is
+  // where its visitors sign in. Each is served as the image ships it
+  // (deploy/local/Dockerfile.web): the standalone server `output:
+  // "standalone"` emits, beside the static and public assets it does
+  // not carry. `next start` is not that server, and warns that it does
+  // not work with standalone output. Each binds the loopback address
+  // the `.localhost` names resolve to, and its readiness is asked
+  // there: Node does not resolve those names the way a browser does.
+  webServer: [
+    {
+      command: "pnpm build && pnpm start",
+      env: {
+        HOSTNAME: "127.0.0.1",
+        PORT: portOf(served),
+        GARAM_SITE_URL: SITE_URL,
+      },
+      url: `http://127.0.0.1:${portOf(served)}/healthz`,
+      // The subject is what this tree builds. `url` is answered by
+      // anything listening on the port, so reusing took a stale `next
+      // dev` or an unrelated process as the app under test.
+      reuseExistingServer: false,
+      timeout: 180_000,
     },
-    url: BASE_URL,
-    // The subject is what this tree builds. `url` is answered by
-    // anything listening on the port, so reusing took a stale `next
-    // dev` or an unrelated process as the app under test.
-    reuseExistingServer: false,
-    timeout: 180_000,
-  },
+    {
+      command: "pnpm --dir ../site build && pnpm --dir ../site start",
+      env: {
+        HOSTNAME: "127.0.0.1",
+        PORT: portOf(site),
+        GARAM_CONSOLE_URL: BASE_URL,
+      },
+      url: `http://127.0.0.1:${portOf(site)}/healthz`,
+      reuseExistingServer: false,
+      timeout: 180_000,
+    },
+  ],
 });

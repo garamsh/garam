@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { garamFetchAuthenticated, parserFor } from "@/lib/garam";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 import { GrnParser, orgPath, refusableRead, type RefusableRead } from "./orgs";
 

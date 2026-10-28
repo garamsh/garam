@@ -120,14 +120,49 @@ func (s *fakeUserStore) grantRoles(g grn.GRN, roles ...string) {
 	s.byID[g.String()] = user.New(g, s.byID[g.String()].Nickname, roles...)
 }
 
-// fakeSessionStore is an in-memory authn.SessionStore double.
+// fakeSessionStore is an in-memory authn.SessionStore double. A
+// handoff is held unexpiring and redeemed once; that a sign-out ends
+// the sessions handed off from it is the Postgres store's, which the
+// integration tests exercise.
 type fakeSessionStore struct {
-	mu   sync.Mutex
-	byID map[string]*authn.Session
+	mu       sync.Mutex
+	byID     map[string]*authn.Session
+	handoffs map[string]fakeHandoff
+}
+
+// fakeHandoff is a handoff in flight: the state it was issued for and
+// the session it hands off.
+type fakeHandoff struct {
+	state   string
+	session *authn.Session
 }
 
 func newFakeSessionStore() *fakeSessionStore {
-	return &fakeSessionStore{byID: map[string]*authn.Session{}}
+	return &fakeSessionStore{byID: map[string]*authn.Session{}, handoffs: map[string]fakeHandoff{}}
+}
+
+func (s *fakeSessionStore) IssueHandoff(_ context.Context, token, code, state string, _ time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sess, ok := s.byID[token]
+	if !ok || sess.Kind != authn.SessionBrowser {
+		return authn.ErrSessionNotFound
+	}
+	s.handoffs[code] = fakeHandoff{state: state, session: sess}
+	return nil
+}
+
+func (s *fakeSessionStore) RedeemHandoff(_ context.Context, code, state, next string) (*authn.Session, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	h, ok := s.handoffs[code]
+	if !ok || h.state != state {
+		return nil, authn.ErrHandoffNotLive
+	}
+	delete(s.handoffs, code)
+	sess := &authn.Session{User: h.session.User, CreatedAt: time.Now(), ExpiresAt: h.session.ExpiresAt, Kind: authn.SessionBrowser}
+	s.byID[next] = sess
+	return sess, nil
 }
 
 func (s *fakeSessionStore) Create(_ context.Context, token string, sess *authn.Session) error {

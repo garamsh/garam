@@ -67,7 +67,7 @@ describe("organizations page", () => {
     server.use(...signedOut());
 
     await expect(renderServerComponent(OrgsPage())).rejects.toThrow(
-      "NEXT_REDIRECT:/login",
+      "NEXT_REDIRECT:/auth/sign-in",
     );
   });
 });

@@ -6,6 +6,8 @@ image:
     tag: "0.0.0-ci"
   web:
     tag: "0.0.0-ci"
+  site:
+    tag: "0.0.0-ci"
 database:
   secretName: garam-database
 machine:
@@ -14,3 +16,7 @@ machine:
   issuer: https://garam-machine.example
 web:
   apiUrl: http://garam-api:8080
+  siteUrl: https://garam.example
+site:
+  apiUrl: http://garam-api:8080
+  consoleUrl: https://console.garam.example

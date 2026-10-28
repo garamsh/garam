@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { garamFetchAuthenticated, refusal } from "@/lib/garam";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 import { slugFromGrn } from "@/lib/grn";
 import { GroupParser, type Group } from "./orgs";

@@ -14,8 +14,8 @@ import {
 import { ArrowDown, ArrowUp, ChevronsUpDown, Search } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@garam/design/ui/button";
+import { Input } from "@garam/design/ui/input";
 import {
   Table,
   TableBody,
@@ -23,7 +23,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from "@garam/design/ui/table";
 
 export type { ColumnDef } from "@tanstack/react-table";
 

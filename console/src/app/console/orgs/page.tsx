@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Building2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Button } from "@garam/design/ui/button";
+import { Card, CardDescription, CardTitle } from "@garam/design/ui/card";
 
 import { ApiUnreachable } from "../_components/api-unreachable";
 import { listConsoleOrgs } from "../_components/console-orgs";

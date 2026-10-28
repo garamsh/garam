@@ -2,7 +2,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { registerOperator } from "@/features/orgs/api/register-operator";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 import { API_URL, fieldOne } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 

@@ -4,10 +4,10 @@ import { Check } from "lucide-react";
 import { useActionState, useState } from "react";
 
 import { DescriptionList } from "@/components/description-list";
-import { FormField } from "@/components/form-field";
+import { FormField } from "@garam/design/components/form-field";
 import { Time } from "@/components/time";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Button } from "@garam/design/ui/button";
+import { Input } from "@garam/design/ui/input";
 import {
   grantDelegation,
   withdrawDelegation,

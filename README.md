@@ -113,40 +113,47 @@ mode 0600 and never printed.
 
 ## Web frontend
 
-The Next.js app lives in [`console/`](./console/) and talks to the Go
-backend through a same-origin `/api/*` rewrite
-([ADR-0009](./docs/architecture/adr/0009-web-frontend.md)). It keeps its
-own toolchain and lockfile; `make -C console ci` is its gate, and
-`make ci` runs it — so `make ci` needs pnpm and Node as well as Go.
+Two Next.js apps talk to the Go backend through a same-origin `/api/*`
+rewrite ([ADR-0009](./docs/architecture/adr/0009-web-frontend.md)):
+[`site/`](./site/), the landing page and the way in, and
+[`console/`](./console/), the signed-in application, each on its own
+origin ([ADR-0131](./docs/architecture/adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)).
+They share one lockfile at the root; `make -C site ci` and
+`make -C console ci` are their gates, and `make ci` runs both — so
+`make ci` needs pnpm and Node as well as Go.
 
 ```sh
 make -C console install   # pnpm install --frozen-lockfile
 make -C console ci        # install, format, lint, typecheck, unit tests, build, codegen check
-pnpm --dir console dev    # dev server on http://localhost:3000
+pnpm --dir console dev    # console on http://console.garam.localhost:3000
+pnpm --dir site dev       # site on http://garam.localhost:3001
 ```
 
-Copy `console/.env.example` to `console/.env.local` and point
-`GARAM_API_URL` at your backend. Google sign-in registers only when the
-backend holds `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and
-additionally needs `GOOGLE_REDIRECT_URL` set to
-`http://localhost:3000/api/auth/callback/google`, so the OAuth round
-trip stays on the web origin. Without the credentials the backend starts
-and serves everything else, and `GET /auth/providers` does not list
-`google`.
+Copy each app's `.env.example` to `.env.local` and point `GARAM_API_URL`
+at your backend. Open each app on the host shown: a person signs in on
+the site, and the console is handed a session of its own on its host
+(ADR-0131). Google sign-in registers only when the backend holds
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and additionally needs
+`GOOGLE_REDIRECT_URL` set to
+`http://garam.localhost:3001/api/auth/callback/google`, so the OAuth
+round trip stays on the site's origin. Without the credentials the
+backend starts and serves everything else, and `GET /auth/providers`
+does not list `google`.
 
 ### Playwright end-to-end tests
 
-`console/e2e/` drives the built app in a real browser against the real
-backend. Bring up the backend first:
+`console/e2e/` and `site/e2e/` drive the built apps in a real browser
+against the real backend. Bring up the backend first:
 
 ```sh
 make backend-up          # postgres, migrate, authz and api, in containers
 make web-e2e
 ```
 
-The suite builds and starts the app itself. The OAuth round trip cannot
-run unattended, so the tests seed a user, an organization and a session
-row directly into Postgres and hand the browser the resulting cookie;
+Each suite builds and starts both apps itself. The OAuth round trip
+cannot run unattended, so the tests seed a user, an organization and a
+session row directly into Postgres and hand the browser the resulting
+cookie;
 everything after the cookie is the real backend. `make web-e2e` asks
 compose which port Postgres was published on and hands the suite that
 URL, so `GARAM_DB_PORT` moves the suite with the server.

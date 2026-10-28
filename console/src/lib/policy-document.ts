@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { pointerTokens } from "@/lib/json-pointer";
-import { refuse, type Parsed } from "@/lib/parsed";
+import { refuse, type Parsed } from "@garam/platform-client/parsed";
 
 /**
  * A policy document as the console holds one: a JSON object. The

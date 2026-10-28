@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 
 import { MarkMissing } from "./missing-page";
 

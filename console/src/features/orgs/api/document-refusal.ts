@@ -1,7 +1,7 @@
 import "server-only";
 
 import { GaramApiError, refusal } from "@/lib/garam";
-import type { RefusalOperation } from "@/lib/refusal-copy";
+import type { RefusalOperation } from "@garam/platform-client/refusal-copy";
 
 /**
  * A refusal a policy-document form shows. `field` says the engine

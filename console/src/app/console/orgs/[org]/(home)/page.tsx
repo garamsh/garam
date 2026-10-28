@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { MemberMark } from "@/components/member-mark";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
-import { Card } from "@/components/ui/card";
+import { Card } from "@garam/design/ui/card";
 import { getSession } from "@/features/auth";
 import {
   agentDisplayName,

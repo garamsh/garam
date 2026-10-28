@@ -118,17 +118,22 @@ it. Compose v5.3.1 validates the key and keeps it in the output of
 `docker compose config`, but never passes it to the builder, so the same
 tree built twice still lands on two image ids.
 
-The API answers on `http://localhost:8080` and the frontend on
-`http://localhost:3000`. Both ports, and Postgres', are overridable —
-see `.env.example`.
+The API answers on `http://localhost:8080`; with the `web` profile the
+console answers on `http://console.garam.localhost:3000` and the site on
+`http://garam.localhost:3001`. A browser resolves every `.localhost`
+name to this machine. Each app holds a host-only session cookie, and the
+console is handed its session by the site after a sign-in there
+(ADR-0131); a cookie names a host and not a port, so the two run on two
+hosts rather than on two ports of `localhost`. Every port, Postgres'
+included, is overridable — see `.env.example`.
 
 ## Startup order
 
 `migrate` runs once against a healthy Postgres and exits; `authz` and
 `api` wait for it to have exited successfully. `api` additionally waits
-for `authz`, and `web` for `api`. Every server's healthcheck is its own
-readiness probe, so a service is healthy here when it can serve a
-request and not merely when it has bound its port.
+for `authz`, and `web` and `site` for `api`. Every server's
+healthcheck is its own readiness probe, so a service is healthy here
+when it can serve a request and not merely when it has bound its port.
 
 ## Probes
 
@@ -142,9 +147,10 @@ outside its process, so a database outage does not restart the stack.
   already serves the HTTP API on.
 - `http://localhost:9091/healthz`, `/readyz` — the authz engine, on the
   listener its metrics use.
-- `http://localhost:3000/healthz`, `/readyz` — the web app, on the port
-  it serves the console on. Neither reads the api, so both keep
-  answering through an api outage and the app stays in rotation.
+- `http://localhost:3000/healthz`, `/readyz` and
+  `http://localhost:3001/healthz`, `/readyz` — the console and the
+  site, each on the port it serves on. Neither reads the api, so both
+  keep answering through an api outage and the app stays in rotation.
 
 `garam serve machine` is not part of this stack; it answers both on
 `GARAM_MACHINE_HEALTH_ADDR`, a port of its own, because its own

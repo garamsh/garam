@@ -331,21 +331,28 @@ keeps. The list below is today's tree
   deployment runs.
 - `platform/tests/image/` — black-box checks against a built image
   rather than against the app (`make web-image-e2e`).
-- `console/` — Next.js frontend; reaches the API through a same-origin
-  `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make -C
-  console ci`). `/` is the public landing page, `/login` the sign-in page
-  and `/register` where an invitation becomes a password account
-  (ADR-0041); the signed-in application lives under `/console`, whose
-  shell and route structure are ADR-0011.
+- `console/` — the Next.js console, on a host of its own (ADR-0131);
+  reaches the API through a same-origin `/api/*` rewrite (ADR-0009).
+  Its own toolchain and gate (`make -C console ci`). The signed-in
+  application lives under `/console`, whose shell and route structure
+  are ADR-0011.
+- `site/` — the Next.js site: `/` is the public landing page, `/login`
+  the sign-in page and `/register` where an invitation becomes a
+  password account (ADR-0041). It keeps the same rewrite, and sends
+  every `/console` address to the console's host (ADR-0131).
+- `design/` — the components, styles and tokens both apps import;
+  `platform/client/` — the client of the platform's API both apps
+  call it through.
 - `deploy/charts/garam/` — the Helm chart a cluster installs garam
   from (ADR-0042).
 - `deploy/local/` — Docker Compose stack running Postgres, migrations,
-  authz, api and (profile-gated) web on one machine; its `postgres`
-  service also hosts the e2e tests' database (`make db-up`), kept
-  separate from the stack's own. `deploy/local/README.md` §Databases is
-  authoritative for which databases that one server holds, which of them
-  a suite truncates or migrates, and what collects the ones a removed
-  worktree leaves behind.
+  authz, api and (profile-gated) the console and the site on one
+  machine; its `postgres` service also hosts the e2e tests' database
+  (`make db-up`), kept separate from the stack's own.
+  `deploy/local/README.md` §Databases is authoritative for which
+  databases that one server holds, which of them a suite truncates or
+  migrates, and what collects the ones a removed worktree leaves
+  behind.
 - `deploy/local/minikube/` — the same processes on a Kubernetes cluster
   on this machine, in the `garam-local` namespace
   (`make -C deploy/local minikube-up`); a development artefact rather

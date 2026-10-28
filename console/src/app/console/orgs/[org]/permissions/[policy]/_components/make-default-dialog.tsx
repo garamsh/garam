@@ -1,7 +1,7 @@
 "use client";
 
 import { JsonDiff } from "@/components/json-diff";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import {
   rollbackPolicy,
   type RollbackPolicyState,

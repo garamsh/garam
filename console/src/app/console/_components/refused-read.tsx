@@ -1,4 +1,4 @@
-import { Banner } from "@/components/banner";
+import { Banner } from "@garam/design/components/banner";
 
 /**
  * A read garam refused the caller, said in the one wording the console

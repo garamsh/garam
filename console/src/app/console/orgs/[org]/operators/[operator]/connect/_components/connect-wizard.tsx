@@ -8,15 +8,20 @@ import { useEffect, useState, useTransition } from "react";
 import {
   API_UNREACHABLE_TITLE,
   ApiUnreachableReason,
-} from "@/components/api-unreachable";
-import { Banner } from "@/components/banner";
+} from "@garam/design/components/api-unreachable";
+import { Banner } from "@garam/design/components/banner";
 import { CopyField } from "@/components/copy-field";
-import { Refusal } from "@/components/refusal";
+import { Refusal } from "@garam/design/components/refusal";
 import { SecretReveal } from "@/components/secret-reveal";
 import { StatusDot } from "@/components/status-dot";
 import { Time } from "@/components/time";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@garam/design/ui/button";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@garam/design/ui/tabs";
 import {
   issueOperatorKey,
   type IssueOperatorKeyState,

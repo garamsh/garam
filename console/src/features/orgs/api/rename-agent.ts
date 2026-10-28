@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { parseAgentName } from "@/lib/agent-name";
 import { garamFetchAuthenticated, refusal } from "@/lib/garam";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 import { AgentParser } from "./orgs";
 

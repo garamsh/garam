@@ -1,6 +1,6 @@
 import { Check } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { cn } from "@garam/design/lib/utils";
 
 /** One step of a wizard. */
 export type Step = { id: string; title: string; description?: string };

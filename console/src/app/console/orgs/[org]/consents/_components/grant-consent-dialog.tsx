@@ -3,8 +3,8 @@
 import { Plus } from "lucide-react";
 import { useActionState, useState } from "react";
 
-import { FormField } from "@/components/form-field";
-import { Button } from "@/components/ui/button";
+import { FormField } from "@garam/design/components/form-field";
+import { Button } from "@garam/design/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -13,8 +13,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+} from "@garam/design/ui/dialog";
+import { Input } from "@garam/design/ui/input";
 import {
   grantOrgConsent,
   type GrantOrgConsentState,

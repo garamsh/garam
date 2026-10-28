@@ -1656,6 +1656,24 @@ type Session struct {
 // SessionKind defines model for Session.Kind.
 type SessionKind string
 
+// SessionHandoff defines model for SessionHandoff.
+type SessionHandoff struct {
+	// Code The one-time code, redeemable once within a minute. Only its hash is stored.
+	Code string `json:"code"`
+}
+
+// SessionHandoffRedemption defines model for SessionHandoffRedemption.
+type SessionHandoffRedemption struct {
+	Code  string `json:"code"`
+	State string `json:"state"`
+}
+
+// SessionHandoffRequest defines model for SessionHandoffRequest.
+type SessionHandoffRequest struct {
+	// State The value the app receiving the handoff holds in a cookie of its own. Only its hash is stored.
+	State string `json:"state"`
+}
+
 // SessionToken A CLI session's tokens, RFC 6749's successful token response (ADR-0120).
 type SessionToken struct {
 	// AccessToken Presented as `Authorization: Bearer <token>`. garam stores only its hash.
@@ -1878,6 +1896,12 @@ type DecideDeviceCodeJSONRequestBody = DeviceDecision
 // DeviceTokenFormdataRequestBody defines body for DeviceToken for application/x-www-form-urlencoded ContentType.
 type DeviceTokenFormdataRequestBody = DeviceTokenRequest
 
+// IssueSessionHandoffJSONRequestBody defines body for IssueSessionHandoff for application/json ContentType.
+type IssueSessionHandoffJSONRequestBody = SessionHandoffRequest
+
+// RedeemSessionHandoffJSONRequestBody defines body for RedeemSessionHandoff for application/json ContentType.
+type RedeemSessionHandoffJSONRequestBody = SessionHandoffRedemption
+
 // LoginWithReturnPathFormdataRequestBody defines body for LoginWithReturnPath for application/x-www-form-urlencoded ContentType.
 type LoginWithReturnPathFormdataRequestBody = LoginReturnPath
 
@@ -1973,6 +1997,12 @@ type ServerInterface interface {
 	// DeviceToken Poll a device sign-in, or refresh a CLI session.
 	// (POST /auth/device/token)
 	DeviceToken(w http.ResponseWriter, r *http.Request)
+	// IssueSessionHandoff Hand the current sign-in to another of garam's apps.
+	// (POST /auth/handoff)
+	IssueSessionHandoff(w http.ResponseWriter, r *http.Request)
+	// RedeemSessionHandoff Redeem a handoff code for a session on this host.
+	// (POST /auth/handoff/redeem)
+	RedeemSessionHandoff(w http.ResponseWriter, r *http.Request)
 	// Login Start the OAuth authorization code flow.
 	// (GET /auth/login/{provider})
 	Login(w http.ResponseWriter, r *http.Request, provider Provider)
@@ -2303,6 +2333,34 @@ func (siw *ServerInterfaceWrapper) DeviceToken(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeviceToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IssueSessionHandoff operation middleware
+func (siw *ServerInterfaceWrapper) IssueSessionHandoff(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IssueSessionHandoff(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RedeemSessionHandoff operation middleware
+func (siw *ServerInterfaceWrapper) RedeemSessionHandoff(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RedeemSessionHandoff(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5268,6 +5326,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/login/{provider}", wrapper.LoginWithReturnPath)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/callback/{provider}", wrapper.OauthCallback)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.Logout)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/handoff", wrapper.IssueSessionHandoff)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/handoff/redeem", wrapper.RedeemSessionHandoff)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/providers", wrapper.ListProviders)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/password/register", wrapper.RegisterPassword)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/password/login", wrapper.LoginPassword)

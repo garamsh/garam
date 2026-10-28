@@ -18,4 +18,5 @@ type Session struct {
 	Name             pgtype.Text
 	RefreshHash      pgtype.Text
 	RefreshExpiresAt pgtype.Timestamptz
+	HandedOffFrom    pgtype.UUID
 }

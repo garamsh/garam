@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Button } from "@garam/design/ui/button";
+import { Label } from "@garam/design/ui/label";
 import {
   Select,
   SelectContent,
@@ -12,7 +12,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@garam/design/ui/select";
 
 import type { ChoiceGroup } from "../../_components/attach-policy-form";
 

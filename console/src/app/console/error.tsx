@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { RotateCw } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 
 /**
  * The console's error boundary: a page below the shell failed while it

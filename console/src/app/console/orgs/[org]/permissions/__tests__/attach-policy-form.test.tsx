@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AttachPolicyForm } from "@/app/console/orgs/[org]/permissions/_components/attach-policy-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {

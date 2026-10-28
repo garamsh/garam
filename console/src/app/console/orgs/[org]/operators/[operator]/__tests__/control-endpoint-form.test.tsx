@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { ControlEndpointForm } from "@/app/console/orgs/[org]/operators/[operator]/_components/control-endpoint-form";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { enter } from "@/testing/enter";
 import { API_URL, fieldOne } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";

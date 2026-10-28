@@ -1,4 +1,0 @@
-# esbuild ships its native binary through an install script, which the
-# bundle step runs.
-allowBuilds:
-  esbuild: true

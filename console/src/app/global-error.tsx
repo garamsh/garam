@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 
 /**
  * Last-resort boundary: it replaces the root layout when the error is

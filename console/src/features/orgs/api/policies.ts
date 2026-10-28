@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { garamFetchAuthenticated, parserFor } from "@/lib/garam";
 import type { PolicyDocument } from "@/lib/policy-document";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 import { parseGrn } from "@/lib/grn";
 import { orgPath, refusableRead, type RefusableRead } from "./orgs";

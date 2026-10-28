@@ -11,7 +11,7 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@garam/design/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,16 +21,16 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@garam/design/ui/dropdown-menu";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar";
+} from "@garam/design/ui/sidebar";
 import { logOut } from "@/features/auth/actions";
 import { useTheme } from "@/hooks/use-theme";
-import { parseThemePreference } from "@/lib/theme";
+import { parseThemePreference } from "@garam/design/lib/theme";
 
 import { SESSIONS_LABEL } from "./navigation";
 

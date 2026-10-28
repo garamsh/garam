@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createGroup } from "@/features/orgs/api/create-group";
 import { API_URL, engineering } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 // `revalidatePath` only works inside a Next.js request store.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));

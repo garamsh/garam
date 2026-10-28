@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@garam/design/ui/sidebar";
 
 // `SidebarProvider` writes this cookie on every toggle without
 // exporting its name.

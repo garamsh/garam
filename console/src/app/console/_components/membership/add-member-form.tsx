@@ -2,8 +2,8 @@
 
 import { useActionState, useState } from "react";
 
-import { FormField } from "@/components/form-field";
-import { Button } from "@/components/ui/button";
+import { FormField } from "@garam/design/components/form-field";
+import { Button } from "@garam/design/ui/button";
 import {
   Select,
   SelectContent,
@@ -12,7 +12,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@garam/design/ui/select";
 import type { AddGroupMemberState } from "@/features/orgs/actions";
 
 import type { Candidate } from "@/features/orgs";

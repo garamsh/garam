@@ -5,8 +5,8 @@ import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
+import { Button } from "@garam/design/ui/button";
+import { Kbd } from "@garam/design/ui/kbd";
 import { useHydrated } from "@/hooks/use-hydrated";
 
 import { isUnknownOrg, parseConsolePath, type ConsoleOrg } from "./navigation";

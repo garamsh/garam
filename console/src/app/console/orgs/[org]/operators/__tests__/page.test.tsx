@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import OperatorsPage from "@/app/console/orgs/[org]/operators/page";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import {
   API_URL,
   answerPermissionChecks,
@@ -273,6 +273,6 @@ describe("operators list", () => {
   it("sends a rejected session to the login page, not to the notice", async () => {
     server.use(...signedOut());
 
-    await expect(renderPage()).rejects.toThrow("NEXT_REDIRECT:/login");
+    await expect(renderPage()).rejects.toThrow("NEXT_REDIRECT:/auth/sign-in");
   });
 });

@@ -3,8 +3,8 @@
 import { useActionState } from "react";
 import Link from "next/link";
 
-import { Refusal } from "@/components/refusal";
-import { Button } from "@/components/ui/button";
+import { Refusal } from "@garam/design/components/refusal";
+import { Button } from "@garam/design/ui/button";
 import {
   acceptInvitation,
   type AcceptInvitationState,

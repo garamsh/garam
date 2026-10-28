@@ -1,5 +1,5 @@
 import { axeViolations, expectHydrated, useTheme } from "./axe";
-import { expect, test } from "./fixtures";
+import { expect, holdSession, test } from "./fixtures";
 import { seedMember } from "./seed";
 
 test.describe("consents", () => {
@@ -102,15 +102,7 @@ test.describe("consents", () => {
 
     const member = await seedMember(signedIn);
     await context.clearCookies();
-    await context.addCookies([
-      {
-        name: "garam_session",
-        value: member.sessionToken,
-        url: baseURL!,
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+    await holdSession(context, baseURL, member.sessionToken);
     await page.goto(consents);
 
     await expect(

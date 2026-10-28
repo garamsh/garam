@@ -1,13 +1,13 @@
-# console — the Next.js frontend (ADR-0009). It keeps its own toolchain
-# and lockfile. Its verbs are every module's (#1661); `make -C console
-# ci` is its fast gate, and `stack-up suites` the half that needs
-# Docker.
+# console — the Next.js frontend (ADR-0009). It installs from the
+# workspace's lockfile at the root. Its verbs are every module's
+# (#1661); `make -C console ci` is its fast gate, and `stack-up suites`
+# the half that needs Docker.
 
 include ../tooling/make/stack.mk
 
-.PHONY: ci install format lint test build gen check-gen stack-up suites e2e
+.PHONY: ci install format lint test build stack-up suites e2e
 
-ci: install format lint test build check-gen
+ci: install format lint test build
 
 # install pins the install to the lockfile, which pnpm would otherwise
 # resolve itself. The gate runs it first, so a gate never reads a tree
@@ -72,28 +72,11 @@ test:
 	pnpm test
 
 # `next build` runs with NODE_ENV=production, where env.ts requires
-# GARAM_API_URL (the `/api/*` rewrite is baked into the build). Nothing
-# calls the backend during the build, so a placeholder is enough.
+# GARAM_API_URL (the `/api/*` rewrite is baked into the build) and
+# GARAM_SITE_URL, which is read again at runtime. Nothing calls either
+# during the build, so a placeholder is enough.
 build:
-	GARAM_API_URL=http://localhost:8080 pnpm build
-
-# gen regenerates the API types the frontend consumes from the
-# platform's OpenAPI spec, which stays the contract's source of truth.
-gen:
-	pnpm gen:api
-
-# What gen:api writes, read from the script that writes it: package.json
-# owns the -o path, and a second copy here is the copy that goes stale.
-GEN_PATHS = $(shell sed -n 's|.*"gen:api": ".* -o \([^" ]*\)".*|\1|p' package.json)
-
-# A git diff pathspec matching no tracked file exits 0 having compared
-# nothing, so what git tracks under the owned path is counted first: a
-# moved -o or a removed file fails here instead of passing forever.
-check-gen: gen
-	@echo 'check-gen: $(words $(GEN_PATHS)) generated paths compared'
-	@test -n '$(GEN_PATHS)' && git ls-files --error-unmatch -- $(GEN_PATHS) >/dev/null 2>&1 \
-		|| { echo 'check-gen: nothing to compare — package.json names no gen:api output, or git tracks none of "$(GEN_PATHS)"'; exit 1; }
-	@git diff --exit-code -- $(GEN_PATHS)
+	GARAM_API_URL=http://localhost:8080 GARAM_SITE_URL=http://garam.localhost:3001 pnpm build
 
 # The backend the browser suite drives: postgres, the one-shot
 # migration, authz and api.
@@ -103,10 +86,12 @@ stack-up:
 suites: install e2e
 
 # e2e drives the built app in a real browser against the backend
-# stack-up starts. It builds and serves the app itself, so it needs
-# GARAM_API_URL — the real api here, not `build`'s placeholder — the URL
-# its seed script writes sessions through, and the browser, which
-# Playwright keeps outside the lockfile.
+# stack-up starts. It builds and serves the app itself, and the
+# site beside it, since a session signed in on one is read on the
+# other (ADR-0131). So it needs GARAM_API_URL — the real api here, not
+# `build`'s placeholder — the URL its seed script writes sessions
+# through, and the browser, which Playwright keeps outside the
+# lockfile.
 e2e:
 	@test -n "$(API_HOST_ADDR)" || { echo "e2e: no api published on this host — run make -C console stack-up" >&2; exit 1; }
 	@test -n '$(WEB_E2E_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make -C console stack-up" >&2; exit 1; }

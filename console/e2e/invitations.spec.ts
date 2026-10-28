@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expectHydrated } from "./axe";
-import { expect, test } from "./fixtures";
+import { SITE_URL, expect, holdSession, test } from "./fixtures";
 import { seedExpiredSession, seedSignedInOrg, seedSignedInUser } from "./seed";
 
 test.describe("organization mutations", () => {
@@ -43,15 +43,7 @@ test.describe("organization mutations", () => {
     // organization and the role before anything is accepted.
     const invitee = await seedSignedInUser();
     const inviteeContext = await browser.newContext({ baseURL });
-    await inviteeContext.addCookies([
-      {
-        name: "garam_session",
-        value: invitee.sessionToken,
-        url: baseURL ?? "http://localhost:3000",
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+    await holdSession(inviteeContext, baseURL, invitee.sessionToken);
     const inviteePage = await inviteeContext.newPage();
     await inviteePage.goto(invitationUrl);
     await expect(
@@ -109,7 +101,7 @@ test.describe("organization mutations", () => {
     // The proxy sends a visitor without a session to sign in, carrying
     // the invitation along, and the page says what it is for.
     await expect(visitor).toHaveURL(
-      `/login?next=${encodeURIComponent(`/console/invitations/${token}`)}`,
+      `${SITE_URL}/login?next=${encodeURIComponent(`/console/invitations/${token}`)}`,
     );
     await expect(
       visitor.getByRole("heading", {
@@ -180,15 +172,7 @@ test.describe("organization mutations", () => {
     // A second organization's owner invites that account.
     const other = await seedSignedInOrg();
     const ownerContext = await browser.newContext({ baseURL });
-    await ownerContext.addCookies([
-      {
-        name: "garam_session",
-        value: other.sessionToken,
-        url: baseURL ?? "http://localhost:3000",
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+    await holdSession(ownerContext, baseURL, other.sessionToken);
     const second = await createInvitationLink(
       await ownerContext.newPage(),
       other.orgSlug,
@@ -247,15 +231,7 @@ test.describe("organization mutations", () => {
 
     const other = await seedSignedInOrg();
     const ownerContext = await browser.newContext({ baseURL });
-    await ownerContext.addCookies([
-      {
-        name: "garam_session",
-        value: other.sessionToken,
-        url: baseURL ?? "http://localhost:3000",
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+    await holdSession(ownerContext, baseURL, other.sessionToken);
     const second = await createInvitationLink(
       await ownerContext.newPage(),
       other.orgSlug,
@@ -268,21 +244,13 @@ test.describe("organization mutations", () => {
       `grn:root:default:user:local-${username}`,
     );
     const context = await browser.newContext({ baseURL });
-    await context.addCookies([
-      {
-        name: "garam_session",
-        value: stale,
-        url: baseURL ?? "http://localhost:3000",
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+    await holdSession(context, baseURL, stale);
     const visitor = await context.newPage();
     const invitationPath = new URL(second).pathname;
     await visitor.goto(second);
 
     await expect(visitor).toHaveURL(
-      `/login?next=${encodeURIComponent(invitationPath)}`,
+      `${SITE_URL}/login?next=${encodeURIComponent(invitationPath)}`,
     );
     await expect(
       visitor.getByRole("heading", {

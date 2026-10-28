@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DeleteTeamDialog } from "@/app/console/orgs/[org]/teams/[team]/_components/delete-team-dialog";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 // The real `unstable_rethrow` tells a redirect from a failed request,
 // so the mocked one carries the digest a real redirect does.

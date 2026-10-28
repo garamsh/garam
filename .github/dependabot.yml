@@ -31,16 +31,18 @@
 # looks like.
 #
 # Three record it here instead: platform/go.mod's `go` directive, which
-# the gomod entry never edits; `packageManager` in console/package.json,
-# pinned to pnpm@11.11.0, in a file JSON gives no comment syntax; and
-# console/pnpm-lock.yaml, which is generated. No entry here reaches
-# console/ at all, and no scheduled review is named for any of the
-# three, so each is the PM's to move under AGENTS.md §Roles.
+# the gomod entry never edits; `packageManager`, pinned to pnpm@11.11.0
+# in the root package.json and in each web package's, a file JSON gives
+# no comment syntax; and pnpm-lock.yaml at the root, which is generated.
+# No entry here reaches a web package at all, and no scheduled review is
+# named for any of the three, so each is the PM's to move under
+# AGENTS.md §Roles.
 #
 # The lockfile is one record for every resolution it holds. An exact
-# dependency version in console/package.json is a pin only because the
-# lockfile carries the integrity hash §Verify's checksum-log test asks
-# for, so what moves those versions is a move of the lockfile.
+# dependency version in a web package's package.json is a pin only
+# because the lockfile carries the integrity hash §Verify's
+# checksum-log test asks for, so what moves those versions is a move of
+# the lockfile.
 #
 # What each entry covers was read from github/docs at commit
 # 0dddeeb8cce75425f9ca0cdffd6a1cbd94926c07 and dependabot/dependabot-core

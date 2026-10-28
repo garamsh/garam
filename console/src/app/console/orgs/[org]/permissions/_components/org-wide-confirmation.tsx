@@ -1,5 +1,5 @@
-import { Banner } from "@/components/banner";
-import { Label } from "@/components/ui/label";
+import { Banner } from "@garam/design/components/banner";
+import { Label } from "@garam/design/ui/label";
 
 /**
  * The checkbox a write that would or may apply a policy to the whole

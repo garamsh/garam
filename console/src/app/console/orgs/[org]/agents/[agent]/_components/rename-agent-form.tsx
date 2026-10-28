@@ -2,9 +2,9 @@
 
 import { useActionState, useState } from "react";
 
-import { FormField } from "@/components/form-field";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FormField } from "@garam/design/components/form-field";
+import { Button } from "@garam/design/ui/button";
+import { Input } from "@garam/design/ui/input";
 import { renameAgent, type RenameAgentState } from "@/features/orgs/actions";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { AGENT_NAME_MAX_LENGTH } from "@/lib/agent-name";

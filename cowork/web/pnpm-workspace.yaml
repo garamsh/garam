@@ -1,6 +1,0 @@
-# sharp backs Next.js image optimisation; unrs-resolver backs the ESLint
-# import resolver. Both ship native binaries and need their install
-# scripts to run.
-allowBuilds:
-  sharp: true
-  unrs-resolver: true

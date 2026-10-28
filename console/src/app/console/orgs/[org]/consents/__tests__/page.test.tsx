@@ -301,6 +301,6 @@ describe("consents section", () => {
 
     await expect(
       renderServerComponent(ConsentsPage(params("acme"))),
-    ).rejects.toThrow("NEXT_REDIRECT:/login");
+    ).rejects.toThrow("NEXT_REDIRECT:/auth/sign-in");
   });
 });

@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConsentConfirmDialog } from "@/app/console/orgs/[org]/consents/_components/consent-confirm-dialog";
 import { GrantConsentDialog } from "@/app/console/orgs/[org]/consents/_components/grant-consent-dialog";
 import { grantOrgConsent, withdrawOrgConsent } from "@/features/orgs/actions";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 import { enter } from "@/testing/enter";
 import { API_URL, globexConsent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";

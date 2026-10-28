@@ -11,14 +11,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@garam/design/ui/dropdown-menu";
 import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   useSidebar,
-} from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
+} from "@garam/design/ui/sidebar";
+import { cn } from "@garam/design/lib/utils";
 
 import { parseConsolePath, type ConsoleOrg } from "./navigation";
 import { ROLE_LABEL, useOrgRole } from "./org-role";

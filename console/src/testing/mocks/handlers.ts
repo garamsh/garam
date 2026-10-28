@@ -2,7 +2,7 @@ import { HttpResponse, http, type JsonBodyType } from "msw";
 import { z } from "zod";
 
 import type { PermissionExplanation } from "@/lib/permission-explanation";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 import type { Session, User } from "@/features/auth";
 import type {
   Agent,

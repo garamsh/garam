@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import type { RemoveGroupMemberState } from "@/features/orgs/actions";
 
 import { ActionDialog } from "../action-dialog";

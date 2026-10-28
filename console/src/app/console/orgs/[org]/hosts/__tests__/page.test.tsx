@@ -4,8 +4,8 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import HostsPage from "@/app/console/orgs/[org]/hosts/page";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 import { renderServerComponent } from "@/testing/render";
 import {
   API_URL,

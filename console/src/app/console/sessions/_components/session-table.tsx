@@ -4,8 +4,8 @@ import { Laptop, Terminal } from "lucide-react";
 
 import { DataTable, type ColumnDef } from "@/components/data-table";
 import { Time } from "@/components/time";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Badge } from "@garam/design/ui/badge";
+import { Button } from "@garam/design/ui/button";
 import {
   revokeSession,
   type RevokeSessionState,

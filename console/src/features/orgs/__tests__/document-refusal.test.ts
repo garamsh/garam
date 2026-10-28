@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { documentRefusal } from "@/features/orgs/api/document-refusal";
 import { GaramApiError } from "@/lib/garam";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 /**
  * A refusal as the seam raises it once it carries garam's reason

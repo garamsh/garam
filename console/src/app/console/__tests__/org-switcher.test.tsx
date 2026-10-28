@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { OrgRole } from "@/app/console/_components/org-role";
 import { ReportOrgShell } from "@/app/console/_components/org-shell";
 import { OrgSwitcher } from "@/app/console/_components/org-switcher";
-import { SidebarProvider } from "@/components/ui/sidebar";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { SidebarProvider } from "@garam/design/ui/sidebar";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 
 const route = vi.hoisted(() => ({ pathname: "/console/orgs" }));
 

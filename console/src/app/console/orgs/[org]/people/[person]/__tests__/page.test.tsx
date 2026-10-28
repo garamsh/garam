@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import PersonPage from "@/app/console/orgs/[org]/people/[person]/page";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";

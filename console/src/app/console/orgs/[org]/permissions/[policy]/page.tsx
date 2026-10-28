@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { Banner } from "@/components/banner";
+import { Banner } from "@garam/design/components/banner";
 import {
   KIND_LABEL,
   getOrg,

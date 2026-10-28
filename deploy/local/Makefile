@@ -108,7 +108,7 @@ minikube-start: minikube-context
 minikube-images:
 	eval "$$(minikube docker-env --shell bash)"; \
 		docker build -t garam:local -f Dockerfile ../.. && \
-		docker build -t garam-web:local -f Dockerfile.web ../../console
+		docker build -t garam-web:local -f Dockerfile.web --build-arg APP=console ../..
 
 # minikube-db creates the namespace everything else lands in and the
 # Postgres cluster CNPG reconciles, and returns once it is reachable.

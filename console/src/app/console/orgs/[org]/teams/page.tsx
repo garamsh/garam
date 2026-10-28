@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import { getOrg, lookupGroups, slugFromGrn } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 

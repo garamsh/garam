@@ -5,8 +5,8 @@ import { z } from "zod";
 
 import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 import { parseGrn } from "@/lib/grn";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
-import type { components } from "@/types/api";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
+import type { components } from "@garam/platform-client/api";
 
 /** What the approval dialog has to show: nothing yet, a refusal, or done. */
 export type ApproveAgentEnrollmentState =

@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@garam/design/lib/utils";
 
 /** What a mark stands for; each kind has a shape of its own. */
 export type MarkKind = "person" | "agent" | "team";

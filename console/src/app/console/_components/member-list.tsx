@@ -10,21 +10,21 @@ import { DataTable, type ColumnDef } from "@/components/data-table";
 import { MemberMark } from "@/components/member-mark";
 import { StatusDot, type StatusTone } from "@/components/status-dot";
 import { Time } from "@/components/time";
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Label } from "@/components/ui/label";
+} from "@garam/design/ui/dropdown-menu";
+import { Label } from "@garam/design/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@garam/design/ui/select";
 import {
   addMembersToTeam,
   attachPolicyToMembers,

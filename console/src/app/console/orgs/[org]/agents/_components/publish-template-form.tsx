@@ -3,11 +3,11 @@
 import { useState } from "react";
 
 import type { DelegatedOperator } from "@/features/orgs";
-import { FormField } from "@/components/form-field";
-import { Refusal } from "@/components/refusal";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { FormField } from "@garam/design/components/form-field";
+import { Refusal } from "@garam/design/components/refusal";
+import { Button } from "@garam/design/ui/button";
+import { Input } from "@garam/design/ui/input";
+import { Textarea } from "@garam/design/ui/textarea";
 import { mintOperationAuthority } from "@/features/orgs/actions";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { controlFailureCopy } from "@/lib/control-refusal-copy";

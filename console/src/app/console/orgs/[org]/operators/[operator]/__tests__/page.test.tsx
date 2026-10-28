@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import OperatorPage from "@/app/console/orgs/[org]/operators/[operator]/page";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
 import {
   API_URL,
@@ -368,6 +368,8 @@ describe("operator page", () => {
   it("sends a rejected session to the login page", async () => {
     server.use(...signedOut());
 
-    await expect(renderOperator()).rejects.toThrow("NEXT_REDIRECT:/login");
+    await expect(renderOperator()).rejects.toThrow(
+      "NEXT_REDIRECT:/auth/sign-in",
+    );
   });
 });

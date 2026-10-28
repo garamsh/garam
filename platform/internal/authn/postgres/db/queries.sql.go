@@ -136,9 +136,11 @@ func (q *Queries) DeleteDeviceAuthorization(ctx context.Context, deviceCodeHash 
 }
 
 const deleteSession = `-- name: DeleteSession :exec
-DELETE FROM sessions WHERE token_hash = $1
+DELETE FROM sessions WHERE id = (
+    SELECT coalesce(s.handed_off_from, s.id) FROM sessions s WHERE s.token_hash = $1)
 `
 
+// Signing out ends the sign-in, on whichever host it is asked on.
 func (q *Queries) DeleteSession(ctx context.Context, tokenHash string) error {
 	_, err := q.db.Exec(ctx, deleteSession, tokenHash)
 	return err
@@ -156,7 +158,7 @@ func (q *Queries) GetPasswordCredential(ctx context.Context, userGrn string) (st
 }
 
 const getSession = `-- name: GetSession :one
-SELECT token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at FROM sessions WHERE token_hash = $1 AND expires_at > now()
+SELECT token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at, handed_off_from FROM sessions WHERE token_hash = $1 AND expires_at > now()
 `
 
 func (q *Queries) GetSession(ctx context.Context, tokenHash string) (Session, error) {
@@ -172,6 +174,7 @@ func (q *Queries) GetSession(ctx context.Context, tokenHash string) (Session, er
 		&i.Name,
 		&i.RefreshHash,
 		&i.RefreshExpiresAt,
+		&i.HandedOffFrom,
 	)
 	return i, err
 }
@@ -251,8 +254,42 @@ func (q *Queries) IssueOAuthState(ctx context.Context, arg IssueOAuthStateParams
 	return result.RowsAffected(), nil
 }
 
+const issueSessionHandoff = `-- name: IssueSessionHandoff :execrows
+WITH pruned AS (
+    DELETE FROM session_handoffs WHERE expires_at <= now()
+)
+INSERT INTO session_handoffs (code_hash, state_hash, session_id, expires_at)
+SELECT $1, $2, coalesce(s.handed_off_from, s.id), $3
+FROM sessions s
+WHERE s.token_hash = $4 AND s.expires_at > now() AND s.kind = 'browser'
+`
+
+type IssueSessionHandoffParams struct {
+	CodeHash  string
+	StateHash string
+	ExpiresAt pgtype.Timestamptz
+	TokenHash string
+}
+
+// A handoff is issued from a live browser session and hands off the
+// sign-in that session belongs to, so every handed-off session is one
+// step from a sign-in. A token naming no live browser session writes
+// nothing.
+func (q *Queries) IssueSessionHandoff(ctx context.Context, arg IssueSessionHandoffParams) (int64, error) {
+	result, err := q.db.Exec(ctx, issueSessionHandoff,
+		arg.CodeHash,
+		arg.StateHash,
+		arg.ExpiresAt,
+		arg.TokenHash,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listUserSessions = `-- name: ListUserSessions :many
-SELECT token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at FROM sessions
+SELECT token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at, handed_off_from FROM sessions
 WHERE user_grn = $1 AND (expires_at > now() OR refresh_expires_at > now())
 ORDER BY created_at DESC, id
 `
@@ -276,6 +313,7 @@ func (q *Queries) ListUserSessions(ctx context.Context, userGrn string) ([]Sessi
 			&i.Name,
 			&i.RefreshHash,
 			&i.RefreshExpiresAt,
+			&i.HandedOffFrom,
 		); err != nil {
 			return nil, err
 		}
@@ -353,12 +391,59 @@ func (q *Queries) RecordPasswordAttempt(ctx context.Context, arg RecordPasswordA
 	return result.RowsAffected(), nil
 }
 
+const redeemSessionHandoff = `-- name: RedeemSessionHandoff :one
+WITH spent AS (
+    DELETE FROM session_handoffs
+    WHERE code_hash = $3 AND state_hash = $4 AND expires_at > now()
+    RETURNING session_id
+)
+INSERT INTO sessions (token_hash, user_grn, created_at, expires_at, handed_off_from)
+SELECT $1, s.user_grn, $2, s.expires_at, s.id
+FROM spent JOIN sessions s ON s.id = spent.session_id
+WHERE s.expires_at > now()
+RETURNING token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at, handed_off_from
+`
+
+type RedeemSessionHandoffParams struct {
+	TokenHash string
+	CreatedAt pgtype.Timestamptz
+	CodeHash  string
+	StateHash string
+}
+
+// Redeeming deletes the handoff and creates the session in one
+// statement, so two redemptions of one code leave one session between
+// them. The new session expires with the sign-in it was handed off
+// from, and a handoff whose sign-in has lapsed buys nothing.
+func (q *Queries) RedeemSessionHandoff(ctx context.Context, arg RedeemSessionHandoffParams) (Session, error) {
+	row := q.db.QueryRow(ctx, redeemSessionHandoff,
+		arg.TokenHash,
+		arg.CreatedAt,
+		arg.CodeHash,
+		arg.StateHash,
+	)
+	var i Session
+	err := row.Scan(
+		&i.TokenHash,
+		&i.UserGrn,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ID,
+		&i.Kind,
+		&i.Name,
+		&i.RefreshHash,
+		&i.RefreshExpiresAt,
+		&i.HandedOffFrom,
+	)
+	return i, err
+}
+
 const refreshCLISession = `-- name: RefreshCLISession :one
 UPDATE sessions
 SET token_hash = $1, expires_at = $2,
     refresh_hash = $3, refresh_expires_at = $4
 WHERE refresh_hash = $5 AND refresh_expires_at > now() AND kind = 'cli'
-RETURNING token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at
+RETURNING token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at, handed_off_from
 `
 
 type RefreshCLISessionParams struct {
@@ -390,6 +475,7 @@ func (q *Queries) RefreshCLISession(ctx context.Context, arg RefreshCLISessionPa
 		&i.Name,
 		&i.RefreshHash,
 		&i.RefreshExpiresAt,
+		&i.HandedOffFrom,
 	)
 	return i, err
 }
@@ -419,7 +505,9 @@ func (q *Queries) ReplacePasswordVerifier(ctx context.Context, arg ReplacePasswo
 }
 
 const revokeUserSession = `-- name: RevokeUserSession :execrows
-DELETE FROM sessions WHERE user_grn = $1 AND id = $2
+DELETE FROM sessions WHERE id = (
+    SELECT coalesce(s.handed_off_from, s.id) FROM sessions s
+    WHERE s.user_grn = $1 AND s.id = $2)
 `
 
 type RevokeUserSessionParams struct {
@@ -427,6 +515,8 @@ type RevokeUserSessionParams struct {
 	ID      pgtype.UUID
 }
 
+// Revoking a session ends the sign-in it belongs to: the sign-in's row
+// goes, and every session handed off from it with it (ADR-0131).
 func (q *Queries) RevokeUserSession(ctx context.Context, arg RevokeUserSessionParams) (int64, error) {
 	result, err := q.db.Exec(ctx, revokeUserSession, arg.UserGrn, arg.ID)
 	if err != nil {

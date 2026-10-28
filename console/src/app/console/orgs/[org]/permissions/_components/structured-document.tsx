@@ -3,17 +3,17 @@
 import { Plus, X } from "lucide-react";
 import { useId } from "react";
 
-import { Banner } from "@/components/banner";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Banner } from "@garam/design/components/banner";
+import { Button } from "@garam/design/ui/button";
+import { Input } from "@garam/design/ui/input";
+import { Label } from "@garam/design/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@garam/design/ui/select";
 import {
   formatPolicyDocument,
   readStatement,
@@ -26,7 +26,7 @@ import {
   type StatementFields,
   type StatementKey,
 } from "@/lib/policy-document";
-import { cn } from "@/lib/utils";
+import { cn } from "@garam/design/lib/utils";
 
 const EFFECTS = ["Allow", "Deny"] as const;
 

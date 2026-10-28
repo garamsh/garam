@@ -3,10 +3,10 @@
 import { Check } from "lucide-react";
 import { useActionState, useState } from "react";
 
-import { FormField } from "@/components/form-field";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { FormField } from "@garam/design/components/form-field";
+import { Button } from "@garam/design/ui/button";
+import { Input } from "@garam/design/ui/input";
+import { Textarea } from "@garam/design/ui/textarea";
 import {
   updateOperator,
   type UpdateOperatorState,

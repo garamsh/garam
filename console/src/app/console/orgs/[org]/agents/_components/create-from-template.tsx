@@ -2,18 +2,18 @@
 
 import { useState } from "react";
 
-import { Banner } from "@/components/banner";
+import { Banner } from "@garam/design/components/banner";
 import { ControlNotice, NO_FIX } from "@/components/control-notice";
-import { FormField } from "@/components/form-field";
-import { Refusal } from "@/components/refusal";
-import { Button } from "@/components/ui/button";
+import { FormField } from "@garam/design/components/form-field";
+import { Refusal } from "@garam/design/components/refusal";
+import { Button } from "@garam/design/ui/button";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@garam/design/ui/select";
 import type { DelegatedOperator } from "@/features/orgs";
 import { slugFromGrn } from "@/lib/grn";
 import { controlFailureCopy } from "@/lib/control-refusal-copy";

@@ -10,7 +10,7 @@ import {
   parserFor,
 } from "@/lib/garam";
 import type { PermissionCheck } from "@/lib/permission-check";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 /** Why the caller may or may not take one action, as garam explains it. */
 export type PermissionExplanation =

@@ -3,9 +3,9 @@
 import { Check, Copy } from "lucide-react";
 import { useId } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@garam/design/ui/button";
 import { useCopy } from "@/hooks/use-copy";
-import { cn } from "@/lib/utils";
+import { cn } from "@garam/design/lib/utils";
 
 /**
  * An identifier shown in mono with a control that copies it: an

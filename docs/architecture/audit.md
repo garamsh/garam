@@ -75,6 +75,18 @@ that every record of it names the agent's GRN and never a person's:
   there are recorded by the request line, which names its GRN, and by
   its tokens' credential events.
 
+## cowork's principal
+
+**Unbuilt (#1664).**
+[ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
+records what cowork does on its own account under the organization's
+cowork principal, so each organization's record stays its own:
+
+- **A delivery** is a send event like any other, with the principal as
+  sender. The cowork message's author is not a party to it.
+- **The principal's token issuances and refusals** are credential
+  events with the principal as subject, in its organization.
+
 ## Rationale
 
 [ADR-0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)

@@ -471,9 +471,9 @@ Responsibility documents:
   authoritative for
 - [adapter.md](./adapter.md) — what the adapter garam ships must do, and
   what it rests on
-- [cli.md](./cli.md) — the user commands of the `garam` binary: how a
-  person signs one in, how an agent runs it, what it keeps between
-  runs, and what it calls
+- [cli.md](./cli.md) — the client CLI, the `garam` binary
+  `platform-cli/` builds: how a person signs one in, how an agent runs
+  it, what it keeps between runs, and what it calls
 - [deployment-contract.md](./deployment-contract.md) — what a deployment
   must plan for that no manifest carries: readiness, termination,
   migration failure, key-material enforcement, and what is not
@@ -1129,7 +1129,6 @@ ADRs:
   `cowork-web/`, `platform-cli/`), or a supporting responsibility; a
   code library more than one unit links sits under `lib/`, named for
   what it is; an SDK is generated from its service's published API, and
-  a client unit reaches a server only through it; the web packages are
-  moved, the Go libraries and the CLI split are not yet built (#1700);
-  supersedes 0120 in part, on where the commands live, and 0125 in
-  part, on the root's layout
+  a client unit reaches a server only through it; supersedes 0120 in
+  part, on where the commands live, and 0125 in part, on the root's
+  layout

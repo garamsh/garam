@@ -2,7 +2,7 @@
 
 Garam Resource Names — one identifier for every resource in garam.
 Implementation:
-[`platform/sdk/grn/grn.go`](../../platform/sdk/grn/grn.go), whose doc
+[`lib/grn/grn.go`](../../lib/grn/grn.go), whose doc
 comments are authoritative for constructing, rendering,
 parsing and validating a GRN, and for `GRN` being a value type.
 

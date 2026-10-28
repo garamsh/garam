@@ -272,8 +272,8 @@ mentions and delivers none.
   the platform's device grant and keeps the session in garam's
   credentials file (`$XDG_CONFIG_HOME/garam/credentials`, mode 0600),
   so `garam login` and `cowork login` sign the same session in, and
-  `cowork logout` signs both out. `platform/sdk/clisession` holds the
-  file's format, its lock, and the grant.
+  `cowork logout` signs both out. `lib/clisession` holds the file's
+  format, its lock, and the grant.
 - **Where it talks.** `--endpoint` or `COWORK_ENDPOINT` names cowork
   (default `https://cowork.garam.sh`), and `--platform` or
   `GARAM_ENDPOINT` the platform (default `https://garam.sh`). http is

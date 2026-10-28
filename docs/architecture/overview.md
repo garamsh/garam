@@ -312,11 +312,9 @@ garam's retired templates and the browser's `operatorGrn`
 
 ## Module boundaries
 
-**The layout ADR-0132 decides is built in part.** The web packages
-are in it; `platform/sdk/` and the Go SDK move under `lib/`, and the
-client CLI out into `platform-cli/`, in #1700's second pull request.
-[structure.md](./structure.md) §Services holds the rules the layout
-keeps. The list below is today's tree
+The layout is ADR-0132's, and
+[structure.md](./structure.md) §Services holds the rules it keeps. The
+list below is today's tree
 ([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md),
 [ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)).
 
@@ -324,13 +322,14 @@ keeps. The list below is today's tree
   the browser-facing listener's and the machine listener's (ADR-0019).
 - `platform/proto/` — authz gRPC service definition + buf-generated
   code.
-- `platform/cmd/garam/` — thin entrypoint for the cobra CLI.
+- `platform/cmd/garam/` — thin entrypoint for the server's cobra
+  command tree.
 - `platform/migrations/` — SQL migrations (golang-migrate); sqlc schema
   source.
 - `platform/tests/integration/` — store round-trips, and the services
   over them, wired in process against real Postgres.
-- `platform/tests/e2e/` — the built binary run as the processes a
-  deployment runs.
+- `platform/tests/e2e/` — the built server binary run as the processes
+  a deployment runs, and the built client CLI against them.
 - `platform/tests/image/` — black-box checks against a built image
   rather than against the app (`make web-image-e2e`).
 - `platform-web/` — the Next.js console, on a host of its own
@@ -345,6 +344,15 @@ keeps. The list below is today's tree
 - `lib/design/` — the components, styles and tokens both apps import;
   `lib/platform-sdk-ts/` — the client of the platform's API both apps
   call it through.
+- `platform-cli/` — the client CLI, the `garam` a person signs in with
+  (ADR-0120, [cli.md](./cli.md)): `login` | `logout` | `whoami` |
+  `orgs` | `operators` | `agents` and the commands derived from the
+  browser API. It reaches the platform through
+  `lib/platform-sdk-go/`, the Go client generated from
+  `platform/api/openapi.yaml`, and never imports `platform/internal/`.
+- `lib/grn/`, `lib/errorx/` and `lib/clisession/` — the identifier,
+  the typed errors, and a CLI's session with the platform, each a
+  library module both the platform's and cowork's modules can link.
 - `deploy/charts/garam/` — the Helm chart a cluster installs garam
   from (ADR-0042).
 - `deploy/local/` — Docker Compose stack running Postgres, migrations,
@@ -365,9 +373,9 @@ keeps. The list below is today's tree
   does not is authoritative for what running it establishes about a real
   deployment.
 - `platform/internal/grn/` — identifier; shared primitive. It forwards
-  to `platform/sdk/grn/` (ADR-0125) until #1659.
+  to `lib/grn/` (ADR-0125, ADR-0132) until #1659.
 - `platform/internal/errorx/` — typed errors; shared primitive. It
-  forwards to `platform/sdk/errorx/` (ADR-0125) until #1659.
+  forwards to `lib/errorx/` (ADR-0125, ADR-0132) until #1659.
 - `platform/internal/wire/` — the conversions onto the wire formats the
   request surfaces share: the statement `Effect` and a policy's status
   with their authz-proto mappings, a statement rendered onto the authz
@@ -386,12 +394,9 @@ keeps. The list below is today's tree
 - `platform/internal/pgxtype/` — the timestamptz conversion, both
   directions, every postgres-backed store binds and scans through, and
   the `ILIKE` pattern a search binds. Shared primitive.
-- `platform/internal/cli/` — cobra commands + wiring (`serve api` |
-  `serve authz`
-  | `serve machine` | `migrate` | `probe` | `adapter`), and the user
-  commands a person signs in and reads garam's objects with (`login` |
-  `logout` | `whoami` | `orgs` | `operators` | `agents`; ADR-0120,
-  [cli.md](./cli.md)).
+- `platform/internal/cli/` — the server's cobra commands + wiring
+  (`serve api` | `serve authz` | `serve machine` | `migrate` | `probe`
+  | `adapter`).
 - `platform/internal/health/` — what liveness and readiness mean, and
   the two probes every serve command mounts (ADR-0021).
 - `platform/internal/operator/` — the record that an organization has an

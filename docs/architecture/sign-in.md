@@ -37,6 +37,15 @@ Accounts minted this way take the reserved `local-` prefix in the user
 identifier space, which a provider subject may not claim, so a password
 account and a provider account can never resolve to one user row.
 
+Every cookie the api sets or clears — the session, and a sign-in's
+OAuth state and PKCE verifier — carries `Domain=` the value of
+`GARAM_COOKIE_DOMAIN` where one is set, and is host-only where none is
+(ADR-0131). That is what lets the site sign a person in and the
+console read the session on its own host
+([web-app.md](./web-app.md) §What it serves). Unset is the default
+and is a single-host deployment's; `platform/internal/cli/serve.go`
+refuses at startup a value no cookie could carry.
+
 A wrong password and a username no credential belongs to are one
 refusal, in message and in the work done: the second verifies against a
 verifier derived from random bytes rather than returning early.

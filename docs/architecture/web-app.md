@@ -18,9 +18,16 @@ decide.
 
 ## What it is
 
-`console/` implements it: a Next.js App Router application, TypeScript
-strict, Tailwind and shadcn/ui
-([ADR-0009](./adr/0009-web-frontend.md)). It is the one part of this
+Two Next.js App Router applications implement it, TypeScript strict,
+Tailwind and shadcn/ui ([ADR-0009](./adr/0009-web-frontend.md)), each
+on an origin of its own
+([ADR-0131](./adr/0131-the-session-cookie-is-scoped-to-the-deployments-parent-domain-and-only-garams-own-apps-are-served-under-it.md)):
+`site/` serves the landing page and the way in, and `console/` the
+signed-in application. Both build on `design/`, the shared tokens and
+primitives, and on `platform/client/`, the one client of the backend
+they share. What follows names the console where only the console is
+meant; the site's image is built from the same Dockerfile and is not
+yet published. It is the one part of this
 repository that is not Go, it carries a toolchain and a gate of its
 own, and it ships as one of the two images a version tag publishes
 ([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
@@ -92,27 +99,31 @@ decisions it does not make.
 
 ## What it serves
 
-Three parts of the interface and two probes. Two of the three are
-Next.js route groups, `(marketing)` and `(auth)`: a route group
-contributes no URL segment, so neither is in any path. The third,
-`console`, is an ordinary segment, which is why every console path
-starts with it.
+Three parts of the interface and two probes, over two origins. The
+site holds two of the three, the Next.js route groups `(marketing)` and
+`(auth)`: a route group contributes no URL segment, so neither is in
+any path. The console holds the third, `console`, an ordinary segment,
+which is why every console path starts with it. Each app answers a
+path the other serves with a redirect to the other's origin, keeping
+the path and query, so a bookmark from before the split still lands
+(`site/src/proxy.ts`, `console/src/proxy.ts`). Both answer the probes
+and the `/api/*` rewrite.
 
-| Path | For | Reached by |
-|---|---|---|
-| `/` | the public landing page | anyone |
-| `/login` | sign in — a password form, and a provider button only where the backend answers with that provider; signing in lands on the console path the visitor was sent here from, and a visitor already holding a session is sent on to it | anyone |
-| `/register` | turn an invitation into a password account ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)), landing in the organization it joined; reached from an invitation link the token is filled in, and one no longer usable is said instead of the form | anyone holding an invitation token |
-| `/console/*` | the signed-in application | a visitor carrying a session cookie |
-| `/device` | the page `garam login` names ([ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)); it forwards to `/console/device` with the code it was given, as `code` or RFC 8628's `user_code` | anyone |
-| `/healthz`, `/readyz` | the two probes, spelled as every other process spells them ([ADR-0023](./adr/0023-web-probes.md)) | anything that can open the port |
-| `/api/*` | the same-origin rewrite onto the browser-facing listener ([ADR-0009](./adr/0009-web-frontend.md)) | the browser |
+| Path | For | Served by | Reached by |
+|---|---|---|---|
+| `/` | the public landing page | site | anyone |
+| `/login` | sign in — a password form, and a provider button only where the backend answers with that provider; signing in lands on the console path the visitor was sent here from, and a visitor already holding a session is sent on to it | site | anyone |
+| `/register` | turn an invitation into a password account ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)), landing in the organization it joined; reached from an invitation link the token is filled in, and one no longer usable is said instead of the form | site | anyone holding an invitation token |
+| `/console/*` | the signed-in application | console | a visitor carrying a session cookie |
+| `/device` | the page `garam login` names ([ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)); it forwards to `/console/device` with the code it was given, as `code` or RFC 8628's `user_code` | console | anyone |
+| `/healthz`, `/readyz` | the two probes, spelled as every other process spells them ([ADR-0023](./adr/0023-web-probes.md)) | both | anything that can open the port |
+| `/api/*` | the same-origin rewrite onto the browser-facing listener ([ADR-0009](./adr/0009-web-frontend.md)) | both | the browser |
 
 The sign-in page asks `/auth/providers` at runtime and renders a
 provider button only for a name it answers with, so a build cannot
 offer a door the backend would answer 404 for
-(`console/src/app/(auth)/login/page.tsx`, reading through
-`console/src/features/auth/api/list-providers.ts`). A read that fails
+(`site/src/app/(auth)/login/page.tsx`, reading through
+`site/src/features/auth/api/list-providers.ts`). A read that fails
 yields no names, so the password form stays the way in. Which ADR holds
 that decision is open (§Not established).
 
@@ -246,13 +257,16 @@ The page reads the invitation first (`GET /invitations/{token}`, which
 needs no session) and names the organization and role it admits to;
 one already used, expired or unknown is said, with nothing to accept.
 Accepting lands in that organization. A visitor without a session is
-sent to `/login` with the path as its `next` parameter, which
+sent to the site's `/login` with the path as its `next` parameter, which
 `/login` and `/register` carry between them and return to once a
 session exists, so the token survives either way in
 (`console/src/lib/return-path.ts`, which returns only to a console
-path). A session the backend rejects behind a cookie the browser still
-holds is sent the same way: `console/src/proxy.ts` stamps each console
-request with its path, and the redirect reads it back. The Google button
+path, on the console's origin). The session reaches the console from
+the site because the cookie names the two hosts' parent domain
+([sign-in.md](./sign-in.md)). A session the backend rejects behind a
+cookie the browser still holds is sent the same way:
+`console/src/proxy.ts` stamps each console request with its path, and
+the redirect reads it back. The Google button
 posts the same path in its form body to `POST /auth/login/{provider}`,
 which holds it with the login's state, so the provider round trip lands
 on it too.
@@ -276,11 +290,13 @@ it sends no referrer, since the code can ride in its address.
 
 Where the token may appear is fixed:
 
-- **In three same-origin URLs only:** the invitation link, and
-  `/login?next=…` and `/register?next=…`. All three are served with
+- **In three URLs only:** the invitation link, and `/login?next=…` and
+  `/register?next=…`. All three are served with
   `referrer: no-referrer`, and a link carrying one does not prefetch.
-- **Nowhere else:** in no redirect to another origin, in no client
-  storage, and in no other URL.
+  The invitation link is the console's and the other two the site's,
+  so a redirect between them crosses origins (ADR-0131 §Consequences).
+- **Nowhere else:** in no redirect off the two hosts' parent domain, in
+  no client storage, and in no other URL.
 
 No organization, group, project or user is addressed by its GRN
 anywhere in the interface. A policy document is authored text naming
@@ -294,7 +310,9 @@ resources by the identifier segment the API's own paths take
 ## How it reaches garam
 
 **One module.** `console/src/lib/garam.ts` holds the only call to the
-backend anywhere under `console/src/`; every read and every Server
+backend anywhere under `console/src/`, and `site/src/lib/garam.ts`
+under `site/src/`, each a configuration of `platform/client/`'s one
+client; every read and every Server
 Action goes through it. That is what makes the boundary checkable rather
 than asserted: one file to read to know everything the application asks
 for.
@@ -425,7 +443,8 @@ origin; the console's own server never calls one.
 ## Design system
 
 **The foundation is built.** The tokens, fonts, theme, shell,
-primitives and page templates exist (`console/src/styles/globals.css`,
+primitives and page templates exist (`design/src/styles/globals.css`,
+`design/src/ui/`, `design/src/components/`,
 `console/src/components/`, `console/src/app/console/_components/`). Each
 area's migration lands under epic #1366, in its plan's order. Areas on
 the design system are marked in the table above; until an area is, §What
@@ -542,11 +561,11 @@ The boundary is as much of the responsibility as the contents.
 
 - **No authorization decision; it asks the server instead.**
   `console/src/proxy.ts` sends a request to `/console/*` carrying no
-  session cookie to `/login`, and that is a fast path rather than a
-  gate: a cookie can be expired or revoked, so the console verifies the
-  session against `/me`, and a 401 from any read sends the visitor to
-  `/login` regardless. Every org-scoped decision belongs to the policy
-  engine ([ADR-0002](./adr/0002-iam-style-policy-model.md),
+  session cookie to the site's `/login`, and that is a fast path
+  rather than a gate: a cookie can be expired or revoked, so the
+  console verifies the session against `/me`, and a 401 from any read
+  sends the visitor to `/login` regardless. Every org-scoped decision
+  belongs to the policy engine ([ADR-0002](./adr/0002-iam-style-policy-model.md),
   [authz.md](./authz.md)).
   - **The console asks the server whether the caller may take an
     action.** It asks through a permission-check API that answers
@@ -633,8 +652,8 @@ collects the other's files (ADR-0009, `docs/convention/stack-nextjs.md`
   superseded that ADR to remove the second provider without carrying
   the discovery decision either way — so what the application does
   rests on a decision whose ADR is superseded.
-  `console/src/features/auth/api/list-providers.ts` and
-  `console/src/app/(auth)/login/page.tsx` both cite ADR-0010 for it.
+  `site/src/features/auth/api/list-providers.ts` and
+  `site/src/app/(auth)/login/page.tsx` both cite ADR-0010 for it.
 - **What the application promises a visitor across versions.** Nothing
   records it, and [api-surface.md](./api-surface.md) §Not decided
   records the same absence for the API it calls.

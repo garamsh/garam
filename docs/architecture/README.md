@@ -236,7 +236,7 @@ What holds either way is rule 1's ground: a document that does not
 accumulate the sites has nothing to enumerate.
 
 No pipeline stands behind this either: what `make ci` reads under
-`docs/` is what `console/src/app/(marketing)/__tests__/claims.test.ts`
+`docs/` is what `site/src/app/(marketing)/__tests__/claims.test.ts`
 reads: the `> Status:` line of each ADR a landing-page claim names, and
 whether `docs/architecture/grn-model.md` exists. So no run of it passes
 or fails on anything this section describes. What this repository's
@@ -1096,3 +1096,10 @@ ADRs:
   contract; every grant is a readable policy, and the service reads
   membership from an entity store its owners feed; not yet built;
   supersedes 0002, 0003, 0007, 0008, 0025 and 0038 in part
+- [0131](./adr/0131-the-session-cookie-is-scoped-to-the-deployments-parent-domain-and-only-garams-own-apps-are-served-under-it.md)
+  — the session cookie carries `Domain=` the deployment's parent
+  domain, read from `GARAM_COOKIE_DOMAIN`, so one sign-in on `site/`
+  reaches `console/` and every other app garam ships under it; the
+  site redirects `/console/*` to the console's origin and the console
+  sends a signed-out visitor to the site; nothing a user publishes,
+  and nothing garam does not ship, is served under that domain

@@ -39,8 +39,11 @@ nothing a user publishes is served under it.**
 1. **The attribute.** `GARAM_COOKIE_DOMAIN` names the domain, for
    example `garam.sh`. Every cookie the api server sets or clears
    carries it: the session, and the OAuth state and PKCE verifier
-   cookies of a sign-in in flight. Left unset, every cookie stays host-only,
-   which is what a single-host deployment and local development use.
+   cookies of a sign-in in flight. Left unset, every cookie stays
+   host-only, which is what a single-host deployment uses. The local
+   stack sets `garam.localhost` and serves the two apps at
+   `garam.localhost` and `console.garam.localhost`, since `localhost`
+   has no subdomains to share a cookie with.
    The other attributes are unchanged: `HttpOnly`, `Secure` unless
    `GARAM_COOKIE_SECURE` is false, `SameSite=Lax`, `Path=/`.
 2. **Sign-in lives on the site.**
@@ -50,10 +53,15 @@ nothing a user publishes is served under it.**
    - The return path stays a `/console/...` path, validated as today.
    - `site/` redirects `/console/:path*` to the same path on the
      console's origin. That one rule both finishes a sign-in and
-     carries every old bookmark to the console's host.
-3. **The console sends a signed-out person to the site.** Its
-   `/login` and `/register` redirect to the site's, carrying `next`.
-   Every other path stays where it is.
+     carries every old bookmark to the console's host. `/device`, the
+     page `garam login` names relative to the host its `/api` was
+     reached on (ADR-0120), is redirected the same way.
+3. **The console sends a signed-out person to the site.** A visit
+   without a session cookie, and a session the backend rejects, is
+   sent to the site's `/login` with the console path as `next`. The
+   console's own `/login` and `/register` redirect to the site's,
+   carrying their query, and its `/` opens `/console`. Every other path
+   stays where it is.
 4. **What may sit under the parent domain.** Only an app in this
    repository, deployed by garam's chart, is served under
    `GARAM_COOKIE_DOMAIN`. That covers `site/`, `console/`, cowork's web
@@ -89,7 +97,16 @@ nothing a user publishes is served under it.**
   nobody. A reviewer reads it against every new host a pull request
   adds.
 - Signing out on any host clears the cookie on all of them, because
-  the clearing `Set-Cookie` carries the same `Domain=`.
+  the clearing `Set-Cookie` carries the same `Domain=`. Where the
+  `Set-Cookie` reaches a Next.js server rather than the browser — a
+  Server Action's sign-in or sign-out — the app replays it with its
+  `Domain=`, since a cookie planted host-only would be a second cookie
+  of the same name.
+- The return path crosses between the site and the console in the
+  redirects of decisions 2 and 3, and it can hold an invitation token.
+  Both origins are garam's under decision 4, so the rule that the token
+  rides in no redirect to another origin (`web-app.md` §What it serves)
+  now reads as no redirect off the parent domain.
 
 ## Signs the decision was wrong
 

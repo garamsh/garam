@@ -8,6 +8,7 @@ import { WebsocketProvider } from "y-websocket";
 import * as Y from "yjs";
 
 import { ArtifactEmbed } from "@/features/artifacts/components/artifact-embed";
+import { BlockToolbar } from "@/features/editor/components/block-toolbar";
 import { EmbedContext, type Embed } from "@/plugins/embed";
 import { registry } from "@/plugins/manifest";
 
@@ -141,29 +142,12 @@ function CollaborativeEditor({
 
   return (
     <section className="flex flex-col gap-3">
-      <div
-        className="flex flex-wrap items-center gap-2"
-        role="toolbar"
-        aria-label="Insert a block"
-      >
-        {registry.blocks().map((block) => (
-          <button
-            key={block.id}
-            type="button"
-            className="rounded border border-neutral-300 px-2 py-1 text-sm hover:bg-neutral-100 disabled:opacity-50"
-            disabled={!editor || readOnly}
-            onClick={() => editor && block.insert(editor)}
-          >
-            {block.label}
-          </button>
-        ))}
-        <span
-          className="ml-auto text-xs text-neutral-500"
-          data-testid="sync-status"
-        >
-          {readOnly ? "read only" : status}
-        </span>
-      </div>
+      <BlockToolbar
+        blocks={registry.blocks()}
+        editor={editor}
+        disabled={readOnly}
+        status={readOnly ? "read only" : status}
+      />
       <EditorContent
         editor={editor}
         className="min-h-64 rounded border border-neutral-200 p-4"

@@ -37,7 +37,8 @@ ENV GARAM_CONSOLE_URL=http://console.invalid GARAM_SITE_URL=http://site.invalid
 COPY . .
 RUN test -n "$APP" || { echo "APP names the app's folder: console or site" >&2; exit 1; }; \
   pnpm install --offline --frozen-lockfile --filter "{./$APP}..." && \
-  pnpm --dir "$APP" build
+  pnpm --dir "$APP" build && \
+  mkdir -p "$APP/public"
 
 FROM mirror.gcr.io/library/node:24.18.1-alpine3.24@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3
 
@@ -48,8 +49,10 @@ ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000
 # `output: "standalone"` emits a self-contained server plus the subset
 # of node_modules it needs, and nothing else: neither .next/static nor
 # public/ is in it, so both are copied alongside. An asset missing from
-# here 404s at runtime and nothing in the build says so. Next traces
-# from the workspace root, so the server sits under the app's folder.
+# here 404s at runtime and nothing in the build says so. The console
+# serves no public/ of its own since the site took the sign-in images,
+# so the build stage leaves an empty one to copy. Next traces from the
+# workspace root, so the server sits under the app's folder.
 COPY --from=build /repo/$APP/.next/standalone ./
 COPY --from=build /repo/$APP/.next/static ./$APP/.next/static
 COPY --from=build /repo/$APP/public ./$APP/public

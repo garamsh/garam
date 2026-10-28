@@ -1,6 +1,7 @@
 # ADR 0008: Identity-based policy attachments
 
-> Status: accepted — the detach transition is narrowed by [ADR-0031](./0031-detaching-an-active-policys-last-attachment-is-refused.md)
+> Status: accepted — the detach transition is narrowed by [ADR-0031](./0031-detaching-an-active-policys-last-attachment-is-refused.md);
+> attachments are superseded by [ADR-0130](./0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
 > Date: 2026-08-02
 
 ## Context

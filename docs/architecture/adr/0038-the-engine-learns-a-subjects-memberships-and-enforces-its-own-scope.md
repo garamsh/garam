@@ -1,6 +1,7 @@
 # ADR 0038: The engine learns a subject's memberships and enforces its own scope
 
-> Status: accepted
+> Status: accepted; the caller resolving memberships is superseded by
+> [ADR-0130](./0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
 > Date: 2026-08-19
 
 ## Contents

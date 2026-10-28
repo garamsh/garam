@@ -1090,3 +1090,9 @@ ADRs:
   posting needs the platform's allow and, for a private channel or a
   direct message, a place on the list; supersedes 0127 in part, on
   keeping a list
+- [0130](./adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
+  — the policy engine becomes `policy/`, a Rust service deciding Cedar
+  policies through the reference crates behind an AuthZEN-shaped gRPC
+  contract; every grant is a readable policy, and the service reads
+  membership from an entity store its owners feed; not yet built;
+  supersedes 0002, 0003, 0007, 0008, 0025 and 0038 in part

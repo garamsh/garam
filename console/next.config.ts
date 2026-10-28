@@ -7,6 +7,10 @@ const nextConfig: NextConfig = {
   // Emit a self-contained server so the container image carries only
   // the runtime it needs (deploy/local/Dockerfile.web).
   output: "standalone",
+  // The repository's pnpm-workspace.yaml would make Next trace from the
+  // repository root and nest the server under this package's path; the
+  // image builds from this folder alone, so the root is this folder.
+  outputFileTracingRoot: __dirname,
   // @vercel/nft resolves package exports under `require`, which takes
   // @swc/helpers' cjs/ half; Node 22.12+ enables require(esm), so the
   // standalone server resolves the same specifiers to esm/ and that

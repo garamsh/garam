@@ -3,8 +3,8 @@ package postgres
 import (
 	"context"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/message/postgres/db"
 	"github.com/garamsh/garam/platform/internal/pgxerr"

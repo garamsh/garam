@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/audit"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/operator"
 )

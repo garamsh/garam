@@ -1,6 +1,6 @@
 package authz
 
-import "github.com/garamsh/garam/platform/internal/errorx"
+import "github.com/garamsh/garam/lib/errorx"
 
 // Policy sentinel errors.
 var (

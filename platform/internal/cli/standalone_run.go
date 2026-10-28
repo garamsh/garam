@@ -13,11 +13,11 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/delivery"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/keyfile"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/workload"

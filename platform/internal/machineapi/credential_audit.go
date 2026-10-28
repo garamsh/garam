@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/audit"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // CredentialAudit records what the listener decided about a machine

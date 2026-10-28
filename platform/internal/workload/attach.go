@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // attachDir holds an attaching supervisor's serving material, in its

@@ -3,7 +3,7 @@ package authn
 import (
 	"context"
 
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // PasswordCredentialStore persists the verifier that authenticates a

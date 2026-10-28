@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/platform/internal/authz/postgres/db"
-	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // attachmentRow is a stored attachment row that parses.

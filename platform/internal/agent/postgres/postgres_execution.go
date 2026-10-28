@@ -10,9 +10,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/agent/postgres/db"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 

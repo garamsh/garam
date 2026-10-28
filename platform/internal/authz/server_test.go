@@ -15,10 +15,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/authz/mocks"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/wire"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )

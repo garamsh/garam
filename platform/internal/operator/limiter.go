@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // Exceeded refuses a call past the bound, carrying how long until the

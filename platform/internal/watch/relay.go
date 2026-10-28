@@ -3,7 +3,7 @@ package watch
 import (
 	"context"
 
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // Relay carries an announced event to the processes holding streams. It

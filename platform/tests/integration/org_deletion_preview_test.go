@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/listfilter"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"

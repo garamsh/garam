@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // Recheck reads again, for one decision, what admitted an identity when

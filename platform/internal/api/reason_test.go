@@ -15,10 +15,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
+	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authz"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/user"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"

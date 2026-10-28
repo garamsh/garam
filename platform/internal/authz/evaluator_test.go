@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/authz"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/wire"
 )
 

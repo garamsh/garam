@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // recover settles the intent the record holds: one still running what

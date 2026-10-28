@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
@@ -26,7 +27,6 @@ import (
 	"github.com/garamsh/garam/platform/internal/authz"
 	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
 	"github.com/garamsh/garam/platform/internal/cli"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/operator"
 	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 	"github.com/garamsh/garam/platform/internal/org"

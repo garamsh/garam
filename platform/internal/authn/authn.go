@@ -9,7 +9,7 @@ package authn
 import (
 	"fmt"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // ErrSessionNotFound is returned when a session token is unknown or

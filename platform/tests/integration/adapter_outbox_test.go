@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/delivery"
-	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // writeOutboxEntry writes one entry of the agent's the way the

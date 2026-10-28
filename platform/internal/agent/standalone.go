@@ -5,8 +5,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // ServiceTypeSupervisor is the GRN service type of the supervisor a

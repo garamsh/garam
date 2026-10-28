@@ -16,7 +16,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/platform/internal/workload"
 )
 

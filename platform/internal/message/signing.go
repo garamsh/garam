@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // SignatureType is the `typ` of every signature garam makes over a

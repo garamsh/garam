@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/garamsh/garam/lib/errorx"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
-	"github.com/garamsh/garam/platform/internal/errorx"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
 

@@ -7,9 +7,9 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/authz"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // PolicyChannel is the Postgres LISTEN/NOTIFY channel on which policy

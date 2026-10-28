@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/pgxerr"
 	"github.com/garamsh/garam/platform/internal/watch"
 	"github.com/garamsh/garam/platform/internal/watch/postgres/db"

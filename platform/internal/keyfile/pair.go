@@ -4,7 +4,7 @@ import (
 	"crypto/tls"
 	"os"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // Pair is a certificate and the private key it was issued with, held as

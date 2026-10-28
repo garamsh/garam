@@ -3,8 +3,8 @@ package audit
 import (
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // CredentialKind is which machine credential an event is about

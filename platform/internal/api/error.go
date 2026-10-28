@@ -8,8 +8,8 @@ import (
 	"runtime/debug"
 	"strconv"
 
+	"github.com/garamsh/garam/lib/errorx"
 	apigen "github.com/garamsh/garam/platform/api"
-	"github.com/garamsh/garam/platform/internal/errorx"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/wire"
 )

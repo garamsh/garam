@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/machineapi"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"

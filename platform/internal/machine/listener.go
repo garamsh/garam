@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // NewServer returns the machine-facing HTTP server: it terminates TLS

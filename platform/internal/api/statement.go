@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/user"
 	"github.com/garamsh/garam/platform/internal/wire"

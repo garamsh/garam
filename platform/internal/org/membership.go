@@ -3,7 +3,7 @@ package org
 import (
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // Membership ties a user to an Organization with a Role. Every field

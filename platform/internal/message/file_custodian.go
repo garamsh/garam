@@ -9,7 +9,7 @@ import (
 	"encoding/asn1"
 	"math/big"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // fileCustodian generates each key in process and seals its private

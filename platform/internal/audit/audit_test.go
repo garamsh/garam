@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/audit"
-	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // TestSend_NamesAMessageExactlyWhenAuthorized holds the event's one

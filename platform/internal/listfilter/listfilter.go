@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // Filter scopes a List call. Limit of 0 means "no limit".

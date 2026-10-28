@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // AdmissionService is agent-enrollment.v1's approval and admission

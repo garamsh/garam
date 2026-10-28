@@ -111,7 +111,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // NewRootCommand constructs the garam command tree.

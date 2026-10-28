@@ -1,7 +1,7 @@
 package wire
 
 import (
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // GRNsToProto renders GRNs as the strings a request carries.

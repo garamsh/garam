@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/garamsh/garam/lib/errorx"
 	apigen "github.com/garamsh/garam/platform/api"
-	"github.com/garamsh/garam/platform/internal/errorx"
 	"github.com/garamsh/garam/platform/internal/org"
 )
 

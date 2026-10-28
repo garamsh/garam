@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // ControlEndpoint is the base URL where a hosted operator's control

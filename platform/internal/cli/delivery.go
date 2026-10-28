@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/delivery"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // defaultGatewayURL is where the agent platform's gateway answers when

@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // visible answers the items of a page that c may take action on, each

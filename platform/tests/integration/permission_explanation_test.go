@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/api"
@@ -20,7 +21,6 @@ import (
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/cli"
-	"github.com/garamsh/garam/platform/internal/grn"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"

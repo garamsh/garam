@@ -10,7 +10,7 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // Read returns the contents of path, refusing a file any group or other

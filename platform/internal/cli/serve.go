@@ -15,6 +15,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	"github.com/garamsh/garam/platform/internal/api"
@@ -23,8 +25,6 @@ import (
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 	"github.com/garamsh/garam/platform/internal/authz"
 	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/health"
 	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 	"github.com/garamsh/garam/platform/internal/operator"

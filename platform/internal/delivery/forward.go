@@ -7,8 +7,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // replyChannel is the channel an outbox entry names when its target is

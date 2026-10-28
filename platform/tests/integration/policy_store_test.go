@@ -11,10 +11,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/authz"
 	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/wire"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"

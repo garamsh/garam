@@ -8,7 +8,7 @@ package audit
 import (
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // Decision is what garam decided about one send.

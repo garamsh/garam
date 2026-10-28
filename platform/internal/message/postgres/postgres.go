@@ -13,10 +13,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/audit"
 	auditpg "github.com/garamsh/garam/platform/internal/audit/postgres"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/message/postgres/db"
 	"github.com/garamsh/garam/platform/internal/pgxerr"

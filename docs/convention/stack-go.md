@@ -37,40 +37,37 @@ it is:
   modules to import.
 
 A module keeps that layout at any size, and changes layout only by
-gaining or losing `platform/cmd/<binary>/main.go` — a change to the
-tree, not a line count crossed unnoticed.
+gaining or losing `cmd/<binary>/main.go` — a change to the tree, not a
+line count crossed unnoticed.
 
 ### Service layout
 
-- `platform/cmd/<binary>/main.go` — the binary's entry point.
-- `platform/internal/<domain>/<domain>.go` — the aggregate: domain
-  types, DTOs and sentinel errors (`User`, `CreateUserInput`,
-  `ErrUserNotFound`).
-- `platform/internal/<domain>/service.go` — what the domain offers:
-  `type Service interface { ... }`, unexported
-  `type service struct { ... }`, `NewService(...) Service`. A domain
-  owes one once it has behaviour of its own to offer. Holding types and
-  persisting them is not that, and neither is translating a request,
-  composing commands or wiring a runtime.
-- `platform/internal/<domain>/<name>.go` — one dependency interface the
-  domain needs, named for it: `repository.go` declares
-  `type Repository interface`, `mailer.go` declares
-  `type Mailer interface`. No condition and no threshold — the side that
-  needs the behaviour declares the contract, and one file holds one
-  contract.
-- `platform/internal/<domain>/<group>.go` — the service's method bodies
+- `cmd/<binary>/main.go` — the binary's entry point.
+- `internal/<domain>/<domain>.go` — the aggregate: domain types, DTOs
+  and sentinel errors (`User`, `CreateUserInput`, `ErrUserNotFound`).
+- `internal/<domain>/service.go` — what the domain offers: `type
+  Service interface { ... }`, unexported `type service struct { ... }`,
+  `NewService(...) Service`. A domain owes one once it has behaviour of
+  its own to offer. Holding types and persisting them is not that, and
+  neither is translating a request, composing commands or wiring a
+  runtime.
+- `internal/<domain>/<name>.go` — one dependency interface the domain
+  needs, named for it: `repository.go` declares `type Repository
+  interface`, `mailer.go` declares `type Mailer interface`. No
+  condition and no threshold — the side that needs the behaviour
+  declares the contract, and one file holds one contract.
+- `internal/<domain>/<group>.go` — the service's method bodies
   (`create.go`, `update.go`, `lifecycle.go`).
-- `platform/internal/<domain>/service_test.go` — the service's tests
-  (§7).
-- `platform/internal/<domain>/<technology>/` — where a domain keeps an
+- `internal/<domain>/service_test.go` — the service's tests (§7).
+- `internal/<domain>/<technology>/` — where a domain keeps an
   implementation of that dependency interface outside its package: one
   package per technology (`postgres/postgres.go`, `memory/memory.go`);
   the in-memory one serves tests and dev.
-- `platform/internal/<crosscutting>/` — a concern extracted below the
-  domains, named by what it is.
+- `internal/<crosscutting>/` — a concern extracted below the domains,
+  named by what it is.
 - `go.mod`, `go.sum` — module root.
 
-**Rules for `platform/internal/<domain>/`:**
+**Rules for `internal/<domain>/`:**
 
 - Split the method bodies out of `service.go` only when the service
   has more than one verb; a single-method service keeps that method
@@ -88,8 +85,7 @@ tree, not a line count crossed unnoticed.
   satisfies: `postgres/`, `memory/`. Two technologies are two sibling
   packages and not two files in one. A generated mock is §7's.
 
-**One file vs several** inside
-`platform/internal/<domain>/<technology>/`:
+**One file vs several** inside `internal/<domain>/<technology>/`:
 
 - **One file** (`postgres/postgres.go`) when the implementation is ≤
   ~300 LoC and has no private helpers worth isolating.
@@ -108,9 +104,8 @@ A root-level file exists when the module has that concern, and it is
 named after the concern:
 
 - `errors.go` — sentinels no single domain owns, where the module has
-  no package for them. This project keeps them in
-  `platform/internal/errorx` (§4). Domain sentinels stay in
-  `platform/internal/<domain>/<domain>.go`.
+  no package for them. This project keeps them in `internal/errorx`
+  (§4). Domain sentinels stay in `internal/<domain>/<domain>.go`.
 - `config.go` — the module's configuration type and its loading.
 - `logger.go` — only when logger setup goes past `slog.Default()`
   (§5). A project that calls `slog.Default()` directly has no
@@ -127,37 +122,36 @@ name and not a boundary.
 ### Project envelope
 
 This section states which Go file holds the composition site, what
-`platform/internal/` and `pkg/` hold, and what the directories this
-project adds to the layout hold.
+`internal/` and `pkg/` hold, and what the directories this project adds
+to the layout hold.
 
-- **The composition site is `platform/cmd/<binary>/main.go`, unless a
-  test outside `platform/cmd/<binary>/` has to reach it** — a suite in
-  `platform/tests/` (§7) among them. Only a test in its own directory
-  can import a main package, so where such a test exercises the wired
-  binary the site is in a package `main.go` calls, and `main.go` holds
-  that call. A site a test cannot call is one the test copies instead,
-  and the copy goes on passing after the shipped wiring breaks.
-- `platform/internal/` is enforced by the Go toolchain. Use it for
-  everything not explicitly public.
+- **The composition site is `cmd/<binary>/main.go`, unless a test
+  outside `cmd/<binary>/` has to reach it** — a suite in `tests/` (§7)
+  among them. Only a test in its own directory can import a main
+  package, so where such a test exercises the wired binary the site is
+  in a package `main.go` calls, and `main.go` holds that call. A site a
+  test cannot call is one the test copies instead, and the copy goes on
+  passing after the shipped wiring breaks.
+- `internal/` is enforced by the Go toolchain. Use it for everything not
+  explicitly public.
 - `pkg/` is for code other modules import. Most services don't need it.
 
 This project adds seven directories the layout above does not name.
 Each bullet names the ADR that owns its directory where one does;
-`platform/migrations/`, `platform/tests/` and `docs/` are owned by none.
+`migrations/`, `tests/` and `docs/` are owned by none.
 
-- `platform/api/` — the OpenAPI specifications and the servers generated
-  from them. There are two, one per surface: `openapi.yaml` for the
-  browser (ADR-0004) and `machine.yaml` for the machine listener
-  (ADR-0019).
-- `platform/proto/` — `.proto` sources and generated code (ADR-0003).
-- `platform/migrations/` — SQL migrations; the schema's source of truth.
-  The Go file beside them tests the migrations and declares no schema.
-- `platform/tests/` — black-box tests and test-only code, one directory
-  per subject. A suite needing what CI does not hold has its own `make`
-  target, named by no whole-set target or workflow, whose comment names
-  what it needs.
-- `console/` — the frontend, which is not Go, so this file does not
-  govern it (ADR-0009).
+- `api/` — the OpenAPI specifications and the servers generated from
+  them. There are two, one per surface: `openapi.yaml` for the browser
+  (ADR-0004) and `machine.yaml` for the machine listener (ADR-0019).
+- `proto/` — `.proto` sources and generated code (ADR-0003).
+- `migrations/` — SQL migrations; the schema's source of truth. The Go
+  file beside them tests the migrations and declares no schema.
+- `tests/` — black-box tests and test-only code, one directory per
+  subject. A suite needing what CI does not hold has its own `make`
+  target, named by no whole-set target or workflow, whose comment
+  names what it needs.
+- `web/` — the frontend, which is not Go, so this file does not govern
+  it (ADR-0009).
 - `deploy/` — `local/` is what is needed to run the built images
   locally, and `charts/garam/` is the chart that describes a garam
   deployment (ADR-0042, superseding ADR-0020). garam publishes two
@@ -167,9 +161,9 @@ Each bullet names the ADR that owns its directory where one does;
 - `docs/` — the conventions, the architecture documents and the plans;
   `docs/README.md` is the index.
 
-Not every package under `platform/internal/` is a domain. The boundary
-binds a test as it binds shipped code: one surface's test package does
-not import another surface.
+Not every package under `internal/` is a domain. The boundary binds a
+test as it binds shipped code: one surface's test package does not
+import another surface.
 
 ### Monorepo envelope
 
@@ -181,9 +175,9 @@ repository holds several of them, joined by a `go.work` at its root.
   module root.
 - **A module that ships no binary takes the library layout.**
 - **A module reaches another only through what that module
-  publishes**: a package outside its `platform/internal/`, or its API
-  specification. The toolchain enforces `platform/internal/` across
-  modules as it does inside one.
+  publishes**: a package outside its `internal/`, or its API
+  specification. The toolchain enforces `internal/` across modules as
+  it does inside one.
 - **The repository root holds `go.work`, `go.work.sum`, and no Go
   package.**
 - **`go mod tidy` runs per module**, and `go work sync` follows a
@@ -194,19 +188,16 @@ repository holds several of them, joined by a `go.work` at its root.
 §1 owns the per-domain file inventory. This section states which Go
 file declares and which depends.
 
-- `platform/internal/<domain>/<domain>.go`,
-  `platform/internal/<domain>/service.go` and
-  `platform/internal/<domain>/<name>.go` declare the types, sentinels,
-  `Service` interface and dependency interfaces the rest of the domain
-  is written against.
-- `platform/internal/<domain>/<group>.go` and the implementations in
-  `platform/internal/<domain>/<technology>/` depend on those
-  declarations.
+- `internal/<domain>/<domain>.go`, `internal/<domain>/service.go` and
+  `internal/<domain>/<name>.go` declare the types, sentinels, `Service`
+  interface and dependency interfaces the rest of the domain is written
+  against.
+- `internal/<domain>/<group>.go` and the implementations in
+  `internal/<domain>/<technology>/` depend on those declarations.
 - `mocks/` — generated by mockery (§7) for the interfaces its config
   names.
-- **The import goes one way.**
-  `platform/internal/<domain>/<technology>/` may import
-  `platform/internal/<domain>` for the types in the interface's
+- **The import goes one way.** `internal/<domain>/<technology>/` may
+  import `internal/<domain>` for the types in the interface's
   signatures; the reverse import never happens.
 - Go rejects an import cycle at compile time, and a struct holding
   itself by value through another (`type A struct{ b B }`, `type B
@@ -300,11 +291,11 @@ translates, wraps, logs or recovers one.
   instead of answering — the client gets a closed connection, or an
   HTTP/2 `RST_STREAM` — so the middleware exists to reply 500.
 
-Every error carries a kind, through `platform/internal/errorx`. The
-rules below are this project's own, because ADR-0003 carries `errorx`
-kinds over gRPC as status codes without translation and each transport
-picks its code from the kind; an error whose chain holds no `errorx`
-error reaches a transport as unknown.
+Every error carries a kind, through `internal/errorx`. The rules below
+are this project's own, because ADR-0003 carries `errorx` kinds over
+gRPC as status codes without translation and each transport picks its
+code from the kind; an error whose chain holds no `errorx` error reaches
+a transport as unknown.
 
 - **A sentinel is declared with `errorx.New(kind, msg)`, not
   `errors.New`,** so it carries a kind. It is still read with
@@ -318,13 +309,14 @@ error reaches a transport as unknown.
   ADR-0003 carries without translation, so a new kind has no code to
   travel as.
 - **Both HTTP surfaces read one kind-to-status table, in
-  `platform/internal/wire`.** This applies "Each transport translates in
-  one place" above: its two examples, an HTTP server and a gRPC service,
+  `internal/wire`.** This applies "Each transport translates in one
+  place" above: its two examples, an HTTP server and a gRPC service,
   make a transport a protocol, so garam's two HTTP surfaces are one
-  transport with one translation (`docs/architecture/overview.md`
-  §Non-functional goals, `docs/architecture/domains.md` §Shared code
-  below the domains). It is stated here because the table is one of
-  `errorx` kinds, which only ADR-0003 gives this project.
+  transport with one translation
+  (`docs/architecture/overview.md` §Non-functional goals,
+  `docs/architecture/domains.md` §Shared code below the domains). It
+  is stated here because the table is one of `errorx` kinds, which
+  only ADR-0003 gives this project.
 
 ## 5. Logging & observability
 
@@ -367,8 +359,8 @@ project says otherwise).
 - **Internal tests** (`package user`): same directory and package as
   the code under test. Use only when you genuinely need a white-box
   seam (uncommon).
-- **`platform/tests/` at module root:** integration / E2E tests that
-  wire multiple domains. Separate binary.
+- **`tests/` at module root:** integration / E2E tests that wire
+  multiple domains. Separate binary.
 - **In-process integration test client:** `httptest.NewServer`.
 - **E2E tooling:** the binary under test is what `go build` produces.
 - **Real services:** they come from containers. This project brings
@@ -376,7 +368,7 @@ project says otherwise).
   `testcontainers-go`, so one compose project serves the dev stack and
   each suite that needs a real service.
 
-Within `platform/internal/<domain>/`:
+Within `internal/<domain>/`:
 
 - Tests for `<group>.go` live in `<group>_test.go`.
 - Table-driven subtests: `tests := []struct{ name string; ... }{...}`,
@@ -403,12 +395,12 @@ Where the project generates mocks, generate them with
   set, mockery writes `mocks_test.go` in the interface's own directory
   and package, so `mocks/<package>/<Interface>.go` at module root is
   one `dir` and `filename` declare. A dependency interface is scoped to
-  the one domain that declares it, so
-  `dir: platform/internal/<domain>/mocks/` fits it too. A project whose
-  tests live outside the interface's directory — a suite in
-  `platform/tests/` among them — sets `dir` and `filename` to a location
-  those tests can import, because a `_test.go` mock is not importable
-  across directories. Pick one convention per project.
+  the one domain that declares it, so `dir: internal/<domain>/mocks/`
+  fits it too. A project whose tests live outside the interface's
+  directory — a suite in `tests/` among them — sets `dir` and
+  `filename` to a location those tests can import, because a
+  `_test.go` mock is not importable across directories. Pick one
+  convention per project.
 - **Generation:** `mockery` (reads config) or `go generate ./...`
   when interfaces carry `//go:generate mockery` directives. Pick one.
 - **In tests:** the generated mock satisfies the interface; pass it

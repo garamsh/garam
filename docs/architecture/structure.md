@@ -65,7 +65,7 @@ on are boundaries inside a service.
   service other than the one that owns it.
 - **A service reaches another only through what that service
   publishes**: its API specification, or `platform/sdk/`. Reaching
-  into another service's `platform/internal/` or its database is a
+  into another service's `internal/` or its database is a
   defect, even where it builds.
 - **Dependencies point toward `platform/`**, and none points back.
 - **Services authenticate to one another with tokens `platform/`

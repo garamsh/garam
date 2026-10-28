@@ -1,0 +1,77 @@
+#!/bin/sh
+# Runs cowork-web's image and checks it: the standalone server starts
+# and renders the home page, the page names the console address the
+# container is given rather than the placeholder the build held
+# (deploy/local/Dockerfile.web), and a static asset the page references
+# is served, which the standalone output leaves out unless the image
+# copies it in. The subject is the image that file builds with
+# APP=cowork-web, which cowork-web's e2e suite never opens.
+#
+# A visitor with no session asks nothing of cowork or the platform, so
+# every address below is one no request reaches.
+#
+# COWORK_WEB_IMAGE names an image to check instead of building one, so
+# the same checks run against an image pulled from a registry by
+# digest.
+set -eu
+
+image=${COWORK_WEB_IMAGE:-}
+console=http://console.image-e2e.invalid
+web=
+passed=0
+
+cleanup() {
+	if [ -n "$web" ]; then docker rm -f "$web" >/dev/null 2>&1 || true; fi
+}
+trap cleanup EXIT INT TERM
+
+fail() {
+	echo "cowork-web-image-e2e: $1" >&2
+	if [ -n "$web" ]; then docker logs "$web" >&2 2>&1 || true; fi
+	exit 1
+}
+
+if [ -z "$image" ]; then
+	image=cowork-web:image-e2e
+	docker build -t "$image" --build-arg APP=cowork-web -f deploy/local/Dockerfile.web .
+fi
+
+# The host's kernel picks the port, as platform/tests/image/web.sh
+# does it and for the reason it states (#1436).
+port=$(python3 -c 'import socket
+s = socket.socket()
+s.bind(("127.0.0.1", 0))
+print(s.getsockname()[1])') || fail "could not reserve a host port"
+echo "cowork-web-image-e2e: publishing on 127.0.0.1:$port"
+
+web=cowork-web-image-e2e-$$
+docker run -d --name "$web" -p "127.0.0.1:$port:3000" \
+	-e COWORK_API_URL=http://cowork.image-e2e.invalid \
+	-e COWORK_SYNC_URL=ws://cowork.image-e2e.invalid \
+	-e GARAM_API_URL=http://api.image-e2e.invalid \
+	-e "GARAM_CONSOLE_URL=$console" \
+	"$image" >/dev/null
+
+i=0
+until body=$(curl -fsS "http://127.0.0.1:$port/" 2>/dev/null); do
+	[ "$(docker inspect -f '{{.State.Running}}' "$web")" = "true" ] ||
+		fail "the container exited before it served /"
+	i=$((i + 1))
+	[ "$i" -lt 60 ] || fail "GET / did not answer within 30s"
+	sleep 0.5
+done
+passed=$((passed + 1))
+
+case $body in
+*"href=\"$console/login\""*) ;;
+*) fail "GET / links no sign-in at $console/login from GARAM_CONSOLE_URL" ;;
+esac
+passed=$((passed + 1))
+
+asset=$(printf %s "$body" | grep -o '/_next/static/[^"]*\.js' | head -n 1)
+[ -n "$asset" ] || fail "GET / references no script under /_next/static/"
+status=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port$asset")
+[ "$status" = "200" ] || fail "GET $asset answered $status, want 200"
+passed=$((passed + 1))
+
+echo "cowork-web-image-e2e: $passed checks passed against $image on 127.0.0.1:$port (GARAM_CONSOLE_URL $console, asset $asset)"

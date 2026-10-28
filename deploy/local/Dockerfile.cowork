@@ -1,0 +1,57 @@
+# Multi-stage build of cowork's server binary, cowork (ADR-0127). The
+# same image runs `migrate` and `serve`; the compose file picks the
+# subcommand, and its healthcheck runs `probe`, since the runtime stage
+# is scratch. Build context is the repository root, and
+# Dockerfile.cowork.dockerignore keeps it to the cowork module and the
+# libraries it requires.
+#
+# The base is deploy/local/Dockerfile's, pinned and pulled from Google's
+# mirror for the reasons that file states.
+FROM mirror.gcr.io/library/golang:1.27.2-alpine3.24@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS build
+
+WORKDIR /src
+
+# Dependencies resolve from the manifests alone, retried as
+# deploy/local/Dockerfile retries them (#1622). cowork/go.mod replaces
+# lib/errorx and lib/grn with their folders (ADR-0132).
+COPY cowork/go.mod cowork/go.sum ./cowork/
+COPY lib/errorx/go.mod lib/errorx/go.sum ./lib/errorx/
+COPY lib/grn/go.mod lib/grn/go.sum ./lib/grn/
+RUN for attempt in 1 2 3; do \
+      go -C cowork mod download && exit 0; \
+      [ "$attempt" = 3 ] && exit 1; \
+      echo "go mod download: attempt $attempt failed; retrying" >&2; \
+      sleep $((attempt * 10)); \
+    done
+
+COPY . .
+RUN CGO_ENABLED=0 go -C cowork build -o /out/cowork ./cmd/cowork
+
+# The account the processes run as; scratch has no adduser, so only
+# its lines travel and the image carries no root account.
+RUN adduser -D -u 10001 cowork \
+  && grep '^cowork:' /etc/passwd > /out/passwd \
+  && grep '^cowork:' /etc/group > /out/group
+
+FROM scratch
+
+# ca-certificates: the platform and the blob store are reached over
+# HTTPS outside this stack.
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /out/passwd /etc/passwd
+COPY --from=build /out/group /etc/group
+
+COPY --from=build /out/cowork /usr/local/bin/cowork
+COPY cowork/migrations /app/migrations
+
+# The commit and the version the build was given, on the terms
+# deploy/local/Dockerfile records them.
+ARG IMAGE_REVISION
+ARG IMAGE_VERSION
+LABEL org.opencontainers.image.revision=$IMAGE_REVISION \
+  org.opencontainers.image.version=$IMAGE_VERSION
+
+# COWORK_MIGRATIONS_DIR defaults to `migrations`, read from here.
+WORKDIR /app
+USER cowork
+ENTRYPOINT ["cowork"]

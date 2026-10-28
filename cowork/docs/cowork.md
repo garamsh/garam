@@ -9,7 +9,8 @@ its centre
 people (#1664), MCP and the client CLI (#1665), tasks (#1666), and
 artifacts and the blob store (#1667).** Delivery to agents is decided
 and unbuilt (§Delivery to agents), and so is an agent acting as itself
-(ADR-0123). There is no image, and nothing deploys cowork.
+(ADR-0123). The server and the web app each build as an image, and
+nothing publishes or deploys either.
 
 ## Contents
 - What is built
@@ -59,7 +60,15 @@ and unbuilt (§Delivery to agents), and so is an agent acting as itself
   `garam-cli/` (§The client CLI).
 - **The web app** (`cowork-web/`, at the root). Every block type is a
   plugin in its registry.
-- **Not yet:** the Postgres hub several instances need, and the image.
+- **Images.** `deploy/local/Dockerfile.cowork` builds the server's,
+  and `deploy/local/Dockerfile.web` the web app's with
+  `APP=cowork-web`. `images.yml` builds and checks both on every pull
+  request (`make -C deploy/local cowork-image-e2e
+  cowork-web-image-e2e`), and `deploy/local/docker-compose.yml` runs
+  them behind its `cowork` profile, as `deploy/local/README.md`
+  §cowork states.
+- **Not yet:** the Postgres hub several instances need, and publishing
+  and deploying the images.
 
 ## Ports
 

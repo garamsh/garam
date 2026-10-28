@@ -2,10 +2,12 @@
 # whole stack on a local Kubernetes cluster. It has no gate of its own:
 # a module whose suites need the stack names the verb here its
 # `stack-up` runs (#1661), and its suites are what check this folder.
+# It also checks the two cowork images its Dockerfiles build, which
+# images.yml runs.
 
 include ../../tooling/make/stack.mk
 
-.PHONY: db-up db-down db-prune backend-up
+.PHONY: db-up db-down db-prune backend-up cowork-image-e2e cowork-web-image-e2e
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
 
@@ -42,6 +44,14 @@ db-prune:
 # it healthy (#297).
 backend-up:
 	$(COMPOSE_LOCAL) up -d --build --wait api
+
+# cowork-image-e2e and cowork-web-image-e2e build cowork's server image
+# from Dockerfile.cowork and cowork-web's from Dockerfile.web, and check
+# what each built rather than the app. COWORK_IMAGE and COWORK_WEB_IMAGE
+# name an image to check instead, and then nothing is built. The
+# scripts read paths from the repository root.
+cowork-image-e2e cowork-web-image-e2e:
+	@cd $(STACK_ROOT) && tooling/$@.sh
 
 # ---------------------------------------------------------------------
 # deploy/local/minikube — the whole stack on a local Kubernetes cluster.

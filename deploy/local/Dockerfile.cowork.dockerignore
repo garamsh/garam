@@ -1,0 +1,11 @@
+# Build context for deploy/local/Dockerfile.cowork, the repository
+# root. The build compiles the cowork module and the libraries its
+# go.mod replaces, and ships cowork/migrations.
+*
+!cowork
+!lib/errorx
+!lib/grn
+cowork/docs
+cowork/engine
+cowork/tests
+cowork/bin

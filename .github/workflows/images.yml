@@ -8,8 +8,9 @@ name: images
 # one and billed a minute.
 #
 # `docs/**` is the whole ignore list because it is the only path the
-# build itself keeps out of both images: `.dockerignore` names `docs`,
-# and the web image's context is `platform-web/`. A wider one would
+# build itself keeps out of every image: `.dockerignore` names `docs`,
+# and Dockerfile.web.dockerignore and Dockerfile.cowork.dockerignore
+# leave it out of the contexts they allow. A wider one would
 # rest on a property that holds today rather than one the build
 # enforces, and a filter that quietly stops covering a change is what
 # #850 is about.
@@ -58,3 +59,7 @@ jobs:
         env:
           IMAGE_BUILD_CACHE: gha
       - run: make site-image-e2e
+      # cowork's server and web app, which no release publishes yet,
+      # each built from its Dockerfile and then checked (#1714).
+      - run: make -C deploy/local cowork-image-e2e
+      - run: make -C deploy/local cowork-web-image-e2e

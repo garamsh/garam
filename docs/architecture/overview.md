@@ -373,9 +373,9 @@ list below is today's tree
   does not is authoritative for what running it establishes about a real
   deployment.
 - `platform/internal/grn/` — identifier; shared primitive. It forwards
-  to `lib/grn/` (ADR-0125, ADR-0132) until #1659.
+  to `lib/grn/` (ADR-0125, ADR-0132) until #1708.
 - `platform/internal/errorx/` — typed errors; shared primitive. It
-  forwards to `lib/errorx/` (ADR-0125, ADR-0132) until #1659.
+  forwards to `lib/errorx/` (ADR-0125, ADR-0132) until #1708.
 - `platform/internal/wire/` — the conversions onto the wire formats the
   request surfaces share: the statement `Effect` and a policy's status
   with their authz-proto mappings, a statement rendered onto the authz

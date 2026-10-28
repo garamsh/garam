@@ -30,18 +30,19 @@ decision, and the same partitioning serves one deployable or many.
 
 ## Services
 
-**Little of this section is built.** The platform is still the
-module at the root that this document's other sections describe, and
-#1659 moves it into the layout below
-([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)). Until then these rules bind
-what a pull request adds, and the tree reads in today's shape. What
-exists:
+**The tree is laid out as this section states, except for
+`policy/`,** which ADR-0130 decides and its first pull request creates.
+The platform's module is `platform/`, and its server binary is
+`platform/cmd/garam`
+([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md),
+[ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)).
+Beside it:
 
 - **`lib/errorx/`, `lib/grn/` and `lib/clisession/`**, a library
   module each, created because cowork is the second module to need
   them. The platform's module requires the first two through a
   `replace` to their folders, and its own `platform/internal/errorx`
-  and `platform/internal/grn` forward to them until #1659 rewrites
+  and `platform/internal/grn` forward to them until #1708 rewrites
   their importers and deletes them.
 - **`lib/platform-sdk-go/`**, the Go client generated from
   `platform/api/openapi.yaml`, and **`platform-cli/`**, the client CLI
@@ -51,8 +52,7 @@ exists:
   ([cowork.md](../../cowork/docs/cowork.md)).
 - **`go.work`** at the root, naming `platform/`, `platform-cli/`,
   `cowork/` and each Go library under `lib/`. Every Go entry point in
-  the `Makefile` covers every module it names. The root still holds the
-  platform's packages until #1659.
+  the `Makefile` covers every module it names.
 
 Above the boundaries inside garam sits a coarser unit: the service.
 Each top-level folder is one service or one supporting

@@ -1,6 +1,7 @@
 # ADR 0007: Hybrid statement collection
 
-> Status: accepted
+> Status: accepted; callers collecting role statements is superseded by
+> [ADR-0130](./0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
 > Date: 2026-08-02
 
 ## Context

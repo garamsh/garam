@@ -36,7 +36,7 @@ today's.
 
 ## Module path
 
-`github.com/garamsh/garam`
+`github.com/garamsh/garam/platform`
 
 ## Build and test
 

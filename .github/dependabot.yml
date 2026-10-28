@@ -29,15 +29,15 @@
 # sixth such record, or a pin without one, is what this list going stale
 # looks like.
 #
-# Three record it here instead: go.mod's `go` directive, which the gomod
-# entry never edits; `packageManager` in web/package.json, pinned to
-# pnpm@11.11.0, in a file JSON gives no comment syntax; and
-# web/pnpm-lock.yaml, which is generated. No entry here reaches web/ at
-# all, and no scheduled review is named for any of the three, so each is
-# the PM's to move under AGENTS.md §Roles.
+# Three record it here instead: platform/go.mod's `go` directive, which
+# the gomod entry never edits; `packageManager` in console/package.json,
+# pinned to pnpm@11.11.0, in a file JSON gives no comment syntax; and
+# console/pnpm-lock.yaml, which is generated. No entry here reaches
+# console/ at all, and no scheduled review is named for any of the
+# three, so each is the PM's to move under AGENTS.md §Roles.
 #
 # The lockfile is one record for every resolution it holds. An exact
-# dependency version in web/package.json is a pin only because the
+# dependency version in console/package.json is a pin only because the
 # lockfile carries the integrity hash §Verify's checksum-log test asks
 # for, so what moves those versions is a move of the lockfile.
 #
@@ -60,25 +60,27 @@ updates:
   # searched.
   #
   # It also moves only the FROM line. go.mod's `go` directive names the
-  # same Go version Dockerfile does, and web/.nvmrc the same Node major
-  # as Dockerfile.web, so every bump this proposes arrives half-done and
-  # splits the container's toolchain from the repository's declared
-  # version unless the other half lands with it. `make check-toolchain`
-  # fails on that split (#803); it reads the two pairs and not why they
-  # are pairs, which is what this paragraph is for.
+  # same Go version Dockerfile does, and console/.nvmrc the same Node
+  # major as Dockerfile.web, so every bump this proposes arrives
+  # half-done and splits the container's toolchain from the repository's
+  # declared version unless the other half lands with it.
+  # `make check-toolchain` fails on that split (#803); it reads the two
+  # pairs and not why they are pairs, which is what this paragraph is
+  # for.
   - package-ecosystem: "docker"
     directory: "/deploy/local"
     schedule:
       interval: "weekly"
 
-  # tests/testprincipal/Dockerfile, the test image (ADR-0092), whose
-  # build stage takes the golang base deploy/local/Dockerfile does.
+  # platform/tests/testprincipal/Dockerfile, the test image (ADR-0092),
+  # whose build stage takes the golang base deploy/local/Dockerfile
+  # does.
   #
   # Covers and does not cover what the entry above states, and its bump
   # arrives half-done the same way: `make check-toolchain` holds this
   # file's tag against go.mod too.
   - package-ecosystem: "docker"
-    directory: "/tests/testprincipal"
+    directory: "/platform/tests/testprincipal"
     schedule:
       interval: "weekly"
 
@@ -113,8 +115,8 @@ updates:
     schedule:
       interval: "weekly"
 
-  # go.mod's requirements, the seven generator pins, the two linter pins
-  # and the mutation tester among them.
+  # platform/go.mod's requirements, the seven generator pins, the two
+  # linter pins and the mutation tester among them.
   #
   # Covers a newer version for every direct requirement, and for each
   # tool-directive module named below. Go marks a tool directive's
@@ -133,10 +135,11 @@ updates:
   # tool block names moves the generator itself, so what `make gen`
   # writes can stop matching the committed output and the bump arrives
   # half-done: google.golang.org/protobuf 1.36.11 to 1.36.12 (#682)
-  # moved protoc-gen-go's version stamp in two files under proto/gen/,
-  # while mockery 3.7.3 to 3.7.4 (#681) moved nothing. The bump itself
-  # does not say which of the two it is; `make check-gen` does, and the
-  # regenerated output belongs in the same change as the bump.
+  # moved protoc-gen-go's version stamp in two files under
+  # platform/proto/gen/, while mockery 3.7.3 to 3.7.4 (#681) moved
+  # nothing. The bump itself does not say which of the two it is;
+  # `make check-gen` does, and the regenerated output belongs in the
+  # same change as the bump.
   #
   # The two linter pins are outside that: actionlint and shfmt write no
   # output this repository commits, so `check-gen` says nothing about a
@@ -145,7 +148,7 @@ updates:
   # whole-set name runs it, so what reads a bump of it is `make
   # mutation`, which a person invokes (#875).
   - package-ecosystem: "gomod"
-    directory: "/"
+    directory: "/platform"
     schedule:
       interval: "weekly"
     allow:
@@ -161,9 +164,10 @@ updates:
       - dependency-name: "mvdan.cc/sh/v3"
 
   # platform/sdk's requirements (ADR-0125): its tests' assertion
-  # library. The root module replaces platform/sdk with its folder and
-  # requires testify itself, so the two entries move it apart; whichever
-  # lands second takes the other's version with `go work sync`.
+  # library. The platform module replaces platform/sdk with its folder
+  # and requires testify itself, so the two entries move it apart;
+  # whichever lands second takes the other's version with
+  # `go work sync`.
   - package-ecosystem: "gomod"
     directory: "/platform/sdk"
     schedule:

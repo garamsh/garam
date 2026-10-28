@@ -59,7 +59,7 @@ A development build a person made and pushed is in
 under a commit-derived or prerelease tag
 ([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)),
 so a deployment running one sets the repository as well as the tag.
-`scripts/image-build.sh` is authoritative for which development
+`tooling/image-build.sh` is authoritative for which development
 references this repository produces, and refuses every other tag
 before it builds; `README.md` §Development images is the procedure.
 The test image is none of these: an operator pushes it for another
@@ -83,8 +83,8 @@ whether it will.
 
 ## What readiness reports
 
-Dependencies each process reports (`internal/cli/serve.go`,
-`internal/cli/machine.go`):
+Dependencies each process reports (`platform/internal/cli/serve.go`,
+`platform/internal/cli/machine.go`):
 
 | Process | Readiness dependencies |
 |---|---|
@@ -93,7 +93,7 @@ Dependencies each process reports (`internal/cli/serve.go`,
 | `serve machine` | the database, and the channel to the engine |
 | web | none — it reads nothing, so an API outage takes no replica out of rotation ([ADR-0023](./adr/0023-web-probes.md)) |
 
-The semantics, fixed in `internal/health/health.go`:
+The semantics, fixed in `platform/internal/health/health.go`:
 
 - A single readiness answer is bounded at two seconds inside the
   process. That is fixed in the binary; a deployment cannot change it.
@@ -220,27 +220,27 @@ image declares `USER garam` (uid 10001, `deploy/local/Dockerfile`),
 which is a default a Pod overrides rather than a value a key file must
 be owned by. #644 measured it: `garam adapter` ran as 65532, an agent
 operator's user and not garam's own, against a key file owned by 65532,
-and `internal/keyfile` accepted it — what the rule constrains is that
-the two agree, not that either is garam's.
+and `platform/internal/keyfile` accepted it — what the rule constrains
+is that the two agree, not that either is garam's.
 
-**It is enforced, not requested.** `internal/keyfile` refuses a key file
-when any group or other permission bit is set, and separately when its
-owner is not the process's own UID, and every key file a process reads
-at startup goes through it: the key-encryption key and the machine
-listener's own TLS key (`internal/cli/machine.go`), so either refusal
-stops the start of that process. Plain Kubernetes Secret projection
-satisfies neither half — a projected file is root-owned, and `fsGroup`
-changes the group owner rather than the user owner (read 2026-08-25;
-this repository pins no Kubernetes version). Relaxing the check to fit
-plain projection is not an option; the arrival shape the chart renders
-is what the rule requires.
+**It is enforced, not requested.** `platform/internal/keyfile` refuses a
+key file when any group or other permission bit is set, and separately
+when its owner is not the process's own UID, and every key file a
+process reads at startup goes through it: the key-encryption key and the
+machine listener's own TLS key (`platform/internal/cli/machine.go`), so
+either refusal stops the start of that process. Plain Kubernetes Secret
+projection satisfies neither half — a projected file is root-owned, and
+`fsGroup` changes the group owner rather than the user owner (read
+2026-08-25; this repository pins no Kubernetes version). Relaxing the
+check to fit plain projection is not an option; the arrival shape the
+chart renders is what the rule requires.
 
 Two qualifications:
 
 - **The `GARAM_MACHINE_TLS_CERT_FILE` and `GARAM_MACHINE_TLS_KEY_FILE`
-  pair is re-read on every handshake** (`internal/keyfile/pair.go`), so
-  a replaced pair is presented on the
-  next connection with nothing restarted
+  pair is re-read on every handshake**
+  (`platform/internal/keyfile/pair.go`), so a replaced pair is presented
+  on the next connection with nothing restarted
   ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)).
   Two obligations follow, and a deployment that meets neither has
   rotation only on a restart:
@@ -255,7 +255,7 @@ Two qualifications:
 - **There is no client CA bundle, and creating one is forbidden.** The
   machine listener asks for no client certificate and authenticates
   every caller by a token, read on every request
-  (`internal/machine/listener.go`,
+  (`platform/internal/machine/listener.go`,
   [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md),
   [ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)),
   so a bundle would verify nothing. There is nothing to mount and
@@ -274,17 +274,17 @@ signs messages with
 each under the key present when it was created, and the sealed bytes
 open only under that same key: a different one is refused by the
 identifier of the key it needs rather than read as corruption
-(`internal/ca/sealer.go`). Rotation is not built and not designed — the
-identifier is what would make it possible later, and nothing performs
-it ([ADR-0016](./adr/0016-ca-key-custody.md)) — so there is no path
-from one key to another. Under a different key-encryption key the
-signing key does not open, and every claim answers 500 naming that key
-in the listener's log. A signing key is replaceable:
-`garam retire-message-signing-key <kid>` withdraws it, and the next
-hand-out signs under a new key sealed by the key present. A verifier
-holding the published set as a file refuses the new key's signatures
-until the file is replaced. A deployment that configures the Transit
-provider below stops sealing new message keys under it; the keys
+(`platform/internal/ca/sealer.go`). Rotation is not built and not
+designed — the identifier is what would make it possible later, and
+nothing performs it ([ADR-0016](./adr/0016-ca-key-custody.md)) — so
+there is no path from one key to another. Under a different
+key-encryption key the signing key does not open, and every claim
+answers 500 naming that key in the listener's log. A signing key is
+replaceable: `garam retire-message-signing-key <kid>` withdraws it, and
+the next hand-out signs under a new key sealed by the key present. A
+verifier holding the published set as a file refuses the new key's
+signatures until the file is replaced. A deployment that configures the
+Transit provider below stops sealing new message keys under it; the keys
 already sealed stay sealed under it.
 
 It also holds sealed the private key of every organization's
@@ -296,8 +296,8 @@ their owner decides to drop them, and they open under no other key
 
 Nothing detects the substitution at start: the arrival checks above
 pass on any well-formed key, and nothing compares it against what the
-database already holds (`internal/cli/machine.go`). The wrong key
-starts cleanly and fails at the first claim it signs.
+database already holds (`platform/internal/cli/machine.go`). The wrong
+key starts cleanly and fails at the first claim it signs.
 
 The obligation that follows, in the form a deployment can act on:
 
@@ -354,9 +354,10 @@ property, and they are not free of obligations either.**
 `GARAM_MACHINE_TLS_CERT_FILE` and `GARAM_MACHINE_TLS_KEY_FILE` — the
 pair `machine.keyMaterial` names in the chart — seal nothing: they are
 the listener's own pair, read for the TLS handshake and nothing else
-(`internal/cli/machine.go`, `internal/machine/listener.go`). Replacing
-them loses nothing, and the constraint above is the key-encryption key's
-alone. What binds instead is who signs them
+(`platform/internal/cli/machine.go`,
+`platform/internal/machine/listener.go`). Replacing them loses nothing,
+and the constraint above is the key-encryption key's alone. What binds
+instead is who signs them
 ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)):
 
 - **One certificate authority signs that pair and signs nothing else.**
@@ -368,10 +369,10 @@ alone. What binds instead is who signs them
 - **That authority's certificate is `GARAM_MACHINE_SERVER_ROOT_FILE`,
   and garam hands it beside every credential it issues**
   (`serverRootPem` in the agent-token mint answer and the standalone
-  enrollment answer, `api/machine.yaml`). It is public, it is read once
-  at startup, and it must be the root the pair above chains to — a
-  mismatch reaches every caller and works for none. A deployment writing
-  an adapter's files takes that same `serverRootPem` for
+  enrollment answer, `platform/api/machine.yaml`). It is public, it is
+  read once at startup, and it must be the root the pair above chains to
+  — a mismatch reaches every caller and works for none. A deployment
+  writing an adapter's files takes that same `serverRootPem` for
   `GARAM_ADAPTER_SERVER_ROOT_FILE` ([adapter.md](./adapter.md)).
 - **Replacing that authority invalidates the root every caller already
   holds**, and garam reads it once, so it is a restart, with every
@@ -403,12 +404,12 @@ A deployment that sets `GARAM_TRANSIT_ADDR` holds every message
 signing key `garam serve machine` creates from then on in an OpenBao or
 Vault Transit key
 ([ADR-0104](./adr/0104-message-signing-keys-may-be-held-by-an-openbao-transit-provider-and-the-file-key-encryption-key-stays-the-default.md),
-`internal/message/transit`); one that sets none of `GARAM_TRANSIT_*`
-seals them under the key-encryption key as before, and one that sets
-part of it does not start. The chart's `machine.transit` values render
-the variables, and
-`deploy/charts/garam/README.md` §Message signing keys in OpenBao Transit
-is authoritative for them. The deployment supplies:
+`platform/internal/message/transit`); one that sets none of
+`GARAM_TRANSIT_*` seals them under the key-encryption key as before, and
+one that sets part of it does not start. The chart's `machine.transit`
+values render the variables, and `deploy/charts/garam/README.md`
+§Message signing keys in OpenBao Transit is authoritative for them. The
+deployment supplies:
 
 - **OpenBao over `https`**, under a certificate the root in
   `GARAM_TRANSIT_CA_FILE` verifies. No other scheme is accepted, the
@@ -423,15 +424,15 @@ is authoritative for them. The deployment supplies:
   `<mount>/keys/<key>/rotate` and `<mount>/sign/<key>`, the two garam
   calls; it reads the public half from `rotate`'s answer and never
   reads the key, as ADR-0104's erratum of 2026-10-18 records.
-  `tests/integration/transit_signing_test.go` runs it under a token
-  holding those two and nothing else.
+  `platform/tests/integration/transit_signing_test.go` runs it under a
+  token holding those two and nothing else.
 - **A token file**, `GARAM_TRANSIT_TOKEN_FILE`, owner-only and owned by
-  the process's UID: it is read through `internal/keyfile` like every
-  key file above, but on every call rather than at start, so a renewed
-  token takes effect on the next call and a file not yet written fails
-  a claim rather than the start. garam logs in with nothing, so the
-  auth role binding the machine workload's account to the policy, and
-  whatever writes and renews the file, are the deployment's.
+  the process's UID: it is read through `platform/internal/keyfile` like
+  every key file above, but on every call rather than at start, so a
+  renewed token takes effect on the next call and a file not yet written
+  fails a claim rather than the start. garam logs in with nothing, so
+  the auth role binding the machine workload's account to the policy,
+  and whatever writes and renews the file, are the deployment's.
 
 **What the binary does with it:** the published set is read from
 Postgres and keeps being served while OpenBao is unreachable; a claim
@@ -454,7 +455,7 @@ key announced in its place begins two hours later, or at once after
 changed value is a different issuer.** `garam serve machine` refuses to
 start without one, and refuses anything but an https URL in one
 spelling — a lowercase host, no empty port, no path and no trailing
-slash (`internal/message/signing.go`, `ParseIssuer`), because a
+slash (`platform/internal/message/signing.go`, `ParseIssuer`), because a
 verifier compares it byte for byte
 ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)).
 **It is an identity, not an address.** It need not resolve or be
@@ -495,18 +496,19 @@ as 403 `signature rejected: issuer` on every message once the adapter's
 ## The migrate job
 
 `migrate` applies all pending migrations and exits
-(`internal/cli/migrate.go`) and listens on nothing.
+(`platform/internal/cli/migrate.go`) and listens on nothing.
 
 - **It fails closed on a dirty database and never clears the flag
   itself.** A failed run leaves the database dirty, and every later run
   refuses with a message naming the recovery — read the failed run's
   log, fix the migration, force the version, run again
-  (`internal/cli/migrate.go`). The real error exists only in the first
-  run's log, so a retry that deletes the previous Job destroys the
-  evidence.
+  (`platform/internal/cli/migrate.go`). The real error exists only in
+  the first run's log, so a retry that deletes the previous Job destroys
+  the evidence.
 - Every migration this project ships is applied inside a transaction and
-  leaves nothing behind when it fails (`internal/cli/migrate.go`); one
-  that cannot run transactionally would break that guarantee.
+  leaves nothing behind when it fails
+  (`platform/internal/cli/migrate.go`); one that cannot run
+  transactionally would break that guarantee.
 - **Concurrent runs are safe** by the driver's mechanism:
   golang-migrate's Postgres driver takes an advisory lock, so a second
   `migrate` waits and then finds nothing to do. That claim holds at
@@ -516,11 +518,12 @@ as 403 `signature rejected: issuer` on every message once the adapter's
 ## Termination
 
 Every serve command installs a SIGTERM and SIGINT handler
-(`internal/cli/shutdown.go`, wired into `internal/cli/serve.go` and
-`internal/cli/machine.go`), and so does `adapter`
-(`internal/cli/delivery.go`), which stops claiming and exits 0. What it
-was carrying goes with it: the pairings it held reach no disk, their
-leases lapse, and garam hands those messages out again
+(`platform/internal/cli/shutdown.go`, wired into
+`platform/internal/cli/serve.go` and
+`platform/internal/cli/machine.go`), and so does `adapter`
+(`platform/internal/cli/delivery.go`), which stops claiming and exits 0.
+What it was carrying goes with it: the pairings it held reach no disk,
+their leases lapse, and garam hands those messages out again
 ([ADR-0018](./adr/0018-delivery-acknowledgement.md)). That is why it has
 to outlive the agent beside it — a native sidecar rather than an
 ordinary container — and why its own termination grace period is budget
@@ -530,8 +533,8 @@ ten-second bound, and past it they are abandoned deliberately by the
 process rather than by the kubelet's SIGKILL. The process then exits 0:
 a requested shutdown is not an error, so a pod a rollout or a delete
 terminates records `Completed`, not `Error` (#338 settled this; the
-assertion is `tests/e2e/shutdown_test.go`, which SIGTERMs the built
-binary as each of the three serve processes and requires exit 0).
+assertion is `platform/tests/e2e/shutdown_test.go`, which SIGTERMs the
+built binary as each of the three serve processes and requires exit 0).
 
 Both terminations exit 0, so which of the two happened is in the log and
 nowhere else: one that reached the bound and dropped what was still in
@@ -539,32 +542,31 @@ flight writes a line at warn naming the bound, and one that finished
 inside it writes none (#1064).
 
 The bound is the binary's, not the deployment's (`shutdownGrace` in
-`internal/cli/shutdown.go`): a `terminationGracePeriodSeconds` below ten
-seconds truncates in-flight work, and nothing the process does at
-shutdown outlasts it.
+`platform/internal/cli/shutdown.go`): a `terminationGracePeriodSeconds`
+below ten seconds truncates in-flight work, and nothing the process does
+at shutdown outlasts it.
 
 A request carries a bound of its own, thirty seconds to arrive, on two
 of the four HTTP listeners garam starts: the browser-facing one and the
-machine one (`requestReadTimeout` in `internal/cli/cli.go`, and on the
-machine listener it covers the handshake read too). The other two carry
-no such bound — the machine process's probe and metrics port and the
-authz process's — and each of those is reachable on a
-Service the chart renders. It bounds reading rather than a handler — a
-watch stream and a message claim both outlive it by design — so what it
-disconnects is a client that has
-stopped sending, which would otherwise hold a connection open until the
-shutdown bound above expired.
+machine one (`requestReadTimeout` in `platform/internal/cli/cli.go`, and
+on the machine listener it covers the handshake read too). The other two
+carry no such bound — the machine process's probe and metrics port and
+the authz process's — and each of those is reachable on a Service the
+chart renders. It bounds reading rather than a handler — a watch stream
+and a message claim both outlive it by design — so what it disconnects
+is a client that has stopped sending, which would otherwise hold a
+connection open until the shutdown bound above expired.
 
 The browser-facing listener keeps no connection alive: it answers each
 request with `Connection: close` and closes the connection after the
-response (`apiServer` in `internal/cli/serve.go`). The console's `/api`
-rewrite reaches it through Next.js's proxy, whose pooled sockets never
-time out and which ignores a server's `Keep-Alive` hint. A request
-that reused a socket at the moment the listener closed it for idleness
-was reset and answered 500 (#1428). A longer idle timeout would only
-make that rarer, so the cost is one connection per request on a
-cluster-local hop instead. The machine listener keeps its connections
-alive.
+response (`apiServer` in `platform/internal/cli/serve.go`). The
+console's `/api` rewrite reaches it through Next.js's proxy, whose
+pooled sockets never time out and which ignores a server's `Keep-Alive`
+hint. A request that reused a socket at the moment the listener closed
+it for idleness was reset and answered 500 (#1428). A longer idle
+timeout would only make that rarer, so the cost is one connection per
+request on a cluster-local hop instead. The machine listener keeps its
+connections alive.
 
 ## The PodSecurity level is the deployment's
 
@@ -596,14 +598,15 @@ here so they are not guessed, and so the chart does not offer a value
 that would assert one:
 
 - **Read-only root filesystem.** Not established for either image. What
-  is checkable: the code under `internal/` that writes a file is the
-  standalone host's commands (`internal/cli/standalone_host.go`,
-  `internal/cli/standalone_run.go`), the supervisor's workload
-  (`internal/workload/`) and the adapter's outbox
-  (`internal/delivery/outbox.go`), none of which a serve process runs,
-  so the three serve processes need no writable path. What the web
-  runtime writes, if anything, is unverified — so the `securityContext`
-  field is the deployment's to set either way.
+  is checkable: the code under `platform/internal/` that writes a file
+  is the standalone host's commands
+  (`platform/internal/cli/standalone_host.go`,
+  `platform/internal/cli/standalone_run.go`), the supervisor's workload
+  (`platform/internal/workload/`) and the adapter's outbox
+  (`platform/internal/delivery/outbox.go`), none of which a serve
+  process runs, so the three serve processes need no writable path. What
+  the web runtime writes, if anything, is unverified — so the
+  `securityContext` field is the deployment's to set either way.
 - **Replica safety above one.** Not established for `serve api`,
   `serve authz`, or `serve machine`. No leader election exists anywhere
   in the source; whether that makes a second replica safe or unsafe is

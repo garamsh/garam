@@ -40,8 +40,8 @@ evaluation reads it. Every other key below is read.
 - `Effect`: `Allow` | `Deny`.
 - `Action`: `<service_type>:<verb>` strings; `*` and `?` wildcards may
   appear anywhere and repeat (`org:*`, `*`). Constants are owned by
-  the defining domain (`internal/org`, `internal/user`, …). The engine
-  matches strings only.
+  the defining domain (`platform/internal/org`,
+  `platform/internal/user`, …). The engine matches strings only.
 - `Resource`: GRN patterns with the same wildcard rules
   (`grn:acme:*` scopes to an org).
 - `Condition`: reserved, as above.
@@ -204,28 +204,30 @@ an engine predating it answers `UNIMPLEMENTED`, where a field it does
 not know would be dropped unread and the call answered from its cache.
 `Check` and `Explain` keep the cached behaviour above.
 
-Lifecycle is served by `PolicyService` in `proto/garam/authz/v1`:
-create, append a version, list policies and versions, search policies
-by name or identifier for `searchOrg` (api-surface.md), activate,
-delete, roll back, attach, detach, and list attachments. Documents are
-validated at the write boundary, so a stored document always parses.
+Lifecycle is served by `PolicyService` in
+`platform/proto/garam/authz/v1`: create, append a version, list policies
+and versions, search policies by name or identifier for `searchOrg`
+(api-surface.md), activate, delete, roll back, attach, detach, and list
+attachments. Documents are validated at the write boundary, so a stored
+document always parses.
 
 ## Managing policies over HTTP
 
 Org admins reach that lifecycle under `/orgs/{org}/policies`
-(`api/openapi.yaml`). The api server passes each call through the
-`PolicyManager` seam — the gRPC client to `PolicyService` — so it never
-imports the engine and never parses a document: a document that does
-not parse comes back as `invalid_argument` and leaves as 400.
+(`platform/api/openapi.yaml`). The api server passes each call through
+the `PolicyManager` seam — the gRPC client to `PolicyService` — so it
+never imports the engine and never parses a document: a document that
+does not parse comes back as `invalid_argument` and leaves as 400.
 
 Policy management is authorized like any other action. The
 `policy:create`, `policy:read`, `policy:update`, `policy:attach`,
-`policy:detach` and `policy:delete` constants live in `internal/org`,
-because the api server enforces them and may not import the engine that
-stores policies. `owner` and `admin` grant `policy:*`; `member` grants
-none, so reading a policy is an admin action. The addressed policy's GRN
-is the object of the check, and its organization segment is the org in
-the path, so a policy of another org is not addressable.
+`policy:detach` and `policy:delete` constants live in
+`platform/internal/org`, because the api server enforces them and may
+not import the engine that stores policies. `owner` and `admin` grant
+`policy:*`; `member` grants none, so reading a policy is an admin
+action. The addressed policy's GRN is the object of the check, and its
+organization segment is the org in the path, so a policy of another org
+is not addressable.
 
 The console calls these operations and no others
 ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)),
@@ -270,14 +272,14 @@ object's organization before asking, sends that organization as
 `subject_org` on `Check` / `Explain`, and the engine refuses the call
 when the field is unset or does not match
 ([ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)).
-`internal/api` populates it from the org whose member it fetched; the
-machine listener populates it from the sender's own GRN, after the
-consent relation has decided the same-organization half. A caller that
-hands the engine a subject from another organization is refused at the
-engine — the boundary has moved, and the engine is where the obligation
-now lives. The groups a caller sends are subjects too, and the same
-obligation covers them: a group belongs to the org that names it in its
-GRN.
+`platform/internal/api` populates it from the org whose member it
+fetched; the machine listener populates it from the sender's own GRN,
+after the consent relation has decided the same-organization half. A
+caller that hands the engine a subject from another organization is
+refused at the engine — the boundary has moved, and the engine is where
+the obligation now lives. The groups a caller sends are subjects too,
+and the same obligation covers them: a group belongs to the org that
+names it in its GRN.
 
 The row above reads "every subject the caller asks about" for that
 reason. A caller that hands the engine a subject from another
@@ -326,14 +328,14 @@ other policy write.
 
 | Component | Responsibility | Depends on |
 |-----------|----------------|------------|
-| `Statement` / `PolicyDocument` | IAM-style rule model (ADR-0002); the `Effect` type is declared once in `internal/wire` and shared with every surface | `internal/wire` |
+| `Statement` / `PolicyDocument` | IAM-style rule model (ADR-0002); the `Effect` type is declared once in `platform/internal/wire` and shared with every surface | `platform/internal/wire` |
 | `Evaluator` | statement-set → `Decision` | — |
 | `StatementEvaluator` | native in-process `Evaluator` | — |
 | `Policy` / `PolicyVersion` | stored policy and its revisions | — |
 | `PolicyAttachment` | binds a policy to a subject (ADR-0008) | — |
-| `Store` | policy and attachment persistence, implemented by `internal/authz/postgres` (ADR-0069) | `migrations/` |
+| `Store` | policy and attachment persistence, implemented by `platform/internal/authz/postgres` (ADR-0069) | `platform/migrations/` |
 | `PolicyCache` | per-org parsed policies and their attachments, and the uncached read `CheckCurrent` uses | `Store` |
-| `ListenPolicyChanges` (`internal/authz/postgres`) | drops a `PolicyCache` entry as `garam_policy_change` announces the write | `PolicyCache` |
+| `ListenPolicyChanges` (`platform/internal/authz/postgres`) | drops a `PolicyCache` entry as `garam_policy_change` announces the write | `PolicyCache` |
 | `GRPCServer` | `Check` / `CheckBatch` / `CheckCurrent` / `Explain` RPCs | `PolicyCache` |
 | `PolicyGRPCServer` | policy lifecycle RPCs | `Store`, `PolicyCache` |
 
@@ -341,28 +343,29 @@ Role persistence (subject × role × scope) stays roadmap; roles remain
 org data resolved by the api server.
 
 The api server never imports this package; it calls the engine over
-gRPC (`Check`, `CheckBatch` and `Explain` in `proto/garam/authz/v1`)
-and supplies the role-derived statements it collected. `CheckBatch` is
-`Check` asked of many objects for one subject and one action: the
-statements that hold for every object are sent once, each object
-carries those that reach the subject through it alone, and the
-persisted statements are read once for the call. Each object is
-decided as `Check` would decide it, and one outside the subject's
-organization refuses the call. An org-gated list asks it once per page
-to drop the objects the caller may not read
-([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md)). The machine listener reaches the
-same engine the same way, over a seam of its own, and supplies the
-identity-derived ones. Delegated operation authority on both reaches
-`CheckCurrent` (§Policy persistence) through one adapter,
-`internal/cli/authority.go`, which reads the membership, the user's
-own roles and its groups for each call and sends the org-scoped
-statement those roles grant; neither operation targets a group or
-project, so no scoped role is collected. Each listener's `Evaluator`
-seam has one non-test implementation, the gRPC client, and that is
-what both composition roots wire (`internal/cli/serve.go`,
-`internal/cli/machine.go`). The in-process evaluator is the engine's
-own rather than a test substitute: `StatementEvaluator` is what `Check`
-runs on every request (`internal/authz/server.go`).
+gRPC (`Check`, `CheckBatch` and `Explain` in
+`platform/proto/garam/authz/v1`) and supplies the role-derived
+statements it collected. `CheckBatch` is `Check` asked of many objects
+for one subject and one action: the statements that hold for every
+object are sent once, each object carries those that reach the subject
+through it alone, and the persisted statements are read once for the
+call. Each object is decided as `Check` would decide it, and one outside
+the subject's organization refuses the call. An org-gated list asks it
+once per page to drop the objects the caller may not read
+([ADR-0115](./adr/0115-a-list-drops-each-object-its-caller-may-not-read-asked-of-the-engine-in-one-batch.md)).
+The machine listener reaches the same engine the same way, over a seam
+of its own, and supplies the identity-derived ones. Delegated operation
+authority on both reaches `CheckCurrent` (§Policy persistence) through
+one adapter, `platform/internal/cli/authority.go`, which reads the
+membership, the user's own roles and its groups for each call and sends
+the org-scoped statement those roles grant; neither operation targets a
+group or project, so no scoped role is collected. Each listener's
+`Evaluator` seam has one non-test implementation, the gRPC client, and
+that is what both composition roots wire
+(`platform/internal/cli/serve.go`, `platform/internal/cli/machine.go`).
+The in-process evaluator is the engine's own rather than a test
+substitute: `StatementEvaluator` is what `Check` runs on every request
+(`platform/internal/authz/server.go`).
 
 ## Roles vs policies
 

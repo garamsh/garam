@@ -1,8 +1,9 @@
 # Audit
 
 The record garam keeps of what it decided, held by garam rather than by
-either party it decided between. Implemented by `internal/audit`,
-whose PostgreSQL writer is `internal/audit/postgres`.
+either party it decided between. Implemented by
+`platform/internal/audit`, whose PostgreSQL writer is
+`platform/internal/audit/postgres`.
 
 **Send events and machine credential events are the events built.**
 Decision and change events, which this domain was planned for, are

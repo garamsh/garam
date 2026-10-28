@@ -18,8 +18,8 @@ it does not decide. The server commands the same binary carries are
 
 ## What it is
 
-`internal/cli` implements it, beside the server commands, in the one
-binary garam ships
+`platform/internal/cli` implements it, beside the server commands, in
+the one binary garam ships
 ([ADR-0003](./adr/0003-single-cli-topology.md),
 [ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)).
 The user commands sit at the top level:
@@ -42,10 +42,10 @@ objects).
 ## The commands it derives
 
 Every browser API operation becomes a command derived from
-`api/openapi.yaml` ([ADR-0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)). `internal/cli/cligen` writes
-`internal/cli/commands.gen.go` from the specification and
-`internal/cli/commands.yaml`, which `make gen` runs and `make check-gen`
-holds current.
+`platform/api/openapi.yaml` ([ADR-0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)). `platform/internal/cli/cligen` writes
+`platform/internal/cli/commands.gen.go` from the specification and
+`platform/internal/cli/commands.yaml`, which `make gen` runs and
+`make check-gen` holds current.
 
 - **Grammar.** `garam <noun>... <verb> [arguments]`:
   - the nouns are the path's static segments;
@@ -117,8 +117,8 @@ out.
 ## What it calls
 
 - **The browser API alone.** The CLI calls the browser API through the
-  client `api/client-codegen.yaml` generates from `api/openapi.yaml`,
-  for every operation.
+  client `platform/api/client-codegen.yaml` generates from
+  `platform/api/openapi.yaml`, for every operation.
 - **The endpoint.** It comes from `--endpoint`, else `GARAM_ENDPOINT`,
   else `https://garam.sh`, and is an origin. It is `https`, or `http` to
   a loopback address alone, because a session's tokens cross it. The

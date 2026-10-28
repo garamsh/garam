@@ -124,7 +124,7 @@ These are documentation too.
   not this rule's check — every line the exception permits is one of
   them, so that count reports violations in a file that has none and
   diverges from the rule exactly where the exception applies.
-  `scripts/check-line-width.sh` counts what the rule forbids.
+  `tooling/check-line-width.sh` counts what the rule forbids.
 - Start each file with one line stating what it governs.
 - A section whose territory abuts another document's states what it
   states — in its heading where that is shorter, in one opening sentence

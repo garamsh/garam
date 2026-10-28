@@ -1,5 +1,5 @@
 # Multi-stage build of the Next.js frontend (ADR-0009) as a standalone
-# server. Build context is `web/`.
+# server. Build context is `console/`.
 #
 # All three stages take the same base, pinned by digest: the tag reads
 # and the digest resolves, so two builds of this commit pull the same

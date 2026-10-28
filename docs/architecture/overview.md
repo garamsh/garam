@@ -318,18 +318,20 @@ into `platform/`, `console/` and `tooling/`, and
 keeps. The list below is today's tree
 ([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)).
 
-- `api/` — OpenAPI specs (source of truth) + generated servers: the
-  browser-facing listener's and the machine listener's (ADR-0019).
-- `proto/` — authz gRPC service definition + buf-generated code.
-- `cmd/garam/` — thin entrypoint for the cobra CLI.
-- `migrations/` — SQL migrations (golang-migrate); sqlc schema source.
-- `tests/integration/` — store round-trips, and the services over
-  them, wired in process against real Postgres.
-- `tests/e2e/` — the built binary run as the processes a deployment
-  runs.
-- `tests/image/` — black-box checks against a built image rather than
-  against the app (`make web-image-e2e`).
-- `web/` — Next.js frontend; reaches the API through a same-origin
+- `platform/api/` — OpenAPI specs (source of truth) + generated servers:
+  the browser-facing listener's and the machine listener's (ADR-0019).
+- `platform/proto/` — authz gRPC service definition + buf-generated
+  code.
+- `platform/cmd/garam/` — thin entrypoint for the cobra CLI.
+- `platform/migrations/` — SQL migrations (golang-migrate); sqlc schema
+  source.
+- `platform/tests/integration/` — store round-trips, and the services
+  over them, wired in process against real Postgres.
+- `platform/tests/e2e/` — the built binary run as the processes a
+  deployment runs.
+- `platform/tests/image/` — black-box checks against a built image
+  rather than against the app (`make web-image-e2e`).
+- `console/` — Next.js frontend; reaches the API through a same-origin
   `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make
   web-ci`). `/` is the public landing page, `/login` the sign-in page
   and `/register` where an invitation becomes a password account
@@ -353,76 +355,83 @@ keeps. The list below is today's tree
   `minikube/README.md` §What this proves and what it does not is
   authoritative for what
   running it establishes about a real deployment.
-- `internal/grn/` — identifier; shared primitive. It forwards to
-  `platform/sdk/grn/` (ADR-0125) until #1659.
-- `internal/errorx/` — typed errors; shared primitive. It forwards to
-  `platform/sdk/errorx/` (ADR-0125) until #1659.
-- `internal/wire/` — the conversions onto the wire formats the request
-  surfaces share: the statement `Effect` and a policy's status with
-  their authz-proto mappings, a statement rendered onto the authz
-  contract, errorx kinds rendered as HTTP statuses and as gRPC codes
-  and read back from them, and a gRPC error read back as an errorx
-  error; shared primitive.
-- `internal/keyfile/` — the owner-only rule every key material file is
-  read under (ADR-0015); shared primitive.
-- `internal/listfilter/` — the offset/limit filter a domain's list call
-  is scoped by, and the needle a search matches by; shared primitive.
-- `internal/pgxerr/` — the mapping from postgres driver errors to
-  errorx kinds every postgres-backed store answers through. The five
+- `platform/internal/grn/` — identifier; shared primitive. It forwards
+  to `platform/sdk/grn/` (ADR-0125) until #1659.
+- `platform/internal/errorx/` — typed errors; shared primitive. It
+  forwards to `platform/sdk/errorx/` (ADR-0125) until #1659.
+- `platform/internal/wire/` — the conversions onto the wire formats the
+  request surfaces share: the statement `Effect` and a policy's status
+  with their authz-proto mappings, a statement rendered onto the authz
+  contract, errorx kinds rendered as HTTP statuses and as gRPC codes and
+  read back from them, and a gRPC error read back as an errorx error;
+  shared primitive.
+- `platform/internal/keyfile/` — the owner-only rule every key material
+  file is read under (ADR-0015); shared primitive.
+- `platform/internal/listfilter/` — the offset/limit filter a domain's
+  list call is scoped by, and the needle a search matches by; shared
+  primitive.
+- `platform/internal/pgxerr/` — the mapping from postgres driver errors
+  to errorx kinds every postgres-backed store answers through. The five
   copies the volume audit found have been collapsed into this one.
   Shared primitive.
-- `internal/pgxtype/` — the timestamptz conversion, both directions,
-  every postgres-backed store binds and scans through, and the `ILIKE`
-  pattern a search binds. Shared primitive.
-- `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
+- `platform/internal/pgxtype/` — the timestamptz conversion, both
+  directions, every postgres-backed store binds and scans through, and
+  the `ILIKE` pattern a search binds. Shared primitive.
+- `platform/internal/cli/` — cobra commands + wiring (`serve api` |
+  `serve authz`
   | `serve machine` | `migrate` | `probe` | `adapter`), and the user
   commands a person signs in and reads garam's objects with (`login` |
   `logout` | `whoami` | `orgs` | `operators` | `agents`; ADR-0120,
   [cli.md](./cli.md)).
-- `internal/health/` — what liveness and readiness mean, and the two
-  probes every serve command mounts (ADR-0021).
-- `internal/operator/` — the record that an organization has an
+- `platform/internal/health/` — what liveness and readiness mean, and
+  the two probes every serve command mounts (ADR-0021).
+- `platform/internal/operator/` — the record that an organization has an
   operator (ADR-0045), which holds no reported state; the operator's
   keys and the tokens it exchanges them for (ADR-0102).
-- `internal/agent/` — agent identities and the operator each is
+- `platform/internal/agent/` — agent identities and the operator each is
   assigned to.
-- `internal/ca/` — the sealer key material is sealed under against a
-  database dump, opened by the key-encryption key (ADR-0016).
-- `internal/machine/` — the machine identity a token names, the
+- `platform/internal/ca/` — the sealer key material is sealed under
+  against a database dump, opened by the key-encryption key (ADR-0016).
+- `platform/internal/machine/` — the machine identity a token names, the
   listener that reads one, and the evidence of how each caller
-  authenticated, kept by `internal/machine/postgres` (ADR-0109).
-- `internal/machineapi/` — handlers implementing the ServerInterface
-  generated from the machine listener's spec.
-- `internal/message/` — the durable queue a message reaches an agent
-  through; one reader claims a message at a time, whose queue a caller
-  may act on is decided here, and every hand-out is signed under keys
-  kept here (ADR-0101) or, where the deployment configures one, in an
-  OpenBao Transit key `internal/message/transit` reaches (ADR-0104).
-- `internal/audit/` — the record of every message send garam decides,
-  written with the send's outcome and never with its body (ADR-0106).
-- `internal/delivery/` — the adapter's delivery loop: it claims a
-  message for one agent, posts it into that agent's gateway under
+  authenticated, kept by `platform/internal/machine/postgres`
+  (ADR-0109).
+- `platform/internal/machineapi/` — handlers implementing the
+  ServerInterface generated from the machine listener's spec.
+- `platform/internal/message/` — the durable queue a message reaches an
+  agent through; one reader claims a message at a time, whose queue a
+  caller may act on is decided here, and every hand-out is signed under
+  keys kept here (ADR-0101) or, where the deployment configures one, in
+  an OpenBao Transit key `platform/internal/message/transit` reaches
+  (ADR-0104).
+- `platform/internal/audit/` — the record of every message send garam
+  decides, written with the send's outcome and never with its body
+  (ADR-0106).
+- `platform/internal/delivery/` — the adapter's delivery loop: it claims
+  a message for one agent, posts it into that agent's gateway under
   garam's identifier, completes the claim the platform says committed,
   forwards the platform's outbox, and holds its generation's activation
   ([adapter.md](./adapter.md), ADR-0018, ADR-0079, ADR-0084). It runs
   beside the agent rather than inside garam, and holds what it is
   carrying in memory alone.
-- `internal/watch/` — who is watching an agent work, and the turn events
-  carried to them while they are (ADR-0022). It stores no event.
-- `internal/workload/` — a standalone host's supervisor over its
-  agent's workload: the runtime, workspace and adapter containers of
+- `platform/internal/watch/` — who is watching an agent work, and the
+  turn events carried to them while they are (ADR-0022). It stores no
+  event.
+- `platform/internal/workload/` — a standalone host's supervisor over
+  its agent's workload: the runtime, workspace and adapter containers of
   one generation, the volumes they share, and the socket the adapter
   activates through ([agents.md](./agents.md) §Standalone hosts,
   ADR-0085). It runs on the host rather than inside garam, and
-  `internal/workload/docker` is its engine.
-- `internal/api/` — handlers implementing the generated ServerInterface.
-- `internal/authn/` — sign-in provider abstraction, implemented by
-  Google OIDC alone (ADR-0044), password verification, sessions.
-- `internal/authz/` — policy engine: model, evaluator, policy store
-  and per-org cache, gRPC servers.
-- `internal/org/` — organizations, groups, projects, memberships,
-  invitations.
-- `internal/user/` — human identities.
+  `platform/internal/workload/docker` is its engine.
+- `platform/internal/api/` — handlers implementing the generated
+  ServerInterface.
+- `platform/internal/authn/` — sign-in provider abstraction, implemented
+  by Google OIDC alone (ADR-0044), password verification, sessions.
+- `platform/internal/authz/` — policy engine: model, evaluator, policy
+  store and per-org cache, gRPC servers.
+- `platform/internal/org/` — organizations, groups, projects,
+  memberships, invitations.
+- `platform/internal/user/` — human identities.
 
 `grn`, `errorx` and `listfilter` are the packages domains share with
 each other; `keyfile` holds the one rule key material files are read
@@ -443,65 +452,62 @@ seam, implemented by the authz gRPC client (ADR-0003 stage 2). The
 machine listener enforces its own authentication at its own boundary
 and shares neither cookie nor session with `api`; `machineapi` reaches
 the engine through an `Evaluator` seam of its own to decide what a
-caller may send, and it and `internal/api` never import each other.
-Neither imports `internal/authz`; the wire contract is
-`proto/garam/authz/v1`, and the conversions onto it are declared once
-in `internal/wire`. Both surfaces compose four boundaries — the
-`agent`, `message` and `operator` domains, and `watch`, which is not a
-domain
-(`domains.md` §Sub-responsibilities in a boundary of their own). `watch`
-is extracted
-rather than
-held by either of them because a watch has a lifecycle neither
-`message` nor `agent` contains, and its two ends fall on different
-listeners — opened on the browser one, fed on the machine one — which
-may not reach each other (ADR-0017, ADR-0022). `delivery` is the one
-package that runs outside
-garam: it is a client of the machine listener rather than part of it, so
-it reads that listener's specification through the models generated from
-it and imports no request surface and no domain.
+caller may send, and it and `platform/internal/api` never import each
+other. Neither imports `platform/internal/authz`; the wire contract is
+`platform/proto/garam/authz/v1`, and the conversions onto it are
+declared once in `platform/internal/wire`. Both surfaces compose four
+boundaries — the `agent`, `message` and `operator` domains, and `watch`,
+which is not a domain (`domains.md` §Sub-responsibilities in a boundary
+of their own). `watch` is extracted rather than held by either of them
+because a watch has a lifecycle neither `message` nor `agent` contains,
+and its two ends fall on different listeners — opened on the browser
+one, fed on the machine one — which may not reach each other (ADR-0017,
+ADR-0022). `delivery` is the one package that runs outside garam: it is
+a client of the machine listener rather than part of it, so it reads
+that listener's specification through the models generated from it and
+imports no request surface and no domain.
 
 ## Core abstractions
 
 | Type | Package | Responsibility |
 |------|---------|----------------|
-| `grn.GRN` | `internal/grn` | resource identifier (value type) |
-| `errorx.Error` | `internal/errorx` | typed error with kind |
-| `user.User` | `internal/user` | human identity |
-| `operator.Operator` | `internal/operator` | an organization's record that it has an operator |
-| `agent.Agent` | `internal/agent` | autonomous actor an operator provisions |
-| `agent.Assignment` | `internal/agent` | agent-to-operator binding, fenced by an epoch |
-| `agent.Service` | `internal/agent` | records the state each party reports, and mints an agent's tokens for the operator or supervisor holding it |
-| `ca.Sealer` | `internal/ca` | seals key material against a database dump |
-| `operator.Service` | `internal/operator` | exchanges a key's signed assertion for a token, and proves an operator by a token shown to another |
-| `machine.Identity` | `internal/machine` | the GRN a token names, with the token's serial and dates |
-| `machine.Recheck` | `internal/machine` | reads an identity's token dates and registration again for one decision |
-| `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |
-| `machine.Evidence` | `internal/machine` | each caller's last authentication by path, the G3 gate's inventory, never a credential (ADR-0109) |
-| `message.Message` | `internal/message` | one message addressed to a recipient |
-| `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
-| `message.Keyring` | `internal/message` | the keys every hand-out is signed under: opens the one signing, rotates them, publishes the set (ADR-0101) |
-| `message.Custodian` | `internal/message` | holds a signing key's private half: sealed under the key-encryption key, or in an OpenBao Transit key (`internal/message/transit`) that signs for it (ADR-0104) |
-| `audit.Send` | `internal/audit` | one message send as garam decided it: the parties, the decision and the message it stored, never a body (ADR-0106) |
-| `watch.Event` | `internal/watch` | one forwarded turn event, carried and never stored |
-| `watch.Subscription` | `internal/watch` | one open watch: the stream its holder reads |
-| `watch.Service` | `internal/watch` | opens a watch, carries a forwarded event to the watchers of that agent, counts them |
-| `delivery.Service` | `internal/delivery` | the loop beside one agent: claims a message, posts it into the agent's gateway, completes the claim a turn named |
-| `workload.Supervisor` | `internal/workload` | a standalone host's supervisor: brings one generation up or adopts it, serves its adapter's activation, and drains it without force |
-| `workload.Engine` | `internal/workload` | the container engine the supervisor alone holds; it has no stop with a timeout |
-| `org.Organization` | `internal/org` | top-level tenant |
-| `org.Group` | `internal/org` | user/agent bundle |
-| `org.Project` | `internal/org` | unit of work |
-| `org.Membership` | `internal/org` | user in an org, carries a `Role` |
-| `org.Invitation` | `internal/org` | single-use token into an org |
-| `authn.Provider` | `internal/authn` | sign-in provider; Google OIDC implements it and nothing else does (ADR-0044) |
-| `authn.Password` | `internal/authn` | a password as typed; renders redacted everywhere (ADR-0041) |
-| `authn.Verifier` | `internal/authn` | stored Argon2id verifier, carrying its own parameters (ADR-0041) |
-| `authn.Session` | `internal/authn` | authenticated browser session |
-| `authz.Object` | `internal/authz` | target interface |
-| `authz.Evaluator` | `internal/authz` | policy evaluator (native, IAM-style) |
-| `authz.Policy` | `internal/authz` | stored policy, versioned append-only |
-| `authz.PolicyCache` | `internal/authz` | per-org parsed statement set |
+| `grn.GRN` | `platform/internal/grn` | resource identifier (value type) |
+| `errorx.Error` | `platform/internal/errorx` | typed error with kind |
+| `user.User` | `platform/internal/user` | human identity |
+| `operator.Operator` | `platform/internal/operator` | an organization's record that it has an operator |
+| `agent.Agent` | `platform/internal/agent` | autonomous actor an operator provisions |
+| `agent.Assignment` | `platform/internal/agent` | agent-to-operator binding, fenced by an epoch |
+| `agent.Service` | `platform/internal/agent` | records the state each party reports, and mints an agent's tokens for the operator or supervisor holding it |
+| `ca.Sealer` | `platform/internal/ca` | seals key material against a database dump |
+| `operator.Service` | `platform/internal/operator` | exchanges a key's signed assertion for a token, and proves an operator by a token shown to another |
+| `machine.Identity` | `platform/internal/machine` | the GRN a token names, with the token's serial and dates |
+| `machine.Recheck` | `platform/internal/machine` | reads an identity's token dates and registration again for one decision |
+| `machine.ServerCertificate` | `platform/internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |
+| `machine.Evidence` | `platform/internal/machine` | each caller's last authentication by path, the G3 gate's inventory, never a credential (ADR-0109) |
+| `message.Message` | `platform/internal/message` | one message addressed to a recipient |
+| `message.Claim` | `platform/internal/message` | one reader's hold on a message, fenced by a token |
+| `message.Keyring` | `platform/internal/message` | the keys every hand-out is signed under: opens the one signing, rotates them, publishes the set (ADR-0101) |
+| `message.Custodian` | `platform/internal/message` | holds a signing key's private half: sealed under the key-encryption key, or in an OpenBao Transit key (`platform/internal/message/transit`) that signs for it (ADR-0104) |
+| `audit.Send` | `platform/internal/audit` | one message send as garam decided it: the parties, the decision and the message it stored, never a body (ADR-0106) |
+| `watch.Event` | `platform/internal/watch` | one forwarded turn event, carried and never stored |
+| `watch.Subscription` | `platform/internal/watch` | one open watch: the stream its holder reads |
+| `watch.Service` | `platform/internal/watch` | opens a watch, carries a forwarded event to the watchers of that agent, counts them |
+| `delivery.Service` | `platform/internal/delivery` | the loop beside one agent: claims a message, posts it into the agent's gateway, completes the claim a turn named |
+| `workload.Supervisor` | `platform/internal/workload` | a standalone host's supervisor: brings one generation up or adopts it, serves its adapter's activation, and drains it without force |
+| `workload.Engine` | `platform/internal/workload` | the container engine the supervisor alone holds; it has no stop with a timeout |
+| `org.Organization` | `platform/internal/org` | top-level tenant |
+| `org.Group` | `platform/internal/org` | user/agent bundle |
+| `org.Project` | `platform/internal/org` | unit of work |
+| `org.Membership` | `platform/internal/org` | user in an org, carries a `Role` |
+| `org.Invitation` | `platform/internal/org` | single-use token into an org |
+| `authn.Provider` | `platform/internal/authn` | sign-in provider; Google OIDC implements it and nothing else does (ADR-0044) |
+| `authn.Password` | `platform/internal/authn` | a password as typed; renders redacted everywhere (ADR-0041) |
+| `authn.Verifier` | `platform/internal/authn` | stored Argon2id verifier, carrying its own parameters (ADR-0041) |
+| `authn.Session` | `platform/internal/authn` | authenticated browser session |
+| `authz.Object` | `platform/internal/authz` | target interface |
+| `authz.Evaluator` | `platform/internal/authz` | policy evaluator (native, IAM-style) |
+| `authz.Policy` | `platform/internal/authz` | stored policy, versioned append-only |
+| `authz.PolicyCache` | `platform/internal/authz` | per-org parsed statement set |
 
 ## Decisions
 
@@ -548,13 +554,14 @@ it and imports no request surface and no domain.
   reproduce why a request was allowed or denied.
 - **Transport-agnostic errors** — `errorx` flows over HTTP, gRPC, CLI
   without translation at the source; the kind-to-status mapping the
-  HTTP surfaces answer with is declared once in `internal/wire`.
+  HTTP surfaces answer with is declared once in
+  `platform/internal/wire`.
 - **Testable in isolation** — every domain exposes an interface; unit
   tests substitute at module boundaries (mocks, in-memory test doubles
   where they exist).
 - **Storage behind each domain's own interface** — each domain declares
   the store it needs, and its Postgres implementation moves to
-  `internal/<domain>/postgres/`
+  `platform/internal/<domain>/postgres/`
   ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md));
   a second implementation would plug in behind that domain's interface.
   [domains.md](./domains.md) §Store implementation status records which

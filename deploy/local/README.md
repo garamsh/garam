@@ -9,9 +9,9 @@ on — is not part of this stack
 ([ADR-0017](../../docs/architecture/adr/0017-machine-process.md)). Its
 key material is per host, readable by its owner alone, and a container
 running as another user is refused it; run that listener outside
-compose, configured as the `internal/cli` package documents, or on the
-local Kubernetes stack in `minikube/`, which generates that key material
-and hands the process a file it owns.
+compose, configured as the `platform/internal/cli` package documents, or
+on the local Kubernetes stack in `minikube/`, which generates that key
+material and hands the process a file it owns.
 
 This compose file is also what the test gates run against. `make db-up`
 starts only its `postgres`, `openbao` and `rustfs` services for the Go
@@ -87,7 +87,7 @@ moves that one server rather than standing up a second.
 - `Dockerfile` — multi-stage build of the `garam` binary; context is the
   repository root.
 - `Dockerfile.web` — multi-stage Next.js standalone build; context is
-  `web/`.
+  `console/`.
 - `.env.example` — every variable the stack reads.
 
 ## Up and down
@@ -107,10 +107,10 @@ running.
 Every `up` above passes `--build`, and `make backend-up` passes it too.
 Compose starts an image that already exists without asking whether the
 sources moved, so an `up` without it runs the previous binary — and the
-previous `migrations/`, which ship in the same image — and reports the
-stack healthy. The build is cached, so an unchanged tree costs seconds;
-the containers are recreated either way, because the image id moves on
-every export whether or not a layer did.
+previous `platform/migrations/`, which ship in the same image — and
+reports the stack healthy. The build is cached, so an unchanged tree
+costs seconds; the containers are recreated either way, because the
+image id moves on every export whether or not a layer did.
 
 That movement is the provenance attestation BuildKit attaches to each
 export, and `build.provenance: false` in the compose file does not stop
@@ -180,7 +180,7 @@ Every variable is documented in `.env.example`. Three notes:
   ([ADR-0041](../../docs/architecture/adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
   An empty database holds no admin, so the way in is Google credentials
   or user and session rows written against the database directly, as
-  `web/e2e/seed.ts` does for the browser suite.
+  `console/e2e/seed.ts` does for the browser suite.
 - The web image bakes `GARAM_API_URL` into the build, because the
   `/api/*` rewrite is resolved at build time. Changing it means
   rebuilding the image, not just restarting the container.

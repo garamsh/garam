@@ -44,20 +44,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: scripts/record-runner-image.sh
+      - run: tooling/record-runner-image.sh
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version-file: platform/go.mod
       - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          package-json-file: web/package.json
+          package-json-file: console/package.json
           install: false
           node-version-file: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: web/.nvmrc
+          node-version-file: console/.nvmrc
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: console/pnpm-lock.yaml
       - run: make web-install
       - run: make ci
 
@@ -65,36 +65,36 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: scripts/record-runner-image.sh
+      - run: tooling/record-runner-image.sh
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version-file: platform/go.mod
       - run: make db-up integration e2e
 
   web-e2e:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: scripts/record-runner-image.sh
+      - run: tooling/record-runner-image.sh
       # cowork-web-e2e builds the cowork binary it drives.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version-file: go.mod
+          go-version-file: platform/go.mod
       - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
-          package-json-file: web/package.json
+          package-json-file: console/package.json
           install: false
           node-version-file: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: web/.nvmrc
+          node-version-file: console/.nvmrc
           cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
+          cache-dependency-path: console/pnpm-lock.yaml
       - run: make web-install
       # Reuse the server image's layers from the GitHub Actions cache
       # (#1519). The runtime action hands the build the cache's URL and
       # token, which a `run:` step is not given.
-      - run: scripts/enable-containerd-image-store.sh
+      - run: tooling/enable-containerd-image-store.sh
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       - run: make backend-up
         env:

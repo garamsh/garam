@@ -1,0 +1,7 @@
+# Every web package (ADR-0125), for a recursive pnpm run from here. A
+# command run inside a package reads that package's own
+# pnpm-workspace.yaml first, which keeps its lockfile and allowBuilds.
+packages:
+  - console
+  - cowork/engine
+  - cowork/web

@@ -83,7 +83,7 @@ only from an invitation an org admin issued
 ([ADR-0041](../../../docs/architecture/adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
 The database this stack starts with holds no admin, so reaching the
 console means writing user and session rows against it directly, as
-`web/e2e/seed.ts` does for the browser suite.
+`console/e2e/seed.ts` does for the browser suite.
 
 To reach anything else — the api, the authz engine's metrics, the
 machine process's probes — forward its Service the same way.

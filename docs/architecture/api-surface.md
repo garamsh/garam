@@ -25,8 +25,8 @@ authenticates as rather than what a process contains
 ([ADR-0019](./adr/0019-machine-openapi-spec.md)). That split is what
 this document holds.
 
-It describes no operation. `api/openapi.yaml` and `api/machine.yaml`
-are the source of truth for those
+It describes no operation. `platform/api/openapi.yaml` and
+`platform/api/machine.yaml` are the source of truth for those
 ([ADR-0004](./adr/0004-openapi-first-api.md), ADR-0019), the chart at
 `deploy/charts/garam/` is authoritative for the address each process
 listens on and for what may stand in front of it
@@ -38,9 +38,9 @@ repeated. A second copy is a second thing to keep true.
 
 | Surface | Served by | Described by | A caller reaches it as |
 |---|---|---|---|
-| Browser-facing HTTP | `garam serve api` | `api/openapi.yaml` | a signed-in person, through the web app's same-origin `/api/*` rewrite (ADR-0009) |
-| Machine | `garam serve machine` | `api/machine.yaml` | an operator, an agent or a standalone host's supervisor presenting a token garam issued (ADR-0100, ADR-0118) |
-| Policy engine | `garam serve authz` | `proto/garam/authz/v1` | one of the two listeners above, over gRPC (ADR-0003) |
+| Browser-facing HTTP | `garam serve api` | `platform/api/openapi.yaml` | a signed-in person, through the web app's same-origin `/api/*` rewrite (ADR-0009) |
+| Machine | `garam serve machine` | `platform/api/machine.yaml` | an operator, an agent or a standalone host's supervisor presenting a token garam issued (ADR-0100, ADR-0118) |
+| Policy engine | `garam serve authz` | `platform/proto/garam/authz/v1` | one of the two listeners above, over gRPC (ADR-0003) |
 | Probes | every serve command, and the web app | no specification | anything that can open the port (ADR-0021, ADR-0023) |
 | Metrics | `garam serve api` and `garam serve authz`, on the listener each already runs, and `garam serve machine`, on its probe port | no specification | anything that can open the port (§Not decided) |
 
@@ -69,8 +69,8 @@ is admitted by a standalone approval that names it, not by
 - `machine-token.v2` is `exchangeClientAssertion`, `POST /oauth/token`
   on the machine listener: RFC 7523's client assertion parameters, the
   client credentials grant and RFC 6749's token and error responses.
-  `api/machine.yaml` §exchangeClientAssertion is authoritative for its
-  wire. `machine-token.v1`'s exchange and mint are unchanged.
+  `platform/api/machine.yaml` §exchangeClientAssertion is authoritative
+  for its wire. `machine-token.v1`'s exchange and mint are unchanged.
 - The `Bearer` alias resolves the same opaque access tokens as
   `Garam-Token`, with the same per-request reads and the same refusal
   of a second `Authorization` header (`machine-identity.md`
@@ -109,35 +109,33 @@ its callback, the provider list, reading an invitation, registering
 an account from one, signing in with a password, and the device
 grant's code and token requests carry no credential, as do the probes
 and metrics this process serves from the same router. Which operations
-those are is read from `api/openapi.yaml` rather than remembered: an
-operation carrying `security: []` opts out of the session requirement,
-cookie or bearer, the file applies to every other one. The login write
-rate is bounded at the store
+those are is read from `platform/api/openapi.yaml` rather than
+remembered: an operation carrying `security: []` opts out of the session
+requirement, cookie or bearer, the file applies to every other one. The
+login write rate is bounded at the store
 ([ADR-0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md)).
-The same session is accepted as `Authorization: Bearer <token>`
-wherever the cookie is, which is how the CLI presents its own, and a
-request carrying an `Authorization` header is read by that header
-alone. The CLI obtains its session by the device grant: requesting a
-device code and polling the token endpoint carry no credential, and
-approving a code is done on a session. Issuing is bounded at the store
-as a login state is, and a poll earlier than its code's interval
-answers `slow_down`
+The same session is accepted as `Authorization: Bearer <token>` wherever
+the cookie is, which is how the CLI presents its own, and a request
+carrying an `Authorization` header is read by that header alone. The CLI
+obtains its session by the device grant: requesting a device code and
+polling the token endpoint carry no credential, and approving a code is
+done on a session. Issuing is bounded at the store as a login state is,
+and a poll earlier than its code's interval answers `slow_down`
 ([ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md);
-[sign-in.md](./sign-in.md) §The CLI's session).
-A callback that finds no live record of the login it claims to
-complete is refused as unauthenticated
-([ADR-0028](./adr/0028-oauth-state-is-a-server-side-record.md)).
-Reading an invitation (`GET /invitations/{token}`) admits on the
-token alone, because possession of it is the whole claim
+[sign-in.md](./sign-in.md) §The CLI's session). A callback that finds no
+live record of the login it claims to complete is refused as
+unauthenticated
+([ADR-0028](./adr/0028-oauth-state-is-a-server-side-record.md)). Reading
+an invitation (`GET /invitations/{token}`) admits on the token alone,
+because possession of it is the whole claim
 ([ADR-0006](./adr/0006-invitation-tokens.md)). It answers the
-organization's identifier and name, the role and whether the
-invitation is pending, accepted or expired, which is what accepting
-it would reveal, and nothing about who invited or who belongs. An
-unknown token, and one whose organization is gone, answer the
-not-found body the accept operation answers. The request line, and
-the `url.path` of the request's trace span, name the route pattern
-rather than the path, so the token reaches neither the log nor an
-exported span.
+organization's identifier and name, the role and whether the invitation
+is pending, accepted or expired, which is what accepting it would
+reveal, and nothing about who invited or who belongs. An unknown token,
+and one whose organization is gone, answer the not-found body the accept
+operation answers. The request line, and the `url.path` of the request's
+trace span, name the route pattern rather than the path, so the token
+reaches neither the log nor an exported span.
 
 **Machine.** A token, presented as `Authorization: Garam-Token
 <token>` or `Bearer <token>`, and nothing else: the listener asks for
@@ -175,26 +173,25 @@ that value. `ConfineSupervisors` bounds a supervisor's token to the
 routes it holds, which standalone enrollment below names.
 
 **The listener asks for no client certificate**
-(`internal/machine/listener.go`), so a handshake completes for every
-caller, and what authenticates a request is the token it presents. A
-request presenting none carries no identity, and a token that proves
+(`platform/internal/machine/listener.go`), so a handshake completes for
+every caller, and what authenticates a request is the token it presents.
+A request presenting none carries no identity, and a token that proves
 nothing leaves its request with none and the reason beside it; every
-operation but four refuses a request that carries none. Which
-operations opt out is read from `api/machine.yaml` rather than
-remembered: `enrollStandaloneAgent` carries `security: []`, as an
-operation on the browser-facing listener does, and is authenticated by
-the bootstrap secret it spends instead.
-`getMessageSigningKeys` carries it too and is authenticated by nothing,
-because what it answers is public: the keys a verifier anywhere checks
-garam's signature on a message with
+operation but four refuses a request that carries none. Which operations
+opt out is read from `platform/api/machine.yaml` rather than remembered:
+`enrollStandaloneAgent` carries `security: []`, as an operation on the
+browser-facing listener does, and is authenticated by the bootstrap
+secret it spends instead. `getMessageSigningKeys` carries it too and is
+authenticated by nothing, because what it answers is public: the keys a
+verifier anywhere checks garam's signature on a message with
 ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)),
 read at the issuer followed by `/message-signing-keys`.
 `exchangeClientAssertion` carries it as well, and is authenticated by
 the client assertion in its body, refusing an `Authorization` header
 beside it
 ([ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)).
-`exchangeToken` carries `machineCredential`, and is authenticated by
-a supervisor's credential.
+`exchangeToken` carries `machineCredential`, and is authenticated by a
+supervisor's credential.
 
 Why a token did not authenticate is written to the listener's own log
 and nowhere else: what crosses the wire says only that the token was
@@ -203,22 +200,22 @@ that resolves nothing is recorded as ordinary traffic; a read that
 could not be made is recorded as an anomaly.
 
 **Each handler makes that refusal itself, and a test is what makes it
-true of every route.** `internal/machineapi/identity_test.go`, in
+true of every route.** `platform/internal/machineapi/identity_test.go`,
+in
 `TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches`,
-is authoritative for that: every operation `api/machine.yaml` declares
-except `POST /agent-enrollments`, `GET /message-signing-keys`,
+is authoritative for that: every operation `platform/api/machine.yaml`
+declares except `POST /agent-enrollments`, `GET /message-signing-keys`,
 `POST /tokens` and `POST /oauth/token` answers `401` naming the missing
-identity to a caller carrying none, sent from the same client those
-four answer, so what admitted those four was the route rather than a
-listener that had stopped checking.
-The routes it sends to are derived and not listed — read off the
-registration `make gen` writes from that specification, and held
-against the operation count of the generated interface — so an
-operation added there arrives in the test with no case added by hand,
-and one added without the guard fails it. That derivation is the whole
-of its value: read as a fixture the test is a handful of paths someone
-chose, and a route added unauthenticated would read as one nobody
-thought to cover rather than as one this already covers.
+identity to a caller carrying none, sent from the same client those four
+answer, so what admitted those four was the route rather than a listener
+that had stopped checking. The routes it sends to are derived and not
+listed — read off the registration `make gen` writes from that
+specification, and held against the operation count of the generated
+interface — so an operation added there arrives in the test with no case
+added by hand, and one added without the guard fails it. That derivation
+is the whole of its value: read as a fixture the test is a handful of
+paths someone chose, and a route added unauthenticated would read as one
+nobody thought to cover rather than as one this already covers.
 
 **A standalone host enrolls without a token.** Its supervisor obtains
 its credential with `enrollStandaloneAgent`, presenting the bootstrap
@@ -257,8 +254,8 @@ operator's token is refused from its next request
 It is authorized on `operator:delete` rather than on the action the
 other two take, because registering grants nothing and this withdraws
 what an operator runs on. It answers 204. No operation on
-`api/machine.yaml` deletes an operator: an operator does not delete
-itself.
+`platform/api/machine.yaml` deletes an operator: an operator does not
+delete itself.
 
 **Delegation and operation authority are versioned routes on both
 listeners** (ADR-0078). The browser-facing listener grants, reads and
@@ -287,7 +284,7 @@ naming it, not the operation authority's. A recovery replaces the
 agent's credential lineage, so every token minted in the one before is
 refused from the next request. An agent's own protected calls carry its
 activation's token, under the `executionHeader` scheme each declares.
-`api/machine.yaml` is authoritative for both, and
+`platform/api/machine.yaml` is authoritative for both, and
 [machine-identity.md](./machine-identity.md) §Generation and lineage
 for what they decide. No route adds a 5xx of its own (ADR-0050): an
 answer that cannot be decided from current state is the listener's
@@ -314,7 +311,7 @@ specifications are authoritative for their forms, and
 listener** (ADR-0077, ADR-0078). Creating a managed agent requires and
 answers `Garam-Contract-Version: managed-enrollment.v2`, and a request
 naming none or another is refused naming it. It carries no private
-key, and no other route creates an agent. `api/machine.yaml` is
+key, and no other route creates an agent. `platform/api/machine.yaml` is
 authoritative for the wire, and
 [agents.md](./agents.md) §Separated execution for what they decide.
 
@@ -338,7 +335,7 @@ branches on these answers, each carrying the header:
 | 401, 403, 409 `failed_precondition` | as `POST /messages` | the execution fence's refusals (ADR-0080) |
 | 404 | — | a garam without the route |
 
-`api/machine.yaml` is authoritative for the wire, and
+`platform/api/machine.yaml` is authoritative for the wire, and
 [messaging.md](./messaging.md) for what the budget decides.
 
 **Policy engine.** Nothing. Both listeners hold a client of their own,
@@ -497,19 +494,19 @@ and not in the same place on every surface.
     ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
     The pair is put to the check the mint runs, through the one
     function both call
-    (`internal/operator/authority_service.go`, `AuthorizeOperation`).
-    A deny there is the mint's refusal, so it is answered deny. An
-    allow leaves the grant, which `checkPermissions` does not read, so
-    it is answered unknown.
+    (`platform/internal/operator/authority_service.go`,
+    `AuthorizeOperation`). A deny there is the mint's refusal, so it is
+    answered deny. An allow leaves the grant, which `checkPermissions`
+    does not read, so it is answered unknown.
   - **allow or deny** for `operator:delegate`. It is put to the check
     every write of a delegation and of a control endpoint runs, through
     the one function they all call
-    (`internal/operator/authority_service.go`, `AuthorizeDelegation`),
-    and that check is all of their authority.
+    (`platform/internal/operator/authority_service.go`,
+    `AuthorizeDelegation`), and that check is all of their authority.
   - **allow or deny** for `agent:enroll`. It is put to the check every
     approval, withdrawal and revoke of a standalone host runs, on
     current policy past the engine's cache, through the one function
-    they all call (`internal/agent/standalone_service.go`,
+    they all call (`platform/internal/agent/standalone_service.go`,
     `AuthorizeEnroll`), and that check is all of their authority. A new
     host is asked on the organization, and an approval, withdrawal or
     revoke that acts on an agent on that agent.
@@ -572,9 +569,10 @@ arrives
 ## What a specification is authoritative for
 
 One specification per listener, and a third listener repeats that
-rather than reopening it (ADR-0019). `api/openapi.yaml` is the source
-of truth for what `garam serve api` serves (ADR-0004);
-`api/machine.yaml` for what `garam serve machine` serves (ADR-0019).
+rather than reopening it (ADR-0019). `platform/api/openapi.yaml` is the
+source of truth for what `garam serve api` serves (ADR-0004);
+`platform/api/machine.yaml` for what `garam serve machine` serves
+(ADR-0019).
 
 Each is also written for the caller its listener admits, and the two
 are not held to agree: a value both files carry is described in each
@@ -587,12 +585,12 @@ enum's `description` is authoritative for what its members mean to that
 caller. Nothing compares one file with the other (§What nothing checks).
 
 That authority is enforced rather than asserted. `make gen` writes
-`api/server.gen.go` and `api/machine/server.gen.go` from the two
-specifications, `internal/api` and `internal/machineapi` implement what
-is generated, and `make check-gen` — which `make ci` runs — fails when
-the committed output and the specifications disagree. A path, a
-parameter or a model therefore cannot diverge from the file describing
-it.
+`platform/api/server.gen.go` and `platform/api/machine/server.gen.go`
+from the two specifications, `platform/internal/api` and
+`platform/internal/machineapi` implement what is generated, and
+`make check-gen` — which `make ci` runs — fails when the committed
+output and the specifications disagree. A path, a parameter or a model
+therefore cannot diverge from the file describing it.
 
 It is authority over the shape of what the listener serves, and not
 over the whole of what a caller can meet. Each specification states two
@@ -616,65 +614,69 @@ What each limit covers is in the two files, named here and not copied.
 A caller meets one more limit, which neither file states. **Both
 listeners bound a request body at 1 MiB before anything decodes it**,
 the figure the composition root holds as `maxRequestBody` in
-`internal/cli/cli.go`. The browser listener answers a body past it
-with 413 and its `Error`, kind `invalid_argument`, from the one decoder
-every browser handler reads a body through. The machine listener
-refuses it as an invalid argument with 400, because each of its
-handlers decodes on its own. The bound is on the request rather than
-a field, which is what leaves it standing where §What nothing checks
-says a declared constraint does not.
+`platform/internal/cli/cli.go`. The browser listener answers a body past
+it with 413 and its `Error`, kind `invalid_argument`, from the one
+decoder every browser handler reads a body through. The machine listener
+refuses it as an invalid argument with 400, because each of its handlers
+decodes on its own. The bound is on the request rather than a field,
+which is what leaves it standing where §What nothing checks says a
+declared constraint does not.
 
 **A refusal names its rule where the kind cannot.** The browser
 listener's `Error` carries an optional `reason`, a stable code, where
 one status and kind cover refusals a client must tell apart (#1380):
 an invitation used against one that lapsed, and each rule a policy
 document breaks, with `path`, a JSON Pointer into the document. The
-codes are listed in `api/openapi.yaml` `Error.reason`; a client
+codes are listed in `platform/api/openapi.yaml` `Error.reason`; a client
 branches on them and never on `message`, and one that does not know a
 code reads the kind as before. A reason the engine gives crosses the
-gRPC hop as an `ErrorInfo` status detail (`internal/wire/error.go`),
-so the API answers the engine's code unchanged.
+gRPC hop as an `ErrorInfo` status detail
+(`platform/internal/wire/error.go`), so the API answers the engine's
+code unchanged.
 
 **A provider sign-in can land on a console path.**
 `POST /auth/login/{provider}` starts the same flow as `GET` and takes
 `next` in its form body. A path off the console is dropped by the rule
 the console applies to the password sign-in
-(`internal/api/return_path.go`, `web/src/lib/return-path.ts`), which
-bounds it in UTF-8 bytes and is tested on both sides against one table,
-`internal/api/testdata/return-path-vectors.json`. What is kept is held
-on the login's `oauth_states` row, so it is spent with the state by the
-callback that completes and expires with it. The callback redirects to
-it, checked again, or to `/console`, and no answer repeats it. A
-cross-site form can start such a login, and the most it decides is where
-inside the console that login lands.
+(`platform/internal/api/return_path.go`,
+`console/src/lib/return-path.ts`), which bounds it in UTF-8 bytes and is
+tested on both sides against one table,
+`platform/internal/api/testdata/return-path-vectors.json`. What is kept
+is held on the login's `oauth_states` row, so it is spent with the state
+by the callback that completes and expires with it. The callback
+redirects to it, checked again, or to `/console`, and no answer repeats
+it. A cross-site form can start such a login, and the most it decides is
+where inside the console that login lands.
 
 The other three surfaces are fixed differently. The engine's wire
-contract is `proto/garam/authz/v1`, generated and checked the same way.
-The probes have no specification at all: their paths, and the ports
-they answer on, are interface rather than implementation, so changing
-one supersedes the ADR that set it instead of editing a handler
-(ADR-0021, [ADR-0023](./adr/0023-web-probes.md)). The metrics surface
-is fixed by nothing at all (§Not decided).
+contract is `platform/proto/garam/authz/v1`, generated and checked the
+same way. The probes have no specification at all: their paths, and the
+ports they answer on, are interface rather than implementation, so
+changing one supersedes the ADR that set it instead of editing a handler
+(ADR-0021, [ADR-0023](./adr/0023-web-probes.md)). The metrics surface is
+fixed by nothing at all (§Not decided).
 
 ## What nothing checks
 
 **Generation copies prose and reads none of it.** Which prose it copies
 differs by kind, measured on 2026-09-03 by perturbing one description
 of each kind in each specification and running `make gen` and
-`make web-gen`: a schema's `description` reaches `api/server.gen.go`,
-`api/machine/server.gen.go` and `web/src/types/api.ts`, an operation's
-reaches `web/src/types/api.ts` alone, and a tag's reaches none of the
-three. So `make check-gen` and `make web-check-gen` fail on a schema
+`make web-gen`: a schema's `description` reaches
+`platform/api/server.gen.go`, `platform/api/machine/server.gen.go` and
+`console/src/types/api.ts`, an operation's reaches
+`console/src/types/api.ts` alone, and a tag's reaches none of the three.
+So `make check-gen` and `make web-check-gen` fail on a schema
 description edited without regenerating, and pass on any text at all:
 each compares one specification against its own output, never one
 against the other, and never prose against what the code does. A
-decision that changes what an operation does leaves the text stating
-the old behaviour with every check green.
+decision that changes what an operation does leaves the text stating the
+old behaviour with every check green.
 
 That is not hypothetical. ADR-0035 changed what garam does with a
 message it may not route. [domains.md](./domains.md) moved with it and
-`api/machine.yaml` did not, in two places: `postMessage`'s description
-stated the new behaviour as explicitly not what happens, corrected in
+`platform/api/machine.yaml` did not, in two places: `postMessage`'s
+description stated the new behaviour as explicitly not what happens,
+corrected in
 #530, and the `message` tag's description, corrected in #532. Neither
 is a schema description and no TypeScript output is generated from that
 file, so on the reach stated above neither moved a generated byte. Both
@@ -683,18 +685,19 @@ the repository.
 
 **Nor does it cover which statuses an operation declares.** A response
 is not part of what oapi-codegen writes: adding a `'500'` to one
-operation and running `make gen` leaves `api/server.gen.go`
+operation and running `make gen` leaves `platform/api/server.gen.go`
 byte-identical, so `make check-gen` reads a response set in neither
 direction — a status declared that cannot occur, and one that occurs
 undeclared, are both invisible to it. #698 is the same fact in the
 history: it changed four operations' response sets and moved no
-generated Go file. What does move is `web/src/types/api.ts`, generated
-from `api/openapi.yaml` and held against it by `make web-check-gen`, so
-the browser client's types follow a response set while the server's do
-not — and `api/machine.yaml` has no consumer of that kind at all. What
-`make gen` writes from it is the generated Go
-§What a specification is authoritative for names, which a response set
-leaves as untouched as it leaves `api/server.gen.go`.
+generated Go file. What does move is `console/src/types/api.ts`,
+generated from `platform/api/openapi.yaml` and held against it by
+`make web-check-gen`, so the browser client's types follow a response
+set while the server's do not — and `platform/api/machine.yaml` has no
+consumer of that kind at all. What `make gen` writes from it is the
+generated Go §What a specification is authoritative for names, which a
+response set leaves as untouched as it leaves
+`platform/api/server.gen.go`.
 
 **Nor does it cover the two specifications against each other.**
 `AgentProvisioningState` and `ProvisioningState` describe one stored
@@ -744,12 +747,12 @@ an author having read this far, which is weaker than a check;
 - **Whether "Decisions land in pairs" reaches a specification.** It
   names the
   responsibility documents and [README.md](./README.md) itself. This
-  one is inside its reach; `api/openapi.yaml` and `api/machine.yaml`
-  are neither and are not. Listing the API as a concern closes the
-  half a document can close — an ADR that changes an endpoint now has
-  a responsibility document to be paired with — and leaves the half
-  only a rule can. What that rule should say is the index's to decide
-  and not this document's.
+  one is inside its reach; `platform/api/openapi.yaml` and
+  `platform/api/machine.yaml` are neither and are not. Listing the API
+  as a concern closes the half a document can close — an ADR that
+  changes an endpoint now has a responsibility document to be paired
+  with — and leaves the half only a rule can. What that rule should say
+  is the index's to decide and not this document's.
 - **What decides the metrics surface, on two processes of three.**
   `/metrics` is served by `garam serve api` and `garam serve authz`
   (§The surfaces) and decided by no ADR: every ADR that names it treats
@@ -761,8 +764,9 @@ an author having read this far, which is weaker than a check;
   `/metrics` on its probe port because ADR-0100's migration plan gated
   removing the certificate path on a count of the listener's requests
   by how each authenticated, `garam_machine_requests_total`
-  (`internal/cli/machine_token.go`). That decides that this process
-  exposes the count, and nothing about what the other two expose.
+  (`platform/internal/cli/machine_token.go`). That decides that this
+  process exposes the count, and nothing about what the other two
+  expose.
 - **Whether anything outside the cluster reaches any listener.** The
   chart renders four `ClusterIP` Services and refuses to offer a value
   that would expose one (ADR-0042), so exposure is the deployment's
@@ -780,8 +784,9 @@ document owes an update.
   every org-scoped request
 - [ADR-0003](./adr/0003-single-cli-topology.md) — one binary, and the
   engine reached over gRPC inside the trust boundary
-- [ADR-0004](./adr/0004-openapi-first-api.md) — `api/openapi.yaml` is
-  the source of truth for what `serve api` serves
+- [ADR-0004](./adr/0004-openapi-first-api.md) —
+  `platform/api/openapi.yaml` is the source of truth for what
+  `serve api` serves
 - [ADR-0005](./adr/0005-server-side-sessions.md) — a session is a row,
   and the cookie carries the token naming it
 - [ADR-0009](./adr/0009-web-frontend.md) — the browser reaches the API
@@ -797,7 +802,8 @@ document owes an update.
   process of its own, taking neither the browser API's proxy nor its
   cookie
 - [ADR-0019](./adr/0019-machine-openapi-spec.md) — one specification
-  per listener, and `api/machine.yaml` is the machine listener's
+  per listener, and `platform/api/machine.yaml` is the machine
+  listener's
 - [ADR-0021](./adr/0021-liveness-and-readiness.md) — the two probes
   answer where a caller needs no credential, and their paths are
   interface

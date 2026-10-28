@@ -9,7 +9,7 @@ name: images
 #
 # `docs/**` is the whole ignore list because it is the only path the
 # build itself keeps out of both images: `.dockerignore` names `docs`,
-# and the web image's context is `web/`. A wider one would rest on a
+# and the web image's context is `console/`. A wider one would rest on a
 # property that holds today rather than one the build enforces, and a
 # filter that quietly stops covering a change is what #850 is about.
 #
@@ -44,14 +44,14 @@ jobs:
   #
   # Neither toolchain is reached except through a Dockerfile, so the
   # runner's own Docker and make are all this needs, with the python3
-  # tests/image/web.sh reserves a host port through.
+  # platform/tests/image/web.sh reserves a host port through.
   images:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: scripts/record-runner-image.sh
+      - run: tooling/record-runner-image.sh
       # The layer cache ci.yml's web-e2e states, one scope per image.
-      - run: scripts/enable-containerd-image-store.sh
+      - run: tooling/enable-containerd-image-store.sh
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       - run: make web-image-e2e
         env:

@@ -1,7 +1,7 @@
 # Organizations
 
 The tenant hierarchy: the top-level tenant, what is grouped inside it,
-and who belongs to one. Implemented by `internal/org`.
+and who belongs to one. Implemented by `platform/internal/org`.
 
 **A `Group`'s and a `Project`'s `policies` are built in part.** Each
 carries them as data and stores them, and nothing collects them into a
@@ -13,9 +13,9 @@ aggregate**
 ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)),
 which supersedes the accessor ADR-0051 chose. `Organization`, `Group`,
 `Project`, `Membership` and `Invitation` carry exported fields, and the
-store sits in `internal/org/postgres/`, so `go list -deps` on
-`internal/org` reports no `jackc/pgx`. The rule that a Group or Project
-member another org owns is refused stays in the domain as
+store sits in `platform/internal/org/postgres/`, so `go list -deps` on
+`platform/internal/org` reports no `jackc/pgx`. The rule that a Group or
+Project member another org owns is refused stays in the domain as
 `CheckMemberOrg`, which the store calls.
 
 | Type | Responsibility |
@@ -65,7 +65,7 @@ admitted, the line the engine's attachment trigger draws (ADR-0008).
 The check reads the two GRNs and no row, so no concurrent write can
 slip past it. A remove is not refused: no such membership can be added
 now, and one stored before the refusal existed stays removable.
-`api/openapi.yaml`'s `addGroupMember`, `addProjectMember`,
+`platform/api/openapi.yaml`'s `addGroupMember`, `addProjectMember`,
 `removeGroupMember` and `removeProjectMember` descriptions state what a
 caller is answered.
 
@@ -74,14 +74,15 @@ what performs it.** `DeleteOrg` issues one statement against `orgs`;
 every row that goes does so through a foreign key declared `ON DELETE
 CASCADE`, so what is taken is fixed by the migrations rather than by any
 code path. Directly: this domain's groups, projects, memberships and
-invitations, the policies the engine stores, the agents `internal/agent`
-owns, the operators `internal/operator` registers, and the certificate
-authority an earlier release gave the organization, where it has one.
-Through those: a group's and a project's members, a policy's versions
-and attachments, an agent's assignment, and an operator's keys and the
-tokens exchanged under them. Before the cascade, `migrations/000047`'s
-trigger on `orgs` holds the agents' execution rows and then the
-operators' registrations, in the orders [agents.md](./agents.md) and
+invitations, the policies the engine stores, the agents
+`platform/internal/agent` owns, the operators
+`platform/internal/operator` registers, and the certificate authority an
+earlier release gave the organization, where it has one. Through those:
+a group's and a project's members, a policy's versions and attachments,
+an agent's assignment, and an operator's keys and the tokens exchanged
+under them. Before the cascade, `platform/migrations/000047`'s trigger
+on `orgs` holds the agents' execution rows and then the operators'
+registrations, in the orders [agents.md](./agents.md) and
 [machine-identity.md](./machine-identity.md) state.
 
 Two of those reach further than one organization. A consent relation
@@ -105,20 +106,20 @@ This domain owns its action constants (`ActionOrgRead`,
 including the policy management actions, which the api server enforces
 without importing the engine that stores policies, the consent
 management actions (ADR-0035), which it enforces over the relation
-`internal/message` stores, and reading an organization's agents, which
-it enforces without `internal/agent` importing this package back — and
-`Role.Actions` maps each role to the action patterns it grants;
-`ActionsFor` does the same for the role names a `Group` or `Project`
-carries as data. No role holds a wildcard over agents, and none holds
-one over operators: ADR-0012 keeps provisioning outside garam, so each
-agent action a role grants is granted by name and a later one is a
-decision rather than an increment, and an operator's three are named the
-same way — a wildcard would have granted deleting an operator before
-anybody decided it (ADR-0045, ADR-0070). `agent:watch` is granted by no
-role at all, which is that reason carried further — ADR-0022 separates
-watching from reading so an organization may withhold it, and a role
-naming it would settle that for every organization instead. The authz
-evaluator decides. Groups and projects are addressed under their
-organization's HTTP paths, and their GRNs carry the owning org in the
-organization segment, so a group or project role is scoped to that
-resource alone ([authz.md](./authz.md) §Statement collection).
+`platform/internal/message` stores, and reading an organization's
+agents, which it enforces without `platform/internal/agent` importing
+this package back — and `Role.Actions` maps each role to the action
+patterns it grants; `ActionsFor` does the same for the role names a
+`Group` or `Project` carries as data. No role holds a wildcard over
+agents, and none holds one over operators: ADR-0012 keeps provisioning
+outside garam, so each agent action a role grants is granted by name and
+a later one is a decision rather than an increment, and an operator's
+three are named the same way — a wildcard would have granted deleting an
+operator before anybody decided it (ADR-0045, ADR-0070). `agent:watch`
+is granted by no role at all, which is that reason carried further —
+ADR-0022 separates watching from reading so an organization may withhold
+it, and a role naming it would settle that for every organization
+instead. The authz evaluator decides. Groups and projects are addressed
+under their organization's HTTP paths, and their GRNs carry the owning
+org in the organization segment, so a group or project role is scoped to
+that resource alone ([authz.md](./authz.md) §Statement collection).

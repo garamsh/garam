@@ -1,0 +1,17 @@
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/garamsh/garam/platform/proto/gen
+# The two plugin versions below are tool directives in go.mod: go.sum
+# records them and Dependabot's gomod ecosystem proposes their bumps,
+# and `.github/dependabot.yml` names what it does not cover. A move
+# lands with the `make gen` that follows it or `check-gen` fails.
+plugins:
+  - local: [go, tool, protoc-gen-go]
+    out: proto/gen
+    opt: paths=source_relative
+  - local: [go, tool, protoc-gen-go-grpc]
+    out: proto/gen
+    opt: paths=source_relative

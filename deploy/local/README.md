@@ -160,9 +160,9 @@ opens a page's sync WebSocket to `console.garam.localhost:8090`.
 - `localhost:3100` — cowork-web.
 
 `COWORK_LOCAL_PORT`, `COWORK_LOCAL_USERCONTENT_PORT` and
-`COWORK_LOCAL_WEB_PORT` move them. `make -C deploy/local
-cowork-image-e2e cowork-web-image-e2e` checks both images outside the
-stack, as `images.yml` does.
+`COWORK_LOCAL_WEB_PORT` move them. `make cowork-image-e2e
+cowork-web-image-e2e` checks both images outside the stack, as
+`images.yml` does.
 
 ## Startup order
 

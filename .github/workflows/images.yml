@@ -61,5 +61,5 @@ jobs:
       - run: make site-image-e2e
       # cowork's server and web app, which no release publishes yet,
       # each built from its Dockerfile and then checked (#1714).
-      - run: make -C deploy/local cowork-image-e2e
-      - run: make -C deploy/local cowork-web-image-e2e
+      - run: make cowork-image-e2e
+      - run: make cowork-web-image-e2e

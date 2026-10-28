@@ -58,10 +58,12 @@ test:
 # through the command text: each is read out of a file in the tree,
 # which ci.md §Security baseline keeps out of a command line.
 NODE_VERSION := $(shell cat $(REPO_ROOT)/platform-web/.nvmrc)
+COWORK_GO_DIRECTIVE := $(shell sed -n 's/^go //p' $(REPO_ROOT)/cowork/go.mod)
 
 export TOOLCHAIN_PAIRS = \
 	platform-web/.nvmrc,$(NODE_VERSION),deploy/local/Dockerfile.web,node \
 	platform/go.mod,$(GO_DIRECTIVE),deploy/local/Dockerfile,golang \
+	cowork/go.mod,$(COWORK_GO_DIRECTIVE),deploy/local/Dockerfile.cowork,golang \
 	platform/go.mod,$(GO_DIRECTIVE),platform/tests/testprincipal/Dockerfile,golang
 
 check-toolchain:

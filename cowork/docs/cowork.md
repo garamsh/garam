@@ -63,10 +63,9 @@ nothing publishes or deploys either.
 - **Images.** `deploy/local/Dockerfile.cowork` builds the server's,
   and `deploy/local/Dockerfile.web` the web app's with
   `APP=cowork-web`. `images.yml` builds and checks both on every pull
-  request (`make -C deploy/local cowork-image-e2e
-  cowork-web-image-e2e`), and `deploy/local/docker-compose.yml` runs
-  them behind its `cowork` profile, as `deploy/local/README.md`
-  §cowork states.
+  request (`make cowork-image-e2e cowork-web-image-e2e`), and
+  `deploy/local/docker-compose.yml` runs them behind its `cowork`
+  profile, as `deploy/local/README.md` §cowork states.
 - **Not yet:** the Postgres hub several instances need, and publishing
   and deploying the images.
 

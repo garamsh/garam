@@ -21,7 +21,7 @@ modules-with = $(strip $(foreach m,$(MODULES),$(if $(shell grep -q '^$(1):' $(m)
 VERBS := ci install format lint test build gen check-gen stack-up suites integration
 
 .PHONY: $(VERBS) affected e2e web-e2e cowork-web-e2e db-up db-down db-prune backend-up
-.PHONY: template-diff search image-build web-image-e2e site-image-e2e test-image test-image-e2e test-image-push test-image-pin
+.PHONY: template-diff search image-build web-image-e2e site-image-e2e cowork-image-e2e cowork-web-image-e2e test-image test-image-e2e test-image-push test-image-pin
 
 $(VERBS):
 	@test -n '$(call modules-with,$@)' || { echo '$@: no module defines it — tooling/ci/modules or a module Makefile is misread'; exit 1; }
@@ -104,6 +104,14 @@ web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
 # one yet, so there is no image-build output to take.
 site-image-e2e:
 	APP=site-web platform/tests/image/web.sh
+
+# cowork-image-e2e and cowork-web-image-e2e check cowork's server image,
+# built from deploy/local/Dockerfile.cowork, and cowork-web's, built
+# from deploy/local/Dockerfile.web; no release publishes either yet.
+# COWORK_IMAGE and COWORK_WEB_IMAGE name an image to check instead, and
+# then nothing is built here.
+cowork-image-e2e cowork-web-image-e2e:
+	tooling/$@.sh
 
 # test-image builds the test image another repository's CI copies
 # garam, testprincipal and the migrations out of (ADR-0092), tagged

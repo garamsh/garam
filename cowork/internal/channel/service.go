@@ -5,7 +5,7 @@ import (
 
 	"github.com/garamsh/garam/cowork/internal/fanout"
 	"github.com/garamsh/garam/cowork/internal/platform"
-	"github.com/garamsh/garam/platform/sdk/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // The platform's actions on channels (ADR-0128).

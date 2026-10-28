@@ -30,25 +30,29 @@ decision, and the same partitioning serves one deployable or many.
 
 ## Services
 
-**Little of this section is built.** The platform is still the
-module at the root that this document's other sections describe, and
-#1659 moves it into the layout below
-([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)). Until then these rules bind
-what a pull request adds, and the tree reads in today's shape. What
-exists:
+**The tree is laid out as this section states, except for
+`policy/`,** which ADR-0130 decides and its first pull request creates.
+The platform's module is `platform/`, and its server binary is
+`platform/cmd/garam`
+([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md),
+[ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)).
+Beside it:
 
-- **`platform/sdk/`**, a library module holding `errorx` and `grn`,
-  created because cowork is the second module to need them. The root
-  module requires it through a `replace` to its folder, and its own
-  `platform/internal/errorx` and `platform/internal/grn` forward to it
-  until #1659 rewrites their importers and deletes them.
+- **`lib/errorx/`, `lib/grn/` and `lib/clisession/`**, a library
+  module each, created because cowork is the second module to need
+  them. The platform's module requires the first two through a
+  `replace` to their folders, and its own `platform/internal/errorx`
+  and `platform/internal/grn` forward to them until #1708 rewrites
+  their importers and deletes them.
+- **`lib/platform-sdk-go/`**, the Go client generated from
+  `platform/api/openapi.yaml`, and **`platform-cli/`**, the client CLI
+  built on it ([cli.md](./cli.md)).
 - **`cowork/`**, the first service in its own folder: its module,
   binary, database and documents
   ([cowork.md](../../cowork/docs/cowork.md)).
-- **`go.work`** at the root, naming the root module, `cowork/` and
-  `platform/sdk/`. Every Go entry point in the `Makefile` covers every
-  module it names. The root still holds the platform's packages until
-  #1659.
+- **`go.work`** at the root, naming `platform/`, `platform-cli/`,
+  `cowork/` and each Go library under `lib/`. Every Go entry point in
+  the `Makefile` covers every module it names.
 
 Above the boundaries inside garam sits a coarser unit: the service.
 Each top-level folder is one service or one supporting
@@ -62,16 +66,16 @@ on are boundaries inside a service.
     first pull request creates;
   - **an executable unit named `<service>-<surface>`**: `platform-web/`
     (the console), `site-web/` (the site), `cowork-web/`, and
-    `platform-cli/`, which #1700 has not yet split out of
-    `platform/cmd/garam`;
+    `platform-cli/` (the client CLI);
   - **a supporting responsibility**: `lib/`, `tooling/`, `deploy/` and
     `docs/`.
 - **`lib/` holds code libraries, and no binary.** Each package in it is
   named for what it is and is linked by more than one unit:
-  `lib/design/` and `lib/platform-sdk-ts/` today. `platform/sdk/`'s
-  `grn`, `errorx` and `clisession`, and the Go SDK generated from
-  `platform/api/openapi.yaml`, move under `lib/` in #1700's second pull
-  request. No folder is a catch-all: there is no `shared/`, `utils/` or
+  `lib/design/`, `lib/platform-sdk-ts/`, `lib/platform-sdk-go/`,
+  `lib/grn/`, `lib/errorx/` and `lib/clisession/`. A Go library is a
+  module of its own, its package at the module root, as
+  `docs/convention/stack-go.md` §1 lays out a module that ships no
+  binary. No folder is a catch-all: there is no `shared/`, `utils/` or
   `common/`, and a package in `lib/` that one unit alone imports
   belongs to that unit.
 - **An SDK is generated from its service's published API**, and a
@@ -81,8 +85,7 @@ on are boundaries inside a service.
 - **A service owns its database.** No table is read or written by a
   service other than the one that owns it.
 - **A service reaches another only through what that service
-  publishes**: its API specification, or a library in `lib/`
-  (`platform/sdk/` until #1700 moves it). Reaching
+  publishes**: its API specification, or a library in `lib/`. Reaching
   into another service's `internal/` or its database is a
   defect, even where it builds.
 - **Dependencies point toward `platform/`**, and none points back.
@@ -192,7 +195,9 @@ on are boundaries inside a service.
 garam's composition root is `platform/internal/cli`, the package
 `platform/cmd/garam/main.go` calls: the concrete types behind the seams
 the domains declare are constructed there, and
-`platform/cmd/garam/main.go` constructs nothing itself.
+`platform/cmd/garam/main.go` constructs nothing itself. The client
+CLI's is `platform-cli/internal/cli`, on the same terms: its
+`cmd/garam/main.go` executes the tree that package builds.
 
 The rule is the three bullets above, and
 `docs/convention/stack-go.md` §Project envelope states only which Go

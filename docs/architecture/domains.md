@@ -376,8 +376,9 @@ organization, which ADR-0001 makes root-owned (#1150). It depends on
 status codes, the `Error` interface, and `New` / `Wrap` / `IsKind` /
 `KindOf`. It has no dependency of its own.
 
-Both are implemented in `platform/sdk/` since cowork became a second
-module needing them (ADR-0125). The two packages above forward to it,
+Both are implemented under `lib/`, in `lib/grn/` and `lib/errorx/`,
+since cowork became a second module needing them (ADR-0125,
+ADR-0132). The two packages above forward to it,
 so the counts in the table still read through them, until #1659
 rewrites their importers to the new paths.
 

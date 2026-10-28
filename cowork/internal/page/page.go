@@ -7,8 +7,8 @@ package page
 import (
 	"time"
 
-	"github.com/garamsh/garam/platform/sdk/errorx"
-	"github.com/garamsh/garam/platform/sdk/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // ServiceType is a page's GRN service type, the kind the platform's

@@ -12,7 +12,7 @@ import (
 
 	"github.com/garamsh/garam/cowork/internal/collab"
 	"github.com/garamsh/garam/cowork/internal/collab/postgres/db"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // foreignKeyViolation is the SQL state of an update for a page that no

@@ -2,8 +2,6 @@ module github.com/garamsh/garam/cowork
 
 go 1.27.2
 
-replace github.com/garamsh/garam/platform/sdk => ../platform/sdk
-
 require (
 	github.com/aws/aws-sdk-go-v2 v1.47.5
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.12
@@ -11,7 +9,9 @@ require (
 	github.com/aws/smithy-go v1.28.7
 	github.com/coder/websocket v1.8.14
 	github.com/dop251/goja v0.0.0-20261027145915-d535508610d2
-	github.com/garamsh/garam/platform/sdk v0.0.0-00010101000000-000000000000
+	github.com/garamsh/garam/lib/clisession v0.0.0-00010101000000-000000000000
+	github.com/garamsh/garam/lib/errorx v0.0.0-00010101000000-000000000000
+	github.com/garamsh/garam/lib/grn v0.0.0-00010101000000-000000000000
 	github.com/golang-migrate/migrate/v4 v4.20.1
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
@@ -56,4 +56,10 @@ require (
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect
+)
+
+replace (
+	github.com/garamsh/garam/lib/clisession => ../lib/clisession
+	github.com/garamsh/garam/lib/errorx => ../lib/errorx
+	github.com/garamsh/garam/lib/grn => ../lib/grn
 )

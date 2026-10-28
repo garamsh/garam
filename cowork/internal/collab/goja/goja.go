@@ -13,7 +13,7 @@ import (
 	"github.com/dop251/goja"
 
 	"github.com/garamsh/garam/cowork/internal/collab"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 //go:embed engine.gen.js

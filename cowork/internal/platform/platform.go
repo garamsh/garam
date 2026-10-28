@@ -7,8 +7,8 @@ package platform
 import (
 	"context"
 
-	"github.com/garamsh/garam/platform/sdk/errorx"
-	"github.com/garamsh/garam/platform/sdk/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // The cowork actions the platform answers for (ADR-0127). Each is

@@ -1,10 +1,10 @@
 # CLI
 
-What the user commands of the `garam` binary are responsible for: how a
-person signs one in, how an agent runs it, what it keeps between runs,
-what it calls, and what it does not decide. The server commands the
-same binary carries are [overview.md](./overview.md)'s module list and
-[deployment-contract.md](./deployment-contract.md)'s.
+What the client CLI, the `garam` binary `platform-cli/` builds, is
+responsible for: how a person signs one in, how an agent runs it, what
+it keeps between runs, what it calls, and what it does not decide. The
+server binary's commands are [overview.md](./overview.md)'s module
+list and [deployment-contract.md](./deployment-contract.md)'s.
 
 ## Contents
 - What it is
@@ -19,18 +19,14 @@ same binary carries are [overview.md](./overview.md)'s module list and
 
 ## What it is
 
-**Its own binary is not yet built.** ADR-0132 moves the user commands
-into `platform-cli/`, a client binary calling the platform through
-`lib/platform-sdk-go`, and leaves the server commands in
-`platform/cmd/garam` (#1700). Until that pull request, the tree reads
-as this section describes.
-
-`platform/internal/cli` implements it, beside the server commands, in
-the one binary garam ships
-([ADR-0003](./adr/0003-single-cli-topology.md),
-[ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md),
+`platform-cli/internal/cli` implements it, and
+`platform-cli/cmd/garam` builds it into a client binary apart from the
+server's `platform/cmd/garam`
+([ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md),
 [ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)).
-The user commands sit at the top level:
+Both binaries are named `garam`; the client carries no server command
+and the server no user command. It imports nothing under
+`platform/internal/`. The user commands sit at the top level:
 
 | Command | What it does |
 |---|---|
@@ -50,10 +46,11 @@ objects).
 ## The commands it derives
 
 Every browser API operation becomes a command derived from
-`platform/api/openapi.yaml` ([ADR-0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)). `platform/internal/cli/cligen` writes
-`platform/internal/cli/commands.gen.go` from the specification and
-`platform/internal/cli/commands.yaml`, which `make gen` runs and
-`make check-gen` holds current.
+`platform/api/openapi.yaml` ([ADR-0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)). `platform-cli/internal/cli/cligen` writes
+`platform-cli/internal/cli/commands.gen.go` from the specification and
+`platform-cli/internal/cli/commands.yaml`, which
+`make -C platform-cli gen` runs and `make -C platform-cli check-gen`
+holds current.
 
 - **Grammar.** `garam <noun>... <verb> [arguments]`:
   - the nouns are the path's static segments;
@@ -73,7 +70,7 @@ Every browser API operation becomes a command derived from
   prints as JSON.
 - **Exit codes.** 0 success, 2 usage, 3 not signed in, 4 permission
   denied, 5 not found, 6 conflict, 7 invalid argument, 8 unavailable,
-  and 1 for anything else. A server command ends with 1 on any
+  and 1 for anything else. The server binary ends with 1 on any
   failure.
 - **Secrets.** An answer `commands.yaml` lists a secret field of
   (`issueOperatorKey`, `createInvitation`, `mintOperationAuthority`) is
@@ -145,9 +142,10 @@ step. Today every command presents a person's session.
 
 ## What it calls
 
-- **The browser API alone.** The CLI calls the browser API through the
-  client `platform/api/client-codegen.yaml` generates from
-  `platform/api/openapi.yaml`, for every operation.
+- **The browser API alone.** The CLI calls the browser API through
+  `lib/platform-sdk-go`, the client and types oapi-codegen generates
+  from `platform/api/openapi.yaml`, for every operation
+  (`make -C lib/platform-sdk-go gen`; `check-gen` holds it current).
 - **The endpoint.** It comes from `--endpoint`, else `GARAM_ENDPOINT`,
   else `https://garam.sh`, and is an origin. It is `https`, or `http` to
   a loopback address alone, because a session's tokens cross it. The
@@ -177,7 +175,7 @@ API's message under its kind.
 ## Decisions this rests on
 
 - [ADR-0003](./adr/0003-single-cli-topology.md) — one binary carries
-  every command
+  every server command; the client's is its own (ADR-0132)
 - [ADR-0005](./adr/0005-server-side-sessions.md) — a session is a row
   revoked by deleting it
 - [ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)
@@ -190,6 +188,5 @@ API's message under its kind.
   — an agent runs the CLI from a token file its assignee keeps
   current; unbuilt
 - [ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)
-  — the user commands become a client binary of their own,
-  `platform-cli/`, calling the platform through a generated SDK; not
-  yet built
+  — the user commands are a client binary of their own,
+  `platform-cli/`, calling the platform through a generated SDK

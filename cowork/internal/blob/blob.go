@@ -8,7 +8,7 @@ package blob
 import (
 	"context"
 
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // Blob is what a key holds: its bytes and the media type they were

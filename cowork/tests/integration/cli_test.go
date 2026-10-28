@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/cowork/internal/cli"
-	"github.com/garamsh/garam/platform/sdk/clisession"
+	"github.com/garamsh/garam/lib/clisession"
 )
 
 // signIn keeps who's CLI session for the stack's platform in a fresh

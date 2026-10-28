@@ -9,7 +9,7 @@ import (
 	"sync"
 
 	"github.com/garamsh/garam/cowork/internal/channel"
-	"github.com/garamsh/garam/platform/sdk/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // Repository holds every organization's channels and messages behind

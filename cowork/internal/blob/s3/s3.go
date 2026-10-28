@@ -17,7 +17,7 @@ import (
 	"github.com/aws/smithy-go"
 
 	"github.com/garamsh/garam/cowork/internal/blob"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // Config names a bucket and how to reach it. Endpoint is empty for AWS

@@ -18,7 +18,7 @@ import (
 	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/platform"
 	"github.com/garamsh/garam/cowork/internal/task"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // Path is where the tools are served, in the protocol's streamable

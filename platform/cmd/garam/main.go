@@ -1,5 +1,6 @@
-// Command garam is the single deliverable binary (ADR-0003). All
-// wiring lives in internal/cli; main only executes the command tree.
+// Command garam is the platform's server binary (ADR-0003, ADR-0132).
+// All wiring lives in internal/cli; main only executes the command
+// tree. A failure ends the process with 1, whichever command failed.
 package main
 
 import (
@@ -10,9 +11,8 @@ import (
 )
 
 func main() {
-	cmd, err := cli.NewRootCommand().ExecuteC()
-	if err != nil {
+	if err := cli.NewRootCommand().Execute(); err != nil {
 		slog.Error("garam exited", slog.String("error", err.Error()))
-		os.Exit(cli.ExitCode(cmd, err))
+		os.Exit(1)
 	}
 }

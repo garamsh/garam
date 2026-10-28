@@ -95,8 +95,9 @@ integration` and `make e2e`, the first of which truncates.
 
 ## The garam CLI
 
-The `garam` binary is also the CLI a person or a program administers
-garam with ([docs/architecture/cli.md](./docs/architecture/cli.md)).
+`platform-cli/` builds the `garam` a person or a program administers
+garam with ([docs/architecture/cli.md](./docs/architecture/cli.md)),
+a client binary apart from the server's (ADR-0132).
 
 ```sh
 garam login --endpoint https://garam.example   # device grant (ADR-0120)
@@ -107,7 +108,7 @@ garam operators keys issue hosted --rotation planned --out hosted-key.json
 
 Every browser API operation becomes a command derived from
 `platform/api/openapi.yaml` by `go run ./internal/cli/cligen` in
-`platform/`, which `make gen` runs (ADR-0122). An answer carrying a
+`platform-cli/`, which `make gen` runs (ADR-0122). An answer carrying a
 secret, such as an issued key, is written to the file `--out` names at
 mode 0600 and never printed.
 

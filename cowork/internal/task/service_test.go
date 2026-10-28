@@ -13,8 +13,8 @@ import (
 	"github.com/garamsh/garam/cowork/internal/platform"
 	"github.com/garamsh/garam/cowork/internal/task"
 	"github.com/garamsh/garam/cowork/internal/task/memory"
-	"github.com/garamsh/garam/platform/sdk/errorx"
-	"github.com/garamsh/garam/platform/sdk/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // policy allows every check but those deny names, as `action` or

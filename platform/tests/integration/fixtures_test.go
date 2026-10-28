@@ -86,7 +86,11 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "integration: GARAM_TEST_DATABASE_URL is not set; run `make db-up integration`")
 		os.Exit(1)
 	}
-	os.Exit(m.Run())
+	code := m.Run()
+	if cliDir != "" {
+		_ = os.RemoveAll(cliDir)
+	}
+	os.Exit(code)
 }
 
 // pool connects to the test database TestMain checked for.

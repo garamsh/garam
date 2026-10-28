@@ -14,9 +14,17 @@
 # check-toolchain reads the platform's go.mod, the console's .nvmrc and
 # the stack's Dockerfiles.
 tooling platform platform-web deploy/local
-platform/sdk
-# The platform's suites run against the stack.
-platform deploy/local
+lib/errorx
+lib/grn
+lib/clisession
+# The platform's Go client generates from the platform's OpenAPI spec.
+lib/platform-sdk-go platform
+# The platform's suites run against the stack, and drive the client CLI
+# they build from platform-cli.
+platform platform-cli deploy/local
+# The client CLI derives its commands from the platform's OpenAPI spec,
+# and its coverage test reads it.
+platform-cli platform
 cowork/engine
 # cowork's gen builds cowork/engine's bundle into internal/.
 cowork cowork/engine deploy/local

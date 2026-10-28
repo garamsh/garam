@@ -18,14 +18,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestCLI_TheBuiltBinaryLogsInByTheDeviceGrant runs `garam login`
-// against the built `serve api`, reached behind an /api prefix as the
-// console's rewrite serves it, approves the code it prints on the
-// principal's session, and reads who it signed in as with `garam
-// whoami`. The approval goes through the API rather than the console's
-// /device page, which is not yet built (#1616).
+// TestCLI_TheBuiltBinaryLogsInByTheDeviceGrant runs the built client's
+// `garam login` against the built server's `serve api`, reached behind
+// an /api prefix as the console's rewrite serves it, approves the code
+// it prints on the principal's session, and reads who it signed in as
+// with `garam whoami`. The approval goes through the API rather than
+// the console's /device page, which is not yet built (#1616).
 func TestCLI_TheBuiltBinaryLogsInByTheDeviceGrant(t *testing.T) {
-	garam := buildGaram(t)
+	garam, client := buildGaram(t), buildGaramCLI(t)
 	p := prepareDatabase(t, buildPrincipalFixture(t))
 	grpcAddr, metricsAddr, httpAddr := freeAddr(t), freeAddr(t), freeAddr(t)
 	serve(t, garam, "authz", []string{
@@ -40,7 +40,7 @@ func TestCLI_TheBuiltBinaryLogsInByTheDeviceGrant(t *testing.T) {
 	t.Cleanup(console.Close)
 
 	env := []string{"XDG_CONFIG_HOME=" + t.TempDir(), "GARAM_ENDPOINT=" + console.URL, "HOME=" + t.TempDir()}
-	login := exec.Command(garam, "login", "--no-browser")
+	login := exec.Command(client, "login", "--no-browser")
 	login.Env = env
 	stderr, err := login.StderrPipe()
 	require.NoError(t, err)
@@ -77,7 +77,7 @@ func TestCLI_TheBuiltBinaryLogsInByTheDeviceGrant(t *testing.T) {
 		t.Fatal("login did not exit once its code was approved")
 	}
 
-	whoami := exec.Command(garam, "whoami", "-o", "json")
+	whoami := exec.Command(client, "whoami", "-o", "json")
 	whoami.Env = env
 	out, err := whoami.Output()
 	require.NoError(t, err)
@@ -95,10 +95,10 @@ func TestCLI_TheBuiltBinaryLogsInByTheDeviceGrant(t *testing.T) {
 	access := file.Endpoints[console.URL].AccessToken
 	require.NotEmpty(t, access)
 
-	logout := exec.Command(garam, "logout")
+	logout := exec.Command(client, "logout")
 	logout.Env = env
 	require.NoError(t, logout.Run())
-	again := exec.Command(garam, "whoami")
+	again := exec.Command(client, "whoami")
 	again.Env = env
 	assert.Error(t, again.Run(), "after logout the CLI is signed out")
 

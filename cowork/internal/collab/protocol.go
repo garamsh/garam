@@ -1,7 +1,7 @@
 package collab
 
 import (
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // The y-websocket wire format a client speaks (ADR-0127): a message is

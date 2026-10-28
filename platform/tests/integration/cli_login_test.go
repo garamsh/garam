@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sync"
@@ -17,21 +19,51 @@ import (
 
 	apigen "github.com/garamsh/garam/platform/api"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
-	"github.com/garamsh/garam/platform/internal/cli"
 	"github.com/garamsh/garam/platform/internal/grn"
 )
 
-// runCLI runs one garam command in process and answers its stdout,
-// its stderr and what it returned.
+// The client binary the user commands are in, built once for the run
+// into cliDir, which TestMain removes.
+var (
+	cliOnce sync.Once
+	cliDir  string
+	cliBin  string
+	cliErr  error
+)
+
+// garamCLI builds platform-cli's garam (ADR-0132) from the module
+// beside this one, once per run, and answers its path.
+func garamCLI(t *testing.T) string {
+	t.Helper()
+	cliOnce.Do(func() {
+		cliDir, cliErr = os.MkdirTemp("", "garam-cli-")
+		if cliErr != nil {
+			return
+		}
+		cliBin = filepath.Join(cliDir, "garam")
+		build := exec.Command("go", "build", "-o", cliBin, "./cmd/garam")
+		build.Dir = filepath.Join(filepath.Dir(migrationsDir(t)), "..", "platform-cli")
+		if out, err := build.CombinedOutput(); err != nil {
+			cliErr = fmt.Errorf("go build: %w: %s", err, out)
+		}
+	})
+	require.NoError(t, cliErr)
+	return cliBin
+}
+
+// runCLI runs one garam command as the built client and answers its
+// stdout, its stderr and what it returned. A command that fails exits
+// nonzero having written its failure to stderr, so that is the error.
 func runCLI(t *testing.T, stderr io.Writer, args ...string) (string, error) {
 	t.Helper()
-	root := cli.NewRootCommand()
-	var stdout bytes.Buffer
-	root.SetOut(&stdout)
-	root.SetErr(stderr)
-	root.SetArgs(args)
-	err := root.ExecuteContext(context.Background())
-	return stdout.String(), err
+	var stdout, failure bytes.Buffer
+	cmd := exec.Command(garamCLI(t), args...)
+	cmd.Stdout = &stdout
+	cmd.Stderr = io.MultiWriter(stderr, &failure)
+	if err := cmd.Run(); err != nil {
+		return stdout.String(), fmt.Errorf("%w: %s", err, failure.String())
+	}
+	return stdout.String(), nil
 }
 
 // lockedBuffer is a buffer one goroutine writes while another reads.

@@ -661,11 +661,11 @@ fixed by nothing at all (§Not decided).
 **Generation copies prose and reads none of it.** Which prose it copies
 differs by kind, measured on 2026-09-03 by perturbing one description
 of each kind in each specification and running `make gen` and
-`make web-gen`: a schema's `description` reaches
+`make -C console gen`: a schema's `description` reaches
 `platform/api/server.gen.go`, `platform/api/machine/server.gen.go` and
 `console/src/types/api.ts`, an operation's reaches
 `console/src/types/api.ts` alone, and a tag's reaches none of the three.
-So `make check-gen` and `make web-check-gen` fail on a schema
+So `make check-gen` and `make -C console check-gen` fail on a schema
 description edited without regenerating, and pass on any text at all:
 each compares one specification against its own output, never one
 against the other, and never prose against what the code does. A
@@ -692,11 +692,11 @@ undeclared, are both invisible to it. #698 is the same fact in the
 history: it changed four operations' response sets and moved no
 generated Go file. What does move is `console/src/types/api.ts`,
 generated from `platform/api/openapi.yaml` and held against it by
-`make web-check-gen`, so the browser client's types follow a response
-set while the server's do not — and `platform/api/machine.yaml` has no
-consumer of that kind at all. What `make gen` writes from it is the
-generated Go §What a specification is authoritative for names, which a
-response set leaves as untouched as it leaves
+`make -C console check-gen`, so the browser client's types follow a
+response set while the server's do not — and `platform/api/machine.yaml`
+has no consumer of that kind at all. What `make gen` writes from it is
+the generated Go §What a specification is authoritative for names, which
+a response set leaves as untouched as it leaves
 `platform/api/server.gen.go`.
 
 **Nor does it cover the two specifications against each other.**

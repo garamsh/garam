@@ -17,7 +17,7 @@
 # empty set.
 #
 # CHART_DIR, CHART_IDENTITIES, CHART_VALUES and HELM arrive in the
-# environment; the Makefile holds them.
+# environment; deploy/charts/Makefile holds them.
 
 set -- $CHART_IDENTITIES; workloads=$#
 set -- $CHART_VALUES; values=$#

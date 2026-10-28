@@ -77,9 +77,9 @@ own things a reader might come here for, and none of them is restated:
   [structure.md](./structure.md) §Boundaries and dependency direction's
   ([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)),
   and `console/eslint.config.mjs`'s `garam/import-direction` rule is
-  what fails `make web-lint` on a crossing. Nothing here restates a
-  layout rule, and a question about where a file belongs is that file's,
-  not this one's.
+  what fails `make -C console lint` on a crossing. Nothing here restates
+  a layout rule, and a question about where a file belongs is that
+  file's, not this one's.
 - `deploy/local/Dockerfile.web` is authoritative for what the image
   carries. `output: "standalone"` in `console/next.config.ts` decides
   what the build emits; that Dockerfile decides what has to be copied in
@@ -348,8 +348,9 @@ compares the value the release bakes against what the chart renders.
 The address is server-side only and never reaches a browser. It is
 declared once, as a typed schema in `console/src/env.ts`, parsed at
 import so a missing value fails at start rather than inside the first
-request that needs it. That file is also the authority `make chart`
-reads the application's environment names from
+request that needs it. That file is also the authority
+`make -C deploy/charts ci` reads the application's environment names
+from
 ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)),
 so adding a variable here is a change the chart has to answer for.
 
@@ -592,16 +593,17 @@ The boundary is as much of the responsibility as the contents.
 
 ## Its own toolchain and gate
 
-`make web-ci` is the gate, and `make ci` runs it last, so the one name
-covers both toolchains. In order: `web-format`, `web-lint`
-(which also typechecks), `web-test`, `web-build`, `web-check-gen`.
+`make -C console ci` is the gate, and `make ci` runs it with every other
+module's, so the one name covers both toolchains. In order: `install`,
+`format`, `lint` (which also typechecks), `test`, `build`,
+`check-gen`.
 
-Three things are outside it. `make web-e2e` runs the Playwright specs
+Three things are outside it. `make -C console e2e` runs the Playwright specs
 in `console/e2e/` against a real built application, a real backend and a
 real Postgres, so it needs infrastructure the gate does not start.
 `make web-image-e2e`'s subject is the image a release publishes rather
 than this tree's application, and it runs that image, so it needs a
-container runtime the gate never asks for. `make web-install` is a
+container runtime the gate never asks for. `make install` is a
 prerequisite rather than a check.
 
 Tests are in two locations by decision, not by accident: Vitest owns

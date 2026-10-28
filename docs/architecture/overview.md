@@ -332,8 +332,8 @@ keeps. The list below is today's tree
 - `platform/tests/image/` — black-box checks against a built image
   rather than against the app (`make web-image-e2e`).
 - `console/` — Next.js frontend; reaches the API through a same-origin
-  `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make
-  web-ci`). `/` is the public landing page, `/login` the sign-in page
+  `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make -C
+  console ci`). `/` is the public landing page, `/login` the sign-in page
   and `/register` where an invitation becomes a password account
   (ADR-0041); the signed-in application lives under `/console`, whose
   shell and route structure are ADR-0011.
@@ -347,14 +347,14 @@ keeps. The list below is today's tree
   a suite truncates or migrates, and what collects the ones a removed
   worktree leaves behind.
 - `deploy/local/minikube/` — the same processes on a Kubernetes cluster
-  on this machine, in the `garam-local` namespace (`make minikube-up`);
-  a development artefact rather than manifests for a cluster garam does
-  not run. `deploy/local/minikube/README.md` is authoritative for what
-  it runs, how it is brought up and torn down, and where its key
-  material and its images come from;
-  `minikube/README.md` §What this proves and what it does not is
-  authoritative for what
-  running it establishes about a real deployment.
+  on this machine, in the `garam-local` namespace
+  (`make -C deploy/local minikube-up`); a development artefact rather
+  than manifests for a cluster garam does not run.
+  `deploy/local/minikube/README.md` is authoritative for what it runs,
+  how it is brought up and torn down, and where its key material and its
+  images come from; `minikube/README.md` §What this proves and what it
+  does not is authoritative for what running it establishes about a real
+  deployment.
 - `platform/internal/grn/` — identifier; shared primitive. It forwards
   to `platform/sdk/grn/` (ADR-0125) until #1659.
 - `platform/internal/errorx/` — typed errors; shared primitive. It

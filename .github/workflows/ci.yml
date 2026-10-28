@@ -36,12 +36,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # `make ci` covers both toolchains, so both are set up here and the
-  # checks are one step (docs/convention/ci.md §One entry point per
-  # task). `make web-install` is setup rather than a check: it pins the
-  # install to the lockfile that pnpm would otherwise resolve itself.
+  # Which modules this change can affect, by the entry point a
+  # contributor runs locally (ci.md §One entry point per task):
+  # `make affected` prints each module with its reason and hands the
+  # jobs below the ones defining each verb. The pull request's merge
+  # ref has the base as its first parent, so a depth of two holds the
+  # merge base. A promotion into `main` runs every module (git.md
+  # §Promotion).
+  changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      ci: ${{ steps.affected.outputs.ci }}
+      suites: ${{ steps.affected.outputs.suites }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - run: tooling/record-runner-image.sh
+      - id: affected
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          AFFECTED_EVERY: ${{ github.base_ref == 'main' && 'a promotion into main runs every module' || '' }}
+        run: AFFECTED_OUTPUT="$GITHUB_OUTPUT" make affected BASE="$BASE"
+
+  # Each selected module's fast gate, `make -C <module> ci`. Both
+  # toolchains are set up for every module: a Go module's gate can
+  # build a web package (cowork's gen bundles cowork/engine), and the
+  # setup costs less than a second list of which needs which.
   ci:
+    needs: changes
+    if: needs.changes.outputs.ci != '[]'
+    name: ci (${{ matrix.module }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.changes.outputs.ci) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: tooling/record-runner-image.sh
@@ -57,26 +87,25 @@ jobs:
         with:
           node-version-file: console/.nvmrc
           cache: pnpm
-          cache-dependency-path: console/pnpm-lock.yaml
-      - run: make web-install
-      - run: make ci
+          cache-dependency-path: '**/pnpm-lock.yaml'
+      - env:
+          MODULE: ${{ matrix.module }}
+        run: make -C "$MODULE" ci
 
-  e2e:
+  # Each selected module's suites, against the stack its `stack-up`
+  # names: `make -C <module> stack-up suites`.
+  suites:
+    needs: changes
+    if: needs.changes.outputs.suites != '[]'
+    name: suites (${{ matrix.module }})
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.changes.outputs.suites) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: tooling/record-runner-image.sh
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: platform/go.mod
-      - run: make db-up integration e2e
-
-  web-e2e:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: tooling/record-runner-image.sh
-      # cowork-web-e2e builds the cowork binary it drives.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: platform/go.mod
@@ -89,15 +118,31 @@ jobs:
         with:
           node-version-file: console/.nvmrc
           cache: pnpm
-          cache-dependency-path: console/pnpm-lock.yaml
-      - run: make web-install
+          cache-dependency-path: '**/pnpm-lock.yaml'
       # Reuse the server image's layers from the GitHub Actions cache
       # (#1519). The runtime action hands the build the cache's URL and
       # token, which a `run:` step is not given.
       - run: tooling/enable-containerd-image-store.sh
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
-      - run: make backend-up
-        env:
+      - env:
+          MODULE: ${{ matrix.module }}
           IMAGE_BUILD_CACHE: gha
-      - run: make web-e2e
-      - run: make cowork-web-e2e
+        run: make -C "$MODULE" stack-up
+      - env:
+          MODULE: ${{ matrix.module }}
+        run: make -C "$MODULE" suites
+
+  # The one check branch protection needs (#1661). It fails when a job
+  # above failed or was cancelled, and when one was skipped although
+  # `changes` selected modules for it; a job is skipped rightly only
+  # when its list is empty. alls-green reads every job's result from
+  # `needs`.
+  ci-ok:
+    if: always()
+    needs: [changes, ci, suites]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
+        with:
+          allowed-skips: ${{ needs.changes.outputs.ci == '[]' && 'ci,' || '' }}${{ needs.changes.outputs.suites == '[]' && 'suites' || '' }}
+          jobs: ${{ toJSON(needs) }}

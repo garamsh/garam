@@ -17,13 +17,13 @@
 # passing an empty set. A tag no version reads out of is that same
 # failure.
 #
-# TOOLCHAIN_PAIRS arrives in the environment; the Makefile holds it.
+# TOOLCHAIN_PAIRS arrives in the environment; tooling/Makefile holds it.
 
 set -- $TOOLCHAIN_PAIRS; pairs=$#
 
 echo "check-toolchain: $pairs pairs — a version this repository declares against the base image tag carrying it, the split .github/dependabot.yml's docker entry predicts"
 test "$pairs" -gt 0 \
-	|| { echo 'check-toolchain: TOOLCHAIN_PAIRS names no pair — the Makefile holds none, or what it read out of the tree came back empty'; exit 1; }
+	|| { echo 'check-toolchain: TOOLCHAIN_PAIRS names no pair — tooling/Makefile holds none, or what it read out of the tree came back empty'; exit 1; }
 set -e
 
 # The count of dot-separated components a version names.

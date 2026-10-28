@@ -24,8 +24,8 @@ The chart at `deploy/charts/garam/` is the description of a garam
 deployment ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)).
 It is authoritative for everything a deployment *sets* — the images, the
 ports, every configuration value, the mounts, and the shape key material
-arrives in — and `make chart` checks it against the source rather than
-against a reader's attention.
+arrives in — and `make -C deploy/charts ci` checks it against the source
+rather than against a reader's attention.
 
 **This document is authoritative for what the binary does with what the
 chart sets, and for what is not known.** Where the two could both answer

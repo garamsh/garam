@@ -278,6 +278,20 @@ on hosted runners.
   `main` and `dev`, so every pull request into either starts both
   workflows (#1657). It named `main` alone from #1059 until then, on
   the owner's decision that verification ran on the promotion.
+- **A pull request runs the modules it can affect, and one check
+  reports them (#1661).** `ci.yml`'s `changes` job runs
+  `make affected` against the pull request's base, which prints each
+  module it selects with its reason: changed, depending on a changed
+  one, or a root file changed (`tooling/ci/affected.sh`, over the
+  table `tooling/ci/modules`). One `ci (<module>)` job runs
+  `make -C <module> ci` for each selected module, and one
+  `suites (<module>)` job runs `make -C <module> stack-up suites` for
+  each that has suites. `ci-ok` needs all of them and fails when one
+  failed, was cancelled, or was skipped while modules were selected for
+  it. A promotion into `main` selects every module. Neither `main` nor
+  `dev` has branch protection or a ruleset, measured on 2026-10-28, so
+  no required check names a job; requiring `ci-ok` is the owner's
+  setting.
 - **A superseded run is cancelled; a release run is not.** `ci.yml` and
   `images.yml` each declare a concurrency group keyed on
   `github.workflow` and `github.ref` — under their one trigger that ref
@@ -302,8 +316,9 @@ on hosted runners.
   costs is the run. Until #850 neither image was built by any check.
 - **A pull request's image builds take their layers from the GitHub
   Actions cache and their bases from `mirror.gcr.io`.**
-  `web-e2e`'s `make backend-up` and `images`' `make web-image-e2e` run
-  with `IMAGE_BUILD_CACHE=gha` (`Makefile`), on the runner's Docker
+  The `suites` jobs' `make -C <module> stack-up` and `images`'
+  `make web-image-e2e` run with `IMAGE_BUILD_CACHE=gha`
+  (`tooling/make/stack.mk`), on the runner's Docker
   switched to the containerd image store by
   `tooling/enable-containerd-image-store.sh`, so a run reuses the
   `go mod download` and `go build` layers an earlier run of the same
@@ -371,19 +386,19 @@ on hosted runners.
   replacement is a required status check with *branches must be up to
   date*, which is a repository setting and so the account owner's.
 - **Mutation testing runs in no workflow, and that is the decision
-  rather than an omission.** `make mutation` rewrites one operator at a
-  time under `platform/internal/` and reports the mutants no test
-  noticed. Four full runs on 2026-09-02 each spent around 35 minutes of
-  CPU on twelve cores and took between 5 minutes 42 seconds and 32
-  minutes of wall time; the spread is the per-mutant timeout, accounted
-  for below. A runner with four cores has a third of those and slower
-  ones. `platform/internal/` holds 33 of the module's 40 Go packages;
-  the seven outside it are `platform/cmd/garam`, the three generated
-  from `platform/api/openapi.yaml`, `platform/api/machine.yaml` and
-  `platform/proto/`, and `migrations`, `platform/tests/e2e` and
-  `platform/tests/integration`, which hold test files only
-  (`go list ./... | grep -v /internal/`). So triggering on changes under
-  it would exclude a pull request that changes Go outside
+  rather than an omission.** `make -C platform mutation` rewrites one
+  operator at a time under `platform/internal/` and reports the mutants
+  no test noticed. Four full runs on 2026-09-02 each spent around 35
+  minutes of CPU on twelve cores and took between 5 minutes 42 seconds
+  and 32 minutes of wall time; the spread is the per-mutant timeout,
+  accounted for below. A runner with four cores has a third of those and
+  slower ones. `platform/internal/` holds 33 of the module's 40 Go
+  packages; the seven outside it are `platform/cmd/garam`, the three
+  generated from `platform/api/openapi.yaml`,
+  `platform/api/machine.yaml` and `platform/proto/`, and `migrations`,
+  `platform/tests/e2e` and `platform/tests/integration`, which hold test
+  files only (`go list ./... | grep -v /internal/`). So triggering on
+  changes under it would exclude a pull request that changes Go outside
   `platform/internal/` as well as the ones that change no Go at all, and
   would still fire on almost every pull request that changes Go and
   roughly double what it costs: of the 120 commits to
@@ -416,7 +431,7 @@ on hosted runners.
   copies the whole module directory into `TMPDIR` once per worker
   (`internal/engine/workdir`), and a worker is a core by default: the Go
   tree is four megabytes and the `console/node_modules` and
-  `console/.next` that `make web-install` and `make web-build` leave
+  `console/.next` that `make install` and `make -C console build` leave
   behind are another 856, so a run on twelve cores after `make ci`
   writes ten gigabytes — to RAM wherever `TMPDIR` is a tmpfs.
 

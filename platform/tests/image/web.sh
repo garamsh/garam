@@ -36,13 +36,14 @@ if [ -z "$image" ]; then
 	image=garam-web:image-e2e
 	docker build -t "$image" \
 		--build-arg GARAM_API_URL=http://garam-api-stub:8080 \
-		-f deploy/local/Dockerfile.web web
+		--build-arg APP=console \
+		-f deploy/local/Dockerfile.web .
 fi
 
 # The rewrite target is baked, so what the image itself carries is the
 # only thing the stub can be expected to answer on.
 dest=$(docker run --rm --entrypoint node "$image" -e '
-const r = require("/app/.next/routes-manifest.json").rewrites;
+const r = require("/app/console/.next/routes-manifest.json").rewrites;
 const all = [...r.beforeFiles, ...r.afterFiles, ...r.fallback];
 const api = all.find((x) => x.source === "/api/:path*");
 if (!api) { console.error("no /api/:path* rewrite"); process.exit(1); }

@@ -1,47 +1,53 @@
-# Multi-stage build of the Next.js frontend (ADR-0009) as a standalone
-# server. Build context is `console/`.
+# Multi-stage build of one of the Next.js apps (ADR-0009) as a
+# standalone server. Build context is the repository root, which holds
+# the pnpm workspace the app installs from: the app names its folder in
+# APP (`console` or `site`), and Dockerfile.web.dockerignore keeps the
+# context to the web packages.
 #
-# All three stages take the same base, pinned by digest: the tag reads
+# Both stages take the same base, pinned by digest: the tag reads
 # and the digest resolves, so two builds of this commit pull the same
 # bytes. Dependabot proposes a newer tag — `.github/dependabot.yml`
 # names what it does not cover — and a move by hand re-resolves with
 # `docker buildx imagetools inspect <ref>`. It is pulled from Google's
 # mirror for the reason deploy/local/Dockerfile states.
 
-FROM mirror.gcr.io/library/node:24.18.1-alpine3.24@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3 AS deps
-
-WORKDIR /app
-RUN npm install -g pnpm@11.11.0
-
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
-
 FROM mirror.gcr.io/library/node:24.18.1-alpine3.24@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3 AS build
 
-WORKDIR /app
+WORKDIR /repo
 RUN npm install -g pnpm@11.11.0
+
+# fetch reads only the lockfile, so this layer is reused until a
+# dependency moves, whatever source changed.
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm fetch
+
+ARG APP
 
 # The `/api/*` rewrite is baked into the build, so the backend URL has
 # to be known here as well as at runtime.
 ARG GARAM_API_URL=http://api:8080
 ENV GARAM_API_URL=$GARAM_API_URL
 
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm build
+RUN test -n "$APP" || { echo "APP names the app's folder: console or site" >&2; exit 1; }; \
+  pnpm install --offline --frozen-lockfile --filter "{./$APP}..." && \
+  pnpm --dir "$APP" build
 
 FROM mirror.gcr.io/library/node:24.18.1-alpine3.24@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3
 
+ARG APP
 WORKDIR /app
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000
 
 # `output: "standalone"` emits a self-contained server plus the subset
 # of node_modules it needs, and nothing else: neither .next/static nor
 # public/ is in it, so both are copied alongside. An asset missing from
-# here 404s at runtime and nothing in the build says so.
-COPY --from=build /app/.next/standalone ./
-COPY --from=build /app/.next/static ./.next/static
-COPY --from=build /app/public ./public
+# here 404s at runtime and nothing in the build says so. Next traces
+# from the workspace root, so the server sits under the app's folder.
+COPY --from=build /repo/$APP/.next/standalone ./
+COPY --from=build /repo/$APP/.next/static ./$APP/.next/static
+COPY --from=build /repo/$APP/public ./$APP/public
+WORKDIR /app/$APP
 
 # The commit and the version the build was given, recorded on the image
 # so a deployment resolves back to a source without going through the

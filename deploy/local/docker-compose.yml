@@ -163,9 +163,10 @@ services:
   web:
     profiles: ["web"]
     build:
-      context: ../../console
-      dockerfile: ../deploy/local/Dockerfile.web
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.web
       args:
+        APP: console
         GARAM_API_URL: http://api:8080
     environment:
       GARAM_API_URL: http://api:8080

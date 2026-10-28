@@ -22,7 +22,7 @@ set -eu
 
 # What the repository root owns: a change to any of them can reach every
 # module. A path ending in / is a folder.
-ROOT_FILES='go.work go.work.sum pnpm-workspace.yaml Makefile .gitignore .dockerignore .github/ tooling/'
+ROOT_FILES='go.work go.work.sum package.json pnpm-lock.yaml pnpm-workspace.yaml Makefile .gitignore .dockerignore .github/ tooling/'
 
 base=${1:-}
 test -n "$base" || { echo 'affected: no base — usage: tooling/ci/affected.sh <base>' >&2; exit 2; }

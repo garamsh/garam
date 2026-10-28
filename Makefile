@@ -77,11 +77,12 @@ IMAGE_BUILD_ARGS = $(if $(IMAGE_REGISTRY),--registry '$(IMAGE_REGISTRY)') $(if $
 image-build:
 	tooling/image-build.sh $(IMAGE_BUILD_ARGS)
 
-# What image-build tagged the web image, asked of the script that tags
-# it by the build context, so a rename in release.yml cannot leave this
-# naming an image an earlier run built (#870). Empty when the release
-# builds none from the web context, which the target reports.
-WEB_IMAGE = $(shell tooling/image-build.sh --names $(IMAGE_BUILD_ARGS) | sed -n 's|^console ||p')
+# What image-build tagged the console's image, asked of the script that
+# tags it, so a tag rule in release.yml cannot leave this naming an
+# image an earlier run built (#870). Both images build from the root, so
+# the console's is told apart by its repository, garam-web. Empty when
+# the release builds none into it, which the target reports.
+WEB_IMAGE = $(shell tooling/image-build.sh --names $(IMAGE_BUILD_ARGS) | awk '$$2 ~ /(^|\/)garam-web:/ { print $$2 }')
 
 # web-image-e2e checks the built image rather than the app: that the
 # standalone server starts, answers both probes and reaches the baked
@@ -91,7 +92,7 @@ WEB_IMAGE = $(shell tooling/image-build.sh --names $(IMAGE_BUILD_ARGS) | sed -n 
 # verified, and then nothing is built here.
 web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
 	@image='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))'; \
-		test -n "$$image" || { echo 'web-image-e2e: nothing names the image to check — .github/workflows/release.yml builds none from the web context'; exit 1; }; \
+		test -n "$$image" || { echo 'web-image-e2e: nothing names the image to check — .github/workflows/release.yml builds none into garam-web'; exit 1; }; \
 		GARAM_WEB_IMAGE="$$image" platform/tests/image/web.sh
 
 # test-image builds the test image another repository's CI copies

@@ -85,9 +85,9 @@ ns=garam-dev
 # existed. A development build takes the release's repository names
 # into `garam-dev/`, the release workflow naming them under `garam/`.
 accepted '. garam-server:ci' --names
-accepted 'console garam-web:ci' --names
+accepted '. garam-web:ci' --names
 accepted ". $reg/$ns/garam-server:$short" --names --registry "$reg"
-accepted "console $reg/$ns/garam-web:$short" --names --registry "$reg"
+accepted ". $reg/$ns/garam-web:$short" --names --registry "$reg"
 
 # A release version against the prerelease it is one suffix from.
 refused 'is a release version' --names --registry "$reg" --tag 1.2.3

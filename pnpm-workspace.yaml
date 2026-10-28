@@ -1,7 +1,17 @@
-# Every web package (ADR-0125), for a recursive pnpm run from here. A
-# command run inside a package reads that package's own
-# pnpm-workspace.yaml first, which keeps its lockfile and allowBuilds.
+# Every web package (ADR-0125), installed together from one lockfile,
+# pnpm-lock.yaml beside this file, so a package another imports
+# (design/) is linked rather than published.
 packages:
   - console
   - cowork/engine
   - cowork/web
+# sharp backs Next.js image optimisation; unrs-resolver backs the ESLint
+# import resolver; esbuild bundles cowork/engine. Each ships a native
+# binary through an install script, which has to run.
+# msw's postinstall only writes the browser service worker; the tests
+# mock in Node, so it stays off.
+allowBuilds:
+  esbuild: true
+  msw: false
+  sharp: true
+  unrs-resolver: true

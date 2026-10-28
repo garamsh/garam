@@ -14,6 +14,9 @@ Thumbs.db
 # Logs
 *.log
 
+# The pnpm workspace's install, shared by every web package
+/node_modules/
+
 # Go
 /garam
 *.test

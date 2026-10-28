@@ -1,9 +1,0 @@
-# sharp backs Next.js image optimisation; unrs-resolver backs the ESLint
-# import resolver. Both ship native binaries and need their install
-# scripts to run.
-# msw's postinstall only writes the browser service worker; the tests
-# mock in Node, so it stays off.
-allowBuilds:
-  msw: false
-  sharp: true
-  unrs-resolver: true

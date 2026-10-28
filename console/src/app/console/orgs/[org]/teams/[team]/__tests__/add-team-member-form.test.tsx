@@ -7,7 +7,7 @@ import { AddMemberForm } from "@/app/console/_components/membership/add-member-f
 import type { Candidate } from "@/features/orgs";
 import { API_URL, alice, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {

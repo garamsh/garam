@@ -15,7 +15,7 @@
 export const RETURN_PARAM = "next";
 
 /**
- * The request header `proxy.ts` stamps a console request with: the path
+ * The request header the console's `proxy.ts` stamps a request with: the path
  * and query it asked for, so a page or an action that finds the
  * session gone can send the visitor to sign in carrying it. The proxy
  * overwrites whatever a client sent under this name, and every reader

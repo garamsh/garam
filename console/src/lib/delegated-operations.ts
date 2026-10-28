@@ -1,4 +1,4 @@
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 /** One operation a hosted operator's grant can carry. */
 type DelegatedOperation = components["schemas"]["DelegatedOperation"];

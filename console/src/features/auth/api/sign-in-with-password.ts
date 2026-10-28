@@ -4,9 +4,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { GaramApiError, garamRequest, refusal } from "@/lib/garam";
-import { PASSWORD_REFUSED } from "@/lib/password-credentials";
-import { RETURN_PARAM, safeReturnPath } from "@/lib/return-path";
-import type { components } from "@/types/api";
+import { PASSWORD_REFUSED } from "@garam/platform-client/password-credentials";
+import { RETURN_PARAM, safeReturnPath } from "@garam/platform-client/return-path";
+import type { components } from "@garam/platform-client/api";
 
 import { keepSessionCookie } from "./session-cookie";
 

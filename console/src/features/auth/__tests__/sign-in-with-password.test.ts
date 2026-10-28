@@ -2,10 +2,10 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { signInWithPassword } from "@/features/auth/api/sign-in-with-password";
-import { PASSWORD_REFUSED } from "@/lib/password-credentials";
+import { PASSWORD_REFUSED } from "@garam/platform-client/password-credentials";
 import { API_URL, alice } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 // `redirect()` throws a control-flow error the router catches; the
 // test only needs to observe where it was sent.

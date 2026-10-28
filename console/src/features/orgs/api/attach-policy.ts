@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { GaramApiError, garamFetchAuthenticated, refusal } from "@/lib/garam";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 import { parseGrn } from "@/lib/grn";
 import { PolicyAttachmentParser } from "./policies";

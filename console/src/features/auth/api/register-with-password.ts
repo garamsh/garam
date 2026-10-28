@@ -5,8 +5,8 @@ import { z } from "zod";
 
 import { joinedOrgPath } from "@/features/orgs";
 import { GaramApiError, garamRequest, refusal } from "@/lib/garam";
-import { parsePassword, parseUsername } from "@/lib/password-credentials";
-import type { components } from "@/types/api";
+import { parsePassword, parseUsername } from "@garam/platform-client/password-credentials";
+import type { components } from "@garam/platform-client/api";
 
 import { keepSessionCookie } from "./session-cookie";
 

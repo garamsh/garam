@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { RenameOrgForm } from "@/app/console/orgs/[org]/settings/_components/rename-org-form";
 import { enter } from "@/testing/enter";
 import { API_URL, acme } from "@/testing/mocks/handlers";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 import { server } from "@/testing/setup";
 
 // `revalidatePath` needs a request scope the test does not run in.

@@ -34,7 +34,7 @@ import {
   parseOperatorIdentifier,
   parseOperatorName,
 } from "@/lib/operator";
-import type { Parsed } from "@/lib/parsed";
+import type { Parsed } from "@garam/platform-client/parsed";
 import { refuseUnsent } from "@/lib/unsent-action";
 
 import type { OperatorIdentity } from "./operator-pairs";

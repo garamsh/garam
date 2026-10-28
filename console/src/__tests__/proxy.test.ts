@@ -2,8 +2,8 @@ import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 
 import { proxy } from "@/proxy";
-import { RETURN_PATH_HEADER } from "@/lib/return-path";
-import { SESSION_COOKIE } from "@/lib/session";
+import { RETURN_PATH_HEADER } from "@garam/platform-client/return-path";
+import { SESSION_COOKIE } from "@garam/platform-client/session";
 
 function request(path: string, { signedIn = false } = {}) {
   const req = new NextRequest(new URL(path, "http://localhost:3000"));

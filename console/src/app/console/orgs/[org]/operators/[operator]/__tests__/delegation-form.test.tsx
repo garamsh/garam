@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DelegationForm } from "@/app/console/orgs/[org]/operators/[operator]/_components/delegation-form";
 import { TooltipProvider } from "@garam/design/ui/tooltip";
 import type { Delegation } from "@/features/orgs";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 

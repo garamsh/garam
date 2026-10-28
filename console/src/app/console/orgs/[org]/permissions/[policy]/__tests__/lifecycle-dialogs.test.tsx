@@ -8,7 +8,7 @@ import { ActivatePolicyDialog } from "@/app/console/orgs/[org]/permissions/[poli
 import { DeletePolicyDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/delete-policy-dialog";
 import { MakeDefaultDialog } from "@/app/console/orgs/[org]/permissions/[policy]/_components/make-default-dialog";
 import { Outcome, OutcomeProvider } from "@/app/console/_components/outcome";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 import { API_URL, baselineRead, denyDeletes } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 

@@ -8,7 +8,7 @@ import {
   CONTRACT_VERSION,
   CONTRACT_VERSION_HEADER,
 } from "@/lib/operation-authority";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 import { OperatorParser, orgPath } from "./orgs";
 

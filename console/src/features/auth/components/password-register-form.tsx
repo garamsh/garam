@@ -9,7 +9,7 @@ import { Input } from "@garam/design/ui/input";
 import {
   PASSWORD_MIN_LENGTH,
   USERNAME_MAX_LENGTH,
-} from "@/lib/password-credentials";
+} from "@garam/platform-client/password-credentials";
 
 import {
   registerWithPassword,

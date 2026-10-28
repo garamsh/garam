@@ -13,7 +13,7 @@ import {
   RETURN_PARAM,
   safeReturnPath,
   withReturnPath,
-} from "@/lib/return-path";
+} from "@garam/platform-client/return-path";
 
 import { ApiUnreachableCard } from "../_components/api-unreachable-card";
 import {

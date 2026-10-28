@@ -2,7 +2,7 @@ import { HttpResponse, http } from "msw";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { logOut } from "@/features/auth/api/log-out";
-import { SESSION_COOKIE } from "@/lib/session";
+import { SESSION_COOKIE } from "@garam/platform-client/session";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 

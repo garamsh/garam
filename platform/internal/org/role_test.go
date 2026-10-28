@@ -33,7 +33,7 @@ func TestParseRole_Unknown(t *testing.T) {
 
 // TestActionConstants_SpellTheirWireStrings pins the action vocabulary
 // as text. An action string is what a stored policy document names and
-// what `api/openapi.yaml` and `console/src/types/api.ts` spell out, so
+// what `api/openapi.yaml` and `client/src/api.ts` spell out, so
 // renaming one breaks a contract already published; every other
 // assertion in this file compares a constant to itself and reports
 // nothing when it moves. Each is also one IsAction answers for, so a

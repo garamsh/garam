@@ -15,7 +15,7 @@ import {
   denyDeletesVersions,
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({

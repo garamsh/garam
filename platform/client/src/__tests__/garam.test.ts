@@ -6,11 +6,17 @@ import {
   GaramApiError,
   GaramContractError,
   GaramUnreachableError,
-  garamFetch,
+  garamClient,
   refusal,
-} from "@/lib/garam";
-import { API_URL, alice } from "@/testing/mocks/handlers";
-import { server } from "@/testing/setup";
+} from "../garam";
+import { API_URL, alice, server } from "../testing/setup";
+
+const { garamFetch } = garamClient({
+  apiUrl: API_URL,
+  redirectToSignIn: () => {
+    throw new Error("no read here is a signed-in one");
+  },
+});
 
 const User = z.object({ grn: z.string(), nickname: z.string() });
 

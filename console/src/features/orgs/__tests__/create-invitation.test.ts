@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createInvitation } from "@/features/orgs/api/create-invitation";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {

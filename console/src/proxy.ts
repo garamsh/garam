@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { RETURN_PATH_HEADER, withReturnPath } from "@/lib/return-path";
-import { SESSION_COOKIE } from "@/lib/session";
+import { RETURN_PATH_HEADER, withReturnPath } from "@garam/platform-client/return-path";
+import { SESSION_COOKIE } from "@garam/platform-client/session";
 
 /**
  * Sends visitors without a session cookie to the login page before the

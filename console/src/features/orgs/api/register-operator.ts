@@ -10,7 +10,7 @@ import {
   parseOperatorIdentifier,
   parseOperatorName,
 } from "@/lib/operator";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 import { slugFromGrn } from "@/lib/grn";
 import { OperatorParser, type Operator } from "./orgs";

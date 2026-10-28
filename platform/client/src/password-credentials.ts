@@ -16,7 +16,7 @@
  * which of the two it was holding.
  */
 
-import { refuse, type Parsed } from "@/lib/parsed";
+import { refuse, type Parsed } from "./parsed";
 
 /**
  * How long a username is, in characters. The schema states no number:

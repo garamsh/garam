@@ -7,11 +7,11 @@ import { PasswordRegisterForm } from "@/features/auth/components/password-regist
 import {
   PASSWORD_MIN_LENGTH,
   USERNAME_MAX_LENGTH,
-} from "@/lib/password-credentials";
+} from "@garam/platform-client/password-credentials";
 import { enter } from "@/testing/enter";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {

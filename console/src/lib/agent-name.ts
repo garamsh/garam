@@ -3,7 +3,7 @@
  * which the rename form and its Server Action both apply (ADR-0119).
  */
 
-import { refuse, type Parsed } from "@/lib/parsed";
+import { refuse, type Parsed } from "@garam/platform-client/parsed";
 
 /**
  * How long an agent's name is, in characters, once surrounding space

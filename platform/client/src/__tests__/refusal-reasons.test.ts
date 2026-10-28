@@ -3,17 +3,18 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { MAPPED_REASONS, UNMAPPED_REASONS } from "@/lib/refusal-copy";
+import { MAPPED_REASONS, UNMAPPED_REASONS } from "../refusal-copy";
 
 /**
  * The codes `platform/api/openapi.yaml` documents under `Error.reason`,
- * read off the description `console/src/types/api.ts` is generated with
- * — which `make -C console check-gen` holds to the specification — as every
- * backticked snake_case word on the comment above `reason?: string`.
+ * read off the description `platform/client/src/api.ts` is generated
+ * with — which `make -C platform/client check-gen` holds to the
+ * specification — as every backticked snake_case word on the comment
+ * above `reason?: string`.
  */
 function documentedReasons(): string[] {
   const generated = readFileSync(
-    join(import.meta.dirname, "../../types/api.ts"),
+    join(import.meta.dirname, "../api.ts"),
     "utf8",
   );
   const comment =

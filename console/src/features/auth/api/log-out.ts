@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { garamFetch, isUnauthenticated } from "@/lib/garam";
-import { SESSION_COOKIE } from "@/lib/session";
+import { SESSION_COOKIE } from "@garam/platform-client/session";
 
 /**
  * Revokes the session server-side and clears the cookie. A session the

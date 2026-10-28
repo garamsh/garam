@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { garamFetchAuthenticated } from "@/lib/garam";
-import { RETURN_PATH_HEADER } from "@/lib/return-path";
+import { RETURN_PATH_HEADER } from "@garam/platform-client/return-path";
 import { API_URL } from "@/testing/mocks/handlers";
 import { requestHeaders, server } from "@/testing/setup";
 

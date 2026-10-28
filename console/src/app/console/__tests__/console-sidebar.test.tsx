@@ -8,7 +8,7 @@ import { SidebarProvider } from "@garam/design/ui/sidebar";
 import { TooltipProvider } from "@garam/design/ui/tooltip";
 import { API_URL } from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
-import { RETURN_PATH_HEADER } from "@/lib/return-path";
+import { RETURN_PATH_HEADER } from "@garam/platform-client/return-path";
 import { requestHeaders, server } from "@/testing/setup";
 
 const route = vi.hoisted(() => ({ pathname: "/console/orgs/acme" }));

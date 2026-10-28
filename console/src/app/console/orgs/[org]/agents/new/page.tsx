@@ -12,7 +12,7 @@ import {
   type HostedOperator,
 } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { PageHeader } from "../../../../_components/page-header";

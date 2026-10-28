@@ -9,7 +9,7 @@ import {
   garamFetchAuthenticated,
   parserFor,
 } from "@/lib/garam";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 /**
  * One question for the server: an action, and the resource it would be

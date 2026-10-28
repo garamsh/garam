@@ -13,7 +13,7 @@ import {
   CONTRACT_VERSION,
   CONTRACT_VERSION_HEADER,
 } from "@/lib/operation-authority";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 import { slugFromGrn } from "@/lib/grn";
 import { GrnParser, OperatorParser, orgPath, type Operator } from "./orgs";

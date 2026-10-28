@@ -5,14 +5,14 @@ import { registerWithPassword } from "@/features/auth/api/register-with-password
 import {
   PASSWORD_MIN_LENGTH,
   USERNAME_MAX_LENGTH,
-} from "@/lib/password-credentials";
+} from "@garam/platform-client/password-credentials";
 import {
   API_URL,
   acmeInvitation,
   aliceMembership,
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 // `redirect()` throws a control-flow error the router catches; the
 // test only needs to observe where it was sent.

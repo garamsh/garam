@@ -6,7 +6,7 @@ import { z } from "zod";
 import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 import { parsePolicyDocument } from "@/lib/policy-document";
 import type { PolicyDocument } from "@/lib/policy-document";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 import { documentRefusal, type DocumentRefusal } from "./document-refusal";
 import { PolicyParser, PolicyVersionParser } from "./policies";

@@ -2,7 +2,7 @@ import "server-only";
 
 import { cookies } from "next/headers";
 
-import { SESSION_COOKIE } from "@/lib/session";
+import { SESSION_COOKIE } from "@garam/platform-client/session";
 
 /**
  * Plants on this origin the session cookie the backend issued.

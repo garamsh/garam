@@ -19,7 +19,7 @@
  * editing both carry them.
  */
 
-import { refuse, type Parsed } from "@/lib/parsed";
+import { refuse, type Parsed } from "@garam/platform-client/parsed";
 
 /** How long an operator identifier is, in characters. */
 export const OPERATOR_IDENTIFIER_MAX_LENGTH = 64;

@@ -6,8 +6,9 @@ import { env } from "./src/env";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
-  // design/ ships its TypeScript source, which this app compiles.
-  transpilePackages: ["@garam/design"],
+  // design/ and platform/client ship TypeScript source, which this app
+  // compiles.
+  transpilePackages: ["@garam/design", "@garam/platform-client"],
   // Emit a self-contained server so the container image carries only
   // the runtime it needs (deploy/local/Dockerfile.web).
   output: "standalone",

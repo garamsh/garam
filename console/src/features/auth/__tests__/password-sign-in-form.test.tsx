@@ -5,11 +5,11 @@ import { Component, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { PasswordSignInForm } from "@/features/auth/components/password-sign-in-form";
-import { PASSWORD_REFUSED } from "@/lib/password-credentials";
+import { PASSWORD_REFUSED } from "@garam/platform-client/password-credentials";
 import { enter } from "@/testing/enter";
 import { API_URL, alice } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { REFUSAL_COPY } from "@/lib/refusal-copy";
+import { REFUSAL_COPY } from "@garam/platform-client/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {

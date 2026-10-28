@@ -6,7 +6,7 @@ import { FormField } from "@garam/design/components/form-field";
 import { Refusal } from "@garam/design/components/refusal";
 import { Button } from "@garam/design/ui/button";
 import { Input } from "@garam/design/ui/input";
-import { RETURN_PARAM } from "@/lib/return-path";
+import { RETURN_PARAM } from "@garam/platform-client/return-path";
 
 import { signInWithPassword, type SignInWithPasswordState } from "../actions";
 

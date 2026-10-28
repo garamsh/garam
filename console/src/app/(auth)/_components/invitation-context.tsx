@@ -5,7 +5,7 @@ import {
   unusableInvitation,
   type InvitationPreview,
 } from "@/features/orgs";
-import { invitationTokenOf } from "@/lib/return-path";
+import { invitationTokenOf } from "@garam/platform-client/return-path";
 
 /**
  * The invitation a sign-in shell page was reached for: one that can

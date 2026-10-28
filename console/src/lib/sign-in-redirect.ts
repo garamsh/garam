@@ -7,7 +7,7 @@ import {
   RETURN_PATH_HEADER,
   safeReturnPath,
   withReturnPath,
-} from "@/lib/return-path";
+} from "@garam/platform-client/return-path";
 
 /**
  * Sends a visitor whose session the backend rejected to sign in, carrying

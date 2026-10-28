@@ -6,7 +6,7 @@ import {
   isUnauthenticated,
   parserFor,
 } from "@/lib/garam";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 /** The signed-in user, as the backend describes one. */
 export type User = components["schemas"]["User"];

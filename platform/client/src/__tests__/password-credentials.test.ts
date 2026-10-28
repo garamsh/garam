@@ -6,7 +6,7 @@ import {
   USERNAME_MAX_LENGTH,
   parsePassword,
   parseUsername,
-} from "@/lib/password-credentials";
+} from "../password-credentials";
 
 describe("parseUsername", () => {
   it("takes lowercase letters, digits and hyphens", () => {

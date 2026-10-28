@@ -7,7 +7,7 @@ import {
   invitationTokenOf,
   safeReturnPath,
   withReturnPath,
-} from "@/lib/return-path";
+} from "../return-path";
 
 /**
  * The vectors the Go rule is tested against too
@@ -24,7 +24,7 @@ const VECTORS: {
   readFileSync(
     join(
       import.meta.dirname,
-      "../../../../platform/internal/api/testdata/return-path-vectors.json",
+      "../../../internal/api/testdata/return-path-vectors.json",
     ),
     "utf8",
   ),

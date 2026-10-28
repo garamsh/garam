@@ -8,7 +8,7 @@ import {
   garamFetch,
   parserFor,
 } from "@/lib/garam";
-import type { components } from "@/types/api";
+import type { components } from "@garam/platform-client/api";
 
 /**
  * What an invitation admits its holder to, as the API answers it: the

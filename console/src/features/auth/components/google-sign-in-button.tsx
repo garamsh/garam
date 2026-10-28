@@ -1,6 +1,6 @@
 import Image from "next/image";
 
-import { RETURN_PARAM } from "@/lib/return-path";
+import { RETURN_PARAM } from "@garam/platform-client/return-path";
 
 /** Approved label, carried by the button image and its accessible name. */
 export const GOOGLE_SIGN_IN_LABEL = "Sign in with Google";

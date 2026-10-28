@@ -25,6 +25,10 @@ type Config struct {
 	// CookieSecure marks cookies Secure. Disable only for local dev
 	// over plain HTTP.
 	CookieSecure bool
+	// CookieDomain is the Domain every cookie carries: the parent
+	// domain of the hosts one sign-in reaches (ADR-0131). Empty leaves
+	// every cookie host-only.
+	CookieDomain string
 	// TokenURL is the machine listener's token endpoint URL, which
 	// operator.ParseTokenEndpoint read: what an issued key's assertions
 	// name as their audience (ADR-0102). Empty issues no key.

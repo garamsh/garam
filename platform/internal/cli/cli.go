@@ -204,6 +204,7 @@ const (
 	envAuthzAddr             envName = "GARAM_AUTHZ_ADDR"
 	envSessionTTL            envName = "GARAM_SESSION_TTL"
 	envCookieSecure          envName = "GARAM_COOKIE_SECURE"
+	envCookieDomain          envName = "GARAM_COOKIE_DOMAIN"
 	envGoogleClientID        envName = "GOOGLE_CLIENT_ID"
 	envGoogleClientSecret    envName = "GOOGLE_CLIENT_SECRET"
 	envGoogleRedirectURL     envName = "GOOGLE_REDIRECT_URL"

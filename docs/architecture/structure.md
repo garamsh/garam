@@ -41,9 +41,7 @@ Beside it:
 - **`lib/errorx/`, `lib/grn/` and `lib/clisession/`**, a library
   module each, created because cowork is the second module to need
   them. The platform's module requires the first two through a
-  `replace` to their folders, and its own `platform/internal/errorx`
-  and `platform/internal/grn` forward to them until #1708 rewrites
-  their importers and deletes them.
+  `replace` to their folders and imports them directly.
 - **`lib/platform-sdk-go/`**, the Go client generated from
   `platform/api/openapi.yaml`, and **`platform-cli/`**, the client CLI
   built on it ([cli.md](./cli.md)).

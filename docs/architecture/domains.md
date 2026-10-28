@@ -358,8 +358,8 @@ go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{e
 
 | Package | Domains importing it | Standing |
 |---|---|---|
-| `platform/internal/errorx` | 9 — every domain | earns its place |
-| `platform/internal/grn` | 9 — every domain | earns its place |
+| `lib/errorx` | 9 — every domain | earns its place |
+| `lib/grn` | 9 — every domain | earns its place |
 | `platform/internal/pgxerr` | 9 — `org` `user` `authz` `agent` `operator` `authn` `message` `audit` `machine` | earns its place |
 | `platform/internal/pgxtype` | 9 — `org` `user` `authz` `agent` `operator` `authn` `message` `audit` `machine` | earns its place |
 | `platform/internal/listfilter` | 5 — `org` `agent` `audit` `authz` `user` | earns its place; ADR-0052 placed it before the count did |
@@ -367,20 +367,18 @@ go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{e
 | `platform/internal/keyfile` | 1 — `message` | under the threshold; belongs with the domain that owns it |
 | `platform/internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
 
-`platform/internal/grn` holds the `GRN` value type with `New`, `Parse`,
+`lib/grn` holds the `GRN` value type with `New`, `Parse`,
 `Validate`, `String` and `IsZero`, and `Org`, the GRN of an
 organization, which ADR-0001 makes root-owned (#1150). It depends on
 `errorx` only.
 
-`platform/internal/errorx` holds the `Kind` enum aligned with gRPC
+`lib/errorx` holds the `Kind` enum aligned with gRPC
 status codes, the `Error` interface, and `New` / `Wrap` / `IsKind` /
 `KindOf`. It has no dependency of its own.
 
-Both are implemented under `lib/`, in `lib/grn/` and `lib/errorx/`,
-since cowork became a second module needing them (ADR-0125,
-ADR-0132). The two packages above forward to it,
-so the counts in the table still read through them, until #1659
-rewrites their importers to the new paths.
+Both sit under `lib/` since cowork became a second module needing them
+(ADR-0125, ADR-0132), and the platform's packages import them there
+directly (#1708).
 
 `platform/internal/pgxerr` maps a postgres driver error to an `errorx`
 error by reading the sql state the driver carries, or, where it carries

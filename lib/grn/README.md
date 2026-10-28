@@ -5,6 +5,5 @@ Garam Resource Names, the one identifier for every resource in garam
 the doc comments in `grn.go` are authoritative for constructing,
 rendering, parsing and validating one.
 
-- **Imported by** `platform/` (through `platform/internal/grn`, until
-  #1708) and `cowork/`.
+- **Imported by** `platform/` and `cowork/`.
 - **Gate:** `make -C lib/grn ci`.

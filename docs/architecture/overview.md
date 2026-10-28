@@ -372,10 +372,6 @@ list below is today's tree
   images come from; `minikube/README.md` §What this proves and what it
   does not is authoritative for what running it establishes about a real
   deployment.
-- `platform/internal/grn/` — identifier; shared primitive. It forwards
-  to `lib/grn/` (ADR-0125, ADR-0132) until #1708.
-- `platform/internal/errorx/` — typed errors; shared primitive. It
-  forwards to `lib/errorx/` (ADR-0125, ADR-0132) until #1708.
 - `platform/internal/wire/` — the conversions onto the wire formats the
   request surfaces share: the statement `Effect` and a policy's status
   with their authz-proto mappings, a statement rendered onto the authz
@@ -485,8 +481,8 @@ imports no request surface and no domain.
 
 | Type | Package | Responsibility |
 |------|---------|----------------|
-| `grn.GRN` | `platform/internal/grn` | resource identifier (value type) |
-| `errorx.Error` | `platform/internal/errorx` | typed error with kind |
+| `grn.GRN` | `lib/grn` | resource identifier (value type) |
+| `errorx.Error` | `lib/errorx` | typed error with kind |
 | `user.User` | `platform/internal/user` | human identity |
 | `operator.Operator` | `platform/internal/operator` | an organization's record that it has an operator |
 | `agent.Agent` | `platform/internal/agent` | autonomous actor an operator provisions |

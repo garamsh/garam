@@ -2,7 +2,9 @@
 
 > Status: accepted; the process count is superseded by
 > [ADR-0017](./0017-machine-process.md), and the binary's path by
-> [ADR-0125](./0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
+> [ADR-0125](./0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md),
+> and the engine's binary by
+> [ADR-0130](./0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
 > Date: 2026-07-25
 
 ## Context

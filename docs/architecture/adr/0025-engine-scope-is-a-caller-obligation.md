@@ -1,6 +1,7 @@
 # ADR 0025: The engine's organization scope is the caller's obligation
 
-> Status: accepted — the engine-membership half this decision deferred is decided by [ADR-0038](./0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)
+> Status: accepted — the engine-membership half this decision deferred is decided by [ADR-0038](./0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md);
+> the caller's obligation is superseded by [ADR-0130](./0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
 > Date: 2026-08-17
 
 ## Contents

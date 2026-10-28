@@ -15,13 +15,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/test/bufconn"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/authz"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
-	"github.com/garamsh/garam/internal/user"
-	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/api"
+	"github.com/garamsh/garam/platform/internal/authz"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/user"
+	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // enginePolicyManager is the API's policy client over a real engine

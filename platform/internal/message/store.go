@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // Store is the queue itself: every message lives in it, and a reader

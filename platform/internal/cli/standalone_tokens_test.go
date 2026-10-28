@@ -18,10 +18,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/workload"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/workload"
 )
 
 // tokenGaram is garam's exchange, mint and activation as a v2

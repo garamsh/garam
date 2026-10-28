@@ -8,9 +8,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/listfilter"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/listfilter"
 )
 
 // actionEnroll is the action approving, withdrawing and revoking a

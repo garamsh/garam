@@ -24,10 +24,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/workload"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/message"
+	"github.com/garamsh/garam/platform/internal/workload"
 )
 
 // runtimeConfigOf is the runtime's configuration as the runtime reads

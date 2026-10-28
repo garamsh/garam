@@ -14,10 +14,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/ca"
-	"github.com/garamsh/garam/internal/cli"
-	"github.com/garamsh/garam/internal/keyfile"
-	"github.com/garamsh/garam/internal/operator"
+	"github.com/garamsh/garam/platform/internal/ca"
+	"github.com/garamsh/garam/platform/internal/cli"
+	"github.com/garamsh/garam/platform/internal/keyfile"
+	"github.com/garamsh/garam/platform/internal/operator"
 )
 
 // TestIdentityTokens_RefusesAMalformedTokenWithoutAReadForIt holds that

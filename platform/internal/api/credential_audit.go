@@ -4,15 +4,15 @@ import (
 	"context"
 	"net/http"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/audit"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/listfilter"
-	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/org"
-	"github.com/garamsh/garam/internal/user"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/audit"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/listfilter"
+	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/user"
 )
 
 // CredentialAudit reads the machine credential events the machine

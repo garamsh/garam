@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/audit"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/machine"
-	"github.com/garamsh/garam/internal/operator"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/audit"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/machine"
+	"github.com/garamsh/garam/platform/internal/operator"
 )
 
 // ReportProvisioningState records what the calling operator says about

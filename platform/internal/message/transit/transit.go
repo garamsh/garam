@@ -23,9 +23,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/keyfile"
-	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/keyfile"
+	"github.com/garamsh/garam/platform/internal/message"
 )
 
 // DefaultMount is the Transit mount when the deployment names none.

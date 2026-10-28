@@ -18,8 +18,8 @@ package workload
 import (
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // Refusals the supervisor leaves pending rather than repairs. Each

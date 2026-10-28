@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/ca"
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/ca"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // keyIDPrefix is how many leading bytes of a sealed value name the

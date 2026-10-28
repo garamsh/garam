@@ -32,10 +32,10 @@ const MAX_RETURN_PATH_BYTES = 2048;
  * `value` as a console path to return to, or null where it is not one:
  * the console or a path below it, well-formed and at most
  * `MAX_RETURN_PATH_BYTES` in UTF-8, with no backslash, control
- * character or dot segment. `internal/api/return_path.go` holds the
- * same rule for the provider sign-in, and
- * `internal/api/testdata/return-path-vectors.json` is the table both
- * are tested against.
+ * character or dot segment. `platform/internal/api/return_path.go`
+ * holds the same rule for the provider sign-in, and
+ * `platform/internal/api/testdata/return-path-vectors.json` is the
+ * table both are tested against.
  */
 export function safeReturnPath(value: unknown): string | null {
   if (typeof value !== "string" || !value.isWellFormed()) return null;

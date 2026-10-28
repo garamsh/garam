@@ -13,15 +13,15 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/delivery"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/keyfile"
-	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/workload"
-	"github.com/garamsh/garam/internal/workload/docker"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/delivery"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/keyfile"
+	"github.com/garamsh/garam/platform/internal/message"
+	"github.com/garamsh/garam/platform/internal/workload"
+	"github.com/garamsh/garam/platform/internal/workload/docker"
 )
 
 // runLockFile is what one `garam standalone run` holds in the

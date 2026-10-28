@@ -3,7 +3,7 @@ package authz
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/wire"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // Decision is the outcome of evaluating a statement set.

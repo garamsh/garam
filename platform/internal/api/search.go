@@ -4,12 +4,12 @@ import (
 	"net/http"
 	"slices"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/listfilter"
-	"github.com/garamsh/garam/internal/org"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/listfilter"
+	"github.com/garamsh/garam/platform/internal/org"
 )
 
 // Bounds of searchOrg's limit: how many objects of each kind it

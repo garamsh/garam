@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/delivery"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/delivery"
 )
 
 // createdAt is when every entry here was written, with the variable

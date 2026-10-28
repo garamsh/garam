@@ -2,8 +2,8 @@
 # Runs the web image and checks it: the standalone server starts,
 # /healthz and /readyz answer (ADR-0023), and `/api/*` reaches the URL
 # baked at build time (ADR-0009). The subject is the image a release
-# publishes, which `web/e2e` never opens — that suite builds this tree's
-# app and serves it.
+# publishes, which `console/e2e` never opens — that suite builds this
+# tree's app and serves it.
 #
 # 3000 below is the PORT deploy/local/Dockerfile.web sets. The chart
 # probes 3000 as well and nothing ties the two, so nothing here

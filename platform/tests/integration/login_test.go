@@ -10,10 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/authn"
-	authnpg "github.com/garamsh/garam/internal/authn/postgres"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/api"
+	"github.com/garamsh/garam/platform/internal/authn"
+	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 )
 
 // stubProvider drives /auth/login/{provider} without an issuer. The

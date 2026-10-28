@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/machineapi"
-	"github.com/garamsh/garam/internal/pgxerr"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/machineapi"
+	"github.com/garamsh/garam/platform/internal/pgxerr"
 )
 
 // engineWords is what the engine's own error says. A caller must not

@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // AuthorityReader reports whether an organization still holds a

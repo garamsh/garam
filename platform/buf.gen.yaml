@@ -3,7 +3,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/garamsh/garam/proto/gen
+      value: github.com/garamsh/garam/platform/proto/gen
 # The two plugin versions below are tool directives in go.mod: go.sum
 # records them and Dependabot's gomod ecosystem proposes their bumps,
 # and `.github/dependabot.yml` names what it does not cover. A move

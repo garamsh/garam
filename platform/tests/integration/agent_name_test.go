@@ -15,15 +15,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	apigen "github.com/garamsh/garam/api"
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/authn"
-	authnpg "github.com/garamsh/garam/internal/authn/postgres"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
-	"github.com/garamsh/garam/internal/user"
-	userpg "github.com/garamsh/garam/internal/user/postgres"
-	"github.com/garamsh/garam/internal/wire"
+	apigen "github.com/garamsh/garam/platform/api"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/authn"
+	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/user"
+	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // namedCreationBody is a managed-enrollment.v2 creation asking for

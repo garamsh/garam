@@ -6,10 +6,10 @@ import (
 
 	"google.golang.org/grpc/status"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/wire"
-	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/wire"
+	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // GRPCServer serves the policy engine over gRPC (ADR-0003 stage 2).

@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/wire"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 func TestGRNsToProto(t *testing.T) {

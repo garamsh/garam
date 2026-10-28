@@ -14,7 +14,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // Postgres sqlstate codes the unified classifier handles by name. They

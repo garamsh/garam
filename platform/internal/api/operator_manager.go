@@ -3,9 +3,9 @@ package api
 import (
 	"net/http"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/org"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/org"
 )
 
 // SetOperatorManager links the operator, as a control service, to the

@@ -334,8 +334,8 @@ func TestPrincipalFixture_IsAbsentFromTheGaramBinary(t *testing.T) {
 	list.Dir = moduleRoot(t)
 	deps, err := list.Output()
 	require.NoError(t, err)
-	assert.Contains(t, string(deps), "github.com/garamsh/garam/internal/authn", "the list is the binary's own packages")
-	assert.NotContains(t, string(deps), "github.com/garamsh/garam/tests/")
+	assert.Contains(t, string(deps), "github.com/garamsh/garam/platform/internal/authn", "the list is the binary's own packages")
+	assert.NotContains(t, string(deps), "github.com/garamsh/garam/platform/tests/")
 }
 
 // principalDatabases lists the databases named as prepare names them.

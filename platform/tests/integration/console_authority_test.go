@@ -13,11 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	apigen "github.com/garamsh/garam/api"
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/org"
-	orgpg "github.com/garamsh/garam/internal/org/postgres"
-	"github.com/garamsh/garam/internal/wire"
+	apigen "github.com/garamsh/garam/platform/api"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/org"
+	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // consoleOperations is every operation a console read or publication is

@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/watch"
-	watchpg "github.com/garamsh/garam/internal/watch/postgres"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/watch"
+	watchpg "github.com/garamsh/garam/platform/internal/watch/postgres"
 )
 
 // watchRelayAppName is what the relay's connections call themselves, so

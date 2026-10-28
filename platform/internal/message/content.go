@@ -3,7 +3,7 @@ package message
 import (
 	"encoding/json"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // ContentContract names the content a runtime is handed for a message

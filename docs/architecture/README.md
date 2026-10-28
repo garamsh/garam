@@ -236,7 +236,7 @@ What holds either way is rule 1's ground: a document that does not
 accumulate the sites has nothing to enumerate.
 
 No pipeline stands behind this either: what `make ci` reads under
-`docs/` is what `web/src/app/(marketing)/__tests__/claims.test.ts`
+`docs/` is what `console/src/app/(marketing)/__tests__/claims.test.ts`
 reads: the `> Status:` line of each ADR a landing-page claim names, and
 whether `docs/architecture/grn-model.md` exists. So no run of it passes
 or fails on anything this section describes. What this repository's
@@ -305,7 +305,7 @@ on hosted runners.
   `web-e2e`'s `make backend-up` and `images`' `make web-image-e2e` run
   with `IMAGE_BUILD_CACHE=gha` (`Makefile`), on the runner's Docker
   switched to the containerd image store by
-  `scripts/enable-containerd-image-store.sh`, so a run reuses the
+  `tooling/enable-containerd-image-store.sh`, so a run reuses the
   `go mod download` and `go build` layers an earlier run of the same
   pull request wrote (#1519). GitHub restores a cache only from the
   run's own ref and the default branch, and every cache here is written
@@ -340,27 +340,27 @@ on hosted runners.
   version of its `vX.Y.Z` tag (ADR-0039), to both Dockerfiles, which
   record the pair as `org.opencontainers.image.revision` and
   `…version` — so `docker image inspect -f '{{json .Config.Labels}}'`
-  names the commit whose `api/openapi.yaml` and `api/machine.yaml` a
-  caller of that deployment meets. **A label is what the build claimed
-  and not a property of the bytes.** Nothing derives it from the
-  layers, so this replaces an unenforced step with a readable one
-  rather than removing it: both repositories are IMMUTABLE, which makes
-  a tag's digest a fact the registry enforces, and the single link left
-  resting on trust is the git tag still naming the commit it named.
-  What the registry held when #1033 merged, 2026-09-04T16:44Z, was
-  published before the change — `0.1.0` carried no labels at all and
-  `0.2.0` a pair a person passed by hand — so the first image carrying
-  them because these files say so is a release after that reading.
-  A development build, which `make image-build` produces when given
-  `IMAGE_REGISTRY`, carries the same two labels, the version being its
-  tag (ADR-0071), and reaches `garam-dev/garam-server` or
-  `garam-dev/garam-web` only by a person's push (ADR-0097);
-  without it the target tags `:ci` and passes neither label a value.
-  A reference this repository did not publish is still one only its
-  builder can vouch for, which after the label is a claim about where
-  it came from and no longer about what code is in it. An answer to
-  "does this route exist" therefore names where it exists, and `main`
-  answers a different question than the caller asked (#886).
+  names the commit whose `platform/api/openapi.yaml` and
+  `platform/api/machine.yaml` a caller of that deployment meets. **A
+  label is what the build claimed and not a property of the bytes.**
+  Nothing derives it from the layers, so this replaces an unenforced
+  step with a readable one rather than removing it: both repositories
+  are IMMUTABLE, which makes a tag's digest a fact the registry
+  enforces, and the single link left resting on trust is the git tag
+  still naming the commit it named. What the registry held when #1033
+  merged, 2026-09-04T16:44Z, was published before the change — `0.1.0`
+  carried no labels at all and `0.2.0` a pair a person passed by hand —
+  so the first image carrying them because these files say so is a
+  release after that reading. A development build, which
+  `make image-build` produces when given `IMAGE_REGISTRY`, carries the
+  same two labels, the version being its tag (ADR-0071), and reaches
+  `garam-dev/garam-server` or `garam-dev/garam-web` only by a person's
+  push (ADR-0097); without it the target tags `:ci` and passes neither
+  label a value. A reference this repository did not publish is still
+  one only its builder can vouch for, which after the label is a claim
+  about where it came from and no longer about what code is in it. An
+  answer to "does this route exist" therefore names where it exists, and
+  `main` answers a different question than the caller asked (#886).
 - **The after-merge run is not taken.** A `push: branches: [main]`
   trigger ran on `ci.yml` until #811. Both triggers read the merge
   result, so what that one alone covered is a `main` that moved between
@@ -372,51 +372,53 @@ on hosted runners.
   date*, which is a repository setting and so the account owner's.
 - **Mutation testing runs in no workflow, and that is the decision
   rather than an omission.** `make mutation` rewrites one operator at a
-  time under `internal/` and reports the mutants no test noticed. Four
-  full runs on 2026-09-02 each spent around 35 minutes of CPU on twelve
-  cores and took between 5 minutes 42 seconds and 32 minutes of wall
-  time; the spread is the per-mutant timeout, accounted for below. A
-  runner with four cores has a third of those and slower ones.
-  `internal/` holds 33 of the module's 40 Go packages; the seven outside
-  it are `cmd/garam`, the three generated from `api/openapi.yaml`,
-  `api/machine.yaml` and `proto/`, and `migrations`, `tests/e2e` and
-  `tests/integration`, which hold test files only (`go list ./... | grep
-  -v /internal/`). So triggering on changes under it would exclude a
-  pull request that changes Go outside `internal/` as well as the ones
-  that change no Go at all, and would still fire on almost every pull
-  request that changes Go and roughly double what it costs: of the 120
-  commits to 3fbcf9367ad6b66d1ae5e553eb5630471c589036, 47 changed a Go,
-  specification or migration file, and 41 of those touch `internal/`
-  while six do not. A schedule spends the same minutes on a report no
-  pull request is waiting for, and attributes a new survivor to no
-  change rather than to the one that raised it. What the run buys is an
-  audit of the suite rather than a gate on one change, which is why a
-  person invokes it (#875). `--timeout-coefficient` is a ratio and not a
-  duration: gremlins allows each mutant's `go test` the coverage run's
-  own duration times it, and that duration is whatever Go's test cache
-  made it — two runs behind #875 measured it at 5.6 seconds and at 0.49
-  seconds, so the target's 300 buys half an hour per mutant in the first
-  and two and a half minutes in the second. The smaller is enough for
-  every mutant that is not a genuine hang. A long budget is paid for
-  only by a mutant that hangs, which holds a worker for the whole of it:
-  those two runs spent the same 36 minutes of CPU and took 7 and 32
-  minutes of wall time, and the nine mutants that hang in
-  `internal/delivery/gateway.go` are the whole difference. gremlins'
-  default of 3 buys a second and a half either way, less than compiling
-  one package takes, so every mutant times out and gremlins prints `Test
-  efficacy: 0.00%` and exits 0 having tested nothing — the run
-  `docs/convention/ci.md` §One entry point per task says has to be told
-  apart from the one that did the work. The target tells them apart by
-  the counts in the report gremlins writes rather than in its stream,
-  which says the same on both; the report is `json.Marshal` output, so
-  each key is followed directly by its value, which is what the target's
-  parse reads. gremlins 0.6.0 copies the whole module directory into
-  `TMPDIR` once per worker (`internal/engine/workdir`), and a worker is
-  a core by default: the Go tree is four megabytes and the
-  `web/node_modules` and `web/.next` that `make web-install` and `make
-  web-build` leave behind are another 856, so a run on twelve cores
-  after `make ci` writes ten gigabytes — to RAM wherever `TMPDIR` is a
-  tmpfs.
+  time under `platform/internal/` and reports the mutants no test
+  noticed. Four full runs on 2026-09-02 each spent around 35 minutes of
+  CPU on twelve cores and took between 5 minutes 42 seconds and 32
+  minutes of wall time; the spread is the per-mutant timeout, accounted
+  for below. A runner with four cores has a third of those and slower
+  ones. `platform/internal/` holds 33 of the module's 40 Go packages;
+  the seven outside it are `platform/cmd/garam`, the three generated
+  from `platform/api/openapi.yaml`, `platform/api/machine.yaml` and
+  `platform/proto/`, and `migrations`, `platform/tests/e2e` and
+  `platform/tests/integration`, which hold test files only
+  (`go list ./... | grep -v /internal/`). So triggering on changes under
+  it would exclude a pull request that changes Go outside
+  `platform/internal/` as well as the ones that change no Go at all, and
+  would still fire on almost every pull request that changes Go and
+  roughly double what it costs: of the 120 commits to
+  3fbcf9367ad6b66d1ae5e553eb5630471c589036, 47 changed a Go,
+  specification or migration file, and 41 of those touch
+  `platform/internal/` while six do not. A schedule spends the same
+  minutes on a report no pull request is waiting for, and attributes a
+  new survivor to no change rather than to the one that raised it. What
+  the run buys is an audit of the suite rather than a gate on one
+  change, which is why a person invokes it (#875).
+  `--timeout-coefficient` is a ratio and not a duration: gremlins allows
+  each mutant's `go test` the coverage run's own duration times it, and
+  that duration is whatever Go's test cache made it — two runs behind
+  #875 measured it at 5.6 seconds and at 0.49 seconds, so the target's
+  300 buys half an hour per mutant in the first and two and a half
+  minutes in the second. The smaller is enough for every mutant that is
+  not a genuine hang. A long budget is paid for only by a mutant that
+  hangs, which holds a worker for the whole of it: those two runs spent
+  the same 36 minutes of CPU and took 7 and 32 minutes of wall time, and
+  the nine mutants that hang in `platform/internal/delivery/gateway.go`
+  are the whole difference. gremlins' default of 3 buys a second and a
+  half either way, less than compiling one package takes, so every
+  mutant times out and gremlins prints `Test efficacy: 0.00%` and exits
+  0 having tested nothing — the run `docs/convention/ci.md` §One entry
+  point per task says has to be told apart from the one that did the
+  work. The target tells them apart by the counts in the report gremlins
+  writes rather than in its stream, which says the same on both; the
+  report is `json.Marshal` output, so each key is followed directly by
+  its value, which is what the target's parse reads. gremlins 0.6.0
+  copies the whole module directory into `TMPDIR` once per worker
+  (`internal/engine/workdir`), and a worker is a core by default: the Go
+  tree is four megabytes and the `console/node_modules` and
+  `console/.next` that `make web-install` and `make web-build` leave
+  behind are another 856, so a run on twelve cores after `make ci`
+  writes ten gigabytes — to RAM wherever `TMPDIR` is a tmpfs.
 
 ## Index
 
@@ -426,7 +428,7 @@ Responsibility documents:
   what may reference what, and when a new boundary is earned
 - [overview.md](./overview.md) — what garam is and is not; module list
 - [domains.md](./domains.md) — garam's domains named by subject matter,
-  and what else under `internal/` is not one
+  and what else under `platform/internal/` is not one
 - [organizations.md](./organizations.md) — the tenant hierarchy: the
   top-level tenant, what is grouped inside it, and who belongs to one
 - [users.md](./users.md) — human identity
@@ -486,7 +488,8 @@ ADRs:
   collection
 - [0008](./adr/0008-identity-based-policy-attachments.md) —
   identity-based policy attachments
-- [0009](./adr/0009-web-frontend.md) — Next.js web frontend in `web/`
+- [0009](./adr/0009-web-frontend.md) — Next.js web frontend in
+  `console/`
 - [0010](./adr/0010-dev-auth-provider.md) — development-only sign-in
   provider behind GARAM_DEV_AUTH; superseded by 0044
 - [0011](./adr/0011-console-shell.md) — console sidebar shell over org
@@ -666,10 +669,11 @@ ADRs:
 - [0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)
   — the aggregates are data carriers, so the driver leaves the domain
   package: no method on one assigns a field, so the fields are exported,
-  the accessors go, and the store moves to `internal/<domain>/postgres/`
-  named for the technology it implements against. Supersedes ADR-0066
-  whole and ADR-0051 in part; `internal/user` is the pilot and the other
-  nine domains follow in their own pull requests
+  the accessors go, and the store moves to
+  `platform/internal/<domain>/postgres/` named for the technology it
+  implements against. Supersedes ADR-0066 whole and ADR-0051 in part;
+  `platform/internal/user` is the pilot and the other nine domains
+  follow in their own pull requests
 - [0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
   — an organization deletes an operator, and the record it withdraws is
   what that operator authenticated on: the machine listener reads the
@@ -746,10 +750,10 @@ ADRs:
   generation commits after its replacement; its legacy mode is
   superseded by 0117
 - [0081](./adr/0081-a-test-only-command-signs-in-the-first-principal-of-a-database-it-creates.md)
-  — a test-only command under `tests/testprincipal` creates a fresh
-  local database and signs in its first principal under a versioned
-  contract; no Garam binary carries it, and everything after that
-  principal goes through public routes. Superseded in part by 0092,
+  — a test-only command under `platform/tests/testprincipal` creates a
+  fresh local database and signs in its first principal under a
+  versioned contract; no Garam binary carries it, and everything after
+  that principal goes through public routes. Superseded in part by 0092,
   whose test image carries it
 - [0082](./adr/0082-a-standalone-host-runs-its-agent-under-a-supervisor-an-administrator-approves-by-its-keys.md)
   — a standalone host's lifecycle authority is a supervisor garam
@@ -853,9 +857,9 @@ ADRs:
   — a structural rule yields to a stack file only where the stack's
   framework imposes the case, taken from the conventions template at
   `b02fe378e81c03eaf38540372430f15bbfbc4396` with six more template
-  commits; `web/` is governed by `structure.md` again, and
-  `db3291285a9f89edf571a41bcdaee8528d77b021` makes `internal/cli` the
-  composition site `stack-go.md` provides
+  commits; `console/` is governed by `structure.md` again, and
+  `db3291285a9f89edf571a41bcdaee8528d77b021` makes
+  `platform/internal/cli` the composition site `stack-go.md` provides
 - [0095](./adr/0095-development-images-live-under-dev-and-garam-holds-releases-only.md)
   — development images live under `dev/`, and `garam/` holds
   releases only: `make image-build` names each image under `dev/`
@@ -957,7 +961,7 @@ ADRs:
   written where each path is decided, at most once a minute per process,
   and never holds a credential. It goes with the tenant, outlives a
   deleted caller, and is read with
-  `internal/machine/postgres/inventory.sql`
+  `platform/internal/machine/postgres/inventory.sql`
 - [0110](./adr/0110-a-new-adr-carries-the-four-sections-of-the-adr-template-as-headings.md)
   — every ADR added after this one carries the template's four
   sections as `##` headings, further sections allowed; ADRs already
@@ -1038,8 +1042,8 @@ ADRs:
   kept in one owner-only file
 - [0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)
   — the CLI derives a command for every browser API operation from
-  `api/openapi.yaml`, with one grammar, output contract and set of exit
-  codes, and writes a secret answer to a file at mode 0600 alone
+  `platform/api/openapi.yaml`, with one grammar, output contract and set
+  of exit codes, and writes a secret answer to a file at mode 0600 alone
 - [0124](./adr/0124-an-operator-is-registered-as-a-pair-in-one-step-and-its-control-service-names-its-manager.md)
   — an Operator is registered as a pair in one step, its cluster
   manager and its control service in one transaction, each keeping its

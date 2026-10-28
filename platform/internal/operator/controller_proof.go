@@ -1,8 +1,8 @@
 package operator
 
 import (
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // ControllerProof is a positive proof, for one lifecycle decision by a

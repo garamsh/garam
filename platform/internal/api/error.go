@@ -8,10 +8,10 @@ import (
 	"runtime/debug"
 	"strconv"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/wire"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // RecoverPanics answers a handler that panicked with a 500, which

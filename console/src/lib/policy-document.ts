@@ -6,8 +6,8 @@ import { refuse, type Parsed } from "@/lib/parsed";
 /**
  * A policy document as the console holds one: a JSON object. The
  * engine owns the model and validates every key on write
- * (`api/openapi.yaml` `PolicyDocument`), so the console checks only
- * that the text is an object and leaves the rest to the engine's
+ * (`platform/api/openapi.yaml` `PolicyDocument`), so the console checks
+ * only that the text is an object and leaves the rest to the engine's
  * refusal. The generated type is `Record<string, never>`, since the
  * specification declares an object with no properties of its own.
  */
@@ -39,7 +39,7 @@ export function formatPolicyDocument(document: PolicyDocument): string {
 /**
  * What the engine refused about a document, as the form shows it: the
  * sentence, and where garam named one, the JSON Pointer to the place
- * (`api/openapi.yaml` `Error.path`).
+ * (`platform/api/openapi.yaml` `Error.path`).
  */
 export type DocumentProblem = { message: string; path?: string };
 

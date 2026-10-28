@@ -11,8 +11,8 @@ package user
 import (
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // ServiceType is the canonical GRN service-type for users.

@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // maxEntryBytes bounds one outbox entry. garam admits a body of 65536

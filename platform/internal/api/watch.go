@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/org"
-	"github.com/garamsh/garam/internal/watch"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/watch"
 )
 
 // watchCloseTimeout bounds dropping a watch's lease once the stream it

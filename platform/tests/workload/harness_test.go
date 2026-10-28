@@ -36,10 +36,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/workload"
-	"github.com/garamsh/garam/internal/workload/docker"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/workload"
+	"github.com/garamsh/garam/platform/internal/workload/docker"
 )
 
 // testPrefix begins every name this suite makes, so cleanup removes

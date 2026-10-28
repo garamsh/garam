@@ -23,17 +23,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	agentpg "github.com/garamsh/garam/internal/agent/postgres"
-	"github.com/garamsh/garam/internal/authz"
-	authzpg "github.com/garamsh/garam/internal/authz/postgres"
-	"github.com/garamsh/garam/internal/cli"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator"
-	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
-	"github.com/garamsh/garam/internal/org"
-	orgpg "github.com/garamsh/garam/internal/org/postgres"
-	"github.com/garamsh/garam/internal/wire"
-	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
+	"github.com/garamsh/garam/platform/internal/authz"
+	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
+	"github.com/garamsh/garam/platform/internal/cli"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/operator"
+	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
+	"github.com/garamsh/garam/platform/internal/org"
+	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/wire"
+	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // heldClock is the time the machine listener measures tokens and

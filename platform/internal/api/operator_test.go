@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/org"
 )
 
 // TestOperatorRegister_AdminRegistersWhereOthersAreRefused holds the

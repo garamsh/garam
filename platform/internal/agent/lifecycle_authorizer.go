@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // LifecycleOperation is what a lifecycle authority asks to do to an

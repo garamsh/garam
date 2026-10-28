@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/authz"
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/authz"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // TestParsePolicyDocument_NamesTheRuleAndThePlace drives one document

@@ -9,14 +9,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 
-	"github.com/garamsh/garam/internal/agent"
-	agentpg "github.com/garamsh/garam/internal/agent/postgres"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator"
-	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
-	orgpg "github.com/garamsh/garam/internal/org/postgres"
-	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+	"github.com/garamsh/garam/platform/internal/agent"
+	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/operator"
+	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
+	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // newExecutionService composes what a lifecycle authority does to an

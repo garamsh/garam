@@ -3,7 +3,7 @@ package authz
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // Grant is one statement an evaluation reads and where it came from.

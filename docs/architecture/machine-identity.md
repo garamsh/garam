@@ -2,7 +2,7 @@
 
 Who is calling on the listener a machine identity authenticates on
 (ADR-0100), and the evidence of how each caller authenticated
-(ADR-0109). Implemented by `internal/machine`.
+(ADR-0109). Implemented by `platform/internal/machine`.
 
 Every machine caller authenticates by a token it presents, and the
 listener asks for no client certificate
@@ -23,7 +23,7 @@ the supervisor's shared-secret exchange and `machine-token.v1` stay.
 | `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
 | `Tokens` | answers what a token a request presents stands for, read for that request beside the record it rests on (ADR-0100) |
 | `Evidence` | notes each caller's authentication by path, at most once a minute per caller and path per process, and never fails a request (ADR-0109) |
-| `Recorder` | keeps that evidence; satisfied by `internal/machine/postgres` |
+| `Recorder` | keeps that evidence; satisfied by `platform/internal/machine/postgres` |
 
 An agent, an operator and a supervisor are the same kind of caller
 here and the listener does not branch on which. It asks one question
@@ -41,16 +41,16 @@ token's serial is what the execution fence judges its request by
 (§Generation and lineage).
 
 The package holds no store and reaches no database; the one store
-beside it, `internal/machine/postgres`, keeps the evidence
+beside it, `platform/internal/machine/postgres`, keeps the evidence
 §Authentication evidence describes behind `Recorder`. `Tokens` and
 `Registration` are seams the composition root satisfies
-(`internal/cli/machine.go`): `Tokens` from the domain a token's prefix
-names, and `Registration` from `internal/operator` for an operator and
-from `internal/agent` for a supervisor. A token's read joins the record
-it rests on, so an organization deleting an operator, or revoking a
-supervisor, refuses the next request on a connection already open
-(§Tokens) — no list, no responder, just the record the organization
-already keeps.
+(`platform/internal/cli/machine.go`): `Tokens` from the domain a token's
+prefix names, and `Registration` from `platform/internal/operator` for
+an operator and from `platform/internal/agent` for a supervisor. A
+token's read joins the record it rests on, so an organization deleting
+an operator, or revoking a supervisor, refuses the next request on a
+connection already open (§Tokens) — no list, no responder, just the
+record the organization already keeps.
 
 Three kinds of route read them again for their decision:
 
@@ -72,8 +72,8 @@ Three kinds of route read them again for their decision:
 
 Every other route relies on listener admission, which reads them on
 every request. `ServerCertificate` is the other seam, satisfied from
-`internal/keyfile`, and what it answers with is the certificate every
-machine caller verifies garam by: it chains to the one root every
+`platform/internal/keyfile`, and what it answers with is the certificate
+every machine caller verifies garam by: it chains to the one root every
 organization shares (ADR-0040), which garam answers as `serverRootPem`
 beside every agent token it mints and every supervisor credential it
 issues.
@@ -81,15 +81,15 @@ issues.
 `garam serve machine` is where the listener runs — its own process and
 its own port (ADR-0017), terminating TLS itself with the pair it holds
 as two paths and re-reads per handshake, the private key under the
-owner-only rule `internal/keyfile` holds, and the root that signed that
-pair beside them. It terminates TLS itself, so the certificate a caller
-pins that root against is the one garam presents (ADR-0040). It is not
-part of the local Docker stack: its key material
-is per host, and compose has
-no step that generates it and hands a container a file that container
-owns. The Kubernetes stacks under `deploy/` have that step — an init
-container copies the key material as the UID the listener runs as — so
-what compose lacks is the step, not something a container cannot do.
+owner-only rule `platform/internal/keyfile` holds, and the root that
+signed that pair beside them. It terminates TLS itself, so the
+certificate a caller pins that root against is the one garam presents
+(ADR-0040). It is not part of the local Docker stack: its key material
+is per host, and compose has no step that generates it and hands a
+container a file that container owns. The Kubernetes stacks under
+`deploy/` have that step — an init container copies the key material as
+the UID the listener runs as — so what compose lacks is the step, not
+something a container cannot do.
 
 ## Asymmetric Operator exchange
 
@@ -97,8 +97,8 @@ what compose lacks is the step, not something a container cannot do.
 [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)'s
 signed client assertions are how an operator obtains a token, the
 shared-secret exchange beside them being gone (ADR-0117).
-`api/machine.yaml` §exchangeClientAssertion is authoritative for the
-exchange's wire and refusals, and §machineBearer for the alias.
+`platform/api/machine.yaml` §exchangeClientAssertion is authoritative
+for the exchange's wire and refusals, and §machineBearer for the alias.
 
 - **`exchangeClientAssertion`, `POST /oauth/token`, is the client
   credentials grant authenticated by private_key_jwt under
@@ -106,35 +106,34 @@ exchange's wire and refusals, and §machineBearer for the alias.
   refuses as `invalid_request` — so a caller holds one credential there
   and falls back to none. Its RS256,
   identity, endpoint audience, lifetime and duplicate-member checks are
-  `internal/operator` `ParseClientAssertion` and
+  `platform/internal/operator` `ParseClientAssertion` and
   `ClientAssertion.Verify`; the key is looked up by `kid` within the
   `client_id`'s registration alone. Every authentication failure is one
   `invalid_client`.
 - **One assertion yields one token on every replica and across
-  restarts.** `migrations/000043`'s `operator_assertions` primary key,
-  `(operator_grn, jti)`, is spent in the transaction that records the
-  token and keeps the jti until `exp` plus the skew. The same
-  transaction holds the key's row under the lock a withdrawal's update
-  takes and measures the assertion's dates at the database's time, so
-  a withdrawal either commits first and the exchange records nothing,
-  or waits and deletes the token the exchange recorded. It holds the
-  registration's row first, as an issuance does before it withdraws
-  or retires a key, so whichever of an exchange and a rotation comes
-  second waits for the first to commit, and neither holds a row the
-  other is waiting on (#1399). A refused assertion spends no jti.
+  restarts.** `platform/migrations/000043`'s `operator_assertions`
+  primary key, `(operator_grn, jti)`, is spent in the transaction that
+  records the token and keeps the jti until `exp` plus the skew. The
+  same transaction holds the key's row under the lock a withdrawal's
+  update takes and measures the assertion's dates at the database's
+  time, so a withdrawal either commits first and the exchange records
+  nothing, or waits and deletes the token the exchange recorded. It
+  holds the registration's row first, as an issuance does before it
+  withdraws or retires a key, so whichever of an exchange and a rotation
+  comes second waits for the first to commit, and neither holds a row
+  the other is waiting on (#1399). A refused assertion spends no jti.
 - **A store write acting for an operator takes that operator's
   registration row first, and a transaction holding several takes them
-  in GRN byte order** (`internal/operator/postgres` `Store`).
+  in GRN byte order** (`platform/internal/operator/postgres` `Store`).
   - An exchange holds it `FOR KEY SHARE` for the client, and for the
     audience when the token names one.
   - An issuance, a withdrawal and a deletion hold it `FOR UPDATE`.
   - Deleting an organization holds every one of its operators' `FOR
     UPDATE` before its cascade deletes them, by the trigger on `orgs`
-    `migrations/000047` defines, after its agents' execution rows
-    ([agents.md](./agents.md) §Tokens in place of certificates states
-    why). An audience
-    is an operator of the client's organization, so the registrations
-    an exchange holds are among them.
+    `platform/migrations/000047` defines, after its agents' execution
+    rows ([agents.md](./agents.md) §Tokens in place of certificates
+    states why). An audience is an operator of the client's
+    organization, so the registrations an exchange holds are among them.
 
   The `FOR KEY SHARE` holders hold it together. Every other pair acting
   for one operator waits on the registration for the first to commit,
@@ -160,8 +159,8 @@ exchange's wire and refusals, and §machineBearer for the alias.
     tokens, and a deletion's of every token the operator holds or is
     the audience of, are each that statement. The deletion runs its
     before the registration goes, so the cascades of
-    `migrations/000043` and `000041` find none; `000046` indexes
-    `audience_grn` for the deletion's.
+    `platform/migrations/000043` and `000041` find none; `000046`
+    indexes `audience_grn` for the deletion's.
   - An exchange records its token, trims its key's tokens to the newest
     five live ones, and then sweeps the operator's expired tokens. The
     trim is that statement; the sweep skips a token another transaction
@@ -180,21 +179,22 @@ exchange's wire and refusals, and §machineBearer for the alias.
   `Garam-Token`.** `machine.PresentedToken` is the one reading of that
   header the listener and the routes share, so the alias takes the
   same resolver, operations, contract values and header placement;
-  `api/machine.yaml` lists `machineBearer` beside every `machineToken`
-  and a test holds the two lists equal. The scheme matches
-  case-insensitively, and a `Bearer` value with no token after it is
-  refused rather than read as no token at all.
+  `platform/api/machine.yaml` lists `machineBearer` beside every
+  `machineToken` and a test holds the two lists equal. The scheme
+  matches case-insensitively, and a `Bearer` value with no token after
+  it is refused rather than read as no token at all.
 - **One process answers at most 60 exchanges per client address and 10
-  authenticated ones per operator per minute** (`internal/operator`
-  `ExchangesPerSource`, `ExchangesPerClient`), 429 with `Retry-After`
-  past either. Each exchange holds the operator's registration, which is
-  what the bound keeps a writer from waiting on for long. The address's
-  count is taken before anything is read, so a flood from one address
-  holds back no other; the operator's starts once its key verified, so a
-  stranger knowing the GRN cannot lock the operator out. The listener
-  terminates TLS itself, so the address is the peer's, and clients
-  behind one NAT share it. An unconfigured token endpoint answers 503
-  and issues nothing.
+  authenticated ones per operator per minute**
+  (`platform/internal/operator` `ExchangesPerSource`,
+  `ExchangesPerClient`), 429 with `Retry-After` past either. Each
+  exchange holds the operator's registration, which is what the bound
+  keeps a writer from waiting on for long. The address's count is taken
+  before anything is read, so a flood from one address holds back no
+  other; the operator's starts once its key verified, so a stranger
+  knowing the GRN cannot lock the operator out. The listener terminates
+  TLS itself, so the address is the peer's, and clients behind one NAT
+  share it. An unconfigured token endpoint answers 503 and issues
+  nothing.
 - **What tells the cohorts apart.**
   `garam_machine_token_exchanges_total` counts exchanges by method —
   supervisor shared secret, operator private_key_jwt, or a credential
@@ -251,26 +251,25 @@ credential, and an agent holds the tokens its assignee mints for it
   while any of them presents a token carries no identity, and the reason
   travels with it, as it does for a token that proved nothing, so the
   handler's refusal says why.
-- **Each contract has one value.** `internal/machineapi/contract.go`
-  holds the ones the listener serves to a token —
-  `operation-authority.v2`, `execution-fence.v2`,
+- **Each contract has one value.**
+  `platform/internal/machineapi/contract.go` holds the ones the listener
+  serves to a token — `operation-authority.v2`, `execution-fence.v2`,
   `managed-enrollment.v2` and `durable-delivery.v2` — and a request
-  under another value is
-  refused with 400 naming the one served. A standalone host spends its
-  approval under `standalone-enrollment.v2`, the supervisor's exchange
-  and an agent token's mint take `machine-token.v1` and the client
-  assertion exchange `machine-token.v2`, and an approval's admission
-  takes `agent-enrollment.v1`. The values that travel beside the
-  caller's token — an execution token, an operation authority or
-  reference — take headers of their own, `Garam-Execution` and
-  `Garam-Operation`.
-- **A token reaches the operations `api/machine.yaml` lists
+  under another value is refused with 400 naming the one served. A
+  standalone host spends its approval under `standalone-enrollment.v2`,
+  the supervisor's exchange and an agent token's mint take
+  `machine-token.v1` and the client assertion exchange
+  `machine-token.v2`, and an approval's admission takes
+  `agent-enrollment.v1`. The values that travel beside the caller's
+  token — an execution token, an operation authority or reference — take
+  headers of their own, `Garam-Execution` and `Garam-Operation`.
+- **A token reaches the operations `platform/api/machine.yaml` lists
   `machineToken` on.** Every operation lists it but the four that take
   no token — a standalone enrollment, the two exchanges and the
   published message signing keys — and a test in
-  `internal/machineapi` holds the specification to that. What a caller
-  may do there is its identity's: a route reading a credential's serial
-  refuses an operator's token, and `ConfineSupervisors` keeps a
+  `platform/internal/machineapi` holds the specification to that. What a
+  caller may do there is its identity's: a route reading a credential's
+  serial refuses an operator's token, and `ConfineSupervisors` keeps a
   supervisor to its identity, its lifecycle routes and its agent's mint
   ([agents.md](./agents.md) §Standalone hosts).
 
@@ -283,7 +282,7 @@ ADR-0118 read before the certificate path went. This section covers
 what records it.
 
 - **One row per caller and path** in `machine_authentication_evidence`
-  (`migrations/000052`). The paths written are `token`,
+  (`platform/migrations/000052`). The paths written are `token`,
   `exchange_shared_secret`, `exchange_private_key_jwt`, `agent_mint` and
   `audience_token`, and `machine.Path` names them; a `certificate` row
   an earlier release recorded stays, and the inventory reads it. A row
@@ -296,8 +295,8 @@ what records it.
   token path of every request it hands an identity. The
   exchange and mint handlers report what they issued through
   `machine.ReportIssuance`, and `recordIssuances` in
-  `internal/cli/machine_token.go` records it under the path the route
-  and credential prefix name. A refused issuance reports nothing.
+  `platform/internal/cli/machine_token.go` records it under the path the
+  route and credential prefix name. A refused issuance reports nothing.
 - **Best effort and coalesced.** One write per caller, path and process
   a minute, bounded at a second. A failed write is logged and the
   request goes on.
@@ -305,22 +304,22 @@ what records it.
   and a deleted caller's rows stay as the evidence that it stopped.
 - **A restart is not visible here.** It stays with joint acceptance
   (#1495).
-- **The read is `internal/machine/postgres/inventory.sql`**, run with
-  `psql -f`. It is authoritative for the cohort each caller is counted
-  in and for what an idle caller looks like: a registered row with
-  every path empty.
+- **The read is `platform/internal/machine/postgres/inventory.sql`**,
+  run with `psql -f`. It is authoritative for the cohort each caller is
+  counted in and for what an idle caller looks like: a registered row
+  with every path empty.
 
 ## Credential events
 
 **Built**
 ([ADR-0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)).
 Every issuance and refusal of a supervisor credential or an agent token
-is one row of `audit_credential_events` (`migrations/000054`; `000056`
-dropped the operator credential and enrollment token kinds with them),
-held by the audit domain ([audit.md](./audit.md)); a row an earlier
-release wrote for an operator or a supervisor certificate stays and
-reads as it was. Unlike the evidence above, it is
-a record and not a sampling: one row per answer, none coalesced.
+is one row of `audit_credential_events` (`platform/migrations/000054`;
+`000056` dropped the operator credential and enrollment token kinds with
+them), held by the audit domain ([audit.md](./audit.md)); a row an
+earlier release wrote for an operator or a supervisor certificate stays
+and reads as it was. Unlike the evidence above, it is a record and not a
+sampling: one row per answer, none coalesced.
 
 - **What a row says.** The subject, the credential, `issue` or `renew`,
   issued or refused, whether an issued answer replayed an earlier
@@ -377,32 +376,29 @@ transaction of their own write, so the answer holds when that write
 commits (ADR-0080). Reading a sent
 message's state writes nothing; it asks both in the transaction of its
 read, so a refused caller reads nothing. `getIdentity` asks neither.
-The routes and their schemes are `api/machine.yaml`'s, under the
-`executionHeader` scheme each declares.
+The routes and their schemes are `platform/api/machine.yaml`'s, under
+the `executionHeader` scheme each declares.
 
 The hosted control service is a lifecycle caller. It activates,
 deactivates, inspects and recovers an agent's execution on the routes
-tagged `execution` in `api/machine.yaml`, which is authoritative for
-their wire and their `execution-fence.v2` contract value. A
-standalone host's supervisor is the other: on the same routes it
-activates, deactivates and inspects the one agent it is registered
+tagged `execution` in `platform/api/machine.yaml`, which is
+authoritative for their wire and their `execution-fence.v2` contract
+value. A standalone host's supervisor is the other: on the same routes
+it activates, deactivates and inspects the one agent it is registered
 for and holds, and recovers nothing; its token reaches no route but
-those, its identity and its agent's mint
-([agents.md](./agents.md) §Standalone hosts). The hosted control
-service alone creates a managed agent, on the route tagged
-`enrollment`, authoritative for its wire and `managed-enrollment.v2`,
-and prepares and admits
-one under `agent-enrollment.v1` on those tagged `agent-enrollment`,
-which take its token alone.
-Each request rereads the caller's token and registration; each
-but creation and admission rereads its grant, or a supervisor's
+those, its identity and its agent's mint ([agents.md](./agents.md)
+§Standalone hosts). The hosted control service alone creates a managed
+agent, on the route tagged `enrollment`, authoritative for its wire and
+`managed-enrollment.v2`, and prepares and admits one under
+`agent-enrollment.v1` on those tagged `agent-enrollment`, which take its
+token alone. Each request rereads the caller's token and registration;
+each but creation and admission rereads its grant, or a supervisor's
 registration and assignment, and current policy too, and those reread
-the member's `agent:create` reference instead, or for a replacement
-the `agent:replace` reference whose grant must cover both the
-controller the agent is on and the one it moves to (ADR-0107). An
-agent's own token and a controller's are refused.
-Activation, deactivation, recovery, creation and admission are each
-bounded by a ten-second server deadline over both
+the member's `agent:create` reference instead, or for a replacement the
+`agent:replace` reference whose grant must cover both the controller the
+agent is on and the one it moves to (ADR-0107). An agent's own token and
+a controller's are refused. Activation, deactivation, recovery, creation
+and admission are each bounded by a ten-second server deadline over both
 their authority reads and their write, and past it answer unavailable
 without saying whether the write committed (ADR-0080). Introspection
 answers a forwarded token's standing and a generation's from one

@@ -58,7 +58,7 @@ export default async function ConnectOperatorPage({
   ]);
   // garam issues a key to an operator holding no live one under either
   // action, and any other under re-issuing alone
-  // (`internal/api/operator_key.go`).
+  // (`platform/internal/api/operator_key.go`).
   const denied = (action: "register" | "reissue") =>
     permissions.get(action) === "denied";
 

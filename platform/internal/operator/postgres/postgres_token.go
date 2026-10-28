@@ -5,11 +5,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/operator/postgres/db"
-	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/operator/postgres/db"
+	"github.com/garamsh/garam/platform/internal/pgxerr"
 )
 
 // Compile-time check that Store satisfies TokenStore.

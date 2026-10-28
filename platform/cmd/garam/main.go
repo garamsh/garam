@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/garamsh/garam/internal/cli"
+	"github.com/garamsh/garam/platform/internal/cli"
 )
 
 func main() {

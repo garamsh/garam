@@ -9,11 +9,11 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/api"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/org"
 )
 
 // The preview answers what deleting the organization would take. Each

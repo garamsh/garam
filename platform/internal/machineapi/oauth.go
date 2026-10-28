@@ -9,11 +9,11 @@ import (
 	"net/url"
 	"strconv"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/machine"
-	"github.com/garamsh/garam/internal/operator"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/machine"
+	"github.com/garamsh/garam/platform/internal/operator"
 )
 
 // maxAssertionRequest bounds the form the exchange reads: the

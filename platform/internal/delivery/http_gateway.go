@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // maxEventBytes bounds what one event on the platform's stream may cost

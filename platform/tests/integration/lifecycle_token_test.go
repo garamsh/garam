@@ -14,12 +14,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/operator"
-	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/message"
+	"github.com/garamsh/garam/platform/internal/operator"
+	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
 )
 
 // tokenStack is the managed execution stack, whose hosted control

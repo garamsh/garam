@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/platform/internal/authz"
 )
 
 // matchResource is a literal every case below matches on, so that only

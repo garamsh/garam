@@ -7,9 +7,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/operator/postgres/db"
-	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/operator/postgres/db"
+	"github.com/garamsh/garam/platform/internal/pgxerr"
 )
 
 // Store implements operator.GrantStore and operator.AuthorityStore.

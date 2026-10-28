@@ -158,8 +158,8 @@ func TestStore_RefusesAFileOthersCanRead(t *testing.T) {
 }
 
 // TestStore_ReadsTheFileGaramLoginWrites holds the format to the one
-// garam's CLI keeps (internal/cli/credentials.go), field by field, so
-// a session either CLI signs in is the other's.
+// garam's CLI keeps (platform/internal/cli/credentials.go), field by
+// field, so a session either CLI signs in is the other's.
 func TestStore_ReadsTheFileGaramLoginWrites(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "credentials")
 	require.NoError(t, os.WriteFile(path, []byte(`{"endpoints":{"https://garam.sh":{

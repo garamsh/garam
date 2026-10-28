@@ -13,11 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/argon2"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/authn"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
-	"github.com/garamsh/garam/internal/user"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/authn"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/user"
 )
 
 // The password these tests register with. It is a fixture of this file

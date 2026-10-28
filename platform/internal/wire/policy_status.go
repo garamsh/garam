@@ -1,6 +1,6 @@
 package wire
 
-import authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+import authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 
 // PolicyStatus is a stored policy's lifecycle state (ADR-0002). One
 // declaration serves the engine that stores it and the surface that

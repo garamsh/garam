@@ -15,10 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	apigen "github.com/garamsh/garam/api"
-	agentpg "github.com/garamsh/garam/internal/agent/postgres"
-	"github.com/garamsh/garam/internal/cli"
-	"github.com/garamsh/garam/internal/grn"
+	apigen "github.com/garamsh/garam/platform/api"
+	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
+	"github.com/garamsh/garam/platform/internal/cli"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // runCLI runs one garam command in process and answers its stdout,

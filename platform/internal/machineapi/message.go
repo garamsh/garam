@@ -9,12 +9,12 @@ import (
 	"strconv"
 	"time"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/wire"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/message"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // PostMessage stores a message the caller is sending. The sender is

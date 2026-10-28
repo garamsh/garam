@@ -21,15 +21,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/ca"
-	"github.com/garamsh/garam/internal/delivery"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
-	messagepg "github.com/garamsh/garam/internal/message/postgres"
-	"github.com/garamsh/garam/internal/org"
-	orgpg "github.com/garamsh/garam/internal/org/postgres"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/ca"
+	"github.com/garamsh/garam/platform/internal/delivery"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/message"
+	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
+	"github.com/garamsh/garam/platform/internal/org"
+	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 )
 
 // signedClaims is what a verifier reads out of a message signature,

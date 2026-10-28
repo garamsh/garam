@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/machine"
+	"github.com/garamsh/garam/platform/internal/machine"
 )
 
 // clientOf is the client garam is reached through, from the server

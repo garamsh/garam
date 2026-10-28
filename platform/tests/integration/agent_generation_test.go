@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	apigen "github.com/garamsh/garam/api"
-	agentpg "github.com/garamsh/garam/internal/agent/postgres"
-	"github.com/garamsh/garam/internal/api"
-	authnpg "github.com/garamsh/garam/internal/authn/postgres"
-	orgpg "github.com/garamsh/garam/internal/org/postgres"
-	userpg "github.com/garamsh/garam/internal/user/postgres"
+	apigen "github.com/garamsh/garam/platform/api"
+	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
+	"github.com/garamsh/garam/platform/internal/api"
+	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
+	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
 )
 
 // agentReader is a browser-facing listener over the execution stack's

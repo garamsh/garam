@@ -7,7 +7,7 @@ import { refuse, type Parsed } from "@/lib/parsed";
 
 /**
  * How long an agent's name is, in characters, once surrounding space
- * is trimmed (`api/openapi.yaml` §AgentPatch).
+ * is trimmed (`platform/api/openapi.yaml` §AgentPatch).
  */
 export const AGENT_NAME_MAX_LENGTH = 100;
 

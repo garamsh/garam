@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/grn"
-	orgpg "github.com/garamsh/garam/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/grn"
+	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 )
 
 // mintedIn records a token for the fixture's agent, minted by its

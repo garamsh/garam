@@ -3,8 +3,8 @@ package operator_test
 import (
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/operator"
 )
 
 func operatorGRN(org, id string) grn.GRN {

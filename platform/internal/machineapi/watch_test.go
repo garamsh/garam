@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/watch"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/watch"
 )
 
 // watchLeases is a watch.Store in memory: the watches open, which is

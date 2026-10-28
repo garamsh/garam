@@ -34,7 +34,7 @@ cache=
 
 usage() {
 	echo "image-build: $1" >&2
-	echo 'usage: scripts/image-build.sh [--names] [--registry <host> [--tag <tag>]] [--cache gha]' >&2
+	echo 'usage: tooling/image-build.sh [--names] [--registry <host> [--tag <tag>]] [--cache gha]' >&2
 	exit 2
 }
 

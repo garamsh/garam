@@ -34,7 +34,7 @@ const CLAIMS: Claim[] = [
     prose: ["an agent already has an identity"],
     pinned: [],
     facts: [
-      { kind: "path", path: "internal/agent", exists: true },
+      { kind: "path", path: "platform/internal/agent", exists: true },
       { kind: "migration", table: "agents" },
     ],
   },
@@ -53,8 +53,8 @@ const CLAIMS: Claim[] = [
     prose: ["exchanges messages on a listener of its own"],
     pinned: [],
     facts: [
-      { kind: "path", path: "internal/machine", exists: true },
-      { kind: "path", path: "internal/machineapi", exists: true },
+      { kind: "path", path: "platform/internal/machine", exists: true },
+      { kind: "path", path: "platform/internal/machineapi", exists: true },
       { kind: "migration", table: "messages" },
     ],
   },
@@ -66,15 +66,15 @@ const CLAIMS: Claim[] = [
     pinned: [
       { file: UNIT_TEST, text: "the adapter that would run beside the agent" },
     ],
-    facts: [{ kind: "path", path: "internal/adapter", exists: false }],
+    facts: [{ kind: "path", path: "platform/internal/adapter", exists: false }],
   },
   {
     prose: ["The listener and the message queue are built."],
     pinned: [],
     facts: [
-      { kind: "path", path: "internal/machine", exists: true },
-      { kind: "path", path: "internal/machineapi", exists: true },
-      { kind: "path", path: "internal/message", exists: true },
+      { kind: "path", path: "platform/internal/machine", exists: true },
+      { kind: "path", path: "platform/internal/machineapi", exists: true },
+      { kind: "path", path: "platform/internal/message", exists: true },
       { kind: "migration", table: "messages" },
     ],
   },
@@ -86,18 +86,18 @@ const CLAIMS: Claim[] = [
     ],
     facts: [
       // Watching's two ends are a console route and the adapter
-      // (overview.md §Out of scope); garam's half, internal/watch, is
-      // built and is not what this claim is about. The console's half
-      // is a route that watches one agent. An agent's own page now
-      // exists and shows what was requested and reported (ADR-0075)
-      // but watches nothing, so the path standing for this claim is a
-      // watch below it.
+      // (overview.md §Out of scope); garam's half,
+      // platform/internal/watch, is built and is not what this claim is
+      // about. The console's half is a route that watches one agent. An
+      // agent's own page now exists and shows what was requested and
+      // reported (ADR-0075) but watches nothing, so the path standing
+      // for this claim is a watch below it.
       {
         kind: "path",
-        path: "web/src/app/console/orgs/[org]/agents/[agent]/watch",
+        path: "console/src/app/console/orgs/[org]/agents/[agent]/watch",
         exists: false,
       },
-      { kind: "path", path: "internal/adapter", exists: false },
+      { kind: "path", path: "platform/internal/adapter", exists: false },
     ],
   },
   {
@@ -130,7 +130,7 @@ const CLAIMS: Claim[] = [
     ],
     pinned: [{ file: UNIT_TEST, text: "One name shape, five segments" }],
     facts: [
-      { kind: "path", path: "internal/grn", exists: true },
+      { kind: "path", path: "platform/internal/grn", exists: true },
       { kind: "path", path: "docs/architecture/grn-model.md", exists: true },
     ],
   },
@@ -141,7 +141,7 @@ const CLAIMS: Claim[] = [
     ],
     pinned: [{ file: UNIT_TEST, text: "Invitation, not signup" }],
     facts: [
-      { kind: "path", path: "internal/org", exists: true },
+      { kind: "path", path: "platform/internal/org", exists: true },
       { kind: "migration", table: "invitations" },
     ],
   },
@@ -159,7 +159,7 @@ const CLAIMS: Claim[] = [
     ],
     pinned: [],
     facts: [
-      { kind: "path", path: "internal/authz", exists: true },
+      { kind: "path", path: "platform/internal/authz", exists: true },
       { kind: "migration", table: "policies" },
       { kind: "migration", table: "policy_attachments" },
       { kind: "migration", table: "policy_versions" },
@@ -182,7 +182,7 @@ const CLAIMS: Claim[] = [
       "settings",
     ].map((section) => ({
       kind: "path" as const,
-      path: `web/src/app/console/orgs/[org]/${section}`,
+      path: `console/src/app/console/orgs/[org]/${section}`,
       exists: true,
     })),
   },
@@ -192,7 +192,7 @@ const REPO_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../../../../..",
 );
-const WEB_ROOT = path.join(REPO_ROOT, "web");
+const WEB_ROOT = path.join(REPO_ROOT, "console");
 
 function checkFact(fact: Fact): string | null {
   switch (fact.kind) {
@@ -203,11 +203,14 @@ function checkFact(fact: Fact): string | null {
         : `${fact.path} ${fact.exists ? "no longer exists" : "exists now"}`;
     }
     case "migration": {
-      const creates = readdirSync(path.join(REPO_ROOT, "migrations"))
+      const creates = readdirSync(path.join(REPO_ROOT, "platform/migrations"))
         .filter((file) => file.endsWith(".up.sql"))
         .some((file) =>
           new RegExp(`\\b${fact.table}\\b`).test(
-            readFileSync(path.join(REPO_ROOT, "migrations", file), "utf8"),
+            readFileSync(
+              path.join(REPO_ROOT, "platform/migrations", file),
+              "utf8",
+            ),
           ),
         );
       return creates ? null : `no migration names ${fact.table}`;

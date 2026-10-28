@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // ControlEndpoint is the base URL where a hosted operator's control
@@ -14,8 +14,8 @@ import (
 // so a path prefix it carries reaches the control service unchanged.
 type ControlEndpoint string
 
-// maxControlEndpoint bounds an endpoint in bytes. migrations/000032
-// holds the same bound.
+// maxControlEndpoint bounds an endpoint in bytes.
+// platform/migrations/000032 holds the same bound.
 const maxControlEndpoint = 2048
 
 // ParseControlEndpoint parses an absolute https URL with an optional

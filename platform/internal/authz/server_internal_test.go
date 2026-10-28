@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/wire"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // TestEffectToProto_AgreesWithTheSharedConverter pins the coercing

@@ -19,8 +19,8 @@ package machine
 import (
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // ErrOutsideValidity refuses an identity whose token's dates no longer

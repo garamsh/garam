@@ -3,7 +3,7 @@ package delivery
 import (
 	"encoding/json"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // MessageContract names the content the runtime is handed for a garam

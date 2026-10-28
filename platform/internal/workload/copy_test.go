@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/workload"
+	"github.com/garamsh/garam/platform/internal/workload"
 )
 
 // storeDir writes a stopped store: the memory file, its WAL, the lock

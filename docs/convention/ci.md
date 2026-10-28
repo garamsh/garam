@@ -171,11 +171,11 @@ The living list is the `Makefile`. This project has two toolchains and
 one whole-set name over both:
 
 - `ci` — `format lint test build check-gen check-toolchain chart
-  web-ci`, the Go module, the chart it ships, and the `web/` half
+  web-ci`, the Go module, the chart it ships, and the `console/` half
   below.
 - `web-ci` — `web-format web-lint web-test web-build web-check-gen`,
-  the `web/` app, which has its own package manager and its own gate.
-  `ci` runs it last, so the cheaper Go half fails first.
+  the `console/` app, which has its own package manager and its own
+  gate. `ci` runs it last, so the cheaper Go half fails first.
 
 Both run identically on a contributor's machine and in CI. The rest:
 
@@ -195,8 +195,8 @@ Both run identically on a contributor's machine and in CI. The rest:
   `web-e2e` runs Playwright against the built app and `backend-up`'s
   backend. `image-build` builds the images a release publishes, each
   from what the release workflow says it is built from, and
-  `web-image-e2e` runs `tests/image/`'s checks against the web one
-  rather than against the app.
+  `web-image-e2e` runs `platform/tests/image/`'s checks against the web
+  one rather than against the app.
 
 `ci` and `web-ci` stop short of the four suites that need Docker.
 Locally they are `make db-up integration e2e`, `make backend-up

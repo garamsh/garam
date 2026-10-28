@@ -10,7 +10,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // credentialsFile is what the CLI keeps between runs (ADR-0120): per

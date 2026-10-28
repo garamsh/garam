@@ -3,7 +3,7 @@ package message
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // ConsentStore is the persistence of the consent relation. The two

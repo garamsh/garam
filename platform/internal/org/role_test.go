@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/org"
 )
 
 func TestParseRole_KnownRoles(t *testing.T) {
@@ -33,7 +33,7 @@ func TestParseRole_Unknown(t *testing.T) {
 
 // TestActionConstants_SpellTheirWireStrings pins the action vocabulary
 // as text. An action string is what a stored policy document names and
-// what `api/openapi.yaml` and `web/src/types/api.ts` spell out, so
+// what `api/openapi.yaml` and `console/src/types/api.ts` spell out, so
 // renaming one breaks a contract already published; every other
 // assertion in this file compares a constant to itself and reports
 // nothing when it moves. Each is also one IsAction answers for, so a

@@ -1,9 +1,9 @@
 /**
  * The sentences a person reads when garam refuses a request or cannot
  * be reached, and the one place they are written. A refusal is matched
- * by the fields `api/openapi.yaml` gives every error a stable meaning —
- * the HTTP status and the `kind` beside it — never by the English of
- * `message`, which garam may reword at any release.
+ * by the fields `platform/api/openapi.yaml` gives every error a stable
+ * meaning — the HTTP status and the `kind` beside it — never by the
+ * English of `message`, which garam may reword at any release.
  *
  * A refusal carrying a `reason` garam documents reads that reason's
  * sentence first: it names the rule that refused, which the status and
@@ -15,8 +15,9 @@
 
 /**
  * An error answer as the seam received it. `reason` and `path` are the
- * optional stable code and JSON Pointer `api/openapi.yaml` `Error`
- * carries where the kind alone does not say which refusal it was.
+ * optional stable code and JSON Pointer `platform/api/openapi.yaml`
+ * `Error` carries where the kind alone does not say which refusal it
+ * was.
  */
 export type RefusalAnswer = {
   status: number;
@@ -196,8 +197,8 @@ const POLICY_KEYS = [
 /**
  * A pointer token in the format's own spelling where it names a key the
  * format holds. garam already points at known keys by that spelling
- * (`api/openapi.yaml` `Error.path`); this keeps a sentence in it
- * whatever case reaches here. Any other token is shown as written.
+ * (`platform/api/openapi.yaml` `Error.path`); this keeps a sentence in
+ * it whatever case reaches here. Any other token is shown as written.
  */
 function canonical(token: string): string {
   return (

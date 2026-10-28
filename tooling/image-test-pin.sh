@@ -3,7 +3,7 @@
 # its ECR repository (ADR-0093), for `make test-image-pin`, under the
 # caller's AWS credentials. A commit is named by 12 to 40 lowercase
 # hex digits and found under its first twelve, the tag
-# scripts/image-test-push.sh pushes it as (ADR-0071's default). Its
+# tooling/image-test-push.sh pushes it as (ADR-0071's default). Its
 # manifest is put again under the pinned tag with the digest it was
 # read with, so the registry stores the same bytes rather than a copy
 # that could name another digest, and the consumer's previous image
@@ -17,11 +17,11 @@
 # consumer's first pin succeeds and every later one is refused by the
 # registry.
 #
-#   scripts/image-test-pin.sh <commit> <consumer>
+#   tooling/image-test-pin.sh <commit> <consumer>
 set -eu
 
 [ $# -eq 2 ] || {
-	echo 'usage: scripts/image-test-pin.sh <commit> <consumer>' >&2
+	echo 'usage: tooling/image-test-pin.sh <commit> <consumer>' >&2
 	exit 2
 }
 commit=$1 consumer=$2

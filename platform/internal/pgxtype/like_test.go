@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/garamsh/garam/internal/pgxtype"
+	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 
 // TestContains escapes each character LIKE reads as other than itself.

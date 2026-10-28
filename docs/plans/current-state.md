@@ -18,9 +18,9 @@ none is scheduled.
 - **`Condition` in policy documents** — reserved: a statement carries
   one through the parse boundary and reads it back as it was written,
   and nothing evaluates it (ADR-0002). It is the `Statement` type in
-  `internal/authz` that holds it, as raw JSON, because the model names
-  nothing that may appear inside it; no evaluation path reads that
-  field.
+  `platform/internal/authz` that holds it, as raw JSON, because the
+  model names nothing that may appear inside it; no evaluation path
+  reads that field.
 
 ## Known corrections applied
 
@@ -29,17 +29,17 @@ mislead.
 
 - The module path is `github.com/garamsh/garam`. It spent a period
   under an interim name and was renamed back (#96); the name is uniform
-  across the module path, `cmd/garam`, the proto package
+  across the module path, `platform/cmd/garam`, the proto package
   `garam.authz.v1`, `GARAM_*` variables, session cookies, and the
   `garam_policy_change` NOTIFY channel.
 - Authorization was once headed for Rego/OPA. That is superseded by
   IAM-style documents (ADR-0002) and the legacy interfaces were removed
   (#28, #40, #47, #59). No Rego package exists.
 - The in-process suite against real Postgres lives in
-  `tests/integration/` with a root-relative migrations path, after
-  several attempts to place it (#53, #58, #64, #70) and a rename out of
-  `tests/e2e/` (#874), which now holds only what drives the built
-  binary.
+  `platform/tests/integration/` with a root-relative migrations path,
+  after several attempts to place it (#53, #58, #64, #70) and a rename
+  out of `platform/tests/e2e/` (#874), which now holds only what drives
+  the built binary.
 - There is one dev Postgres per machine, not per worktree, and `make
   integration e2e` owns databases apart from the stack's because the
   first of the two truncates (#112): `garam_test`, and one suffixed

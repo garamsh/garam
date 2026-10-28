@@ -41,7 +41,8 @@ services:
   # (ADR-0104), started by `make db-up` beside postgres. Dev mode: one
   # in-memory, unsealed server over TLS, whose CA and root token it
   # generates inside the container at every start, where
-  # tests/integration reads them. Nothing in the stack above uses it.
+  # platform/tests/integration reads them. Nothing in the stack above
+  # uses it.
   #
   # Digest as well as tag, the digest of the multi-platform index.
   # Dependabot's docker-compose entry moves the pair, as it does
@@ -162,7 +163,7 @@ services:
   web:
     profiles: ["web"]
     build:
-      context: ../../web
+      context: ../../console
       dockerfile: ../deploy/local/Dockerfile.web
       args:
         GARAM_API_URL: http://api:8080

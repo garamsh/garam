@@ -20,15 +20,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/machine"
-	"github.com/garamsh/garam/internal/machineapi"
-	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/watch"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/machine"
+	"github.com/garamsh/garam/platform/internal/machineapi"
+	"github.com/garamsh/garam/platform/internal/message"
+	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/watch"
 )
 
 func operatorGRN(org string) grn.GRN {

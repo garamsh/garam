@@ -3,8 +3,8 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/garamsh/garam/internal/message"
-	messagepg "github.com/garamsh/garam/internal/message/postgres"
+	"github.com/garamsh/garam/platform/internal/message"
+	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
 )
 
 // newRetireMessageSigningKeyCommand constructs `garam

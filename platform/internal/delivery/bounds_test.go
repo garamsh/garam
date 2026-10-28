@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/delivery"
+	"github.com/garamsh/garam/platform/internal/delivery"
 )
 
 // stalled is the peer every test here is about: it accepts the

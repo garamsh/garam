@@ -13,15 +13,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/ca"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
-	orgpg "github.com/garamsh/garam/internal/org/postgres"
-	"github.com/garamsh/garam/internal/watch"
-	watchpg "github.com/garamsh/garam/internal/watch/postgres"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/ca"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/org"
+	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/watch"
+	watchpg "github.com/garamsh/garam/platform/internal/watch/postgres"
 )
 
 // watchRows is how many rows the watch table holds, lapsed ones

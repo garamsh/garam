@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/cli"
-	"github.com/garamsh/garam/internal/operator"
+	"github.com/garamsh/garam/platform/internal/cli"
+	"github.com/garamsh/garam/platform/internal/operator"
 )
 
 // standaloneCommand runs `garam standalone args...` as the CLI ships it

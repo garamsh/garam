@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // OperationKind is the operation a user's handoff or durable operation

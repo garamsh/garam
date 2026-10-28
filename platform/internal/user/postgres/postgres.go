@@ -9,13 +9,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/listfilter"
-	"github.com/garamsh/garam/internal/pgxerr"
-	"github.com/garamsh/garam/internal/pgxtype"
-	"github.com/garamsh/garam/internal/user"
-	"github.com/garamsh/garam/internal/user/postgres/db"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/listfilter"
+	"github.com/garamsh/garam/platform/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/pgxtype"
+	"github.com/garamsh/garam/platform/internal/user"
+	"github.com/garamsh/garam/platform/internal/user/postgres/db"
 )
 
 // Store implements user.Store against PostgreSQL.

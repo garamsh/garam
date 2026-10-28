@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/garamsh/garam/internal/delivery"
+	"github.com/garamsh/garam/platform/internal/delivery"
 )
 
 // binding is the binding the fake runtime reports.

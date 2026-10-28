@@ -27,12 +27,12 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/machine"
-	"github.com/garamsh/garam/internal/wire"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/api"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/machine"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // The service name every trace, metric and log line carries, so one

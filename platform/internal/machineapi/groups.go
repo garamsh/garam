@@ -3,7 +3,7 @@ package machineapi
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // Groups reports which of its organization's groups a machine identity

@@ -15,9 +15,9 @@ import { redirectToSignIn } from "@/lib/sign-in-redirect";
 
 /**
  * A non-2xx response from the backend, carrying its HTTP status and the
- * `kind` its error body named (`api/openapi.yaml` `Error`). The two are
- * what a refusal is told apart by; `message` is the server's English,
- * which a person reads only through `refusal`.
+ * `kind` its error body named (`platform/api/openapi.yaml` `Error`).
+ * The two are what a refusal is told apart by; `message` is the
+ * server's English, which a person reads only through `refusal`.
  */
 export class GaramApiError extends Error {
   constructor(
@@ -36,7 +36,7 @@ export class GaramApiError extends Error {
  * on: either the connection failed, so there is no status to carry, or
  * the backend answered 503 because a dependency it needs — the policy
  * engine, the database, a sign-in provider — is itself unreachable
- * (`api/openapi.yaml` §info). It is a different answer from
+ * (`platform/api/openapi.yaml` §info). It is a different answer from
  * `GaramApiError`, where the backend reached what it needed and refused.
  */
 export class GaramUnreachableError extends Error {
@@ -48,10 +48,10 @@ export class GaramUnreachableError extends Error {
 
 /**
  * The backend answered, and what it answered is not what
- * `api/openapi.yaml` says the operation carries. Neither a refusal nor
- * an outage: garam broke a contract this repository generates the
- * client from, so it surfaces as the bug it is rather than as a state a
- * page renders.
+ * `platform/api/openapi.yaml` says the operation carries. Neither a
+ * refusal nor an outage: garam broke a contract this repository
+ * generates the client from, so it surfaces as the bug it is rather
+ * than as a state a page renders.
  */
 export class GaramContractError extends Error {
   constructor(path: string, options?: ErrorOptions) {
@@ -62,11 +62,11 @@ export class GaramContractError extends Error {
 
 /**
  * The parser `garamFetch` takes for a body, tied to the type
- * `api/openapi.yaml` generated in both directions: it produces `T`, and
- * it accepts every body `T` describes. A `z.ZodType<T>` annotation
- * carries only the first — a parser demanding a key the specification
- * does not describe still produces `T`, so it typechecks and then
- * refuses a valid response as a contract violation (#896).
+ * `platform/api/openapi.yaml` generated in both directions: it produces
+ * `T`, and it accepts every body `T` describes. A `z.ZodType<T>`
+ * annotation carries only the first — a parser demanding a key the
+ * specification does not describe still produces `T`, so it typechecks
+ * and then refuses a valid response as a contract violation (#896).
  *
  * Written `parserFor<Operator>()(z.object({ ... }))`: `T` is named so
  * that the parser stays inferred and what it demands can be read off it.
@@ -76,7 +76,9 @@ export function parserFor<T>() {
     parser: S &
       (T extends z.input<S>
         ? unknown
-        : { "requires what api/openapi.yaml does not describe": never }),
+        : {
+            "requires what platform/api/openapi.yaml does not describe": never;
+          }),
   ): z.ZodType<T> => parser;
 }
 
@@ -149,9 +151,9 @@ export async function garamRequest(
   });
   // A 503 is an outage rather than a refusal: it says a dependency
   // garam needs is unreachable, and its body names no cause to render
-  // (`api/openapi.yaml` §info). Every reading surface already has a
-  // state for that, so it arrives as the one the connection failure
-  // arrives as.
+  // (`platform/api/openapi.yaml` §info). Every reading surface already
+  // has a state for that, so it arrives as the one the connection
+  // failure arrives as.
   if (response.status === 503) {
     throw new GaramUnreachableError();
   }

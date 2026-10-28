@@ -1,17 +1,17 @@
 # The versions this repository declares its two toolchains at, read from
 # the file that declares each. `check-toolchain` holds the container
 # bases against them.
-GO_DIRECTIVE := $(shell sed -n 's/^go //p' go.mod)
-NODE_VERSION := $(shell cat web/.nvmrc)
+GO_DIRECTIVE := $(shell sed -n 's/^go //p' platform/go.mod)
+NODE_VERSION := $(shell cat console/.nvmrc)
 
 # `go run tool@version` takes the toolchain from the tool's own go
 # directive, which can be older than this module's and then cannot load
-# its packages. The floor is the version go.mod declares; `+auto` still
-# upgrades for a tool that needs a newer one.
+# its packages. The floor is the version platform/go.mod declares;
+# `+auto` still upgrades for a tool that needs a newer one.
 export GOTOOLCHAIN := go$(GO_DIRECTIVE)+auto
 
-# Tool directives in go.mod: go.sum records each version and
-# Dependabot's gomod ecosystem proposes its bumps, and
+# Tool directives in platform/go.mod: its go.sum records each version
+# and Dependabot's gomod ecosystem proposes its bumps, and
 # `.github/dependabot.yml` names what it does not cover. Each writes
 # output this repository commits, so a move — a bump, or a floor another
 # dependency raises — lands with the `gen` that follows it or
@@ -67,7 +67,7 @@ endif
 
 COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml$(if $(IMAGE_BUILD_CACHE), -f deploy/local/docker-compose.gha-cache.yml)
 export COMPOSE_LOCAL
-PNPM := pnpm --dir web
+PNPM := pnpm --dir console
 # cowork's Yjs bundle is built by its own package, which holds only the
 # bundler and Yjs (ADR-0127).
 PNPM_COWORK_ENGINE := pnpm --dir cowork/engine
@@ -139,16 +139,16 @@ endef
 # What buf lint will read, counted on lint's line. buf itself fails on a
 # module holding no .proto file; the guard below is for an ls-files that
 # comes back empty, which would otherwise print a zero nobody checked.
-PROTO_FILES = $(shell $(BUF) ls-files)
+PROTO_FILES = $(shell cd platform && $(BUF) ls-files)
 
 # What actionlint and shfmt will read, counted on lint's line too.
 # actionlint given no path finds the workflows itself and shfmt given a
 # directory walks it, and either sweep coming back empty exits zero
 # reading exactly like the run that read every file — so the paths are
 # listed here and an empty list fails below. The shell sweep takes two
-# roots: `scripts/` and the repository root.
+# roots: `tooling/` and the repository root.
 WORKFLOW_FILES = $(shell find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \))
-SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find scripts -type f -name '*.sh')
+SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find tooling -type f -name '*.sh')
 
 # actionlint runs with shellcheck and pyflakes named off, so it is one
 # check on every machine, and its ref-keyed checks reach no action
@@ -161,7 +161,7 @@ lint:
 		|| { echo 'lint: nothing to lint — the buf module, .github/workflows or the shell sweep matched no input; the counts above name which'; exit 1; }
 	$(call go-packages,lint (go vet),$(GO_SELECT),$(GO_PKGS))
 	@go vet $(GO_PKGS)
-	@$(BUF) lint
+	@cd platform && $(BUF) lint
 	@$(ACTIONLINT) -shellcheck= -pyflakes= $(WORKFLOW_FILES)
 	@$(SHFMT) -ln posix $(SHELL_SCRIPTS) >/dev/null
 
@@ -185,18 +185,18 @@ format:
 # the four suites needing Postgres or a Docker daemon are named instead;
 # a filter that stops matching sweeps its suite back in to fail rather
 # than skip. The two shell tests need no Docker:
-# scripts/image-build-test.sh (ADR-0071, ADR-0097) and
-# scripts/image-test-ecr-test.sh (ADR-0093).
+# tooling/image-build-test.sh (ADR-0071, ADR-0097) and
+# tooling/image-test-ecr-test.sh (ADR-0093).
 TEST_EXCLUDE = %/tests/integration %/tests/e2e %/tests/workload %/tests/standalone
 TEST_SELECT = $(GO_SELECT) minus $(TEST_EXCLUDE)
 TEST_PKGS = $(filter-out $(TEST_EXCLUDE),$(GO_PKGS))
 
 test:
 	$(call go-packages,test,$(TEST_SELECT),$(TEST_PKGS))
-	@echo 'test: tests/integration and tests/e2e not covered here — they need Postgres (make db-up integration e2e); tests/workload and tests/standalone need a Docker daemon and the pinned images (make workload-integration, make standalone-e2e)'
+	@echo 'test: platform/tests/integration and platform/tests/e2e not covered here — they need Postgres (make db-up integration e2e); platform/tests/workload and platform/tests/standalone need a Docker daemon and the pinned images (make workload-integration, make standalone-e2e)'
 	@go test -count=1 $(TEST_PKGS)
-	@scripts/image-build-test.sh
-	@scripts/image-test-ecr-test.sh
+	@tooling/image-build-test.sh
+	@tooling/image-test-ecr-test.sh
 
 # `go build ./...` exits 0 having done nothing should that pattern ever
 # resolve to no package, so build counts the packages it selects first.
@@ -210,14 +210,14 @@ build:
 # OpenAPI server, the CLI's client of it and the commands cligen derives
 # from it (ADR-0122), sqlc queries, protobuf code, and mocks.
 gen:
-	$(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
-	$(OAPI_CODEGEN) --config api/client-codegen.yaml api/openapi.yaml
-	go run ./internal/cli/cligen
-	$(OAPI_CODEGEN) --config api/machine-codegen.yaml api/machine.yaml
-	$(SQLC) generate
-	$(MOCKERY)
-	$(BUF) generate
-	$(GOIMPORTS) -w proto/gen
+	cd platform && $(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
+	cd platform && $(OAPI_CODEGEN) --config api/client-codegen.yaml api/openapi.yaml
+	cd platform && go run ./internal/cli/cligen
+	cd platform && $(OAPI_CODEGEN) --config api/machine-codegen.yaml api/machine.yaml
+	cd platform && $(SQLC) generate
+	cd platform && $(MOCKERY)
+	cd platform && $(BUF) generate
+	cd platform && $(GOIMPORTS) -w proto/gen
 	cd cowork && $(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
 	cd cowork && $(SQLC) generate
 	$(PNPM_COWORK_ENGINE) build
@@ -227,12 +227,12 @@ gen:
 # producing. The paths are literal rather than globs: a glob expands
 # against the working tree, so a deleted generated directory would fall
 # outside it and read as clean (#360).
-GEN_PATHS := $(shell { sed -n 's/^output: //p' api/oapi-codegen.yaml api/client-codegen.yaml \
-		api/machine-codegen.yaml; \
-	sed -n 's/^        out: //p' sqlc.yaml; \
-	sed -n 's/^    out: //p' buf.gen.yaml; \
-	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; \
-	sed -n 's/^\toutPath *= "\(.*\)"$$/\1/p' internal/cli/cligen/main.go; \
+GEN_PATHS := $(shell { sed -n 's|^output: |platform/|p' platform/api/oapi-codegen.yaml platform/api/client-codegen.yaml \
+		platform/api/machine-codegen.yaml; \
+	sed -n 's|^        out: |platform/|p' platform/sqlc.yaml; \
+	sed -n 's|^    out: |platform/|p' platform/buf.gen.yaml; \
+	sed -n 's|^  $(shell sed -n 's/^module //p' platform/go.mod)/\(.*\):$$|platform/\1/mocks|p' platform/.mockery.yaml; \
+	sed -n 's|^\toutPath *= "\(.*\)"$$|platform/\1|p' platform/internal/cli/cligen/main.go; \
 	sed -n 's|^output: |cowork/|p' cowork/api/oapi-codegen.yaml; \
 	sed -n 's|^        out: |cowork/|p' cowork/sqlc.yaml; \
 	sed -n 's|.*outfile: "\.\./\(.*\)".*|cowork/\1|p' cowork/engine/build.mjs; } | sort -u)
@@ -267,12 +267,12 @@ check-gen:
 # through the command text: each is read out of a file in the tree,
 # which ci.md §Security baseline keeps out of a command line.
 export TOOLCHAIN_PAIRS = \
-	web/.nvmrc,$(NODE_VERSION),deploy/local/Dockerfile.web,node \
-	go.mod,$(GO_DIRECTIVE),deploy/local/Dockerfile,golang \
-	go.mod,$(GO_DIRECTIVE),tests/testprincipal/Dockerfile,golang
+	console/.nvmrc,$(NODE_VERSION),deploy/local/Dockerfile.web,node \
+	platform/go.mod,$(GO_DIRECTIVE),deploy/local/Dockerfile,golang \
+	platform/go.mod,$(GO_DIRECTIVE),platform/tests/testprincipal/Dockerfile,golang
 
 check-toolchain:
-	@scripts/check-toolchain.sh
+	@tooling/check-toolchain.sh
 
 # The template commit this repository has taken every improvement from,
 # up to. Nothing can derive it, since an adapted file differs from the
@@ -281,14 +281,14 @@ check-toolchain:
 TEMPLATE_SYNCED := 3d0c87aaf8d363fc304df45a588928febc97097a
 
 template-diff:
-	@TEMPLATE_SYNCED='$(TEMPLATE_SYNCED)' scripts/template-diff.sh
+	@TEMPLATE_SYNCED='$(TEMPLATE_SYNCED)' tooling/template-diff.sh
 
 # Q reaches awk through the environment and never through the command
 # text, so a phrase holding a quote is searched for rather than run.
 export SEARCH_Q = $(Q)
 
 search:
-	@scripts/search.sh
+	@tooling/search.sh
 
 # db-up starts postgres, the openbao `integration` signs against and the
 # rustfs cowork's blob store is tested against, and
@@ -314,7 +314,7 @@ db-down:
 # starts empty, and the target is destructive on a developer machine.
 # The script holds the keep set and the controls it rests on (#943).
 db-prune:
-	@scripts/db-prune.sh
+	@tooling/db-prune.sh
 
 # backend-up starts what `make web-e2e` drives — postgres, the one-shot
 # migration, authz and api — and returns once api answers; the
@@ -328,10 +328,10 @@ backend-up:
 # 0 with `[no test files]` on one holding none — a build tag that
 # stopped matching reads like the run that did the work. That condition
 # then empties a list and fails below.
-INTEGRATION_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/integration/... ./cowork/tests/integration/...)
-INTEGRATION_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/integration/... ./cowork/tests/integration/...)
-E2E_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/e2e/...)
-E2E_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/e2e/...)
+INTEGRATION_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./platform/tests/integration/... ./cowork/tests/integration/...)
+INTEGRATION_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./platform/tests/integration/... ./cowork/tests/integration/...)
+E2E_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./platform/tests/e2e/...)
+E2E_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./platform/tests/e2e/...)
 
 # integration runs the store round-trips and the services over them in
 # process, against real Postgres, and the Transit custodian against the
@@ -339,7 +339,7 @@ E2E_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range 
 # against cowork's own database.
 integration:
 	@echo 'integration: $(words $(INTEGRATION_PKGS)) packages, $(words $(INTEGRATION_TEST_FILES)) test files, against $(TEST_DB_NAME), $(COWORK_TEST_DB_NAME), the openbao at $(OPENBAO_HOST_ADDR) and the rustfs at $(COWORK_S3_HOST_ADDR)'
-	@test -n '$(INTEGRATION_PKGS)' || { echo 'integration: nothing to run — no package under ./tests/integration/... holds a test file'; exit 1; }
+	@test -n '$(INTEGRATION_PKGS)' || { echo 'integration: nothing to run — no package under ./platform/tests/integration/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "integration: no postgres published on this host — run make db-up" >&2; exit 1; }
 	@test -n '$(OPENBAO_HOST_ADDR)' && test -n '$(OPENBAO_CONTAINER)' || { echo "integration: no openbao published on this host — run make db-up" >&2; exit 1; }
 	@test -n '$(COWORK_S3_HOST_ADDR)' || { echo "integration: no rustfs published on this host — run make db-up" >&2; exit 1; }
@@ -353,7 +353,7 @@ integration:
 # the same Postgres (see db-up).
 e2e:
 	@echo 'e2e: $(words $(E2E_PKGS)) packages, $(words $(E2E_TEST_FILES)) test files, against $(TEST_DB_NAME)'
-	@test -n '$(E2E_PKGS)' || { echo 'e2e: nothing to run — no package under ./tests/e2e/... holds a test file'; exit 1; }
+	@test -n '$(E2E_PKGS)' || { echo 'e2e: nothing to run — no package under ./platform/tests/e2e/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(E2E_PKGS)
 
@@ -379,49 +379,49 @@ export GARAM_TEST_RUNTIME_IMAGE GARAM_TEST_WORKSPACE_IMAGE
 # socket; GARAM_TEST_RUNTIME_IMAGE and GARAM_TEST_WORKSPACE_IMAGE
 # default to the Sherlock pin above, and GARAM_TEST_ADAPTER_IMAGE names
 # this tree's garam image by digest or ID.
-WORKLOAD_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/workload/...)
-WORKLOAD_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/workload/...)
+WORKLOAD_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./platform/tests/workload/...)
+WORKLOAD_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./platform/tests/workload/...)
 
 workload-integration:
 	@echo 'workload-integration: $(words $(WORKLOAD_PKGS)) packages, $(words $(WORKLOAD_TEST_FILES)) test files, against $(GARAM_TEST_DOCKER_HOST)'
-	@test -n '$(WORKLOAD_PKGS)' || { echo 'workload-integration: nothing to run — no package under ./tests/workload/... holds a test file'; exit 1; }
+	@test -n '$(WORKLOAD_PKGS)' || { echo 'workload-integration: nothing to run — no package under ./platform/tests/workload/... holds a test file'; exit 1; }
 	go test -count=1 -timeout 30m $(WORKLOAD_PKGS)
 
 # standalone-e2e runs a standalone host end to end (ADR-0085, #1180):
 # the shipped binary prepares, enrolls and runs the supervisor against
-# garam's own image, over a database tests/testprincipal creates on the
-# Postgres db-up starts, with a real model answering. Like
-# workload-integration it is in no whole-set name and in no workflow,
-# for the same images and a model credential besides. Beside that
-# target's GARAM_TEST_DOCKER_HOST and Sherlock images it reads
+# garam's own image, over a database platform/tests/testprincipal
+# creates on the Postgres db-up starts, with a real model answering.
+# Like workload-integration it is in no whole-set name and in no
+# workflow, for the same images and a model credential besides. Beside
+# that target's GARAM_TEST_DOCKER_HOST and Sherlock images it reads
 # GARAM_TEST_GARAM_IMAGE (this tree's image-build output, by ID),
 # GARAM_TEST_TEI_IMAGE and GARAM_TEST_MODEL_ENV_FILE, an owner-only
 # KEY=VALUE file; the server and its container come from compose.
-STANDALONE_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/standalone/...)
-STANDALONE_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/standalone/...)
+STANDALONE_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./platform/tests/standalone/...)
+STANDALONE_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./platform/tests/standalone/...)
 
 standalone-e2e:
 	@echo 'standalone-e2e: $(words $(STANDALONE_PKGS)) packages, $(words $(STANDALONE_TEST_FILES)) test files, against $(GARAM_TEST_DOCKER_HOST)'
-	@test -n '$(STANDALONE_PKGS)' || { echo 'standalone-e2e: nothing to run — no package under ./tests/standalone/... holds a test file'; exit 1; }
+	@test -n '$(STANDALONE_PKGS)' || { echo 'standalone-e2e: nothing to run — no package under ./platform/tests/standalone/... holds a test file'; exit 1; }
 	@test -n '$(DB_HOST_ADDR)' || { echo "standalone-e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_SERVER_URL='postgres://garam:garam@$(DB_HOST_ADDR)/postgres?sslmode=disable' \
 		GARAM_TEST_POSTGRES_CONTAINER="$$($(COMPOSE_LOCAL) ps -q postgres)" \
 		go test -count=1 -timeout 60m $(STANDALONE_PKGS)
 
-# mutation runs gremlins over internal/ and reports the mutants no test
-# noticed; docs/architecture/README.md §Operation records why it is in
-# no workflow and what the coefficient and TMPDIR cost (#875). The
-# default coefficient times every mutant out and gremlins still exits
-# 0, so the counts are read from its report, removed first since it
-# writes none when it finds nothing, and zero tested fails. Point TMPDIR
-# at a disk: each worker copies the module, web/ builds included.
+# mutation runs gremlins over platform/internal/ and reports the mutants
+# no test noticed; docs/architecture/README.md §Operation records why it
+# is in no workflow and what the coefficient and TMPDIR cost (#875). The
+# default coefficient times every mutant out and gremlins still exits 0,
+# so the counts are read from its report, removed first since it writes
+# none when it finds nothing, and zero tested fails. Point TMPDIR at a
+# disk: each worker copies the module.
 MUTATION_COEFFICIENT := 300
 MUTATION_REPORT := mutation.json
 
 mutation:
-	@echo 'mutation: internal/, coefficient $(MUTATION_COEFFICIENT), report $(MUTATION_REPORT)'
+	@echo 'mutation: platform/internal/, coefficient $(MUTATION_COEFFICIENT), report $(MUTATION_REPORT)'
 	@rm -f '$(MUTATION_REPORT)'
-	@$(GREMLINS) unleash --timeout-coefficient $(MUTATION_COEFFICIENT) -o '$(MUTATION_REPORT)' internal
+	@cd platform && $(GREMLINS) unleash --timeout-coefficient $(MUTATION_COEFFICIENT) -o '$(CURDIR)/$(MUTATION_REPORT)' internal
 	@killed="$$(sed -n 's/.*"mutants_killed":\([0-9]*\).*/\1/p' '$(MUTATION_REPORT)')"; \
 		lived="$$(sed -n 's/.*"mutants_lived":\([0-9]*\).*/\1/p' '$(MUTATION_REPORT)')"; \
 		efficacy="$$(sed -n 's/.*"test_efficacy":\([0-9.]*\).*/\1/p' '$(MUTATION_REPORT)')"; \
@@ -433,12 +433,12 @@ mutation:
 
 # The whole set, both toolchains, under one name (#789). `web-ci` runs
 # last so the cheaper Go half fails first, and it puts pnpm and the node
-# version web/.nvmrc names on every contributor's path.
+# version console/.nvmrc names on every contributor's path.
 ci: format lint test build check-gen check-toolchain chart web-ci cowork-web-ci
 
 # ---------------------------------------------------------------------
-# web/ — the Next.js frontend (ADR-0009). It keeps its own toolchain and
-# lockfile; `web-ci` is the half of `ci` that covers it.
+# console/ — the Next.js frontend (ADR-0009). It keeps its own toolchain
+# and lockfile; `web-ci` is the half of `ci` that covers it.
 # ---------------------------------------------------------------------
 
 web-install:
@@ -479,10 +479,10 @@ web-lint:
 # whenever CI is set in the environment, and those escape sequences left
 # the scrape that read it matching nothing on every runner (#822).
 #
-# The candidates are what git has under web/ — tracked, plus untracked
-# files no ignore file excludes — the set prettier's own default
-# --ignore-path is aligned to.
-WEB_FORMAT_CANDIDATES = $(shell git -C web ls-files --cached --others --exclude-standard)
+# The candidates are what git has under console/ — tracked, plus
+# untracked files no ignore file excludes — the set prettier's own
+# default --ignore-path is aligned to.
+WEB_FORMAT_CANDIDATES = $(shell git -C console ls-files --cached --others --exclude-standard)
 
 # getFileInfo is prettier's documented answer for one path: `ignored`
 # applies both ignore files, and a null `inferredParser` is a file it
@@ -495,7 +495,7 @@ WEB_FORMAT_FILES = $(shell $(PNPM) --silent exec node -e 'const p=require("prett
 
 web-format:
 	@echo 'web-format: $(words $(WEB_FORMAT_FILES)) files (prettier)'
-	@test -n '$(WEB_FORMAT_CANDIDATES)' || { echo 'web-format: nothing to check — git lists no file under web/'; exit 1; }
+	@test -n '$(WEB_FORMAT_CANDIDATES)' || { echo 'web-format: nothing to check — git lists no file under console/'; exit 1; }
 	@test -n '$(WEB_FORMAT_FILES)' || { echo 'web-format: nothing to check — prettier called all $(words $(WEB_FORMAT_CANDIDATES)) of them ignored or unparseable'; exit 1; }
 	@$(PNPM) format
 
@@ -515,8 +515,8 @@ web-gen:
 
 # What gen:api writes, read from the script that writes it: package.json
 # owns the -o path, and a second copy here is the copy that goes stale.
-# The script runs in web/, so the path it names is relative to it.
-WEB_GEN_PATHS = $(shell sed -n 's|.*"gen:api": ".* -o \([^" ]*\)".*|web/\1|p' web/package.json)
+# The script runs in console/, so the path it names is relative to it.
+WEB_GEN_PATHS = $(shell sed -n 's|.*"gen:api": ".* -o \([^" ]*\)".*|console/\1|p' console/package.json)
 
 # A git diff pathspec matching no tracked file exits 0 having compared
 # nothing, so what git tracks under the owned path is counted first: a
@@ -547,13 +547,13 @@ web-e2e:
 IMAGE_BUILD_ARGS = $(if $(IMAGE_REGISTRY),--registry '$(IMAGE_REGISTRY)') $(if $(IMAGE_TAG),--tag '$(IMAGE_TAG)') $(if $(IMAGE_BUILD_CACHE),--cache '$(IMAGE_BUILD_CACHE)')
 
 image-build:
-	scripts/image-build.sh $(IMAGE_BUILD_ARGS)
+	tooling/image-build.sh $(IMAGE_BUILD_ARGS)
 
 # What image-build tagged the web image, asked of the script that tags
 # it by the build context, so a rename in release.yml cannot leave this
 # naming an image an earlier run built (#870). Empty when the release
 # builds none from the web context, which the target reports.
-WEB_IMAGE = $(shell scripts/image-build.sh --names $(IMAGE_BUILD_ARGS) | sed -n 's|^web ||p')
+WEB_IMAGE = $(shell tooling/image-build.sh --names $(IMAGE_BUILD_ARGS) | sed -n 's|^console ||p')
 
 # web-image-e2e checks the built image rather than the app: that the
 # standalone server starts, answers both probes and reaches the baked
@@ -564,7 +564,7 @@ WEB_IMAGE = $(shell scripts/image-build.sh --names $(IMAGE_BUILD_ARGS) | sed -n 
 web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
 	@image='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))'; \
 		test -n "$$image" || { echo 'web-image-e2e: nothing names the image to check — .github/workflows/release.yml builds none from the web context'; exit 1; }; \
-		GARAM_WEB_IMAGE="$$image" tests/image/web.sh
+		GARAM_WEB_IMAGE="$$image" platform/tests/image/web.sh
 
 # test-image builds the test image another repository's CI copies
 # garam, testprincipal and the migrations out of (ADR-0092), tagged
@@ -574,10 +574,10 @@ web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
 TEST_IMAGE_REPOSITORY ?= garam-test
 
 test-image:
-	scripts/image-test.sh '$(TEST_IMAGE_REPOSITORY)'
+	tooling/image-test.sh '$(TEST_IMAGE_REPOSITORY)'
 
 test-image-e2e: test-image
-	tests/image/test-image.sh '$(TEST_IMAGE_REPOSITORY):$(shell git rev-parse HEAD)'
+	platform/tests/image/test-image.sh '$(TEST_IMAGE_REPOSITORY):$(shell git rev-parse HEAD)'
 
 # An operator pushes the test image to ECR and moves a consumer's pin
 # under their own AWS credentials (ADR-0093), so neither target is in
@@ -586,10 +586,10 @@ test-image-e2e: test-image
 # `pinned-$(CONSUMER)` to the image of $(COMMIT). Both scripts hold the
 # repository, so no make variable can redirect them.
 test-image-push:
-	scripts/image-test-push.sh
+	tooling/image-test-push.sh
 
 test-image-pin:
-	scripts/image-test-pin.sh '$(COMMIT)' '$(CONSUMER)'
+	tooling/image-test-pin.sh '$(COMMIT)' '$(CONSUMER)'
 
 web-ci: web-format web-lint web-test web-build web-check-gen
 
@@ -610,12 +610,13 @@ CHART_TEMPLATES = $(wildcard $(CHART_DIR)/templates/*.yaml)
 CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
 
 # Every environment variable garam reads, from its declarations: the
-# envName block in internal/cli, and web/src/env.ts parsed for its own
-# shape. The guards chart-render runs first keep the block equal to the
-# reads (#734), and both sides read one character class, since a name
-# outside it drops out of both sets and passes unseen (#864).
-CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z][A-Z0-9_]*"' --include=*.go internal cmd | sed 's/.*"\([A-Z][A-Z0-9_]*\)"/\1/' | sort -u)
-CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' web/src/env.ts)
+# envName block in platform/internal/cli, and console/src/env.ts parsed
+# for its own shape. The guards chart-render runs first keep the block
+# equal to the reads (#734), and both sides read one character class,
+# since a name outside it drops out of both sets and passes unseen
+# (#864).
+CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z][A-Z0-9_]*"' --include=*.go platform/internal platform/cmd | sed 's/.*"\([A-Z][A-Z0-9_]*\)"/\1/' | sort -u)
+CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' console/src/env.ts)
 
 # What the chart declares it does not set, read from the table that
 # carries the reasons. A renamed heading empties this and fails the
@@ -661,15 +662,15 @@ chart-render:
 	@# What makes the block above the whole of what the Go source reads:
 	@# every read reaches os.Getenv, and os.Getenv is called once, inside
 	@# envOr. A second read is a name this check cannot see.
-	@reads="$$(grep -rhoE 'os\.(Getenv|LookupEnv|Environ)\(' --include=*.go --exclude=*_test.go internal cmd | wc -l)"; \
+	@reads="$$(grep -rhoE 'os\.(Getenv|LookupEnv|Environ)\(' --include=*.go --exclude=*_test.go platform/internal platform/cmd | wc -l)"; \
 		test "$$reads" -eq 1 \
-		|| { echo "chart-render: $$reads reads of the environment under internal|cmd, expected the one envOr holds — a read outside it is a name this check cannot see"; exit 1; }
+		|| { echo "chart-render: $$reads reads of the environment under platform/internal|cmd, expected the one envOr holds — a read outside it is a name this check cannot see"; exit 1; }
 	@# And every name reaching envOr is declared rather than written at
 	@# the call, so no reader can name a variable this check does not
 	@# enumerate. An env-shaped literal passed to any call is that.
-	@stray="$$(grep -rnE '[A-Za-z_][A-Za-z0-9_]*\("(GARAM|GOOGLE)_[A-Z_]+"' --include=*.go --exclude=*_test.go internal cmd || true)"; \
+	@stray="$$(grep -rnE '[A-Za-z_][A-Za-z0-9_]*\("(GARAM|GOOGLE)_[A-Z_]+"' --include=*.go --exclude=*_test.go platform/internal platform/cmd || true)"; \
 		test -z "$$stray" \
-		|| { echo 'chart-render: an environment name is written at a call site rather than declared in internal/cli, so this check cannot enumerate it:'; echo "$$stray"; exit 1; }
+		|| { echo 'chart-render: an environment name is written at a call site rather than declared in platform/internal/cli, so this check cannot enumerate it:'; echo "$$stray"; exit 1; }
 	@test -n '$(CHART_UNSET_ENV)' \
 		|| { echo 'chart-render: $(CHART_DIR)/README.md §Not set by this chart named no variable — the parse is broken'; exit 1; }
 	@set -e; \
@@ -766,7 +767,7 @@ chart-names:
 # image against the api Service rendered under release `garam`, two
 # facts nothing else reads together (#861). The render under
 # $(CHART_LONG_RELEASE) is the control and must differ, or the equality
-# proves nothing (ADR-0056). scripts/image-build.sh reads the same file
+# proves nothing (ADR-0056). tooling/image-build.sh reads the same file
 # for what the release builds.
 CHART_BAKED_API_URL = $(shell sed -n 's/^ *GARAM_API_URL=\(.*\)$$/\1/p' .github/workflows/release.yml)
 
@@ -822,7 +823,7 @@ chart-guards:
 chart-security:
 	@CHART_DIR='$(CHART_DIR)' HELM='$(HELM)' \
 		CHART_IDENTITIES='$(CHART_IDENTITIES)' CHART_VALUES='$(CHART_VALUES)' \
-		scripts/chart-security.sh
+		tooling/chart-security.sh
 
 # chart-package searches the artifact `helm package` produces, which no
 # other check opens, for a resource name set as a key: no figure is one
@@ -910,7 +911,7 @@ minikube-start: minikube-context
 minikube-images:
 	eval "$$(minikube docker-env --shell bash)"; \
 		docker build -t garam:local -f deploy/local/Dockerfile . && \
-		docker build -t garam-web:local -f deploy/local/Dockerfile.web web
+		docker build -t garam-web:local -f deploy/local/Dockerfile.web console
 
 # minikube-db creates the namespace everything else lands in and the
 # Postgres cluster CNPG reconciles, and returns once it is reachable.
@@ -963,8 +964,8 @@ minikube-down:
 
 # ---------------------------------------------------------------------
 # cowork/web — cowork's Next.js app (ADR-0127). Its own toolchain and
-# lockfile, as web/'s; `cowork-web-ci` is the half of `ci` that covers
-# it, and `web-install` installs it beside web/.
+# lockfile, as console/'s; `cowork-web-ci` is the half of `ci` that
+# covers it, and `web-install` installs it beside console/.
 # ---------------------------------------------------------------------
 
 COWORK_WEB_FILES = $(shell git -C cowork/web ls-files --cached --others --exclude-standard)

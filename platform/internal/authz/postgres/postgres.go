@@ -6,8 +6,8 @@ package postgres
 import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/garam/internal/authz"
-	"github.com/garamsh/garam/internal/authz/postgres/db"
+	"github.com/garamsh/garam/platform/internal/authz"
+	"github.com/garamsh/garam/platform/internal/authz/postgres/db"
 )
 
 // Store implements authz.Store against PostgreSQL. The queries are

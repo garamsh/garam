@@ -12,14 +12,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/authz"
-	"github.com/garamsh/garam/internal/ca"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/org"
-	orgpg "github.com/garamsh/garam/internal/org/postgres"
-	"github.com/garamsh/garam/internal/wire"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/authz"
+	"github.com/garamsh/garam/platform/internal/ca"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/message"
+	"github.com/garamsh/garam/platform/internal/org"
+	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // sendEvent is one row of the send record as a test reads it back.

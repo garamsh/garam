@@ -1,9 +1,10 @@
 #!/bin/sh
-# Builds the test image (ADR-0092) from tests/testprincipal/Dockerfile
-# as `<repository>:<commit>`, the commit being HEAD's full hash, which
-# the revision label records as well. The repository defaults to
-# `garam-test`; scripts/image-test-push.sh names the ECR repository's
-# (ADR-0093). Nothing is pushed.
+# Builds the test image (ADR-0092) from
+# platform/tests/testprincipal/Dockerfile as `<repository>:<commit>`,
+# the commit being HEAD's full hash, which the revision label records as
+# well. The repository defaults to `garam-test`;
+# tooling/image-test-push.sh names the ECR repository's (ADR-0093).
+# Nothing is pushed.
 #
 # The tag and the label both name HEAD, so a working tree that differs
 # from it is refused before anything is built: the image would claim a
@@ -25,10 +26,10 @@ status=$(git status --porcelain) \
 	|| refuse "the working tree differs from HEAD ($revision), which the tag and the revision label would both name"
 
 image=$repository:$revision
-echo "image-test: $image from tests/testprincipal/Dockerfile, context ."
+echo "image-test: $image from platform/tests/testprincipal/Dockerfile, context ."
 # One linux/amd64 image manifest and no attestation beside it, which
 # would make the reference an index.
-docker build -t "$image" -f tests/testprincipal/Dockerfile \
+docker build -t "$image" -f platform/tests/testprincipal/Dockerfile \
 	--platform linux/amd64 --provenance=false --sbom=false \
 	--build-arg "IMAGE_REVISION=$revision" .
 echo "image-test: built $image $(docker image inspect -f '{{.Id}}' "$image")"

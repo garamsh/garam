@@ -50,7 +50,7 @@ export async function detachPolicy(
     );
   } catch (error) {
     // The operation answers 409 for this refusal alone
-    // (`api/openapi.yaml` detachPolicy).
+    // (`platform/api/openapi.yaml` detachPolicy).
     if (error instanceof GaramApiError && error.status === 409) {
       return { status: "last-attachment" };
     }

@@ -1,8 +1,8 @@
 /**
  * The user code a `/device` address carries. garam's
- * `verification_uri_complete` names it `code` (`api/openapi.yaml`,
- * `DeviceCode`); `user_code`, RFC 8628's own name for it, is read where
- * `code` is absent.
+ * `verification_uri_complete` names it `code`
+ * (`platform/api/openapi.yaml`, `DeviceCode`); `user_code`, RFC 8628's
+ * own name for it, is read where `code` is absent.
  */
 export type DeviceCodeParams = {
   code?: string | string[];

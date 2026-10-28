@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // TokenScheme is the Authorization scheme a request presents a token

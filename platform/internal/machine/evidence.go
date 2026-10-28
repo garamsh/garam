@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // Path is how one authentication by a machine caller was decided

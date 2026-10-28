@@ -688,8 +688,9 @@ test.describe("control service, as contract tests against the agreed Operator wi
     // The deny was written to the database, and the API's policy cache,
     // which the owner's visit above filled, drops that org's entry only
     // when the change notification arrives after the commit
-    // (`internal/authz/cache.go`). A read landing first is decided
-    // without the deny, so the page is read again until it is in force.
+    // (`platform/internal/authz/cache.go`). A read landing first is
+    // decided without the deny, so the page is read again until it is
+    // in force.
     await expect(async () => {
       await page.goto(agentPage);
       // The refusal is the Execution tab's, which a reload closes.

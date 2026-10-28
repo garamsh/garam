@@ -16,8 +16,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/errorx"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // apiOperation is one browser API operation the CLI serves as a

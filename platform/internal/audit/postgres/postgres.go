@@ -8,12 +8,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/garamsh/garam/internal/audit"
-	"github.com/garamsh/garam/internal/audit/postgres/db"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/pgxerr"
-	"github.com/garamsh/garam/internal/pgxtype"
+	"github.com/garamsh/garam/platform/internal/audit"
+	"github.com/garamsh/garam/platform/internal/audit/postgres/db"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 
 // RecordSend writes the send event inside tx, the transaction that

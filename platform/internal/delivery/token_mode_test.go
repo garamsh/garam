@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/delivery"
-	"github.com/garamsh/garam/internal/errorx"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/delivery"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // agentTokenOf is an agent token as garam spells one, made of c.

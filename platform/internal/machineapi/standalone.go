@@ -9,11 +9,11 @@ import (
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/audit"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/machine"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/audit"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/machine"
 )
 
 // bootstrapScheme is the Authorization scheme a standalone host spends

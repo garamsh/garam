@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/authn"
-	authnpg "github.com/garamsh/garam/internal/authn/postgres"
+	"github.com/garamsh/garam/platform/internal/authn"
+	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 )
 
 // TestOAuthStateStore_RoundTrip drives a login state through the shape

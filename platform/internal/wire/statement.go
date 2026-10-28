@@ -1,8 +1,8 @@
 package wire
 
 import (
-	"github.com/garamsh/garam/internal/errorx"
-	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // StatementToProto renders one statement a caller collected as the

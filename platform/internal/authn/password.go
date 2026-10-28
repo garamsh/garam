@@ -12,7 +12,7 @@ import (
 
 	"golang.org/x/crypto/argon2"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // Password is a password as a person typed it. Every way the standard

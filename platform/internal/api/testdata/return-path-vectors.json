@@ -1,5 +1,5 @@
 {
-  "description": "The return-path rule's test vectors, read by internal/api/return_path_test.go and web/src/lib/__tests__/return-path.test.ts so the Go and TypeScript rules cannot drift. A vector with inputHex is raw bytes; goOnly marks one a JavaScript string cannot hold.",
+  "description": "The return-path rule's test vectors, read by internal/api/return_path_test.go and console/src/lib/__tests__/return-path.test.ts so the Go and TypeScript rules cannot drift. A vector with inputHex is raw bytes; goOnly marks one a JavaScript string cannot hold.",
   "vectors": [
     {
       "name": "the console",

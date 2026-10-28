@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/wire"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // Statement is one IAM-style rule handed to the authz engine for

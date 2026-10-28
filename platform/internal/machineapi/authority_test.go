@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/machineapi"
-	"github.com/garamsh/garam/internal/operator"
-	operatormocks "github.com/garamsh/garam/internal/operator/mocks"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/machineapi"
+	"github.com/garamsh/garam/platform/internal/operator"
+	operatormocks "github.com/garamsh/garam/platform/internal/operator/mocks"
 )
 
 // authorityListener serves the authority routes over the machine

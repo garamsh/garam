@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/operator"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/operator"
 )
 
 // IntrospectOperationAuthority answers what an operation authority

@@ -3,7 +3,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/garamsh/garam/internal/workload"
+	"github.com/garamsh/garam/platform/internal/workload"
 )
 
 // newCopyMemoryCommand constructs `garam copy-memory`: what the

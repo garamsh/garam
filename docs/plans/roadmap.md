@@ -17,15 +17,15 @@ workflow last. Each tier depends only on the tier below it.
 
 - GRN value type, `errorx`, domain types and `Store` interfaces for
   `org` / `user`.
-- `internal/authn/` — OAuth provider abstraction (OIDC) with Google as
-  the first provider; more providers plug in later without touching
-  call sites.
+- `platform/internal/authn/` — OAuth provider abstraction (OIDC) with
+  Google as the first provider; more providers plug in later without
+  touching call sites.
 - `org` gains an `Invitation` aggregate: orgs grow by invitation and
   acceptance, not open signup. Minimal org roles (`owner`, `admin`,
   `member`) on membership, expressed as IAM-style policy statements
   and enforced by the authz service (ADR-0002).
-- Single cobra CLI (`cmd/garam`): `serve api` (OpenAPI HTTP) and
-  `serve authz` (gRPC policy engine) run as independent packages
+- Single cobra CLI (`platform/cmd/garam`): `serve api` (OpenAPI HTTP)
+  and `serve authz` (gRPC policy engine) run as independent packages
   (ADR-0003).
 - The `agent` domain stayed excluded, and was decided after this tier
   (ADR-0012, ADR-0013, ADR-0026, ADR-0033).
@@ -33,8 +33,8 @@ workflow last. Each tier depends only on the tier below it.
   domain stores.
 - OpenAPI spec as the source of truth for the HTTP API; server code
   generated from the spec (oapi-codegen, stdlib `net/http`).
-- Migrations under `migrations/` (golang-migrate). Dockerised Postgres
-  for dev; e2e store round-trips against real Postgres.
+- Migrations under `platform/migrations/` (golang-migrate). Dockerised
+  Postgres for dev; e2e store round-trips against real Postgres.
 
 ## P1 — authz engine (done)
 
@@ -64,9 +64,9 @@ workflow last. Each tier depends only on the tier below it.
 Not a tier in the dependency stack — a surface over what P1 and P2
 already expose, built in parallel rather than gating P3.
 
-- `web/`: Next.js App Router, Tailwind v4, shadcn/ui, three test layers
-  (ADR-0009). Its own toolchain and gate, `make web-ci`, which `make
-  ci` runs.
+- `console/`: Next.js App Router, Tailwind v4, shadcn/ui, three test
+  layers (ADR-0009). Its own toolchain and gate, `make web-ci`, which
+  `make ci` runs.
 - A public landing page at `/`, sign-in at `/login`, and the signed-in
   application under `/console`.
 - Sign-in with a username and a password beside Google, registered

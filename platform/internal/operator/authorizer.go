@@ -3,7 +3,7 @@ package operator
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // Authorizer decides from current state whether a user may perform

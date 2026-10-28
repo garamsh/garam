@@ -44,8 +44,8 @@ because the subject is still in-process modules.
 of those suites.** There, substituting the service means substituting
 the store: the stand-in goes where the code under test is rather than
 behind it, and the suite is left exercising the stand-in. The e2e row's
-obligation is met separately, by `tests/e2e/`, which drives the built
-binary and fails without a store (#900).
+obligation is met separately, by `platform/tests/e2e/`, which drives the
+built binary and fails without a store (#900).
 
 **A test constructs what it puts under test** — the unit and whatever
 stands in for its dependencies, or the server its client is pointed at.

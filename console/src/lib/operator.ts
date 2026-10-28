@@ -14,7 +14,7 @@
  * registered under is refused by the API, which names it (ADR-0045).
  *
  * The name and description beside it are what the organization says
- * about the operator, and their bounds are `api/openapi.yaml`
+ * about the operator, and their bounds are `platform/api/openapi.yaml`
  * §OperatorName and §OperatorDescription (ADR-0074). Registering and
  * editing both carry them.
  */

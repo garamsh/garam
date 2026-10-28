@@ -7,12 +7,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/operator/postgres/db"
-	"github.com/garamsh/garam/internal/pgxerr"
-	"github.com/garamsh/garam/internal/pgxtype"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/operator/postgres/db"
+	"github.com/garamsh/garam/platform/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 
 // IssueKey records the key under the registration's row lock, so two

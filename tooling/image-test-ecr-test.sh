@@ -1,5 +1,5 @@
 #!/bin/sh
-# Checks what scripts/image-test-push.sh and scripts/image-test-pin.sh
+# Checks what tooling/image-test-push.sh and tooling/image-test-pin.sh
 # refuse (ADR-0093), and that each refusal made before AWS is called
 # calls neither `aws` nor `docker`. Each case runs the scripts in a
 # scratch repository holding this tree's copies of them, committed
@@ -20,20 +20,20 @@ trap 'rm -rf "$scratch"' EXIT INT TERM
 repo=$scratch/repo
 bin=$scratch/bin
 registry=$scratch/registry
-mkdir -p "$repo/scripts" "$repo/tests/image" "$bin" "$registry"
-cp scripts/image-test-push.sh scripts/image-test-pin.sh "$repo/scripts/"
+mkdir -p "$repo/tooling" "$repo/platform/tests/image" "$bin" "$registry"
+cp tooling/image-test-push.sh tooling/image-test-pin.sh "$repo/tooling/"
 # The build and its check: each records that it ran, and the check
 # fails when CHECK_FAILS is set.
-cat >"$repo/scripts/image-test.sh" <<'EOF'
+cat >"$repo/tooling/image-test.sh" <<'EOF'
 #!/bin/sh
 echo "build $*" >>"$CALLS"
 EOF
-cat >"$repo/tests/image/test-image.sh" <<'EOF'
+cat >"$repo/platform/tests/image/test-image.sh" <<'EOF'
 #!/bin/sh
 echo "check $*" >>"$CALLS"
 [ -z "${CHECK_FAILS:-}" ] || { echo 'test-image-e2e: stand-in check failed' >&2; exit 1; }
 EOF
-chmod +x "$repo/scripts/image-test.sh" "$repo/tests/image/test-image.sh"
+chmod +x "$repo/tooling/image-test.sh" "$repo/platform/tests/image/test-image.sh"
 git -C "$repo" init -q
 git -C "$repo" -c user.name=test -c user.email=test@invalid add -A
 git -C "$repo" -c user.name=test -c user.email=test@invalid commit -qm scratch
@@ -182,8 +182,8 @@ called() {
 	grep -Eq -- "$1" "$calls"
 }
 
-push=scripts/image-test-push.sh
-pin=scripts/image-test-pin.sh
+push=tooling/image-test-push.sh
+pin=tooling/image-test-pin.sh
 
 # test-image-push: the control checks HEAD under its full hash, pushes
 # it under the first twelve digits, and reads the digest back.
@@ -206,18 +206,18 @@ aws_ours=$(grep -c -- '--region ap-northeast-2 --registry-id 486152169996 --repo
 
 # A repository named on the command line is refused, whatever it is:
 # another account, another region, the release namespace, or this one.
-untouched 'usage: scripts/image-test-push.sh' $push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
-untouched 'usage: scripts/image-test-push.sh' $push 486152169996.dkr.ecr.us-east-1.amazonaws.com/garam-dev/garam-test
-untouched 'usage: scripts/image-test-push.sh' $push 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test
-untouched 'usage: scripts/image-test-push.sh' $push "$ecr"
+untouched 'usage: tooling/image-test-push.sh' $push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
+untouched 'usage: tooling/image-test-push.sh' $push 486152169996.dkr.ecr.us-east-1.amazonaws.com/garam-dev/garam-test
+untouched 'usage: tooling/image-test-push.sh' $push 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test
+untouched 'usage: tooling/image-test-push.sh' $push "$ecr"
 
 touch "$repo/untracked"
 reset empty
 untouched 'differs from HEAD' $push
 rm "$repo/untracked"
-echo changed >>"$repo/scripts/image-test.sh"
+echo changed >>"$repo/tooling/image-test.sh"
 untouched 'differs from HEAD' $push
-git -C "$repo" checkout -q scripts/image-test.sh
+git -C "$repo" checkout -q tooling/image-test.sh
 
 # A `git` whose status fails and prints nothing, every other command
 # reaching the real one: the failure is refused, not read as clean.
@@ -272,11 +272,11 @@ aws_ours=$(grep -c -- '--region ap-northeast-2 --registry-id 486152169996 --repo
 [ "$aws_calls" -gt 0 ] && [ "$aws_ours" -eq "$aws_calls" ] && ! called '^docker ' \
 	|| fail "the pin control reached another repository: $(cat "$calls")"
 
-untouched 'usage: scripts/image-test-pin.sh' $pin "$head"
+untouched 'usage: tooling/image-test-pin.sh' $pin "$head"
 for other in 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test \
 	486152169996.dkr.ecr.us-east-1.amazonaws.com/garam-dev/garam-test \
 	486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test "$ecr"; do
-	untouched 'usage: scripts/image-test-pin.sh' $pin "$other" "$head" consumer
+	untouched 'usage: tooling/image-test-pin.sh' $pin "$other" "$head" consumer
 done
 reset
 accepted "image-test-pin: $ecr:pinned-consumer is $short, $want" $pin "$short" consumer
@@ -326,4 +326,4 @@ with PUT_STORES=sha256:other refused "pinned-consumer resolves to sha256:other, 
 	echo "image-test-ecr-test: $failed of $cases cases failed" >&2
 	exit 1
 }
-echo "image-test-ecr-test: $cases cases passed, read against $root/scripts/image-test-push.sh and $root/scripts/image-test-pin.sh"
+echo "image-test-ecr-test: $cases cases passed, read against $root/tooling/image-test-push.sh and $root/tooling/image-test-pin.sh"

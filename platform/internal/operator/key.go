@@ -12,8 +12,8 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // KeyAlgorithm is the one signature algorithm an operator key is

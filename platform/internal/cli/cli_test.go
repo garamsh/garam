@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/cli"
+	"github.com/garamsh/garam/platform/internal/cli"
 )
 
 // runRoot executes the command tree with args and returns what cobra

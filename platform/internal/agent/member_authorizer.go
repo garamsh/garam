@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // MemberAuthorizer decides from current state whether a user may

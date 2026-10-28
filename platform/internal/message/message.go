@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/garamsh/garam/internal/audit"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/audit"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // Domain sentinel errors.

@@ -20,8 +20,8 @@ import {
  * What issuing a key has to show: nothing yet, a refusal, a garam that
  * issues no keys because no token endpoint is configured, no answer,
  * or the key. garam refuses the unconfigured case with a reason of its
- * own (`api/openapi.yaml` `Error.reason`), so it is told apart from an
- * outage rather than read as one (#1394).
+ * own (`platform/api/openapi.yaml` `Error.reason`), so it is told apart
+ * from an outage rather than read as one (#1394).
  *
  * The private key is carried in this state because this answer is the
  * only place it exists: garam keeps the public key alone and answers

@@ -3,7 +3,7 @@ package authn
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // SessionStore persists sessions by the hash of their bearer token.

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Checks which tags scripts/image-build.sh accepts for a development
+# Checks which tags tooling/image-build.sh accepts for a development
 # build (ADR-0071), that it names the development namespace and never
 # the release's (ADR-0097), and that a refused one reaches no build.
 # Each case runs the script in a scratch repository holding this
@@ -17,8 +17,8 @@ scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT INT TERM
 
 repo=$scratch/repo
-mkdir -p "$repo/scripts" "$repo/.github/workflows" "$scratch/bin"
-cp scripts/image-build.sh "$repo/scripts/"
+mkdir -p "$repo/tooling" "$repo/.github/workflows" "$scratch/bin"
+cp tooling/image-build.sh "$repo/tooling/"
 cp .github/workflows/release.yml "$repo/.github/workflows/"
 git -C "$repo" init -q
 git -C "$repo" -c user.name=test -c user.email=test@invalid add -A
@@ -42,7 +42,7 @@ log=$scratch/docker.log
 run() {
 	: >"$log"
 	(cd "$repo" && PATH="$scratch/bin:$PATH" DOCKER_LOG="$log" \
-		scripts/image-build.sh "$@") >"$out" 2>&1
+		tooling/image-build.sh "$@") >"$out" 2>&1
 }
 
 fail() {
@@ -85,9 +85,9 @@ ns=garam-dev
 # existed. A development build takes the release's repository names
 # into `garam-dev/`, the release workflow naming them under `garam/`.
 accepted '. garam-server:ci' --names
-accepted 'web garam-web:ci' --names
+accepted 'console garam-web:ci' --names
 accepted ". $reg/$ns/garam-server:$short" --names --registry "$reg"
-accepted "web $reg/$ns/garam-web:$short" --names --registry "$reg"
+accepted "console $reg/$ns/garam-web:$short" --names --registry "$reg"
 
 # A release version against the prerelease it is one suffix from.
 refused 'is a release version' --names --registry "$reg" --tag 1.2.3

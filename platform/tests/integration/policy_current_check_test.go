@@ -13,11 +13,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	"github.com/garamsh/garam/internal/authz"
-	authzpg "github.com/garamsh/garam/internal/authz/postgres"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/wire"
-	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+	"github.com/garamsh/garam/platform/internal/authz"
+	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/wire"
+	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // currentCheckAppName is what the engine's proxied connections call

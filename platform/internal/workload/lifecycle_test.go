@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/delivery"
-	"github.com/garamsh/garam/internal/workload"
+	"github.com/garamsh/garam/platform/internal/delivery"
+	"github.com/garamsh/garam/platform/internal/workload"
 )
 
 // activateOnce has the adapter of the generation running now activate

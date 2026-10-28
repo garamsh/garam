@@ -3,11 +3,11 @@ package api
 import (
 	"net/http"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/org"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/message"
+	"github.com/garamsh/garam/platform/internal/org"
 )
 
 // ListOrgConsents lists every cross-organization consent relation the

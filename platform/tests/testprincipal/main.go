@@ -19,12 +19,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/garam/internal/authn"
-	authnpg "github.com/garamsh/garam/internal/authn/postgres"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/user"
-	userpg "github.com/garamsh/garam/internal/user/postgres"
+	"github.com/garamsh/garam/platform/internal/authn"
+	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/user"
+	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
 )
 
 // contractVersion is the one contract this build serves. A caller

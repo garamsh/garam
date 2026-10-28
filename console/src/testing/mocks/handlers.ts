@@ -236,9 +236,9 @@ export const buildHost: AgentSupervisor = {
 /**
  * Every route the fixtures model: what it answers signed in, and
  * whether the backend guards it. The split is the one
- * `api/openapi.yaml` records — an operation carrying `security: []`
- * answers without a session — and the signed-out fixtures below
- * reproduce it.
+ * `platform/api/openapi.yaml` records — an operation carrying
+ * `security: []` answers without a session — and the signed-out
+ * fixtures below reproduce it.
  */
 /**
  * Alice's sessions: the browser this request was made on, and a CLI

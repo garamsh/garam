@@ -3,8 +3,8 @@ package agent
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/listfilter"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/listfilter"
 )
 
 // StandaloneStore persists administrators' approvals of standalone

@@ -7,11 +7,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/operator/postgres/db"
-	"github.com/garamsh/garam/internal/pgxtype"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/operator/postgres/db"
+	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 
 // Compile-time check that Store satisfies operator.GrantStore.

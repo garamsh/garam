@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/pgxtype"
+	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 
 func TestTimestamptz(t *testing.T) {

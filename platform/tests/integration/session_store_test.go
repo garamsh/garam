@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/authn"
-	authnpg "github.com/garamsh/garam/internal/authn/postgres"
-	"github.com/garamsh/garam/internal/user"
-	userpg "github.com/garamsh/garam/internal/user/postgres"
+	"github.com/garamsh/garam/platform/internal/authn"
+	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
+	"github.com/garamsh/garam/platform/internal/user"
+	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
 )
 
 func TestSessionStore_RoundTrip(t *testing.T) {

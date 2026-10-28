@@ -5,11 +5,11 @@ import (
 	"net/http"
 	"strings"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/machine"
-	"github.com/garamsh/garam/internal/operator"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/machine"
+	"github.com/garamsh/garam/platform/internal/operator"
 )
 
 // GetIdentity answers with the GRN the request's token authenticated

@@ -3,11 +3,11 @@ package api
 import (
 	"net/http"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
-	"github.com/garamsh/garam/internal/user"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/user"
 )
 
 // serviceTypePolicy is the GRN service type of a stored policy. The

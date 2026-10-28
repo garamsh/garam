@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/workload"
+	"github.com/garamsh/garam/platform/internal/workload"
 )
 
 func moveTo(name string) func(*workload.Desired) {

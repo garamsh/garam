@@ -3,12 +3,12 @@ package postgres
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/message/postgres/db"
-	"github.com/garamsh/garam/internal/pgxerr"
-	"github.com/garamsh/garam/internal/pgxtype"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/message"
+	"github.com/garamsh/garam/platform/internal/message/postgres/db"
+	"github.com/garamsh/garam/platform/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 
 // Compile-time check that Store satisfies ConsentStore.

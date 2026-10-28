@@ -21,9 +21,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/keyfile"
-	"github.com/garamsh/garam/internal/machine"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/keyfile"
+	"github.com/garamsh/garam/platform/internal/machine"
 )
 
 // identityHandler answers with the GRN the request authenticated as.

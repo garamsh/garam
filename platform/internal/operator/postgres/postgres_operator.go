@@ -7,12 +7,12 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator"
-	"github.com/garamsh/garam/internal/operator/postgres/db"
-	"github.com/garamsh/garam/internal/pgxerr"
-	"github.com/garamsh/garam/internal/pgxtype"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/operator/postgres/db"
+	"github.com/garamsh/garam/platform/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 
 // Compile-time check that Store satisfies operator.Store.
@@ -304,7 +304,7 @@ func (s *Store) CountByOrg(ctx context.Context, orgGRN grn.GRN) (int, error) {
 }
 
 // managerUnique is the constraint that holds a manager to one control
-// service (migrations/000062).
+// service (platform/migrations/000062).
 const managerUnique = "operators_manager_unique"
 
 // violates reports whether err is postgres refusing a statement on the

@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
-	"github.com/garamsh/garam/internal/user"
-	"github.com/garamsh/garam/internal/wire"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/api"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/user"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // enforce answers the Evaluator seam by evaluating the statements the

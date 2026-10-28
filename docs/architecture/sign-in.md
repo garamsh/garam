@@ -1,8 +1,8 @@
 # Sign-in
 
 How a person proves who they are, and the session that carries the
-proof afterwards. Implemented by `internal/authn`, which persists
-through `internal/authn/postgres` (ADR-0069).
+proof afterwards. Implemented by `platform/internal/authn`, which
+persists through `platform/internal/authn/postgres` (ADR-0069).
 
 | Type | Responsibility |
 |------|----------------|
@@ -52,14 +52,14 @@ is decided in the statement that writes, not held by any one process
 (ADR-0030).
 
 Tests outside this repository get their first signed-in user from
-`tests/testprincipal`, which creates a fresh local database and writes
-the user and its session through the stores above (ADR-0081). No
+`platform/tests/testprincipal`, which creates a fresh local database and
+writes the user and its session through the stores above (ADR-0081). No
 release image and no `garam` binary carries it, so it is no path into a
 deployment. The test image published from `dev` carries it beside
 `garam` and the migrations, as files a consumer copies out and runs
 against its own local Postgres (ADR-0092).
-`tests/testprincipal/README.md` is its contract and invocation, the
-test image's included.
+`platform/tests/testprincipal/README.md` is its contract and invocation,
+the test image's included.
 
 ## The CLI's session
 

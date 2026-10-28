@@ -32,7 +32,7 @@ export type PermissionMap<K extends string> = {
   get(name: K): Permission;
 };
 
-/** The most pairs `api/openapi.yaml` lets one check ask. */
+/** The most pairs `platform/api/openapi.yaml` lets one check ask. */
 export const MAX_PERMISSION_CHECKS = 50;
 
 type PermissionCheckAnswer = components["schemas"]["PermissionCheckAnswer"];

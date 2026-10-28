@@ -15,11 +15,11 @@
 # bytes and be refused at the push. The digest is read back from the
 # registry, and must be the one the push reported.
 #
-#   scripts/image-test-push.sh
+#   tooling/image-test-push.sh
 set -eu
 
 [ $# -eq 0 ] || {
-	echo 'usage: scripts/image-test-push.sh, which takes no argument' >&2
+	echo 'usage: tooling/image-test-push.sh, which takes no argument' >&2
 	exit 2
 }
 
@@ -37,7 +37,7 @@ refuse() {
 	exit 1
 }
 
-# scripts/image-test.sh refuses this too; it is read here as well so a
+# tooling/image-test.sh refuses this too; it is read here as well so a
 # dirty tree reaches neither AWS nor the build.
 revision=$(git rev-parse --verify HEAD) \
 	|| refuse "no commit to tag the image with"
@@ -66,8 +66,8 @@ aws ecr get-login-password --region "$region" \
 	| docker login --username AWS --password-stdin "$host" \
 	|| refuse "docker could not log in to $host with the caller's AWS credentials"
 
-scripts/image-test.sh "$repository"
-tests/image/test-image.sh "$repository:$revision"
+tooling/image-test.sh "$repository"
+platform/tests/image/test-image.sh "$repository:$revision"
 docker tag "$repository:$revision" "$image"
 
 docker push "$image" || refuse "the registry refused $image"

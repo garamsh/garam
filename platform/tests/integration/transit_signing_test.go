@@ -25,10 +25,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/message"
-	messagepg "github.com/garamsh/garam/internal/message/postgres"
-	"github.com/garamsh/garam/internal/message/transit"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/message"
+	messagepg "github.com/garamsh/garam/platform/internal/message/postgres"
+	"github.com/garamsh/garam/platform/internal/message/transit"
 )
 
 // openBao is the dev-mode OpenBao `make db-up` starts beside Postgres

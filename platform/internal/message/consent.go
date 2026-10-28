@@ -3,7 +3,7 @@ package message
 import (
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // Consent is the relation a message crossing an organization boundary

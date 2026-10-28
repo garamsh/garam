@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/operator"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/operator"
 )
 
 func acmeGRN() grn.GRN {
@@ -83,11 +83,11 @@ func TestNew_CallsAnOperatorItsIdentifierUntilItIsNamed(t *testing.T) {
 }
 
 // TestNewDetailsPatch_RefusesWhatItCannotStore holds the bounds
-// migrations/000025 also holds, and the text PostgreSQL refuses on its
-// own. The bounds count characters rather than bytes, so the accepted
-// cases at each bound are written in a script whose characters take
-// three bytes each: a byte count would refuse them, and they are the
-// control that tells the two apart.
+// platform/migrations/000025 also holds, and the text PostgreSQL
+// refuses on its own. The bounds count characters rather than bytes, so
+// the accepted cases at each bound are written in a script whose
+// characters take three bytes each: a byte count would refuse them, and
+// they are the control that tells the two apart.
 func TestNewDetailsPatch_RefusesWhatItCannotStore(t *testing.T) {
 	tests := []struct {
 		name        string

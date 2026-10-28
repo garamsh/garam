@@ -6,7 +6,7 @@ import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 /**
  * A refusal as the seam raises it once it carries garam's reason
- * (`api/openapi.yaml` `Error.reason`, `Error.path`).
+ * (`platform/api/openapi.yaml` `Error.reason`, `Error.path`).
  */
 function located(path: string): GaramApiError {
   return new GaramApiError(

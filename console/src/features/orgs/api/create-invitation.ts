@@ -16,7 +16,8 @@ export type CreateInvitationState =
   | { status: "error"; message: string }
   | { status: "created"; token: string };
 
-// Owners are not transferable by invitation (api/openapi.yaml).
+// Owners are not transferable by invitation
+// (platform/api/openapi.yaml).
 const Schema = z.object({
   org: z.string().min(1),
   role: z.enum(["admin", "member"]),

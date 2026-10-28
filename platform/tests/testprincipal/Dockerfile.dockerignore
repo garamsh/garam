@@ -1,9 +1,9 @@
-# Build context for tests/testprincipal/Dockerfile, read in place of the
-# root .dockerignore. The same entries, less `tests`: the build compiles
-# tests/testprincipal.
+# Build context for platform/tests/testprincipal/Dockerfile, read in
+# place of the root .dockerignore. The same entries, less
+# `platform/tests`: the build compiles platform/tests/testprincipal.
 .git
 .github
 docs
-web
+console
 deploy
 *.md

@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // AccessTokenStore records the tokens an agent's assignee mints for it

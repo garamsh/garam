@@ -70,13 +70,13 @@ it.
 - **Both token files are required.** An adapter naming
   `GARAM_ADAPTER_TOKEN_FILE` or `GARAM_ADAPTER_CONTROL_TOKEN_FILE`
   without the other refuses to start, and so does one naming neither
-  (`internal/cli/delivery.go`).
+  (`platform/internal/cli/delivery.go`).
 - **The file format is the token alone**: `garam_at_` and 64 lowercase
-  hex characters, which `api/machine.yaml` spells for `AgentToken`.
-  Carriage returns and newlines after it are ignored; any other
-  whitespace, leading or inner, makes the file not a token. At most
-  1 KiB is read. The writer keeps each file readable by the adapter's
-  account alone; the adapter does not check the mode.
+  hex characters, which `platform/api/machine.yaml` spells for
+  `AgentToken`. Carriage returns and newlines after it are ignored; any
+  other whitespace, leading or inner, makes the file not a token. At
+  most 1 KiB is read. The writer keeps each file readable by the
+  adapter's account alone; the adapter does not check the mode.
 - **Each file is read before every call to its peer and never held.**
   The garam token before each call to garam, the control token before
   each call to control. A replacement is presented on the next call,
@@ -118,12 +118,13 @@ it.
   agent resumes on the next generation or placement its assignee
   starts.
 
-`internal/delivery/token_mode_test.go` holds the adapter's reading,
-retrying and re-arming against stand-ins.
-`tests/integration/adapter_token_test.go` holds the two audiences and a
-recovery against the real listener, `tests/integration/adapter_test.go`
-the delivery loop, a replacement and a replay across restart, and
-`internal/cli/delivery_test.go` holds the settings.
+`platform/internal/delivery/token_mode_test.go` holds the adapter's
+reading, retrying and re-arming against stand-ins.
+`platform/tests/integration/adapter_token_test.go` holds the two
+audiences and a recovery against the real listener,
+`platform/tests/integration/adapter_test.go` the delivery loop, a
+replacement and a replay across restart, and
+`platform/internal/cli/delivery_test.go` holds the settings.
 
 ## API access after common enrollment
 
@@ -162,7 +163,7 @@ setting or route.
   per-caller authorization above the platform; a local ACL needs a
   separate owner decision and is not a prerequisite of the tokens.
 
-`internal/cli/delivery.go`, §Token mode and
+`platform/internal/cli/delivery.go`, §Token mode and
 §Activation and runtime status are authoritative for what the adapter
 runs now. A direct adapter runs as a host process, under an account
 of its own, in the runtime's network namespace, which on a host
@@ -182,8 +183,8 @@ running Sherlock directly is the host's own.
 - **It forwards nothing written under an earlier ID.** It sets aside
   every outbox entry whose `agent_id` is not the agent's GRN before
   any call to garam, and leaves the file in place
-  (`internal/delivery/forward.go` `outboundOf`). A runtime restarted
-  under its GRN leaves such entries behind, and they stay.
+  (`platform/internal/delivery/forward.go` `outboundOf`). A runtime
+  restarted under its GRN leaves such entries behind, and they stay.
 
 The acceptance sequence is in the existing machine-identity migration
 plan.
@@ -291,11 +292,10 @@ before they do.
 **The adapter's half is unbuilt.** garam's is there: a claim and a
 renewal both answer with the watcher count, and the machine listener
 serves the route a forward arrives on. Nothing under
-`internal/delivery/` reads that count or posts a turn event, so what
-follows is the rule the adapter takes when it is built rather than a
-description of what runs.
-[overview.md](./overview.md) §Out of scope (today) records it, beside
-the §Readiness half.
+`platform/internal/delivery/` reads that count or posts a turn event, so
+what follows is the rule the adapter takes when it is built rather than
+a description of what runs. [overview.md](./overview.md) §Out of scope
+(today) records it, beside the §Readiness half.
 
 **Forward turn events only while garam says someone is watching, and
 read that from the claim.** Every claim and every renewal answers with a
@@ -313,17 +313,18 @@ who opened the view mid-turn is first seen.
   browser that reads slowly must not cost the completion signal an
   event.
 - **An event garam cannot carry whole is refused**, not shortened. It is
-  bounded by what one announcement holds, which `api/machine.yaml`
-  states; a refusal is a gap, and this stream already permits one.
+  bounded by what one announcement holds, which
+  `platform/api/machine.yaml` states; a refusal is a gap, and this
+  stream already permits one.
 
 ## Subscriptions
 
-**One of these exists.** `readTurns` (`internal/delivery/service.go`)
-opens the single subscription the loop holds, and it carries turn
-endings — consuming and completing together. Forwarding and readiness
-are unbuilt (§Watching, §Readiness), so what follows is the rule the
-built one already keeps and the rule the others take when they are
-built, rather than a description of what runs.
+**One of these exists.** `readTurns`
+(`platform/internal/delivery/service.go`) opens the single subscription
+the loop holds, and it carries turn endings — consuming and completing
+together. Forwarding and readiness are unbuilt (§Watching, §Readiness),
+so what follows is the rule the built one already keeps and the rule the
+others take when they are built, rather than a description of what runs.
 
 Consuming, completing and forwarding use separate subscriptions. A slow
 consumer must not degrade the signal that decides what it completed:
@@ -336,9 +337,9 @@ a subscription of its own (below), and puts watching on a third
 
 **Nothing implements this.** The mechanism below is decided
 ([ADR-0013](./adr/0013-agent-messaging.md)) and unbuilt: nothing under
-`internal/delivery/` or `internal/cli/delivery.go` opens a readiness
-subscription. [overview.md](./overview.md) §Out of scope (today)
-records it, beside the §Watching half.
+`platform/internal/delivery/` or `platform/internal/cli/delivery.go`
+opens a readiness subscription. [overview.md](./overview.md) §Out of
+scope (today) records it, beside the §Watching half.
 
 **Readiness is a monitoring subscription the adapter opens fresh, of
 its own** — not the one it consumes, and not a handle it kept. The
@@ -422,7 +423,7 @@ contract binds:
 | `GET /agents/{agent}/messages/{id}` answers `pending`, `completed` or `unknown` | `internal/gateway/handler.go` | A lost event could not be recovered |
 | `GET /agents/{agent}/status` answers `contract_version` 1 with the agent, epoch, generation, revision, state and start | `internal/gateway/handler.go` | Nothing could be activated |
 | The ingress body is bounded at 1 MiB | `internal/gateway/handler.go` | A maximal envelope could be cut |
-| An outbox entry is `<id>.json`, written whole under a dot-prefixed temporary name, carrying `created_at` once | `tools/message_send/message_send.go`, `internal/message/message.go` | The forwarder could read a partial entry or invent an age |
+| An outbox entry is `<id>.json`, written whole under a dot-prefixed temporary name, carrying `created_at` once | `tools/message_send/message_send.go`, `platform/internal/message/message.go` | The forwarder could read a partial entry or invent an age |
 
 Read in Sherlock at
 [`v0.8.0`](https://github.com/garamsh/sherlock/tree/162499052312c8830a0ac585021d9e14a2f3ce08)
@@ -476,8 +477,8 @@ pins it for this adapter.
   again. It encodes the members above itself only for a garam whose
   claim answers no content, which predates ADR-0101, and then sends no
   signature: a signature goes only beside the octets garam signed.
-  `tests/integration/adapter_test.go` holds that the bytes the runtime
-  receives verify against the set garam publishes.
+  `platform/tests/integration/adapter_test.go` holds that the bytes the
+  runtime receives verify against the set garam publishes.
 - **Signing is a deployment's switch, off by default.**
   `GARAM_ADAPTER_SIGN_MESSAGES` sends garam's signature in the
   ingress member `signature`, beside `id` and `content`. Nothing the
@@ -537,7 +538,7 @@ pins it for this adapter.
   and in-reply-to, never its content.
 - **Every adapter forwards an outbox.** `GARAM_ADAPTER_OUTBOX_DIR` is
   required beside the control settings, and an adapter naming none
-  refuses to start (`internal/cli/delivery.go`).
+  refuses to start (`platform/internal/cli/delivery.go`).
 - **What is still not promised.** A turn interrupted before it
   committed may repeat its effects. Delivery stays at-least-once and
   completion stays §Completion's rule.
@@ -562,9 +563,10 @@ managed, the local supervisor when standalone or direct.
 
 - **Every adapter is fenced.** The three control settings are required
   together, and an adapter naming none or some refuses to start
-  (`internal/cli/delivery.go`): garam admits no agent's write without
-  an activation's token ([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)), so an adapter with
-  no lifecycle authority to ask could carry nothing.
+  (`platform/internal/cli/delivery.go`): garam admits no agent's write
+  without an activation's token
+  ([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)),
+  so an adapter with no lifecycle authority to ask could carry nothing.
 - **Control authenticates the control token** over server TLS, and
   garam's token never goes to control (§Token mode).
 - **A standalone adapter dials its supervisor's socket.**

@@ -15,8 +15,8 @@ import (
 
 	"github.com/go-jose/go-jose/v4"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // AssertionContractVersion is the contract the private_key_jwt

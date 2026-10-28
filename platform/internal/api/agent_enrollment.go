@@ -8,11 +8,11 @@ import (
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/listfilter"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/listfilter"
 )
 
 // ApproveAgentEnrollment records an administrator's approval of what a

@@ -3,7 +3,7 @@ package operator
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // AssignmentReader answers where an agent currently runs. The agents

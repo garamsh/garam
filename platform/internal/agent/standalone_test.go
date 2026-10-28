@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/platform/internal/agent"
 )
 
 // TestEnrollmentSummary_State reads each state off the times an

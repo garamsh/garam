@@ -34,8 +34,8 @@ export function documentRefusal(
   ) {
     return refused;
   }
-  // The place garam named, where it named one (`api/openapi.yaml`
-  // `Error.path`).
+  // The place garam named, where it named one
+  // (`platform/api/openapi.yaml` `Error.path`).
   const path = error.reason?.path;
   return path === undefined
     ? { ...refused, field: "document" }

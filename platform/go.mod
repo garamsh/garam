@@ -1,4 +1,4 @@
-module github.com/garamsh/garam
+module github.com/garamsh/garam/platform
 
 go 1.27.2
 
@@ -219,4 +219,4 @@ tool (
 	mvdan.cc/sh/v3/cmd/shfmt
 )
 
-replace github.com/garamsh/garam/platform/sdk => ./platform/sdk
+replace github.com/garamsh/garam/platform/sdk => ./sdk

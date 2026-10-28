@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // loadedPolicy is one active policy's GRN, parsed statements and the

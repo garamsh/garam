@@ -162,7 +162,7 @@ git switch --detach <commit>
 make test-image-push
 ```
 
-`scripts/image-test-push.sh` refuses a working tree that differs from
+`tooling/image-test-push.sh` refuses a working tree that differs from
 HEAD, logs Docker in with `aws ecr get-login-password`, builds the
 image and runs `make test-image-e2e`'s checks on it, pushes
 `$REPOSITORY:<tag>`, and prints the digest it reads back from the
@@ -175,7 +175,7 @@ Then the pin, from a checkout that has this target:
 make test-image-pin COMMIT=<commit> CONSUMER=<consumer>
 ```
 
-`scripts/image-test-pin.sh` refuses a commit that is not 12 to 40
+`tooling/image-test-pin.sh` refuses a commit that is not 12 to 40
 lowercase hex digits and a consumer name of anything but lowercase
 letters, digits and inner hyphens, puts the commit's manifest under
 `pinned-<consumer>` with the digest it was read with, and prints the

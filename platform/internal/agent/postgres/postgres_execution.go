@@ -10,10 +10,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/agent/postgres/db"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/pgxtype"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/agent/postgres/db"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 
 func (s *Store) Activate(ctx context.Context, req agent.ActivationRequest) (*agent.Activation, bool, error) {

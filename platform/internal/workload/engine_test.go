@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/workload"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/workload"
 )
 
 // stubEngine is an engine held in memory. A container exits on SIGTERM

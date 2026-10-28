@@ -3,8 +3,8 @@ package agent
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // TokenEnrollmentContractVersion names the contract the managed

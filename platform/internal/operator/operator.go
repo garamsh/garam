@@ -17,8 +17,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // ServiceType is the canonical GRN service-type for operators.
@@ -54,7 +54,7 @@ var (
 )
 
 // The bounds on what an organization says about its operator, in
-// characters. migrations/000025 holds the same two.
+// characters. platform/migrations/000025 holds the same two.
 const (
 	NameMaxLength        = 100
 	DescriptionMaxLength = 1000

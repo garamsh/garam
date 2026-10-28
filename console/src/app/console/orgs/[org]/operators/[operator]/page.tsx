@@ -191,7 +191,7 @@ export default async function OperatorPage({ params, searchParams }: Params) {
   const connection = keyList ? keyConnection(keyList) : null;
   // garam issues a key to an operator holding no live one under either
   // action, and any other under re-issuing alone
-  // (`internal/api/operator_key.go`).
+  // (`platform/internal/api/operator_key.go`).
   const canIssue =
     keyList !== null && liveKeys(keyList).length === 0
       ? allowed("register") || allowed("reissue")

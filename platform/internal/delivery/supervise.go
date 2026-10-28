@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // inputs is what an activation is sought on and what re-arms one a

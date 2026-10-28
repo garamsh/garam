@@ -16,8 +16,8 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/keyfile"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/keyfile"
 )
 
 // Sealer seals key material so that what reaches storage is useless

@@ -78,10 +78,10 @@ export type OrgRead<T> = { status: "ok"; data: T } | { status: "unreachable" };
 export type RefusableRead<T> = OrgRead<T> | { status: "forbidden" };
 
 // What the seam parses each of this feature's reads against. Every
-// parser is tied to the type `api/openapi.yaml` generated, in both
-// directions: a field the specification adds, drops or retypes fails
-// the typecheck here rather than reaching a page as a cast, and a field
-// only the parser demands fails it rather than refusing a valid
+// parser is tied to the type `platform/api/openapi.yaml` generated, in
+// both directions: a field the specification adds, drops or retypes
+// fails the typecheck here rather than reaching a page as a cast, and a
+// field only the parser demands fails it rather than refusing a valid
 // response as a contract violation.
 
 /**

@@ -3,9 +3,9 @@ package machineapi
 import (
 	"net/http"
 
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/message"
-	"github.com/garamsh/garam/internal/operator"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/message"
+	"github.com/garamsh/garam/platform/internal/operator"
 )
 
 // contractValue is the Garam-Contract-Version value one contract is

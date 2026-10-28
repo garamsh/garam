@@ -65,7 +65,7 @@ Under `src/`:
   route, kept beside it; the `_` prefix opts the folder out of
   routing.
 - `src/features/<name>/` — a vertical slice, owning its own
-  `api/`, `components/`, `hooks/`, `types/` — only the ones the
+  `platform/api/`, `components/`, `hooks/`, `types/` — only the ones the
   feature needs, not a fixed set per feature.
 - `src/components/` — shared UI; `src/components/ui/` is the
   shadcn primitives home.

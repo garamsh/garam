@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/agent"
-	agentpg "github.com/garamsh/garam/internal/agent/postgres"
-	"github.com/garamsh/garam/internal/grn"
-	operatorpg "github.com/garamsh/garam/internal/operator/postgres"
-	orgpg "github.com/garamsh/garam/internal/org/postgres"
+	"github.com/garamsh/garam/platform/internal/agent"
+	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
+	"github.com/garamsh/garam/platform/internal/grn"
+	operatorpg "github.com/garamsh/garam/platform/internal/operator/postgres"
+	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 )
 
 // agentTokenRow is an agent token a test writes directly for the

@@ -11,9 +11,9 @@ import {
 
 /**
  * The vectors the Go rule is tested against too
- * (`internal/api/auth_return_path_test.go`), so a path one rule accepts
- * and the other drops fails on one side. A `goOnly` vector is raw bytes
- * a JavaScript string cannot hold.
+ * (`platform/internal/api/auth_return_path_test.go`), so a path one
+ * rule accepts and the other drops fails on one side. A `goOnly` vector
+ * is raw bytes a JavaScript string cannot hold.
  */
 const VECTORS: {
   name: string;
@@ -24,7 +24,7 @@ const VECTORS: {
   readFileSync(
     join(
       import.meta.dirname,
-      "../../../../internal/api/testdata/return-path-vectors.json",
+      "../../../../platform/internal/api/testdata/return-path-vectors.json",
     ),
     "utf8",
   ),

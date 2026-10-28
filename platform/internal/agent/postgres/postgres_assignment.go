@@ -5,12 +5,12 @@ import (
 	"errors"
 	"time"
 
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/agent/postgres/db"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/pgxerr"
-	"github.com/garamsh/garam/internal/pgxtype"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/agent/postgres/db"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/pgxtype"
 )
 
 // Assign binds the agent to an assignee at the next epoch. Every call

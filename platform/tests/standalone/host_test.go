@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/garamsh/garam/internal/operator"
+	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/stretchr/testify/require"
 )
 

@@ -3,7 +3,7 @@ package authz
 import (
 	"encoding/json"
 
-	"github.com/garamsh/garam/internal/wire"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // Statement is one IAM-style rule (ADR-0002). Action and Resource

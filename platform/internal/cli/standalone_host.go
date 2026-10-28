@@ -25,10 +25,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
-	machinegen "github.com/garamsh/garam/api/machine"
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/keyfile"
+	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/keyfile"
 )
 
 // The files a standalone host keeps (ADR-0082). The supervisor's

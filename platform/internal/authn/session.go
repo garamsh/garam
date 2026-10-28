@@ -7,8 +7,8 @@ import (
 	"encoding/hex"
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // SessionKind tells a browser's session from a CLI's (ADR-0120).

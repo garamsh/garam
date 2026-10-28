@@ -917,7 +917,7 @@ const file_garam_authz_v1_authz_proto_rawDesc = "" +
 	"\n" +
 	"CheckBatch\x12!.garam.authz.v1.CheckBatchRequest\x1a\".garam.authz.v1.CheckBatchResponseB\xb5\x01\n" +
 	"\x12com.garam.authz.v1B\n" +
-	"AuthzProtoP\x01Z9github.com/garamsh/garam/proto/gen/garam/authz/v1;authzv1\xa2\x02\x03GAX\xaa\x02\x0eGaram.Authz.V1\xca\x02\x0eGaram\\Authz\\V1\xe2\x02\x1aGaram\\Authz\\V1\\GPBMetadata\xea\x02\x10Garam::Authz::V1b\x06proto3"
+	"AuthzProtoP\x01Z9github.com/garamsh/garam/platform/proto/gen/garam/authz/v1;authzv1\xa2\x02\x03GAX\xaa\x02\x0eGaram.Authz.V1\xca\x02\x0eGaram\\Authz\\V1\xe2\x02\x1aGaram\\Authz\\V1\\GPBMetadata\xea\x02\x10Garam::Authz::V1b\x06proto3"
 
 var (
 	file_garam_authz_v1_authz_proto_rawDescOnce sync.Once

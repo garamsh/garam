@@ -3,7 +3,7 @@ package org
 import (
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // Project is a resource container that belongs to a single

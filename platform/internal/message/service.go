@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // Delivery parameters. They default narrow, and the reason is dated: a

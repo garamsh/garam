@@ -14,7 +14,7 @@ export type ApproveAgentEnrollmentState =
   | { status: "error"; message: string }
   | { status: "approved"; hostName: string };
 
-/** The longest an approval may stay spendable (`api/openapi.yaml`). */
+/** The longest an approval may stay spendable (`platform/api/openapi.yaml`). */
 const MAX_APPROVAL_HOURS = 24;
 
 const Hex64 = z.string().regex(/^[0-9a-f]{64}$/);

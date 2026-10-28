@@ -18,15 +18,15 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/authn"
-	"github.com/garamsh/garam/internal/authz"
-	authzmocks "github.com/garamsh/garam/internal/authz/mocks"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/health"
-	"github.com/garamsh/garam/internal/wire"
-	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+	"github.com/garamsh/garam/platform/internal/api"
+	"github.com/garamsh/garam/platform/internal/authn"
+	"github.com/garamsh/garam/platform/internal/authz"
+	authzmocks "github.com/garamsh/garam/platform/internal/authz/mocks"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/health"
+	"github.com/garamsh/garam/platform/internal/wire"
+	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // TestGoogleProvider_DiscoveryFailure is also the control for the two

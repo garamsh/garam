@@ -25,8 +25,8 @@ const Schema = z.object({
 
 /**
  * Renames a group of the organization. Only the name is sent, so the
- * roles the group grants are left as they stand (`api/openapi.yaml`
- * §ScopedRoles).
+ * roles the group grants are left as they stand
+ * (`platform/api/openapi.yaml` §ScopedRoles).
  */
 export async function updateGroup(
   _state: UpdateGroupState,

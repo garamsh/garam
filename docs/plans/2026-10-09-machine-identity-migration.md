@@ -67,31 +67,33 @@ The checked Garam revision contains all four G1 steps:
 
 | Step | Current implementation and evidence |
 |---|---|
-| G1a | Operator shared-secret issuance/re-issue, one-hour exchange and per-request token reads: `internal/operator/token.go`, `internal/machineapi/identity.go`, migration 000038 |
+| G1a | Operator shared-secret issuance/re-issue, one-hour exchange and per-request token reads: `platform/internal/operator/token.go`, `platform/internal/machineapi/identity.go`, migration 000038 |
 | G1b | Assignee-minted agent tokens, current epoch/lineage checks and `durable-delivery.v2`: `internal/agent/postgres_access_token.go`, migration 000039 |
-| G1c | Token audience introspection, operation/execution/cutover/managed v2 values and audience foreign keys: `internal/machineapi/contract.go`, migrations 000040/000041 |
-| G1d | Supervisor credential and token exchange, `standalone-enrollment.v2` and one-agent confinement: `internal/machineapi/standalone.go`, `internal/agent/supervisor_credential.go`, migration 000042 |
+| G1c | Token audience introspection, operation/execution/cutover/managed v2 values and audience foreign keys: `platform/internal/machineapi/contract.go`, migrations 000040/000041 |
+| G1d | Supervisor credential and token exchange, `standalone-enrollment.v2` and one-agent confinement: `platform/internal/machineapi/standalone.go`, `platform/internal/agent/supervisor_credential.go`, migration 000042 |
 
 #1356 adds ADR-0102's Garam backend beside them: an issued RSA key
 whose public JWK alone is stored, the `machine-token.v2` private_key_jwt
 exchange at `POST /oauth/token`, a replay store shared across replicas,
 key withdrawal and rotation with next-request token revocation, and
-the `Bearer` alias (`internal/operator/assertion.go`,
-`internal/operator/postgres_key.go`, `internal/machineapi/oauth.go`,
-migration 000043). No Operator release exchanges against it yet, and
-no deployment sets `GARAM_MACHINE_TOKEN_URL`.
+the `Bearer` alias (`platform/internal/operator/assertion.go`,
+`internal/operator/postgres_key.go`,
+`platform/internal/machineapi/oauth.go`, migration 000043). No Operator
+release exchanges against it yet, and no deployment sets
+`GARAM_MACHINE_TOKEN_URL`.
 
 G2 #1352 builds the adapter's token mode and the standalone host's v2
 path on the existing v2 contracts, which ADR-0102 leaves unchanged
 (PM decision of 2026-10-14 on #1352): the adapter reads a garam token
 and, fenced, a control token per request under `durable-delivery.v2`
-and `agent-execution.v2` (`internal/cli/delivery.go`,
-`internal/delivery/token_file.go`), and `garam standalone` prepares,
-enrolls and runs on a supervisor credential
-(`internal/cli/standalone_host.go`, `internal/cli/standalone_tokens.go`,
-`internal/workload/control.go`). The certificate mode and the v1 host
-stay. Adopting `agent-enrollment.v1` and the direct connector are not
-built, and wait on #1355.
+and `agent-execution.v2` (`platform/internal/cli/delivery.go`,
+`platform/internal/delivery/token_file.go`), and `garam standalone`
+prepares, enrolls and runs on a supervisor credential
+(`platform/internal/cli/standalone_host.go`,
+`platform/internal/cli/standalone_tokens.go`,
+`platform/internal/workload/control.go`). The certificate mode and the
+v1 host stay. Adopting `agent-enrollment.v1` and the direct connector
+are not built, and wait on #1355.
 
 The managed and standalone mechanisms still differ:
 
@@ -141,7 +143,7 @@ and no SimpleX integration or terminal attach is included.
 
 ADR-0102 §Assertion exchange profile and §Supersession and compatibility
 are authoritative for the new profile and retained contracts. Current
-wire authority remains `api/machine.yaml`, not this plan.
+wire authority remains `platform/api/machine.yaml`, not this plan.
 
 | Value | Migration treatment |
 |---|---|

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // Paths inside the containers. The memory volume goes on /data, the

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/workload"
+	"github.com/garamsh/garam/platform/internal/workload"
 )
 
 // TestRealEngine_TheAdapterMountsTheOutboxAlone holds the adapter to the

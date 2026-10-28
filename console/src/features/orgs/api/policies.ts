@@ -32,7 +32,7 @@ export type PolicyAttachment = components["schemas"]["PolicyAttachment"];
 
 const GrnParser = z.string().refine((value) => parseGrn(value) !== null);
 
-/** Parses a policy as `api/openapi.yaml` describes one. */
+/** Parses a policy as `platform/api/openapi.yaml` describes one. */
 export const PolicyParser = parserFor<Policy>()(
   z.object({
     grn: GrnParser,

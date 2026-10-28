@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // The reasons a refused policy document carries (api/openapi.yaml

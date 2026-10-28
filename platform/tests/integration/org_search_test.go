@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
-	"github.com/garamsh/garam/internal/user"
-	userpg "github.com/garamsh/garam/internal/user/postgres"
-	"github.com/garamsh/garam/internal/wire"
+	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/user"
+	userpg "github.com/garamsh/garam/platform/internal/user/postgres"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // foundKind is one kind of searchOrg's answer: the GRNs it found in

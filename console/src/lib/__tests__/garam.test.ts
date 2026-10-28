@@ -59,8 +59,9 @@ describe("garamFetch", () => {
     );
 
     // A dependency garam needs being unreachable arrives as a status
-    // and not as a connection failure (`api/openapi.yaml` §info), and
-    // its body names no cause: it is the same outage to a caller.
+    // and not as a connection failure (`platform/api/openapi.yaml`
+    // §info), and its body names no cause: it is the same outage to a
+    // caller.
     server.use(
       http.get(`${API_URL}/me`, () =>
         HttpResponse.json(

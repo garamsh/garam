@@ -17,17 +17,17 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	apigen "github.com/garamsh/garam/api"
-	agentmocks "github.com/garamsh/garam/internal/agent/mocks"
-	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/api/mocks"
-	"github.com/garamsh/garam/internal/authn"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
-	operatormocks "github.com/garamsh/garam/internal/operator/mocks"
-	"github.com/garamsh/garam/internal/org"
-	"github.com/garamsh/garam/internal/user"
-	"github.com/garamsh/garam/internal/watch"
+	apigen "github.com/garamsh/garam/platform/api"
+	agentmocks "github.com/garamsh/garam/platform/internal/agent/mocks"
+	"github.com/garamsh/garam/platform/internal/api"
+	"github.com/garamsh/garam/platform/internal/api/mocks"
+	"github.com/garamsh/garam/platform/internal/authn"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/grn"
+	operatormocks "github.com/garamsh/garam/platform/internal/operator/mocks"
+	"github.com/garamsh/garam/platform/internal/org"
+	"github.com/garamsh/garam/platform/internal/user"
+	"github.com/garamsh/garam/platform/internal/watch"
 )
 
 // fixture wires a Server to in-memory doubles.

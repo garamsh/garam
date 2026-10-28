@@ -51,8 +51,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/workload"
-	"github.com/garamsh/garam/internal/workload/docker"
+	"github.com/garamsh/garam/platform/internal/workload"
+	"github.com/garamsh/garam/platform/internal/workload/docker"
 )
 
 // testPrefix begins every name this suite makes, so cleanup removes

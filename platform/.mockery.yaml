@@ -9,16 +9,16 @@ filename: "{{.InterfaceName | snakecase}}.go"
 pkgname: "mocks"
 structname: "Mock{{.InterfaceName}}"
 packages:
-  github.com/garamsh/garam/internal/agent:
+  github.com/garamsh/garam/platform/internal/agent:
     interfaces:
       StandaloneService: {}
-  github.com/garamsh/garam/internal/api:
+  github.com/garamsh/garam/platform/internal/api:
     interfaces:
       Evaluator: {}
       PolicyManager: {}
-  github.com/garamsh/garam/internal/authz:
+  github.com/garamsh/garam/platform/internal/authz:
     interfaces:
       Store: {}
-  github.com/garamsh/garam/internal/operator:
+  github.com/garamsh/garam/platform/internal/operator:
     interfaces:
       AuthorityService: {}

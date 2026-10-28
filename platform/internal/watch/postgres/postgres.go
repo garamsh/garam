@@ -10,10 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/pgxerr"
-	"github.com/garamsh/garam/internal/watch"
-	"github.com/garamsh/garam/internal/watch/postgres/db"
+	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/platform/internal/pgxerr"
+	"github.com/garamsh/garam/platform/internal/watch"
+	"github.com/garamsh/garam/platform/internal/watch/postgres/db"
 )
 
 // Store implements watch.Store against PostgreSQL. The queries are

@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/authz"
-	authzpg "github.com/garamsh/garam/internal/authz/postgres"
-	"github.com/garamsh/garam/internal/wire"
+	"github.com/garamsh/garam/platform/internal/authz"
+	authzpg "github.com/garamsh/garam/platform/internal/authz/postgres"
+	"github.com/garamsh/garam/platform/internal/wire"
 )
 
 // policyListenerAppName is what the listener's connections call

@@ -8,9 +8,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/authn"
-	"github.com/garamsh/garam/internal/errorx"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/authn"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // cliClientID is the one client the device grant serves (ADR-0120).

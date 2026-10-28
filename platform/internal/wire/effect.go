@@ -7,8 +7,8 @@
 package wire
 
 import (
-	"github.com/garamsh/garam/internal/errorx"
-	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+	"github.com/garamsh/garam/platform/internal/errorx"
+	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // Effect is a statement's outcome when it matches (ADR-0002). One

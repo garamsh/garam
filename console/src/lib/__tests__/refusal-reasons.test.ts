@@ -6,9 +6,9 @@ import { describe, expect, it } from "vitest";
 import { MAPPED_REASONS, UNMAPPED_REASONS } from "@/lib/refusal-copy";
 
 /**
- * The codes `api/openapi.yaml` documents under `Error.reason`, read off
- * the description `web/src/types/api.ts` is generated with — which
- * `make web-check-gen` holds to the specification — as every
+ * The codes `platform/api/openapi.yaml` documents under `Error.reason`,
+ * read off the description `console/src/types/api.ts` is generated with
+ * — which `make web-check-gen` holds to the specification — as every
  * backticked snake_case word on the comment above `reason?: string`.
  */
 function documentedReasons(): string[] {

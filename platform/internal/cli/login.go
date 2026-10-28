@@ -13,8 +13,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/errorx"
+	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // newLoginCommand signs the CLI in by the device grant (ADR-0120).

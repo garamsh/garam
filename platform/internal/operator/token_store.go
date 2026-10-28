@@ -3,7 +3,7 @@ package operator
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // TokenStore records the tokens an operator exchanges its key for, and

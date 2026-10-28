@@ -1,7 +1,7 @@
 go 1.27.2
 
 use (
-	.
 	./cowork
+	./platform
 	./platform/sdk
 )

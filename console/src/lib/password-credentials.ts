@@ -6,7 +6,7 @@
  * the same bounds as help text, so a person meets them before
  * submitting rather than after.
  *
- * The numbers are the ones `api/openapi.yaml` publishes under
+ * The numbers are the ones `platform/api/openapi.yaml` publishes under
  * `PasswordRegistration`, which is the only schema that states them:
  * the password's floor and ceiling, and the username's character rule.
  *

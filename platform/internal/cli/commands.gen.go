@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	apigen "github.com/garamsh/garam/api"
+	apigen "github.com/garamsh/garam/platform/api"
 )
 
 var _ = uuid.Parse

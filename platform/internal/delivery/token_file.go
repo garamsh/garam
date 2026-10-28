@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // TokenScheme is the Authorization scheme an agent token travels under

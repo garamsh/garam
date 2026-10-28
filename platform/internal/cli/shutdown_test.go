@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
 // testShutdownGrace stands in for shutdownGrace, so the branch past the

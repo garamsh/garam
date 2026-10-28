@@ -57,10 +57,10 @@ test:
 # Both versions reach the script through the environment and never
 # through the command text: each is read out of a file in the tree,
 # which ci.md §Security baseline keeps out of a command line.
-NODE_VERSION := $(shell cat $(REPO_ROOT)/console/.nvmrc)
+NODE_VERSION := $(shell cat $(REPO_ROOT)/platform-web/.nvmrc)
 
 export TOOLCHAIN_PAIRS = \
-	console/.nvmrc,$(NODE_VERSION),deploy/local/Dockerfile.web,node \
+	platform-web/.nvmrc,$(NODE_VERSION),deploy/local/Dockerfile.web,node \
 	platform/go.mod,$(GO_DIRECTIVE),deploy/local/Dockerfile,golang \
 	platform/go.mod,$(GO_DIRECTIVE),platform/tests/testprincipal/Dockerfile,golang
 

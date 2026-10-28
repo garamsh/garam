@@ -19,10 +19,17 @@ same binary carries are [overview.md](./overview.md)'s module list and
 
 ## What it is
 
+**Its own binary is not yet built.** ADR-0132 moves the user commands
+into `platform-cli/`, a client binary calling the platform through
+`lib/platform-sdk-go`, and leaves the server commands in
+`platform/cmd/garam` (#1700). Until that pull request, the tree reads
+as this section describes.
+
 `platform/internal/cli` implements it, beside the server commands, in
 the one binary garam ships
 ([ADR-0003](./adr/0003-single-cli-topology.md),
-[ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)).
+[ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md),
+[ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)).
 The user commands sit at the top level:
 
 | Command | What it does |
@@ -182,3 +189,7 @@ API's message under its kind.
 - [ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
   — an agent runs the CLI from a token file its assignee keeps
   current; unbuilt
+- [ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)
+  — the user commands become a client binary of their own,
+  `platform-cli/`, calling the platform through a generated SDK; not
+  yet built

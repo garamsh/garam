@@ -172,7 +172,7 @@ verbs, leaving out a verb it has no use for: `ci`, its fast gate, which
 needs no Docker; `install`, `format`, `lint`, `test`, `build`, `gen` and
 `check-gen`; `stack-up`, which brings up the stack its suites need;
 and `suites`, which runs them — `integration` and `e2e`. So
-`make -C console e2e`, `make -C cowork/web e2e` and
+`make -C platform-web e2e`, `make -C cowork-web e2e` and
 `make -C platform integration` are the same verbs in three modules.
 The modules and the edges between them that no workspace file declares
 are listed in `tooling/ci/modules`.
@@ -189,7 +189,7 @@ is the whole set over both toolchains. The rest:
   25432, and `db-prune` drops the per-worktree test databases for
   worktrees that are gone.
 - `e2e`, `web-e2e` and `cowork-web-e2e` are the platform's, the
-  console's and cowork/web's `e2e`, by the names they had before each
+  console's and cowork-web's `e2e`, by the names they had before each
   module had its own `Makefile`.
 - `image-build` builds the images a release publishes, each from what
   the release workflow says it is built from, and `web-image-e2e` runs

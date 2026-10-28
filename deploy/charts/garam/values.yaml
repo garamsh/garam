@@ -52,7 +52,7 @@ image:
     runAsUser: 1000
     runAsGroup: 1000
   # The site (ADR-0131), built from the same Dockerfile as `web` with
-  # `APP=site`, so it runs as the same account.
+  # `APP=site-web`, so it runs as the same account.
   site:
     repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-site
     tag: ""

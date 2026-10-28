@@ -217,14 +217,15 @@ fails without them:
 - `web.apiUrl` — the address the web process reaches `serve api` on,
   baked into the image at build time as the `/api/*` rewrite target and
   read again at runtime by every server-side render
-  (`console/src/lib/garam.ts`, binding `platform/client`), and for a
-  published image it is the address §Choosing a release name states.
+  (`platform-web/src/lib/garam.ts`, binding `lib/platform-sdk-ts`), and
+  for a published image it is the address §Choosing a release name
+  states.
   Absent at runtime the process still starts and answers both probes,
   `/` and the rewrite keep serving, and every server-rendered route
   answers 500:
-  `console/src/env.ts` parses at import, and only the routes reaching
-  the backend import it. `site.apiUrl` is the same address for the
-  site, on the same terms (`site/src/lib/garam.ts`).
+  `platform-web/src/env.ts` parses at import, and only the routes
+  reaching the backend import it. `site.apiUrl` is the same address for
+  the site, on the same terms (`site-web/src/lib/garam.ts`).
 - `web.siteUrl` and `site.consoleUrl` — where each app sends a visitor
   to the other (ADR-0131): the console sends a visitor without a
   session to the site's `/handoff`, and the site sends the code it
@@ -511,7 +512,7 @@ covered and fails when a count is zero:
   cannot render fails, and the environment comparison above against the
   names the source reads: `envOr` in `platform/internal/cli/`, which
   wraps the module's only `os.Getenv` call, and the schema in
-  `console/src/env.ts`.
+  `platform-web/src/env.ts`.
 - `chart-identity` — the identity comparison against
   §Workload identities. Every rendered Deployment and Job is a workload
   that table declares, every account the chart renders is one a workload
@@ -575,9 +576,9 @@ print.
   a wrapper around `envOr` cannot quietly shrink what this covers: the
   target refuses a second read of the environment under `internal|cmd`
   and refuses a name written at a call site instead of declared there.
-  The web half is `console/src/env.ts` parsed for its own shape, and it
-  carries no such guard — a module reading `process.env` directly would
-  be a name this check never sees.
+  The web half is `platform-web/src/env.ts` parsed for its own shape,
+  and it carries no such guard — a module reading `process.env` directly
+  would be a name this check never sees.
 - `chart-identity` is complete over **pod identity**: which account each
   Deployment and Job runs as, whether every account rendered is one a
   workload runs as, and whether either moves when the release name

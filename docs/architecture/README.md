@@ -236,7 +236,7 @@ What holds either way is rule 1's ground: a document that does not
 accumulate the sites has nothing to enumerate.
 
 No pipeline stands behind this either: what `make ci` reads under
-`docs/` is what `site/src/app/(marketing)/__tests__/claims.test.ts`
+`docs/` is what `site-web/src/app/(marketing)/__tests__/claims.test.ts`
 reads: the `> Status:` line of each ADR a landing-page claim names, and
 whether `docs/architecture/grn-model.md` exists. So no run of it passes
 or fails on anything this section describes. What this repository's
@@ -430,10 +430,11 @@ on hosted runners.
   its value, which is what the target's parse reads. gremlins 0.6.0
   copies the whole module directory into `TMPDIR` once per worker
   (`internal/engine/workdir`), and a worker is a core by default: the Go
-  tree is four megabytes and the `console/node_modules` and
-  `console/.next` that `make install` and `make -C console build` leave
-  behind are another 856, so a run on twelve cores after `make ci`
-  writes ten gigabytes — to RAM wherever `TMPDIR` is a tmpfs.
+  tree is four megabytes and the `platform-web/node_modules` and
+  `platform-web/.next` that `make install` and
+  `make -C platform-web build` leave behind are another 856, so a run on
+  twelve cores after `make ci` writes ten gigabytes — to RAM wherever
+  `TMPDIR` is a tmpfs.
 
 ## Index
 
@@ -507,7 +508,7 @@ ADRs:
 - [0008](./adr/0008-identity-based-policy-attachments.md) —
   identity-based policy attachments
 - [0009](./adr/0009-web-frontend.md) — Next.js web frontend in
-  `console/`
+  `platform-web/`
 - [0010](./adr/0010-dev-auth-provider.md) — development-only sign-in
   provider behind GARAM_DEV_AUTH; superseded by 0044
 - [0011](./adr/0011-console-shell.md) — console sidebar shell over org
@@ -875,7 +876,7 @@ ADRs:
   — a structural rule yields to a stack file only where the stack's
   framework imposes the case, taken from the conventions template at
   `b02fe378e81c03eaf38540372430f15bbfbc4396` with six more template
-  commits; `console/` is governed by `structure.md` again, and
+  commits; `platform-web/` is governed by `structure.md` again, and
   `db3291285a9f89edf571a41bcdaee8528d77b021` makes
   `platform/internal/cli` the composition site `stack-go.md` provides
 - [0095](./adr/0095-development-images-live-under-dev-and-garam-holds-releases-only.md)
@@ -1117,8 +1118,18 @@ ADRs:
   supersedes 0002, 0003, 0007, 0008, 0025 and 0038 in part
 - [0131](./adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)
   — the session cookie stays host-only to each app; a person signs in
-  on `site/`, and another app is handed a session of its own by a
+  on `site-web/`, and another app is handed a session of its own by a
   one-time code the site issues and the app redeems on its own host,
   bound to a state the app holds; signing out on any host ends the
   sign-in on all of them; the site redirects `/console/*` to the
   console's origin
+- [0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)
+  — a top-level folder is a service's own tree, an executable unit
+  named `<service>-<surface>` (`platform-web/`, `site-web/`,
+  `cowork-web/`, `platform-cli/`), or a supporting responsibility; a
+  code library more than one unit links sits under `lib/`, named for
+  what it is; an SDK is generated from its service's published API, and
+  a client unit reaches a server only through it; the web packages are
+  moved, the Go libraries and the CLI split are not yet built (#1700);
+  supersedes 0120 in part, on where the commands live, and 0125 in
+  part, on the root's layout

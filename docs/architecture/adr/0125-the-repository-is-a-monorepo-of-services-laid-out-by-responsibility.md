@@ -2,7 +2,9 @@
 
 > Status: accepted; the direction of dependencies is superseded in
 > part by
-> [ADR-0130](./0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
+> [ADR-0130](./0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md),
+> and the layout of the root by
+> [ADR-0132](./0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)
 > Date: 2026-10-27
 
 Drafted for #1656, which reserves this number. The direction is the

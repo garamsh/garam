@@ -1,13 +1,13 @@
 # Every web package (ADR-0125), installed together from one lockfile,
 # pnpm-lock.yaml beside this file, so a package another imports
-# (design/) is linked rather than published.
+# (lib/design/) is linked rather than published.
 packages:
-  - console
+  - platform-web
   - cowork/engine
-  - cowork/web
-  - design
-  - platform/client
-  - site
+  - cowork-web
+  - lib/design
+  - lib/platform-sdk-ts
+  - site-web
 # sharp backs Next.js image optimisation; unrs-resolver backs the ESLint
 # import resolver; esbuild bundles cowork/engine. Each ships a native
 # binary through an install script, which has to run.

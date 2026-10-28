@@ -5,9 +5,9 @@
 .git
 .github
 docs
-console
-design
-site
+platform-web
+lib/design
+site-web
 **/node_modules
 deploy
 platform/tests

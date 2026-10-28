@@ -55,8 +55,8 @@ and unbuilt (§Delivery to agents), and so is an agent acting as itself
   artifacts, as its caller.
 - **The client CLI** (`internal/cli`). The tools as commands, and
   `cowork mcp`, a stdio bridge for local MCP clients.
-- **The web app** (`web/`). Every block type is a plugin in its
-  registry.
+- **The web app** (`cowork-web/`, at the root). Every block type is a
+  plugin in its registry.
 - **Not yet:** the Postgres hub several instances need, and the image.
 
 ## Ports

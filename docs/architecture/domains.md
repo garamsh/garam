@@ -155,8 +155,8 @@ subject and owning a folder are not in tension.
 **Both ends of this are unbuilt.** garam's half is built — the stream a
 browser reads, the watcher count on the poll, and the fan-out between
 the two listeners — and nothing reaches either end of it: no route
-under `console/src/app/console/` opens the stream, and nothing under
-`platform/internal/delivery/` forwards an event
+under `platform-web/src/app/console/` opens the stream, and nothing
+under `platform/internal/delivery/` forwards an event
 ([adapter.md](./adapter.md) §Watching).
 [overview.md](./overview.md) §Out of scope (today) records it.
 

@@ -63,8 +63,8 @@ updates:
   # searched.
   #
   # It also moves only the FROM line. go.mod's `go` directive names the
-  # same Go version Dockerfile does, and console/.nvmrc the same Node
-  # major as Dockerfile.web, so every bump this proposes arrives
+  # same Go version Dockerfile does, and platform-web/.nvmrc the same
+  # Node major as Dockerfile.web, so every bump this proposes arrives
   # half-done and splits the container's toolchain from the repository's
   # declared version unless the other half lands with it.
   # `make -C tooling check-toolchain` fails on that split (#803); it

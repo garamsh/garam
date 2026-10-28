@@ -85,7 +85,7 @@ jobs:
           node-version-file: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: console/.nvmrc
+          node-version-file: platform-web/.nvmrc
           # Only a web package installs into the pnpm store; in any
           # other module the store's path never exists, and the
           # post-job save fails the job on it.
@@ -119,7 +119,7 @@ jobs:
           node-version-file: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: console/.nvmrc
+          node-version-file: platform-web/.nvmrc
           # Only a web package installs into the pnpm store; in any
           # other module the store's path never exists, and the
           # post-job save fails the job on it.

@@ -55,18 +55,34 @@ Each top-level folder is one service or one supporting
 responsibility, and the boundaries this document describes from here
 on are boundaries inside a service.
 
-- **A top-level folder is one responsibility.** `platform/`,
-  `console/`, `site/`, `design/`, `tooling/`, `deploy/` and
-  `docs/convention/` are the folders ADR-0125 names. No folder holds
-  code without an owner: there is no `shared/`, `libs/` or `common/`.
-  ADR-0130 adds `policy/`, the policy engine, which its first pull
-  request creates.
+- **A top-level folder is one responsibility**, of one of three kinds
+  ([ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)):
+  - **a service's own tree**, its server binary under `cmd/`:
+    `platform/` and `cowork/`. ADR-0130 adds `policy/`, which its
+    first pull request creates;
+  - **an executable unit named `<service>-<surface>`**: `platform-web/`
+    (the console), `site-web/` (the site), `cowork-web/`, and
+    `platform-cli/`, which #1700 has not yet split out of
+    `platform/cmd/garam`;
+  - **a supporting responsibility**: `lib/`, `tooling/`, `deploy/` and
+    `docs/`.
+- **`lib/` holds code libraries, and no binary.** Each package in it is
+  named for what it is and is linked by more than one unit:
+  `lib/design/` and `lib/platform-sdk-ts/` today. `platform/sdk/`'s
+  `grn`, `errorx` and `clisession`, and the Go SDK generated from
+  `platform/api/openapi.yaml`, move under `lib/` in #1700's second pull
+  request. No folder is a catch-all: there is no `shared/`, `utils/` or
+  `common/`, and a package in `lib/` that one unit alone imports
+  belongs to that unit.
+- **An SDK is generated from its service's published API**, and a
+  client unit reaches a server only through it.
 - **A service's folder is created by its first pull request**, and not
   before.
 - **A service owns its database.** No table is read or written by a
   service other than the one that owns it.
 - **A service reaches another only through what that service
-  publishes**: its API specification, or `platform/sdk/`. Reaching
+  publishes**: its API specification, or a library in `lib/`
+  (`platform/sdk/` until #1700 moves it). Reaching
   into another service's `internal/` or its database is a
   defect, even where it builds.
 - **Dependencies point toward `platform/`**, and none points back.
@@ -74,8 +90,8 @@ on are boundaries inside a service.
   cowork call `policy/`, and `policy/` calls no service.
 - **Services authenticate to one another with tokens `platform/`
   issues**, never by network position.
-- **`console/` and `site/` call only the services' public management
-  APIs.**
+- **`platform-web/` and `site-web/` call only the services' public
+  management APIs.**
 - **Management and runtime endpoints are separate deployments.** The
   console and the services' management APIs are one kind; the machine
   listener and the model gateway are the other.
@@ -305,10 +321,10 @@ behaviour rather than convert one does not.
 - [ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — this document's rules yield to a stack file only where the stack's
   framework imposes the case. The ADR records the adoption of that rule
-  from the conventions template, which moves `console/`: a feature there
-  now reaches a sibling through its declared surface. It also records
-  the adoption of the template's composition-site rule, which ends
-  §Where the composition root lives' divergence from
+  from the conventions template, which moves `platform-web/`: a feature
+  there now reaches a sibling through its declared surface. It also
+  records the adoption of the template's composition-site rule, which
+  ends §Where the composition root lives' divergence from
   `docs/convention/stack-go.md`.
 - [ADR-0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)
   — the composition-site rule is this document's. The ADR records the
@@ -322,6 +338,11 @@ behaviour rather than convert one does not.
   responsibility. §Services carries its boundary rules, which sit
   above every rule in this document because they divide the
   repository before this document divides a service.
+- [ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)
+  — a root folder is a service's tree, an executable unit named
+  `<service>-<surface>`, or a supporting responsibility, and shared
+  code libraries sit under `lib/`. It supersedes ADR-0125's table of
+  folders, and §Services carries its rules.
 
 ## Open questions
 

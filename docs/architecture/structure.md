@@ -50,9 +50,9 @@ exists:
   binary, database and documents
   ([cowork.md](../../cowork/docs/cowork.md)).
 - **`go.work`** at the root, naming `platform/`, `platform-cli/`,
-  `cowork/` and each Go library under `lib/`. Every Go entry point in the `Makefile` covers every
-  module it names. The root still holds the platform's packages until
-  #1659.
+  `cowork/` and each Go library under `lib/`. Every Go entry point in
+  the `Makefile` covers every module it names. The root still holds the
+  platform's packages until #1659.
 
 Above the boundaries inside garam sits a coarser unit: the service.
 Each top-level folder is one service or one supporting

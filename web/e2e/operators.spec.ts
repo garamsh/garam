@@ -237,7 +237,9 @@ test.describe("operators", () => {
     // page, where both keys are issued (ADR-0117, ADR-0124).
     await dialog.getByRole("button", { name: "Register", exact: true }).click();
 
-    await expect(page).toHaveURL(`${operators}/field-two/connect`);
+    await expect(page).toHaveURL(
+      `${operators}/field-two/connect?pair=field-two-control`,
+    );
     await expectHydrated(page);
     expect(await axeViolations(page)).toEqual([]);
     await page
@@ -387,7 +389,7 @@ test.describe("operators", () => {
       .getByRole("button", { name: "Register", exact: true })
       .click();
     // Registering opens the operator's setup page.
-    await expect(page).toHaveURL(`${operators}/new/connect`);
+    await expect(page).toHaveURL(`${operators}/new/connect?pair=new-control`);
 
     // `new` is a valid identifier, so it is an operator's page and no
     // create route takes it (ADR-0074).

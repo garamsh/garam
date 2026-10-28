@@ -1,8 +1,8 @@
 # Multi-stage build of one of the Next.js apps (ADR-0009) as a
 # standalone server. Build context is the repository root, which holds
 # the pnpm workspace the app installs from: the app names its folder in
-# APP (`console` or `site`), and Dockerfile.web.dockerignore keeps the
-# context to the web packages.
+# APP (`platform-web` or `site-web`), and Dockerfile.web.dockerignore
+# keeps the context to the web packages.
 #
 # Both stages take the same base, pinned by digest: the tag reads
 # and the digest resolves, so two builds of this commit pull the same
@@ -35,7 +35,7 @@ ENV GARAM_API_URL=$GARAM_API_URL
 ENV GARAM_CONSOLE_URL=http://console.invalid GARAM_SITE_URL=http://site.invalid
 
 COPY . .
-RUN test -n "$APP" || { echo "APP names the app's folder: console or site" >&2; exit 1; }; \
+RUN test -n "$APP" || { echo "APP names the app's folder: platform-web or site-web" >&2; exit 1; }; \
   pnpm install --offline --frozen-lockfile --filter "{./$APP}..." && \
   pnpm --dir "$APP" build && \
   mkdir -p "$APP/public"

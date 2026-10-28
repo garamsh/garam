@@ -5,12 +5,12 @@
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml
-!console
+!platform-web
 !cowork/engine
-!cowork/web
-!design
-!platform/client
-!site
+!cowork-web
+!lib/design
+!lib/platform-sdk-ts
+!site-web
 **/node_modules
 **/.next
 **/playwright-report

@@ -45,6 +45,12 @@ spec:
               value: {{ required "api.sessionTTL is required" .Values.api.sessionTTL | quote }}
             - name: GARAM_COOKIE_SECURE
               value: {{ .Values.api.cookieSecure | quote }}
+            {{- with .Values.api.cookieDomain }}
+            # Every cookie garam sets is scoped to this parent
+            # (ADR-0131); unset, each is host-only.
+            - name: GARAM_COOKIE_DOMAIN
+              value: {{ . | quote }}
+            {{- end }}
 {{- include "garam.machineTokenUrlEnv" . }}
             {{- $google := .Values.api.google }}
             {{- if or $google.clientId $google.redirectUrl $google.clientSecret.secretName $google.clientSecret.secretKey }}

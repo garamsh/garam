@@ -21,7 +21,7 @@ describe("proxy", () => {
     // Sign-in is the site's (ADR-0131), on its own origin.
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/login?next=%2Fconsole%2Forgs%3Fsubject%3Dteam",
+      "http://garam.localhost:3001/login?next=%2Fconsole%2Forgs%3Fsubject%3Dteam",
     );
   });
 
@@ -41,7 +41,7 @@ describe("proxy", () => {
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      `http://localhost:3001${path}`,
+      `http://garam.localhost:3001${path}`,
     );
   });
 
@@ -61,7 +61,7 @@ describe("proxy", () => {
     const response = proxy(request("/console/invitations/tok-123"));
 
     const location = new URL(response.headers.get("location") ?? "");
-    expect(location.origin).toBe("http://localhost:3001");
+    expect(location.origin).toBe("http://garam.localhost:3001");
     expect(location.pathname).toBe("/login");
     expect(location.searchParams.get("next")).toBe(
       "/console/invitations/tok-123",

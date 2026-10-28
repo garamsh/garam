@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 
 import { config, proxy } from "@/proxy";
 
-const SITE = "http://localhost:3001";
-const CONSOLE = "http://localhost:3000";
+const SITE = "http://garam.localhost:3001";
+const CONSOLE = "http://console.garam.localhost:3000";
 
 /**
  * Every page the console served under this host before it moved to its

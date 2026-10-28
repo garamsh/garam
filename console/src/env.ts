@@ -17,7 +17,7 @@ const schema = z.object({
   GARAM_SITE_URL:
     process.env.NODE_ENV === "production"
       ? z.url()
-      : z.url().default("http://localhost:3001"),
+      : z.url().default("http://garam.localhost:3001"),
   // Where cowork's web app is served (ADR-0127 §10). The sidebar links
   // to it only where it is set, so a console without cowork offers no
   // link to nowhere.

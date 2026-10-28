@@ -13,7 +13,7 @@ const LIFECYCLE_BUDGET_MS = 60_000;
 
 /** The tab panel on show; inactive ones stay mounted, hidden. */
 const ACTIVE_PANEL = '[role="tabpanel"][data-state="active"]';
-import { expect, test } from "./fixtures";
+import { expect, holdSession, test } from "./fixtures";
 import {
   recordedAuthority,
   seedHostedOperator,
@@ -558,15 +558,7 @@ test.describe("operators", () => {
 
     const member = await seedMember(signedIn);
     await context.clearCookies();
-    await context.addCookies([
-      {
-        name: "garam_session",
-        value: member.sessionToken,
-        url: baseURL!,
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+    await holdSession(context, baseURL, member.sessionToken);
 
     await page.goto(operators);
     await expect(

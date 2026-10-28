@@ -51,6 +51,14 @@ image:
     # (deploy/local/Dockerfile.web).
     runAsUser: 1000
     runAsGroup: 1000
+  # The site (ADR-0131), built from the same Dockerfile as `web` with
+  # `APP=site`, so it runs as the same account.
+  site:
+    repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-site
+    tag: ""
+    digest: ""
+    runAsUser: 1000
+    runAsGroup: 1000
   pullPolicy: IfNotPresent
   # Secret names, never a credential. How a node obtains the one ECR
   # requires is the deployment's to decide.
@@ -73,6 +81,15 @@ api:
   # nothing refuses at startup, every page renders, and sign-in never
   # sticks — see the README, §Exposure is the cluster owner's.
   cookieSecure: true
+  # The parent domain the session cookie is scoped to (ADR-0131), so a
+  # person signed in on the site is signed in on the console: the two
+  # hosts' common parent, `garam.sh` for `garam.sh` and
+  # `console.garam.sh`. Empty keeps the cookie host-only, which a
+  # deployment serving the site and the console on one host needs and
+  # one serving them on two does not work with. Every host under it
+  # receives the cookie, so nothing but garam's own apps may be served
+  # there — see the README, §Values a deployment must supply.
+  cookieDomain: ""
   # Set all of these or none of them. Setting any one makes the rest
   # required: garam refuses to start holding one half of the credential,
   # so the render refuses first rather than installing a release whose
@@ -200,6 +217,26 @@ web:
   # that build used, and nothing here checks it — see the README, §Values
   # a deployment must supply.
   apiUrl: ""
+  # Where the site is served (ADR-0131): a visitor without a session is
+  # sent there to sign in. Read when a request arrives, not when the
+  # image was built.
+  siteUrl: ""
+  resources: {}
+
+# The landing page and the way in (ADR-0131), a Next.js app beside the
+# console.
+site:
+  serviceAccount:
+    name: ""
+    create: false
+    annotations: {}
+  # As `web.apiUrl`: baked into the image as the `/api/*` rewrite target
+  # and read again at runtime, so it must equal the value that build
+  # used.
+  apiUrl: ""
+  # Where the console is served. Every address under `/console`, and
+  # a signed-in visitor, is sent there.
+  consoleUrl: ""
   resources: {}
 
 migrate:

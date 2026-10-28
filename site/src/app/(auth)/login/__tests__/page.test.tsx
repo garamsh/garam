@@ -202,7 +202,7 @@ describe("login page", () => {
 
   it("sends an already signed-in visitor to the console", async () => {
     await expect(renderServerComponent(LoginPage(NO_PARAMS))).rejects.toThrow(
-      "NEXT_REDIRECT:http://localhost:3000/console",
+      "NEXT_REDIRECT:http://console.garam.localhost:3000/console",
     );
   });
 
@@ -210,7 +210,7 @@ describe("login page", () => {
     await expect(
       renderServerComponent(LoginPage(invitedTo("secret-token"))),
     ).rejects.toThrow(
-      "NEXT_REDIRECT:http://localhost:3000/console/invitations/secret-token",
+      "NEXT_REDIRECT:http://console.garam.localhost:3000/console/invitations/secret-token",
     );
   });
 
@@ -223,7 +223,9 @@ describe("login page", () => {
           searchParams: Promise.resolve({ next: "//evil.example/console" }),
         }),
       ),
-    ).rejects.toThrow(/^NEXT_REDIRECT:http:\/\/localhost:3000\/console$/);
+    ).rejects.toThrow(
+      /^NEXT_REDIRECT:http:\/\/console\.garam\.localhost:3000\/console$/,
+    );
   });
 
   it("names the invitation it was reached for and carries it to sign-in and to register", async () => {

@@ -81,7 +81,9 @@ describe("signInWithPassword", () => {
         { status: "idle" },
         form({ username: "alice", password: PASSWORD }),
       ),
-    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3000/console");
+    ).rejects.toThrow(
+      "NEXT_REDIRECT:http://console.garam.localhost:3000/console",
+    );
 
     expect(sent).toEqual({ username: "alice", password: PASSWORD });
     // The attributes are garam's own, read off the header rather than
@@ -124,10 +126,12 @@ describe("signInWithPassword", () => {
         { status: "idle" },
         form({ username: "alice", password: PASSWORD }),
       ),
-    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3000/console");
+    ).rejects.toThrow(
+      "NEXT_REDIRECT:http://console.garam.localhost:3000/console",
+    );
 
-    // ADR-0131: a cookie replanted host-only would sign the person in on
-    // the host that answered the form and on no other.
+    // ADR-0131: a cookie replanted host-only would sign the person in
+    // on the host that answered the form and on no other.
     expect(planted).toEqual([
       expect.objectContaining({ domain: "garam.test", secure: true }),
     ]);
@@ -146,7 +150,7 @@ describe("signInWithPassword", () => {
         }),
       ),
     ).rejects.toThrow(
-      /^NEXT_REDIRECT:http:\/\/localhost:3000\/console\/invitations\/secret-token$/,
+      /^NEXT_REDIRECT:http:\/\/console\.garam\.localhost:3000\/console\/invitations\/secret-token$/,
     );
 
     // The control: a return path off the console is dropped rather
@@ -161,7 +165,9 @@ describe("signInWithPassword", () => {
           next: "https://evil.example/console",
         }),
       ),
-    ).rejects.toThrow(/^NEXT_REDIRECT:http:\/\/localhost:3000\/console$/);
+    ).rejects.toThrow(
+      /^NEXT_REDIRECT:http:\/\/console\.garam\.localhost:3000\/console$/,
+    );
   });
 
   it("carries the Secure a backend on HTTPS marks the session with", async () => {
@@ -173,7 +179,9 @@ describe("signInWithPassword", () => {
         { status: "idle" },
         form({ username: "alice", password: PASSWORD }),
       ),
-    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3000/console");
+    ).rejects.toThrow(
+      "NEXT_REDIRECT:http://console.garam.localhost:3000/console",
+    );
 
     expect(planted[0]).toMatchObject({ secure: true });
   });

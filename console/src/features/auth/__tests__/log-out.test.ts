@@ -47,7 +47,7 @@ describe("logOut", () => {
     );
 
     await expect(logOut()).rejects.toThrow(
-      "NEXT_REDIRECT:http://localhost:3001/login",
+      "NEXT_REDIRECT:http://garam.localhost:3001/login",
     );
     // ADR-0131: a host-only delete leaves the parent domain's cookie,
     // and the browser signed in on every other host.
@@ -69,7 +69,7 @@ describe("logOut", () => {
     );
 
     await expect(logOut()).rejects.toThrow(
-      "NEXT_REDIRECT:http://localhost:3001/login",
+      "NEXT_REDIRECT:http://garam.localhost:3001/login",
     );
     expect(deleted).toHaveBeenCalledWith({ name: SESSION_COOKIE, path: "/" });
   });

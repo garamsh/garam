@@ -17,7 +17,7 @@ const schema = z.object({
   GARAM_CONSOLE_URL:
     process.env.NODE_ENV === "production"
       ? z.url()
-      : z.url().default("http://localhost:3000"),
+      : z.url().default("http://console.garam.localhost:3000"),
 });
 
 /**

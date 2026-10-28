@@ -2,8 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import type { Browser, Page } from "@playwright/test";
 
-import { expectHydrated } from "./axe";
-import { expect, test } from "./fixtures";
+import { CONSOLE_URL, expect, test } from "./fixtures";
 
 /**
  * A password no other value in this suite carries, so a URL holding it
@@ -16,21 +15,15 @@ function newPassword(): string {
 /**
  * Creates an invitation as the organization's owner and answers with
  * the token its link carries — what a person registering is holding.
+ * The console's own suite drives the dialog that does this; here it is
+ * the request that dialog sends.
  */
 async function invitationToken(page: Page, orgSlug: string): Promise<string> {
-  await page.goto(`/console/orgs/${orgSlug}/people`);
-  await expectHydrated(page);
-  await page.getByRole("button", { name: "Invite people" }).click();
-  const dialog = page.getByRole("dialog", { name: "Invite a person" });
-  await dialog.getByRole("combobox", { name: "Role" }).click();
-  await page.getByRole("option", { name: "Member", exact: true }).click();
-  await dialog.getByRole("button", { name: "Create invitation" }).click();
-
-  const link = page
-    .getByRole("alertdialog", { name: "Invitation link" })
-    .locator("pre");
-  await expect(link).toBeVisible();
-  const token = ((await link.textContent()) ?? "").split("/").pop() ?? "";
+  const response = await page.request.post(`/api/orgs/${orgSlug}/invitations`, {
+    data: { role: "member" },
+  });
+  expect(response.status()).toBe(201);
+  const { token } = (await response.json()) as { token: string };
   expect(token).not.toBe("");
   return token;
 }
@@ -39,7 +32,8 @@ async function invitationToken(page: Page, orgSlug: string): Promise<string> {
  * Registers an account in a browser holding no session, at the login
  * page with nothing but the token pasted by hand — the way in for an
  * invitee who has the token and not the link. Registering lands in the
- * organization the invitation named.
+ * organization the invitation named, on the console's origin: the
+ * session the site was handed reaches it (ADR-0131).
  */
 async function registerAccount(
   browser: Browser,
@@ -65,7 +59,9 @@ async function registerAccount(
   await page.getByLabel("Password").fill(credential.password);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  await expect(page).toHaveURL(`/console/orgs/${credential.orgSlug}`);
+  await expect(page).toHaveURL(
+    `${CONSOLE_URL}/console/orgs/${credential.orgSlug}`,
+  );
   await context.close();
 }
 
@@ -108,7 +104,10 @@ test.describe("password accounts", () => {
     await signingIn.getByLabel("Password").fill(password);
     await signingIn.getByRole("button", { name: "Sign in" }).click();
 
-    await expect(signingIn).toHaveURL("/console/orgs");
+    // Signed in on the site, and shown the console on its own host
+    // without a second sign-in: the cookie the site replanted is
+    // scoped to the parent both share (ADR-0131).
+    await expect(signingIn).toHaveURL(`${CONSOLE_URL}/console/orgs`);
     // The membership the invitation named, held by the account the
     // password signed in as. Substring on purpose: the card link's
     // accessible name carries the org's slug beside its name.
@@ -175,7 +174,7 @@ test.describe("password accounts", () => {
     const unknownUsername = await refused.locator("form").innerText();
 
     // The two renders are the same render: garam refuses them
-    // identically and the console adds nothing that tells them apart
+    // identically and the site adds nothing that tells them apart
     // (ADR-0041).
     expect(wrongPassword).toBe(unknownUsername);
 

@@ -131,9 +131,17 @@ services:
       GARAM_AUTHZ_ADDR: authz:9090
       # Plain HTTP locally, so the session cookie cannot be Secure.
       GARAM_COOKIE_SECURE: "false"
+      # The site and the console are two hosts under one parent
+      # (ADR-0131), and a session signed in on one reaches the other
+      # only through a cookie scoped to that parent. `localhost` has no
+      # subdomains to share one with, so the local hosts are
+      # garam.localhost and console.garam.localhost, which a browser
+      # resolves to this machine.
+      GARAM_COOKIE_DOMAIN: ${GARAM_COOKIE_DOMAIN:-garam.localhost}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:3000/api/auth/callback/google}
+      # Sign-in is the site's, so Google returns the browser there.
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://garam.localhost:3001/api/auth/callback/google}
       # Lets the local stack issue operator keys (ADR-0102), which the
       # console's key setup and its e2e need. Nothing exchanges them
       # locally: the stack runs no machine listener, so the URL is only
@@ -158,8 +166,10 @@ services:
       timeout: 5s
       retries: 10
 
-  # Opt-in: `docker compose --profile web up`. The browser reaches the
-  # backend through this service's same-origin `/api/*` rewrite.
+  # Opt-in: `docker compose --profile web up`, which starts the console
+  # at console.garam.localhost:3000 and the site at garam.localhost:3001.
+  # The browser reaches the backend through each one's same-origin
+  # `/api/*` rewrite.
   web:
     profiles: ["web"]
     build:
@@ -170,6 +180,7 @@ services:
         GARAM_API_URL: http://api:8080
     environment:
       GARAM_API_URL: http://api:8080
+      GARAM_SITE_URL: ${GARAM_SITE_URL:-http://garam.localhost:3001}
     ports:
       - "${GARAM_LOCAL_WEB_PORT:-3000}:3000"
     depends_on:
@@ -178,6 +189,28 @@ services:
     # /readyz, as the other two services use, so every service in the
     # stack reports health the same way. Here it reads nothing outside
     # the process (ADR-0023), so an api outage leaves this healthy.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/readyz"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  site:
+    profiles: ["web"]
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.web
+      args:
+        APP: site
+        GARAM_API_URL: http://api:8080
+    environment:
+      GARAM_API_URL: http://api:8080
+      GARAM_CONSOLE_URL: ${GARAM_CONSOLE_URL:-http://console.garam.localhost:3000}
+    ports:
+      - "${GARAM_LOCAL_SITE_PORT:-3001}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/readyz"]
       interval: 2s

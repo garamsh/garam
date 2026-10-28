@@ -28,13 +28,13 @@ CHART_TEMPLATES = $(wildcard $(CHART_DIR)/templates/*.yaml)
 CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
 
 # Every environment variable garam reads, from its declarations: the
-# envName block in platform/internal/cli, and console/src/env.ts parsed
-# for its own shape. The guards chart-render runs first keep the block
+# envName block in platform/internal/cli, and the console's and the
+# site's src/env.ts parsed for their own shape. The guards chart-render runs first keep the block
 # equal to the reads (#734), and both sides read one character class,
 # since a name outside it drops out of both sets and passes unseen
 # (#864).
 CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z][A-Z0-9_]*"' --include=*.go ../../platform/internal ../../platform/cmd | sed 's/.*"\([A-Z][A-Z0-9_]*\)"/\1/' | sort -u)
-CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' ../../console/src/env.ts)
+CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' ../../console/src/env.ts ../../site/src/env.ts | sort -u)
 
 # What the chart declares it does not set, read from the table that
 # carries the reasons. A renamed heading empties this and fails the

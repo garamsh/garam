@@ -1,7 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 
 import { axeViolations, expectHydrated, useTheme } from "./axe";
-import { expect, test } from "./fixtures";
+import { expect, holdSession, test } from "./fixtures";
 import { seedMember } from "./seed";
 
 /** The seeded group's page: its GRN's identifier is `engineering`. */
@@ -317,15 +317,7 @@ test.describe("teams", () => {
 
     const member = await seedMember(signedIn);
     await context.clearCookies();
-    await context.addCookies([
-      {
-        name: "garam_session",
-        value: member.sessionToken,
-        url: baseURL!,
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+    await holdSession(context, baseURL, member.sessionToken);
 
     // The list reads for a member, so the page rendered and the action
     // is absent rather than unreached.

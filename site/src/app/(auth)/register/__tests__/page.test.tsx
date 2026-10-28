@@ -45,7 +45,9 @@ describe("register page", () => {
     // instead (ADR-0041).
     await expect(
       renderServerComponent(RegisterPage(NO_PARAMS)),
-    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3000/console");
+    ).rejects.toThrow(
+      "NEXT_REDIRECT:http://console.garam.localhost:3000/console",
+    );
   });
 
   it("says the API is unreachable instead of failing", async () => {
@@ -111,7 +113,7 @@ describe("register page", () => {
     await expect(
       renderServerComponent(RegisterPage(invitedTo("secret-token"))),
     ).rejects.toThrow(
-      "NEXT_REDIRECT:http://localhost:3000/console/invitations/secret-token",
+      "NEXT_REDIRECT:http://console.garam.localhost:3000/console/invitations/secret-token",
     );
   });
 });

@@ -20,7 +20,7 @@ modules-with = $(strip $(foreach m,$(MODULES),$(if $(shell grep -q '^$(1):' $(m)
 VERBS := ci install format lint test build gen check-gen stack-up suites integration
 
 .PHONY: $(VERBS) affected e2e web-e2e cowork-web-e2e db-up db-down db-prune backend-up
-.PHONY: template-diff search image-build web-image-e2e test-image test-image-e2e test-image-push test-image-pin
+.PHONY: template-diff search image-build web-image-e2e site-image-e2e test-image test-image-e2e test-image-push test-image-pin
 
 $(VERBS):
 	@test -n '$(call modules-with,$@)' || { echo '$@: no module defines it — tooling/ci/modules or a module Makefile is misread'; exit 1; }
@@ -36,12 +36,15 @@ affected:
 
 # The names these were run by before each module had its own Makefile,
 # kept while CI's goal commands and the documents use them: the
-# platform's binary suite, and the two browser suites.
+# platform's binary suite, and the browser suites. `web-e2e` was the
+# one web app's and is now both of the apps it split into (ADR-0131),
+# the console's and the site's.
 e2e:
 	@$(MAKE) --no-print-directory -C platform e2e
 
 web-e2e:
 	@$(MAKE) --no-print-directory -C console e2e
+	@$(MAKE) --no-print-directory -C site e2e
 
 cowork-web-e2e:
 	@$(MAKE) --no-print-directory -C cowork/web e2e
@@ -94,6 +97,12 @@ web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
 	@image='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))'; \
 		test -n "$$image" || { echo 'web-image-e2e: nothing names the image to check — .github/workflows/release.yml builds none into garam-web'; exit 1; }; \
 		GARAM_WEB_IMAGE="$$image" platform/tests/image/web.sh
+
+# site-image-e2e is the same check of the site's image (ADR-0131),
+# built here from deploy/local/Dockerfile.web: no release publishes
+# one yet, so there is no image-build output to take.
+site-image-e2e:
+	APP=site platform/tests/image/web.sh
 
 # test-image builds the test image another repository's CI copies
 # garam, testprincipal and the migrations out of (ADR-0092), tagged

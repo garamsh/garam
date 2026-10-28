@@ -155,7 +155,7 @@ describe("teams section", () => {
 
     await expect(
       renderServerComponent(TeamsPage(params("acme"))),
-    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3001/login");
+    ).rejects.toThrow("NEXT_REDIRECT:http://garam.localhost:3001/login");
   });
   it("leaves out the create action on a refused list only when denied", async () => {
     server.use(

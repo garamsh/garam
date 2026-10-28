@@ -301,6 +301,6 @@ describe("consents section", () => {
 
     await expect(
       renderServerComponent(ConsentsPage(params("acme"))),
-    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3001/login");
+    ).rejects.toThrow("NEXT_REDIRECT:http://garam.localhost:3001/login");
   });
 });

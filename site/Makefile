@@ -72,10 +72,11 @@ test:
 	pnpm test
 
 # `next build` runs with NODE_ENV=production, where env.ts requires
-# GARAM_API_URL (the `/api/*` rewrite is baked into the build). Nothing
-# calls the backend during the build, so a placeholder is enough.
+# GARAM_API_URL (the `/api/*` rewrite is baked into the build) and
+# GARAM_CONSOLE_URL, which is read again at runtime. Nothing calls
+# either during the build, so a placeholder is enough.
 build:
-	GARAM_API_URL=http://localhost:8080 GARAM_CONSOLE_URL=http://localhost:3000 pnpm build
+	GARAM_API_URL=http://localhost:8080 GARAM_CONSOLE_URL=http://console.garam.localhost:3000 pnpm build
 
 # The backend the browser suite drives: postgres, the one-shot
 # migration, authz and api.
@@ -85,10 +86,12 @@ stack-up:
 suites: install e2e
 
 # e2e drives the built app in a real browser against the backend
-# stack-up starts. It builds and serves the app itself, so it needs
-# GARAM_API_URL — the real api here, not `build`'s placeholder — the URL
-# its seed script writes sessions through, and the browser, which
-# Playwright keeps outside the lockfile.
+# stack-up starts. It builds and serves the app itself, and the
+# console beside it, since a session signed in on one is read on the
+# other (ADR-0131). So it needs GARAM_API_URL — the real api here, not
+# `build`'s placeholder — the URL its seed script writes sessions
+# through, and the browser, which Playwright keeps outside the
+# lockfile.
 e2e:
 	@test -n "$(API_HOST_ADDR)" || { echo "e2e: no api published on this host — run make -C site stack-up" >&2; exit 1; }
 	@test -n '$(WEB_E2E_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make -C site stack-up" >&2; exit 1; }

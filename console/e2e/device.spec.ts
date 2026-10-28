@@ -1,7 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 
 import { axeViolations, expectHydrated, useTheme } from "./axe";
-import { expect, test } from "./fixtures";
+import { SITE_URL, expect, test } from "./fixtures";
 
 const DEVICE_GRANT = "urn:ietf:params:oauth:grant-type:device_code";
 
@@ -142,7 +142,7 @@ test.describe("device sign-in", () => {
     await page.goto("/device?code=WDJB-MJHT");
 
     await expect(page).toHaveURL(
-      `/login?next=${encodeURIComponent("/console/device?code=WDJB-MJHT")}`,
+      `${SITE_URL}/login?next=${encodeURIComponent("/console/device?code=WDJB-MJHT")}`,
     );
   });
 

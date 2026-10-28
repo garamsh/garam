@@ -1,10 +1,13 @@
 import type { Browser, Page } from "@playwright/test";
 
 import { axeViolations, expectHydrated, useTheme } from "./axe";
-import { expect, test } from "./fixtures";
+import { CONSOLE_URL, expect, holdSession, test } from "./fixtures";
 import { seedSignedInUser } from "./seed";
 
-/** Creates a member invitation as the page's owner and returns its path. */
+/**
+ * Creates a member invitation as the page's owner and returns its path,
+ * the console's: this site sends it there (ADR-0131).
+ */
 async function invite(page: Page, orgSlug: string): Promise<string> {
   const response = await page.request.post(`/api/orgs/${orgSlug}/invitations`, {
     data: { role: "member" },
@@ -21,22 +24,14 @@ async function visitor(
   session?: string,
 ): Promise<Page> {
   const context = await browser.newContext({ baseURL });
-  if (session !== undefined) {
-    await context.addCookies([
-      {
-        name: "garam_session",
-        value: session,
-        url: baseURL,
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
-  }
+  if (session !== undefined) await holdSession(context, baseURL, session);
   return context.newPage();
 }
 
 // The states an invitation puts the way in and the invitation page in,
-// in both themes: usable, then spent once the invitee has joined.
+// in both themes: usable, then spent once the invitee has joined. The
+// way in is this site's and the invitation page the console's, reached
+// from here by the address the invitation link carries.
 test.describe("invitation pages", () => {
   for (const theme of ["light", "dark"] as const) {
     test(`pass axe while usable and once spent, in the ${theme} theme`, async ({
@@ -74,7 +69,9 @@ test.describe("invitation pages", () => {
       await joining
         .getByRole("button", { name: `Join ${signedIn.orgName}` })
         .click();
-      await expect(joining).toHaveURL(`/console/orgs/${signedIn.orgSlug}`);
+      await expect(joining).toHaveURL(
+        `${CONSOLE_URL}/console/orgs/${signedIn.orgSlug}`,
+      );
 
       await joining.goto(invitation);
       await expect(

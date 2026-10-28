@@ -88,7 +88,7 @@ describe("registerWithPassword", () => {
         }),
       ),
     ).rejects.toThrow(
-      /^NEXT_REDIRECT:http:\/\/localhost:3000\/console\/orgs\/acme$/,
+      /^NEXT_REDIRECT:http:\/\/console\.garam\.localhost:3000\/console\/orgs\/acme$/,
     );
 
     expect(posted).toEqual([
@@ -162,7 +162,9 @@ describe("registerWithPassword", () => {
           password: `${short}a`,
         }),
       ),
-    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3000/console");
+    ).rejects.toThrow(
+      "NEXT_REDIRECT:http://console.garam.localhost:3000/console",
+    );
     expect(posted).toHaveLength(1);
   });
 
@@ -196,7 +198,9 @@ describe("registerWithPassword", () => {
           password: PASSWORD,
         }),
       ),
-    ).rejects.toThrow("NEXT_REDIRECT:http://localhost:3000/console");
+    ).rejects.toThrow(
+      "NEXT_REDIRECT:http://console.garam.localhost:3000/console",
+    );
     expect(posted).toHaveLength(1);
   });
 

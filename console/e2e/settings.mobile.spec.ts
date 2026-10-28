@@ -8,9 +8,10 @@ function fitsTheScreen() {
   );
 }
 
-// Settings, the organizations list, an invitation, and the pages that
-// lead into the console, at 390px in both themes.
-test.describe("settings and the way in, on a phone", () => {
+// Settings, the organizations list and an invitation, at 390px in both
+// themes. The pages that lead into the console are the site's, and its
+// own suite holds them to the same.
+test.describe("settings and an invitation, on a phone", () => {
   for (const theme of ["light", "dark"] as const) {
     test(`Settings passes axe in the ${theme} theme`, async ({
       page,
@@ -60,16 +61,5 @@ test.describe("settings and the way in, on a phone", () => {
       expect(await axeViolations(page)).toEqual([]);
       expect(await page.evaluate(fitsTheScreen)).toBe(true);
     });
-
-    for (const path of ["/", "/login", "/register"]) {
-      test(`${path} passes axe in the ${theme} theme`, async ({ page }) => {
-        await useTheme(page, theme);
-        await page.goto(path);
-        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-
-        expect(await axeViolations(page)).toEqual([]);
-        expect(await page.evaluate(fitsTheScreen)).toBe(true);
-      });
-    }
   }
 });

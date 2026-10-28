@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { Page } from "@playwright/test";
 
-import { expect, test } from "./fixtures";
+import { expect, holdSession, test } from "./fixtures";
 import {
   recordedAuthority,
   seedHostedOperator,
@@ -675,15 +675,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
 
     const member = await seedMemberDeniedOperatorRead(signedIn);
     await context.clearCookies();
-    await context.addCookies([
-      {
-        name: "garam_session",
-        value: member.sessionToken,
-        url: baseURL!,
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+    await holdSession(context, baseURL, member.sessionToken);
 
     // The deny was written to the database, and the API's policy cache,
     // which the owner's visit above filled, drops that org's entry only

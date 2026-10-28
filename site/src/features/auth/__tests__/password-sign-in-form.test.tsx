@@ -138,7 +138,7 @@ describe("password sign-in form", () => {
 
     expect(
       await screen.findByText(
-        "NEXT_REDIRECT:http://localhost:3000/console/invitations/secret-token",
+        "NEXT_REDIRECT:http://console.garam.localhost:3000/console/invitations/secret-token",
       ),
     ).toBeInTheDocument();
   });

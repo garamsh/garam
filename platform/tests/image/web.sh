@@ -1,9 +1,12 @@
 #!/bin/sh
-# Runs the web image and checks it: the standalone server starts,
-# /healthz and /readyz answer (ADR-0023), and `/api/*` reaches the URL
-# baked at build time (ADR-0009). The subject is the image a release
-# publishes, which `console/e2e` never opens — that suite builds this
-# tree's app and serves it.
+# Runs a web image and checks it: the standalone server starts,
+# /healthz and /readyz answer (ADR-0023), `/api/*` reaches the URL
+# baked at build time (ADR-0009), and the other app's address is the
+# one the container is given rather than one the build held (ADR-0131).
+# The subject is the image a release publishes, which neither app's e2e
+# suite opens — each builds this tree's app and serves it.
+#
+# APP names the app: `console`, the default, or `site`.
 #
 # 3000 below is the PORT deploy/local/Dockerfile.web sets. The chart
 # probes 3000 as well and nothing ties the two, so nothing here
@@ -14,6 +17,23 @@
 set -eu
 
 image=${GARAM_WEB_IMAGE:-}
+app=${APP:-console}
+case $app in
+console)
+	other=GARAM_SITE_URL
+	other_url=http://site.image-e2e.invalid
+	sent=/login
+	;;
+site)
+	other=GARAM_CONSOLE_URL
+	other_url=http://console.image-e2e.invalid
+	sent=/console/orgs
+	;;
+*)
+	echo "web-image-e2e: APP is '$app', and the apps are console and site" >&2
+	exit 1
+	;;
+esac
 net=garam-web-image-$$
 stub=
 web=
@@ -33,17 +53,17 @@ fail() {
 }
 
 if [ -z "$image" ]; then
-	image=garam-web:image-e2e
+	image=garam-$app:image-e2e
 	docker build -t "$image" \
 		--build-arg GARAM_API_URL=http://garam-api-stub:8080 \
-		--build-arg APP=console \
+		--build-arg APP="$app" \
 		-f deploy/local/Dockerfile.web .
 fi
 
 # The rewrite target is baked, so what the image itself carries is the
 # only thing the stub can be expected to answer on.
 dest=$(docker run --rm --entrypoint node "$image" -e '
-const r = require("/app/console/.next/routes-manifest.json").rewrites;
+const r = require("/app/'"$app"'/.next/routes-manifest.json").rewrites;
 const all = [...r.beforeFiles, ...r.afterFiles, ...r.fallback];
 const api = all.find((x) => x.source === "/api/:path*");
 if (!api) { console.error("no /api/:path* rewrite"); process.exit(1); }
@@ -86,7 +106,7 @@ echo "web-image-e2e: publishing on 127.0.0.1:$port"
 # --add-host rather than a network alias: the baked host is a DNS name
 # with dots, which an alias does not accept.
 web=$net-web
-docker run -d --name "$web" --network "$net" \
+docker run -d --name "$web" --network "$net" -e "$other=$other_url" \
 	--add-host "$api_host:$stub_ip" -p "127.0.0.1:$port:3000" "$image" >/dev/null
 
 # Wait on the condition the checks depend on — the server answering —
@@ -111,4 +131,12 @@ body=$(curl -fsS "http://127.0.0.1:$port/api/healthz")
 	fail "GET /api/healthz reached the backend as '$body', want '/healthz' at $dest"
 passed=$((passed + 1))
 
-echo "web-image-e2e: $passed checks passed against $image on 127.0.0.1:$port (rewrite target $dest)"
+# The build held a placeholder for the other app's address
+# (deploy/local/Dockerfile.web), so a redirect naming the one this
+# container was given shows the address is read when a request arrives.
+location=$(curl -s -o /dev/null -w '%{redirect_url}' "http://127.0.0.1:$port$sent")
+[ "$location" = "$other_url$sent" ] ||
+	fail "GET $sent redirected to '$location', want '$other_url$sent' from $other"
+passed=$((passed + 1))
+
+echo "web-image-e2e: $passed checks passed against $image on 127.0.0.1:$port (rewrite target $dest, $other $other_url)"

@@ -20,9 +20,9 @@ platform deploy/local
 cowork/engine
 # cowork's gen builds cowork/engine's bundle into internal/.
 cowork cowork/engine deploy/local
-# The chart's checks read the environment names the platform and the
-# console declare.
-deploy/charts platform console
+# The chart's checks read the environment names the platform, the
+# console and the site declare.
+deploy/charts platform console site
 # The stack has no gate of its own; the suites of the modules naming it
 # check it.
 deploy/local

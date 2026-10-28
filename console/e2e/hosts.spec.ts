@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 
 import { axeViolations, expectHydrated, useTheme } from "./axe";
-import { expect, test } from "./fixtures";
+import { expect, holdSession, test } from "./fixtures";
 import { seedHosts, seedMember } from "./seed";
 
 /** What `garam standalone prepare` prints for a host, made up here. */
@@ -53,15 +53,7 @@ test.describe("hosts", () => {
     const hosts = await seedHosts(signedIn);
     const member = await seedMember(signedIn);
     await context.clearCookies();
-    await context.addCookies([
-      {
-        name: "garam_session",
-        value: member.sessionToken,
-        url: baseURL!,
-        httpOnly: true,
-        sameSite: "Lax",
-      },
-    ]);
+    await holdSession(context, baseURL, member.sessionToken);
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/hosts`);
     await expectHydrated(page);

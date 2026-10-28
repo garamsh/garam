@@ -357,7 +357,7 @@ describe("team page", () => {
     server.use(...signedOut());
 
     await expect(renderTeam()).rejects.toThrow(
-      "NEXT_REDIRECT:http://localhost:3001/login",
+      "NEXT_REDIRECT:http://garam.localhost:3001/login",
     );
   });
   it("keeps the rename in Settings and the delete in its danger zone", async () => {

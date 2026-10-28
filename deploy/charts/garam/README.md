@@ -34,7 +34,7 @@ held nothing of this chart when it was read on 2026-08-25.
 
 ## What it renders
 
-Five workloads, a `ClusterIP` Service in front of each of the four that
+Six workloads, a `ClusterIP` Service in front of each of the five that
 listen, and a `ServiceAccount` for each workload a deployment names one
 for (§Workload identities). Each workload's file renders all of its own
 objects:
@@ -45,6 +45,8 @@ objects:
 - `templates/machine.yaml` — `serve machine`, mTLS on 8443, probes on
   8444.
 - `templates/web.yaml` — the Next.js console, port 3000.
+- `templates/site.yaml` — the Next.js site, the landing page and the way
+  in (ADR-0131), port 3000.
 - `templates/migrate.yaml` — the migration Job, a `pre-install` and
   `pre-upgrade` hook. It carries no `hook-failed` delete policy: a
   failed run's log is the only place its error exists. A consumer that
@@ -102,7 +104,7 @@ Every workload can run as an account of its own, and **the chart creates
 none by default**. `<workload>.serviceAccount.name` is the account it
 runs as and `<workload>.serviceAccount.create` renders the object under
 that name; both are off until a deployment sets them, so the chart
-renders none, one, or five accounts and the values decide which.
+renders none, one, or six accounts and the values decide which.
 
 | Workload | Kind | Account name |
 |---|---|---|
@@ -110,6 +112,7 @@ renders none, one, or five accounts and the values decide which.
 | `authz` | Deployment | `authz.serviceAccount.name` |
 | `machine` | Deployment | `machine.serviceAccount.name` |
 | `migrate` | Job | `migrate.serviceAccount.name` |
+| `site` | Deployment | `site.serviceAccount.name` |
 | `web` | Deployment | `web.serviceAccount.name` |
 
 `make -C deploy/charts ci` reads this table and fails when the render
@@ -173,8 +176,8 @@ the machine listener's own rather than one every pod in the namespace
 presents.
 
 `serve api` needs one when it reads a cloud-held secret of its own —
-Google sign-in is the pending case. `authz`, `web` and `migrate` read
-none, so a role bound to an account for any of them would grant what
+Google sign-in is the pending case. `authz`, `web`, `site` and
+`migrate` read none, so a role bound to an account for any of them would grant what
 nothing asks for.
 
 Getting the machine listener's identity wrong fails in the right
@@ -188,10 +191,11 @@ which carries what the only remedy costs).
 
 ## Values a deployment must supply
 
-`values.yaml` documents each. These six have no default and the render
+`values.yaml` documents each. These have no default and the render
 fails without them:
 
-- `image.server.tag`, `image.web.tag` — the version a deployment runs is
+- `image.server.tag`, `image.web.tag`, `image.site.tag` — the version a
+  deployment runs is
   its own to name. A default would go on naming the release it was
   written against once the next one lands, with nothing in the chart
   changed to say so.
@@ -219,12 +223,27 @@ fails without them:
   `/` and the rewrite keep serving, and every server-rendered route
   answers 500:
   `console/src/env.ts` parses at import, and only the routes reaching
-  the backend import it.
+  the backend import it. `site.apiUrl` is the same address for the
+  site, on the same terms (`site/src/lib/garam.ts`).
+- `web.siteUrl` and `site.consoleUrl` — where each app sends a visitor
+  to the other (ADR-0131): the console sends a visitor without a
+  session to the site's `/login`, and the site sends a signed-in
+  visitor, and every address under `/console`, to the console. Both
+  are read when a request arrives, so the published images name no
+  deployment's hosts.
+
+**`api.cookieDomain` scopes the session to the parent domain both apps
+are served under** (ADR-0131): `garam.sh` for `garam.sh` and
+`console.garam.sh`. Without it each cookie is host-only, and a person
+signed in on the site arrives at the console signed out. Every host
+under that parent receives the session cookie, so nothing but garam's
+own apps may be served there: content users publish is served from a
+domain outside it (ADR-0127's user-content domain).
 
 **Each image carries the account it declares**, as `runAsUser` and
-`runAsGroup` under `image.server` and under `image.web`. The defaults
-are what the two Dockerfiles build — 10001 for the server image, 1000
-for the web image's `node` — and a deployment running either under
+`runAsGroup` under `image.server`, `image.web` and `image.site`. The
+defaults are what the two Dockerfiles build — 10001 for the server
+image, 1000 for the web images' `node` — and a deployment running either under
 another account moves the pair there rather than one pair per
 workload, because four of the five workloads run the server image. The
 machine pod takes the server pair for its `fsGroup` as well: the copy

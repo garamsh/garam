@@ -130,7 +130,7 @@ const CLAIMS: Claim[] = [
     ],
     pinned: [{ file: UNIT_TEST, text: "One name shape, five segments" }],
     facts: [
-      { kind: "path", path: "platform/internal/grn", exists: true },
+      { kind: "path", path: "lib/grn", exists: true },
       { kind: "path", path: "docs/architecture/grn-model.md", exists: true },
     ],
   },

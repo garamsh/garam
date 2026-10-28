@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // maxAnswerBody bounds what is read from an answer this loop only

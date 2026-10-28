@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // RegisteredOperators answers whether an organization holds a record

@@ -3,7 +3,7 @@ package org
 import (
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // Group is a member container that belongs to a single Organization.

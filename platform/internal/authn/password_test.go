@@ -14,8 +14,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/argon2"
 
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/platform/internal/authn"
-	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // A password long enough to satisfy the floor, used wherever the test

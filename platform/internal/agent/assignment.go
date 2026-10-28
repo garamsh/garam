@@ -3,7 +3,7 @@ package agent
 import (
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // Assignment binds one agent to what holds it: an operator (ADR-0012)

@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // TokenExecutionContract is the adapter-facing activation and

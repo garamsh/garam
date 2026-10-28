@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/authz/postgres/db"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/pgxerr"
 	"github.com/garamsh/garam/platform/internal/pgxtype"
 	"github.com/garamsh/garam/platform/internal/wire"

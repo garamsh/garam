@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // TestOpenPool_RefusesAnUnsetURLAndAnswersAnUnbuildablePoolUnavailable

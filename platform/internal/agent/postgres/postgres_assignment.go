@@ -5,10 +5,10 @@ import (
 	"errors"
 	"time"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/agent/postgres/db"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 	"github.com/garamsh/garam/platform/internal/pgxerr"
 	"github.com/garamsh/garam/platform/internal/pgxtype"
 )

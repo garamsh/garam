@@ -3,7 +3,7 @@ package org
 import (
 	"slices"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // Role is the org-level permission carried by a Membership. Roles are
@@ -103,7 +103,7 @@ const (
 	// Reading the agents an org holds and watching one work. The org
 	// owns the constants for the reason it owns the policy ones: the
 	// api server enforces them, and internal/agent does not import
-	// this package — it derives an org's GRN through internal/grn
+	// this package — it derives an org's GRN through lib/grn
 	// rather than depend on it.
 	ActionAgentRead = "agent:read"
 	// ActionAgentWatch is watching an agent work (ADR-0022). Reading an

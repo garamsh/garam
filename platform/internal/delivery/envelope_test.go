@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/delivery"
-	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 // claimOf is one hold on a message under a lease of its own.

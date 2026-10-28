@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // AccessTokenPrefix is what an agent token carries, so a scanner

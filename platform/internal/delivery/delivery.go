@@ -16,8 +16,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // Delivery sentinels. The loop acts on these and treats every other

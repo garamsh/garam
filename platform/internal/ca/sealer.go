@@ -16,7 +16,7 @@ import (
 	"encoding/hex"
 	"strings"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/platform/internal/keyfile"
 )
 

@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
-	"github.com/garamsh/garam/platform/internal/grn"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 )
 

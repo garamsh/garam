@@ -25,9 +25,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
+	"github.com/garamsh/garam/lib/errorx"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
-	"github.com/garamsh/garam/platform/internal/errorx"
 	"github.com/garamsh/garam/platform/internal/keyfile"
 )
 

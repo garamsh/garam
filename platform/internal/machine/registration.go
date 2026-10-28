@@ -3,7 +3,7 @@ package machine
 import (
 	"context"
 
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // Registration is the organization's record of a machine identity, as

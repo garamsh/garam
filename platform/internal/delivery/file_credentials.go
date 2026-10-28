@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // FileCredentials reads the placement token from the file the

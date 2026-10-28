@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/operator/postgres/db"
 	"github.com/garamsh/garam/platform/internal/pgxerr"

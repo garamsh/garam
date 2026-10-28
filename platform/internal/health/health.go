@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // The paths the two probes answer on. One spelling, so three processes

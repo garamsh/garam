@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // drain stops the intent's generation with no deadline, one container

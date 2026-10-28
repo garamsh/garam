@@ -7,7 +7,7 @@
 package wire
 
 import (
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 

@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/garamsh/garam/lib/errorx"
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/authn"
-	"github.com/garamsh/garam/platform/internal/errorx"
 )
 
 // The bounds of a handoff's state, as the specification states them.

@@ -6,10 +6,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/agent/postgres/db"
-	"github.com/garamsh/garam/platform/internal/errorx"
-	"github.com/garamsh/garam/platform/internal/grn"
 )
 
 func (s *Store) CreateManaged(ctx context.Context, c agent.ManagedCreation) (*agent.ManagedCreation, bool, error) {

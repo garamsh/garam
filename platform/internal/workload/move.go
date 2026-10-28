@@ -13,7 +13,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // Where the copy's helper mounts the two volumes: the source

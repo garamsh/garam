@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/garamsh/garam/platform/internal/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // storage makes sure both volumes are the ones this host created:

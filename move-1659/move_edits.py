@@ -161,3 +161,7 @@ edit(C, 'path: "internal/adapter", exists: false', 'path: "platform/internal/ada
 
 # gen:api runs in console/, so the spec it reads is one level up and then into platform/.
 edit("console/package.json", '"openapi-typescript ../api/openapi.yaml', '"openapi-typescript ../platform/api/openapi.yaml')
+
+# go list patterns are relative to the directory make runs in, the root.
+for suite in ("e2e", "workload", "standalone"):
+    edit(M, f" ./tests/{suite}/...)", f" ./platform/tests/{suite}/...)", 2)

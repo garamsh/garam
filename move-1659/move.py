@@ -250,6 +250,25 @@ packages:
   - cowork/engine
   - cowork/web
 """)
+# Next infers its tracing root from the nearest workspace file, which is
+# now this one, and would nest each standalone server under its package's
+# path. Each image builds from its package's folder alone, so the root is
+# pinned to the package and the standalone layout stays what it was.
+PIN = """  output: "standalone",
+  // The repository's pnpm-workspace.yaml would make Next trace from the
+  // repository root and nest the server under this package's path; the
+  // image builds from this folder alone, so the root is this folder.
+  outputFileTracingRoot: __dirname,
+"""
+for cfg in ("console/next.config.ts", "cowork/web/next.config.ts"):
+    with open(cfg, encoding="utf-8") as f:
+        s_cfg = f.read()
+    if s_cfg.count('  output: "standalone",\n') != 1:
+        sys.exit(f"{cfg}: expected one standalone output line")
+    with open(cfg, "w", encoding="utf-8") as f:
+        f.write(s_cfg.replace('  output: "standalone",\n', PIN))
 commit("build: name every web package in a root pnpm workspace (#1659)",
        "ADR-0125 decision 3. Each package keeps its own lockfile: pnpm run\n"
-       "inside one reads that package's pnpm-workspace.yaml first.")
+       "inside one reads that package's pnpm-workspace.yaml first. Each\n"
+       "Next config pins its tracing root to its package, which the root\n"
+       "workspace file would otherwise move.")

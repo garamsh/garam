@@ -104,7 +104,7 @@ A root-level file exists when the module has that concern, and it is
 named after the concern:
 
 - `errors.go` — sentinels no single domain owns, where the module has
-  no package for them. This project keeps them in `internal/errorx`
+  no package for them. This project keeps them in `lib/errorx`
   (§4). Domain sentinels stay in `internal/<domain>/<domain>.go`.
 - `config.go` — the module's configuration type and its loading.
 - `logger.go` — only when logger setup goes past `slog.Default()`
@@ -291,7 +291,7 @@ translates, wraps, logs or recovers one.
   instead of answering — the client gets a closed connection, or an
   HTTP/2 `RST_STREAM` — so the middleware exists to reply 500.
 
-Every error carries a kind, through `internal/errorx`. The rules below
+Every error carries a kind, through `lib/errorx`. The rules below
 are this project's own, because ADR-0003 carries `errorx` kinds over
 gRPC as status codes without translation and each transport picks its
 code from the kind; an error whose chain holds no `errorx` error reaches

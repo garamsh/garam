@@ -21,20 +21,20 @@ WORKDIR /src
 # source-only edits. The proxy has dropped a read mid-download (#1622),
 # so the download is tried three times, 10 and 20 seconds apart. Each
 # attempt fetches only what the last left missing, and verifies every
-# module against go.sum as the first did. go.mod replaces
+# module against go.sum as the first did. platform/go.mod replaces
 # platform/sdk with its folder (ADR-0125), so that module's manifests
 # come along.
-COPY go.mod go.sum ./
+COPY platform/go.mod platform/go.sum ./platform/
 COPY platform/sdk/go.mod platform/sdk/go.sum ./platform/sdk/
 RUN for attempt in 1 2 3; do \
-      go mod download && exit 0; \
+      go -C platform mod download && exit 0; \
       [ "$attempt" = 3 ] && exit 1; \
       echo "go mod download: attempt $attempt failed; retrying" >&2; \
       sleep $((attempt * 10)); \
     done
 
 COPY . .
-RUN CGO_ENABLED=0 go build -o /out/garam ./cmd/garam
+RUN CGO_ENABLED=0 go build -o /out/garam ./platform/cmd/garam
 
 # The account the processes run as, created here because scratch has no
 # adduser. Only the garam lines travel: the image carries no root
@@ -54,7 +54,7 @@ COPY --from=build /out/passwd /etc/passwd
 COPY --from=build /out/group /etc/group
 
 COPY --from=build /out/garam /usr/local/bin/garam
-COPY migrations /app/migrations
+COPY platform/migrations /app/migrations
 
 # The commit and the version the build was given, recorded on the image
 # so a deployment resolves back to a source without going through the

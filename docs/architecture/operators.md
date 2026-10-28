@@ -13,9 +13,9 @@ enrollment token and the shared-secret credential are gone
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)),
 and garam issues an operator no certificate
 ([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)).
-Implemented by `internal/operator`, which persists through
-`internal/operator/postgres` (ADR-0069): its records, keys, tokens,
-grants and authorities.
+Implemented by `platform/internal/operator`, which persists through
+`platform/internal/operator/postgres` (ADR-0069): its records, keys,
+tokens, grants and authorities.
 
 | Type | Responsibility |
 |------|----------------|
@@ -74,11 +74,12 @@ the identifier, and the update writes those two columns and nothing
 keyed on the GRN, so its keys and their tokens stand as they were. It
 is authorized on `operator:update`, which grants nothing and withdraws
 nothing. The
-bounds are `api/openapi.yaml` §OperatorName and §OperatorDescription,
-which is authoritative for them, and 000025 holds the same ones.
-There is a delete, and it is the one write here that takes something
-away (ADR-0070). It leaves the identifier holding nothing: its keys and
-their tokens go by `migrations/000043`'s foreign keys.
+bounds are `platform/api/openapi.yaml` §OperatorName and
+§OperatorDescription, which is authoritative for them, and 000025 holds
+the same ones. There is a delete, and it is the one write here that
+takes something away (ADR-0070). It leaves the identifier holding
+nothing: its keys and their tokens go by `platform/migrations/000043`'s
+foreign keys.
 
 The record's surface is the browser-facing listener, on the
 organization's own paths: it registers, reads and renames one, links
@@ -122,10 +123,10 @@ among them, to these terms.
   organization's deletion does (#1424). A link holds the record
   `FOR UPDATE`, which waits for a registration holding it as a cluster
   manager, and holds the two rows in GRN byte order.
-- **It names the identity.** `migrations/000062` holds the column
-  unique, without a foreign key, and naming a record of the same
-  organization other than the row. Deleting a cluster manager leaves
-  its control service naming it, and registering that identifier again
+- **It names the identity.** `platform/migrations/000062` holds the
+  column unique, without a foreign key, and naming a record of the same
+  organization other than the row. Deleting a cluster manager leaves its
+  control service naming it, and registering that identifier again
   rejoins them.
 - **It is read on the list.** `ListByOrg` answers every record with
   its manager, and the console joins them:
@@ -138,7 +139,7 @@ among them, to these terms.
   hands a hosted operator (§Delegated operation authority), not a
   statement of which identities are one Operator.
 
-`api/openapi.yaml` §Operator and §OperatorRegistration are
+`platform/api/openapi.yaml` §Operator and §OperatorRegistration are
 authoritative for the pair's wire.
 
 ## Issued PEM identity
@@ -151,7 +152,7 @@ removed the shared-secret exchange beside it. The registration,
 identifier and permissions remain, and the
 Operator's single-mode cutover is its own repository's (Operator
 ADR-0068).
-`api/openapi.yaml` §issueOperatorKey, §listOperatorKeys and
+`platform/api/openapi.yaml` §issueOperatorKey, §listOperatorKeys and
 §revokeOperatorKey are authoritative for the key routes' wire.
 
 - **A key is issued by `issueOperatorKey`; registering issues none.**
@@ -174,10 +175,10 @@ ADR-0068).
   from the write.
 - **garam answers the private key once and keeps the public JWK.** The
   key is RSA 3072 as PKCS#8 `PRIVATE KEY` PEM, answered with
-  `Cache-Control: no-store`; `migrations/000043`'s `operator_keys`
-  holds the JWK, algorithm, RFC 7638 thumbprint `kid`, issuer and
-  state. The PEM exists in the generating process and the answer and
-  in no column, log or metric. A lost answer is replaced with
+  `Cache-Control: no-store`; `platform/migrations/000043`'s
+  `operator_keys` holds the JWK, algorithm, RFC 7638 thumbprint `kid`,
+  issuer and state. The PEM exists in the generating process and the
+  answer and in no column, log or metric. A lost answer is replaced with
   `rotation` `immediate`, never read back.
 - **The answer carries `tokenUrl`, the configured
   `GARAM_MACHINE_TOKEN_URL`, which an assertion's `aud` equals byte
@@ -202,7 +203,7 @@ ADR-0068).
   controller proof and assignment checks apply to them. Replacing a
   key recovers no agent lineage.
 - **One process issues at most 3 keys per registered operator identity
-  and 30 in all per minute** (`internal/operator`
+  and 30 in all per minute** (`platform/internal/operator`
   `KeyIssuancesPerOperator`), and answers 429 with `Retry-After` past
   either; generating the key is the costliest thing a member asks of the
   browser-facing listener.
@@ -230,9 +231,9 @@ hash beside the key it was exchanged under.
   organization registered, a hosted control service it is to be shown
   to — and garam accepts such a token on no route; it reads one only
   when that audience forwards it for a controller proof
-  (§Controller proof). `migrations/000041`'s foreign key refuses an
-  audience nobody registered, and deleting that operator takes the
-  tokens minted to be shown to it.
+  (§Controller proof). `platform/migrations/000041`'s foreign key
+  refuses an audience nobody registered, and deleting that operator
+  takes the tokens minted to be shown to it.
 - **Revocation is a read on every request.** The machine listener
   resolves a presented token by its row joined to the registration and
   to its key while that key is live, so deleting the operator, which
@@ -316,7 +317,7 @@ anything. Create,
 configure and recover bind none and refuse one, so their authority is
 what it was. Publishing execution profiles stays with the deployment
 and no operation here grants it. The role defaults are the one
-`machineActions` table in `internal/org/role.go`, which is
+`machineActions` table in `platform/internal/org/role.go`, which is
 authoritative for which role holds what.
 
 **Reading what the Operator reports about the organization's
@@ -375,13 +376,13 @@ be read from current state is unavailable and never an answer. A
 reference is not a restart capability: restarting an applied revision
 is lifecycle authority (ADR-0078).
 
-The routes and their wire forms are `api/openapi.yaml` §operator and
-`api/machine.yaml` §authority, which are authoritative for them; the
-browser-facing listener's carry the `operation-authority.v1` contract
-version (ADR-0079), and the machine listener's `operation-authority.v2`
-(ADR-0100, ADR-0118). A
-release that does not know an operation refuses to mint it, so an
-older garam never mints a read without its request target.
+The routes and their wire forms are `platform/api/openapi.yaml`
+§operator and `platform/api/machine.yaml` §authority, which are
+authoritative for them; the browser-facing listener's carry the
+`operation-authority.v1` contract version (ADR-0079), and the machine
+listener's `operation-authority.v2` (ADR-0100, ADR-0118). A release that
+does not know an operation refuses to mint it, so an older garam never
+mints a read without its request target.
 
 ## Controller proof
 
@@ -413,7 +414,7 @@ on the request:
   the organization for a session, on the agent for that agent's
   lifecycle — does not deny it, and an explicit Deny wins.
 
-The caller's identity is `internal/machine`'s to read again
+The caller's identity is `platform/internal/machine`'s to read again
 ([machine-identity.md](./machine-identity.md)) and a controller's token
 is this domain's, which issued it (`Service.VerifyShown`); this domain
 decides the grant, the placement and the policy on GRNs. A read that
@@ -426,8 +427,9 @@ desired content or deciding its placement — the calls a controller
 originates — the caller obtains that
 agent's proof, compares the epoch with the one it expects, and asks
 again after a long wait; it never reuses a proof across decisions. The
-route, its fields and its refusal statuses are `api/machine.yaml`
-`introspectController`, which is authoritative for them.
+route, its fields and its refusal statuses are
+`platform/api/machine.yaml` `introspectController`, which is
+authoritative for them.
 
 **Each token is proven by the route for its kind.** These are
 obligations on the Operator control service; garam's routes for both

@@ -36,7 +36,8 @@ if $kubectl get secret "$secret" >/dev/null 2>&1; then
   $kubectl get secret "$secret" \
     -o go-template='{{ index .data "ca-kek.hex" | base64decode }}' >"$dir/ca-kek.hex"
 else
-  # A key-encryption key is 32 bytes, hex-encoded (internal/ca).
+  # A key-encryption key is 32 bytes, hex-encoded
+  # (platform/internal/ca).
   openssl rand -hex 32 >"$dir/ca-kek.hex"
 fi
 

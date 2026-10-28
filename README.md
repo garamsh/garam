@@ -36,7 +36,7 @@ today's.
 
 ## Module path
 
-`github.com/garamsh/garam`
+`github.com/garamsh/garam/platform`
 
 ## Build and test
 
@@ -102,28 +102,29 @@ garam operators keys issue hosted --rotation planned --out hosted-key.json
 ```
 
 Every browser API operation becomes a command derived from
-`api/openapi.yaml` by `go run ./internal/cli/cligen`, which `make gen`
-runs (ADR-0122). An answer carrying a secret, such as an issued key, is
-written to the file `--out` names at mode 0600 and never printed.
+`platform/api/openapi.yaml` by `go run ./internal/cli/cligen` in
+`platform/`, which `make gen` runs (ADR-0122). An answer carrying a
+secret, such as an issued key, is written to the file `--out` names at
+mode 0600 and never printed.
 
 ## Web frontend
 
-The Next.js app lives in [`web/`](./web/) and talks to the Go backend
-through a same-origin `/api/*` rewrite
-([ADR-0009](./docs/architecture/adr/0009-web-frontend.md)). It keeps
-its own toolchain and lockfile; `make web-ci` is its gate, and `make
-ci` runs it — so `make ci` needs pnpm and Node as well as Go.
+The Next.js app lives in [`console/`](./console/) and talks to the Go
+backend through a same-origin `/api/*` rewrite
+([ADR-0009](./docs/architecture/adr/0009-web-frontend.md)). It keeps its
+own toolchain and lockfile; `make web-ci` is its gate, and `make ci`
+runs it — so `make ci` needs pnpm and Node as well as Go.
 
 ```sh
 make web-install          # pnpm install --frozen-lockfile
 make web-ci               # format, lint, typecheck, unit tests, build, codegen check
-pnpm --dir web dev        # dev server on http://localhost:3000
+pnpm --dir console dev        # dev server on http://localhost:3000
 ```
 
-Copy `web/.env.example` to `web/.env.local` and point `GARAM_API_URL` at
-your backend. Google sign-in registers only when the backend holds
-`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and additionally needs
-`GOOGLE_REDIRECT_URL` set to
+Copy `console/.env.example` to `console/.env.local` and point
+`GARAM_API_URL` at your backend. Google sign-in registers only when the
+backend holds `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and
+additionally needs `GOOGLE_REDIRECT_URL` set to
 `http://localhost:3000/api/auth/callback/google`, so the OAuth round
 trip stays on the web origin. Without the credentials the backend starts
 and serves everything else, and `GET /auth/providers` does not list
@@ -131,7 +132,7 @@ and serves everything else, and `GET /auth/providers` does not list
 
 ### Playwright end-to-end tests
 
-`web/e2e/` drives the built app in a real browser against the real
+`console/e2e/` drives the built app in a real browser against the real
 backend. Bring up the backend first:
 
 ```sh
@@ -185,7 +186,7 @@ make image-build IMAGE_REGISTRY=<registry> IMAGE_TAG=0.4.0-rc.1  # a prerelease 
 `garam-dev/<image>`, and the contexts, the Dockerfiles and the build
 arguments are the ones the release reads. Each image is labelled with
 HEAD and the tag.
-`scripts/image-build.sh` refuses, before building anything, a bare
+`tooling/image-build.sh` refuses, before building anything, a bare
 release version, a tag of any other form, a commit prefix that is not
 HEAD's, and a working tree that differs from HEAD; its last line names
 the commit built.
@@ -224,8 +225,9 @@ make test-image-push  # builds and checks it, then pushes it to ECR
 make test-image-pin COMMIT=<hash> CONSUMER=<name>  # moves pinned-<name>
 ```
 
-`tests/testprincipal/README.md` §The test image is the consumer's
-contract: what it holds, how to pin it, and how long a version stays.
+`platform/tests/testprincipal/README.md` §The test image is the
+consumer's contract: what it holds, how to pin it, and how long a
+version stays.
 
 ## Development model
 

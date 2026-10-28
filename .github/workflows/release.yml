@@ -37,7 +37,7 @@ jobs:
       web-digest: ${{ steps.push.outputs.web-digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: scripts/record-runner-image.sh
+      - run: tooling/record-runner-image.sh
 
       # ADR-0039: a release is a `vX.Y.Z` git tag and the image tag is
       # that tag without the `v`. The trigger admits every `v*`, and the
@@ -72,7 +72,7 @@ jobs:
       # readable by eye against the pattern quoted at the top of this
       # file. It verifies nothing, it calls no AWS API, and it stands
       # after the version guard so a malformed tag still costs nothing.
-      - run: scripts/oidc-subject.sh
+      - run: tooling/oidc-subject.sh
 
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
@@ -90,7 +90,7 @@ jobs:
       # reach, and `load` writes each image into the runner's image
       # store. `push: false` defers both pushes to the step below, which
       # pushes neither image unless both were built (ADR-0039
-      # §Consequences, scripts/image-push.sh).
+      # §Consequences, tooling/image-push.sh).
       - id: server
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
@@ -108,7 +108,7 @@ jobs:
           # same way. What a label carries is what the build claimed
           # rather than a property of the bytes — nothing derives it
           # from the layers. Both values are resolved per run, which
-          # is why scripts/image-build.sh names them and passes
+          # is why tooling/image-build.sh names them and passes
           # neither (#1020).
           build-args: |
             IMAGE_REVISION=${{ steps.revision.outputs.revision }}
@@ -118,7 +118,7 @@ jobs:
       - id: web
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: web
+          context: console
           file: deploy/local/Dockerfile.web
           platforms: linux/amd64
           provenance: false
@@ -142,7 +142,7 @@ jobs:
       # Both images are in the runner's image store and neither
       # repository has been written to yet. Each reference is named
       # again here rather than read off the step that built it: the
-      # `tags:` above are also what scripts/image-build.sh parses to
+      # `tags:` above are also what tooling/image-build.sh parses to
       # build the same two on a pull request (#870), so they stay
       # written out, and a rename reaching one site and not the other
       # fails this step before it pushes anything.
@@ -150,7 +150,7 @@ jobs:
         env:
           SERVER: ${{ steps.ecr.outputs.registry }}/garam/garam-server:${{ steps.version.outputs.version }}
           WEB: ${{ steps.ecr.outputs.registry }}/garam/garam-web:${{ steps.version.outputs.version }}
-        run: scripts/image-push.sh "server=$SERVER" "web=$WEB"
+        run: tooling/image-push.sh "server=$SERVER" "web=$WEB"
 
   release:
     needs: images
@@ -159,13 +159,13 @@ jobs:
       # The release is the only thing this workflow writes back.
       contents: write
     steps:
-      # Checked out only for scripts/record-runner-image.sh, so the
+      # Checked out only for tooling/record-runner-image.sh, so the
       # job's write token is kept out of .git/config: nothing here
       # needs git to hold it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - run: scripts/record-runner-image.sh
+      - run: tooling/record-runner-image.sh
 
       # ADR-0039: the release records each image's digest alongside its
       # tag, so a consumer that would rather pin a digest reads one here

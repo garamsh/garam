@@ -1,7 +1,7 @@
 # Agents
 
 Autonomous identity, provisioned outside garam (ADR-0012). Implemented
-by `internal/agent`.
+by `platform/internal/agent`.
 
 garam issues no agent or supervisor a certificate, and every agent's
 writes wait for an activation
@@ -83,20 +83,20 @@ listener serves people: an organization's agents and the assignments
 holding them, each a batch read rather than one per agent. An agent no
 operator holds contributes no assignment, so the two lists are not one
 length. Both aggregates are data carriers whose fields are exported, so
-the store that reads them back lives in `internal/agent/postgres`
-beside the execution, admission and standalone stores, and the domain
-package imports no driver (ADR-0069).
+the store that reads them back lives in
+`platform/internal/agent/postgres` beside the execution, admission and
+standalone stores, and the domain package imports no driver (ADR-0069).
 
 Signing happens through the `RequestSigner` seam the composition root
-satisfies from `internal/ca`, so the two domains still cooperate
-through `grn.GRN` alone and this one never holds key material. The
-HTTP surfaces are the machine listener — where the operator reports the
-pod and the agent reports itself, each on a route of its own and
+satisfies from `platform/internal/ca`, so the two domains still
+cooperate through `grn.GRN` alone and this one never holds key material.
+The HTTP surfaces are the machine listener — where the operator reports
+the pod and the agent reports itself, each on a route of its own and
 neither reaching the other's fact (ADR-0053) — and the browser-facing
-one for the organization's members, which reads the agents and
-writes none: an agent is created through an operator's control
-service or by a standalone host's enrollment. The queue a message
-reaches an agent through is the messaging domain.
+one for the organization's members, which reads the agents and writes
+none: an agent is created through an operator's control service or by a
+standalone host's enrollment. The queue a message reaches an agent
+through is the messaging domain.
 
 What an agent is built from is the operator's, and garam holds no
 value of it. The images an agent's Pod is
@@ -151,12 +151,12 @@ and §Standalone hosts describe the older cohorts, which stay served.
 
 - **What is built.** The hosted control service prepares an approval
   under a member's `agent:create` reference, then admits the agent it
-  binds; `api/machine.yaml` §prepareAgentEnrollment and
+  binds; `platform/api/machine.yaml` §prepareAgentEnrollment and
   §admitAgentEnrollment are authoritative for the wire and the
   refusal reasons. Credential delivery is `mintAgentToken` and
   activation `activateAgent`, unchanged. `AdmissionService`
-  (`internal/agent/admission_service.go`) holds both stages. It admits
-  managed placement alone, and refuses direct placement with the
+  (`platform/internal/agent/admission_service.go`) holds both stages. It
+  admits managed placement alone, and refuses direct placement with the
   reason `direct_placement_gated`, permanently: a direct agent's
   authority is an administrator and a one-agent supervisor, never an
   operator.
@@ -171,15 +171,16 @@ and §Standalone hosts describe the older cohorts, which stay served.
   assignment the replacement writes, so a retry is answered and an
   agent replaced before it ever ran starts on it.
 - **One admission write.** Admitting an identity is one store
-  primitive, `admit` (`internal/agent/postgres/postgres_admission.go`),
-  which `agent-enrollment.v1`, `managed-enrollment.v2` creation and
-  standalone spending each call: a new agent fenced from birth
-  with its first assignment, or a move from exactly the expected
-  assignment into a new lineage, which a managed replacement and a
-  standalone one share. An `agent-enrollment.v1` admission
-  also records the managed creation row, so one reference creates one
-  agent under either managed contract and its first activation
-  carries that reference as a `managed-enrollment` creation's does.
+  primitive, `admit`
+  (`platform/internal/agent/postgres/postgres_admission.go`), which
+  `agent-enrollment.v1`, `managed-enrollment.v2` creation and standalone
+  spending each call: a new agent fenced from birth with its first
+  assignment, or a move from exactly the expected assignment into a new
+  lineage, which a managed replacement and a standalone one share. An
+  `agent-enrollment.v1` admission also records the managed creation row,
+  so one reference creates one agent under either managed contract and
+  its first activation carries that reference as a `managed-enrollment`
+  creation's does.
 
 - Provisioning and enrollment are separate. A managed runtime is
   provisioned by the Operator; a direct runtime may already be running
@@ -211,7 +212,8 @@ and §Standalone hosts describe the older cohorts, which stay served.
 
 **Direct attachment is built; its joint acceptance with a real
 Sherlock is not.** The tests stand in a runtime that keeps Sherlock's
-lock and drain order (`tests/integration/direct_attachment_test.go`).
+lock and drain order
+(`platform/tests/integration/direct_attachment_test.go`).
 
 - **The authority is an ADR-0082 supervisor in an attach mode.** An
   administrator approves a host with `placement: direct`, which binds
@@ -272,9 +274,9 @@ credential is §Standalone hosts'.
   reassignment or a recovery refuses it from the next request, on a
   connection already open too, and the execution fence admits a
   protected write on the token's serial only in the same terms
-  (`migrations/000039_agent_tokens.up.sql`). A fenced agent's calls
-  carry their activation's token in a `Garam-Execution` header of its
-  own, since the agent token takes `Authorization`.
+  (`platform/migrations/000039_agent_tokens.up.sql`). A fenced agent's
+  calls carry their activation's token in a `Garam-Execution` header of
+  its own, since the agent token takes `Authorization`.
 - **It lives an hour by default**, configurable from twenty minutes to
   a day, and its start is backdated by a minute, so a database whose
   clock trails the minting process finds it current at once. A mint
@@ -285,16 +287,16 @@ credential is §Standalone hosts'.
 - **A mint and an operator's deletion each wait on agent tokens in one
   statement, which takes them in `token_hash` order; an organization's
   deletion takes them in its cascade's order and waits on none** (#1434;
-  `internal/agent/postgres` `Store.MintAccessToken`,
-  `migrations/000047`).
+  `platform/internal/agent/postgres` `Store.MintAccessToken`,
+  `platform/migrations/000047`).
   - A mint holds the agent's execution row `FOR SHARE`, records its
     token, whose foreign key holds the audience's registration, and
     then deletes in one such statement every token past the two bounds
     above, the expired ones included. It waits on the audience's
     registration holding no token but its own.
   - Deleting an operator holds every agent token naming it as
-    audience, in that order, before `migrations/000041`'s cascade
-    deletes them.
+    audience, in that order, before `platform/migrations/000041`'s
+    cascade deletes them.
   - Deleting an organization holds its agents' execution rows, then
     its operators' registrations, each in byte order, before its
     cascade: the order a mint takes an execution row and then an
@@ -313,7 +315,7 @@ credential is §Standalone hosts'.
   expired one, is answered fenced while its row is kept, and not proven
   once a mint has swept or trimmed it; either way it may not act.
   Deleting the hosted operator takes the tokens shown to it
-  (`migrations/000041`).
+  (`platform/migrations/000041`).
 ## Separated execution
 
 **Built here is garam's half of four parts: managed creation (below),
@@ -366,7 +368,7 @@ in #1157.
   none of its writes is admitted until a lifecycle authority activates
   a generation, and the one credential predicate (ADR-0080) admits only
   a token minted in that lineage at the current assignment
-  (`migrations/000059`). Recovery replaces a lost credential.
+  (`platform/migrations/000059`). Recovery replaces a lost credential.
 - **A generation is what an assignment does not fence.** Beside the GRN
   and the epoch, every agent has one execution row recording its
   active generation and its credential lineage. A lifecycle
@@ -417,14 +419,14 @@ in #1157.
 **garam's half is built, and so is the host's runner; the joint
 acceptance is not.** A standalone host enrolls with
 `garam standalone prepare` and `enroll`, under
-`standalone-enrollment.v2` (`internal/cli/standalone_host.go`);
+`standalone-enrollment.v2` (`platform/internal/cli/standalone_host.go`);
 `garam standalone run` supervises the runtime, proves the old writer
-exited and hands the adapter its activation (`internal/workload`,
-ADR-0085). The runner is
-tested against a real rootless daemon and the pinned Sherlock images
-with garam's activation stood in for; enrollment, a message and its
-reply, and a restart that keeps memory, joined to garam, are
-unverified (#1180, #1169).
+exited and hands the adapter its activation
+(`platform/internal/workload`, ADR-0085). The runner is tested against a
+real rootless daemon and the pinned Sherlock images with garam's
+activation stood in for; enrollment, a message and its reply, and a
+restart that keeps memory, joined to garam, are unverified (#1180,
+#1169).
 
 - **An administrator approves the host's request.** The host
   generates a bootstrap secret before it asks, and keeps it with a
@@ -443,18 +445,18 @@ unverified (#1180, #1169).
 - **The host is answered a credential, not certificates** (ADR-0100).
   A spending signs nothing: it registers the supervisor and answers a
   credential garam keeps only the hash of, beside the garam server
-  root (`migrations/000042`). An identical retry, while the registration
-  still holds the agent, re-issues it under the approval's row lock,
-  and the credential answered before goes with every token it was
-  exchanged for; garam keeps no audit trail of that or of any other
-  void. The supervisor exchanges the credential for hour-long tokens
-  on `exchangeToken`, mints its agent's tokens for garam alone, and on
-  the execution routes forwards the agent token it minted for garam;
-  that form is a supervisor's alone, since it is the assignee and the
-  lifecycle authority at once, and an operator forwards a token shown
-  to it. A revocation or a replacement ends the
-  registration, and every read of the credential or a token joins a
-  registration that has not ended.
+  root (`platform/migrations/000042`). An identical retry, while the
+  registration still holds the agent, re-issues it under the approval's
+  row lock, and the credential answered before goes with every token it
+  was exchanged for; garam keeps no audit trail of that or of any other
+  void. The supervisor exchanges the credential for hour-long tokens on
+  `exchangeToken`, mints its agent's tokens for garam alone, and on the
+  execution routes forwards the agent token it minted for garam; that
+  form is a supervisor's alone, since it is the assignee and the
+  lifecycle authority at once, and an operator forwards a token shown to
+  it. A revocation or a replacement ends the registration, and every
+  read of the credential or a token joins a registration that has not
+  ended.
 - **The supervisor activates its own agent and nothing else.** On the
   execution routes it is authorized by its current registration, its
   being the agent's assignee and current policy, read per request; it
@@ -466,10 +468,10 @@ unverified (#1180, #1169).
   identity, those three execution routes and its agent's token mint,
   and nothing else:
   `ConfineSupervisors` in
-  `internal/machineapi/standalone.go` refuses every other route at the
-  router, so a supervisor posts, claims and reads no message and acts
-  on no operator route. Every collaboration route admits through the
-  one fence.
+  `platform/internal/machineapi/standalone.go` refuses every other route
+  at the router, so a supervisor posts, claims and reads no message and
+  acts on no operator route. Every collaboration route admits through
+  the one fence.
 - **Replacement and revocation are an administrator's.** A replacement
   approval names the supervisor and epoch it replaces and, spent,
   reassigns the agent at the next epoch, ends the former registration
@@ -483,10 +485,10 @@ unverified (#1180, #1169).
   new supervisor's first activation must name the agent's most recent
   activation, and a host whose supervisor never activated has no
   record of it. The spending records it as the execution lock found it
-  (`migrations/000053`) and answers it as `replacesActivationId`, a
-  replay the same one. `garam standalone run` seeds the supervisor's
-  record with it where the record holds none, and never overwrites one
-  it holds.
+  (`platform/migrations/000053`) and answers it as
+  `replacesActivationId`, a replay the same one. `garam standalone run`
+  seeds the supervisor's record with it where the record holds none, and
+  never overwrites one it holds.
 - **The approval names the placement.** `standalone`, the default, is
   the three containers §The host's runner starts; `direct` is a runtime
   the host already runs, which the supervisor attaches to
@@ -500,11 +502,11 @@ unverified (#1180, #1169).
   activation of its agent at that epoch. Both are paged like any list
   and decided on `agent:read` from current state, as the writes beside
   them are. The store reads them into summary types
-  (`internal/agent/standalone.go`, `EnrollmentSummary` and
+  (`platform/internal/agent/standalone.go`, `EnrollmentSummary` and
   `SupervisorSummary`) with no field for a secret's hash, a request
   digest or a credential, so no listing can answer one.
-  `api/machine.yaml` §standalone is authoritative for the wire and
-  `standalone-enrollment.v2`.
+  `platform/api/machine.yaml` §standalone is authoritative for the wire
+  and `standalone-enrollment.v2`.
 - **`garam standalone` prepares and enrolls (#1352).**
   `prepare` writes the bootstrap secret and the request identifier and
   generates no key, so the approval it asks for binds none. `enroll`
@@ -542,12 +544,12 @@ supervisor that stops leaves the workload running.
   before the container answers by it. That run asks the engine again
   until the container answers, its context ends, or ten seconds pass,
   and adopts it by name and nonce as it adopts any create whose answer
-  was lost (`inFlightCreateWait`, `internal/workload/containers.go`).
-  Such a create took about 60 ms when measured. Without the wait, the
-  next run lost that race every time and exited, and only a further
-  start recovered (#1604). A name that still answers nothing after the
-  bound fails the run as unavailable, and restarting it stays the host
-  init's.
+  was lost (`inFlightCreateWait`,
+  `platform/internal/workload/containers.go`). Such a create took about
+  60 ms when measured. Without the wait, the next run lost that race
+  every time and exited, and only a further start recovered (#1604). A
+  name that still answers nothing after the bound fails the run as
+  unavailable, and restarting it stays the host init's.
 - **A generation is three containers sharing the runtime's network
   namespace.** The runtime runs the pinned `sherlock-agent` image as
   65532 with no capability, its gateway on loopback and no port
@@ -598,16 +600,16 @@ supervisor that stops leaves the workload running.
   supervisor draws with the intent, records with it and never sends to
   garam. A generation an earlier release recorded with no control token
   is drained and replaced rather than adopted
-  (`internal/workload/containers.go`). The supervisor forwards an
-  activation only for the intent's placement token, epoch and
+  (`platform/internal/workload/containers.go`). The supervisor forwards
+  an activation only for the intent's placement token, epoch and
   revision, its runtime unrestarted, and a generation never asked for
   before, with the agent token it minted for garam, whichever it holds
-  when it forwards. A retry repeats the first request, so garam
-  answers the same activation with a newer token. The control
-  path never leaves the host, since the supervisor is the lifecycle
-  authority, and `mintAgentToken` refuses a supervisor an audience; a
-  token garam issued for control would be one garam accepts, which
-  ADR-0100's audiences forbid.
+  when it forwards. A retry repeats the first request, so garam answers
+  the same activation with a newer token. The control path never leaves
+  the host, since the supervisor is the lifecycle authority, and
+  `mintAgentToken` refuses a supervisor an audience; a token garam
+  issued for control would be one garam accepts, which ADR-0100's
+  audiences forbid.
 - **Credentials are copied in, never mounted.** The runtime's
   configuration and the adapter's tokens, roots and placement token
   are written into each container before it starts,
@@ -682,11 +684,11 @@ supervisor that stops leaves the workload running.
   at `v0.3.0`), and fetches against the system roots, which do not
   reach garam's private root. So a host on a runtime older than
   `v0.4.0` names no issuer, and one that does has every message
-  refused and handed out again. `tests/standalone/signing_test.go`
-  holds the configured case against the pinned Sherlock: a runtime that
-  refuses anything unsigned takes the message. A generation started
-  before the rendering keeps the configuration and the adapter it was
-  given until it is replaced.
+  refused and handed out again.
+  `platform/tests/standalone/signing_test.go` holds the configured case
+  against the pinned Sherlock: a runtime that refuses anything unsigned
+  takes the message. A generation started before the rendering keeps the
+  configuration and the adapter it was given until it is replaced.
 - **An engine it cannot reach decides nothing.** The supervisor starts,
   signals and activates nothing, and the generation keeps running with
   its adapter's token. A daemon stop may stop the runtime, and recovery
@@ -709,9 +711,10 @@ supervisor that stops leaves the workload running.
 ### Attached to a direct runtime
 
 `garam standalone run` on a host enrolled under the direct placement
-runs the supervisor's attach mode (ADR-0111, `internal/workload`
-`attach.go`). It holds no engine, and it starts, signals and drains
-nothing; restarting the runtime is the host's.
+runs the supervisor's attach mode (ADR-0111,
+`platform/internal/workload` `attach.go`). It holds no engine, and it
+starts, signals and drains nothing; restarting the runtime is the
+host's.
 
 - **The runtime is named by a loopback literal.** `--runtime-address`
   is `127.0.0.1:<port>` or `[::1]:<port>`, never a name: `localhost`

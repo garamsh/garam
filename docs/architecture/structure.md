@@ -40,8 +40,8 @@ exists:
 - **`platform/sdk/`**, a library module holding `errorx` and `grn`,
   created because cowork is the second module to need them. The root
   module requires it through a `replace` to its folder, and its own
-  `internal/errorx` and `internal/grn` forward to it until #1659
-  rewrites their importers and deletes them.
+  `platform/internal/errorx` and `platform/internal/grn` forward to it
+  until #1659 rewrites their importers and deletes them.
 - **`cowork/`**, the first service in its own folder: its module,
   binary, database and documents
   ([cowork.md](../../cowork/docs/cowork.md)).
@@ -65,8 +65,8 @@ on are boundaries inside a service.
   service other than the one that owns it.
 - **A service reaches another only through what that service
   publishes**: its API specification, or `platform/sdk/`. Reaching
-  into another service's `internal/` or its database is a defect, even
-  where it builds.
+  into another service's `internal/` or its database is a
+  defect, even where it builds.
 - **Dependencies point toward `platform/`**, and none points back.
 - **Services authenticate to one another with tokens `platform/`
   issues**, never by network position.
@@ -101,21 +101,22 @@ on are boundaries inside a service.
   ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)). That ADR supersedes ADR-0051's accessor and ends
   ADR-0066's reservation; an aggregate that does hold an invariant over
   its fields is not decided by it.
-- **Of the ten domains #1083 covers, `internal/ca` has since lost its
-  store (ADR-0118), and three have converted.** `internal/user`,
-  `internal/watch` and `internal/org` keep their store in
-  `internal/<domain>/postgres/`, and `go list -deps` on each reports no
-  `jackc/pgx`. `user` and `org` carry exported fields on what their
-  stores persist; `watch`'s `Store` persists no aggregate, so it
-  exported none. `internal/machine` had no driver import to move. The
-  other five — `agent`, `message`, `authz`, `operator` and `authn` —
-  still import the driver into the domain package and keep their
-  accessors until each follows in its own pull request (#1083), so the
-  tree reads in two shapes meanwhile and the rule above is what both are
-  measured against. `internal/audit`, added after the ten, was written
-  in the converted shape: its writer sits in `internal/audit/postgres/`,
-  and its one aggregate keeps accessors because it holds an invariant
-  over its fields
+- **Of the ten domains #1083 covers, `platform/internal/ca` has since
+  lost its store (ADR-0118), and three have converted.**
+  `platform/internal/user`, `platform/internal/watch` and
+  `platform/internal/org` keep their store in
+  `platform/internal/<domain>/postgres/`, and `go list -deps` on each
+  reports no `jackc/pgx`. `user` and `org` carry exported fields on what
+  their stores persist; `watch`'s `Store` persists no aggregate, so it
+  exported none. `platform/internal/machine` had no driver import to
+  move. The other five — `agent`, `message`, `authz`, `operator` and
+  `authn` — still import the driver into the domain package and keep
+  their accessors until each follows in its own pull request (#1083), so
+  the tree reads in two shapes meanwhile and the rule above is what both
+  are measured against. `platform/internal/audit`, added after the ten,
+  was written in the converted shape: its writer sits in
+  `platform/internal/audit/postgres/`, and its one aggregate keeps
+  accessors because it holds an invariant over its fields
   ([ADR-0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)).
 - **A boundary reaches a sibling directly, through the surface that
   sibling declares**
@@ -167,49 +168,54 @@ on are boundaries inside a service.
 - **The composition site stays thin.** It constructs and passes; it
   decides nothing else.
 
-garam's composition root is `internal/cli`, the package
-`cmd/garam/main.go` calls: the concrete types behind the seams the
-domains declare are constructed there, and `cmd/garam/main.go`
-constructs nothing itself.
+garam's composition root is `platform/internal/cli`, the package
+`platform/cmd/garam/main.go` calls: the concrete types behind the seams
+the domains declare are constructed there, and
+`platform/cmd/garam/main.go` constructs nothing itself.
 
 The rule is the three bullets above, and
 `docs/convention/stack-go.md` §Project envelope states only which Go
-file the site takes. That section puts it in `cmd/<binary>/main.go`
-unless a test outside `cmd/<binary>/` has to reach it, and in a package
-`main.go` calls when one does. The paragraph below names the tests that
-reach it, so `internal/cli` is the file that section names for garam
+file the site takes. That section puts it in
+`platform/cmd/<binary>/main.go` unless a test outside
+`platform/cmd/<binary>/` has to reach it, and in a package `main.go`
+calls when one does. The paragraph below names the tests that reach it,
+so `platform/internal/cli` is the file that section names for garam
 ([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md),
 [ADR-0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)).
 
 **The environment is read in the composition root and nowhere else.**
 Every name the module reads is declared in one block in
-`internal/cli/cli.go`, and the `envOr` beside it holds the only
-environment read under `internal/` and `cmd/`, so what the source reads
-is enumerable from those declarations rather than from the spelling of
-the calls that read them. A second read there is the defect this states,
-and `make chart-render` fails on one rather than leaving it to a
-reviewer: it counts the reads under those two trees and expects the one,
-because a name read outside the block is one it cannot enumerate against
-the chart. The suites under `tests/` read `GARAM_TEST_DATABASE_URL` for
-themselves and are outside both the rule and the count.
+`platform/internal/cli/cli.go`, and the `envOr` beside it holds the only
+environment read under `platform/internal/` and `platform/cmd/`, so what
+the source reads is enumerable from those declarations rather than from
+the spelling of the calls that read them. A second read there is the
+defect this states, and `make chart-render` fails on one rather than
+leaving it to a reviewer: it counts the reads under those two trees and
+expects the one, because a name read outside the block is one it cannot
+enumerate against the chart. The suites under `platform/tests/` read
+`GARAM_TEST_DATABASE_URL` for themselves and are outside both the rule
+and the count.
 
 **The placement is what the in-process integration tests rest on.** Only
 a test in its own directory can import a main package, which
 `docs/convention/stack-go.md` §Project envelope states where it moves
 the site out of `main.go`, and §7. Testing of that file designates
-`tests/` for the integration and E2E tests that wire multiple domains
+`platform/tests/` for the integration and E2E tests that wire multiple
+domains
 ([ADR-0096](./adr/0096-garam-syncs-the-convention-template-to-f7de866.md)).
-`tests/integration/migrate_test.go` and
-`tests/integration/standalone_host_test.go` reach the shipped command
-tree through `cli.NewRootCommand()`. Construction moved into
-`cmd/garam/main.go` is construction those two cannot reach: what they
-exercise goes uncovered, or is rebuilt beside them as a second copy of
-the wiring — and a copy does not fail when the shipped wiring breaks.
+`platform/tests/integration/migrate_test.go` and
+`platform/tests/integration/standalone_host_test.go` reach the shipped
+command tree through `cli.NewRootCommand()`. Construction moved into
+`platform/cmd/garam/main.go` is construction those two cannot reach:
+what they exercise goes uncovered, or is rebuilt beside them as a second
+copy of the wiring — and a copy does not fail when the shipped wiring
+breaks.
 
 **This section once recorded a divergence, and that record has ended.**
-`stack-go.md` used to put construction in `cmd/<binary>/main.go` and
-nowhere else, and this section recorded `internal/cli` as diverging from
-it. #756 put the question to the template, which answered it in
+`stack-go.md` used to put construction in
+`platform/cmd/<binary>/main.go` and nowhere else, and this section
+recorded `platform/internal/cli` as diverging from it. #756 put the
+question to the template, which answered it in
 `garamsh/convention-driven-project@db3291285a9f89edf571a41bcdaee8528d77b021`
 (#337). ADR-0094 adopts that answer, so the divergence record ends and
 no question is left open.
@@ -275,8 +281,8 @@ behaviour rather than convert one does not.
   leaves the domain package. It answers the write half on evidence
   about the surface rather than about the layout: 122 one-line getters
   across the ten domain packages and no method that assigns a field.
-  The store moves to `internal/<domain>/postgres/`, named for the
-  technology it implements against, which is what
+  The store moves to `platform/internal/<domain>/postgres/`, named for
+  the technology it implements against, which is what
   `docs/convention/stack-go.md` §Service layout requires.
 - [ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)
   — a concern is owned by the boundary whose subject matter it is. The
@@ -294,9 +300,9 @@ behaviour rather than convert one does not.
 - [ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — this document's rules yield to a stack file only where the stack's
   framework imposes the case. The ADR records the adoption of that rule
-  from the conventions template, which moves `web/`: a feature there now
-  reaches a sibling through its declared surface. It also records the
-  adoption of the template's composition-site rule, which ends
+  from the conventions template, which moves `console/`: a feature there
+  now reaches a sibling through its declared surface. It also records
+  the adoption of the template's composition-site rule, which ends
   §Where the composition root lives' divergence from
   `docs/convention/stack-go.md`.
 - [ADR-0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)

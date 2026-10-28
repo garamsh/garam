@@ -1,7 +1,7 @@
 # Users
 
-Human identity. Implemented by `internal/user`, whose PostgreSQL
-store is `internal/user/postgres`.
+Human identity. Implemented by `platform/internal/user`, whose
+PostgreSQL store is `platform/internal/user/postgres`.
 
 **The `Policies` field is built in part.** A user's directly assigned
 policies are stored and carried on the aggregate, and nothing collects

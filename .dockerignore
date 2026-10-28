@@ -4,7 +4,7 @@
 .git
 .github
 docs
-web
+console
 deploy
-tests
+platform/tests
 *.md

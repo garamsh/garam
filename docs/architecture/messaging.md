@@ -3,8 +3,8 @@
 The durable queue a message reaches an agent through (ADR-0013), the
 consent that lets one cross an organization boundary (ADR-0035), and
 the signature garam puts on every message it hands out (ADR-0101).
-Implemented by `internal/message`, which persists through
-`internal/message/postgres` (ADR-0069).
+Implemented by `platform/internal/message`, which persists through
+`platform/internal/message/postgres` (ADR-0069).
 
 **garam announces nothing to a sender, and one of the two reports it
 owes is built.** It answers a post no consent relation carries across
@@ -32,7 +32,7 @@ state of a message it sent, described below (ADR-0055).
 | `Author` | who wrote a message: its sender, or garam for the refusal it writes itself — what a signature names as the sender garam vouches for (ADR-0101) |
 | `Keyring` | the keys messages are signed with: opens the one that signs now, before a claim's wait, and answers the published set (ADR-0101) |
 | `Signer` | signs one hand-out under the key the keyring opened, inside the transaction that claims it (ADR-0104) |
-| `Custodian` | holds a signing key's private half and never hands it back: makes a key, and signs under one it holds — sealed into its row under the key-encryption key, or a version of an OpenBao Transit key (`internal/message/transit`) (ADR-0104) |
+| `Custodian` | holds a signing key's private half and never hands it back: makes a key, and signs under one it holds — sealed into its row under the key-encryption key, or a version of an OpenBao Transit key (`platform/internal/message/transit`) (ADR-0104) |
 | `Holding` | where one key's private half is held: a `SealedKey` or a `TransitVersion`, and nothing else |
 | `SigningKeyStore` | the keys messages are signed with, read with the database's clock, rotated under one lock, withdrawn at once |
 | `Issuer` | the deployment's issuer: the machine listener's external https origin, compared byte for byte |
@@ -186,8 +186,8 @@ the listener authenticated for everything a caller posted, and garam's
 own issuer for the cross-organization refusal it writes under the
 intended recipient's identity, whose content keeps that stored sender.
 ADR-0101 §What a verifier checks is the contract a verifier holds garam
-to; `api/machine.yaml` is authoritative for the claim's members and the
-key-set route.
+to; `platform/api/machine.yaml` is authoritative for the claim's members
+and the key-set route.
 
 The keys are rows of their own, never deleted. With no provider
 configured each is sealed under the key-encryption key the machine
@@ -253,6 +253,6 @@ signed hand-outs or ADR-0101's issuer contract.
   `jti` cache is not the message redelivery record.
 
 ADR-0101 stands but for where its keys are held, which ADR-0104
-supersedes. `internal/message/signing.go` and
-`api/machine.yaml` §message implement signed hand-outs and the public
-key set; ADR-0102 introduces no new message channel.
+supersedes. `platform/internal/message/signing.go` and
+`platform/api/machine.yaml` §message implement signed hand-outs and the
+public key set; ADR-0102 introduces no new message channel.

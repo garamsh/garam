@@ -1,9 +1,0 @@
-# Build context for tests/testprincipal/Dockerfile, read in place of the
-# root .dockerignore. The same entries, less `tests`: the build compiles
-# tests/testprincipal.
-.git
-.github
-docs
-web
-deploy
-*.md

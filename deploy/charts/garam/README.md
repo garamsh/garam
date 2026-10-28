@@ -164,11 +164,12 @@ the key-encryption key the message signing keys are sealed under, which
 an earlier release also sealed each organization's certificate authority
 under
 ([ADR-0016](../../../docs/architecture/adr/0016-ca-key-custody.md),
-ADR-0104), and refuses to start without it (`internal/cli/machine.go`).
-That key arrives in the Secret `machine.keyMaterial.secretName` names,
-which this chart does not create; whatever populates it grants to a
-subject, and that subject is the machine listener's own rather than one
-every pod in the namespace presents.
+ADR-0104), and refuses to start without it
+(`platform/internal/cli/machine.go`). That key arrives in the Secret
+`machine.keyMaterial.secretName` names, which this chart does not
+create; whatever populates it grants to a subject, and that subject is
+the machine listener's own rather than one every pod in the namespace
+presents.
 
 `serve api` needs one when it reads a cloud-held secret of its own —
 Google sign-in is the pending case. `authz`, `web` and `migrate` read
@@ -211,11 +212,12 @@ fails without them:
 - `web.apiUrl` — the address the web process reaches `serve api` on,
   baked into the image at build time as the `/api/*` rewrite target and
   read again at runtime by every server-side render
-  (`web/src/lib/garam.ts`), and for a published image it is the address
-  §Choosing a release name states. Absent at runtime the process still
-  starts and answers both probes, `/` and the rewrite keep serving, and
-  every server-rendered route answers 500: `web/src/env.ts` parses at
-  import, and only the routes reaching the backend import it.
+  (`console/src/lib/garam.ts`), and for a published image it is the
+  address §Choosing a release name states. Absent at runtime the process
+  still starts and answers both probes, `/` and the rewrite keep
+  serving, and every server-rendered route answers 500:
+  `console/src/env.ts` parses at import, and only the routes reaching
+  the backend import it.
 
 **Each image carries the account it declares**, as `runAsUser` and
 `runAsGroup` under `image.server` and under `image.web`. The defaults
@@ -489,8 +491,9 @@ count is zero:
 - `chart-lint` — `helm lint --strict` against each value file in `ci/`.
 - `chart-render` — `helm template` against each, so a template that
   cannot render fails, and the environment comparison above against the
-  names the source reads: `envOr` in `internal/cli/`, which wraps the
-  module's only `os.Getenv` call, and the schema in `web/src/env.ts`.
+  names the source reads: `envOr` in `platform/internal/cli/`, which
+  wraps the module's only `os.Getenv` call, and the schema in
+  `console/src/env.ts`.
 - `chart-identity` — the identity comparison against
   §Workload identities. Every rendered Deployment and Job is a workload
   that table declares, every account the chart renders is one a workload
@@ -550,11 +553,11 @@ print.
   name the source reads is rendered or declared unset, and every name
   rendered is read. It reads no value — a name rendered with the wrong
   value passes. What the Go source reads is the `envName` block in
-  `internal/cli`, not a pattern over the calls that read it, so a
-  wrapper around `envOr` cannot quietly shrink what this covers: the
+  `platform/internal/cli`, not a pattern over the calls that read it, so
+  a wrapper around `envOr` cannot quietly shrink what this covers: the
   target refuses a second read of the environment under `internal|cmd`
   and refuses a name written at a call site instead of declared there.
-  The web half is `web/src/env.ts` parsed for its own shape, and it
+  The web half is `console/src/env.ts` parsed for its own shape, and it
   carries no such guard — a module reading `process.env` directly would
   be a name this check never sees.
 - `chart-identity` is complete over **pod identity**: which account each

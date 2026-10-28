@@ -1,7 +1,7 @@
 # Domains
 
 garam's domains, named by the subject matter each owns, and what else
-under `internal/` is not one.
+under `platform/internal/` is not one.
 
 ## Contents
 - What a domain is here
@@ -25,9 +25,9 @@ document of its own named for the subject: the Go package implementing
 a domain is named in that document and is not the domain's name
 ([ADR-0048](./adr/0048-garams-domains-are-named-by-subject-matter.md)).
 
-Three kinds of folder under `internal/` are not domains, and each has a
-section of its own below. A **sub-responsibility** belongs to a
-domain's subject and is held in a boundary of its own for a reason
+Three kinds of folder under `platform/internal/` are not domains, and
+each has a section of its own below. A **sub-responsibility** belongs to
+a domain's subject and is held in a boundary of its own for a reason
 recorded there. A **delivery surface** composes several domains, which
 is what stops it being one ([structure.md](./structure.md) §The shape).
 **Shared code** sits below the domains that need it.
@@ -38,24 +38,27 @@ Each is a responsibility document of its own, named for its subject;
 the Go package implementing it is in parentheses.
 
 - [organizations.md](./organizations.md) — the tenant hierarchy
-  (`internal/org`)
-- [users.md](./users.md) — human identity (`internal/user`)
+  (`platform/internal/org`)
+- [users.md](./users.md) — human identity (`platform/internal/user`)
 - [sign-in.md](./sign-in.md) — how a person proves who they are, and
-  the session that carries the proof afterwards (`internal/authn`)
+  the session that carries the proof afterwards
+  (`platform/internal/authn`)
 - [authz.md](./authz.md) — the rules that decide what a subject may do,
-  and the engine that decides (`internal/authz`)
+  and the engine that decides (`platform/internal/authz`)
 - [operators.md](./operators.md) — what an organization records about
-  an operator and what it authenticates with (`internal/operator`)
+  an operator and what it authenticates with
+  (`platform/internal/operator`)
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
-  garam (`internal/agent`)
+  garam (`platform/internal/agent`)
 - [machine-identity.md](./machine-identity.md) — who is calling on the
-  listener a machine identity authenticates on (`internal/machine`)
+  listener a machine identity authenticates on
+  (`platform/internal/machine`)
 - [messaging.md](./messaging.md) — the durable queue a message reaches
   an agent through, the consent that lets one cross an organization
   boundary, and the signature on every message garam hands out
-  (`internal/message`)
+  (`platform/internal/message`)
 - [audit.md](./audit.md) — the record garam keeps of what it decided,
-  which holds message sends alone (`internal/audit`)
+  which holds message sends alone (`platform/internal/audit`)
 
 ## The shape a domain takes
 
@@ -78,69 +81,71 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**All nine have this shape today.** `internal/user`, `internal/watch`,
-`internal/org`, `internal/operator`, `internal/agent`,
-`internal/message`, `internal/authz` and `internal/authn` each keep
-their store in `internal/<domain>/postgres/` (#1083), and
-`internal/machine` persists through `internal/machine/postgres` and had
-no driver import to move. `go list -deps` on a domain package names no
-`jackc/pgx`.
+**All nine have this shape today.** `platform/internal/user`,
+`platform/internal/watch`, `platform/internal/org`,
+`platform/internal/operator`, `platform/internal/agent`,
+`platform/internal/message`, `platform/internal/authz` and
+`platform/internal/authn` each keep their store in
+`platform/internal/<domain>/postgres/` (#1083), and
+`platform/internal/machine` persists through
+`platform/internal/machine/postgres` and had no driver import to move.
+`go list -deps` on a domain package names no `jackc/pgx`.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,
 inside the same package, when one Postgres type carries the methods of
 more than one aggregate (`org`, `agent`, `authz`) or of more than one
 `Store` interface (`operator`, `message`). What splits is a receiver's
-methods and not a package's stores: `internal/authn/postgres`
+methods and not a package's stores: `platform/internal/authn/postgres`
 implements five `Store` interfaces on five types, each named for what
 it stores (ADR-0069), and keeps them in one `postgres.go`.
-`ls internal/*/postgres_*.go` names no package now: `org`'s,
+`ls platform/internal/*/postgres_*.go` names no package now: `org`'s,
 `operator`'s, `agent`'s, `message`'s and `authz`'s splits moved with
-their stores into `internal/<domain>/postgres/`. A split
+their stores into `platform/internal/<domain>/postgres/`. A split
 stayed under the domain while its aggregates' fields were unexported,
 so whatever rehydrated one shared its package — a state the nine have
 been passing through rather than a position the project holds.
 [ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md) settled the write half on evidence about the surface:
 no method on any of these aggregates assigns a field, so the fields are
-exported, the store leaves for `internal/<domain>/postgres/`, and the
-argument that kept it beside the aggregate ends with the encapsulation
-it rested on. It supersedes
+exported, the store leaves for `platform/internal/<domain>/postgres/`,
+and the argument that kept it beside the aggregate ends with the
+encapsulation it rested on. It supersedes
 [ADR-0066](./adr/0066-no-aggregate-gains-an-exported-restore-path-to-satisfy-a-layout-rule.md),
 which had refused that change while a layout rule was the only reason
 offered for it. A store beside its aggregate is therefore not a defect
 in a domain that has not converted, and is one in a domain that has.
 
-`internal/machine` persists only the evidence of how each caller
-authenticated (ADR-0109), and its package holds none of the storage
-files above. It is its types, the recheck a lifecycle decision asks,
-the listener it builds, and the seams it reads and writes through: the
-tokens a caller presents, the registration that admits the caller
+`platform/internal/machine` persists only the evidence of how each
+caller authenticated (ADR-0109), and its package holds none of the
+storage files above. It is its types, the recheck a lifecycle decision
+asks, the listener it builds, and the seams it reads and writes through:
+the tokens a caller presents, the registration that admits the caller
 (ADR-0070), a certificate for itself, and the recorder that evidence
 goes to. The composition root satisfies all of them, so the package
-imports neither `internal/agent` nor `internal/operator` and the
-domains cooperate through `grn.GRN` alone.
-The recorder's store is `internal/machine/postgres`.
+imports neither `platform/internal/agent` nor
+`platform/internal/operator` and the domains cooperate through `grn.GRN`
+alone. The recorder's store is `platform/internal/machine/postgres`.
 
 `queries.sql` and `db/` are a source and its output, not two copies.
 Every generated file says so in its first line, and `make check-gen`
 fails on any drift between them. `sqlc.yaml` names where each pair
 lives, so a domain that has moved its store is read there rather than
-assumed. Every entry reads the whole `migrations/` directory as its
-schema, so each domain sees the one schema the database has, and none
-keeps a list of the migrations it believes touch its tables. Each entry
-also sets `omit_unused_structs`, so its `db/` package holds only the
-models its own queries read (#1151).
+assumed. Every entry reads the whole `platform/migrations/` directory as
+its schema, so each domain sees the one schema the database has, and
+none keeps a list of the migrations it believes touch its tables. Each
+entry also sets `omit_unused_structs`, so its `db/` package holds only
+the models its own queries read (#1151).
 
 A change announcement reads no row, so it is not in `queries.sql`, and
 the two domains that use one do not raise it the same way.
-`internal/watch` issues both halves from Go. A policy change is
-announced by triggers the schema carries in `migrations/`, and
-`internal/authz` issues only the `LISTEN`.
+`platform/internal/watch` issues both halves from Go. A policy change is
+announced by triggers the schema carries in `platform/migrations/`, and
+`platform/internal/authz` issues only the `LISTEN`.
 
 ## Sub-responsibilities in a boundary of their own
 
-Three folders under `internal/` hold a responsibility that belongs to a
-domain's subject rather than to one of its own. None is a domain,
-and each is a boundary for a reason recorded below —
+Three folders under `platform/internal/` hold a responsibility that
+belongs to a domain's subject rather than to one of its own. None is a
+domain, and each is a boundary for a reason recorded below —
 `structure.md` §Boundaries and dependency direction makes a boundary a
 domain, a feature or a bounded context, so being a feature of another
 subject and owning a folder are not in tension.
@@ -150,18 +155,18 @@ subject and owning a folder are not in tension.
 **Both ends of this are unbuilt.** garam's half is built — the stream a
 browser reads, the watcher count on the poll, and the fan-out between
 the two listeners — and nothing reaches either end of it: no route
-under `web/src/app/console/` opens the stream, and nothing under
-`internal/delivery/` forwards an event
+under `console/src/app/console/` opens the stream, and nothing under
+`platform/internal/delivery/` forwards an event
 ([adapter.md](./adapter.md) §Watching).
 [overview.md](./overview.md) §Out of scope (today) records it.
 
 Who is watching an agent work, and what is carried to them while they
-are (ADR-0022). Implemented by `internal/watch`. The subject is the
-agent; the boundary is its own because a watch has a lifecycle neither
-the agents domain nor the messaging one contains — it begins when a
-person opens an agent and ends when they leave, and nothing about it
-survives that — and because the two surfaces that need it may not reach
-each other at all (ADR-0017).
+are (ADR-0022). Implemented by `platform/internal/watch`. The subject is
+the agent; the boundary is its own because a watch has a lifecycle
+neither the agents domain nor the messaging one contains — it begins
+when a person opens an agent and ends when they leave, and nothing about
+it survives that — and because the two surfaces that need it may not
+reach each other at all (ADR-0017).
 
 | Type | Responsibility |
 |------|----------------|
@@ -217,10 +222,10 @@ one comparison against the identity the caller authenticated as.
 
 Claiming a message for one agent, posting it into that agent's gateway,
 and completing the claim the turn that succeeded named (ADR-0018).
-Implemented by `internal/delivery`. The subject is message delivery;
-the boundary is its own because it runs outside garam, beside the
-agent, as a client of the machine listener rather than a part of it —
-it imports no domain and no delivery surface, reading that listener's
+Implemented by `platform/internal/delivery`. The subject is message
+delivery; the boundary is its own because it runs outside garam, beside
+the agent, as a client of the machine listener rather than a part of it
+— it imports no domain and no delivery surface, reading that listener's
 specification through the models generated from it.
 
 What it must do is [adapter.md](./adapter.md), which is the
@@ -231,33 +236,35 @@ here.
 
 Running a standalone host's agent as the workload its supervisor owns,
 and serving that workload's adapter its activation (ADR-0085).
-Implemented by `internal/workload`, with its Docker engine in
-`internal/workload/docker`. The subject is the agent's execution; the
-boundary is its own because it runs on the host rather than inside
-garam, as a client of the machine listener's execution routes, and
-holds a container engine no garam process may reach. It imports no
-domain and no delivery surface.
+Implemented by `platform/internal/workload`, with its Docker engine in
+`platform/internal/workload/docker`. The subject is the agent's
+execution; the boundary is its own because it runs on the host rather
+than inside garam, as a client of the machine listener's execution
+routes, and holds a container engine no garam process may reach. It
+imports no domain and no delivery surface.
 
 What it does is [agents.md](./agents.md) §Standalone hosts, which is
 the responsibility document for it; nothing about it is restated here.
 
 ## Delivery surfaces
 
-Three folders under `internal/` compose several boundaries, which is
-what stops each being one ([structure.md](./structure.md) §The shape).
-They are named here as what they are; what each serves and what admits
-a caller to it is [api-surface.md](./api-surface.md).
+Three folders under `platform/internal/` compose several boundaries,
+which is what stops each being one ([structure.md](./structure.md) §The
+shape). They are named here as what they are; what each serves and what
+admits a caller to it is [api-surface.md](./api-surface.md).
 
-- `internal/api` — the browser-facing listener's handlers, implementing
-  the ServerInterface generated from `api/openapi.yaml` (ADR-0004). It
-  composes the organizations, users, sign-in, agents, operators and
-  messaging domains and the watch boundary.
-- `internal/machineapi` — the machine listener's handlers, implementing
-  the ServerInterface generated from `api/machine.yaml` (ADR-0019). It
-  composes the agents, operators, messaging and machine-identity
-  domains and the watch boundary.
-- `internal/cli` — the cobra commands and the composition root behind
-  them. It is what satisfies every seam a domain declares — the
+- `platform/internal/api` — the browser-facing listener's handlers,
+  implementing the ServerInterface generated from
+  `platform/api/openapi.yaml` (ADR-0004). It composes the organizations,
+  users, sign-in, agents, operators and messaging domains and the watch
+  boundary.
+- `platform/internal/machineapi` — the machine listener's handlers,
+  implementing the ServerInterface generated from
+  `platform/api/machine.yaml` (ADR-0019). It composes the agents,
+  operators, messaging and machine-identity domains and the watch
+  boundary.
+- `platform/internal/cli` — the cobra commands and the composition root
+  behind them. It is what satisfies every seam a domain declares — the
   `Tokens` and `ServerCertificate` the machine-identity domain reads,
   and the `Groups` the machine listener reads org membership through.
 
@@ -276,13 +283,13 @@ the policy engine through, and `AuthorityReader`.
 Neither listener imports the other and they never run in one process
 (ADR-0017). Neither imports the policy engine: each holds a gRPC client
 of its own, and the conversions onto the wire contract are declared
-once in `internal/wire`. Neither imports `internal/ca` either. What
-the browser-facing one reads of a certificate authority is whether an
-organization has one, through `AuthorityReader`, which the composition
-root satisfies with the organizations store's presence read below.
-Presence is the whole of that seam: the question is asked to say what
-deleting an organization would destroy, it needs no key to answer, and
-`garam serve api` still reads no key-encryption key.
+once in `platform/internal/wire`. Neither imports `platform/internal/ca`
+either. What the browser-facing one reads of a certificate authority is
+whether an organization has one, through `AuthorityReader`, which the
+composition root satisfies with the organizations store's presence read
+below. Presence is the whole of that seam: the question is asked to say
+what deleting an organization would destroy, it needs no key to answer,
+and `garam serve api` still reads no key-encryption key.
 
 Two decisions live at a surface rather than in a domain, because each
 is a question about the caller rather than about the subject. Whom a
@@ -328,16 +335,17 @@ numbers for want of saying what it counts, so the rule is here:
   its own and another shared package import these packages too, and
   none of those importers is a domain.
 - **A domain's generated subpackages are not its code.**
-  `internal/<domain>/db/` and `internal/<domain>/mocks/` are generator
-  output, which `docs/convention/README.md` §Scope places outside what
-  the project writes, so an import only one of them carries is not the
-  domain's. Any other subpackage is inside the folder the boundary
-  names and is that domain, counted once with the rest.
+  `platform/internal/<domain>/db/` and
+  `platform/internal/<domain>/mocks/` are generator output, which
+  `docs/convention/README.md` §Scope places outside what the project
+  writes, so an import only one of them carries is not the domain's. Any
+  other subpackage is inside the folder the boundary names and is that
+  domain, counted once with the rest.
 - **A test import is not an import here.** A test import is not a
   dependency of the domain's code, and counting one is what once made
-  `internal/keyfile` look like two domains. `go list`'s `.Imports`
-  holds what is not a test and `.TestImports` holds the rest, so the
-  query below is already scoped to it.
+  `platform/internal/keyfile` look like two domains. `go list`'s
+  `.Imports` holds what is not a test and `.TestImports` holds the rest,
+  so the query below is already scoped to it.
 
 The query names every importer of one shared package; the rules above
 say which of those importers the column counts.
@@ -350,33 +358,33 @@ go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{e
 
 | Package | Domains importing it | Standing |
 |---|---|---|
-| `internal/errorx` | 9 — every domain | earns its place |
-| `internal/grn` | 9 — every domain | earns its place |
-| `internal/pgxerr` | 9 — `org` `user` `authz` `agent` `operator` `authn` `message` `audit` `machine` | earns its place |
-| `internal/pgxtype` | 9 — `org` `user` `authz` `agent` `operator` `authn` `message` `audit` `machine` | earns its place |
-| `internal/listfilter` | 5 — `org` `agent` `audit` `authz` `user` | earns its place; ADR-0052 placed it before the count did |
-| `internal/wire` | 1 — `authz` | permitted by the wire-format carve-out, not by the count |
-| `internal/keyfile` | 1 — `message` | under the threshold; belongs with the domain that owns it |
-| `internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
+| `platform/internal/errorx` | 9 — every domain | earns its place |
+| `platform/internal/grn` | 9 — every domain | earns its place |
+| `platform/internal/pgxerr` | 9 — `org` `user` `authz` `agent` `operator` `authn` `message` `audit` `machine` | earns its place |
+| `platform/internal/pgxtype` | 9 — `org` `user` `authz` `agent` `operator` `authn` `message` `audit` `machine` | earns its place |
+| `platform/internal/listfilter` | 5 — `org` `agent` `audit` `authz` `user` | earns its place; ADR-0052 placed it before the count did |
+| `platform/internal/wire` | 1 — `authz` | permitted by the wire-format carve-out, not by the count |
+| `platform/internal/keyfile` | 1 — `message` | under the threshold; belongs with the domain that owns it |
+| `platform/internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
 
-`internal/grn` holds the `GRN` value type with `New`, `Parse`,
+`platform/internal/grn` holds the `GRN` value type with `New`, `Parse`,
 `Validate`, `String` and `IsZero`, and `Org`, the GRN of an
 organization, which ADR-0001 makes root-owned (#1150). It depends on
 `errorx` only.
 
-`internal/errorx` holds the `Kind` enum aligned with gRPC status codes,
-the `Error` interface, and `New` / `Wrap` / `IsKind` / `KindOf`. It has
-no dependency of its own.
+`platform/internal/errorx` holds the `Kind` enum aligned with gRPC
+status codes, the `Error` interface, and `New` / `Wrap` / `IsKind` /
+`KindOf`. It has no dependency of its own.
 
 Both are implemented in `platform/sdk/` since cowork became a second
 module needing them (ADR-0125). The two packages above forward to it,
 so the counts in the table still read through them, until #1659
 rewrites their importers to the new paths.
 
-`internal/pgxerr` maps a postgres driver error to an `errorx` error by
-reading the sql state the driver carries, or, where it carries none,
-whether the driver lost its connection (#1165), and labels it with the
-operation the caller names rather than with a store's name. It is a
+`platform/internal/pgxerr` maps a postgres driver error to an `errorx`
+error by reading the sql state the driver carries, or, where it carries
+none, whether the driver lost its connection (#1165), and labels it with
+the operation the caller names rather than with a store's name. It is a
 package of its own rather than part of `errorx` because `errorx` is
 transport-agnostic by design, so the same errors flow over any surface,
 and a pgx dependency there would end that. Which sqlstate becomes which
@@ -386,27 +394,27 @@ through it, which is nine domains: the four that each held their own
 copy — `org`, `authz`, `user`, `agent` — `operator`, which never had
 one, the sign-in and messaging domains, whose stores read the driver's
 error inline until they were routed through it too, and audit and
-machine identity, whose stores have answered through it from the
-start. The watch boundary's store answers through it as well and is
-not a domain, which is why the query above names ten importers where
-the column counts nine.
+machine identity, whose stores have answered through it from the start.
+The watch boundary's store answers through it as well and is not a
+domain, which is why the query above names ten importers where the
+column counts nine.
 
-`internal/pgxtype` holds the timestamptz conversion the stores bind and
-scan: `Timestamptz` makes a present value of a `time.Time`, and `Time`
-reads one back as stored, nil where it is NULL. It also holds
+`platform/internal/pgxtype` holds the timestamptz conversion the stores
+bind and scan: `Timestamptz` makes a present value of a `time.Time`, and
+`Time` reads one back as stored, nil where it is NULL. It also holds
 `Contains`, the `ILIKE` pattern a search binds, in which `%`, `_` and
-the backslash match only themselves. Every postgres-backed
-store binds through it, which is the same nine domains and the watch
-boundary `internal/pgxerr` counts; each had declared its own copy
+the backslash match only themselves. Every postgres-backed store binds
+through it, which is the same nine domains and the watch boundary
+`platform/internal/pgxerr` counts; each had declared its own copy
 (#1150). It is a wire format and chooses no behaviour, so it is a
 package of its own rather than part of `pgxerr`, which is errors.
 
-`internal/listfilter` holds `Filter`, an offset and a limit where a
-limit of 0 means no limit, and `Parse`, which builds one from what a
-request carries and refuses a page the paging columns cannot hold. It
-also holds `Needle`, the text `searchOrg` matches names by, and
-`ParseNeedle`, which refuses a blank or overlong one (#1583). It
-depends on `errorx` only.
+`platform/internal/listfilter` holds `Filter`, an offset and a limit
+where a limit of 0 means no limit, and `Parse`, which builds one from
+what a request carries and refuses a page the paging columns cannot
+hold. It also holds `Needle`, the text `searchOrg` matches names by, and
+`ParseNeedle`, which refuses a blank or overlong one (#1583). It depends
+on `errorx` only.
 
 Five domains page or search with it, which the count places below
 them as it places `errorx`, `grn` and `pgxerr`. It sat below the
@@ -416,39 +424,38 @@ boundary whose subject it is rather than by the one it was extracted
 from
 ([ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)).
 `111bdd55a1bd1225d73ea0415e995ee31a6564b5` (#402) extracted the type
-out of `internal/org`, where it was `org.ListFilter`, when the agents
-domain gained pagination; that is where it was born and, under the
-decision above, not what owns it.
+out of `platform/internal/org`, where it was `org.ListFilter`, when the
+agents domain gained pagination; that is where it was born and, under
+the decision above, not what owns it.
 
-`internal/wire` holds the conversions onto the wire formats the request
-surfaces share: the statement `Effect` and a policy's status with their
-authz-proto mappings, a statement rendered onto the authz contract,
-`errorx` kinds rendered as HTTP statuses and as gRPC codes and read
-back from them, and a gRPC error read back as an `errorx` error. Each
-listener still holds the gRPC client behind its own `Evaluator` seam;
-what the two clients share is these conversions and nothing that
-chooses a behaviour.
-One domain imports it, so the threshold is not what places it; the
-carve-out is. Its whole exported surface is a wire type and conversions
-in both directions, and nothing in it chooses a behaviour, which is
-what the carve-out names.
+`platform/internal/wire` holds the conversions onto the wire formats the
+request surfaces share: the statement `Effect` and a policy's status
+with their authz-proto mappings, a statement rendered onto the authz
+contract, `errorx` kinds rendered as HTTP statuses and as gRPC codes and
+read back from them, and a gRPC error read back as an `errorx` error.
+Each listener still holds the gRPC client behind its own `Evaluator`
+seam; what the two clients share is these conversions and nothing that
+chooses a behaviour. One domain imports it, so the threshold is not what
+places it; the carve-out is. Its whole exported surface is a wire type
+and conversions in both directions, and nothing in it chooses a
+behaviour, which is what the carve-out names.
 
-`internal/keyfile` holds the one rule key material is read under
-(ADR-0015): a file only the reading process's owner can reach —
-owner-only permission bits and an owner equal to the process's UID,
-both read from the open descriptor so no window sits between the check
-and the read. `Pair` is a certificate and its key held as the two paths
-they arrive at rather than as what they held at startup, so every read
+`platform/internal/keyfile` holds the one rule key material is read
+under (ADR-0015): a file only the reading process's owner can reach —
+owner-only permission bits and an owner equal to the process's UID, both
+read from the open descriptor so no window sits between the check and
+the read. `Pair` is a certificate and its key held as the two paths they
+arrive at rather than as what they held at startup, so every read
 answers with the files as they are now and a replaced pair is presented
-on the next handshake without a restart (ADR-0040). The key goes
-through the rule above on every read; the certificate beside it is
-public. It depends on `errorx` only. One domain reads it, the
-messaging domain's `internal/message/transit`, for the OpenBao token
-on every call (ADR-0104); `internal/ca` reads the key-encryption key
-through it, and the composition root reads the machine listener's pair
-and a standalone supervisor's credential through it.
+on the next handshake without a restart (ADR-0040). The key goes through
+the rule above on every read; the certificate beside it is public. It
+depends on `errorx` only. One domain reads it, the messaging domain's
+`platform/internal/message/transit`, for the OpenBao token on every call
+(ADR-0104); `platform/internal/ca` reads the key-encryption key through
+it, and the composition root reads the machine listener's pair and a
+standalone supervisor's credential through it.
 
-`internal/ca` holds the sealer the key-encryption key opens
+`platform/internal/ca` holds the sealer the key-encryption key opens
 (ADR-0016): the message signing keys are sealed through it unless a
 transit provider holds them (ADR-0104). It signs nothing, and garam
 holds no certificate authority of its own (ADR-0118). The rows of
@@ -457,15 +464,15 @@ authority's private key sealed under the key-encryption key, stay in
 place, because nothing can make one again once it is dropped and the
 drop is the owner's decision. Nothing reads them, with one exception:
 the organizations store's `HoldsCertificateAuthority`
-(`internal/org/postgres`) asks whether an organization holds a row,
-opening and decoding nothing, so the deletion preview can warn that
+(`platform/internal/org/postgres`) asks whether an organization holds a
+row, opening and decoding nothing, so the deletion preview can warn that
 deleting the organization destroys one
 ([organizations.md](./organizations.md)). The composition root alone
-imports `internal/ca`.
+imports `platform/internal/ca`.
 
-`internal/health` holds what liveness and readiness mean and the two
-probes every serve command mounts (ADR-0021). No domain imports it; the
-composition root does.
+`platform/internal/health` holds what liveness and readiness mean and
+the two probes every serve command mounts (ADR-0021). No domain imports
+it; the composition root does.
 
 ## Store implementation status
 
@@ -493,20 +500,20 @@ it.
 
 The postgres implementations are written by hand against sqlc output,
 which sqlc generates from each domain's `queries.sql`; the schema
-source is `migrations/`. A converted domain keeps both under
-`internal/<domain>/postgres/` and an unconverted one keeps them at
-`internal/<domain>/`, and `sqlc.yaml` is where each pair's path is
-declared. Domain stores go straight to Postgres — no domain `memory.go`
-files are planned.
+source is `platform/migrations/`. A converted domain keeps both under
+`platform/internal/<domain>/postgres/` and an unconverted one keeps them
+at `platform/internal/<domain>/`, and `sqlc.yaml` is where each pair's
+path is declared. Domain stores go straight to Postgres — no domain
+`memory.go` files are planned.
 
 sqlc rather than an ORM, re-examined and unchanged: it parses the real
 schema and the real query at build time, so a renamed column fails the
-build instead of a request. `migrations/` stays the one schema source,
-where an ORM's auto-migrate would make a second. The storage-agnostic
-goal is delivered by the `Store` interface, which an ORM's tags and
-associations would reach past. And the features already in use —
-`LISTEN`/`NOTIFY`, triggers, and the row-level locking a queue needs —
-are where an ORM hands the work back anyway. See
+build instead of a request. `platform/migrations/` stays the one schema
+source, where an ORM's auto-migrate would make a second. The
+storage-agnostic goal is delivered by the `Store` interface, which an
+ORM's tags and associations would reach past. And the features already
+in use — `LISTEN`/`NOTIFY`, triggers, and the row-level locking a queue
+needs — are where an ORM hands the work back anyway. See
 [`../plans/roadmap.md`](../plans/roadmap.md).
 
 ## Known gap
@@ -519,7 +526,7 @@ should define the adapter where it is used.
 ## Open questions
 
 - **Whether the organizations domain holds one responsibility or
-  several.** `#608` counts six concepts in `internal/org` —
+  several.** `#608` counts six concepts in `platform/internal/org` —
   `Organization`, `Group`, `Project`, `Membership`, `Invitation` and
   `Role` — each with its own `postgres_<concept>.go`, and the
   browser-facing surface split the same way. Naming the domain settles
@@ -528,10 +535,10 @@ should define the adapter where it is used.
   nothing.
 - **What owns a concern once it is extracted below the domains.**
   [structure.md](./structure.md) §Open questions holds this, and
-  `internal/keyfile` and `internal/health` are the two packages waiting
-  on it: each is under the threshold that would place it below the
-  domains, and no decision here says which boundary should own it
-  instead.
+  `platform/internal/keyfile` and `platform/internal/health` are the two
+  packages waiting on it: each is under the threshold that would place
+  it below the domains, and no decision here says which boundary should
+  own it instead.
   [ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)
   decides what owning is and not what holds a concern once it is
   extracted, so it gives these two the test to be read against rather
@@ -543,5 +550,5 @@ should define the adapter where it is used.
 |--------|---------------------|----------------|
 | workflow | `internal/workflow` | workflow definition and execution |
 | doc | `internal/doc` | permissioned document |
-| token | `internal/token` | API token exchange (browser sessions live in `internal/authn`) |
+| token | `internal/token` | API token exchange (browser sessions live in `platform/internal/authn`) |
 | secret | `internal/secret` | a reference to a secret an external store holds — never the value (ADR-0036) |

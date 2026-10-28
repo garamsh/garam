@@ -49,9 +49,9 @@
 # at commit 98786d7814bb4f7199ca3cdb08350b6180b82983.
 version: 2
 updates:
-  # deploy/local/Dockerfile and Dockerfile.web.
+  # deploy/local/Dockerfile, Dockerfile.cowork and Dockerfile.web.
   #
-  # Covers a newer tag for both, rewriting the tag and the digest
+  # Covers a newer tag for each, rewriting the tag and the digest
   # together.
   #
   # Does not cover: a CVE with no newer tag, because the docker
@@ -62,13 +62,14 @@ updates:
   # not; and deploy/local/minikube/, which is a subdirectory and is not
   # searched.
   #
-  # It also moves only the FROM line. go.mod's `go` directive names the
-  # same Go version Dockerfile does, and platform-web/.nvmrc the same
-  # Node major as Dockerfile.web, so every bump this proposes arrives
-  # half-done and splits the container's toolchain from the repository's
-  # declared version unless the other half lands with it.
+  # It also moves only the FROM line. platform/go.mod's `go` directive
+  # names the same Go version Dockerfile does, cowork/go.mod's the same
+  # as Dockerfile.cowork, and platform-web/.nvmrc the same Node major as
+  # Dockerfile.web, so every bump this proposes arrives half-done and
+  # splits the container's toolchain from the repository's declared
+  # version unless the other half lands with it.
   # `make -C tooling check-toolchain` fails on that split (#803); it
-  # reads the two pairs and not why they are pairs, which is what this
+  # reads the pairs and not why they are pairs, which is what this
   # paragraph is for.
   - package-ecosystem: "docker"
     directory: "/deploy/local"

@@ -1,8 +1,8 @@
 # Multi-stage build of one of the Next.js apps (ADR-0009) as a
 # standalone server. Build context is the repository root, which holds
 # the pnpm workspace the app installs from: the app names its folder in
-# APP (`platform-web` or `site-web`), and Dockerfile.web.dockerignore
-# keeps the context to the web packages.
+# APP (`platform-web`, `site-web` or `cowork-web`), and
+# Dockerfile.web.dockerignore keeps the context to the web packages.
 #
 # Both stages take the same base, pinned by digest: the tag reads
 # and the digest resolves, so two builds of this commit pull the same
@@ -28,14 +28,16 @@ ARG APP
 ARG GARAM_API_URL=http://api:8080
 ENV GARAM_API_URL=$GARAM_API_URL
 
-# Each app's env.ts requires the other's address in production, and the
-# build evaluates it. Nothing the build emits holds it: each reads it
-# again when a request arrives, so this stage's values stop here and
-# the runtime's are the ones served (ADR-0131).
-ENV GARAM_CONSOLE_URL=http://console.invalid GARAM_SITE_URL=http://site.invalid
+# Each app's env.ts requires the other's address in production, and
+# cowork-web's requires cowork's too, and the build evaluates it.
+# Nothing the build emits holds them: each is read again when a request
+# arrives, so this stage's values stop here and the runtime's are the
+# ones served (ADR-0131).
+ENV GARAM_CONSOLE_URL=http://console.invalid GARAM_SITE_URL=http://site.invalid \
+  COWORK_API_URL=http://cowork.invalid COWORK_SYNC_URL=ws://cowork.invalid
 
 COPY . .
-RUN test -n "$APP" || { echo "APP names the app's folder: platform-web or site-web" >&2; exit 1; }; \
+RUN test -n "$APP" || { echo "APP names the app's folder: platform-web, site-web or cowork-web" >&2; exit 1; }; \
   pnpm install --offline --frozen-lockfile --filter "{./$APP}..." && \
   pnpm --dir "$APP" build && \
   mkdir -p "$APP/public"

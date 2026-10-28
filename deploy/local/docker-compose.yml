@@ -214,5 +214,119 @@ services:
       timeout: 5s
       retries: 10
 
+  # Opt-in: `docker compose --profile cowork up`, which starts cowork
+  # and its web app against the platform above. cowork-web answers at
+  # console.garam.localhost:3100: the console's session cookie names its
+  # host and not a port, so it reaches cowork-web there and, through
+  # the sync WebSocket, cowork at console.garam.localhost:8090.
+  #
+  # cowork owns its database (ADR-0125), `cowork` on the one server.
+  # Postgres has no CREATE DATABASE IF NOT EXISTS, so this one-shot asks
+  # first; output and exit status are read apart, as `make db-up` reads
+  # them (#344). It runs the postgres service's image, which Dependabot
+  # moves with that one.
+  cowork-db:
+    profiles: ["cowork"]
+    image: postgres:17.11-alpine3.24@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      PGHOST: postgres
+      PGUSER: garam
+      PGPASSWORD: garam
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        present=$$(psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='cowork'") || exit 1;
+        test -n "$$present" || createdb cowork
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  cowork-migrate:
+    profiles: ["cowork"]
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.cowork
+    command: ["migrate"]
+    environment:
+      COWORK_DATABASE_URL: postgres://garam:garam@postgres:5432/cowork?sslmode=disable
+    depends_on:
+      cowork-db:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # Artifacts go to the rustfs above, in a bucket serve creates where it
+  # is missing, and HTML artifacts are viewed from a user-content origin
+  # of their own on localhost:8092 (ADR-0127 §8). The signing key, like
+  # rustfs's keys, is this stack's alone and signs nothing a deployment
+  # trusts.
+  cowork:
+    profiles: ["cowork"]
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.cowork
+    command: ["serve"]
+    environment:
+      COWORK_DATABASE_URL: postgres://garam:garam@postgres:5432/cowork?sslmode=disable
+      COWORK_PLATFORM_URL: http://api:8080
+      COWORK_LISTEN_ADDR: ":8090"
+      COWORK_WEB_ORIGINS: console.garam.localhost:${COWORK_LOCAL_WEB_PORT:-3100}
+      COWORK_BLOB_STORE: s3
+      COWORK_S3_ENDPOINT: http://rustfs:9000
+      COWORK_S3_BUCKET: cowork
+      COWORK_S3_PATH_STYLE: "true"
+      COWORK_S3_CREATE_BUCKET: "true"
+      COWORK_S3_ACCESS_KEY: cowork
+      COWORK_S3_SECRET_KEY: cowork-local-secret
+      COWORK_USERCONTENT_ORIGIN: http://localhost:${COWORK_LOCAL_USERCONTENT_PORT:-8092}
+      COWORK_USERCONTENT_ADDR: ":8092"
+      COWORK_USERCONTENT_SECRET: local-stack-only-usercontent-signing-key
+    ports:
+      - "${COWORK_LOCAL_PORT:-8090}:8090"
+      - "${COWORK_LOCAL_USERCONTENT_PORT:-8092}:8092"
+    depends_on:
+      cowork-migrate:
+        condition: service_completed_successfully
+      rustfs:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    # /readyz, which answers while the database does. The image is
+    # scratch, so the check runs the binary's own probe subcommand.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/cowork", "probe", "http://127.0.0.1:8090/readyz"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  # cowork-web reads every address at runtime; nothing is baked. Its
+  # server reaches cowork and the api inside the network, and the
+  # browser reaches cowork's sync WebSocket on the host.
+  cowork-web:
+    profiles: ["cowork"]
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.web
+      args:
+        APP: cowork-web
+    environment:
+      COWORK_API_URL: http://cowork:8090
+      COWORK_SYNC_URL: ws://console.garam.localhost:${COWORK_LOCAL_PORT:-8090}
+      GARAM_API_URL: http://api:8080
+      GARAM_CONSOLE_URL: ${GARAM_CONSOLE_URL:-http://console.garam.localhost:3000}
+    ports:
+      - "${COWORK_LOCAL_WEB_PORT:-3100}:3000"
+    depends_on:
+      cowork:
+        condition: service_healthy
+    # The app serves no probe route; its home page asks nothing outside
+    # the process of a visitor with no session.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
 volumes:
   postgres-data:

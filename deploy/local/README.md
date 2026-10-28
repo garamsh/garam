@@ -1,8 +1,8 @@
 # Local stack
 
 Runs the whole garam stack on one machine with Docker Compose:
-Postgres, migrations, the authz engine, the API, and — behind a
-profile — the web frontend.
+Postgres, migrations, the authz engine, the API, and — behind
+profiles — the web frontend and cowork.
 
 `garam serve machine` — the listener a machine identity authenticates
 on — is not part of this stack
@@ -28,6 +28,7 @@ no second compose file.
 - Files
 - Up and down
 - Startup order
+- cowork
 - Probes
 - Metrics
 - Configuration
@@ -83,11 +84,17 @@ moves that one server rather than standing up a second.
 
 ## Files
 
-- `docker-compose.yml` — the stack; the `web` service is profile-gated.
+- `docker-compose.yml` — the stack; the `web` and `cowork` services are
+  profile-gated.
 - `Dockerfile` — multi-stage build of the `garam` binary; context is the
   repository root.
-- `Dockerfile.web` — multi-stage Next.js standalone build; context is
-  `platform-web/`.
+- `Dockerfile.cowork` — multi-stage build of the `cowork` binary;
+  context is the repository root, kept to cowork's module by
+  `Dockerfile.cowork.dockerignore`.
+- `Dockerfile.web` — multi-stage Next.js standalone build of the app
+  `APP` names: `platform-web`, `site-web` or `cowork-web`; context is
+  the repository root, kept to the web packages by
+  `Dockerfile.web.dockerignore`.
 - `.env.example` — every variable the stack reads.
 
 ## Up and down
@@ -127,13 +134,46 @@ console is handed its session by the site after a sign-in there
 hosts rather than on two ports of `localhost`. Every port, Postgres'
 included, is overridable — see `.env.example`.
 
+## cowork
+
+```sh
+docker compose -f deploy/local/docker-compose.yml --profile web --profile cowork up --build
+docker compose -f deploy/local/docker-compose.yml --profile web --profile cowork down
+```
+
+The `cowork` profile adds four services: `cowork-db`, a one-shot that
+creates the `cowork` database on the one Postgres where absent;
+`cowork-migrate`, which applies `cowork/migrations/` to it; `cowork`,
+the server; and `cowork-web`, its web app. cowork keeps artifacts in
+the `rustfs` service's `cowork` bucket.
+
+Open cowork at `http://console.garam.localhost:3100`. It has no
+sign-in of its own: sign in at the console, which needs the `web`
+profile, and the console's session cookie, which names that host and
+not a port, reaches cowork-web there. For the same reason the browser
+opens a page's sync WebSocket to `console.garam.localhost:8090`.
+
+- `localhost:8090` — cowork's API, sync, live and MCP endpoints, and
+  its `/healthz` and `/readyz`.
+- `localhost:8092` — the user-content origin HTML artifacts are viewed
+  from.
+- `localhost:3100` — cowork-web.
+
+`COWORK_LOCAL_PORT`, `COWORK_LOCAL_USERCONTENT_PORT` and
+`COWORK_LOCAL_WEB_PORT` move them. `make cowork-image-e2e
+cowork-web-image-e2e` checks both images outside the stack, as
+`images.yml` does.
+
 ## Startup order
 
 `migrate` runs once against a healthy Postgres and exits; `authz` and
 `api` wait for it to have exited successfully. `api` additionally waits
-for `authz`, and `web` and `site` for `api`. Every server's
-healthcheck is its own readiness probe, so a service is healthy here
-when it can serve a request and not merely when it has bound its port.
+for `authz`, and `web` and `site` for `api`. `cowork-migrate` waits
+for `cowork-db`, `cowork` for it, `rustfs` and `api`, and `cowork-web`
+for `cowork`. Every server's healthcheck is its own readiness probe,
+so a service is healthy here when it can serve a request and not
+merely when it has bound its port; cowork-web, which serves no probe,
+is healthy once it renders its home page.
 
 ## Probes
 

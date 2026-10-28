@@ -10,6 +10,7 @@ authoritative for.
 - Authentication and enrollment profiles
 - What admits a caller
 - What decides the rest
+- An agent on the browser-facing listener
 - What a specification is authoritative for
 - What nothing checks
 - Where a change to a surface lands
@@ -566,6 +567,30 @@ what the commitment binds is the surface that serves that domain when it
 arrives
 ([ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)).
 
+## An agent on the browser-facing listener
+
+**Unbuilt.**
+[ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
+admits an agent to the browser-facing listener as itself. Until it is
+built, that listener admits a session alone (§What admits a caller),
+and `platform/api/openapi.yaml` declares no scheme for anything else.
+
+- **What admits it** is an agent token whose audience is the browser
+  API, presented as `Authorization: Bearer` and read on every request
+  beside the agent's assignment and lineage
+  ([machine-identity.md](./machine-identity.md) §Browser tokens).
+- **What decides the rest** is the engine, on the agent's GRN and its
+  groups with no role statements ([authz.md](./authz.md) §An agent on
+  the browser-facing listener).
+- **What it never reaches**, whatever a policy grants: any operation
+  outside `/orgs/{org}` for the organization its GRN names — sign-in,
+  sessions, the device grant, `/me`, the organization list and
+  creation, and invitations by token — and `issueOperatorKey`,
+  `createInvitation`, `mintOperationAuthority` and
+  `approveAgentEnrollment` inside it.
+- **What records it.** The request line names the agent's GRN in the
+  machine principal's field, not the user's.
+
 ## What a specification is authoritative for
 
 One specification per listener, and a third listener repeats that
@@ -887,3 +912,7 @@ document owes an update.
 - [ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)
   — the CLI signs in by the device grant, and the browser API accepts
   its session as a bearer wherever it accepts the cookie
+- [ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
+  — an agent calls the browser API with an agent token of the browser
+  audience, authorized by the policies reaching its GRN, inside a
+  floor no policy lifts; unbuilt

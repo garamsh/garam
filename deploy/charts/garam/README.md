@@ -176,9 +176,9 @@ the machine listener's own rather than one every pod in the namespace
 presents.
 
 `serve api` needs one when it reads a cloud-held secret of its own —
-Google sign-in is the pending case. `authz`, `web`, `site` and
-`migrate` read none, so a role bound to an account for any of them would grant what
-nothing asks for.
+Google sign-in is the pending case. `authz`, `web`, `site` and `migrate`
+read none, so a role bound to an account for any of them would grant
+what nothing asks for.
 
 Getting the machine listener's identity wrong fails in the right
 direction — the pod does not start, and restoring the identity fixes it.
@@ -227,24 +227,21 @@ fails without them:
   site, on the same terms (`site/src/lib/garam.ts`).
 - `web.siteUrl` and `site.consoleUrl` — where each app sends a visitor
   to the other (ADR-0131): the console sends a visitor without a
-  session to the site's `/login`, and the site sends a signed-in
-  visitor, and every address under `/console`, to the console. Both
+  session to the site's `/handoff`, and the site sends the code it
+  hands back, and every address under `/console`, to the console. Both
   are read when a request arrives, so the published images name no
   deployment's hosts.
 
-**`api.cookieDomain` scopes the session to the parent domain both apps
-are served under** (ADR-0131): `garam.sh` for `garam.sh` and
-`console.garam.sh`. Without it each cookie is host-only, and a person
-signed in on the site arrives at the console signed out. Every host
-under that parent receives the session cookie, so nothing but garam's
-own apps may be served there: content users publish is served from a
-domain outside it (ADR-0127's user-content domain).
+**Each app holds a host-only session.** A person signs in on the site,
+and the console is handed a session of its own on its host by a
+one-time code (ADR-0131), so the chart sets no cookie domain and the
+two hosts need not share a parent.
 
 **Each image carries the account it declares**, as `runAsUser` and
 `runAsGroup` under `image.server`, `image.web` and `image.site`. The
 defaults are what the two Dockerfiles build — 10001 for the server
-image, 1000 for the web images' `node` — and a deployment running either under
-another account moves the pair there rather than one pair per
+image, 1000 for the web images' `node` — and a deployment running either
+under another account moves the pair there rather than one pair per
 workload, because four of the five workloads run the server image. The
 machine pod takes the server pair for its `fsGroup` as well: the copy
 its init container makes has to be owned by the UID the container

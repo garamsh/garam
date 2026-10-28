@@ -162,6 +162,42 @@ type ClientInterface interface {
 	// Corresponds with POST /auth/device/token (the `DeviceToken` operationId).
 	DeviceTokenWithFormdataBody(ctx context.Context, body DeviceTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// IssueSessionHandoffWithBody Hand the current sign-in to another of garam's apps.
+	//
+	// Issues a one-time code that hands the caller's sign-in to another app garam serves on a host of its own (ADR-0131). The session cookie is host-only, so the site, where a person signs in, issues the code and redirects to the app that asked; that app redeems it with `POST /auth/handoff/redeem` and receives a session of its own. `state` is what the receiving app holds in a cookie of its own, so a code redeems only in the browser that asked for it. The code lives a minute and redeems once. Only a browser's session hands off: one presented as a bearer is refused with 401, so a CLI's session buys no browser session.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /auth/handoff (the `IssueSessionHandoff` operationId).
+	IssueSessionHandoffWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// IssueSessionHandoff Hand the current sign-in to another of garam's apps.
+	//
+	// Issues a one-time code that hands the caller's sign-in to another app garam serves on a host of its own (ADR-0131). The session cookie is host-only, so the site, where a person signs in, issues the code and redirects to the app that asked; that app redeems it with `POST /auth/handoff/redeem` and receives a session of its own. `state` is what the receiving app holds in a cookie of its own, so a code redeems only in the browser that asked for it. The code lives a minute and redeems once. Only a browser's session hands off: one presented as a bearer is refused with 401, so a CLI's session buys no browser session.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /auth/handoff (the `IssueSessionHandoff` operationId).
+	IssueSessionHandoff(ctx context.Context, body IssueSessionHandoffJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RedeemSessionHandoffWithBody Redeem a handoff code for a session on this host.
+	//
+	// Spends a code `POST /auth/handoff` issued, with the state it was issued for, and sets the `garam_session` cookie for a new session of the same person (ADR-0131). The new session ends with the sign-in it was handed off from, and signing out of either ends both. A code that is unknown, lapsed, already redeemed or presented with another state is refused with one 401.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /auth/handoff/redeem (the `RedeemSessionHandoff` operationId).
+	RedeemSessionHandoffWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RedeemSessionHandoff Redeem a handoff code for a session on this host.
+	//
+	// Spends a code `POST /auth/handoff` issued, with the state it was issued for, and sets the `garam_session` cookie for a new session of the same person (ADR-0131). The new session ends with the sign-in it was handed off from, and signing out of either ends both. A code that is unknown, lapsed, already redeemed or presented with another state is refused with one 401.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /auth/handoff/redeem (the `RedeemSessionHandoff` operationId).
+	RedeemSessionHandoff(ctx context.Context, body RedeemSessionHandoffJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// Login Start the OAuth authorization code flow.
 	//
 	// Redirects to the provider's authorization URL. Sets short-lived cookies carrying the OIDC state and PKCE verifier, which the callback validates.
@@ -1157,6 +1193,82 @@ func (c *Client) DeviceTokenWithBody(ctx context.Context, contentType string, bo
 // Corresponds with POST /auth/device/token (the `DeviceToken` operationId).
 func (c *Client) DeviceTokenWithFormdataBody(ctx context.Context, body DeviceTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeviceTokenRequestWithFormdataBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// IssueSessionHandoffWithBody Hand the current sign-in to another of garam's apps.
+//
+// Issues a one-time code that hands the caller's sign-in to another app garam serves on a host of its own (ADR-0131). The session cookie is host-only, so the site, where a person signs in, issues the code and redirects to the app that asked; that app redeems it with `POST /auth/handoff/redeem` and receives a session of its own. `state` is what the receiving app holds in a cookie of its own, so a code redeems only in the browser that asked for it. The code lives a minute and redeems once. Only a browser's session hands off: one presented as a bearer is refused with 401, so a CLI's session buys no browser session.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /auth/handoff (the `IssueSessionHandoff` operationId).
+func (c *Client) IssueSessionHandoffWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewIssueSessionHandoffRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// IssueSessionHandoff Hand the current sign-in to another of garam's apps.
+//
+// Issues a one-time code that hands the caller's sign-in to another app garam serves on a host of its own (ADR-0131). The session cookie is host-only, so the site, where a person signs in, issues the code and redirects to the app that asked; that app redeems it with `POST /auth/handoff/redeem` and receives a session of its own. `state` is what the receiving app holds in a cookie of its own, so a code redeems only in the browser that asked for it. The code lives a minute and redeems once. Only a browser's session hands off: one presented as a bearer is refused with 401, so a CLI's session buys no browser session.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /auth/handoff (the `IssueSessionHandoff` operationId).
+func (c *Client) IssueSessionHandoff(ctx context.Context, body IssueSessionHandoffJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewIssueSessionHandoffRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RedeemSessionHandoffWithBody Redeem a handoff code for a session on this host.
+//
+// Spends a code `POST /auth/handoff` issued, with the state it was issued for, and sets the `garam_session` cookie for a new session of the same person (ADR-0131). The new session ends with the sign-in it was handed off from, and signing out of either ends both. A code that is unknown, lapsed, already redeemed or presented with another state is refused with one 401.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /auth/handoff/redeem (the `RedeemSessionHandoff` operationId).
+func (c *Client) RedeemSessionHandoffWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRedeemSessionHandoffRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RedeemSessionHandoff Redeem a handoff code for a session on this host.
+//
+// Spends a code `POST /auth/handoff` issued, with the state it was issued for, and sets the `garam_session` cookie for a new session of the same person (ADR-0131). The new session ends with the sign-in it was handed off from, and signing out of either ends both. A code that is unknown, lapsed, already redeemed or presented with another state is refused with one 401.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /auth/handoff/redeem (the `RedeemSessionHandoff` operationId).
+func (c *Client) RedeemSessionHandoff(ctx context.Context, body RedeemSessionHandoffJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRedeemSessionHandoffRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3236,6 +3348,86 @@ func NewDeviceTokenRequestWithBody(server string, contentType string, body io.Re
 	}
 
 	operationPath := fmt.Sprintf("/auth/device/token")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewIssueSessionHandoffRequest calls the generic IssueSessionHandoff builder with application/json body
+func NewIssueSessionHandoffRequest(server string, body IssueSessionHandoffJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewIssueSessionHandoffRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewIssueSessionHandoffRequestWithBody constructs an http.Request for the IssueSessionHandoff method, with any body, and a specified content type
+func NewIssueSessionHandoffRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/auth/handoff")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRedeemSessionHandoffRequest calls the generic RedeemSessionHandoff builder with application/json body
+func NewRedeemSessionHandoffRequest(server string, body RedeemSessionHandoffJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRedeemSessionHandoffRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewRedeemSessionHandoffRequestWithBody constructs an http.Request for the RedeemSessionHandoff method, with any body, and a specified content type
+func NewRedeemSessionHandoffRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/auth/handoff/redeem")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -7110,6 +7302,42 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /auth/device/token (the `DeviceToken` operationId).
 	DeviceTokenWithFormdataBodyWithResponse(ctx context.Context, body DeviceTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*DeviceTokenResponse, error)
 
+	// IssueSessionHandoffWithBodyWithResponse Hand the current sign-in to another of garam's apps.
+	//
+	// Issues a one-time code that hands the caller's sign-in to another app garam serves on a host of its own (ADR-0131). The session cookie is host-only, so the site, where a person signs in, issues the code and redirects to the app that asked; that app redeems it with `POST /auth/handoff/redeem` and receives a session of its own. `state` is what the receiving app holds in a cookie of its own, so a code redeems only in the browser that asked for it. The code lives a minute and redeems once. Only a browser's session hands off: one presented as a bearer is refused with 401, so a CLI's session buys no browser session.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /auth/handoff (the `IssueSessionHandoff` operationId).
+	IssueSessionHandoffWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*IssueSessionHandoffResponse, error)
+
+	// IssueSessionHandoffWithResponse Hand the current sign-in to another of garam's apps.
+	//
+	// Issues a one-time code that hands the caller's sign-in to another app garam serves on a host of its own (ADR-0131). The session cookie is host-only, so the site, where a person signs in, issues the code and redirects to the app that asked; that app redeems it with `POST /auth/handoff/redeem` and receives a session of its own. `state` is what the receiving app holds in a cookie of its own, so a code redeems only in the browser that asked for it. The code lives a minute and redeems once. Only a browser's session hands off: one presented as a bearer is refused with 401, so a CLI's session buys no browser session.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /auth/handoff (the `IssueSessionHandoff` operationId).
+	IssueSessionHandoffWithResponse(ctx context.Context, body IssueSessionHandoffJSONRequestBody, reqEditors ...RequestEditorFn) (*IssueSessionHandoffResponse, error)
+
+	// RedeemSessionHandoffWithBodyWithResponse Redeem a handoff code for a session on this host.
+	//
+	// Spends a code `POST /auth/handoff` issued, with the state it was issued for, and sets the `garam_session` cookie for a new session of the same person (ADR-0131). The new session ends with the sign-in it was handed off from, and signing out of either ends both. A code that is unknown, lapsed, already redeemed or presented with another state is refused with one 401.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /auth/handoff/redeem (the `RedeemSessionHandoff` operationId).
+	RedeemSessionHandoffWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RedeemSessionHandoffResponse, error)
+
+	// RedeemSessionHandoffWithResponse Redeem a handoff code for a session on this host.
+	//
+	// Spends a code `POST /auth/handoff` issued, with the state it was issued for, and sets the `garam_session` cookie for a new session of the same person (ADR-0131). The new session ends with the sign-in it was handed off from, and signing out of either ends both. A code that is unknown, lapsed, already redeemed or presented with another state is refused with one 401.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /auth/handoff/redeem (the `RedeemSessionHandoff` operationId).
+	RedeemSessionHandoffWithResponse(ctx context.Context, body RedeemSessionHandoffJSONRequestBody, reqEditors ...RequestEditorFn) (*RedeemSessionHandoffResponse, error)
+
 	// LoginWithResponse Start the OAuth authorization code flow.
 	//
 	// Redirects to the provider's authorization URL. Sets short-lived cookies carrying the OIDC state and PKCE verifier, which the callback validates.
@@ -8302,6 +8530,109 @@ func (r DeviceTokenResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DeviceTokenResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type IssueSessionHandoffResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *SessionHandoff
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r IssueSessionHandoffResponse) GetJSON201() *SessionHandoff {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r IssueSessionHandoffResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r IssueSessionHandoffResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetBody returns the raw response body bytes
+func (r IssueSessionHandoffResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r IssueSessionHandoffResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r IssueSessionHandoffResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r IssueSessionHandoffResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RedeemSessionHandoffResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RedeemSessionHandoffResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RedeemSessionHandoffResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetBody returns the raw response body bytes
+func (r RedeemSessionHandoffResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RedeemSessionHandoffResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RedeemSessionHandoffResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RedeemSessionHandoffResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -13547,6 +13878,66 @@ func (c *ClientWithResponses) DeviceTokenWithFormdataBodyWithResponse(ctx contex
 	return ParseDeviceTokenResponse(rsp)
 }
 
+// IssueSessionHandoffWithBodyWithResponse Hand the current sign-in to another of garam's apps.
+//
+// Issues a one-time code that hands the caller's sign-in to another app garam serves on a host of its own (ADR-0131). The session cookie is host-only, so the site, where a person signs in, issues the code and redirects to the app that asked; that app redeems it with `POST /auth/handoff/redeem` and receives a session of its own. `state` is what the receiving app holds in a cookie of its own, so a code redeems only in the browser that asked for it. The code lives a minute and redeems once. Only a browser's session hands off: one presented as a bearer is refused with 401, so a CLI's session buys no browser session.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /auth/handoff (the `IssueSessionHandoff` operationId).
+func (c *ClientWithResponses) IssueSessionHandoffWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*IssueSessionHandoffResponse, error) {
+	rsp, err := c.IssueSessionHandoffWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseIssueSessionHandoffResponse(rsp)
+}
+
+// IssueSessionHandoffWithResponse Hand the current sign-in to another of garam's apps.
+//
+// Issues a one-time code that hands the caller's sign-in to another app garam serves on a host of its own (ADR-0131). The session cookie is host-only, so the site, where a person signs in, issues the code and redirects to the app that asked; that app redeems it with `POST /auth/handoff/redeem` and receives a session of its own. `state` is what the receiving app holds in a cookie of its own, so a code redeems only in the browser that asked for it. The code lives a minute and redeems once. Only a browser's session hands off: one presented as a bearer is refused with 401, so a CLI's session buys no browser session.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /auth/handoff (the `IssueSessionHandoff` operationId).
+func (c *ClientWithResponses) IssueSessionHandoffWithResponse(ctx context.Context, body IssueSessionHandoffJSONRequestBody, reqEditors ...RequestEditorFn) (*IssueSessionHandoffResponse, error) {
+	rsp, err := c.IssueSessionHandoff(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseIssueSessionHandoffResponse(rsp)
+}
+
+// RedeemSessionHandoffWithBodyWithResponse Redeem a handoff code for a session on this host.
+//
+// Spends a code `POST /auth/handoff` issued, with the state it was issued for, and sets the `garam_session` cookie for a new session of the same person (ADR-0131). The new session ends with the sign-in it was handed off from, and signing out of either ends both. A code that is unknown, lapsed, already redeemed or presented with another state is refused with one 401.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /auth/handoff/redeem (the `RedeemSessionHandoff` operationId).
+func (c *ClientWithResponses) RedeemSessionHandoffWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RedeemSessionHandoffResponse, error) {
+	rsp, err := c.RedeemSessionHandoffWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRedeemSessionHandoffResponse(rsp)
+}
+
+// RedeemSessionHandoffWithResponse Redeem a handoff code for a session on this host.
+//
+// Spends a code `POST /auth/handoff` issued, with the state it was issued for, and sets the `garam_session` cookie for a new session of the same person (ADR-0131). The new session ends with the sign-in it was handed off from, and signing out of either ends both. A code that is unknown, lapsed, already redeemed or presented with another state is refused with one 401.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /auth/handoff/redeem (the `RedeemSessionHandoff` operationId).
+func (c *ClientWithResponses) RedeemSessionHandoffWithResponse(ctx context.Context, body RedeemSessionHandoffJSONRequestBody, reqEditors ...RequestEditorFn) (*RedeemSessionHandoffResponse, error) {
+	rsp, err := c.RedeemSessionHandoff(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRedeemSessionHandoffResponse(rsp)
+}
+
 // LoginWithResponse Start the OAuth authorization code flow.
 //
 // Redirects to the provider's authorization URL. Sets short-lived cookies carrying the OIDC state and PKCE verifier, which the callback validates.
@@ -15327,6 +15718,82 @@ func ParseDeviceTokenResponse(rsp *http.Response) (*DeviceTokenResponse, error) 
 			headers.CacheControl = &value
 		}
 		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseIssueSessionHandoffResponse parses an HTTP response from a IssueSessionHandoffWithResponse call
+func ParseIssueSessionHandoffResponse(rsp *http.Response) (*IssueSessionHandoffResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &IssueSessionHandoffResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest SessionHandoff
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRedeemSessionHandoffResponse parses an HTTP response from a RedeemSessionHandoffWithResponse call
+func ParseRedeemSessionHandoffResponse(rsp *http.Response) (*RedeemSessionHandoffResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RedeemSessionHandoffResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
 	}
 
 	return response, nil

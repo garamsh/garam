@@ -117,7 +117,7 @@ Two Next.js apps talk to the Go backend through a same-origin `/api/*`
 rewrite ([ADR-0009](./docs/architecture/adr/0009-web-frontend.md)):
 [`site/`](./site/), the landing page and the way in, and
 [`console/`](./console/), the signed-in application, each on its own
-origin ([ADR-0131](./docs/architecture/adr/0131-the-session-cookie-is-scoped-to-the-deployments-parent-domain-and-only-garams-own-apps-are-served-under-it.md)).
+origin ([ADR-0131](./docs/architecture/adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)).
 They share one lockfile at the root; `make -C site ci` and
 `make -C console ci` are their gates, and `make ci` runs both — so
 `make ci` needs pnpm and Node as well as Go.
@@ -129,11 +129,10 @@ pnpm --dir console dev    # console on http://console.garam.localhost:3000
 pnpm --dir site dev       # site on http://garam.localhost:3001
 ```
 
-Copy each app's `.env.example` to `.env.local` and point
-`GARAM_API_URL` at your backend. The session crosses from the site to
-the console only when the backend runs with
-`GARAM_COOKIE_DOMAIN=garam.localhost` and both are opened on those
-hosts. Google sign-in registers only when the backend holds
+Copy each app's `.env.example` to `.env.local` and point `GARAM_API_URL`
+at your backend. Open each app on the host shown: a person signs in on
+the site, and the console is handed a session of its own on its host
+(ADR-0131). Google sign-in registers only when the backend holds
 `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and additionally needs
 `GOOGLE_REDIRECT_URL` set to
 `http://garam.localhost:3001/api/auth/callback/google`, so the OAuth

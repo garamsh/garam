@@ -1096,10 +1096,10 @@ ADRs:
   contract; every grant is a readable policy, and the service reads
   membership from an entity store its owners feed; not yet built;
   supersedes 0002, 0003, 0007, 0008, 0025 and 0038 in part
-- [0131](./adr/0131-the-session-cookie-is-scoped-to-the-deployments-parent-domain-and-only-garams-own-apps-are-served-under-it.md)
-  — the session cookie carries `Domain=` the deployment's parent
-  domain, read from `GARAM_COOKIE_DOMAIN`, so one sign-in on `site/`
-  reaches `console/` and every other app garam ships under it; the
-  site redirects `/console/*` to the console's origin and the console
-  sends a signed-out visitor to the site; nothing a user publishes,
-  and nothing garam does not ship, is served under that domain
+- [0131](./adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)
+  — the session cookie stays host-only to each app; a person signs in
+  on `site/`, and another app is handed a session of its own by a
+  one-time code the site issues and the app redeems on its own host,
+  bound to a state the app holds; signing out on any host ends the
+  sign-in on all of them; the site redirects `/console/*` to the
+  console's origin

@@ -21,7 +21,7 @@ decide.
 Two Next.js App Router applications implement it, TypeScript strict,
 Tailwind and shadcn/ui ([ADR-0009](./adr/0009-web-frontend.md)), each
 on an origin of its own
-([ADR-0131](./adr/0131-the-session-cookie-is-scoped-to-the-deployments-parent-domain-and-only-garams-own-apps-are-served-under-it.md)):
+([ADR-0131](./adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)):
 `site/` serves the landing page and the way in, and `console/` the
 signed-in application. Both build on `design/`, the shared tokens and
 primitives, and on `platform/client/`, the one client of the backend
@@ -257,14 +257,16 @@ The page reads the invitation first (`GET /invitations/{token}`, which
 needs no session) and names the organization and role it admits to;
 one already used, expired or unknown is said, with nothing to accept.
 Accepting lands in that organization. A visitor without a session is
-sent to the site's `/login` with the path as its `next` parameter, which
+sent through the console's `/auth/sign-in` to the site, whose `/login`
+takes the path as its `next` parameter, which
 `/login` and `/register` carry between them and return to once a
 session exists, so the token survives either way in
 (`console/src/lib/return-path.ts`, which returns only to a console
 path, on the console's origin). The session reaches the console from
-the site because the cookie names the two hosts' parent domain
-([sign-in.md](./sign-in.md)). A session the backend rejects behind a
-cookie the browser still holds is sent the same way:
+the site by a one-time code the console redeems on its own host
+(`console/src/app/auth/`, [sign-in.md](./sign-in.md)). A session the
+backend rejects behind a cookie the browser still holds is sent the
+same way:
 `console/src/proxy.ts` stamps each console request with its path, and
 the redirect reads it back. The Google button
 posts the same path in its form body to `POST /auth/login/{provider}`,
@@ -290,13 +292,15 @@ it sends no referrer, since the code can ride in its address.
 
 Where the token may appear is fixed:
 
-- **In three URLs only:** the invitation link, and `/login?next=…` and
-  `/register?next=…`. All three are served with
-  `referrer: no-referrer`, and a link carrying one does not prefetch.
-  The invitation link is the console's and the other two the site's,
-  so a redirect between them crosses origins (ADR-0131 §Consequences).
-- **Nowhere else:** in no redirect off the two hosts' parent domain, in
-  no client storage, and in no other URL.
+- **In the invitation link and the sign-in's own URLs only:** the
+  site's `/login?next=…`, `/register?next=…` and `/handoff?next=…`, and
+  the console's `/auth/sign-in?next=…` and `/auth/handoff?next=…`.
+  Every one is served or redirected to with `referrer: no-referrer`,
+  and a link carrying one does not prefetch. The invitation link is
+  the console's and the sign-in the site's, so a redirect between them
+  crosses origins (ADR-0131 §Consequences).
+- **Nowhere else:** in no redirect to an origin garam does not serve,
+  in no client storage, and in no other URL.
 
 No organization, group, project or user is addressed by its GRN
 anywhere in the interface. A policy document is authored text naming
@@ -564,8 +568,9 @@ The boundary is as much of the responsibility as the contents.
   session cookie to the site's `/login`, and that is a fast path
   rather than a gate: a cookie can be expired or revoked, so the
   console verifies the session against `/me`, and a 401 from any read
-  sends the visitor to `/login` regardless. Every org-scoped decision
-  belongs to the policy engine ([ADR-0002](./adr/0002-iam-style-policy-model.md),
+  sends the visitor to sign in regardless. Every org-scoped decision
+  belongs to the policy engine
+  ([ADR-0002](./adr/0002-iam-style-policy-model.md),
   [authz.md](./authz.md)).
   - **The console asks the server whether the caller may take an
     action.** It asks through a permission-check API that answers

@@ -105,9 +105,21 @@ test.describe("password accounts", () => {
     await signingIn.getByRole("button", { name: "Sign in" }).click();
 
     // Signed in on the site, and shown the console on its own host
-    // without a second sign-in: the cookie the site replanted is
-    // scoped to the parent both share (ADR-0131).
+    // without a second sign-in: the console was handed a session of
+    // its own (ADR-0131).
     await expect(signingIn).toHaveURL(`${CONSOLE_URL}/console/orgs`);
+    // Each host holds its own host-only cookie, and they differ: the
+    // console's is the handoff's, not the site's carried across.
+    const held = (await context.cookies()).filter(
+      (cookie) => cookie.name === "garam_session",
+    );
+    expect(held.map((cookie) => cookie.domain).sort()).toEqual(
+      [
+        new URL(baseURL ?? "http://garam.localhost:3001").hostname,
+        new URL(CONSOLE_URL).hostname,
+      ].sort(),
+    );
+    expect(new Set(held.map((cookie) => cookie.value)).size).toBe(2);
     // The membership the invitation named, held by the account the
     // password signed in as. Substring on purpose: the card link's
     // accessible name carries the org's slug beside its name.

@@ -86,10 +86,6 @@ func serveAPI(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	cookieDomain, err := parseCookieDomain(envOr(envCookieDomain, ""))
-	if err != nil {
-		return err
-	}
 	tokenURL, err := operator.ParseTokenEndpoint(envOr(envMachineTokenURL, ""))
 	if err != nil {
 		return errorx.Wrap(err, string(envMachineTokenURL))
@@ -137,7 +133,6 @@ func serveAPI(cmd *cobra.Command) error {
 		api.Config{
 			SessionTTL:   ttl,
 			CookieSecure: cookieSecure,
-			CookieDomain: cookieDomain,
 			TokenURL:     tokenURL,
 		},
 	).WithCredentialAudit(auditpg.NewCredentialStore(pool)).
@@ -203,21 +198,6 @@ func envBool(key envName, fallback string) (bool, error) {
 		return false, errorx.Wrap(err, string(key), errorx.KindInvalidArgument)
 	}
 	return b, nil
-}
-
-// parseCookieDomain reads the domain every cookie names (ADR-0131).
-// net/http drops a Domain it cannot write and still sets the cookie
-// host-only, so a misspelt value would sign a person in on one host
-// alone; it is refused at startup instead.
-func parseCookieDomain(v string) (string, error) {
-	if v == "" {
-		return "", nil
-	}
-	c := http.Cookie{Name: "garam_session", Value: "v", Domain: v}
-	if err := c.Valid(); err != nil {
-		return "", errorx.Wrap(err, string(envCookieDomain), errorx.KindInvalidArgument)
-	}
-	return v, nil
 }
 
 // googleProvider resolves the Google sign-in provider: nil unless the

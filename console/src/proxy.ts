@@ -4,18 +4,20 @@ import {
   RETURN_PATH_HEADER,
   withReturnPath,
 } from "@garam/platform-client/return-path";
+import { HANDOFF_START_PATH } from "@garam/platform-client/handoff";
 import { SESSION_COOKIE } from "@garam/platform-client/session";
 
 import { env } from "@/env";
 
 /**
- * Sends visitors without a session cookie to the site's login page
- * before the console shell renders (ADR-0131). This is a fast path, not
- * the authorization gate: a cookie may be expired or revoked, so
- * `/console` verifies the session against the backend's `/me`, and the
- * login page sends a visitor who already has a valid one back here.
+ * Sends visitors without a session cookie to sign in before the console
+ * shell renders. The session cookie is host-only (ADR-0131), so signing
+ * in is a handoff from the site, which `HANDOFF_START_PATH` starts. This
+ * is a fast path, not the authorization gate: a cookie may be expired or
+ * revoked, so `/console` verifies the session against the backend's
+ * `/me` and starts the same handoff when it is refused.
  *
- * The address asked for travels to the login page as its return path,
+ * The address asked for travels through the handoff as its return path,
  * so signing in — or registering from an invitation — lands where the
  * visitor was going rather than on the console's front page.
  *
@@ -41,7 +43,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.next({ request: { headers } });
   }
   return NextResponse.redirect(
-    new URL(withReturnPath("/login", pathname + search), env.GARAM_SITE_URL),
+    new URL(withReturnPath(HANDOFF_START_PATH, pathname + search), request.url),
   );
 }
 

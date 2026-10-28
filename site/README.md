@@ -3,7 +3,7 @@
 The public face of garam: the landing page, sign-in and registration,
 on its own origin beside [`console/`](../console/README.md), the
 signed-in application
-([ADR-0131](../docs/architecture/adr/0131-the-session-cookie-is-scoped-to-the-deployments-parent-domain-and-only-garams-own-apps-are-served-under-it.md)).
+([ADR-0131](../docs/architecture/adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)).
 Its stack and conventions are the console's: Next.js App Router,
 TypeScript strict, Tailwind CSS v4 and shadcn/ui, through the shared
 [`design/`](../design/) package

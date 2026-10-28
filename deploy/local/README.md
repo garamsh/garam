@@ -121,11 +121,11 @@ tree built twice still lands on two image ids.
 The API answers on `http://localhost:8080`; with the `web` profile the
 console answers on `http://console.garam.localhost:3000` and the site on
 `http://garam.localhost:3001`. A browser resolves every `.localhost`
-name to this machine, and the two names share the parent
-`garam.localhost`, which the api scopes the session cookie to
-(`GARAM_COOKIE_DOMAIN`, ADR-0131) so a session signed in on the site
-reaches the console. Every port, Postgres' included, is overridable —
-see `.env.example`.
+name to this machine. Each app holds a host-only session cookie, and the
+console is handed its session by the site after a sign-in there
+(ADR-0131); a cookie names a host and not a port, so the two run on two
+hosts rather than on two ports of `localhost`. Every port, Postgres'
+included, is overridable — see `.env.example`.
 
 ## Startup order
 

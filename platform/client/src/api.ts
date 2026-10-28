@@ -65,6 +65,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand the current sign-in to another of garam's apps.
+         * @description Issues a one-time code that hands the caller's sign-in to another app garam serves on a host of its own (ADR-0131). The session cookie is host-only, so the site, where a person signs in, issues the code and redirects to the app that asked; that app redeems it with `POST /auth/handoff/redeem` and receives a session of its own. `state` is what the receiving app holds in a cookie of its own, so a code redeems only in the browser that asked for it. The code lives a minute and redeems once. Only a browser's session hands off: one presented as a bearer is refused with 401, so a CLI's session buys no browser session.
+         */
+        post: operations["issueSessionHandoff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/handoff/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem a handoff code for a session on this host.
+         * @description Spends a code `POST /auth/handoff` issued, with the state it was issued for, and sets the `garam_session` cookie for a new session of the same person (ADR-0131). The new session ends with the sign-in it was handed off from, and signing out of either ends both. A code that is unknown, lapsed, already redeemed or presented with another state is refused with one 401.
+         */
+        post: operations["redeemSessionHandoff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/providers": {
         parameters: {
             query?: never;
@@ -1333,6 +1373,18 @@ export interface components {
              */
             password: string;
         };
+        SessionHandoffRequest: {
+            /** @description The value the app receiving the handoff holds in a cookie of its own. Only its hash is stored. */
+            state: string;
+        };
+        SessionHandoff: {
+            /** @description The one-time code, redeemable once within a minute. Only its hash is stored. */
+            code: string;
+        };
+        SessionHandoffRedemption: {
+            code: string;
+            state: string;
+        };
         PasswordRegistration: {
             /** @description The invitation being accepted. It names the organization and the role the new account joins with. */
             invitationToken: string;
@@ -2171,6 +2223,56 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Error"];
+        };
+    };
+    issueSessionHandoff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description The code, shown once. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionHandoff"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+        };
+    };
+    redeemSessionHandoff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionHandoffRedemption"];
+            };
+        };
+        responses: {
+            /** @description The session cookie is set. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
         };
     };

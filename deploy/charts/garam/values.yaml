@@ -81,15 +81,6 @@ api:
   # nothing refuses at startup, every page renders, and sign-in never
   # sticks — see the README, §Exposure is the cluster owner's.
   cookieSecure: true
-  # The parent domain the session cookie is scoped to (ADR-0131), so a
-  # person signed in on the site is signed in on the console: the two
-  # hosts' common parent, `garam.sh` for `garam.sh` and
-  # `console.garam.sh`. Empty keeps the cookie host-only, which a
-  # deployment serving the site and the console on one host needs and
-  # one serving them on two does not work with. Every host under it
-  # receives the cookie, so nothing but garam's own apps may be served
-  # there — see the README, §Values a deployment must supply.
-  cookieDomain: ""
   # Set all of these or none of them. Setting any one makes the rest
   # required: garam refuses to start holding one half of the credential,
   # so the render refuses first rather than installing a release whose

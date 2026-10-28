@@ -20,6 +20,11 @@ var ErrSessionNotFound = errorx.New(errorx.KindNotFound, "session not found")
 // is unknown, lapsed or already spent. One answer covers the three.
 var ErrRefreshTokenNotLive = errorx.New(errorx.KindUnauthenticated, "refresh token not live")
 
+// ErrHandoffNotLive is returned when a handoff code was never issued,
+// has lapsed, was already redeemed, or is presented with a state it was
+// not issued for. One answer covers them all, as for a login state.
+var ErrHandoffNotLive = errorx.New(errorx.KindUnauthenticated, "handoff not live")
+
 // ErrOAuthStateNotLive is returned when a login state was never
 // issued, has expired, or has already been consumed. One answer covers
 // the three: whoever presented the state is told it buys nothing, and

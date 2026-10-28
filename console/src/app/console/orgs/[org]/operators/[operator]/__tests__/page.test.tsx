@@ -369,7 +369,7 @@ describe("operator page", () => {
     server.use(...signedOut());
 
     await expect(renderOperator()).rejects.toThrow(
-      "NEXT_REDIRECT:http://garam.localhost:3001/login",
+      "NEXT_REDIRECT:/auth/sign-in",
     );
   });
 });

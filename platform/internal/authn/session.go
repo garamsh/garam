@@ -27,6 +27,10 @@ const (
 	CLIRefreshTTL = 30 * 24 * time.Hour
 )
 
+// HandoffTTL is how long a handoff code can be redeemed (ADR-0131): it
+// crosses one redirect, from the site to the app that asked for it.
+const HandoffTTL = time.Minute
+
 // Session is an authenticated session for a user: a browser's, held as
 // the session cookie, or a CLI's, presented as a bearer (ADR-0005,
 // ADR-0120). Every field is persisted on the row and exported: the type

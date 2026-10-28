@@ -7,22 +7,10 @@ export const CONSOLE_URL =
   process.env.GARAM_E2E_CONSOLE_URL ?? "http://console.garam.localhost:3000";
 
 /**
- * The parent both hosts share, which the api scopes the session cookie
- * to (GARAM_COOKIE_DOMAIN, ADR-0131): the longest suffix the two
- * hostnames have in common.
+ * Plants `session` on the site's host alone, as a sign-in here plants
+ * it: the cookie is host-only (ADR-0131), and the console is handed a
+ * session of its own.
  */
-export function cookieDomain(siteURL: string): string {
-  const site = new URL(siteURL).hostname.split(".").reverse();
-  const consoleHost = new URL(CONSOLE_URL).hostname.split(".").reverse();
-  const shared: string[] = [];
-  for (const [i, label] of site.entries()) {
-    if (consoleHost[i] !== label) break;
-    shared.push(label);
-  }
-  return shared.reverse().join(".");
-}
-
-/** Plants `session` the way the api scopes it: on the shared parent. */
 export async function holdSession(
   context: BrowserContext,
   siteURL: string,
@@ -32,8 +20,7 @@ export async function holdSession(
     {
       name: "garam_session",
       value: session,
-      domain: cookieDomain(siteURL),
-      path: "/",
+      url: siteURL,
       httpOnly: true,
       sameSite: "Lax",
     },

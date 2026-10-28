@@ -131,13 +131,6 @@ services:
       GARAM_AUTHZ_ADDR: authz:9090
       # Plain HTTP locally, so the session cookie cannot be Secure.
       GARAM_COOKIE_SECURE: "false"
-      # The site and the console are two hosts under one parent
-      # (ADR-0131), and a session signed in on one reaches the other
-      # only through a cookie scoped to that parent. `localhost` has no
-      # subdomains to share one with, so the local hosts are
-      # garam.localhost and console.garam.localhost, which a browser
-      # resolves to this machine.
-      GARAM_COOKIE_DOMAIN: ${GARAM_COOKIE_DOMAIN:-garam.localhost}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       # Sign-in is the site's, so Google returns the browser there.
@@ -166,8 +159,12 @@ services:
       timeout: 5s
       retries: 10
 
-  # Opt-in: `docker compose --profile web up`, which starts the console
-  # at console.garam.localhost:3000 and the site at garam.localhost:3001.
+  # Opt-in: `docker compose --profile web up`, which starts the
+  # console at console.garam.localhost:3000 and the site at
+  # garam.localhost:3001.
+  # Each holds a host-only session the site hands it (ADR-0131), and a
+  # cookie names a host and not a port, so the two are two hosts and
+  # not two ports of localhost; a browser resolves both to this machine.
   # The browser reaches the backend through each one's same-origin
   # `/api/*` rewrite.
   web:

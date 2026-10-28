@@ -370,18 +370,3 @@ func TestEngineSeam_DisclosesOverTheHopWhatItWouldInProcess(t *testing.T) {
 		})
 	}
 }
-
-// TestParseCookieDomain refuses what net/http would drop, against a
-// parent domain and the empty value it accepts.
-func TestParseCookieDomain(t *testing.T) {
-	for _, ok := range []string{"", "garam.sh", "garam.test"} {
-		got, err := parseCookieDomain(ok)
-		require.NoError(t, err, ok)
-		assert.Equal(t, ok, got)
-	}
-	for _, bad := range []string{"https://garam.sh", "garam.sh:443", "garam sh"} {
-		_, err := parseCookieDomain(bad)
-		require.Error(t, err, bad)
-		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), bad)
-	}
-}

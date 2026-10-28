@@ -67,7 +67,7 @@ describe("organizations page", () => {
     server.use(...signedOut());
 
     await expect(renderServerComponent(OrgsPage())).rejects.toThrow(
-      "NEXT_REDIRECT:http://garam.localhost:3001/login",
+      "NEXT_REDIRECT:/auth/sign-in",
     );
   });
 });

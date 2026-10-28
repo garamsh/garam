@@ -13,9 +13,10 @@ import { SESSION_COOKIE } from "./session";
  * signed out holding a session that exists.
  *
  * The attributes are read from the header rather than restated here:
- * `Secure`, `Domain` and `Max-Age` are the backend's configuration, and a
- * console deciding either for itself would be a second policy to keep
- * in step with that one.
+ * `Secure` and `Max-Age` are the backend's configuration, and an app
+ * deciding either for itself would be a second policy to keep in step
+ * with that one. The cookie is host-only (ADR-0131): it names no domain,
+ * so it is planted on the host that answered.
  */
 export async function keepSessionCookie(response: Response): Promise<void> {
   const header = response.headers
@@ -34,9 +35,6 @@ export async function keepSessionCookie(response: Response): Promise<void> {
     name: SESSION_COOKIE,
     value: pair.slice(SESSION_COOKIE.length + 1),
     path: attributes.get("path") ?? "/",
-    // The parent domain garam scopes the session to where it serves
-    // more than one host (ADR-0131); host-only where it names none.
-    ...(attributes.get("domain") ? { domain: attributes.get("domain") } : {}),
     httpOnly: attributes.has("httponly"),
     secure: attributes.has("secure"),
     sameSite: sameSiteOf(attributes.get("samesite")),
@@ -70,25 +68,10 @@ function sameSiteOf(value: string | undefined): "lax" | "strict" | "none" {
 }
 
 /**
- * Clears the session cookie on this origin the way the backend cleared
- * it, where `response` carries the backend's clearing `Set-Cookie`.
- *
- * A cookie scoped to the parent domain (ADR-0131) is removed only by a
- * clearing cookie naming the same domain, which the backend's header
- * does and a host-only delete does not. Without that header — a logout
- * the backend refused or never answered — the delete is host-only: a
- * session it rejected is no longer one, and a revocation that failed
- * reaches the caller as the error it is.
+ * Clears the session cookie on this origin. The backend's clearing
+ * `Set-Cookie` does not reach the browser through a Server Action's
+ * response, so the app clears its own.
  */
-export async function clearSessionCookie(response?: Response): Promise<void> {
-  const header = response?.headers
-    .getSetCookie()
-    .find((candidate) => candidate.startsWith(`${SESSION_COOKIE}=`));
-  const domain =
-    header === undefined ? undefined : attributesOf(header).get("domain");
-  (await cookies()).delete({
-    name: SESSION_COOKIE,
-    path: "/",
-    ...(domain ? { domain } : {}),
-  });
+export async function clearSessionCookie(): Promise<void> {
+  (await cookies()).delete(SESSION_COOKIE);
 }

@@ -29,8 +29,9 @@ CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
 
 # Every environment variable garam reads, from its declarations: the
 # envName block in platform/internal/cli, and the console's and the
-# site's src/env.ts parsed for their own shape. The guards chart-render runs first keep the block
-# equal to the reads (#734), and both sides read one character class,
+# site's src/env.ts parsed for their own shape. The guards chart-render
+# runs first keep the block equal to the reads (#734), and both sides
+# read one character class,
 # since a name outside it drops out of both sets and passes unseen
 # (#864).
 CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z][A-Z0-9_]*"' --include=*.go ../../platform/internal ../../platform/cmd | sed 's/.*"\([A-Z][A-Z0-9_]*\)"/\1/' | sort -u)

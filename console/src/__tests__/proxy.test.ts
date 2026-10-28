@@ -15,13 +15,14 @@ function request(path: string, { signedIn = false } = {}) {
 }
 
 describe("proxy", () => {
-  it("sends a visitor without a session cookie to the site's login page, carrying where they were going", () => {
+  it("starts a sign-in handoff for a visitor without a session cookie, carrying where they were going", () => {
     const response = proxy(request("/console/orgs?subject=team"));
 
-    // Sign-in is the site's (ADR-0131), on its own origin.
+    // The cookie is host-only (ADR-0131): this host starts the handoff
+    // that brings a session from the site.
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "http://garam.localhost:3001/login?next=%2Fconsole%2Forgs%3Fsubject%3Dteam",
+      "http://localhost:3000/auth/sign-in?next=%2Fconsole%2Forgs%3Fsubject%3Dteam",
     );
   });
 
@@ -61,8 +62,8 @@ describe("proxy", () => {
     const response = proxy(request("/console/invitations/tok-123"));
 
     const location = new URL(response.headers.get("location") ?? "");
-    expect(location.origin).toBe("http://garam.localhost:3001");
-    expect(location.pathname).toBe("/login");
+    expect(location.origin).toBe("http://localhost:3000");
+    expect(location.pathname).toBe("/auth/sign-in");
     expect(location.searchParams.get("next")).toBe(
       "/console/invitations/tok-123",
     );

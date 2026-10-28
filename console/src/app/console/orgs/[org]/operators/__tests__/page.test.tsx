@@ -273,8 +273,6 @@ describe("operators list", () => {
   it("sends a rejected session to the login page, not to the notice", async () => {
     server.use(...signedOut());
 
-    await expect(renderPage()).rejects.toThrow(
-      "NEXT_REDIRECT:http://garam.localhost:3001/login",
-    );
+    await expect(renderPage()).rejects.toThrow("NEXT_REDIRECT:/auth/sign-in");
   });
 });

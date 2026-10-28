@@ -1,9 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// The site and the console on two hosts under one parent (ADR-0131),
-// the shape a deployment has: a browser resolves every `.localhost`
-// name to this machine, and the session cookie is scoped to the parent
-// the api names in GARAM_COOKIE_DOMAIN.
+// The site and the console on two hosts (ADR-0131), the shape
+// a deployment has: a browser resolves every `.localhost` name to this
+// machine, and each host holds a host-only session of its own.
 const BASE_URL =
   process.env.GARAM_E2E_BASE_URL ?? "http://garam.localhost:3001";
 const CONSOLE_URL =

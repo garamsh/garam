@@ -37,14 +37,17 @@ Accounts minted this way take the reserved `local-` prefix in the user
 identifier space, which a provider subject may not claim, so a password
 account and a provider account can never resolve to one user row.
 
-Every cookie the api sets or clears — the session, and a sign-in's
-OAuth state and PKCE verifier — carries `Domain=` the value of
-`GARAM_COOKIE_DOMAIN` where one is set, and is host-only where none is
-(ADR-0131). That is what lets the site sign a person in and the
-console read the session on its own host
-([web-app.md](./web-app.md) §What it serves). Unset is the default
-and is a single-host deployment's; `platform/internal/cli/serve.go`
-refuses at startup a value no cookie could carry.
+Every cookie the api sets is host-only (ADR-0131). A person signs in
+on the site, and another of garam's apps is handed a session of its
+own: the site asks `POST /auth/handoff` for a one-time code bound to a
+state the app drew and holds in a cookie, and the app's server redeems
+it through `POST /auth/handoff/redeem` with that state
+(`platform/internal/api/handoff.go`). A code lives one minute, redeems
+once, and is issued only on a browser's session, never on a bearer.
+The session a redemption creates records the sign-in it came from
+(`sessions.handed_off_from`) and expires with it, and signing out or
+revoking any session of that family deletes the sign-in, which takes
+every handed-off session with it.
 
 A wrong password and a username no credential belongs to are one
 refusal, in message and in the work done: the second verifies against a

@@ -123,8 +123,43 @@ func (s *SessionStore) Revoke(ctx context.Context, user grn.GRN, id string) erro
 	return nil
 }
 
-// Delete revokes the session for the raw token. Deleting an unknown
-// token is not an error so logout is idempotent.
+// IssueHandoff records a handoff of the sign-in the raw token's live
+// browser session belongs to. Only hashes of the code and the state
+// are stored, as only a session token's hash is.
+func (s *SessionStore) IssueHandoff(ctx context.Context, token, code, state string, ttl time.Duration) error {
+	issued, err := s.q.IssueSessionHandoff(ctx, db.IssueSessionHandoffParams{
+		CodeHash:  authn.HashToken(code),
+		StateHash: authn.HashToken(state),
+		ExpiresAt: pgxtype.Timestamptz(time.Now().Add(ttl)),
+		TokenHash: authn.HashToken(token),
+	})
+	if err != nil {
+		return pgxerr.Classify(err, "issue session handoff", nil, nil)
+	}
+	if issued == 0 {
+		return authn.ErrSessionNotFound
+	}
+	return nil
+}
+
+// RedeemHandoff spends the handoff and stores the session it buys. The
+// statement is the whole decision: two redemptions racing on one code,
+// one row deleted, so only one of them is answered a session.
+func (s *SessionStore) RedeemHandoff(ctx context.Context, code, state, next string) (*authn.Session, error) {
+	row, err := s.q.RedeemSessionHandoff(ctx, db.RedeemSessionHandoffParams{
+		TokenHash: authn.HashToken(next),
+		CreatedAt: pgxtype.Timestamptz(time.Now()),
+		CodeHash:  authn.HashToken(code),
+		StateHash: authn.HashToken(state),
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "redeem session handoff", authn.ErrHandoffNotLive, nil)
+	}
+	return rowToSession(row)
+}
+
+// Delete ends the sign-in the raw token's session belongs to. Deleting
+// an unknown token is not an error so logout is idempotent.
 func (s *SessionStore) Delete(ctx context.Context, token string) error {
 	return pgxerr.Classify(s.q.DeleteSession(ctx, authn.HashToken(token)), "delete session", nil, nil)
 }

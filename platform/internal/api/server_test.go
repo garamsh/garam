@@ -549,48 +549,6 @@ func TestLoginCallbackMeLogout_RoundTrip(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
-// TestCookies_CarryTheConfiguredDomain walks a sign-in and a sign-out
-// with CookieDomain set: every cookie set and every cookie cleared
-// names the parent domain, so a sign-in on one host reaches the others
-// and a sign-out on any of them clears it for all (ADR-0131). The
-// control is the default fixture, whose cookies stay host-only.
-func TestCookies_CarryTheConfiguredDomain(t *testing.T) {
-	walk := func(f *fixture) []*http.Cookie {
-		rec := f.do(t, "GET", "/auth/login/google", "")
-		require.Equal(t, http.StatusFound, rec.Code)
-		set := rec.Result().Cookies()
-		var state string
-		for _, c := range set {
-			if c.Name == "garam_oauth_state" {
-				state = c.Value
-			}
-		}
-		require.NotEmpty(t, state)
-		rec = f.do(t, "GET", "/auth/callback/google?code=ok&state="+state, "", set...)
-		require.Equal(t, http.StatusFound, rec.Code)
-		session := sessionCookieIn(rec)
-		require.NotNil(t, session, "session cookie set")
-		all := append(set, rec.Result().Cookies()...)
-		rec = f.do(t, "POST", "/auth/logout", "", session)
-		require.Equal(t, http.StatusNoContent, rec.Code)
-		return append(all, rec.Result().Cookies()...)
-	}
-
-	wide := newFixtureConfigured(t, api.Config{SessionTTL: time.Hour, TokenURL: fixtureTokenURL, CookieDomain: "garam.test"})
-	wide.provider.identity = &authn.Identity{Subject: "123", Nickname: "Ada"}
-	cookies := walk(wide)
-	require.Len(t, cookies, 6, "state and verifier set; both cleared and the session set; the session cleared")
-	for _, c := range cookies {
-		assert.Equal(t, "garam.test", c.Domain, "%s (MaxAge %d)", c.Name, c.MaxAge)
-	}
-
-	host := newFixture(t)
-	host.provider.identity = &authn.Identity{Subject: "123", Nickname: "Ada"}
-	for _, c := range walk(host) {
-		assert.Empty(t, c.Domain, "%s (MaxAge %d)", c.Name, c.MaxAge)
-	}
-}
-
 // TestMe_NoSession reads the request with a session against the same
 // request without one: the control is what stops being answered if
 // /me starts refusing every caller.

@@ -11,6 +11,7 @@ authoritative for.
 - What admits a caller
 - What decides the rest
 - An agent on the browser-facing listener
+- cowork's principal on the machine listener
 - What a specification is authoritative for
 - What nothing checks
 - Where a change to a surface lands
@@ -591,6 +592,25 @@ and `platform/api/openapi.yaml` declares no scheme for anything else.
 - **What records it.** The request line names the agent's GRN in the
   machine principal's field, not the user's.
 
+## cowork's principal on the machine listener
+
+**Unbuilt (#1664).**
+[ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
+admits a fourth machine caller: each organization's cowork principal.
+Until it is built, no token the listener reads names one.
+
+- **What admits it** is a token from `exchangeClientAssertion`, whose
+  assertion cowork signs with its one deployment key and whose
+  `client_id` is the organization's principal; it is read on every
+  request beside the principal's record and the configured key
+  ([machine-identity.md](./machine-identity.md) §cowork's principal).
+- **What it reaches** is `postMessage` to an agent of its
+  organization, `getMessageStatus` for a message it sent and
+  `getIdentity`. Every other operation on this listener refuses it,
+  and it takes no browser audience.
+- **What decides the rest** is `message:send`, as for any sender
+  ([authz.md](./authz.md) §cowork's principal).
+
 ## What a specification is authoritative for
 
 One specification per listener, and a third listener repeats that
@@ -916,3 +936,7 @@ document owes an update.
   — an agent calls the browser API with an agent token of the browser
   audience, authorized by the policies reaching its GRN, inside a
   floor no policy lifts; unbuilt
+- [ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
+  — cowork acts in each organization as a principal the platform
+  writes with it, proving one deployment key for a machine-listener
+  token that posts to that organization's agents alone; unbuilt

@@ -454,8 +454,9 @@ Responsibility documents:
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam
 - [machine-identity.md](./machine-identity.md) — who is calling on the
-  listener a machine identity authenticates on, and what an agent
-  presents to the browser-facing one
+  listener a machine identity authenticates on, what an agent
+  presents to the browser-facing one, and how a first-party service
+  acts in an organization
 - [messaging.md](./messaging.md) — the durable queue a message reaches
   an agent through, the consent that lets one cross an organization
   boundary, and the signature on every message garam hands out
@@ -1100,6 +1101,14 @@ ADRs:
   posting needs the platform's allow and, for a private channel or a
   direct message, a place on the list; supersedes 0127 in part, on
   keeping a list
+- [0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
+  — each organization has one cowork principal,
+  `grn:<org>:default:service:cowork`, written with the organization;
+  cowork exchanges an assertion its one deployment key signs for a
+  one-hour machine-listener token that posts only to that
+  organization's agents, decided by `message:send`; the deployment
+  holds the key and revokes a principal, which stops that
+  organization's cowork; not yet built
 - [0130](./adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
   — the policy engine becomes `policy/`, a Rust service deciding Cedar
   policies through the reference crates behind an AuthZEN-shaped gRPC

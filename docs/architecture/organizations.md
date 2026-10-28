@@ -8,6 +8,16 @@ carries them as data and stores them, and nothing collects them into a
 decision: a policy reaches a subject through an attachment the authz
 engine owns (ADR-0008), not through this list.
 
+**An organization's cowork principal is unbuilt (#1664).**
+[ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
+has the platform write one, `grn:<org>:default:service:cowork`, in the
+transaction that creates the organization, and a migration write one
+for each organization that exists. Deleting the organization takes it
+by the cascade below. No member manages it: a server command of the
+deployment revokes and re-issues it, and while it is revoked every
+`cowork:` action on the organization is refused
+([machine-identity.md](./machine-identity.md) §cowork's principal).
+
 **What a store writes and reads back is an exported field on the
 aggregate**
 ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)),

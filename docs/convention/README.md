@@ -65,6 +65,7 @@ loses its row above in the same pull request.
 | `stack-container.md` | — | Container images the project builds |
 | `stack-go.md` | — | Go modules and services |
 | `stack-nextjs.md` | — | Next.js App Router applications |
+| `stack-rust.md` | — | Rust workspaces and services |
 | `stack-tailwind.md` | — | Tailwind CSS styling |
 
 A stack file states the concrete form of what any stack-neutral file

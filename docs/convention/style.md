@@ -17,6 +17,20 @@ casing, affixes, a file name's spelling, or the names a stack bans.
 - **Shared concept, named file.** When two helpers share a concept,
   give the concept a name and name their file for it. The path then
   says what the file does, not that it holds helpers.
+- **A path names its responsibility, at every depth.** A reader — a
+  person or an agent — tells what a folder or a file is responsible
+  for from its path alone: `decision/`, `grant/`, `outbox.rs`,
+  `operator-table.tsx`.
+- **No catch-all name.** `common`, `shared`, `util`, `utils`,
+  `helpers`, `misc`, `core` and `base` name no responsibility, so
+  anything lands in them; none is a folder or a file name. A unit with
+  no nameable responsibility is two units.
+- **A folder grouping packages is not a catch-all.** `crates/` says
+  what it holds, a set of packages, and each package in it is named
+  for its own responsibility (`crates/decision/`).
+- **A name a tool imposes is the tool's.** A folder or file the tool
+  requires by that name keeps it, and only where the tool requires it;
+  the stack file names its tool's.
 
 ## Pattern consistency
 

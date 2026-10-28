@@ -333,14 +333,14 @@ keeps. The list below is today's tree
   deployment runs.
 - `platform/tests/image/` — black-box checks against a built image
   rather than against the app (`make web-image-e2e`).
-- `platform-web/` — the Next.js console, on a host of its own (ADR-0131);
-  reaches the API through a same-origin `/api/*` rewrite (ADR-0009).
-  Its own toolchain and gate (`make -C platform-web ci`). The signed-in
-  application lives under `/console`, whose shell and route structure
-  are ADR-0011.
-- `site-web/` — the Next.js site: `/` is the public landing page, `/login`
-  the sign-in page and `/register` where an invitation becomes a
-  password account (ADR-0041). It keeps the same rewrite, and sends
+- `platform-web/` — the Next.js console, on a host of its own
+  (ADR-0131); reaches the API through a same-origin `/api/*` rewrite
+  (ADR-0009). Its own toolchain and gate (`make -C platform-web ci`).
+  The signed-in application lives under `/console`, whose shell and
+  route structure are ADR-0011.
+- `site-web/` — the Next.js site: `/` is the public landing page,
+  `/login` the sign-in page and `/register` where an invitation becomes
+  a password account (ADR-0041). It keeps the same rewrite, and sends
   every `/console` address to the console's host (ADR-0131).
 - `lib/design/` — the components, styles and tokens both apps import;
   `lib/platform-sdk-ts/` — the client of the platform's API both apps

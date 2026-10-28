@@ -29,10 +29,10 @@ garam is becoming an agent-based collaboration platform, and this
 repository a monorepo of its services
 ([#1655](https://github.com/garamsh/garam/issues/1655)).
 [ADR-0125](./docs/architecture/adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
-decides the layout: `platform/`, `platform-web/`, `site-web/`, `lib/design/`,
-`tooling/` and `deploy/`, with a folder for each new service. None of
-it is built yet. Until #1659 moves the tree, every path below is
-today's.
+decides the layout: `platform/`, `platform-web/`, `site-web/`,
+`lib/design/`, `tooling/` and `deploy/`, with a folder for each new
+service. None of it is built yet. Until #1659 moves the tree, every path
+below is today's.
 
 ## Module path
 
@@ -142,8 +142,8 @@ does not list `google`.
 
 ### Playwright end-to-end tests
 
-`platform-web/e2e/` and `site-web/e2e/` drive the built apps in a real browser
-against the real backend. Bring up the backend first:
+`platform-web/e2e/` and `site-web/e2e/` drive the built apps in a real
+browser against the real backend. Bring up the backend first:
 
 ```sh
 make backend-up          # postgres, migrate, authz and api, in containers

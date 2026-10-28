@@ -1,7 +1,7 @@
 # site-web — the landing page and the way in (ADR-0131), a Next.js app
 # (ADR-0009). It installs from the workspace's lockfile at the root. Its
-# verbs are every module's (#1661); `make -C site-web ci` is its fast gate,
-# and `stack-up suites` the half that needs Docker.
+# verbs are every module's (#1661); `make -C site-web ci` is its fast
+# gate, and `stack-up suites` the half that needs Docker.
 
 include ../tooling/make/stack.mk
 

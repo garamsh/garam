@@ -7,9 +7,9 @@
 # stayed at 24 — and a reviewer caught it rather than a check (#803).
 #
 # The two sites need not name a version to the same depth:
-# platform-web/.nvmrc names a Node major and the tag names a patch. They are
-# compared over the components both name, so the looser site is held to
-# what it declares and to no more.
+# platform-web/.nvmrc names a Node major and the tag names a patch. They
+# are compared over the components both name, so the looser site is held
+# to what it declares and to no more.
 #
 # Every FROM line naming the image is read, counted against the FROM
 # lines the file holds, so a stage added to a Dockerfile is covered the

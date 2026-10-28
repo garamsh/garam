@@ -431,9 +431,10 @@ on hosted runners.
   copies the whole module directory into `TMPDIR` once per worker
   (`internal/engine/workdir`), and a worker is a core by default: the Go
   tree is four megabytes and the `platform-web/node_modules` and
-  `platform-web/.next` that `make install` and `make -C platform-web build` leave
-  behind are another 856, so a run on twelve cores after `make ci`
-  writes ten gigabytes — to RAM wherever `TMPDIR` is a tmpfs.
+  `platform-web/.next` that `make install` and
+  `make -C platform-web build` leave behind are another 856, so a run on
+  twelve cores after `make ci` writes ten gigabytes — to RAM wherever
+  `TMPDIR` is a tmpfs.
 
 ## Index
 

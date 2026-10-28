@@ -6,7 +6,8 @@
 # The subject is the image a release publishes, which neither app's e2e
 # suite opens — each builds this tree's app and serves it.
 #
-# APP names the app's folder: `platform-web`, the default, or `site-web`.
+# APP names the app's folder: `platform-web`, the default, or
+# `site-web`.
 #
 # 3000 below is the PORT deploy/local/Dockerfile.web sets. The chart
 # probes 3000 as well and nothing ties the two, so nothing here

@@ -1,9 +1,10 @@
 # The repository's entry points over every module (#1661). Each module
-# keeps its own Makefile answering the same verbs — `make -C platform-web
-# e2e`, `make -C cowork-web e2e`, `make -C platform integration` — and
-# this file runs a verb in every module defining it, picks the modules
-# a change can affect, and holds the few tasks that span modules: the
-# release images and the repository's own utilities.
+# keeps its own Makefile answering the same verbs —
+# `make -C platform-web e2e`, `make -C cowork-web e2e`,
+# `make -C platform integration` — and this file runs a verb in every
+# module defining it, picks the modules a change can affect, and holds
+# the few tasks that span modules: the release images and the
+# repository's own utilities.
 
 include tooling/make/stack.mk
 

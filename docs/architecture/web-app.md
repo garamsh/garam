@@ -22,12 +22,12 @@ Two Next.js App Router applications implement it, TypeScript strict,
 Tailwind and shadcn/ui ([ADR-0009](./adr/0009-web-frontend.md)), each
 on an origin of its own
 ([ADR-0131](./adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)):
-`site-web/` serves the landing page and the way in, and `platform-web/` the
-signed-in application. Both build on `lib/design/`, the shared tokens and
-primitives, and on `lib/platform-sdk-ts/`, the one client of the backend
-they share. What follows names the console where only the console is
-meant; the site's image is built from the same Dockerfile and is not
-yet published. It is the one part of this
+`site-web/` serves the landing page and the way in, and `platform-web/`
+the signed-in application. Both build on `lib/design/`, the shared
+tokens and primitives, and on `lib/platform-sdk-ts/`, the one client of
+the backend they share. What follows names the console where only the
+console is meant; the site's image is built from the same Dockerfile and
+is not yet published. It is the one part of this
 repository that is not Go, it carries a toolchain and a gate of its
 own, and it ships as one of the two images a version tag publishes
 ([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
@@ -78,20 +78,20 @@ own things a reader might come here for, and none of them is restated:
   is absent at runtime
   ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)).
 - `docs/convention/stack-nextjs.md` governs how the application is laid
-  out inside `platform-web/src/`: which folder holds what, and the two entry
-  points a feature declares (§13. Feature entry points and file naming).
-  What may import what there is
+  out inside `platform-web/src/`: which folder holds what, and the two
+  entry points a feature declares (§13. Feature entry points and file
+  naming). What may import what there is
   [structure.md](./structure.md) §Boundaries and dependency direction's
   ([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)),
-  and `platform-web/eslint.config.mjs`'s `garam/import-direction` rule is
-  what fails `make -C platform-web lint` on a crossing. Nothing here restates
-  a layout rule, and a question about where a file belongs is that
-  file's, not this one's.
+  and `platform-web/eslint.config.mjs`'s `garam/import-direction` rule
+  is what fails `make -C platform-web lint` on a crossing. Nothing here
+  restates a layout rule, and a question about where a file belongs is
+  that file's, not this one's.
 - `deploy/local/Dockerfile.web` is authoritative for what the image
-  carries. `output: "standalone"` in `platform-web/next.config.ts` decides
-  what the build emits; that Dockerfile decides what has to be copied in
-  beside it and says what a path missing from the result costs at
-  runtime.
+  carries. `output: "standalone"` in `platform-web/next.config.ts`
+  decides what the build emits; that Dockerfile decides what has to be
+  copied in beside it and says what a path missing from the result costs
+  at runtime.
 
 What is left is this document's: which routes exist and what each one
 is for, the single seam the application reaches garam through, and the
@@ -106,8 +106,8 @@ any path. The console holds the third, `console`, an ordinary segment,
 which is why every console path starts with it. Each app answers a
 path the other serves with a redirect to the other's origin, keeping
 the path and query, so a bookmark from before the split still lands
-(`site-web/src/proxy.ts`, `platform-web/src/proxy.ts`). Both answer the probes
-and the `/api/*` rewrite.
+(`site-web/src/proxy.ts`, `platform-web/src/proxy.ts`). Both answer the
+probes and the `/api/*` rewrite.
 
 | Path | For | Served by | Reached by |
 |---|---|---|---|
@@ -131,9 +131,9 @@ The console's structure is `Organizations → organization → section`,
 carried by a collapsible sidebar shell over every `/console/*` route
 ([ADR-0011](./adr/0011-console-shell.md)). Its org-scoped sections are
 declared in one place,
-`platform-web/src/app/console/_components/navigation.ts`, which is what the
-sidebar, the breadcrumb, the command palette and the active marking all
-read. The sidebar is
+`platform-web/src/app/console/_components/navigation.ts`, which is what
+the sidebar, the breadcrumb, the command palette and the active marking
+all read. The sidebar is
 [ADR-0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md):
 Home, Projects, and Organization (People, Agents, Teams, Permissions,
 Operators, Hosts and Settings). The same file's `CONSOLE_NAV` is where
@@ -173,8 +173,8 @@ and `…/permissions/{policy}` and `…/permissions/new` are a policy's.
 On such a page the sidebar marks the section as the location, and the
 breadcrumb links the section and names the entry with the name the
 page read, handed to it through
-`platform-web/src/app/console/_components/item-crumb.tsx` because the layout
-cannot read the entry
+`platform-web/src/app/console/_components/item-crumb.tsx` because the
+layout cannot read the entry
 ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)).
 A section may also declare named views beside its entries, which the
 breadcrumb names by label: Permissions declares Attachments, at
@@ -184,10 +184,10 @@ garam keeps no template of its own, so none has a page (ADR-0117).
 
 The shell's links prefetch on intent, not on sight. The sidebar's
 sections and the breadcrumb are `IntentLink`s
-(`platform-web/src/app/console/_components/intent-link.tsx`), which prefetch
-a route once the pointer rests on the link, it takes focus, or it is
-touched. Next.js prefetches every visible link by default, and on a
-console page the shell's links were most of its server work: measured
+(`platform-web/src/app/console/_components/intent-link.tsx`), which
+prefetch a route once the pointer rests on the link, it takes focus, or
+it is touched. Next.js prefetches every visible link by default, and on
+a console page the shell's links were most of its server work: measured
 against the built app, 19 prefetch renders per page view, against 3.5
 once the shell prefetches on intent (#1209). The cost is a link followed
 with no intent shown first, which waits for its render after the click:
@@ -199,29 +199,29 @@ The rest of the shell, and where each part is decided:
 - **The organization switcher** names the caller's role in the
   organization on screen. That organization's layout reads it from its
   members list behind `<Suspense>`
-  (`platform-web/src/app/console/_components/org-shell-read.tsx`), so no page
-  waits on it, and a refused or unanswered read shows no role.
+  (`platform-web/src/app/console/_components/org-shell-read.tsx`), so no
+  page waits on it, and a refused or unanswered read shows no role.
 - **The top bar** carries the breadcrumb and a command palette, opened
   by ⌘K, Ctrl+K or `/`
-  (`platform-web/src/app/console/_components/command-palette.tsx`). It finds
-  the organization's people, agents, teams, policies and projects by
-  name once something is typed and typing rests, through a Server
+  (`platform-web/src/app/console/_components/command-palette.tsx`). It
+  finds the organization's people, agents, teams, policies and projects
+  by name once something is typed and typing rests, through a Server
   Action that asks garam's `searchOrg` then and answers five of each
   kind with a link to the list for the rest
-  (`platform-web/src/features/orgs/api/search-org-objects.ts`); no page load
-  reads them for it. It also reaches the sections the caller may read,
-  the page's actions, the caller's organizations and the theme. `.`
-  opens it on the page's actions alone, each with its consequence in
+  (`platform-web/src/features/orgs/api/search-org-objects.ts`); no page
+  load reads them for it. It also reaches the sections the caller may
+  read, the page's actions, the caller's organizations and the theme.
+  `.` opens it on the page's actions alone, each with its consequence in
   one line: a confirmation dialog given a `command` lists itself while
   its page is mounted, and choosing it opens that dialog. On a phone
   the breadcrumb keeps the organization's name beside the page's.
 - **The theme** is system, light or dark, chosen in the user menu or
-  the palette and kept in the browser alone. `platform-web/src/lib/theme.ts`
-  applies it before the first paint, so a dark page is never served
-  light first.
+  the palette and kept in the browser alone.
+  `platform-web/src/lib/theme.ts` applies it before the first paint, so
+  a dark page is never served light first.
 - **A failure below the shell** renders
-  `platform-web/src/app/console/error.tsx`, which says what happened in words
-  and offers the error's digest as a reference, never the thrown
+  `platform-web/src/app/console/error.tsx`, which says what happened in
+  words and offers the error's digest as a reference, never the thrown
   message. `notFound()` and any console address no route serves render
   `platform-web/src/app/console/not-found.tsx` inside the shell.
 
@@ -248,7 +248,8 @@ which is authoritative for it.
 
 `/console/orgs/{org}/members`, the one list People and Agents were
 until ADR-0116, and a person's page under it redirect to People
-(`platform-web/next.config.ts`); no other former address is kept (#1592).
+(`platform-web/next.config.ts`); no other former address is kept
+(#1592).
 
 Organizations are created, and an invitation is accepted at
 `/console/invitations/{token}` — which is itself behind sign-in,
@@ -264,11 +265,11 @@ session exists, so the token survives either way in
 (`platform-web/src/lib/return-path.ts`, which returns only to a console
 path, on the console's origin). The session reaches the console from
 the site by a one-time code the console redeems on its own host
-(`platform-web/src/app/auth/`, [sign-in.md](./sign-in.md)). A session the
-backend rejects behind a cookie the browser still holds is sent the
+(`platform-web/src/app/auth/`, [sign-in.md](./sign-in.md)). A session
+the backend rejects behind a cookie the browser still holds is sent the
 same way:
-`platform-web/src/proxy.ts` stamps each console request with its path, and
-the redirect reads it back. The Google button
+`platform-web/src/proxy.ts` stamps each console request with its path,
+and the redirect reads it back. The Google button
 posts the same path in its form body to `POST /auth/login/{provider}`,
 which holds it with the login's state, so the provider round trip lands
 on it too.
@@ -313,18 +314,18 @@ resources by the identifier segment the API's own paths take
 
 ## How it reaches garam
 
-**One module.** `platform-web/src/lib/garam.ts` holds the only call to the
-backend anywhere under `platform-web/src/`, and `site-web/src/lib/garam.ts`
-under `site-web/src/`, each a configuration of `lib/platform-sdk-ts/`'s one
-client; every read and every Server
+**One module.** `platform-web/src/lib/garam.ts` holds the only call to
+the backend anywhere under `platform-web/src/`, and
+`site-web/src/lib/garam.ts` under `site-web/src/`, each a configuration
+of `lib/platform-sdk-ts/`'s one client; every read and every Server
 Action goes through it. That is what makes the boundary checkable rather
 than asserted: one file to read to know everything the application asks
 for.
 
 **It words what it refuses.** A Server Action garam refused returns
-the sentence `platform-web/src/lib/refusal-copy.ts` writes for the answer's
-`reason` where garam sent one it documents, naming the place its
-`path` points at. Otherwise the sentence is the one for the HTTP
+the sentence `platform-web/src/lib/refusal-copy.ts` writes for the
+answer's `reason` where garam sent one it documents, naming the place
+its `path` points at. Otherwise the sentence is the one for the HTTP
 status and `kind`, read for the operation that asked where the pair
 means something particular to it. It is never one matched from the
 English of `message`. That text reaches a person only quoted inside
@@ -376,9 +377,10 @@ from
 ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)),
 so adding a variable here is a change the chart has to answer for.
 
-**A page asks what it offers.** `platform-web/src/lib/permission-check.ts`
-puts the actions a page offers to `checkPermissions` in one request
-through the seam above, and answers each one allowed, denied or unknown
+**A page asks what it offers.**
+`platform-web/src/lib/permission-check.ts` puts the actions a page
+offers to `checkPermissions` in one request through the seam above, and
+answers each one allowed, denied or unknown
 ([api-surface.md](./api-surface.md) §What decides the rest). Unknown is
 an action the server answers it cannot decide, or a check that could not
 be asked or answered outside its contract; the last is logged on the
@@ -399,20 +401,21 @@ against them. The operators' reports are `GET /v1/orgs/{org}/operators`
 at garam-agent-operator
 `ba691a69ad0612ff5653d2facce5668ea12cbec9` (#364). The console's calls
 are tested against a stub of that wire, with garam real:
-`platform-web/e2e/control-service.spec.ts` for the agent and template calls,
-and `platform-web/e2e/operators.spec.ts` for the reports. A recovery control
-is not built ([operators.md](./operators.md) §Delegated operation
-authority).
+`platform-web/e2e/control-service.spec.ts` for the agent and template
+calls, and `platform-web/e2e/operators.spec.ts` for the reports. A
+recovery control is not built ([operators.md](./operators.md) §Delegated
+operation authority).
 
-**One module, in the browser.** `platform-web/src/lib/operation-authority.ts`
-holds the only call to a control service. The browser makes it,
-because the control service's CORS answer is what admits the console's
-origin; the console's own server never calls one.
+**One module, in the browser.**
+`platform-web/src/lib/operation-authority.ts` holds the only call to a
+control service. The browser makes it, because the control service's
+CORS answer is what admits the console's origin; the console's own
+server never calls one.
 
 - **One authority per call.** A Server Action mints it through
-  `platform-web/src/lib/garam.ts` like any other write, and the browser holds
-  it only for that call: never in storage, a URL or a log line. It is
-  sent as `Authorization: Garam-Operation`, with no cookie, and a
+  `platform-web/src/lib/garam.ts` like any other write, and the browser
+  holds it only for that call: never in storage, a URL or a log line. It
+  is sent as `Authorization: Garam-Operation`, with no cookie, and a
   redirect is an error rather than followed.
 - **The URL is built once.** It is the registered endpoint and the
   route, and its `pathname + search` is the request target the
@@ -429,8 +432,8 @@ origin; the console's own server never calls one.
   `8e11169334086f00225654de1a57d5f16006412f`); the console shows the
   refusal.
 - **It words what it refuses.** A refusal reads the sentence
-  `platform-web/src/lib/control-refusal-copy.ts` writes for the `kind` the
-  control service named, or for the HTTP status where it named none,
+  `platform-web/src/lib/control-refusal-copy.ts` writes for the `kind`
+  the control service named, or for the HTTP status where it named none,
   read for the operation that asked where that means something
   particular to it. A kind that file does not list, and a status it
   does not map, read one fixed sentence saying what to try. The control
@@ -447,12 +450,13 @@ origin; the console's own server never calls one.
 ## Design system
 
 **The foundation is built.** The tokens, fonts, theme, shell,
-primitives and page templates exist (`lib/design/src/styles/globals.css`,
-`lib/design/src/ui/`, `lib/design/src/components/`,
-`platform-web/src/components/`, `platform-web/src/app/console/_components/`). Each
-area's migration lands under epic #1366, in its plan's order. Areas on
-the design system are marked in the table above; until an area is, §What
-it serves describes it as it is.
+primitives and page templates exist
+(`lib/design/src/styles/globals.css`, `lib/design/src/ui/`,
+`lib/design/src/components/`, `platform-web/src/components/`,
+`platform-web/src/app/console/_components/`). Each area's migration
+lands under epic #1366, in its plan's order. Areas on the design system
+are marked in the table above; until an area is, §What it serves
+describes it as it is.
 [ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
 holds the full decision and the reason for each part. This section is
 what a page owes once it is built on the system.
@@ -489,8 +493,8 @@ asked or an action is denied, beside the shell's own reads.
 Unbuilt:
 - a denied action kept visible as an inactive control everywhere:
   People and Agents keep their denied actions so
-  (`platform-web/src/app/console/_components/inactive-button.tsx`), and the
-  other pages still leave theirs out;
+  (`platform-web/src/app/console/_components/inactive-button.tsx`), and
+  the other pages still leave theirs out;
 - replacing the host of an agent an operator holds, which its control
   service performs (ADR-0107): the agent's page keeps Replace host,
   inactive, with that reason.
@@ -531,8 +535,8 @@ it is under Roster.
   dialog that confirms the action: a dialog given a `command` and no
   description says its consequence. Each page has one primary action,
   at the end of its header row
-  (`platform-web/src/app/console/_components/page-header.tsx`). A table keeps
-  the columns a reader acts on (ADR-0116).
+  (`platform-web/src/app/console/_components/page-header.tsx`). A table
+  keeps the columns a reader acts on (ADR-0116).
 - **Templates.** Every console page is a List, a Detail, a Settings
   page or a Wizard, as ADR-0103 §Page templates lays each out. A
   Detail page keeps every tab mounted and hides the inactive ones, so
@@ -544,18 +548,18 @@ it is under Roster.
   policy editor, the operator onboarding wizard and feedback. Success
   shows inline and an error attaches to its field, with no error
   toasts. Every write confirmed in a dialog goes through
-  `platform-web/src/app/console/_components/action-dialog.tsx`, which stays
-  open until garam answers, keeps a refusal until it closes and, for
-  an act nothing undoes, asks for a typed name. A call garam's answer
-  never comes back from, such as a Server Action's own POST answered
-  503 by a proxy, stays in that dialog, and in every other dialog that
-  submits through a Server Action, as a refusal saying garam did not
-  answer, so the change may or may not have been made and is to be
-  checked before trying again. It does not close as if cancelled
+  `platform-web/src/app/console/_components/action-dialog.tsx`, which
+  stays open until garam answers, keeps a refusal until it closes and,
+  for an act nothing undoes, asks for a typed name. A call garam's
+  answer never comes back from, such as a Server Action's own POST
+  answered 503 by a proxy, stays in that dialog, and in every other
+  dialog that submits through a Server Action, as a refusal saying garam
+  did not answer, so the change may or may not have been made and is to
+  be checked before trying again. It does not close as if cancelled
   (`platform-web/src/lib/unsent-action.ts`, #1631).
   A read garam refused is
-  said by `platform-web/src/app/console/_components/refused-read.tsx`, in one
-  wording.
+  said by `platform-web/src/app/console/_components/refused-read.tsx`,
+  in one wording.
 - **Component base.** shadcn/ui stays on Radix. Base UI is declined
   for now, for the reasons ADR-0103 §Component base gives.
 
@@ -564,8 +568,8 @@ it is under Roster.
 The boundary is as much of the responsibility as the contents.
 
 - **No authorization decision; it asks the server instead.**
-  `platform-web/src/proxy.ts` sends a request to `/console/*` carrying no
-  session cookie to the site's `/login`, and that is a fast path
+  `platform-web/src/proxy.ts` sends a request to `/console/*` carrying
+  no session cookie to the site's `/login`, and that is a fast path
   rather than a gate: a cookie can be expired or revoked, so the
   console verifies the session against `/me`, and a 401 from any read
   sends the visitor to sign in regardless. Every org-scoped decision
@@ -617,24 +621,25 @@ The boundary is as much of the responsibility as the contents.
 
 ## Its own toolchain and gate
 
-`make -C platform-web ci` is the gate, and `make ci` runs it with every other
-module's, so the one name covers both toolchains. In order: `install`,
-`format`, `lint` (which also typechecks), `test`, `build`,
+`make -C platform-web ci` is the gate, and `make ci` runs it with every
+other module's, so the one name covers both toolchains. In order:
+`install`, `format`, `lint` (which also typechecks), `test`, `build`,
 `check-gen`.
 
-Three things are outside it. `make -C platform-web e2e` runs the Playwright specs
-in `platform-web/e2e/` against a real built application, a real backend and a
-real Postgres, so it needs infrastructure the gate does not start.
-`make web-image-e2e`'s subject is the image a release publishes rather
-than this tree's application, and it runs that image, so it needs a
-container runtime the gate never asks for. `make install` is a
-prerequisite rather than a check.
+Three things are outside it. `make -C platform-web e2e` runs the
+Playwright specs in `platform-web/e2e/` against a real built
+application, a real backend and a real Postgres, so it needs
+infrastructure the gate does not start. `make web-image-e2e`'s subject
+is the image a release publishes rather than this tree's application,
+and it runs that image, so it needs a container runtime the gate never
+asks for. `make install` is a prerequisite rather than a check.
 
 Tests are in two locations by decision, not by accident: Vitest owns
 the tests colocated under `platform-web/src/`, Playwright owns
-`platform-web/e2e/`, and each config names the other's territory so neither
-collects the other's files (ADR-0009, `docs/convention/stack-nextjs.md`
-§12. Testing — three layers, two locations).
+`platform-web/e2e/`, and each config names the other's territory so
+neither collects the other's files (ADR-0009,
+`docs/convention/stack-nextjs.md` §12. Testing — three layers, two
+locations).
 
 ## Not established
 
@@ -683,8 +688,8 @@ this document owes an update.
 These decide the application itself:
 
 - [ADR-0009](./adr/0009-web-frontend.md) — a Next.js application in
-  `platform-web/` in this repository, reaching the API through a same-origin
-  `/api/*` rewrite, with three test layers
+  `platform-web/` in this repository, reaching the API through a
+  same-origin `/api/*` rewrite, with three test layers
 - [ADR-0011](./adr/0011-console-shell.md) — the console is a sidebar
   shell over `Organizations → organization → section`, and prints no
   GRN

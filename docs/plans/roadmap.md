@@ -64,9 +64,9 @@ workflow last. Each tier depends only on the tier below it.
 Not a tier in the dependency stack — a surface over what P1 and P2
 already expose, built in parallel rather than gating P3.
 
-- `platform-web/`: Next.js App Router, Tailwind v4, shadcn/ui, three test
-  layers (ADR-0009). Its own toolchain and gate, `make -C platform-web ci`,
-  which `make ci` runs.
+- `platform-web/`: Next.js App Router, Tailwind v4, shadcn/ui, three
+  test layers (ADR-0009). Its own toolchain and gate,
+  `make -C platform-web ci`, which `make ci` runs.
 - A public landing page at `/`, sign-in at `/login`, and the signed-in
   application under `/console`.
 - Sign-in with a username and a password beside Google, registered

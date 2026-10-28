@@ -684,8 +684,8 @@ code unchanged.
 `next` in its form body. A path off the console is dropped by the rule
 the console applies to the password sign-in
 (`platform/internal/api/return_path.go`,
-`platform-web/src/lib/return-path.ts`), which bounds it in UTF-8 bytes and is
-tested on both sides against one table,
+`platform-web/src/lib/return-path.ts`), which bounds it in UTF-8 bytes
+and is tested on both sides against one table,
 `platform/internal/api/testdata/return-path-vectors.json`. What is kept
 is held on the login's `oauth_states` row, so it is spent with the state
 by the callback that completes and expires with it. The callback
@@ -709,11 +709,11 @@ of each kind in each specification and running `make gen` and
 `make -C platform-web gen`: a schema's `description` reaches
 `platform/api/server.gen.go`, `platform/api/machine/server.gen.go` and
 `platform-web/src/types/api.ts`, an operation's reaches
-`platform-web/src/types/api.ts` alone, and a tag's reaches none of the three.
-So `make check-gen` and `make -C platform-web check-gen` fail on a schema
-description edited without regenerating, and pass on any text at all:
-each compares one specification against its own output, never one
-against the other, and never prose against what the code does. A
+`platform-web/src/types/api.ts` alone, and a tag's reaches none of the
+three. So `make check-gen` and `make -C platform-web check-gen` fail on
+a schema description edited without regenerating, and pass on any text
+at all: each compares one specification against its own output, never
+one against the other, and never prose against what the code does. A
 decision that changes what an operation does leaves the text stating the
 old behaviour with every check green.
 

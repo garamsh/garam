@@ -321,10 +321,10 @@ behaviour rather than convert one does not.
 - [ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — this document's rules yield to a stack file only where the stack's
   framework imposes the case. The ADR records the adoption of that rule
-  from the conventions template, which moves `platform-web/`: a feature there
-  now reaches a sibling through its declared surface. It also records
-  the adoption of the template's composition-site rule, which ends
-  §Where the composition root lives' divergence from
+  from the conventions template, which moves `platform-web/`: a feature
+  there now reaches a sibling through its declared surface. It also
+  records the adoption of the template's composition-site rule, which
+  ends §Where the composition root lives' divergence from
   `docs/convention/stack-go.md`.
 - [ADR-0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)
   — the composition-site rule is this document's. The ADR records the

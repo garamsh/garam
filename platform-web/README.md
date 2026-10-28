@@ -1,9 +1,9 @@
 # console
 
 The signed-in garam application, on its own origin beside
-[`site-web/`](../site-web/README.md), which serves the landing page and the way
-in (ADR-0131): Next.js App Router, TypeScript strict, Tailwind CSS
-v4, shadcn/ui. Decisions are recorded in
+[`site-web/`](../site-web/README.md), which serves the landing page and
+the way in (ADR-0131): Next.js App Router, TypeScript strict, Tailwind
+CSS v4, shadcn/ui. Decisions are recorded in
 [ADR-0009](../docs/architecture/adr/0009-web-frontend.md); conventions
 in [stack-nextjs.md](../docs/convention/stack-nextjs.md) and
 [stack-tailwind.md](../docs/convention/stack-tailwind.md).

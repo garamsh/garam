@@ -225,6 +225,28 @@ The retention above is this domain's own work rather than a schedule a
 deployment carries: the sweep rides the enqueue, so a queue being
 written to is a queue being swept (ADR-0034).
 
+## Delivery from cowork
+
+**Unbuilt (#1664).**
+[ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
+has cowork post to agents' queues under its organization's principal
+([machine-identity.md](./machine-identity.md) §cowork's principal).
+Today no message reaches a queue from cowork.
+
+- **The sender is the principal**, `grn:<org>:default:service:cowork`,
+  as for any caller this domain stores a message under: the row, the
+  send event and the signature an agent verifies name it, and garam
+  vouches for nothing else.
+- **The author is cowork's claim.** cowork names the person or agent
+  who wrote the message, and its address in cowork, in the body. garam
+  stores the body as any other and reads nothing in it.
+- **Its own organization's agents only.** A recipient that is not an
+  agent of the principal's organization is refused before the engine
+  is asked, and the consent relation does not carry the principal
+  across a boundary.
+- **No queue of its own.** The principal posts and reads the state of
+  what it sent; it claims, renews and completes nothing.
+
 ## Enrollment does not confer message trust
 
 **Unbuilt: common enrollment.**

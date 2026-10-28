@@ -7,9 +7,9 @@ its centre
 
 **Built: pages and real-time editing (#1663), messaging between
 people (#1664), MCP and the client CLI (#1665), tasks (#1666), and
-artifacts and the blob store (#1667).** Delivery to agents waits on
-the owner's decision on cowork's principal (#1655), and an agent acting
-as itself on #1633. There is no image, and nothing deploys cowork.
+artifacts and the blob store (#1667).** Delivery to agents is decided
+and unbuilt (§Delivery to agents), and so is an agent acting as itself
+(ADR-0123). There is no image, and nothing deploys cowork.
 
 ## Contents
 - What is built
@@ -17,6 +17,7 @@ as itself on #1633. There is no image, and nothing deploys cowork.
 - What it asks of the platform
 - Real-time editing
 - Messaging
+- Delivery to agents
 - Tasks
 - Artifacts
 - MCP
@@ -93,11 +94,11 @@ agents.
   `cowork:task-write` on the organization and on a `cowork-task`; for
   artifacts, `cowork:artifact-read` and `cowork:artifact-write` on the
   organization and on a `cowork-artifact`.
-- Not yet: `postMessage` to an agent's queue, under a principal the
-  owner has yet to decide (#1655), and an agent principal on the
-  browser API (#1633). Until then a message's agent mentions are kept
-  and answered as `undeliveredMentions`, and no agent acts in cowork
-  as itself.
+- Not yet: `postMessage` to an agent's queue, under the
+  organization's cowork principal (§Delivery to agents), and an agent
+  on the browser API (ADR-0123). Until then a message's agent mentions
+  are kept and answered as `undeliveredMentions`, and no agent acts in
+  cowork as itself.
 
 ## Real-time editing
 
@@ -146,6 +147,32 @@ agents.
 - **Live.** `GET /orgs/{org}/channels/{channel}/live` carries each
   message posted there as one text frame, the API's `Message`. Reading
   is decided at the upgrade, as for a page's sync.
+
+## Delivery to agents
+
+**Unbuilt (#1664).**
+[ADR-0129](../../docs/architecture/adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
+decides how cowork reaches an agent's queue. Today it keeps the
+mentions and delivers none.
+
+- **One principal per organization**,
+  `grn:<org>:default:service:cowork`, written by the platform with the
+  organization. cowork derives it and installs nothing.
+- **One deployment key.** cowork keeps its private half in an
+  owner-only file and signs an assertion naming the organization's
+  principal, which the platform's machine listener exchanges for a
+  one-hour token.
+- **What the token does.** `postMessage` to an agent of that
+  organization, `getMessageStatus` for what it sent, `getIdentity`,
+  and nothing else; nothing on the browser API, where cowork acts only
+  as its caller.
+- **`AgentDelivery`** posts each mention, and each direct message
+  with an agent, under that principal, the body naming the author and
+  the message's address in cowork. #1666 posts task-assignment notices
+  the same way. The agent answers through the tools as itself.
+- **Stopping one organization's cowork** is the deployment revoking
+  its principal. The platform then refuses every `cowork:` action on
+  that organization, so the workspace stops for everyone in it.
 
 ## Tasks
 
@@ -254,8 +281,9 @@ agents.
 - **The workspace** is `--org`, or the one `garam orgs use` saved.
 - **The commands.** `login`, `logout`, `whoami`, `workspaces`, `pages
   list|read|create`, `channels`, `messages list|post`, `tasks
-  list|show|create|update|comment`, `search` and `mcp`. Each but the first three calls the tool of its name, so the
-  CLI does what an AI client may, as the same caller.
+  list|show|create|update|comment`, `search` and `mcp`. Each but the
+  first three calls the tool of its name, so the CLI does what an AI
+  client may, as the same caller.
 - **ADR-0122's contract.** `-o json` prints what the tool answered,
   messages go to stderr, and a command exits 3 not signed in, 4
   refused, 5 not found, 6 a conflict, 7 an invalid argument, 8

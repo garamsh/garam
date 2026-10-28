@@ -14,6 +14,7 @@ documents (see [ADR-0002](./adr/0002-iam-style-policy-model.md)).
 - Managing policies over HTTP
 - Policy attachment
 - An agent on the browser-facing listener
+- cowork's principal
 - Components
 - Roles vs policies
 - Explain
@@ -381,6 +382,29 @@ The engine needs no change for it. It was measured asking `Check` and
 group holding both included, with no collected statements: every
 decision and every matched statement was the same for both
 (ADR-0123 §Context).
+
+## cowork's principal
+
+**Unbuilt (#1664).**
+[ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
+gives each organization a cowork principal on the machine listener
+([machine-identity.md](./machine-identity.md) §cowork's principal).
+No such subject reaches the engine today.
+
+- **Decided as a machine sender.** Its `postMessage` asks `message:send`
+  with its GRN as subject and the recipient as object, on the
+  identity-derived Allow over its own organization (§Identity-derived
+  statements). A policy attached to it applies, so a Deny narrows
+  which agents cowork may deliver to; an Allow widens nothing.
+- **A floor before the engine.** A recipient that is not an agent of
+  its organization is refused, and no consent relation carries it
+  across. Its token reaches no other operation.
+- **A revoked principal stops cowork for its organization.** While the
+  deployment holds an organization's principal revoked, the api server
+  refuses every `cowork:` action on that organization before it asks.
+- **Under ADR-0130** it is a `Service` entity, its sending the system
+  policy ADR-0024's baseline becomes, and the floor and the revocation
+  are system `forbid`s.
 
 ## Components
 

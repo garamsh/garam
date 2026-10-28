@@ -2,7 +2,8 @@
 
 Who is calling on the listener a machine identity authenticates on
 (ADR-0100), what an agent presents to the browser-facing listener
-(ADR-0123), and the evidence of how each caller authenticated
+(ADR-0123), how a first-party service acts in an organization
+(ADR-0129), and the evidence of how each caller authenticated
 (ADR-0109). Implemented by `platform/internal/machine`.
 
 Every machine caller authenticates by a token it presents, and the
@@ -301,6 +302,43 @@ listener.
   and an operator's or a supervisor's token takes no browser audience.
 - **Its mint is a credential event of its own kind** (§Credential
   events), with the agent's GRN as subject.
+
+## cowork's principal
+
+**Unbuilt (#1664).**
+[ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
+adds a fourth kind of machine caller beside an operator, an agent and
+a supervisor. Today no service principal exists and cowork reaches no
+queue.
+
+- **One per organization.** `grn:<org>:default:service:cowork`, a
+  record the platform writes with the organization and a migration
+  writes for each existing one. No route creates one, and the
+  organization's deletion takes it by cascade.
+- **One deployment key for every organization.** cowork holds the
+  private half in an owner-only file. The listener is configured with
+  the public JWKs of each first-party service, read per exchange, at
+  most two per service for a rotation; nothing on either listener
+  issues or withdraws them.
+- **The exchange is `exchangeClientAssertion`** under
+  `machine-token.v2`, with the organization's principal GRN as
+  `client_id`, `iss` and `sub`, and the key found by `kid` among the
+  service's configured keys (§Asymmetric Operator exchange holds the
+  rest of the profile). The token lives one hour and carries its own
+  prefix.
+- **Read on every request** joined to the principal's record and its
+  incarnation, with the key still configured, so a revocation, a
+  removed key or the organization's deletion refuses it from the next
+  request.
+- **The machine listener alone.** Its token reaches `postMessage` to
+  an agent of its organization, `getMessageStatus` for a message it
+  sent and `getIdentity`, and nothing else; it takes no browser
+  audience (§Browser tokens).
+- **Revoked and re-issued by a server command**, never by an
+  organization. A re-issued principal revives no earlier token.
+- **Recorded under its organization.** Its issuances and refusals are
+  credential events and its exchanges authentication evidence, with
+  the principal as subject.
 
 ## Authentication evidence
 

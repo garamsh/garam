@@ -1,6 +1,7 @@
 // Package cli is the cowork binary's command tree and its composition
 // site: `serve` wires every port to its adapter here, and nowhere
-// else (ADR-0127).
+// else (ADR-0127). The binary carries the server's commands alone;
+// cowork's client commands are garam's (ADR-0133).
 package cli
 
 import (
@@ -56,21 +57,10 @@ func listOf(v string) []string {
 func NewRootCommand() *cobra.Command {
 	root := &cobra.Command{
 		Use:           "cowork",
-		Short:         "Pages, messages and tools people and agents share: the server and its client in one binary",
+		Short:         "Pages, messages and tools people and agents share: the server",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand())
-	flags := &clientFlags{}
-	client := []*cobra.Command{
-		newLoginCommand(flags), newLogoutCommand(flags), newWhoamiCommand(flags), newWorkspacesCommand(flags),
-		newPagesCommand(flags), newChannelsCommand(flags), newMessagesCommand(flags), newTasksCommand(flags),
-		newSearchCommand(flags),
-		newMCPCommand(flags),
-	}
-	for _, cmd := range client {
-		flags.bind(cmd)
-	}
-	root.AddCommand(client...)
 	return root
 }

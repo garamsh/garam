@@ -1,7 +1,7 @@
 // Package cli owns the cobra command tree for the garam server binary
 // (ADR-0003, ADR-0017): `serve api`, `serve authz`, `serve machine`,
 // `migrate`, `probe` and `adapter`. The user commands a person signs in
-// with are platform-cli's (ADR-0132). Commands are constructed here;
+// with are garam-cli's (ADR-0132). Commands are constructed here;
 // cmd/garam only executes the root.
 //
 // `adapter` is the one command that serves nothing and connects

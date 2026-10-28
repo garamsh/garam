@@ -38,17 +38,19 @@ The platform's module is `platform/`, and its server binary is
 [ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)).
 Beside it:
 
-- **`lib/errorx/`, `lib/grn/` and `lib/clisession/`**, a library
-  module each, created because cowork is the second module to need
-  them. The platform's module requires the first two through a
-  `replace` to their folders and imports them directly.
-- **`lib/platform-sdk-go/`**, the Go client generated from
-  `platform/api/openapi.yaml`, and **`platform-cli/`**, the client CLI
-  built on it ([cli.md](./cli.md)).
+- **`lib/errorx/` and `lib/grn/`**, a library module each, created
+  because cowork is the second module to need them. The platform's
+  module requires them through a `replace` to their folders and
+  imports them directly.
+- **`lib/platform-sdk-go/`** and **`lib/cowork-sdk-go/`**, the Go
+  clients generated from `platform/api/openapi.yaml` and
+  `cowork/api/openapi.yaml`, and **`garam-cli/`**, the one client CLI
+  built on them ([cli.md](./cli.md),
+  [ADR-0133](./adr/0133-garam-is-the-one-client-cli-and-carries-every-services-commands-from-garam-cli.md)).
 - **`cowork/`**, the first service in its own folder: its module,
   binary, database and documents
   ([cowork.md](../../cowork/docs/cowork.md)).
-- **`go.work`** at the root, naming `platform/`, `platform-cli/`,
+- **`go.work`** at the root, naming `platform/`, `garam-cli/`,
   `cowork/` and each Go library under `lib/`. Every Go entry point in
   the `Makefile` covers every module it names.
 
@@ -63,21 +65,25 @@ on are boundaries inside a service.
     `platform/` and `cowork/`. ADR-0130 adds `policy/`, which its
     first pull request creates;
   - **an executable unit named `<service>-<surface>`**: `platform-web/`
-    (the console), `site-web/` (the site), `cowork-web/`, and
-    `platform-cli/` (the client CLI);
+    (the console), `site-web/` (the site) and `cowork-web/`. The one
+    client spanning services is named for the product, `garam-cli/`
+    (ADR-0133);
   - **a supporting responsibility**: `lib/`, `tooling/`, `deploy/` and
     `docs/`.
 - **`lib/` holds code libraries, and no binary.** Each package in it is
   named for what it is and is linked by more than one unit:
   `lib/design/`, `lib/platform-sdk-ts/`, `lib/platform-sdk-go/`,
-  `lib/grn/`, `lib/errorx/` and `lib/clisession/`. A Go library is a
+  `lib/cowork-sdk-go/`, `lib/grn/` and `lib/errorx/`. A Go library is a
   module of its own, its package at the module root, as
   `docs/convention/stack-go.md` §1 lays out a module that ships no
   binary. No folder is a catch-all: there is no `shared/`, `utils/` or
   `common/`, and a package in `lib/` that one unit alone imports
   belongs to that unit.
 - **An SDK is generated from its service's published API**, and a
-  client unit reaches a server only through it.
+  client unit reaches a server only through it, except for what a
+  service publishes outside its API specification: `garam-cli/`
+  reaches cowork's MCP tools for a page's content, which cowork's
+  specification does not carry (ADR-0133).
 - **A service's folder is created by its first pull request**, and not
   before.
 - **A service owns its database.** No table is read or written by a
@@ -194,7 +200,7 @@ garam's composition root is `platform/internal/cli`, the package
 `platform/cmd/garam/main.go` calls: the concrete types behind the seams
 the domains declare are constructed there, and
 `platform/cmd/garam/main.go` constructs nothing itself. The client
-CLI's is `platform-cli/internal/cli`, on the same terms: its
+CLI's is `garam-cli/internal/cli`, on the same terms: its
 `cmd/garam/main.go` executes the tree that package builds.
 
 The rule is the three bullets above, and

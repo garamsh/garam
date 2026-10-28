@@ -344,15 +344,16 @@ list below is today's tree
 - `lib/design/` — the components, styles and tokens both apps import;
   `lib/platform-sdk-ts/` — the client of the platform's API both apps
   call it through.
-- `platform-cli/` — the client CLI, the `garam` a person signs in with
-  (ADR-0120, [cli.md](./cli.md)): `login` | `logout` | `whoami` |
-  `orgs` | `operators` | `agents` and the commands derived from the
-  browser API. It reaches the platform through
-  `lib/platform-sdk-go/`, the Go client generated from
-  `platform/api/openapi.yaml`, and never imports `platform/internal/`.
-- `lib/grn/`, `lib/errorx/` and `lib/clisession/` — the identifier,
-  the typed errors, and a CLI's session with the platform, each a
-  library module both the platform's and cowork's modules can link.
+- `garam-cli/` — the one client CLI, the `garam` a person signs in
+  with (ADR-0120, ADR-0133, [cli.md](./cli.md)): `login` | `logout` |
+  `whoami` | `orgs` | `operators` | `agents`, the commands derived from
+  the browser API, cowork's under `garam cowork`, and `garam mcp
+  cowork`. It reaches the platform through `lib/platform-sdk-go/` and
+  cowork through `lib/cowork-sdk-go/`, the Go clients generated from
+  their specifications, and never imports a service's `internal/`.
+- `lib/grn/` and `lib/errorx/` — the identifier and the typed errors,
+  each a library module both the platform's and cowork's modules can
+  link.
 - `deploy/charts/garam/` — the Helm chart a cluster installs garam
   from (ADR-0042).
 - `deploy/local/` — Docker Compose stack running Postgres, migrations,

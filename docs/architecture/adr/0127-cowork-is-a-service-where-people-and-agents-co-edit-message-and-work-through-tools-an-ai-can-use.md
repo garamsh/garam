@@ -1,7 +1,10 @@
 # ADR 0127: cowork is a service where people and agents co-edit, message and work through tools an AI can use
 
 > Status: accepted; ruling out a participant list is superseded by
-> [ADR-0128](./0128-a-cowork-channels-participants-narrow-what-the-platform-allows-and-grant-nothing.md)
+> [ADR-0128](./0128-a-cowork-channels-participants-narrow-what-the-platform-allows-and-grant-nothing.md);
+> the client commands in the `cowork` binary (point 1) and
+> `cowork mcp` (point 7) are superseded by
+> [ADR-0133](./0133-garam-is-the-one-client-cli-and-carries-every-services-commands-from-garam-cli.md)
 > Date: 2026-10-27
 
 Drafted for #1662, which reserves this number. The direction is the

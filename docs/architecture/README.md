@@ -471,8 +471,8 @@ Responsibility documents:
   authoritative for
 - [adapter.md](./adapter.md) — what the adapter garam ships must do, and
   what it rests on
-- [cli.md](./cli.md) — the client CLI, the `garam` binary
-  `platform-cli/` builds: how a person signs one in, how an agent runs
+- [cli.md](./cli.md) — the one client CLI, the `garam` binary
+  `garam-cli/` builds: how a person signs one in, how an agent runs
   it, what it keeps between runs, and what it calls
 - [deployment-contract.md](./deployment-contract.md) — what a deployment
   must plan for that no manifest carries: readiness, termination,
@@ -1096,7 +1096,8 @@ ADRs:
   — cowork is one Go binary serving pages co-edited through Yjs,
   messages, tasks and artifacts to a pluggable web app, a CLI and an
   MCP server; it asks the platform who a caller is and what it may do,
-  and keeps the rest behind ports; not yet built
+  and keeps the rest behind ports; not yet built; its client commands
+  and `cowork mcp` are superseded by 0133
 - [0128](./adr/0128-a-cowork-channels-participants-narrow-what-the-platform-allows-and-grant-nothing.md)
   — a cowork channel's participant list only narrows: reading or
   posting needs the platform's allow and, for a private channel or a
@@ -1131,4 +1132,14 @@ ADRs:
   what it is; an SDK is generated from its service's published API, and
   a client unit reaches a server only through it; supersedes 0120 in
   part, on where the commands live, and 0125 in part, on the root's
-  layout
+  layout; the platform's client alone and `lib/clisession` as a
+  library are superseded by 0133
+- [0133](./adr/0133-garam-is-the-one-client-cli-and-carries-every-services-commands-from-garam-cli.md)
+  — `garam` is the one client CLI, built from `garam-cli/`, named for
+  the product as an exception to 0132's `<service>-<surface>`; it
+  carries every service's client commands, cowork's under
+  `garam cowork` derived from its specification through
+  `lib/cowork-sdk-go` and three through its MCP tools, and the bridge
+  as `garam mcp cowork`; one package holds the session; `cowork`
+  keeps `serve`, `migrate` and `probe`; supersedes 0127 and 0132 in
+  part

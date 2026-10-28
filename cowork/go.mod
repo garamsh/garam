@@ -9,7 +9,6 @@ require (
 	github.com/aws/smithy-go v1.28.7
 	github.com/coder/websocket v1.8.14
 	github.com/dop251/goja v0.0.0-20261027145915-d535508610d2
-	github.com/garamsh/garam/lib/clisession v0.0.0-00010101000000-000000000000
 	github.com/garamsh/garam/lib/errorx v0.0.0-00010101000000-000000000000
 	github.com/garamsh/garam/lib/grn v0.0.0-00010101000000-000000000000
 	github.com/golang-migrate/migrate/v4 v4.20.1
@@ -59,7 +58,6 @@ require (
 )
 
 replace (
-	github.com/garamsh/garam/lib/clisession => ../lib/clisession
 	github.com/garamsh/garam/lib/errorx => ../lib/errorx
 	github.com/garamsh/garam/lib/grn => ../lib/grn
 )

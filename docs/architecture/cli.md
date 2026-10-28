@@ -1,10 +1,11 @@
 # CLI
 
-What the client CLI, the `garam` binary `platform-cli/` builds, is
+What the one client CLI, the `garam` binary `garam-cli/` builds, is
 responsible for: how a person signs one in, how an agent runs it, what
 it keeps between runs, what it calls, and what it does not decide. The
-server binary's commands are [overview.md](./overview.md)'s module
-list and [deployment-contract.md](./deployment-contract.md)'s.
+server binaries' commands are [overview.md](./overview.md)'s module
+list, [deployment-contract.md](./deployment-contract.md)'s and
+[cowork.md](../../cowork/docs/cowork.md)'s.
 
 ## Contents
 - What it is
@@ -19,14 +20,18 @@ list and [deployment-contract.md](./deployment-contract.md)'s.
 
 ## What it is
 
-`platform-cli/internal/cli` implements it, and
-`platform-cli/cmd/garam` builds it into a client binary apart from the
+`garam-cli/internal/cli` implements it, and
+`garam-cli/cmd/garam` builds it into a client binary apart from the
 server's `platform/cmd/garam`
 ([ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md),
 [ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)).
 Both binaries are named `garam`; the client carries no server command
-and the server no user command. It imports nothing under
-`platform/internal/`. The user commands sit at the top level:
+and the server no user command. It is the one client of every service
+on the platform: cowork's client commands are its too, and the
+`cowork` binary carries none
+([ADR-0133](./adr/0133-garam-is-the-one-client-cli-and-carries-every-services-commands-from-garam-cli.md)).
+It imports no service's `internal/`. The user commands sit at the top
+level:
 
 | Command | What it does |
 |---|---|
@@ -38,19 +43,25 @@ and the server no user command. It imports nothing under
 | `garam operators ...` | the organization's operators, their keys, delegation and control endpoint, derived (§The commands it derives) |
 | `garam agents list`, `garam agents get <agent>` | the organization's agents, with each one's name |
 | `garam agents rename <agent> <name>`, `--clear` | names an agent, or clears its name ([ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)) |
+| `garam cowork ...` | cowork's pages, channels and their messages, tasks and artifacts, derived (§The commands it derives) |
+| `garam cowork pages read <page>`, `pages create`, `search <query>` | a page's content as Markdown, a page created with its paragraphs, and pages and messages found, through cowork's MCP tools (§What it calls) |
+| `garam mcp cowork` | serves cowork's tools to a local MCP client over stdio, as the session |
 
 Every one of them takes `--endpoint`, `--org` and `--output`
 (`-o table`, the default, or `-o json`, which writes the API's own
-objects).
+objects). `cowork` and `mcp cowork` also take `--cowork-endpoint`.
 
 ## The commands it derives
 
 Every browser API operation becomes a command derived from
-`platform/api/openapi.yaml` ([ADR-0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)). `platform-cli/internal/cli/cligen` writes
-`platform-cli/internal/cli/commands.gen.go` from the specification and
-`platform-cli/internal/cli/commands.yaml`, which
-`make -C platform-cli gen` runs and `make -C platform-cli check-gen`
-holds current.
+`platform/api/openapi.yaml` ([ADR-0122](./adr/0122-the-cli-derives-a-command-for-every-browser-api-operation-and-writes-a-secret-to-a-file-alone.md)), and every operation of
+`cowork/api/openapi.yaml` one under `garam cowork` (ADR-0133).
+`garam-cli/internal/cli/cligen` writes
+`garam-cli/internal/cli/commands.gen.go` from the platform's
+specification and `garam-cli/internal/cli/commands.yaml`, and
+`garam-cli/internal/cli/cowork.gen.go` from cowork's and
+`garam-cli/internal/cli/cowork.yaml`, which `make -C garam-cli gen`
+runs and `make -C garam-cli check-gen` holds current.
 
 - **Grammar.** `garam <noun>... <verb> [arguments]`:
   - the nouns are the path's static segments;
@@ -60,7 +71,9 @@ holds current.
   - a path that ends in its own verb names it once
     (`invitations accept <token>`);
   - query parameters and body properties are kebab-case flags, an
-    object one as JSON or `@file`, and `--body` sends the whole body.
+    object one as JSON or `@file`, and `--body` sends the whole body,
+    except where a body property is itself named `body`, as a cowork
+    message's is: the flag is that property's.
   - `commands.yaml` renames the few whose derived name reads badly.
 - **Sessions.** An operation the specification lets a caller reach
   with none (`security: []`, as `getInvitation` is) sends no session,
@@ -79,9 +92,10 @@ holds current.
   removed if garam refuses or cannot be reached. The command prints the
   answer without the secret and names the file on stderr; without
   `--out`, or with a file already there, it sends nothing.
-- **Coverage.** Each of the 83 operations is derived, served by a
-  hand-written command, excluded with its reason, or pending, and in
-  exactly one of those. `cligen` refuses anything else, and so does
+- **Coverage.** Each of the platform's 83 operations and cowork's 28
+  is derived, served by a hand-written command, excluded with its
+  reason, or pending, and in exactly one of those. `cligen` refuses
+  anything else, and so does
   `TestAPIOperations_PlaceEveryOperationOfTheSpecification`.
 
 ## Signing in
@@ -108,7 +122,10 @@ out.
 **Unbuilt.**
 [ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
 lets an agent run the CLI as itself, with no sign-in and no browser
-step. Today every command presents a person's session.
+step. Today every command presents a person's session. When it is
+built it is read where the session's bearer is answered,
+`garam-cli/internal/session`, so cowork's commands and its bridge take
+it with the platform's (ADR-0133).
 
 - **`GARAM_TOKEN_FILE`** names a file holding the agent's browser
   token ([machine-identity.md](./machine-identity.md) §Browser tokens).
@@ -126,6 +143,10 @@ step. Today every command presents a person's session.
 
 ## What it keeps
 
+`garam-cli/internal/session` holds all of it: the file's format, its
+lock, the device grant and the refresh, and the bearer every command
+presents (ADR-0133).
+
 - **The file.** `$XDG_CONFIG_HOME/garam/credentials`, or
   `~/.config/garam/credentials` where that is unset or relative. It
   holds, per endpoint, the session's tokens and their expiries, and the
@@ -142,10 +163,21 @@ step. Today every command presents a person's session.
 
 ## What it calls
 
-- **The browser API alone.** The CLI calls the browser API through
+- **The browser API.** The CLI calls the browser API through
   `lib/platform-sdk-go`, the client and types oapi-codegen generates
   from `platform/api/openapi.yaml`, for every operation
   (`make -C lib/platform-sdk-go gen`; `check-gen` holds it current).
+- **cowork's API**, through `lib/cowork-sdk-go`, generated from
+  `cowork/api/openapi.yaml` on the same terms, as the platform session
+  the command holds. cowork is the origin `--cowork-endpoint` names,
+  else `COWORK_ENDPOINT`, else `https://cowork.garam.sh`, on the
+  endpoint's terms below, since the session's tokens cross it too.
+- **cowork's MCP tools** for what its API does not carry, a page's
+  content: `pages read`, `pages create` and `search` call `read_page`,
+  `create_page` and `search` at cowork's `/mcp`, and `mcp cowork`
+  relays a local client's messages there. A tool's refusal exits by
+  the kind its `_meta` names
+  ([cowork.md](../../cowork/docs/cowork.md) §MCP).
 - **The endpoint.** It comes from `--endpoint`, else `GARAM_ENDPOINT`,
   else `https://garam.sh`, and is an origin. It is `https`, or `http` to
   a loopback address alone, because a session's tokens cross it. The
@@ -188,5 +220,9 @@ API's message under its kind.
   — an agent runs the CLI from a token file its assignee keeps
   current; unbuilt
 - [ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)
-  — the user commands are a client binary of their own,
-  `platform-cli/`, calling the platform through a generated SDK
+  — the user commands are a client binary of their own, calling the
+  platform through a generated SDK
+- [ADR-0133](./adr/0133-garam-is-the-one-client-cli-and-carries-every-services-commands-from-garam-cli.md)
+  — `garam`, built from `garam-cli/`, is the one client of every
+  service, with cowork's commands under `garam cowork`, its bridge as
+  `garam mcp cowork`, and one package for the session

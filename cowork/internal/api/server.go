@@ -53,7 +53,7 @@ func (s *Server) caller(r *http.Request) (platform.Caller, error) {
 func (s *Server) bearerCaller(r *http.Request) (platform.Caller, error) {
 	cred := credentialOf(r)
 	if cred.Bearer == "" {
-		return platform.Caller{}, errorx.New(errorx.KindUnauthenticated, "the tools take a bearer token: run `cowork login`, or give your client the token it prints")
+		return platform.Caller{}, errorx.New(errorx.KindUnauthenticated, "the tools take a bearer token: run `garam login` and give your client `garam mcp cowork`, or send a session's bearer")
 	}
 	return s.platform.Identify(r.Context(), cred)
 }

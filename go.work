@@ -2,10 +2,10 @@ go 1.27.2
 
 use (
 	./cowork
-	./lib/clisession
+	./garam-cli
+	./lib/cowork-sdk-go
 	./lib/errorx
 	./lib/grn
 	./lib/platform-sdk-go
 	./platform
-	./platform-cli
 )

@@ -16,18 +16,20 @@
 tooling platform platform-web deploy/local
 lib/errorx
 lib/grn
-lib/clisession
 # The platform's Go client generates from the platform's OpenAPI spec.
 lib/platform-sdk-go platform
 # The platform's suites run against the stack, and drive the client CLI
-# they build from platform-cli.
-platform platform-cli deploy/local
-# The client CLI derives its commands from the platform's OpenAPI spec,
-# and its coverage test reads it.
-platform-cli platform
+# they build from garam-cli.
+platform garam-cli deploy/local
+# The client CLI derives its commands from the platform's and cowork's
+# OpenAPI specs, and its coverage test reads them.
+garam-cli platform cowork
+# cowork's Go client generates from cowork's OpenAPI spec.
+lib/cowork-sdk-go cowork
 cowork/engine
-# cowork's gen builds cowork/engine's bundle into internal/.
-cowork cowork/engine deploy/local
+# cowork's gen builds cowork/engine's bundle into internal/, and its
+# suites drive the client CLI they build from garam-cli.
+cowork cowork/engine deploy/local garam-cli
 # The chart's checks read the environment names the platform, the
 # console and the site declare.
 deploy/charts platform platform-web site-web

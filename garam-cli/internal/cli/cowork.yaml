@@ -1,0 +1,16 @@
+# How cowork's API operations reach the garam CLI, under `garam cowork`
+# (ADR-0133), on the terms commands.yaml states for the platform's.
+#
+# Every operation in cowork/api/openapi.yaml becomes a command named
+# from its path and operationId unless this file says otherwise. cligen
+# reads both files and writes cowork.gen.go; an operation it can place
+# nowhere fails the generation, and a name below that is not an
+# operation fails it too.
+
+# Operations a hand-written command already serves.
+hand:
+  createPage: garam cowork pages create, through the create_page tool, which takes the page's content with it
+
+# Command names where the derived one reads badly.
+names:
+  leaveChannel: channels leave

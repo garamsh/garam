@@ -32,7 +32,8 @@ and unbuilt (§Delivery to agents), and so is an agent acting as itself
 - **One binary**, `cowork` (`cmd/cowork`). `cowork serve` runs the
   HTTP API, the sync and live endpoints, and the MCP endpoint;
   `cowork migrate` applies `migrations/`; `cowork probe <url>` is the
-  healthcheck. The rest are client commands, `cowork mcp` among them.
+  healthcheck. It carries no client command: those are garam's
+  (§The client CLI).
 - **The page tree** (`internal/page`, `api/openapi.yaml`). A page sits
   under at most one parent and is ordered among its siblings; deleting
   one deletes the pages beneath it and every page's content.
@@ -53,8 +54,9 @@ and unbuilt (§Delivery to agents), and so is an agent acting as itself
 - **MCP** (`internal/mcp`). The tools an AI uses to read and edit
   pages, to read and post messages, to work tasks and to publish
   artifacts, as its caller.
-- **The client CLI** (`internal/cli`). The tools as commands, and
-  `cowork mcp`, a stdio bridge for local MCP clients.
+- **The client CLI** is `garam`'s `cowork` commands and
+  `garam mcp cowork`, a stdio bridge for local MCP clients, built in
+  `garam-cli/` (§The client CLI).
 - **The web app** (`cowork-web/`, at the root). Every block type is a
   plugin in its registry.
 - **Not yet:** the Postgres hub several instances need, and the image.
@@ -268,37 +270,32 @@ mentions and delivers none.
 
 ## The client CLI
 
-- **The session is garam's CLI session.** `cowork login` signs in by
-  the platform's device grant and keeps the session in garam's
-  credentials file (`$XDG_CONFIG_HOME/garam/credentials`, mode 0600),
-  so `garam login` and `cowork login` sign the same session in, and
-  `cowork logout` signs both out. `lib/clisession` holds the file's
-  format, its lock, and the grant.
-- **Where it talks.** `--endpoint` or `COWORK_ENDPOINT` names cowork
-  (default `https://cowork.garam.sh`), and `--platform` or
-  `GARAM_ENDPOINT` the platform (default `https://garam.sh`). http is
-  refused to any host but loopback.
+cowork's client is `garam`, the one client CLI
+([ADR-0133](../../docs/architecture/adr/0133-garam-is-the-one-client-cli-and-carries-every-services-commands-from-garam-cli.md)).
+[cli.md](../../docs/architecture/cli.md) is authoritative for how it
+signs in, what it keeps and the contract its commands keep.
+
+- **The session is garam's.** `garam login` signs it in, and every
+  cowork command presents its bearer.
+- **Where it talks.** `--cowork-endpoint` or `COWORK_ENDPOINT` names
+  cowork (default `https://cowork.garam.sh`), and `--endpoint` or
+  `GARAM_ENDPOINT` the platform.
 - **The workspace** is `--org`, or the one `garam orgs use` saved.
-- **The commands.** `login`, `logout`, `whoami`, `workspaces`, `pages
-  list|read|create`, `channels`, `messages list|post`, `tasks
-  list|show|create|update|comment`, `search` and `mcp`. Each but the
-  first three calls the tool of its name, so the CLI does what an AI
-  client may, as the same caller.
-- **ADR-0122's contract.** `-o json` prints what the tool answered,
-  messages go to stderr, and a command exits 3 not signed in, 4
-  refused, 5 not found, 6 a conflict, 7 an invalid argument, 8
-  unavailable, 2 used wrongly, and 1 otherwise.
+- **The commands.** `garam cowork ...` derives one per operation of
+  `api/openapi.yaml`, through `lib/cowork-sdk-go`. `garam cowork pages
+  read`, `pages create` and `search` call the tools of their names,
+  since the API carries no page content.
 
 ## Connecting an AI client
 
-Sign in first, with `cowork login`, and name the workspace with `garam
+Sign in first, with `garam login`, and name the workspace with `garam
 orgs use <org>` or tell the AI which one `list_workspaces` answers.
 
-- **Claude Code.** `claude mcp add cowork -- cowork mcp`.
+- **Claude Code.** `claude mcp add cowork -- garam mcp cowork`.
 - **Claude Desktop**, in `claude_desktop_config.json`:
 
   ```json
-  {"mcpServers": {"cowork": {"command": "cowork", "args": ["mcp"]}}}
+  {"mcpServers": {"cowork": {"command": "garam", "args": ["mcp", "cowork"]}}}
   ```
 
 - **A client that takes a remote server and a header.** The endpoint
@@ -353,7 +350,8 @@ database, `cowork_test`, which `make db-up` creates, and the blob
 store's contract against both adapters, the `s3` one over the RustFS
 `make db-up` starts. It drives the
 server `NewHandler` wires against a substitute platform, with Yjs
-editors in their own engines over real WebSockets.
+editors in their own engines over real WebSockets, and the `garam` it
+builds from `garam-cli/` for the client commands.
 
 ## Rationale
 

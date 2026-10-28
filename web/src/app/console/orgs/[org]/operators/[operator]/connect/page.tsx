@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 
 import { Banner } from "@/components/banner";
-import { getOperator, listOperatorKeys } from "@/features/orgs";
+import {
+  getOperator,
+  listOperatorKeys,
+  type OperatorKey,
+} from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
 import { ItemCrumb } from "../../../../../_components/item-crumb";
@@ -9,13 +13,14 @@ import { orgHref } from "../../../../../_components/navigation";
 import { PageHeader } from "../../../../../_components/page-header";
 import { liveKeys } from "../../_components/operator-status";
 import { ConnectWizard, type ConnectStep } from "./_components/connect-wizard";
+import { PairConnectWizard } from "./_components/pair-connect-wizard";
 
 /** Head metadata for an operator's setup; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Connect an operator — garam" };
 
 type Params = {
   params: Promise<{ org: string; operator: string }>;
-  searchParams: Promise<{ rotate?: string }>;
+  searchParams: Promise<{ rotate?: string; pair?: string }>;
 };
 
 /**
@@ -25,6 +30,12 @@ type Params = {
  * never used on placing, and a key that has signed in on a verified
  * last step. `?rotate` opens on issuing a replacement.
  *
+ * `?pair=<control service>` sets up a cluster manager and its control
+ * service as one Operator (ADR-0124). The choice is read from the
+ * address alone, never from a read: issuing re-renders this page, and
+ * a read that failed on that render would swap the wizard and unmount
+ * the one copy of a private key garam answered once.
+ *
  * It sits below the operator because an identifier may be `new`, and a
  * create route beside the operators would take that operator's page
  * (ADR-0074); `connect` is a page of the operator's, not an identifier.
@@ -33,7 +44,7 @@ export default async function ConnectOperatorPage({
   params,
   searchParams,
 }: Params) {
-  const [{ org, operator }, { rotate }] = await Promise.all([
+  const [{ org, operator }, { rotate, pair }] = await Promise.all([
     params,
     searchParams,
   ]);
@@ -45,6 +56,52 @@ export default async function ConnectOperatorPage({
       reissue: { action: "operator:reissue" },
     }),
   ]);
+  // garam issues a key to an operator holding no live one under either
+  // action, and any other under re-issuing alone
+  // (`internal/api/operator_key.go`).
+  const denied = (action: "register" | "reissue") =>
+    permissions.get(action) === "denied";
+
+  if (pair !== undefined && rotate === undefined) {
+    const [control, controlKeys] = await Promise.all([
+      getOperator(org, pair),
+      listOperatorKeys(org, pair),
+    ]);
+    const reads = [record, keys, control, controlKeys];
+    const failed = reads.find((read) => read.status !== "ok");
+    const managerKeys = keys.status === "ok" ? keys.data : [];
+    const pairKeys = controlKeys.status === "ok" ? controlKeys.data : [];
+    const name = record.status === "ok" ? record.data.name : operator;
+    return (
+      <>
+        <ItemCrumb label={name} />
+        <PairConnectWizard
+          org={org}
+          name={name}
+          identities={{
+            manager: {
+              operator,
+              name,
+              clientId: record.status === "ok" ? record.data.grn : undefined,
+              keys: managerKeys,
+            },
+            control: {
+              operator: pair,
+              name: control.status === "ok" ? control.data.name : pair,
+              clientId: control.status === "ok" ? control.data.grn : undefined,
+              keys: pairKeys,
+            },
+          }}
+          problem={failed === undefined ? null : failed.status}
+          initialStep={
+            failed === undefined ? pairStep([managerKeys, pairKeys]) : "issue"
+          }
+          canIssue={!(denied("register") && denied("reissue"))}
+          operatorsHref={orgHref(org, "operators")}
+        />
+      </>
+    );
+  }
 
   const header = <PageHeader title="Connect an operator" />;
 
@@ -69,11 +126,6 @@ export default async function ConnectOperatorPage({
       : latest.lastExchangedAt !== undefined
         ? "verify"
         : "place";
-  // garam issues a key to an operator holding no live one under either
-  // action, and any other under re-issuing alone
-  // (`internal/api/operator_key.go`).
-  const denied = (action: "register" | "reissue") =>
-    permissions.get(action) === "denied";
   const canIssue =
     live.length === 0
       ? !(denied("register") && denied("reissue"))
@@ -86,7 +138,7 @@ export default async function ConnectOperatorPage({
         {header}
         <Banner
           tone="info"
-          title="No policy lets you issue this operator a key"
+          title="No policy lets you issue this identity a key"
         />
       </>
     );
@@ -105,9 +157,26 @@ export default async function ConnectOperatorPage({
         problem={problem}
         initialStep={initialStep}
         canReplace={!denied("reissue")}
+        isControlService={
+          record.status === "ok" && record.data.manager !== undefined
+        }
         operatorHref={operatorHref}
         operatorsHref={orgHref(org, "operators")}
       />
     </>
   );
+}
+
+/**
+ * Where a pair's setup resumes: issuing while either identity holds no
+ * live key, verifying once both have signed in, and placing between.
+ */
+function pairStep(
+  keys: [OperatorKey[], OperatorKey[]],
+): Exclude<ConnectStep, "register"> {
+  const latest = keys.map((held) => liveKeys(held).at(-1));
+  if (latest.some((key) => key === undefined)) return "issue";
+  return latest.every((key) => key?.lastExchangedAt !== undefined)
+    ? "verify"
+    : "place";
 }

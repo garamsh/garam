@@ -76,8 +76,8 @@ func (q *Queries) CreateDelegation(ctx context.Context, arg CreateDelegationPara
 }
 
 const createOperator = `-- name: CreateOperator :exec
-INSERT INTO operators (grn, org_grn, registered_by, created_at, name, description)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO operators (grn, org_grn, registered_by, created_at, name, description, manager_grn)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateOperatorParams struct {
@@ -87,6 +87,7 @@ type CreateOperatorParams struct {
 	CreatedAt    pgtype.Timestamptz
 	Name         string
 	Description  string
+	ManagerGrn   pgtype.Text
 }
 
 func (q *Queries) CreateOperator(ctx context.Context, arg CreateOperatorParams) error {
@@ -97,6 +98,7 @@ func (q *Queries) CreateOperator(ctx context.Context, arg CreateOperatorParams) 
 		arg.CreatedAt,
 		arg.Name,
 		arg.Description,
+		arg.ManagerGrn,
 	)
 	return err
 }
@@ -345,7 +347,7 @@ func (q *Queries) GetOperationAuthorityByToken(ctx context.Context, tokenHash st
 }
 
 const getOperator = `-- name: GetOperator :one
-SELECT grn, org_grn, registered_by, created_at, name, description, control_endpoint FROM operators WHERE grn = $1
+SELECT grn, org_grn, registered_by, created_at, name, description, control_endpoint, manager_grn FROM operators WHERE grn = $1
 `
 
 func (q *Queries) GetOperator(ctx context.Context, grn string) (Operator, error) {
@@ -359,6 +361,7 @@ func (q *Queries) GetOperator(ctx context.Context, grn string) (Operator, error)
 		&i.Name,
 		&i.Description,
 		&i.ControlEndpoint,
+		&i.ManagerGrn,
 	)
 	return i, err
 }
@@ -386,6 +389,21 @@ func (q *Queries) HoldLiveOperatorKey(ctx context.Context, arg HoldLiveOperatorK
 	var decided_at pgtype.Timestamptz
 	err := row.Scan(&decided_at)
 	return decided_at, err
+}
+
+const holdOperatorManager = `-- name: HoldOperatorManager :one
+SELECT manager_grn FROM operators WHERE grn = $1 FOR KEY SHARE
+`
+
+// Holds the manager a control service is being registered for, and
+// answers whom it serves itself (ADR-0124). KEY SHARE waits for the
+// manager's deletion and for a FOR UPDATE on its row:
+// LockOperatorRegistration and LockOperatorManager.
+func (q *Queries) HoldOperatorManager(ctx context.Context, grn string) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, holdOperatorManager, grn)
+	var manager_grn pgtype.Text
+	err := row.Scan(&manager_grn)
+	return manager_grn, err
 }
 
 const holdOperatorRegistration = `-- name: HoldOperatorRegistration :one
@@ -556,7 +574,7 @@ func (q *Queries) ListOperatorKeys(ctx context.Context, operatorGrn string) ([]L
 }
 
 const listOperatorsByOrg = `-- name: ListOperatorsByOrg :many
-SELECT grn, org_grn, registered_by, created_at, name, description, control_endpoint FROM operators WHERE org_grn = $1 ORDER BY grn
+SELECT grn, org_grn, registered_by, created_at, name, description, control_endpoint, manager_grn FROM operators WHERE org_grn = $1 ORDER BY grn
 `
 
 func (q *Queries) ListOperatorsByOrg(ctx context.Context, orgGrn string) ([]Operator, error) {
@@ -576,6 +594,7 @@ func (q *Queries) ListOperatorsByOrg(ctx context.Context, orgGrn string) ([]Oper
 			&i.Name,
 			&i.Description,
 			&i.ControlEndpoint,
+			&i.ManagerGrn,
 		); err != nil {
 			return nil, err
 		}
@@ -616,6 +635,20 @@ func (q *Queries) LockCurrentDelegation(ctx context.Context, arg LockCurrentDele
 		&i.EndedAt,
 	)
 	return i, err
+}
+
+const lockOperatorManager = `-- name: LockOperatorManager :one
+SELECT manager_grn FROM operators WHERE grn = $1 FOR UPDATE
+`
+
+// Holds a record its manager is being set on, and answers the manager
+// it names. FOR UPDATE waits for a registration holding it as a
+// manager, so that registration's control service is seen (ADR-0124).
+func (q *Queries) LockOperatorManager(ctx context.Context, grn string) (pgtype.Text, error) {
+	row := q.db.QueryRow(ctx, lockOperatorManager, grn)
+	var manager_grn pgtype.Text
+	err := row.Scan(&manager_grn)
+	return manager_grn, err
 }
 
 const lockOperatorRegistration = `-- name: LockOperatorRegistration :one
@@ -717,6 +750,19 @@ func (q *Queries) MintOperationAuthority(ctx context.Context, arg MintOperationA
 	var ref string
 	err := row.Scan(&ref)
 	return ref, err
+}
+
+const operatorIsManager = `-- name: OperatorIsManager :one
+SELECT EXISTS (SELECT 1 FROM operators WHERE manager_grn = $1)
+`
+
+// Whether a control service names the operator as its manager, which a
+// deleted manager's control service still does (ADR-0124).
+func (q *Queries) OperatorIsManager(ctx context.Context, managerGrn pgtype.Text) (bool, error) {
+	row := q.db.QueryRow(ctx, operatorIsManager, managerGrn)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const operatorKeyExists = `-- name: OperatorKeyExists :one
@@ -882,6 +928,26 @@ type SetOperatorControlEndpointParams struct {
 // delegating act, not renaming (#1170).
 func (q *Queries) SetOperatorControlEndpoint(ctx context.Context, arg SetOperatorControlEndpointParams) (int64, error) {
 	result, err := q.db.Exec(ctx, setOperatorControlEndpoint, arg.ControlEndpoint, arg.Grn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setOperatorManager = `-- name: SetOperatorManager :execrows
+UPDATE operators SET manager_grn = $1
+WHERE grn = $2 AND manager_grn IS NULL
+`
+
+type SetOperatorManagerParams struct {
+	ManagerGrn pgtype.Text
+	Grn        string
+}
+
+// Sets a record's manager once: a record already naming one is not
+// written (ADR-0124).
+func (q *Queries) SetOperatorManager(ctx context.Context, arg SetOperatorManagerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setOperatorManager, arg.ManagerGrn, arg.Grn)
 	if err != nil {
 		return 0, err
 	}

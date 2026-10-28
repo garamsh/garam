@@ -1040,6 +1040,16 @@ ADRs:
   — the CLI derives a command for every browser API operation from
   `api/openapi.yaml`, with one grammar, output contract and set of exit
   codes, and writes a secret answer to a file at mode 0600 alone
+- [0124](./adr/0124-an-operator-is-registered-as-a-pair-in-one-step-and-its-control-service-names-its-manager.md)
+  — an Operator is registered as a pair in one step, its cluster
+  manager and its control service in one transaction, each keeping its
+  own key; the control service's record names its cluster manager by
+  GRN, at most one per cluster manager and never a chain, set at
+  registration or, on a record naming none, once by
+  `setOperatorManager` under `operator:register`, and answered by
+  `listOperators`, so the console lists one row per Operator; the
+  console's three terms and the API names they map to; the delegation
+  stays authority alone
 - [0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
   — the repository is a monorepo of services, each top-level folder
   one responsibility, joined by committed `go.work` and pnpm

@@ -25,12 +25,20 @@ const Schema = z.object({
   identifier: z.string(),
   name: z.string(),
   description: z.string(),
+  // The cluster manager's GRN where the identity is its control
+  // service (ADR-0124); empty or absent registers a new Operator.
+  manager: z.string().optional(),
+  // The control service registered with a new Operator's cluster
+  // manager; absent where `manager` is given.
+  controlService: z.string().optional(),
 });
 
 /**
- * Registers an operator of the organization (ADR-0045) and opens its
- * setup page, where its key is issued: registering issues nothing, and
- * an operator enters by a key alone (ADR-0102, ADR-0117).
+ * Registers an Operator's cluster manager and control service in one
+ * write, or the control service of the cluster manager the form names
+ * (ADR-0124), and opens the setup page of what it registered, where
+ * each identity's key is issued: registering issues nothing, and an
+ * operator enters by a key alone (ADR-0102, ADR-0117).
  */
 export async function registerOperator(
   _state: RegisterOperatorState,
@@ -41,6 +49,8 @@ export async function registerOperator(
     identifier: formData.get("identifier"),
     name: formData.get("name"),
     description: formData.get("description"),
+    manager: formData.get("manager") ?? undefined,
+    controlService: formData.get("controlService") ?? undefined,
   });
   if (!parsed.success) {
     return { status: "error", message: "The form did not arrive complete." };
@@ -57,6 +67,12 @@ export async function registerOperator(
   if (name?.status === "error") return name;
   const description = parseOperatorDescription(parsed.data.description);
   if (description.status === "error") return description;
+  const manager = parsed.data.manager || undefined;
+  const control =
+    manager === undefined && parsed.data.controlService !== undefined
+      ? parseOperatorIdentifier(parsed.data.controlService)
+      : undefined;
+  if (control?.status === "error") return control;
 
   const org = parsed.data.org;
   let registered: Operator;
@@ -71,6 +87,8 @@ export async function registerOperator(
           identifier: identifier.value,
           name: name?.value,
           description: description.value,
+          manager,
+          controlService: control && { identifier: control.value },
         } satisfies components["schemas"]["OperatorRegistration"]),
       },
     );
@@ -82,7 +100,11 @@ export async function registerOperator(
 
   revalidatePath(`/console/orgs/${org}/operators`, "layout");
   revalidatePath(`/console/orgs/${org}/agents`);
+  // A pair's setup is one page for both identities, named by its
+  // address so a re-render cannot swap it (ADR-0124).
   redirect(
-    `/console/orgs/${org}/operators/${slugFromGrn(registered.grn)}/connect`,
+    `/console/orgs/${org}/operators/${slugFromGrn(registered.grn)}/connect${
+      control === undefined ? "" : `?pair=${control.value}`
+    }`,
   );
 }

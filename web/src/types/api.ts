@@ -906,6 +906,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/operators/{operator}/manager": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Link a control service to its cluster manager, once. Requires `operator:register`.
+         * @description Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
+         */
+        put: operations["setOperatorManager"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/operators/{operator}/control-endpoint": {
         parameters: {
             query?: never;
@@ -1799,6 +1819,11 @@ export interface components {
              * @example https://control.example.com
              */
             controlEndpoint?: string;
+            /**
+             * @description The GRN of the operator this one is the control service of, absent where this one is a manager or stands alone (ADR-0124). An Operator is a manager and at most one control service, so a list read pairs the two by this field alone. It is set by `registerOperator`, or once by `setOperatorManager` on a record naming none, and it names the identity rather than a live record: it stays after that manager's registration is deleted.
+             * @example grn:acme:default:operator:field-one
+             */
+            manager?: string;
         };
         /** @description How an issued key stands beside the keys the operator holds (ADR-0102). */
         OperatorKeyIssuance: {
@@ -1866,6 +1891,21 @@ export interface components {
             identifier: string;
             name?: components["schemas"]["OperatorName"];
             description?: components["schemas"]["OperatorDescription"];
+            /**
+             * @description Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124). It is how a control service joins a manager registered on its own, as every pair made before `controlService` was. Not given with `controlService`.
+             * @example grn:acme:default:operator:field-one
+             */
+            manager?: string;
+            /** @description Registers this operator as a manager together with its control service, which names it, in one transaction (ADR-0124): both are recorded or neither is. The answer is the manager; the control service is the operator under this identifier, and each is issued its own key. Not given with `manager`. */
+            controlService?: {
+                /**
+                 * @description The control service's identifier, under the same rule as the manager's and different from it.
+                 * @example field-one-control
+                 */
+                identifier: string;
+                name?: components["schemas"]["OperatorName"];
+                description?: components["schemas"]["OperatorDescription"];
+            };
         };
         /** @description A change to what the organization says about an operator. A field left out keeps its value; the identifier is not a field. */
         OperatorPatch: {
@@ -1891,6 +1931,13 @@ export interface components {
              * @description Within the next 30 days. Kept to the microsecond: finer digits are dropped, and the grant answers and replays the value kept.
              */
             expiresAt: string;
+        };
+        OperatorManagerWrite: {
+            /**
+             * @description The GRN of the cluster manager this operator is the control service of: another operator of this organization.
+             * @example grn:acme:default:operator:field-one
+             */
+            manager: string;
         };
         ControlEndpointWrite: {
             /** @example https://control.example.com/garam */
@@ -3797,6 +3844,40 @@ export interface operations {
             401: components["responses"]["ContractError"];
             403: components["responses"]["ContractError"];
             404: components["responses"]["ContractError"];
+        };
+    };
+    setOperatorManager: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorManagerWrite"];
+            };
+        };
+        responses: {
+            /** @description The operator as stored, naming its manager. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operator"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     setOperatorControlEndpoint: {

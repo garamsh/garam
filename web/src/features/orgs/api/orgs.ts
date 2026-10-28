@@ -173,6 +173,7 @@ export const OperatorParser = parserFor<Operator>()(
     registeredBy: GrnParser,
     createdAt: z.string(),
     controlEndpoint: z.string().optional(),
+    manager: GrnParser.optional(),
   }),
 );
 

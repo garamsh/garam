@@ -35,6 +35,22 @@ var (
 	// ErrNotAnOperator refuses a caller or a stored identity that is
 	// not an operator.
 	ErrNotAnOperator = errorx.New(errorx.KindPermissionDenied, "the identity is not an operator")
+	// ErrManagerNotRegistered refuses a control service registered for
+	// a manager the organization holds no record of (ADR-0124).
+	ErrManagerNotRegistered = errorx.New(errorx.KindFailedPrecondition, "the manager is not a registered operator of this organization")
+	// ErrManagerIsControlService refuses a manager that is itself the
+	// control service of another: an Operator is one manager and at
+	// most one control service, never a chain (ADR-0124).
+	ErrManagerIsControlService = errorx.New(errorx.KindFailedPrecondition, "the manager is itself a control service")
+	// ErrManagerHasControlService refuses a second control service for
+	// one manager (ADR-0124).
+	ErrManagerHasControlService = errorx.New(errorx.KindAlreadyExists, "the manager already has a control service")
+	// ErrManagerAlreadySet refuses setting the manager of a record that
+	// names one: the link is set once and never moves (ADR-0124).
+	ErrManagerAlreadySet = errorx.New(errorx.KindFailedPrecondition, "the record already names its manager")
+	// ErrIdentityIsManager refuses registering as a control service an
+	// identity a control service already names as its manager.
+	ErrIdentityIsManager = errorx.New(errorx.KindFailedPrecondition, "a control service names this identity as its manager")
 )
 
 // The bounds on what an organization says about its operator, in
@@ -130,6 +146,42 @@ type Operator struct {
 	// the console, nil where none is registered. Only an actor holding
 	// operator:delegate moves it (#1170).
 	ControlEndpoint *ControlEndpoint
+	// Manager is the operator this one is the control service of, nil
+	// where it is a manager or stands alone (ADR-0124). It is written
+	// when the control service is registered, or once by
+	// Store.SetManager on a record naming none. It names the identity
+	// and not a live record: deleting the manager leaves it naming a
+	// GRN the organization no longer holds.
+	Manager *grn.GRN
+}
+
+// ServeManager makes o the control service of the operator manager
+// names (ADR-0124), as [ParseManager] reads it. Whether that operator
+// is registered, and free to take a control service, is the store's
+// to answer, read where it writes.
+func (o *Operator) ServeManager(manager string) error {
+	m, err := ParseManager(o.GRN, manager)
+	if err != nil {
+		return err
+	}
+	o.Manager = &m
+	return nil
+}
+
+// ParseManager reads manager as the manager of the record under g: the
+// GRN of another operator of g's organization (ADR-0124).
+func ParseManager(g grn.GRN, manager string) (grn.GRN, error) {
+	m, err := grn.Parse(manager)
+	if err != nil {
+		return grn.GRN{}, errorx.Wrap(err, "operator: manager", errorx.KindInvalidArgument)
+	}
+	if want, err := GRNOf(grn.Org(g.Organization), m.Identifier); err != nil || want != m {
+		return grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "operator: manager is not an operator of this organization")
+	}
+	if m == g {
+		return grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "operator: an operator is not its own manager")
+	}
+	return m, nil
 }
 
 // New records that orgGRN has an operator under identifier.

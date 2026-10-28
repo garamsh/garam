@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 )
 
@@ -155,6 +156,102 @@ func TestOperatorRegister_AnswersTheRecordAloneAndListsIt(t *testing.T) {
 	entries := decodeBody[[]map[string]json.RawMessage](t, rec)
 	require.Len(t, entries, 1)
 	assert.Equal(t, answered, fieldsOf(t, entries[0]), "a listed entry is the record registration answered")
+}
+
+// TestOperatorRegister_RecordsAndListsTheManager covers the pair's
+// wire (ADR-0124): a registration naming a manager answers it, the list
+// answers it on the control service and on nothing else, and a manager
+// that is no operator of this organization, or the registration itself,
+// is refused before the store is reached. The registration naming none
+// is the control: it answers no manager field.
+func TestOperatorRegister_RecordsAndListsTheManager(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRead},
+	)
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+	manager := operatorGRNOf(slug, "aurora").String()
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"aurora"}`, admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.NotContains(t, fieldsOf(t, decodeBody[map[string]json.RawMessage](t, rec)), "manager")
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"aurora-control","manager":"`+manager+`"}`, admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	registered := decodeBody[apigen.Operator](t, rec)
+	require.NotNil(t, registered.Manager)
+	assert.Equal(t, manager, *registered.Manager)
+
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators", "", admin)
+	require.Equal(t, http.StatusOK, rec.Code)
+	listed := map[string]*string{}
+	for _, o := range decodeBody[[]apigen.Operator](t, rec) {
+		listed[o.Grn] = o.Manager
+	}
+	require.Len(t, listed, 2)
+	assert.Nil(t, listed[manager])
+	require.NotNil(t, listed[operatorGRNOf(slug, "aurora-control").String()])
+	assert.Equal(t, manager, *listed[operatorGRNOf(slug, "aurora-control").String()])
+
+	for name, named := range map[string]string{
+		"not a grn":                    "aurora",
+		"another organization's":       operatorGRNOf("globex", "aurora").String(),
+		"not an operator":              grn.New(slug, grn.DefaultProject, "agent", "aurora").String(),
+		"the registration it is about": operatorGRNOf(slug, "self").String(),
+	} {
+		rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"self","manager":"`+named+`"}`, admin)
+		assert.Equalf(t, http.StatusBadRequest, rec.Code, "a manager that is %s", name)
+	}
+}
+
+// TestOperatorRegister_RecordsAPairInOneRegistration covers connecting
+// an Operator in one step (ADR-0124): a registration naming a control
+// service records it beside the cluster manager, naming it, and answers
+// the cluster manager. A registration naming both a manager and a
+// control service, or a control service under the cluster manager's own
+// identifier, is refused before the store is reached; the pair under
+// fresh identifiers is the control for both.
+func TestOperatorRegister_RecordsAPairInOneRegistration(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRead},
+	)
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+	manager := operatorGRNOf(slug, "aurora").String()
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators",
+		`{"identifier":"self","controlService":{"identifier":"self"}}`, admin)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "a control service under the cluster manager's identifier")
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators",
+		`{"identifier":"both","manager":"`+manager+`","controlService":{"identifier":"both-control"}}`, admin)
+	assert.Equal(t, http.StatusBadRequest, rec.Code, "a manager and a control service together")
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators",
+		`{"identifier":"aurora","controlService":{"identifier":"aurora-control","name":"Aurora control"}}`, admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	registered := decodeBody[apigen.Operator](t, rec)
+	assert.Equal(t, manager, registered.Grn)
+	assert.Nil(t, registered.Manager, "the answer is the cluster manager")
+
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators", "", admin)
+	require.Equal(t, http.StatusOK, rec.Code)
+	listed := map[string]apigen.Operator{}
+	for _, o := range decodeBody[[]apigen.Operator](t, rec) {
+		listed[o.Grn] = o
+	}
+	require.Len(t, listed, 2, "the refused registrations recorded nothing")
+	control := listed[operatorGRNOf(slug, "aurora-control").String()]
+	require.NotNil(t, control.Manager)
+	assert.Equal(t, manager, *control.Manager)
+	assert.Equal(t, "Aurora control", control.Name)
 }
 
 // fieldsOf answers the names of an object's fields, sorted.

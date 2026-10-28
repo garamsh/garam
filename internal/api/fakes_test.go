@@ -1250,6 +1250,46 @@ func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator) (*
 	return o, nil
 }
 
+// RegisterPair records both or neither, as the transaction does.
+func (s *fakeOperatorStore) RegisterPair(_ context.Context, manager, control *operator.Operator) (*operator.Operator, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, o := range []*operator.Operator{manager, control} {
+		if _, ok := s.operators[o.GRN.String()]; ok {
+			return nil, operator.ErrOperatorAlreadyRegistered
+		}
+	}
+	s.operators[manager.GRN.String()] = manager
+	s.operators[control.GRN.String()] = control
+	return manager, nil
+}
+
+// SetManager sets a record's manager once, refusing as the store does
+// a record that names one and a manager that is not registered or is
+// itself a control service.
+func (s *fakeOperatorStore) SetManager(_ context.Context, g, manager grn.GRN) (*operator.Operator, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.operators[g.String()]
+	if !ok {
+		return nil, operator.ErrOperatorNotFound
+	}
+	if o.Manager != nil {
+		return nil, operator.ErrManagerAlreadySet
+	}
+	m, ok := s.operators[manager.String()]
+	if !ok {
+		return nil, operator.ErrManagerNotRegistered
+	}
+	if m.Manager != nil {
+		return nil, operator.ErrManagerIsControlService
+	}
+	linked := *o
+	linked.Manager = &manager
+	s.operators[g.String()] = &linked
+	return &linked, nil
+}
+
 // Delete removes the record, as the statement does.
 func (s *fakeOperatorStore) Delete(_ context.Context, g grn.GRN) error {
 	s.mu.Lock()

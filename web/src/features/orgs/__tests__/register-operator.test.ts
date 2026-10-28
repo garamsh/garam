@@ -59,4 +59,52 @@ describe("registerOperator", () => {
       message: REFUSAL_COPY.alreadyExists,
     });
   });
+
+  it("registers a cluster manager with its control service in one request, and opens the pair's setup (#1636)", async () => {
+    const posted: unknown[] = [];
+    server.use(
+      http.post(`${API_URL}/orgs/acme/operators`, async ({ request }) => {
+        posted.push(await request.json());
+        return HttpResponse.json(fieldOne, { status: 201 });
+      }),
+    );
+
+    await expect(
+      registerOperator(
+        { status: "idle" },
+        form({
+          identifier: "field-one",
+          manager: "",
+          controlService: "field-one-control",
+        }),
+      ),
+    ).rejects.toThrow(
+      "NEXT_REDIRECT:/console/orgs/acme/operators/field-one/connect",
+    );
+    expect(posted).toEqual([
+      {
+        identifier: "field-one",
+        description: "",
+        controlService: { identifier: "field-one-control" },
+      },
+    ]);
+  });
+
+  it("refuses a control service identifier outside the character rule without a request", async () => {
+    const posted: unknown[] = [];
+    server.use(
+      http.post(`${API_URL}/orgs/acme/operators`, async ({ request }) => {
+        posted.push(await request.json());
+        return HttpResponse.json(fieldOne, { status: 201 });
+      }),
+    );
+
+    const answer = await registerOperator(
+      { status: "idle" },
+      form({ identifier: "field-one", controlService: "Field One" }),
+    );
+
+    expect(answer.status).toBe("error");
+    expect(posted).toEqual([]);
+  });
 });

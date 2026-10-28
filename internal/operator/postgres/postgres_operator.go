@@ -2,6 +2,10 @@ package postgres
 
 import (
 	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
@@ -17,6 +21,24 @@ var _ operator.Store = (*Store)(nil)
 // Register persists the record and reads the stored operator back in
 // the same transaction.
 func (s *Store) Register(ctx context.Context, o *operator.Operator) (*operator.Operator, error) {
+	return s.register(ctx, o)
+}
+
+// RegisterPair persists a manager and the control service naming it in
+// one transaction, and reads the manager back (ADR-0124).
+func (s *Store) RegisterPair(ctx context.Context, manager, control *operator.Operator) (*operator.Operator, error) {
+	if manager.Manager != nil || control.Manager == nil || *control.Manager != manager.GRN {
+		return nil, errorx.New(errorx.KindInternal, "register pair: the control service must name the manager, which names none")
+	}
+	return s.register(ctx, manager, control)
+}
+
+// register inserts each record in order and answers the first as
+// stored, all in one transaction. A control service's manager is held
+// after the inserts, so the transaction takes the organization's row
+// before any operator's, the order an organization's deletion takes
+// them in (#1424).
+func (s *Store) register(ctx context.Context, records ...*operator.Operator) (*operator.Operator, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
@@ -24,17 +46,31 @@ func (s *Store) Register(ctx context.Context, o *operator.Operator) (*operator.O
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
-	if err := q.CreateOperator(ctx, db.CreateOperatorParams{
-		Grn:          o.GRN.String(),
-		OrgGrn:       o.Organization.String(),
-		RegisteredBy: o.RegisteredBy.String(),
-		CreatedAt:    pgxtype.Timestamptz(o.CreatedAt),
-		Name:         o.Name,
-		Description:  o.Description,
-	}); err != nil {
-		return nil, pgxerr.Classify(err, "register operator", nil, operator.ErrOperatorAlreadyRegistered)
+	for _, o := range records {
+		if err := q.CreateOperator(ctx, db.CreateOperatorParams{
+			Grn:          o.GRN.String(),
+			OrgGrn:       o.Organization.String(),
+			RegisteredBy: o.RegisteredBy.String(),
+			CreatedAt:    pgxtype.Timestamptz(o.CreatedAt),
+			Name:         o.Name,
+			Description:  o.Description,
+			ManagerGrn:   optionalGRN(o.Manager),
+		}); err != nil {
+			if violates(err, managerUnique) {
+				return nil, operator.ErrManagerHasControlService
+			}
+			return nil, pgxerr.Classify(err, "register operator", nil, operator.ErrOperatorAlreadyRegistered)
+		}
 	}
-	row, err := q.GetOperator(ctx, o.GRN.String())
+	for _, o := range records {
+		if o.Manager == nil {
+			continue
+		}
+		if err := holdManager(ctx, q, o); err != nil {
+			return nil, err
+		}
+	}
+	row, err := q.GetOperator(ctx, records[0].GRN.String())
 	if err != nil {
 		return nil, pgxerr.Classify(err, "read registered operator", nil, nil)
 	}
@@ -46,6 +82,80 @@ func (s *Store) Register(ctx context.Context, o *operator.Operator) (*operator.O
 		return nil, errorx.Wrap(err, "commit")
 	}
 	return registered, nil
+}
+
+// SetManager sets the record's manager once, in one transaction with
+// the checks a registration makes (ADR-0124).
+//
+// It holds the record FOR UPDATE, which waits for a registration
+// holding it as a manager, and the manager FOR KEY SHARE, as a
+// registration does. The two are taken in GRN byte order, the order
+// every statement holding two registrations takes them in (#1424).
+func (s *Store) SetManager(ctx context.Context, g, manager grn.GRN) (*operator.Operator, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	holdRecord := func() error {
+		named, err := q.LockOperatorManager(ctx, g.String())
+		if err != nil {
+			return pgxerr.Classify(err, "hold operator", operator.ErrOperatorNotFound, nil)
+		}
+		if named.Valid {
+			return operator.ErrManagerAlreadySet
+		}
+		return nil
+	}
+	holdManager := func() error {
+		serves, err := q.HoldOperatorManager(ctx, manager.String())
+		if err != nil {
+			return pgxerr.Classify(err, "hold operator manager", operator.ErrManagerNotRegistered, nil)
+		}
+		if serves.Valid {
+			return operator.ErrManagerIsControlService
+		}
+		return nil
+	}
+	holds := []func() error{holdRecord, holdManager}
+	if manager.String() < g.String() {
+		holds = []func() error{holdManager, holdRecord}
+	}
+	for _, hold := range holds {
+		if err := hold(); err != nil {
+			return nil, err
+		}
+	}
+	managed, err := q.OperatorIsManager(ctx, optionalGRN(&g))
+	if err != nil {
+		return nil, pgxerr.Classify(err, "read operator managers", nil, nil)
+	}
+	if managed {
+		return nil, operator.ErrIdentityIsManager
+	}
+	if _, err := q.SetOperatorManager(ctx, db.SetOperatorManagerParams{
+		Grn:        g.String(),
+		ManagerGrn: optionalGRN(&manager),
+	}); err != nil {
+		if violates(err, managerUnique) {
+			return nil, operator.ErrManagerHasControlService
+		}
+		return nil, pgxerr.Classify(err, "set operator manager", nil, nil)
+	}
+	row, err := q.GetOperator(ctx, g.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "read operator", operator.ErrOperatorNotFound, nil)
+	}
+	updated, err := rowToOperator(row)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errorx.Wrap(err, "commit")
+	}
+	return updated, nil
 }
 
 // UpdateDetails writes the patch and reads the operator back in one
@@ -193,6 +303,47 @@ func (s *Store) CountByOrg(ctx context.Context, orgGRN grn.GRN) (int, error) {
 	return int(n), nil
 }
 
+// managerUnique is the constraint that holds a manager to one control
+// service (migrations/000062).
+const managerUnique = "operators_manager_unique"
+
+// violates reports whether err is postgres refusing a statement on the
+// named constraint. pgxerr maps a unique violation to one conflict,
+// and a registration has two: its own GRN and its manager's control
+// service.
+func violates(err error, constraint string) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.ConstraintName == constraint
+}
+
+func optionalGRN(g *grn.GRN) pgtype.Text {
+	if g == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: g.String(), Valid: true}
+}
+
+// holdManager refuses o's manager unless it is registered and serves no
+// manager itself, and refuses o if a control service names it as its
+// manager (ADR-0124).
+func holdManager(ctx context.Context, q *db.Queries, o *operator.Operator) error {
+	serves, err := q.HoldOperatorManager(ctx, o.Manager.String())
+	if err != nil {
+		return pgxerr.Classify(err, "hold operator manager", operator.ErrManagerNotRegistered, nil)
+	}
+	if serves.Valid {
+		return operator.ErrManagerIsControlService
+	}
+	managed, err := q.OperatorIsManager(ctx, optionalGRN(&o.GRN))
+	if err != nil {
+		return pgxerr.Classify(err, "read operator managers", nil, nil)
+	}
+	if managed {
+		return operator.ErrIdentityIsManager
+	}
+	return nil
+}
+
 // rowToOperator converts a sqlc row into the domain aggregate. A stored
 // GRN that no longer parses is data corruption, hence internal.
 func rowToOperator(row db.Operator) (*operator.Operator, error) {
@@ -221,6 +372,14 @@ func rowToOperator(row db.Operator) (*operator.Operator, error) {
 		}
 		endpoint = &e
 	}
+	var manager *grn.GRN
+	if row.ManagerGrn.Valid {
+		m, err := grn.Parse(row.ManagerGrn.String)
+		if err != nil {
+			return nil, errorx.Wrap(err, "manager", errorx.KindInternal)
+		}
+		manager = &m
+	}
 	return &operator.Operator{
 		GRN:             g,
 		Organization:    orgGRN,
@@ -229,5 +388,6 @@ func rowToOperator(row db.Operator) (*operator.Operator, error) {
 		Name:            row.Name,
 		Description:     row.Description,
 		ControlEndpoint: endpoint,
+		Manager:         manager,
 	}, nil
 }

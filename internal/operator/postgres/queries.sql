@@ -1,6 +1,30 @@
 -- name: CreateOperator :exec
-INSERT INTO operators (grn, org_grn, registered_by, created_at, name, description)
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO operators (grn, org_grn, registered_by, created_at, name, description, manager_grn)
+VALUES ($1, $2, $3, $4, $5, $6, sqlc.narg('manager_grn'));
+
+-- Holds the manager a control service is being registered for, and
+-- answers whom it serves itself (ADR-0124). KEY SHARE waits for the
+-- manager's deletion and for a FOR UPDATE on its row:
+-- LockOperatorRegistration and LockOperatorManager.
+-- name: HoldOperatorManager :one
+SELECT manager_grn FROM operators WHERE grn = $1 FOR KEY SHARE;
+
+-- Whether a control service names the operator as its manager, which a
+-- deleted manager's control service still does (ADR-0124).
+-- name: OperatorIsManager :one
+SELECT EXISTS (SELECT 1 FROM operators WHERE manager_grn = $1);
+
+-- Holds a record its manager is being set on, and answers the manager
+-- it names. FOR UPDATE waits for a registration holding it as a
+-- manager, so that registration's control service is seen (ADR-0124).
+-- name: LockOperatorManager :one
+SELECT manager_grn FROM operators WHERE grn = $1 FOR UPDATE;
+
+-- Sets a record's manager once: a record already naming one is not
+-- written (ADR-0124).
+-- name: SetOperatorManager :execrows
+UPDATE operators SET manager_grn = sqlc.arg('manager_grn')
+WHERE grn = sqlc.arg('grn') AND manager_grn IS NULL;
 
 -- An absent argument keeps the column it would have written, so a
 -- caller changing one of the two leaves the other as it stands. The

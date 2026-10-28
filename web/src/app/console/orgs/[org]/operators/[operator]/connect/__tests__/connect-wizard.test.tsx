@@ -58,9 +58,11 @@ function wizard(
   {
     problem = null,
     canReplace = true,
+    isControlService = false,
   }: {
     problem?: "unreachable" | "forbidden" | null;
     canReplace?: boolean;
+    isControlService?: boolean;
   } = {},
 ) {
   return (
@@ -74,6 +76,7 @@ function wizard(
         problem={problem}
         initialStep={initialStep}
         canReplace={canReplace}
+        isControlService={isControlService}
         operatorHref="/console/orgs/acme/operators/field-one"
         operatorsHref="/console/orgs/acme/operators"
       />
@@ -156,7 +159,7 @@ describe("connect wizard", () => {
     await user.click(screen.getByRole("button", { name: "Issue key" }));
 
     expect(
-      await screen.findByText("This garam doesn't issue operator keys"),
+      await screen.findByText("This garam doesn't issue keys"),
     ).toBeInTheDocument();
     // The control: it is not read as an outage.
     expect(screen.queryByText("garam couldn't issue a key")).toBeNull();
@@ -180,9 +183,7 @@ describe("connect wizard", () => {
     await user.click(screen.getByRole("button", { name: "Issue key" }));
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(
-      screen.queryByText("This garam doesn't issue operator keys"),
-    ).toBeNull();
+    expect(screen.queryByText("This garam doesn't issue keys")).toBeNull();
   });
 
   it.each([
@@ -208,9 +209,7 @@ describe("connect wizard", () => {
         await screen.findByText("garam couldn't issue a key"),
       ).toBeInTheDocument();
       // The control: the outage is not read as a garam with no keys.
-      expect(
-        screen.queryByText("This garam doesn't issue operator keys"),
-      ).toBeNull();
+      expect(screen.queryByText("This garam doesn't issue keys")).toBeNull();
       expect(currentStep()).toHaveTextContent("Issue a key");
     },
   );
@@ -392,7 +391,16 @@ describe("connect wizard", () => {
     expect(screen.getByText("Field one is connected")).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Connect the control service too" }),
-    ).toHaveAttribute("href", "/console/orgs/acme/operators?connect");
+    ).toHaveAttribute("href", "/console/orgs/acme/operators?connect=field-one");
     expect(currentStep()).toHaveTextContent("Verify");
+  });
+
+  it("offers no second identity once a control service is connected, since its record names its manager (#1636)", () => {
+    render(wizard("verify", [fieldOneKey], { isControlService: true }));
+
+    expect(screen.getByText("Field one is connected")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Connect the control service too" }),
+    ).toBeNull();
   });
 });

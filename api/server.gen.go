@@ -1263,6 +1263,9 @@ type Operator struct {
 	Description string `json:"description"`
 	Grn         string `json:"grn"`
 
+	// Manager The GRN of the operator this one is the control service of, absent where this one is a manager or stands alone (ADR-0124). An Operator is a manager and at most one control service, so a list read pairs the two by this field alone. It is set by `registerOperator`, or once by `setOperatorManager` on a record naming none, and it names the identity rather than a live record: it stays after that manager's registration is deleted.
+	Manager *string `json:"manager,omitempty"`
+
 	// Name What the organization calls the operator. It is not unique and not an identity: two operators may share one, and the GRN is what tells them apart. A registration that named none, including every one made before names existed, is called by its identifier.
 	Name   string `json:"name"`
 	OrgGrn string `json:"orgGrn"`
@@ -1315,6 +1318,12 @@ type OperatorKeyList struct {
 // OperatorKeyState Where a key stands at garam's database time. `active` verifies assertions; `retiring` verifies them until `retiresAt`, which a planned successor set; `revoked` verifies nothing, because it was withdrawn or its `retiresAt` has passed, and the tokens exchanged under it authenticate nothing.
 type OperatorKeyState string
 
+// OperatorManagerWrite defines model for OperatorManagerWrite.
+type OperatorManagerWrite struct {
+	// Manager The GRN of the cluster manager this operator is the control service of: another operator of this organization.
+	Manager string `json:"manager"`
+}
+
 // OperatorName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
 type OperatorName = string
 
@@ -1329,11 +1338,26 @@ type OperatorPatch struct {
 
 // OperatorRegistration defines model for OperatorRegistration.
 type OperatorRegistration struct {
+	// ControlService Registers this operator as a manager together with its control service, which names it, in one transaction (ADR-0124): both are recorded or neither is. The answer is the manager; the control service is the operator under this identifier, and each is issued its own key. Not given with `manager`.
+	ControlService *struct {
+		// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+		Description *OperatorDescription `json:"description,omitempty"`
+
+		// Identifier The control service's identifier, under the same rule as the manager's and different from it.
+		Identifier string `json:"identifier"`
+
+		// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
+		Name *OperatorName `json:"name,omitempty"`
+	} `json:"controlService,omitempty"`
+
 	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
 	Description *OperatorDescription `json:"description,omitempty"`
 
 	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, and it is supplied rather than minted because the operator is configured with it before it is registered.
 	Identifier string `json:"identifier"`
+
+	// Manager Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124). It is how a control service joins a manager registered on its own, as every pair made before `controlService` was. Not given with `controlService`.
+	Manager *string `json:"manager,omitempty"`
 
 	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
 	Name *OperatorName `json:"name,omitempty"`
@@ -1908,6 +1932,9 @@ type WriteOperatorDelegationJSONRequestBody = DelegationWrite
 // IssueOperatorKeyJSONRequestBody defines body for IssueOperatorKey for application/json ContentType.
 type IssueOperatorKeyJSONRequestBody = OperatorKeyIssuance
 
+// SetOperatorManagerJSONRequestBody defines body for SetOperatorManager for application/json ContentType.
+type SetOperatorManagerJSONRequestBody = OperatorManagerWrite
+
 // CheckPermissionsJSONRequestBody defines body for CheckPermissions for application/json ContentType.
 type CheckPermissionsJSONRequestBody = PermissionCheckRequest
 
@@ -2108,6 +2135,9 @@ type ServerInterface interface {
 	// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
 	// (DELETE /orgs/{org}/operators/{operator}/keys/{kid})
 	RevokeOperatorKey(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, keyID KeyID)
+	// SetOperatorManager Link a control service to its cluster manager, once. Requires `operator:register`.
+	// (PUT /orgs/{org}/operators/{operator}/manager)
+	SetOperatorManager(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
 	// CheckPermissions Ask whether the signed-in caller may take each of a list of actions. Requires membership.
 	// (POST /orgs/{org}/permission-checks)
 	CheckPermissions(w http.ResponseWriter, r *http.Request, org Org)
@@ -4195,6 +4225,41 @@ func (siw *ServerInterfaceWrapper) RevokeOperatorKey(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// SetOperatorManager operation middleware
+func (siw *ServerInterfaceWrapper) SetOperatorManager(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetOperatorManager(w, r, org, operatorSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CheckPermissions operation middleware
 func (siw *ServerInterfaceWrapper) CheckPermissions(w http.ResponseWriter, r *http.Request) {
 
@@ -5260,6 +5325,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.EndOperatorDelegation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.GetOperatorDelegation)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.WriteOperatorDelegation)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/manager", wrapper.SetOperatorManager)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/control-endpoint", wrapper.ClearOperatorControlEndpoint)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/control-endpoint", wrapper.SetOperatorControlEndpoint)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operation-authorities", wrapper.MintOperationAuthority)

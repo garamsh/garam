@@ -753,6 +753,24 @@ type ClientInterface interface {
 	// Corresponds with DELETE /orgs/{org}/operators/{operator}/keys/{kid} (the `RevokeOperatorKey` operationId).
 	RevokeOperatorKey(ctx context.Context, org Org, operatorSlug OperatorSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// SetOperatorManagerWithBody Link a control service to its cluster manager, once. Requires `operator:register`.
+	//
+	// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/operators/{operator}/manager (the `SetOperatorManager` operationId).
+	SetOperatorManagerWithBody(ctx context.Context, org Org, operatorSlug OperatorSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetOperatorManager Link a control service to its cluster manager, once. Requires `operator:register`.
+	//
+	// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /orgs/{org}/operators/{operator}/manager (the `SetOperatorManager` operationId).
+	SetOperatorManager(ctx context.Context, org Org, operatorSlug OperatorSlug, body SetOperatorManagerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CheckPermissionsWithBody Ask whether the signed-in caller may take each of a list of actions. Requires membership.
 	//
 	// Answers each pair with the decision enforcement would reach for the same caller, action and resource: the same role statements, groups and attached policies, asked of the policy engine's `Check` one pair at a time. The answer is `allow` or `deny` and never why, so no statement or policy is named. It reads a decision and grants nothing: every write is checked again when it arrives, and a decision can change between this answer and that write.
@@ -2450,6 +2468,44 @@ func (c *Client) IssueOperatorKey(ctx context.Context, org Org, operatorSlug Ope
 // Corresponds with DELETE /orgs/{org}/operators/{operator}/keys/{kid} (the `RevokeOperatorKey` operationId).
 func (c *Client) RevokeOperatorKey(ctx context.Context, org Org, operatorSlug OperatorSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRevokeOperatorKeyRequest(c.Server, org, operatorSlug, keyID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetOperatorManagerWithBody Link a control service to its cluster manager, once. Requires `operator:register`.
+//
+// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/operators/{operator}/manager (the `SetOperatorManager` operationId).
+func (c *Client) SetOperatorManagerWithBody(ctx context.Context, org Org, operatorSlug OperatorSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetOperatorManagerRequestWithBody(c.Server, org, operatorSlug, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SetOperatorManager Link a control service to its cluster manager, once. Requires `operator:register`.
+//
+// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /orgs/{org}/operators/{operator}/manager (the `SetOperatorManager` operationId).
+func (c *Client) SetOperatorManager(ctx context.Context, org Org, operatorSlug OperatorSlug, body SetOperatorManagerJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetOperatorManagerRequest(c.Server, org, operatorSlug, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5727,6 +5783,60 @@ func NewRevokeOperatorKeyRequest(server string, org Org, operatorSlug OperatorSl
 	return req, nil
 }
 
+// NewSetOperatorManagerRequest calls the generic SetOperatorManager builder with application/json body
+func NewSetOperatorManagerRequest(server string, org Org, operatorSlug OperatorSlug, body SetOperatorManagerJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetOperatorManagerRequestWithBody(server, org, operatorSlug, "application/json", bodyReader)
+}
+
+// NewSetOperatorManagerRequestWithBody constructs an http.Request for the SetOperatorManager method, with any body, and a specified content type
+func NewSetOperatorManagerRequestWithBody(server string, org Org, operatorSlug OperatorSlug, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "operator", operatorSlug, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/operators/%s/manager", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewCheckPermissionsRequest calls the generic CheckPermissions builder with application/json body
 func NewCheckPermissionsRequest(server string, org Org, body CheckPermissionsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -7662,6 +7772,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /orgs/{org}/operators/{operator}/keys/{kid} (the `RevokeOperatorKey` operationId).
 	RevokeOperatorKeyWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, keyID KeyID, reqEditors ...RequestEditorFn) (*RevokeOperatorKeyResponse, error)
+
+	// SetOperatorManagerWithBodyWithResponse Link a control service to its cluster manager, once. Requires `operator:register`.
+	//
+	// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/operators/{operator}/manager (the `SetOperatorManager` operationId).
+	SetOperatorManagerWithBodyWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOperatorManagerResponse, error)
+
+	// SetOperatorManagerWithResponse Link a control service to its cluster manager, once. Requires `operator:register`.
+	//
+	// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/operators/{operator}/manager (the `SetOperatorManager` operationId).
+	SetOperatorManagerWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, body SetOperatorManagerJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOperatorManagerResponse, error)
 
 	// CheckPermissionsWithBodyWithResponse Ask whether the signed-in caller may take each of a list of actions. Requires membership.
 	//
@@ -11808,6 +11936,82 @@ func (r RevokeOperatorKeyResponse) ContentType() string {
 	return ""
 }
 
+type SetOperatorManagerResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Operator
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r SetOperatorManagerResponse) GetJSON200() *Operator {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r SetOperatorManagerResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r SetOperatorManagerResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r SetOperatorManagerResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r SetOperatorManagerResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r SetOperatorManagerResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r SetOperatorManagerResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SetOperatorManagerResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetOperatorManagerResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SetOperatorManagerResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type CheckPermissionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14436,6 +14640,36 @@ func (c *ClientWithResponses) RevokeOperatorKeyWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseRevokeOperatorKeyResponse(rsp)
+}
+
+// SetOperatorManagerWithBodyWithResponse Link a control service to its cluster manager, once. Requires `operator:register`.
+//
+// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/operators/{operator}/manager (the `SetOperatorManager` operationId).
+func (c *ClientWithResponses) SetOperatorManagerWithBodyWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetOperatorManagerResponse, error) {
+	rsp, err := c.SetOperatorManagerWithBody(ctx, org, operatorSlug, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetOperatorManagerResponse(rsp)
+}
+
+// SetOperatorManagerWithResponse Link a control service to its cluster manager, once. Requires `operator:register`.
+//
+// Records this operator as the control service of the operator `manager` names, on a record that names no manager yet (ADR-0124). It links a pair registered before the two could be registered together, keeping its keys, its control endpoint and its delegation. The link is set once: a record that already names a manager is refused with 409, whichever manager the request names, and no route moves or clears it. It is refused with 409 as `registerOperator` refuses `manager`: a manager not registered, one that is itself a control service, one another control service already names, and a record a control service names as its manager.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/operators/{operator}/manager (the `SetOperatorManager` operationId).
+func (c *ClientWithResponses) SetOperatorManagerWithResponse(ctx context.Context, org Org, operatorSlug OperatorSlug, body SetOperatorManagerJSONRequestBody, reqEditors ...RequestEditorFn) (*SetOperatorManagerResponse, error) {
+	rsp, err := c.SetOperatorManager(ctx, org, operatorSlug, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetOperatorManagerResponse(rsp)
 }
 
 // CheckPermissionsWithBodyWithResponse Ask whether the signed-in caller may take each of a list of actions. Requires membership.
@@ -18087,6 +18321,67 @@ func ParseRevokeOperatorKeyResponse(rsp *http.Response) (*RevokeOperatorKeyRespo
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetOperatorManagerResponse parses an HTTP response from a SetOperatorManagerWithResponse call
+func ParseSetOperatorManagerResponse(rsp *http.Response) (*SetOperatorManagerResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetOperatorManagerResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Operator
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 

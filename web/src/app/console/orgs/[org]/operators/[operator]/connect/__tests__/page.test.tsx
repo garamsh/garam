@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   API_URL,
   answerPermissionChecks,
+  fieldOne,
   fieldOneKey,
 } from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
@@ -29,11 +30,11 @@ function keysAre(...keys: unknown[]) {
   server.use(http.get(KEYS, () => HttpResponse.json({ keys })));
 }
 
-function renderPage(rotate?: boolean) {
+function renderPage(search: { rotate?: string; pair?: string } = {}) {
   return renderServerComponent(
     ConnectOperatorPage({
       params: Promise.resolve({ org: "acme", operator: "field-one" }),
-      searchParams: Promise.resolve(rotate ? { rotate: "" } : {}),
+      searchParams: Promise.resolve(search),
     }),
     { wrapper: TooltipProvider },
   );
@@ -45,7 +46,96 @@ function currentStep() {
     .find((item) => item.getAttribute("aria-current") === "step");
 }
 
+const CONTROL = {
+  ...fieldOne,
+  grn: "grn:acme:default:operator:field-one-control",
+  name: "field-one-control",
+  manager: fieldOne.grn,
+};
+
+/** Lists field-one beside a control service whose record names it. */
+function pairedWithControlService(controlKeys: unknown[] = []) {
+  server.use(
+    http.get(`${API_URL}/orgs/acme/operators/field-one-control`, () =>
+      HttpResponse.json(CONTROL),
+    ),
+    http.get(`${API_URL}/orgs/acme/operators`, () =>
+      HttpResponse.json([fieldOne, CONTROL]),
+    ),
+    http.get(`${API_URL}/orgs/acme/operators/field-one-control/keys`, () =>
+      HttpResponse.json({ keys: controlKeys }),
+    ),
+  );
+}
+
 describe("connect operator page", () => {
+  it("sets up a cluster manager and its control service as one Operator, issuing the key still missing (#1636)", async () => {
+    pairedWithControlService();
+
+    await renderPage({ pair: "field-one-control" });
+
+    expect(currentStep()).toHaveTextContent("Issue the keys");
+    expect(
+      screen.getByRole("button", { name: "Issue the control service's key" }),
+    ).toBeInTheDocument();
+  });
+
+  it("replaces one identity's key on its own when asked to rotate, though it has a control service", async () => {
+    // The control for the test above: the same pair, with `?rotate`.
+    pairedWithControlService();
+
+    await renderPage({ rotate: "", pair: "field-one-control" });
+
+    expect(currentStep()).toHaveTextContent("Issue a key");
+  });
+
+  it("reads a pair from its address alone, so a listing never swaps the wizard", async () => {
+    // The listing pairs field-one, and the address names no pair.
+    pairedWithControlService();
+    keysAre();
+
+    await renderPage();
+
+    expect(
+      screen.getByRole("button", { name: "Issue key" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps the pair's wizard when a read fails, so issuing's re-render keeps its keys", async () => {
+    pairedWithControlService();
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators/field-one-control/keys`, () =>
+        HttpResponse.error(),
+      ),
+    );
+
+    await renderPage({ pair: "field-one-control" });
+
+    expect(screen.getByText("Cannot reach the API")).toBeInTheDocument();
+    expect(
+      screen.getByRole("list", { name: "Connect Field cluster one steps" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Issue key" })).toBeNull();
+  });
+
+  it("says the caller cannot issue a pair's keys where the server denies both actions", async () => {
+    pairedWithControlService();
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "operator:register" || action === "operator:reissue"
+          ? "deny"
+          : "allow",
+      ),
+    );
+
+    await renderPage({ pair: "field-one-control" });
+
+    expect(
+      screen.getByText("No policy lets you issue these identities a key"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Issue/ })).toBeNull();
+  });
+
   it("opens on issuing a key for an operator that holds none", async () => {
     keysAre();
 
@@ -71,7 +161,7 @@ describe("connect operator page", () => {
   });
 
   it("opens on issuing a replacement when asked to rotate", async () => {
-    await renderPage(true);
+    await renderPage({ rotate: "" });
 
     expect(currentStep()).toHaveTextContent("Issue a key");
     expect(screen.getByRole("radio", { name: /Rotate/ })).toBeChecked();
@@ -105,7 +195,7 @@ describe("connect operator page", () => {
     await renderPage();
 
     expect(
-      screen.getByText("No policy lets you issue this operator a key"),
+      screen.getByText("No policy lets you issue this identity a key"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Issue key" })).toBeNull();
   });
@@ -123,7 +213,7 @@ describe("connect operator page", () => {
     await renderPage();
 
     expect(
-      screen.getByText("You can't view this operator or its keys"),
+      screen.getByText("You can't view this identity or its keys"),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Issue key" })).toBeNull();
   });

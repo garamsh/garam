@@ -70,7 +70,7 @@ func TestAPIOperations_PlaceEveryOperationOfTheSpecification(t *testing.T) {
 		}
 	}
 	assert.Empty(t, placed, "every name commands.yaml places is an operation of the specification")
-	assert.Equal(t, 80, declared, "the count ADR-0122 was measured at; a change here is a change the ADR's table records")
+	assert.Equal(t, 81, declared, "the count docs/architecture/cli.md §Coverage states; an operation added or removed changes both")
 }
 
 // signedInTo writes a credentials file signed in to endpoint under a

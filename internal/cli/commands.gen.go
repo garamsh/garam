@@ -270,7 +270,7 @@ var apiOperations = []apiOperation{
 		ID: "listOperators", Method: "GET", Path: "/orgs/{org}/operators",
 		Words: []string{"operators"}, Verb: "list", Short: "List an organization's operators. Requires the `member` role.",
 		Args: []string(nil), FromOrg: true,
-		Columns: []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint"},
+		Columns: []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint", "manager"},
 		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
 			return c.ListOperators(ctx, path[0], edit)
 		},
@@ -283,9 +283,11 @@ var apiOperations = []apiOperation{
 			{Name: "identifier", In: "body", Kind: "string", Required: true, Help: "Lowercase letters, digits and `-`, at most 64 characters."},
 			{Name: "name", In: "body", Kind: "string", Required: false, Help: "At most 100 characters once surrounding space is trimmed, and at least one."},
 			{Name: "description", In: "body", Kind: "string", Required: false, Help: "At most 1000 characters once surrounding space is trimmed."},
+			{Name: "manager", In: "body", Kind: "string", Required: false, Help: "Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124)."},
+			{Name: "controlService", In: "body", Kind: "json", Required: false, Help: "Registers this operator as a manager together with its control service, which names it, in one transaction (ADR-0124): both are recorded or neither is."},
 		},
 		BodyType: "application/json",
-		Columns:  []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint"},
+		Columns:  []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint", "manager"},
 		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
 			return c.RegisterOperatorWithBody(ctx, path[0], contentType, body, edit)
 		},
@@ -294,7 +296,7 @@ var apiOperations = []apiOperation{
 		ID: "getOperator", Method: "GET", Path: "/orgs/{org}/operators/{operator}",
 		Words: []string{"operators"}, Verb: "get", Short: "Read one of an organization's operators. Requires the `member` role.",
 		Args: []string{"operator"}, FromOrg: true,
-		Columns: []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint"},
+		Columns: []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint", "manager"},
 		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
 			return c.GetOperator(ctx, path[0], path[1], edit)
 		},
@@ -308,7 +310,7 @@ var apiOperations = []apiOperation{
 			{Name: "description", In: "body", Kind: "string", Required: false, Help: "At most 1000 characters once surrounding space is trimmed."},
 		},
 		BodyType: "application/json",
-		Columns:  []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint"},
+		Columns:  []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint", "manager"},
 		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
 			return c.UpdateOperatorWithBody(ctx, path[0], path[1], contentType, body, edit)
 		},
@@ -395,6 +397,19 @@ var apiOperations = []apiOperation{
 		},
 	},
 	{
+		ID: "setOperatorManager", Method: "PUT", Path: "/orgs/{org}/operators/{operator}/manager",
+		Words: []string{"operators", "manager"}, Verb: "set", Short: "Link a control service to its cluster manager, once. Requires `operator:register`.",
+		Args: []string{"operator"}, FromOrg: true,
+		Fields: []apiField{
+			{Name: "manager", In: "body", Kind: "string", Required: true, Help: "The GRN of the cluster manager this operator is the control service of: another operator of this organization."},
+		},
+		BodyType: "application/json",
+		Columns:  []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint", "manager"},
+		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
+			return c.SetOperatorManagerWithBody(ctx, path[0], path[1], contentType, body, edit)
+		},
+	},
+	{
 		ID: "setOperatorControlEndpoint", Method: "PUT", Path: "/orgs/{org}/operators/{operator}/control-endpoint",
 		Words: []string{"operators", "control-endpoint"}, Verb: "set", Short: "Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.",
 		Args: []string{"operator"}, FromOrg: true,
@@ -403,7 +418,7 @@ var apiOperations = []apiOperation{
 		},
 		BodyType: "application/json",
 		Headers:  map[string]string{"Garam-Contract-Version": "operation-authority.v1"},
-		Columns:  []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint"},
+		Columns:  []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint", "manager"},
 		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
 			return c.SetOperatorControlEndpointWithBody(ctx, path[0], path[1], nil, contentType, body, edit)
 		},
@@ -413,7 +428,7 @@ var apiOperations = []apiOperation{
 		Words: []string{"operators", "control-endpoint"}, Verb: "clear", Short: "Clear a hosted operator's control endpoint. Requires current `operator:delegate`.",
 		Args: []string{"operator"}, FromOrg: true,
 		Headers: map[string]string{"Garam-Contract-Version": "operation-authority.v1"},
-		Columns: []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint"},
+		Columns: []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint", "manager"},
 		call: func(ctx context.Context, c apigen.ClientInterface, path []string, contentType string, body io.Reader, edit apigen.RequestEditorFn) (*http.Response, error) {
 			return c.ClearOperatorControlEndpoint(ctx, path[0], path[1], nil, edit)
 		},

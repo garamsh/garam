@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --port 3001",
     "build": "next build",
-    "start": "cp -R .next/static .next/standalone/site/.next/ && cp -R public .next/standalone/site/ && node .next/standalone/site/server.js",
+    "start": "cp -R .next/static .next/standalone/site-web/.next/ && cp -R public .next/standalone/site-web/ && node .next/standalone/site-web/server.js",
     "lint": "eslint",
     "format": "prettier . --check",
     "test": "vitest run",

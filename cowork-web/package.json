@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --port 3100",
     "build": "next build",
-    "start": "cp -R .next/static .next/standalone/cowork/web/.next/ && node .next/standalone/cowork/web/server.js",
+    "start": "cp -R .next/static .next/standalone/cowork-web/.next/ && node .next/standalone/cowork-web/server.js",
     "lint": "eslint",
     "format": "prettier . --check",
     "test": "vitest run",

@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   // Dependencies are installed once for the workspace, in the root's
   // node_modules, so tracing starts there and the server sits at
-  // .next/standalone/cowork/web/server.js.
+  // .next/standalone/cowork-web/server.js.
   outputFileTracingRoot: path.join(__dirname, ".."),
   outputFileTracingIncludes: {
     "/*": [

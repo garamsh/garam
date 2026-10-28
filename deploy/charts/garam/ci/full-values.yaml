@@ -3,10 +3,10 @@
 # digest as well as by tag, key material split across two Secrets, and
 # message signing keys in Transit with the machine pod annotated, and
 # the operator exchange's token endpoint, the branches in the templates
-# — so the render `make chart` checks covers both sides of each. The
-# minimal file covers the other side of each: no name, so no account
-# and no binding; no digest; one Secret holding all four files; keys
-# sealed under the key-encryption key; and no token endpoint.
+# — so the render `make -C deploy/charts ci` checks covers both sides of
+# each. The minimal file covers the other side of each: no name, so no
+# account and no binding; no digest; one Secret holding all four files;
+# keys sealed under the key-encryption key; and no token endpoint.
 #
 # `resources` is set nowhere here. No template branches on it, so a
 # value covers nothing, and `helm package` ships this file inside the

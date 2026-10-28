@@ -1,6 +1,7 @@
-# One-shot: applies pending migrations and exits. `make minikube-migrate`
-# waits for it to complete before `make minikube-apps` starts anything
-# that reads the schema.
+# One-shot: applies pending migrations and exits.
+# `make -C deploy/local minikube-migrate` waits for it to complete
+# before `make -C deploy/local minikube-apps` starts anything that reads
+# the schema.
 #
 # A Job's pod template is immutable, so the bring-up deletes this one
 # before applying it rather than updating it. golang-migrate records what

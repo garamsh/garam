@@ -1,0 +1,34 @@
+# The modules `make affected` selects among (#1661), one per line, each
+# followed by the modules it depends on that no workspace file declares.
+# go.work and its go.mod files declare the Go edges, and package.json
+# `workspace:` dependencies the pnpm ones; this table holds what neither
+# can say: a module reading another's files, building another's
+# binary, or running its suites against the stack deploy/local starts.
+# Every module go.work or pnpm-workspace.yaml names is listed here, and
+# `make affected` fails on one that is not.
+#
+# `make ci` runs each module's gate in this order, the cheaper Go gates
+# before the web ones. A change to a file the root owns selects every
+# module; those files are named in ROOT_FILES in tooling/ci/affected.sh.
+
+# check-toolchain reads the platform's go.mod, the console's .nvmrc and
+# the stack's Dockerfiles.
+tooling platform console deploy/local
+platform/sdk
+# The platform's suites run against the stack.
+platform deploy/local
+cowork/engine
+# cowork's gen builds cowork/engine's bundle into internal/.
+cowork cowork/engine deploy/local
+# The chart's checks read the environment names the platform and the
+# console declare.
+deploy/charts platform console
+# The stack has no gate of its own; the suites of the modules naming it
+# check it.
+deploy/local
+# The console generates its API types from the platform's OpenAPI spec,
+# and its browser suite drives the platform's api.
+console platform deploy/local
+# cowork/web generates its API types from cowork's spec, and its browser
+# suite drives the cowork binary and signs in through the platform.
+cowork/web cowork platform deploy/local

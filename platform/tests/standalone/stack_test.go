@@ -5,14 +5,15 @@
 // containers over a database tests/testprincipal creates — on a real
 // rootless Docker daemon with the pinned Sherlock images.
 //
-// `make standalone-e2e` runs it. It needs:
+// `make -C platform standalone-e2e` runs it. It needs:
 //   - GARAM_TEST_DOCKER_HOST: the rootless daemon, unix://…
 //   - GARAM_TEST_SERVER_URL: the Postgres server `make db-up` publishes
 //   - GARAM_TEST_POSTGRES_CONTAINER: that server's container, whose
 //     network the garam containers join
 //   - GARAM_TEST_GARAM_IMAGE: this tree's garam image, by ID
 //   - GARAM_TEST_RUNTIME_IMAGE, GARAM_TEST_WORKSPACE_IMAGE: Sherlock's,
-//     which `make standalone-e2e` names from the Makefile's pin
+//     which `make -C platform standalone-e2e` names from the Makefile's
+//     pin
 //   - GARAM_TEST_TEI_IMAGE: the embedding service a real model needs
 //   - GARAM_TEST_MODEL_ENV_FILE: an owner-only KEY=VALUE file holding
 //     the model's credential, for the scenarios a model answers
@@ -68,7 +69,7 @@ func required(t *testing.T, name string) string {
 	t.Helper()
 	v := os.Getenv(name)
 	if v == "" {
-		t.Fatalf("%s is required: run this suite through make standalone-e2e", name)
+		t.Fatalf("%s is required: run this suite through make -C platform standalone-e2e", name)
 	}
 	return v
 }

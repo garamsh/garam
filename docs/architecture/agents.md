@@ -750,5 +750,6 @@ for the storage handover ADR-0089 answers: the joint acceptance with
 garam and a model, and a measured daemon stop. ADR-0085 is
 authoritative for the arrangement and the socket's contract, and
 ADR-0089 for the move.
-`make workload-integration` runs both against a real daemon, and `make
-standalone-e2e` runs the move against a real garam and model too.
+`make -C platform workload-integration` runs both against a real daemon,
+and `make standalone-e2e` runs the move against a real garam and model
+too.

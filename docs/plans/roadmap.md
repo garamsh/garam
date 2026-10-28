@@ -65,8 +65,8 @@ Not a tier in the dependency stack — a surface over what P1 and P2
 already expose, built in parallel rather than gating P3.
 
 - `console/`: Next.js App Router, Tailwind v4, shadcn/ui, three test
-  layers (ADR-0009). Its own toolchain and gate, `make web-ci`, which
-  `make ci` runs.
+  layers (ADR-0009). Its own toolchain and gate, `make -C console ci`,
+  which `make ci` runs.
 - A public landing page at `/`, sign-in at `/login`, and the signed-in
   application under `/console`.
 - Sign-in with a username and a password beside Google, registered
@@ -95,8 +95,8 @@ already expose, built in parallel rather than gating P3.
 - Container image and a minimal deploy path — built. Both images come
   from `deploy/local/Dockerfile` and `Dockerfile.web`, and the chart at
   `deploy/charts/garam/` is the description of a deployment (ADR-0042),
-  checked by `make chart` inside `make ci`. What a deployment must plan
-  for is
+  checked by `make -C deploy/charts ci` inside `make ci`. What a
+  deployment must plan for is
   [deployment-contract.md](../architecture/deployment-contract.md).
   Publishing is built and exercised: `.github/workflows/release.yml`
   publishes both images on a `vX.Y.Z` tag push under the names and the

@@ -40,13 +40,17 @@ today's.
 
 ## Build and test
 
-```sh
-go build ./...
-go test  ./...
-```
+Every module has a `Makefile` answering the same verbs, so
+`make -C <module> ci` is that module's gate and `make ci` runs every
+module's. `make affected BASE=origin/dev` prints the modules a change
+can affect, each with its reason, which is what CI runs. See
+[docs/convention/ci.md](./docs/convention/ci.md).
 
-`make ci` runs these checks over the packages it lists — run it before
-you push. See [docs/convention/ci.md](./docs/convention/ci.md).
+```sh
+make affected BASE=origin/dev   # the modules this branch can affect
+make -C platform ci             # one module's gate
+make ci                         # every module's — run it before you push
+```
 
 ## Searching this repository
 
@@ -112,13 +116,13 @@ mode 0600 and never printed.
 The Next.js app lives in [`console/`](./console/) and talks to the Go
 backend through a same-origin `/api/*` rewrite
 ([ADR-0009](./docs/architecture/adr/0009-web-frontend.md)). It keeps its
-own toolchain and lockfile; `make web-ci` is its gate, and `make ci`
-runs it — so `make ci` needs pnpm and Node as well as Go.
+own toolchain and lockfile; `make -C console ci` is its gate, and
+`make ci` runs it — so `make ci` needs pnpm and Node as well as Go.
 
 ```sh
-make web-install          # pnpm install --frozen-lockfile
-make web-ci               # format, lint, typecheck, unit tests, build, codegen check
-pnpm --dir console dev        # dev server on http://localhost:3000
+make -C console install   # pnpm install --frozen-lockfile
+make -C console ci        # install, format, lint, typecheck, unit tests, build, codegen check
+pnpm --dir console dev    # dev server on http://localhost:3000
 ```
 
 Copy `console/.env.example` to `console/.env.local` and point
@@ -162,7 +166,7 @@ GARAM_WEB_IMAGE=<ref> make web-image-e2e  # checks that image instead
 
 The override is how an image pulled from a registry by digest is
 verified. Like `make e2e` and `make web-e2e` it needs Docker, so it
-stays outside `make web-ci`.
+stays outside `make -C console ci`.
 
 ## Development images
 

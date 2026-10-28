@@ -1,6 +1,6 @@
 #!/bin/sh
 # db-prune drops the test databases whose worktree is gone. The
-# Makefile's TEST_DB_NAME suffixes `garam_test` with git's own name for
+# tooling/make/stack.mk's TEST_DB_NAME suffixes `garam_test` with git's own name for
 # a linked worktree, so `make db-up` creates one database per worktree
 # and, until this target, nothing removed it again: a worktree's
 # database outlived the worktree, and only `make db-down` — which
@@ -28,12 +28,12 @@
 # database this worktree uses is the one name that is certainly in use.
 #
 # COMPOSE_LOCAL and TEST_DB_NAME arrive in the environment; the
-# Makefile holds both.
+# tooling/make/stack.mk holds both.
 
 fail() { echo "db-prune: $1" >&2; exit 1; }
 
-test -n "$COMPOSE_LOCAL" || fail 'COMPOSE_LOCAL is empty — the Makefile holds it'
-test -n "$TEST_DB_NAME" || fail 'TEST_DB_NAME is empty — the Makefile holds it'
+test -n "$COMPOSE_LOCAL" || fail 'COMPOSE_LOCAL is empty — tooling/make/stack.mk holds it'
+test -n "$TEST_DB_NAME" || fail 'TEST_DB_NAME is empty — tooling/make/stack.mk holds it'
 
 # Whether a database exists is psql's output; whether there is an
 # answer at all is its exit status. The two are read separately,
@@ -50,7 +50,7 @@ set -e
 
 # The keep set: `garam_test`, plus one name per worktree still on disk.
 # The suffix is the administrative directory's name, which is exactly
-# what `git rev-parse --git-dir` gives the Makefile to cut at line 59.
+# what `git rev-parse --git-dir` gives tooling/make/stack.mk to cut.
 common="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
 admin="$common/worktrees"
 keep='garam_test'
@@ -80,17 +80,17 @@ test "$found" -eq "$((listed - 1))" \
 
 # Control two: the database this run's own worktree uses. It is in use
 # by definition, so an enumeration that dropped it would be dropping a
-# live database, and the derivation is held against the Makefile's.
+# live database, and the derivation is held against stack.mk's.
 self="garam_test$(git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')"
 test "$self" = "$TEST_DB_NAME" \
-	|| fail "the Makefile names $TEST_DB_NAME and this script derives $self — the Makefile's TEST_DB_NAME and the rule here no longer agree"
+	|| fail "tooling/make/stack.mk names $TEST_DB_NAME and this script derives $self — its TEST_DB_NAME and the rule here no longer agree"
 printf '%s\n' "$keep" | grep -qxF "$self" \
 	|| fail "$self is the database this worktree runs against and the keep set does not hold it — the enumeration is broken"
 
 echo "db-prune: $total databases on this server, $found worktrees tracked, $live of them still on disk"
 
 # `garam_test%` is wider than what the naming creates: only `garam_test`
-# and `garam_test_<worktree>` come from the Makefile's TEST_DB_NAME,
+# and `garam_test_<worktree>` come from tooling/make/stack.mk's TEST_DB_NAME,
 # and a third name matching that pattern was created by something else
 # and is left alone rather than swept up by the width of the filter.
 kept=''

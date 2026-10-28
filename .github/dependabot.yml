@@ -17,7 +17,8 @@
 # Eight pins meet both tests. Five record the absence at their own site,
 # so the list is checked against the tree rather than trusted:
 #
-#   - the Makefile's HELM and CNPG_MANIFEST
+#   - HELM in deploy/charts/Makefile and CNPG_MANIFEST in
+#     deploy/local/Makefile
 #   - machine.copyImage in deploy/charts/garam/values.yaml, the one pin
 #     in that file: image.server.tag and image.web.tag are empty
 #   - the key-material container's image in
@@ -64,9 +65,9 @@ updates:
   # major as Dockerfile.web, so every bump this proposes arrives
   # half-done and splits the container's toolchain from the repository's
   # declared version unless the other half lands with it.
-  # `make check-toolchain` fails on that split (#803); it reads the two
-  # pairs and not why they are pairs, which is what this paragraph is
-  # for.
+  # `make -C tooling check-toolchain` fails on that split (#803); it
+  # reads the two pairs and not why they are pairs, which is what this
+  # paragraph is for.
   - package-ecosystem: "docker"
     directory: "/deploy/local"
     schedule:
@@ -77,8 +78,8 @@ updates:
   # does.
   #
   # Covers and does not cover what the entry above states, and its bump
-  # arrives half-done the same way: `make check-toolchain` holds this
-  # file's tag against go.mod too.
+  # arrives half-done the same way: `make -C tooling check-toolchain`
+  # holds this file's tag against go.mod too.
   - package-ecosystem: "docker"
     directory: "/platform/tests/testprincipal"
     schedule:
@@ -95,7 +96,7 @@ updates:
     schedule:
       interval: "weekly"
 
-  # The action pins in .github/workflows/ — ten actions across ci.yml,
+  # The action pins in .github/workflows/ — eleven actions across ci.yml,
   # images.yml and release.yml, one of which all three files use.
   #
   # Covers a newer release for an action pinned by full commit SHA,
@@ -145,8 +146,8 @@ updates:
   # output this repository commits, so `check-gen` says nothing about a
   # bump of either and what reads it is `make lint` (#840). gremlins is
   # outside it for the same reason, and further outside still: no
-  # whole-set name runs it, so what reads a bump of it is `make
-  # mutation`, which a person invokes (#875).
+  # whole-set name runs it, so what reads a bump of it is
+  # `make -C platform mutation`, which a person invokes (#875).
   - package-ecosystem: "gomod"
     directory: "/platform"
     schedule:

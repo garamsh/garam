@@ -62,7 +62,7 @@ func required(t *testing.T, name string) string {
 	t.Helper()
 	v := os.Getenv(name)
 	if v == "" {
-		t.Fatalf("%s is required: run this suite through make workload-integration", name)
+		t.Fatalf("%s is required: run this suite through make -C platform workload-integration", name)
 	}
 	return v
 }

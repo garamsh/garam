@@ -49,7 +49,7 @@ objects:
   `pre-upgrade` hook. It carries no `hook-failed` delete policy: a
   failed run's log is the only place its error exists. A consumer that
   renders with `helm template` receives the Job as an ordinary manifest
-  and orders it itself (helm v4.2.4, the version the `Makefile` pins).
+  and orders it itself (helm v4.2.4, the version `deploy/charts/Makefile` pins).
 
 Every Deployment is `replicas: 1` and the chart offers no value for it.
 Replica safety above one is not established
@@ -88,7 +88,7 @@ one shape, and rendering it and checking it are that deployment's. A
 deployment that builds its own web image bakes its own address and is
 bound to that one instead.
 
-`make chart` holds the half of this that lives here: what
+`make -C deploy/charts ci` holds the half of this that lives here: what
 `.github/workflows/release.yml` bakes is the api Service this chart
 renders under the release name `garam`, read against a second release
 name that must render something else (§What keeps it true). The other
@@ -112,9 +112,10 @@ renders none, one, or five accounts and the values decide which.
 | `migrate` | Job | `migrate.serviceAccount.name` |
 | `web` | Deployment | `web.serviceAccount.name` |
 
-`make chart` reads this table and fails when the render stops matching
-it (§What keeps it true), so a workload added without an identity
-decision fails the check rather than reaching a cluster unnoticed.
+`make -C deploy/charts ci` reads this table and fails when the render
+stops matching it (§What keeps it true), so a workload added without an
+identity decision fails the check rather than reaching a cluster
+unnoticed.
 
 **The name is taken verbatim, and the chart composes none.** A name is
 the subject an IAM trust policy in the infrastructure repository is
@@ -123,14 +124,14 @@ conditioned on — `garamsh/infra`, as the review on #504 read it on
 name this chart composed from the release name would move whenever a
 deployment renamed its release. That failure arrives at runtime, in a
 credential that stops being issued, and a render under one release name
-cannot show it — so `make chart` renders under two
+cannot show it — so `make -C deploy/charts ci` renders under two
 ([ADR-0043](../../../docs/architecture/adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)).
 
 **Set a name only where a role is bound to it.** An account nothing uses
 is a subject the next reader takes for one that was needed; an annotated
 one is worse, because the annotation makes a consumer assume a role that
-may not exist and fail at runtime rather than at apply. `make chart`
-fails on an account no workload runs as.
+may not exist and fail at runtime rather than at apply.
+`make -C deploy/charts ci` fails on an account no workload runs as.
 
 **Annotations are how a cloud role binds to an account**, and each
 account takes its own through `<workload>.serviceAccount.annotations`.
@@ -287,9 +288,9 @@ of the rest, so the same figure on both sides is the figure once.
 ## Not set by this chart
 
 Every environment variable the source reads is either rendered above or
-listed here with the reason. `make chart` compares the two sets against
-the source and fails on either a name it finds in neither or a name here
-that the source no longer reads.
+listed here with the reason. `make -C deploy/charts ci` compares the two
+sets against the source and fails on either a name it finds in neither
+or a name here that the source no longer reads.
 
 | Variable | Why not |
 |---|---|
@@ -483,10 +484,10 @@ change since has.
 
 ## What keeps it true
 
-`make chart` is the entry point, and `make ci` runs it. helm comes from
-the module pin in the `Makefile`, so nothing is installed by hand and
-every run takes one version. It reports what it covered and fails when a
-count is zero:
+`make -C deploy/charts ci` is the entry point, and `make ci` runs it.
+helm comes from the pin in `deploy/charts/Makefile`, so nothing is
+installed by hand and every run takes one version. It reports what it
+covered and fails when a count is zero:
 
 - `chart-lint` — `helm lint --strict` against each value file in `ci/`.
 - `chart-render` — `helm template` against each, so a template that

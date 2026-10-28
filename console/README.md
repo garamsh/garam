@@ -22,6 +22,6 @@ Setup, the dev server, and the Playwright run command live in the
 - `src/lib/garam.ts` — server-side API client; attaches the session
   cookie and maps backend errors.
 - `src/types/api.ts` — generated from `platform/api/openapi.yaml` by
-  `make web-gen`; never edited by hand.
+  `make -C console gen`; never edited by hand.
 - `src/testing/` — MSW handlers and the Server Component render helper.
 - `e2e/` — Playwright specs against the real backend.

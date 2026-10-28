@@ -1,5 +1,6 @@
-# Every required value and nothing else: the render `make chart` checks
-# a deployment that takes every default.
+# Every required value and nothing else: the render
+# `make -C deploy/charts ci` checks a deployment that takes every
+# default.
 image:
   server:
     tag: "0.0.0-ci"

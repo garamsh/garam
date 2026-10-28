@@ -35,7 +35,7 @@ All of it lives in the `garam-local` namespace. Manifests are
 in this directory; they are separate files because the bring-up applies
 them in that order.
 
-The operator comes from `CNPG_MANIFEST` in the `Makefile`, pinned to
+The operator comes from `CNPG_MANIFEST` in `deploy/local/Makefile`, pinned to
 the commit that carries the manifest: a release asset can be replaced
 under its tag and a commit cannot. v1.30.0 is the first release patched
 for all four advisories github.com/cloudnative-pg/cloudnative-pg
@@ -48,34 +48,36 @@ image rather than taking the default this operator version carries.
 ## Up and down
 
 ```sh
-make minikube-up        # cluster, operator, database, secret, images, migrations, processes
-make minikube-rebuild   # after a code change: images, migrations, processes
-make minikube-forward   # publishes the web app on localhost; holds the terminal
-make minikube-down      # removes the namespace, its volume and its key material
+make -C deploy/local minikube-up        # cluster, operator, database, secret, images, migrations, processes
+make -C deploy/local minikube-rebuild   # after a code change: images, migrations, processes
+make -C deploy/local minikube-forward   # publishes the web app on localhost; holds the terminal
+make -C deploy/local minikube-down      # removes the namespace, its volume and its key material
 ```
 
-`make minikube-up` starts the cluster if it is not already running, so
-it works from nothing. Rerunning it is safe: the key material is kept
-rather than regenerated, and the migration Job runs again against an
-already-migrated database and applies nothing.
+`make -C deploy/local minikube-up` starts the cluster if it is not
+already running, so it works from nothing. Rerunning it is safe: the key
+material is kept rather than regenerated, and the migration Job runs
+again against an already-migrated database and applies nothing.
 
-`make minikube-rebuild` is what a code change needs, and it is the whole
-of `minikube-up` past the cluster and the database. The two share one
-list of steps rather than two, so a rebuild cannot come out a step short
-of what a bring-up runs — a change carrying a migration has that
-migration applied before the processes that read the schema start.
+`make -C deploy/local minikube-rebuild` is what a code change needs, and
+it is the whole of `minikube-up` past the cluster and the database. The
+two share one list of steps rather than two, so a rebuild cannot come
+out a step short of what a bring-up runs — a change carrying a migration
+has that migration applied before the processes that read the schema
+start.
 
 Each step is still its own target — `minikube-start`, `minikube-images`,
 `minikube-db`, `minikube-secret`, `minikube-migrate`, `minikube-apps` —
-for when one of them alone is what you want. `make minikube-images
-minikube-apps` is not the rebuild: it puts the new binary in front of
-whatever schema the database already has.
+for when one of them alone is what you want.
+`make -C deploy/local minikube-images minikube-apps` is not the rebuild:
+it puts the new binary in front of whatever schema the database already
+has.
 
 ## Reaching it
 
 Nothing here is published to the host. The Services are cluster-internal
-and there is no ingress, so `make minikube-forward` is the only way in:
-it forwards the web app to `http://localhost:3000`.
+and there is no ingress, so `make -C deploy/local minikube-forward` is
+the only way in: it forwards the web app to `http://localhost:3000`.
 
 `/login` takes Google, which needs real credentials this deployment
 sets none of, or a username and a password, which `/register` mints
@@ -141,17 +143,17 @@ They are built from `deploy/local/Dockerfile` and
 `deploy/local/Dockerfile.web` — the same two the compose stack uses.
 
 Each pod template carries the id of the image it runs, stamped in by
-`make minikube-apps`. The tag alone cannot carry a rebuild:
-`garam:local` names a different image after every build and the same
-Deployment before and after it, which leaves `kubectl apply` a no-op,
-creates no ReplicaSet, and has `rollout status` report the pods still on
-the previous binary as fully rolled out. With the id in the template a
-rebuilt image is a changed Deployment, and an unrebuilt one restarts
-nothing.
+`make -C deploy/local minikube-apps`. The tag alone cannot carry a
+rebuild: `garam:local` names a different image after every build and the
+same Deployment before and after it, which leaves `kubectl apply` a
+no-op, creates no ReplicaSet, and has `rollout status` report the pods
+still on the previous binary as fully rolled out. With the id in the
+template a rebuilt image is a changed Deployment, and an unrebuilt one
+restarts nothing.
 
 ## Which cluster, and whose kubeconfig
 
-Every command names `--context minikube`, so nothing in the `Makefile`
+Every command names `--context minikube`, so nothing in `deploy/local/Makefile`
 can reach a cluster that is not the local one.
 
 The cluster's credentials go in `$HOME/.minikube/kubeconfig`, beside the
@@ -163,8 +165,8 @@ a real one. `kubectl` outside `make` therefore needs to be told:
 export KUBECONFIG=$HOME/.minikube/kubeconfig
 ```
 
-Set `KUBECONFIG` before `make minikube-up` to put the context somewhere
-else, your own kubeconfig included.
+Set `KUBECONFIG` before `make -C deploy/local minikube-up` to put the
+context somewhere else, your own kubeconfig included.
 
 A start run outside `make` — a reboot followed by a plain
 `minikube start` is enough — gives the apiserver a new port and writes
@@ -179,12 +181,13 @@ from one: after a restart outside `make`, run any other target first.
 
 The bring-up sequences what a manifest cannot express: Postgres has to
 serve before the migration runs, and the migration has to finish before
-anything that reads the schema starts. `make minikube-migrate` waits for
-the Job to complete, and `make minikube-apps` runs after it.
+anything that reads the schema starts.
+`make -C deploy/local minikube-migrate` waits for the Job to complete,
+and `make -C deploy/local minikube-apps` runs after it.
 
-`make minikube-db` waits twice. The operator reports the cluster ready
-before the Service in front of it carries a routable endpoint
-(CloudNativePG 1.30.0, the release `CNPG_MANIFEST` applies), so
+`make -C deploy/local minikube-db` waits twice. The operator reports the
+cluster ready before the Service in front of it carries a routable
+endpoint (CloudNativePG 1.30.0, the release `CNPG_MANIFEST` applies), so
 waiting on the cluster alone leaves the first migration attempt to fail
 with `connection refused`; the second wait is on the endpoint the
 migration dials.

@@ -189,12 +189,12 @@ Every name the module reads is declared in one block in
 environment read under `platform/internal/` and `platform/cmd/`, so what
 the source reads is enumerable from those declarations rather than from
 the spelling of the calls that read them. A second read there is the
-defect this states, and `make chart-render` fails on one rather than
-leaving it to a reviewer: it counts the reads under those two trees and
-expects the one, because a name read outside the block is one it cannot
-enumerate against the chart. The suites under `platform/tests/` read
-`GARAM_TEST_DATABASE_URL` for themselves and are outside both the rule
-and the count.
+defect this states, and `make -C deploy/charts chart-render` fails on
+one rather than leaving it to a reviewer: it counts the reads under
+those two trees and expects the one, because a name read outside the
+block is one it cannot enumerate against the chart. The suites under
+`platform/tests/` read `GARAM_TEST_DATABASE_URL` for themselves and are
+outside both the rule and the count.
 
 **The placement is what the in-process integration tests rest on.** Only
 a test in its own directory can import a main package, which

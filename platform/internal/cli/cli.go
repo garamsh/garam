@@ -187,9 +187,9 @@ func newServeCommand() *cobra.Command {
 // envName is the name of an environment variable garam reads. Every
 // name the module reads is declared below and reaches os.Getenv from
 // there, so the set is enumerable from these declarations rather than
-// from the spelling of the calls that read them: `make chart-render`
-// reads this block, and a wrapper around envOr cannot shrink what that
-// check covers.
+// from the spelling of the calls that read them:
+// `make -C deploy/charts chart-render` reads this block, and a wrapper
+// around envOr cannot shrink what that check covers.
 type envName string
 
 // The environment garam reads. What a deployment must set is described

@@ -129,10 +129,10 @@ jobs:
           # image is bound to one address: the api Service a release
           # named `garam` renders, and no other release name (ADR-0056,
           # taking the choice ADR-0039 left to this workflow).
-          # `make chart` reads this value against that render, so the
-          # two are compared rather than kept equal by hand, and
-          # `deploy/charts/garam/README.md` §Choosing a release name is
-          # where a deployment meets what it binds.
+          # `make -C deploy/charts ci` reads this value against that
+          # render, so the two are compared rather than kept equal by
+          # hand, and `deploy/charts/garam/README.md` §Choosing a
+          # release name is where a deployment meets what it binds.
           build-args: |
             GARAM_API_URL=http://garam-api:8080
             IMAGE_REVISION=${{ steps.revision.outputs.revision }}

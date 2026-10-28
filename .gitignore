@@ -20,8 +20,8 @@ Thumbs.db
 *.out
 /vendor/
 
-# What `make mutation` writes: a report of one run, not a record
-/mutation.json
+# What `make -C platform mutation` writes: a report of one run, not a record
+/platform/mutation.json
 
 # Playwright MCP scratch output
 .playwright-mcp/

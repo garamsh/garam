@@ -167,42 +167,40 @@ every rule.
 
 ### Entry points as a Makefile
 
-The living list is the `Makefile`. This project has two toolchains and
-one whole-set name over both:
+Every module keeps its own `Makefile`, and every one answers the same
+verbs, leaving out a verb it has no use for: `ci`, its fast gate, which
+needs no Docker; `install`, `format`, `lint`, `test`, `build`, `gen` and
+`check-gen`; `stack-up`, which brings up the stack its suites need;
+and `suites`, which runs them — `integration` and `e2e`. So
+`make -C console e2e`, `make -C cowork/web e2e` and
+`make -C platform integration` are the same verbs in three modules.
+The modules and the edges between them that no workspace file declares
+are listed in `tooling/ci/modules`.
 
-- `ci` — `format lint test build check-gen check-toolchain chart
-  web-ci`, the Go module, the chart it ships, and the `console/` half
-  below.
-- `web-ci` — `web-format web-lint web-test web-build web-check-gen`,
-  the `console/` app, which has its own package manager and its own
-  gate. `ci` runs it last, so the cheaper Go half fails first.
+The root `Makefile` runs a verb in every module defining it: `make ci`
+is the whole set over both toolchains. The rest:
 
-Both run identically on a contributor's machine and in CI. The rest:
+- `make affected BASE=<ref>` prints the modules a change since `<ref>`
+  can affect, each with its reason (§One entry point per task).
+- `db-up`, `db-down`, `db-prune` and `backend-up` are
+  `deploy/local`'s: the dockerised Postgres, OpenBao and RustFS the Go
+  suites need, and the backend the browser suites drive.
+  `GARAM_DB_PORT` moves the one Postgres server's host port, default
+  25432, and `db-prune` drops the per-worktree test databases for
+  worktrees that are gone.
+- `e2e`, `web-e2e` and `cowork-web-e2e` are the platform's, the
+  console's and cowork/web's `e2e`, by the names they had before each
+  module had its own `Makefile`.
+- `image-build` builds the images a release publishes, each from what
+  the release workflow says it is built from, and `web-image-e2e` runs
+  `platform/tests/image/`'s checks against the web one rather than
+  against the app.
 
-- `gen` regenerates oapi-codegen, sqlc, buf and mockery output;
-  `check-gen` fails when what is committed is stale.
-- `db-up` / `db-down` bring up and remove the dockerised Postgres the
-  two Go suites below need; `GARAM_DB_PORT` moves that one server's
-  host port, default 25432.
-- `db-prune` drops the per-worktree test databases `db-up` created for
-  worktrees that are gone. Nothing else collects them short of removing
-  the volume, so a stack left up accumulates one per worktree.
-- `backend-up` brings up postgres, migrate, authz and api from the
-  same compose file — the backend the browser suite drives.
-- `integration` runs the store round-trips and the services over them
-  in process, against real Postgres and a database of its own per
-  worktree; `e2e` runs the built binary against that same database.
-  `web-e2e` runs Playwright against the built app and `backend-up`'s
-  backend. `image-build` builds the images a release publishes, each
-  from what the release workflow says it is built from, and
-  `web-image-e2e` runs `platform/tests/image/`'s checks against the web
-  one rather than against the app.
-
-`ci` and `web-ci` stop short of the four suites that need Docker.
-Locally they are `make db-up integration e2e`, `make backend-up
-web-e2e` and `make web-image-e2e`. CI runs each of those three
-commands as a job of its own; the last builds two images before it
-checks one, so it runs from a workflow of its own that a
+Locally the suites are `make db-up integration e2e`,
+`make backend-up web-e2e cowork-web-e2e` and `make web-image-e2e`. CI
+runs `make -C <module> ci` and `make -C <module> stack-up suites` for
+each module `make affected` selects; the image check builds two images
+before it checks one, so it runs from a workflow of its own that a
 documentation-only pull request does not start.
 
 ### GitHub Actions specifics
@@ -215,7 +213,8 @@ documentation-only pull request does not start.
   for the candidate version.
 - **Toolchain setup**: use the official setup action for the project's
   language; take its version and inputs from its own docs.
-- **Checks**: run `make ci` — the target, not the commands inside it.
+- **Checks**: run `make -C <module> ci` — the target, not the commands
+  inside it.
 - **Artifacts**: use the artifact action.
 - **Permissions**: `permissions: read-all` at the workflow top; `write`
   granted per job.

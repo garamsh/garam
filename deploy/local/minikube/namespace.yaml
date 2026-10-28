@@ -1,6 +1,6 @@
-# One namespace holds the whole local stack, so `make minikube-down`
-# takes the database volume and the generated key material with it in a
-# single delete.
+# One namespace holds the whole local stack, so
+# `make -C deploy/local minikube-down` takes the database volume and the
+# generated key material with it in a single delete.
 apiVersion: v1
 kind: Namespace
 metadata:

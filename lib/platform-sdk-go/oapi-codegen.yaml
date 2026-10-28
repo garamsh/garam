@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
+# The Go client of the platform's browser API (ADR-0132), generated
+# from platform/api/openapi.yaml with the types it answers, for every
+# operation: platform-cli's cligen derives a command for each that its
+# commands.yaml does not exclude (ADR-0122).
+package: platformsdk
+output: client.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  skip-prune: true

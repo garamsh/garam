@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	apigen "github.com/garamsh/garam/cowork/api"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // statusOf is the one kind-to-status table of cowork's HTTP surface:

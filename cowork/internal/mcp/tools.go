@@ -11,7 +11,7 @@ import (
 	"github.com/garamsh/garam/cowork/internal/collab"
 	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/platform"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // The shapes the tools take and answer. Each field's description is

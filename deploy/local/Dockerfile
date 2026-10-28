@@ -1,8 +1,9 @@
-# Multi-stage build of the single garam binary (ADR-0003). The same
-# image runs `migrate`, `serve authz` and `serve api`; the compose file
-# picks the subcommand, and its healthchecks run `probe` — the runtime
-# stage is scratch, so no shell or wget is there to ask instead. Build
-# context is the repository root.
+# Multi-stage build of the platform's server binary, garam (ADR-0003,
+# ADR-0132). The same image runs `migrate`, `serve authz` and
+# `serve api`; the compose file picks the subcommand, and its
+# healthchecks run `probe` — the runtime stage is scratch, so no shell
+# or wget is there to ask instead. Build context is the repository
+# root.
 
 # The base is pinned by digest: the tag reads and the digest resolves,
 # so two builds of this commit pull the same bytes. Dependabot proposes
@@ -22,10 +23,11 @@ WORKDIR /src
 # so the download is tried three times, 10 and 20 seconds apart. Each
 # attempt fetches only what the last left missing, and verifies every
 # module against go.sum as the first did. platform/go.mod replaces
-# platform/sdk with its folder (ADR-0125), so that module's manifests
-# come along.
+# lib/errorx and lib/grn with their folders (ADR-0132), so those
+# modules' manifests come along.
 COPY platform/go.mod platform/go.sum ./platform/
-COPY platform/sdk/go.mod platform/sdk/go.sum ./platform/sdk/
+COPY lib/errorx/go.mod lib/errorx/go.sum ./lib/errorx/
+COPY lib/grn/go.mod lib/grn/go.sum ./lib/grn/
 RUN for attempt in 1 2 3; do \
       go -C platform mod download && exit 0; \
       [ "$attempt" = 3 ] && exit 1; \

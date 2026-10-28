@@ -3,7 +3,7 @@ package collab
 import (
 	"context"
 
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // EditKind is what one edit does to a page's blocks.

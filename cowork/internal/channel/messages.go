@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/garamsh/garam/cowork/internal/platform"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // ErrPageNotReadable is linking a page the caller may not read: the

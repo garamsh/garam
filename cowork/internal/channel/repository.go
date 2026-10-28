@@ -3,7 +3,7 @@ package channel
 import (
 	"context"
 
-	"github.com/garamsh/garam/platform/sdk/grn"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // Repository keeps channels, their lists and their messages. Every

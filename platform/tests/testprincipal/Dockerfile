@@ -12,10 +12,11 @@ FROM mirror.gcr.io/library/golang:1.27.2-alpine3.24@sha256:f92b6ef800e499660581e
 
 WORKDIR /src
 
-# platform/go.mod replaces platform/sdk with its folder (ADR-0125), so
-# that module's manifests come along.
+# platform/go.mod replaces lib/errorx and lib/grn with their folders
+# (ADR-0132), so those modules' manifests come along.
 COPY platform/go.mod platform/go.sum ./platform/
-COPY platform/sdk/go.mod platform/sdk/go.sum ./platform/sdk/
+COPY lib/errorx/go.mod lib/errorx/go.sum ./lib/errorx/
+COPY lib/grn/go.mod lib/grn/go.sum ./lib/grn/
 RUN go -C platform mod download
 
 COPY . .

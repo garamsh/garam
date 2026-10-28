@@ -10,8 +10,8 @@ import (
 	"github.com/garamsh/garam/cowork/internal/page"
 	"github.com/garamsh/garam/cowork/internal/page/memory"
 	"github.com/garamsh/garam/cowork/internal/platform"
-	"github.com/garamsh/garam/platform/sdk/errorx"
-	"github.com/garamsh/garam/platform/sdk/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // policy is a platform that allows every check but the ones deny

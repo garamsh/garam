@@ -1,5 +1,6 @@
 // Package e2e_test exercises what the build produces: it builds the
-// garam binary and runs it as the processes a deployment runs.
+// server's garam binary and runs it as the processes a deployment runs,
+// and platform-cli's against them.
 // GARAM_TEST_DATABASE_URL names the database those processes open;
 // `make db-up e2e` starts the docker-compose Postgres and sets it. The
 // suite fails without it rather than skipping.
@@ -306,6 +307,18 @@ func buildGaram(t *testing.T) string {
 	bin := filepath.Join(t.TempDir(), "garam")
 	build := exec.Command("go", "build", "-o", bin, "./cmd/garam")
 	build.Dir = moduleRoot(t)
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, "go build: %s", out)
+	return bin
+}
+
+// buildGaramCLI builds platform-cli's garam, the client binary the user
+// commands are in (ADR-0132), from the module beside this one.
+func buildGaramCLI(t *testing.T) string {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "garam")
+	build := exec.Command("go", "build", "-o", bin, "./cmd/garam")
+	build.Dir = filepath.Join(moduleRoot(t), "..", "platform-cli")
 	out, err := build.CombinedOutput()
 	require.NoError(t, err, "go build: %s", out)
 	return bin

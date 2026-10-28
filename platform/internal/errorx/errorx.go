@@ -1,11 +1,10 @@
-// Package errorx forwards to platform/sdk/errorx, where the
-// implementation lives since a second module, cowork, needs it
-// (ADR-0125). It keeps this module's imports unchanged until #1659
-// rewrites them to the new path, and is deleted then; nothing new
-// imports it.
+// Package errorx forwards to lib/errorx, where the implementation
+// lives since a second module, cowork, needs it (ADR-0125, ADR-0132).
+// It keeps this module's imports unchanged until #1659 rewrites them to
+// the new path, and is deleted then; nothing new imports it.
 package errorx
 
-import "github.com/garamsh/garam/platform/sdk/errorx"
+import "github.com/garamsh/garam/lib/errorx"
 
 // Kind is [errorx.Kind].
 type Kind = errorx.Kind

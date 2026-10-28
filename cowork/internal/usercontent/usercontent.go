@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/garamsh/garam/cowork/internal/blob"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // lifetime is how long an address is good for: long enough to load a

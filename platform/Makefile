@@ -37,12 +37,11 @@ build:
 	$(go-build)
 
 # gen regenerates everything derived from a source of truth: the
-# OpenAPI server, the CLI's client of it and the commands cligen derives
-# from it (ADR-0122), sqlc queries, protobuf code, and mocks.
+# OpenAPI servers, sqlc queries, protobuf code, and mocks. The client of
+# the browser API is lib/platform-sdk-go's, and the commands derived
+# from it platform-cli's (ADR-0132).
 gen:
 	$(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
-	$(OAPI_CODEGEN) --config api/client-codegen.yaml api/openapi.yaml
-	go run ./internal/cli/cligen
 	$(OAPI_CODEGEN) --config api/machine-codegen.yaml api/machine.yaml
 	$(SQLC) generate
 	$(MOCKERY)
@@ -54,11 +53,10 @@ gen:
 # producing. The paths are literal rather than globs: a glob expands
 # against the working tree, so a deleted generated directory would fall
 # outside it and read as clean (#360).
-GEN_PATHS := $(shell { sed -n 's|^output: ||p' api/oapi-codegen.yaml api/client-codegen.yaml api/machine-codegen.yaml; \
+GEN_PATHS := $(shell { sed -n 's|^output: ||p' api/oapi-codegen.yaml api/machine-codegen.yaml; \
 	sed -n 's|^        out: ||p' sqlc.yaml; \
 	sed -n 's|^    out: ||p' buf.gen.yaml; \
-	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; \
-	sed -n 's|^\toutPath *= "\(.*\)"$$|\1|p' internal/cli/cligen/main.go; } | sort -u)
+	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; } | sort -u)
 
 check-gen:
 	$(go-check-gen)

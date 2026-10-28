@@ -1,9 +1,8 @@
-// Package cli owns the cobra command tree for the garam binary
+// Package cli owns the cobra command tree for the garam server binary
 // (ADR-0003, ADR-0017): `serve api`, `serve authz`, `serve machine`,
-// `migrate`, `probe` and `adapter`, and the user commands a person
-// signs in and reads garam's objects with (ADR-0120): `login`,
-// `logout`, `whoami`, `orgs`, `operators` and `agents`. Commands are
-// constructed here; cmd/garam only executes the root.
+// `migrate`, `probe` and `adapter`. The user commands a person signs in
+// with are platform-cli's (ADR-0132). Commands are constructed here;
+// cmd/garam only executes the root.
 //
 // `adapter` is the one command that serves nothing and connects
 // outward: the delivery loop docs/architecture/adapter.md specifies,
@@ -104,10 +103,6 @@
 //	                       the runtime is Sherlock v0.4.0 or later and
 //	                       trusts garam's issuer (docs/architecture/
 //	                       adapter.md §Foreign facts this rests on)
-//	GARAM_ENDPOINT         the garam a user command talks to (default
-//	                       "https://garam.sh"; --endpoint overrides it)
-//	XDG_CONFIG_HOME        where a user command keeps its credentials
-//	                       file, under garam/ (default ~/.config)
 package cli
 
 import (
@@ -133,20 +128,6 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(),
 		newAdapterCommand(), newStandaloneCommand(),
 		newCopyMemoryCommand(), newRetireMessageSigningKeyCommand())
-	for _, user := range []*cobra.Command{
-		newLoginCommand(), newLogoutCommand(), newWhoamiCommand(),
-		newOrgsCommand(), newAgentsCommand(),
-	} {
-		root.AddCommand(user)
-	}
-	addAPICommands(root, apiOperations)
-	for _, name := range userCommandNames(root) {
-		for _, c := range root.Commands() {
-			if c.Name() == name {
-				markUserCommands(c)
-			}
-		}
-	}
 	silenceUsageOnRun(root)
 	return root
 }
@@ -233,8 +214,6 @@ const (
 	envAdapterOutboxDir      envName = "GARAM_ADAPTER_OUTBOX_DIR"
 	envAdapterControlSocket  envName = "GARAM_ADAPTER_CONTROL_SOCKET"
 	envAdapterSignMessages   envName = "GARAM_ADAPTER_SIGN_MESSAGES"
-	envEndpoint              envName = "GARAM_ENDPOINT"
-	envXDGConfigHome         envName = "XDG_CONFIG_HOME"
 )
 
 // envOr reads a declared name, or the fallback when it is unset or

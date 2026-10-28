@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/garamsh/garam/cowork/internal/fanout"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // compactAfter is how many updates may follow a page's snapshot

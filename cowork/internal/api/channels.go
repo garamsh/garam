@@ -5,8 +5,8 @@ import (
 
 	apigen "github.com/garamsh/garam/cowork/api"
 	"github.com/garamsh/garam/cowork/internal/channel"
-	"github.com/garamsh/garam/platform/sdk/errorx"
-	"github.com/garamsh/garam/platform/sdk/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 func grnStrings(gs []grn.GRN) []string {

@@ -32,7 +32,7 @@ import (
 	"github.com/garamsh/garam/cowork/internal/task"
 	taskpg "github.com/garamsh/garam/cowork/internal/task/postgres"
 	"github.com/garamsh/garam/cowork/internal/usercontent"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // shutdownGrace is how long serve waits for requests in flight once

@@ -12,7 +12,7 @@ import (
 
 	"github.com/garamsh/garam/cowork/internal/platform"
 	platformhttp "github.com/garamsh/garam/cowork/internal/platform/http"
-	"github.com/garamsh/garam/platform/sdk/errorx"
+	"github.com/garamsh/garam/lib/errorx"
 )
 
 // fakePlatform answers `me` for the session "ada" and the bearer

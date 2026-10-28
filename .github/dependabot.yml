@@ -166,12 +166,19 @@ updates:
       - dependency-name: "google.golang.org/grpc/cmd/protoc-gen-go-grpc"
       - dependency-name: "mvdan.cc/sh/v3"
 
-  # platform/sdk's requirements (ADR-0125): its tests' assertion
-  # library. The platform module replaces platform/sdk with its folder
-  # and requires testify itself, so the two entries move it apart;
-  # whichever lands second takes the other's version with
-  # `go work sync`.
+  # The requirements of the Go libraries under lib/ and of
+  # platform-cli (ADR-0132): the tests' assertion library, the
+  # generated client's runtime, and the client CLI's command and YAML
+  # libraries. The platform module replaces each library it imports with
+  # its folder and requires several of the same modules itself, so this
+  # entry and the one above move them apart; whichever lands second
+  # takes the other's version with `go work sync`.
   - package-ecosystem: "gomod"
-    directory: "/platform/sdk"
+    directories:
+      - "/lib/clisession"
+      - "/lib/errorx"
+      - "/lib/grn"
+      - "/lib/platform-sdk-go"
+      - "/platform-cli"
     schedule:
       interval: "weekly"

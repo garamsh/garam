@@ -14,8 +14,8 @@ import (
 
 	"github.com/garamsh/garam/cowork/internal/channel"
 	"github.com/garamsh/garam/cowork/internal/channel/postgres/db"
-	"github.com/garamsh/garam/platform/sdk/errorx"
-	"github.com/garamsh/garam/platform/sdk/grn"
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // The SQL states the adapter reads: a channel name the organization

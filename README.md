@@ -125,8 +125,8 @@ They share one lockfile at the root; `make -C site-web ci` and
 ```sh
 make -C platform-web install   # pnpm install --frozen-lockfile
 make -C platform-web ci        # install, format, lint, typecheck, unit tests, build, codegen check
-pnpm --dir console dev    # console on http://console.garam.localhost:3000
-pnpm --dir site dev       # site on http://garam.localhost:3001
+pnpm --dir platform-web dev   # console on http://console.garam.localhost:3000
+pnpm --dir site-web dev       # site on http://garam.localhost:3001
 ```
 
 Copy each app's `.env.example` to `.env.local` and point `GARAM_API_URL`

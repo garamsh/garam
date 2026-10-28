@@ -6,15 +6,15 @@ import { env } from "./src/env";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
-  // lib/design/ and platform/client ship TypeScript source, which this app
-  // compiles.
+  // lib/design/ and lib/platform-sdk-ts/ ship TypeScript source, which
+  // this app compiles.
   transpilePackages: ["@garam/design", "@garam/platform-sdk-ts"],
   // Emit a self-contained server so the container image carries only
   // the runtime it needs (deploy/local/Dockerfile.web).
   output: "standalone",
   // Dependencies are installed once for the workspace, in the root's
   // node_modules, so tracing starts there and the server sits at
-  // .next/standalone/site/server.js.
+  // .next/standalone/site-web/server.js.
   outputFileTracingRoot: path.join(__dirname, ".."),
   // @vercel/nft resolves package exports under `require`, which takes
   // @swc/helpers' cjs/ half; Node 22.12+ enables require(esm), so the

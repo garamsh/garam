@@ -1,8 +1,8 @@
-# platform/client — the platform's client for the web apps (ADR-0125):
-# the calls an app binds to its backend and its sign-in, the API types
-# generated from platform/api/openapi.yaml, and the sentences a refusal
-# reads as. It ships TypeScript source, which each app compiles. Its
-# verbs are every module's (#1661).
+# lib/platform-sdk-ts — the platform's client for the web apps
+# (ADR-0125): the calls an app binds to its backend and its sign-in, the
+# API types generated from platform/api/openapi.yaml, and the sentences
+# a refusal reads as. It ships TypeScript source, which each app
+# compiles. Its verbs are every module's (#1661).
 
 .PHONY: ci install format lint test gen check-gen
 
@@ -14,14 +14,14 @@ install:
 FILES = $(shell git ls-files --cached --others --exclude-standard)
 
 lint:
-	@echo 'lint: $(words $(filter %.ts %.mjs %.mts,$(FILES))) files under platform/client (eslint, tsc)'
-	@test -n '$(filter %.ts,$(FILES))' || { echo 'lint: nothing to lint — git lists no TypeScript under platform/client'; exit 1; }
+	@echo 'lint: $(words $(filter %.ts %.mjs %.mts,$(FILES))) files under lib/platform-sdk-ts (eslint, tsc)'
+	@test -n '$(filter %.ts,$(FILES))' || { echo 'lint: nothing to lint — git lists no TypeScript under lib/platform-sdk-ts'; exit 1; }
 	pnpm lint
 	pnpm typecheck
 
 format:
-	@echo 'format: $(words $(FILES)) files under platform/client (prettier, less its ignore files)'
-	@test -n '$(FILES)' || { echo 'format: nothing to check — git lists no file under platform/client'; exit 1; }
+	@echo 'format: $(words $(FILES)) files under lib/platform-sdk-ts (prettier, less its ignore files)'
+	@test -n '$(FILES)' || { echo 'format: nothing to check — git lists no file under lib/platform-sdk-ts'; exit 1; }
 	pnpm format
 
 test:

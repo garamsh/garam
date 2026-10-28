@@ -217,8 +217,9 @@ fails without them:
 - `web.apiUrl` — the address the web process reaches `serve api` on,
   baked into the image at build time as the `/api/*` rewrite target and
   read again at runtime by every server-side render
-  (`platform-web/src/lib/garam.ts`, binding `platform/client`), and for a
-  published image it is the address §Choosing a release name states.
+  (`platform-web/src/lib/garam.ts`, binding `lib/platform-sdk-ts`), and
+  for a published image it is the address §Choosing a release name
+  states.
   Absent at runtime the process still starts and answers both probes,
   `/` and the rewrite keep serving, and every server-rendered route
   answers 500:

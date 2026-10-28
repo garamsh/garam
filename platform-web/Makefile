@@ -1,4 +1,4 @@
-# console — the Next.js frontend (ADR-0009). It installs from the
+# platform-web — the Next.js frontend (ADR-0009). It installs from the
 # workspace's lockfile at the root. Its verbs are every module's
 # (#1661); `make -C platform-web ci` is its fast gate, and `stack-up suites`
 # the half that needs Docker.

@@ -1,4 +1,4 @@
-# cowork/web — cowork's Next.js app (ADR-0127). It installs from the
+# cowork-web — cowork's Next.js app (ADR-0127). It installs from the
 # workspace's lockfile at the root, as console does. Its verbs are
 # every module's (#1661); `make -C cowork-web ci` is its fast gate, and
 # `stack-up suites` the half that needs Docker.
@@ -15,14 +15,14 @@ install:
 FILES = $(shell git ls-files --cached --others --exclude-standard)
 
 lint:
-	@echo 'lint: $(words $(filter %.ts %.tsx %.mjs %.mts,$(FILES))) files under cowork/web (eslint, tsc)'
-	@test -n '$(filter %.ts %.tsx,$(FILES))' || { echo 'lint: nothing to lint — git lists no TypeScript under cowork/web'; exit 1; }
+	@echo 'lint: $(words $(filter %.ts %.tsx %.mjs %.mts,$(FILES))) files under cowork-web (eslint, tsc)'
+	@test -n '$(filter %.ts %.tsx,$(FILES))' || { echo 'lint: nothing to lint — git lists no TypeScript under cowork-web'; exit 1; }
 	pnpm lint
 	pnpm typecheck
 
 format:
-	@echo 'format: $(words $(FILES)) files under cowork/web (prettier, less its ignore files)'
-	@test -n '$(FILES)' || { echo 'format: nothing to check — git lists no file under cowork/web'; exit 1; }
+	@echo 'format: $(words $(FILES)) files under cowork-web (prettier, less its ignore files)'
+	@test -n '$(FILES)' || { echo 'format: nothing to check — git lists no file under cowork-web'; exit 1; }
 	pnpm format
 
 test:

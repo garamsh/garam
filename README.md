@@ -115,9 +115,9 @@ mode 0600 and never printed.
 
 Two Next.js apps talk to the Go backend through a same-origin `/api/*`
 rewrite ([ADR-0009](./docs/architecture/adr/0009-web-frontend.md)):
-[`site-web/`](./site/), the landing page and the way in, and
-[`platform-web/`](./console/), the signed-in application, each on its own
-origin ([ADR-0131](./docs/architecture/adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)).
+[`site-web/`](./site-web/), the landing page and the way in, and
+[`platform-web/`](./platform-web/), the signed-in application, each on
+its own origin ([ADR-0131](./docs/architecture/adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)).
 They share one lockfile at the root; `make -C site-web ci` and
 `make -C platform-web ci` are their gates, and `make ci` runs both — so
 `make ci` needs pnpm and Node as well as Go.

@@ -186,7 +186,7 @@ func TestMCP_ARefusalIsAToolErrorAndNoData(t *testing.T) {
 	eventually(t, "the content is kept", func() bool {
 		var p mcpPage
 		s.agent(t, "ada").ok("read_page", map[string]any{"org": "acme", "page": id}, &p)
-		return p.Markdown != ""
+		return p.Markdown == "the launch date\n"
 	})
 
 	s.platform.denyCheck("bob cowork:page-read@" + id)

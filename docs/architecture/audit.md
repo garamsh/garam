@@ -58,6 +58,23 @@ credential events are read through `listCredentialEvents`
   `operator:read` or `agent:read`, which that subject's own reads
   already take; no action names audit.
 
+## An agent acting on the browser-facing listener
+
+**Unbuilt.**
+[ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
+lets an agent call the browser-facing listener as itself, and decides
+that every record of it names the agent's GRN and never a person's:
+
+- **Its token's mint is a credential event of its own kind**, beside
+  `agent_token`, with the agent as subject and read on `agent:read`
+  like the agent's other events.
+- **Every event the browser-facing listener writes names the
+  authenticated principal as its actor**, so an agent's act is never
+  recorded as a person's. That listener writes no decision or change
+  event yet (§Open questions), so until one is built an agent's acts
+  there are recorded by the request line, which names its GRN, and by
+  its tokens' credential events.
+
 ## Rationale
 
 [ADR-0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)

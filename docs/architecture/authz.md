@@ -13,6 +13,7 @@ documents (see [ADR-0002](./adr/0002-iam-style-policy-model.md)).
 - Policy persistence
 - Managing policies over HTTP
 - Policy attachment
+- An agent on the browser-facing listener
 - Components
 - Roles vs policies
 - Explain
@@ -264,7 +265,9 @@ An active policy is attached to subjects through `policy_attachments`
 engine matches subject strings and validates no service type, so an
 agent GRN is a subject on the same terms as a user
 ([ADR-0014](./adr/0014-agent-authentication.md)) — it needs no model
-change, only a caller that can authenticate as one.
+change, only a caller that can authenticate as one. The machine
+listener is one; the browser-facing listener is to be the other
+(§An agent on the browser-facing listener).
 
 | Attachment | Applies to |
 |------------|------------|
@@ -341,6 +344,43 @@ before asking. An agent names its org in its own GRN, so the
 machine listener reads it directly.
 Attachment writes announce the org on `garam_policy_change` like any
 other policy write.
+
+## An agent on the browser-facing listener
+
+**Unbuilt.** The api server admits a session alone today and refuses
+a non-member before it asks.
+[ADR-0123](./adr/0123-an-agent-calls-the-browser-api-and-the-cli-as-itself-authorized-by-its-own-policies.md)
+admits an agent presenting a browser token
+([machine-identity.md](./machine-identity.md) §Browser tokens), and
+decides it this way:
+
+| Field | For an agent |
+|-------|--------------|
+| subject | the agent's GRN |
+| `subject_groups` | the groups whose members list that GRN |
+| `subject_org` | the organization the agent's GRN names |
+| collected statements | none: an agent holds no membership, direct, group or project role |
+
+- **Its authority is the policies that reach it**: attached to it,
+  attached to a group holding it, and the org's unattached active
+  policies. An agent no policy reaches can do nothing there.
+- **The membership check becomes an organization check.** The path's
+  org must be the one the agent's GRN names.
+- **A floor no policy lifts.** Before the engine is asked, an agent
+  is refused every operation outside its own organization, and
+  `issueOperatorKey`, `createInvitation`, `mintOperationAuthority`
+  and `approveAgentEnrollment` inside it. Policy writes, group
+  membership and deleting the organization are left to policy, which
+  a Deny attached to the agent bounds.
+- **Under ADR-0130** the agent is a principal type beside the user,
+  decided on the grants naming it or a team holding it, and the floor
+  is a system `forbid`.
+
+The engine needs no change for it. It was measured asking `Check` and
+`Explain` about an agent and a user carrying the same attachments, a
+group holding both included, with no collected statements: every
+decision and every matched statement was the same for both
+(ADR-0123 §Context).
 
 ## Components
 

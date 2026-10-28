@@ -13,7 +13,7 @@
 
 # check-toolchain reads the platform's go.mod, the console's .nvmrc and
 # the stack's Dockerfiles.
-tooling platform console deploy/local
+tooling platform platform-web deploy/local
 platform/sdk
 # The platform's suites run against the stack.
 platform deploy/local
@@ -22,21 +22,21 @@ cowork/engine
 cowork cowork/engine deploy/local
 # The chart's checks read the environment names the platform, the
 # console and the site declare.
-deploy/charts platform console site
+deploy/charts platform platform-web site-web
 # The stack has no gate of its own; the suites of the modules naming it
 # check it.
 deploy/local
-design
+lib/design
 # The platform's client generates its API types from the platform's
 # OpenAPI spec, and its tests read the return-path vectors the Go rule
 # is tested against.
-platform/client platform
+lib/platform-sdk-ts platform
 # The console's browser suite drives the platform's api, and starts the
 # site it sends a signed-out visitor to.
-console platform deploy/local site
-# cowork/web generates its API types from cowork's spec, and its browser
+platform-web platform deploy/local site-web
+# cowork-web generates its API types from cowork's spec, and its browser
 # suite drives the cowork binary and signs in through the platform.
-cowork/web cowork platform deploy/local
+cowork-web cowork platform deploy/local
 # The site's browser suite drives the platform's api, and signs in to
 # the console it hands a visitor to.
-site platform deploy/local console
+site-web platform deploy/local platform-web

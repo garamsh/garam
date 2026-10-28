@@ -1,6 +1,6 @@
 # The repository's entry points over every module (#1661). Each module
-# keeps its own Makefile answering the same verbs — `make -C console
-# e2e`, `make -C cowork/web e2e`, `make -C platform integration` — and
+# keeps its own Makefile answering the same verbs — `make -C platform-web
+# e2e`, `make -C cowork-web e2e`, `make -C platform integration` — and
 # this file runs a verb in every module defining it, picks the modules
 # a change can affect, and holds the few tasks that span modules: the
 # release images and the repository's own utilities.
@@ -43,11 +43,11 @@ e2e:
 	@$(MAKE) --no-print-directory -C platform e2e
 
 web-e2e:
-	@$(MAKE) --no-print-directory -C console e2e
-	@$(MAKE) --no-print-directory -C site e2e
+	@$(MAKE) --no-print-directory -C platform-web e2e
+	@$(MAKE) --no-print-directory -C site-web e2e
 
 cowork-web-e2e:
-	@$(MAKE) --no-print-directory -C cowork/web e2e
+	@$(MAKE) --no-print-directory -C cowork-web e2e
 
 # The stack's verbs, which deploy/local/Makefile holds.
 db-up db-down db-prune backend-up:
@@ -102,7 +102,7 @@ web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
 # built here from deploy/local/Dockerfile.web: no release publishes
 # one yet, so there is no image-build output to take.
 site-image-e2e:
-	APP=site platform/tests/image/web.sh
+	APP=site-web platform/tests/image/web.sh
 
 # test-image builds the test image another repository's CI copies
 # garam, testprincipal and the migrations out of (ADR-0092), tagged

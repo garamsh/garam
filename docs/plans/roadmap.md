@@ -64,8 +64,8 @@ workflow last. Each tier depends only on the tier below it.
 Not a tier in the dependency stack — a surface over what P1 and P2
 already expose, built in parallel rather than gating P3.
 
-- `console/`: Next.js App Router, Tailwind v4, shadcn/ui, three test
-  layers (ADR-0009). Its own toolchain and gate, `make -C console ci`,
+- `platform-web/`: Next.js App Router, Tailwind v4, shadcn/ui, three test
+  layers (ADR-0009). Its own toolchain and gate, `make -C platform-web ci`,
   which `make ci` runs.
 - A public landing page at `/`, sign-in at `/login`, and the signed-in
   application under `/console`.
@@ -117,7 +117,7 @@ model configuration. #1655 records the decisions and orders the work.
 
 - The repository becomes a monorepo of services (ADR-0125). #1659
   moves today's tree, #1661 runs CI per affected module, and #1660
-  splits the web app into `site/` and `console/`.
+  splits the web app into `site-web/` and `platform-web/`.
 - Agents reach models through an AI gateway (#1658).
 - `ai-gateway/` and `cowork/` are filed once those decisions are
   recorded. Product management has no design yet.

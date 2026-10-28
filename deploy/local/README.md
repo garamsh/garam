@@ -87,7 +87,7 @@ moves that one server rather than standing up a second.
 - `Dockerfile` — multi-stage build of the `garam` binary; context is the
   repository root.
 - `Dockerfile.web` — multi-stage Next.js standalone build; context is
-  `console/`.
+  `platform-web/`.
 - `.env.example` — every variable the stack reads.
 
 ## Up and down
@@ -186,7 +186,7 @@ Every variable is documented in `.env.example`. Three notes:
   ([ADR-0041](../../docs/architecture/adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
   An empty database holds no admin, so the way in is Google credentials
   or user and session rows written against the database directly, as
-  `console/e2e/seed.ts` does for the browser suite.
+  `platform-web/e2e/seed.ts` does for the browser suite.
 - The web image bakes `GARAM_API_URL` into the build, because the
   `/api/*` rewrite is resolved at build time. Changing it means
   rebuilding the image, not just restarting the container.

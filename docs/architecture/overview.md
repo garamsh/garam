@@ -312,11 +312,13 @@ garam's retired templates and the browser's `operatorGrn`
 
 ## Module boundaries
 
-**The layout ADR-0125 decides is not built.** #1659 moves this tree
-into `platform/`, `console/` and `tooling/`, and
-[structure.md](./structure.md) §Services holds the rules that layout
+**The layout ADR-0132 decides is built in part.** The web packages
+are in it; `platform/sdk/` and the Go SDK move under `lib/`, and the
+client CLI out into `platform-cli/`, in #1700's second pull request.
+[structure.md](./structure.md) §Services holds the rules the layout
 keeps. The list below is today's tree
-([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)).
+([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md),
+[ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)).
 
 - `platform/api/` — OpenAPI specs (source of truth) + generated servers:
   the browser-facing listener's and the machine listener's (ADR-0019).
@@ -331,17 +333,17 @@ keeps. The list below is today's tree
   deployment runs.
 - `platform/tests/image/` — black-box checks against a built image
   rather than against the app (`make web-image-e2e`).
-- `console/` — the Next.js console, on a host of its own (ADR-0131);
+- `platform-web/` — the Next.js console, on a host of its own (ADR-0131);
   reaches the API through a same-origin `/api/*` rewrite (ADR-0009).
-  Its own toolchain and gate (`make -C console ci`). The signed-in
+  Its own toolchain and gate (`make -C platform-web ci`). The signed-in
   application lives under `/console`, whose shell and route structure
   are ADR-0011.
-- `site/` — the Next.js site: `/` is the public landing page, `/login`
+- `site-web/` — the Next.js site: `/` is the public landing page, `/login`
   the sign-in page and `/register` where an invitation becomes a
   password account (ADR-0041). It keeps the same rewrite, and sends
   every `/console` address to the console's host (ADR-0131).
-- `design/` — the components, styles and tokens both apps import;
-  `platform/client/` — the client of the platform's API both apps
+- `lib/design/` — the components, styles and tokens both apps import;
+  `lib/platform-sdk-ts/` — the client of the platform's API both apps
   call it through.
 - `deploy/charts/garam/` — the Helm chart a cluster installs garam
   from (ADR-0042).

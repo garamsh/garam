@@ -29,7 +29,7 @@ garam is becoming an agent-based collaboration platform, and this
 repository a monorepo of its services
 ([#1655](https://github.com/garamsh/garam/issues/1655)).
 [ADR-0125](./docs/architecture/adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md)
-decides the layout: `platform/`, `console/`, `site/`, `design/`,
+decides the layout: `platform/`, `platform-web/`, `site-web/`, `lib/design/`,
 `tooling/` and `deploy/`, with a folder for each new service. None of
 it is built yet. Until #1659 moves the tree, every path below is
 today's.
@@ -115,16 +115,16 @@ mode 0600 and never printed.
 
 Two Next.js apps talk to the Go backend through a same-origin `/api/*`
 rewrite ([ADR-0009](./docs/architecture/adr/0009-web-frontend.md)):
-[`site/`](./site/), the landing page and the way in, and
-[`console/`](./console/), the signed-in application, each on its own
+[`site-web/`](./site/), the landing page and the way in, and
+[`platform-web/`](./console/), the signed-in application, each on its own
 origin ([ADR-0131](./docs/architecture/adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)).
-They share one lockfile at the root; `make -C site ci` and
-`make -C console ci` are their gates, and `make ci` runs both — so
+They share one lockfile at the root; `make -C site-web ci` and
+`make -C platform-web ci` are their gates, and `make ci` runs both — so
 `make ci` needs pnpm and Node as well as Go.
 
 ```sh
-make -C console install   # pnpm install --frozen-lockfile
-make -C console ci        # install, format, lint, typecheck, unit tests, build, codegen check
+make -C platform-web install   # pnpm install --frozen-lockfile
+make -C platform-web ci        # install, format, lint, typecheck, unit tests, build, codegen check
 pnpm --dir console dev    # console on http://console.garam.localhost:3000
 pnpm --dir site dev       # site on http://garam.localhost:3001
 ```
@@ -142,7 +142,7 @@ does not list `google`.
 
 ### Playwright end-to-end tests
 
-`console/e2e/` and `site/e2e/` drive the built apps in a real browser
+`platform-web/e2e/` and `site-web/e2e/` drive the built apps in a real browser
 against the real backend. Bring up the backend first:
 
 ```sh
@@ -173,7 +173,7 @@ GARAM_WEB_IMAGE=<ref> make web-image-e2e  # checks that image instead
 
 The override is how an image pulled from a registry by digest is
 verified. Like `make e2e` and `make web-e2e` it needs Docker, so it
-stays outside `make -C console ci`.
+stays outside `make -C platform-web ci`.
 
 ## Development images
 

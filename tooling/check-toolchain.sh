@@ -3,11 +3,11 @@
 # predicts a half-done bump of and nothing checked: a version this
 # repository declares, and the base image tag that has to carry the same
 # one. #794 arrived exactly as that comment says such a bump does —
-# Dockerfile.web's node base moved two majors while console/.nvmrc
+# Dockerfile.web's node base moved two majors while platform-web/.nvmrc
 # stayed at 24 — and a reviewer caught it rather than a check (#803).
 #
 # The two sites need not name a version to the same depth:
-# console/.nvmrc names a Node major and the tag names a patch. They are
+# platform-web/.nvmrc names a Node major and the tag names a patch. They are
 # compared over the components both name, so the looser site is held to
 # what it declares and to no more.
 #

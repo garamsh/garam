@@ -1,6 +1,8 @@
 # ADR 0120: A person signs the CLI in by the device grant and holds a server-side session as a bearer
 
-> Status: accepted
+> Status: accepted; where the commands live (point 1) is superseded
+> by
+> [ADR-0132](./0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)
 > Date: 2026-10-20
 
 Drafted for #1616, for which the Garam PM reserved this number. The

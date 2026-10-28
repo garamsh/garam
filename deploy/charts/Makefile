@@ -35,7 +35,7 @@ CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
 # since a name outside it drops out of both sets and passes unseen
 # (#864).
 CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z][A-Z0-9_]*"' --include=*.go ../../platform/internal ../../platform/cmd | sed 's/.*"\([A-Z][A-Z0-9_]*\)"/\1/' | sort -u)
-CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' ../../console/src/env.ts ../../site/src/env.ts | sort -u)
+CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' ../../platform-web/src/env.ts ../../site-web/src/env.ts | sort -u)
 
 # What the chart declares it does not set, read from the table that
 # carries the reasons. A renamed heading empties this and fails the

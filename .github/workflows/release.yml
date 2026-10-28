@@ -134,7 +134,7 @@ jobs:
           # hand, and `deploy/charts/garam/README.md` §Choosing a
           # release name is where a deployment meets what it binds.
           build-args: |
-            APP=console
+            APP=platform-web
             GARAM_API_URL=http://garam-api:8080
             IMAGE_REVISION=${{ steps.revision.outputs.revision }}
             IMAGE_VERSION=${{ steps.version.outputs.version }}

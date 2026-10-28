@@ -22,9 +22,9 @@ Two Next.js App Router applications implement it, TypeScript strict,
 Tailwind and shadcn/ui ([ADR-0009](./adr/0009-web-frontend.md)), each
 on an origin of its own
 ([ADR-0131](./adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)):
-`site/` serves the landing page and the way in, and `console/` the
-signed-in application. Both build on `design/`, the shared tokens and
-primitives, and on `platform/client/`, the one client of the backend
+`site-web/` serves the landing page and the way in, and `platform-web/` the
+signed-in application. Both build on `lib/design/`, the shared tokens and
+primitives, and on `lib/platform-sdk-ts/`, the one client of the backend
 they share. What follows names the console where only the console is
 meant; the site's image is built from the same Dockerfile and is not
 yet published. It is the one part of this
@@ -66,7 +66,7 @@ own things a reader might come here for, and none of them is restated:
 
 - `platform/api/openapi.yaml` is the source of truth for every operation
   the application calls ([ADR-0004](./adr/0004-openapi-first-api.md)),
-  and `console/src/types/api.ts` is generated from it rather than
+  and `platform-web/src/types/api.ts` is generated from it rather than
   written ([ADR-0019](./adr/0019-machine-openapi-spec.md)).
 - [api-surface.md](./api-surface.md) describes the browser-facing
   listener as a **surface**: what admits a caller to it and what
@@ -78,17 +78,17 @@ own things a reader might come here for, and none of them is restated:
   is absent at runtime
   ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)).
 - `docs/convention/stack-nextjs.md` governs how the application is laid
-  out inside `console/src/`: which folder holds what, and the two entry
+  out inside `platform-web/src/`: which folder holds what, and the two entry
   points a feature declares (§13. Feature entry points and file naming).
   What may import what there is
   [structure.md](./structure.md) §Boundaries and dependency direction's
   ([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)),
-  and `console/eslint.config.mjs`'s `garam/import-direction` rule is
-  what fails `make -C console lint` on a crossing. Nothing here restates
+  and `platform-web/eslint.config.mjs`'s `garam/import-direction` rule is
+  what fails `make -C platform-web lint` on a crossing. Nothing here restates
   a layout rule, and a question about where a file belongs is that
   file's, not this one's.
 - `deploy/local/Dockerfile.web` is authoritative for what the image
-  carries. `output: "standalone"` in `console/next.config.ts` decides
+  carries. `output: "standalone"` in `platform-web/next.config.ts` decides
   what the build emits; that Dockerfile decides what has to be copied in
   beside it and says what a path missing from the result costs at
   runtime.
@@ -106,7 +106,7 @@ any path. The console holds the third, `console`, an ordinary segment,
 which is why every console path starts with it. Each app answers a
 path the other serves with a redirect to the other's origin, keeping
 the path and query, so a bookmark from before the split still lands
-(`site/src/proxy.ts`, `console/src/proxy.ts`). Both answer the probes
+(`site-web/src/proxy.ts`, `platform-web/src/proxy.ts`). Both answer the probes
 and the `/api/*` rewrite.
 
 | Path | For | Served by | Reached by |
@@ -122,8 +122,8 @@ and the `/api/*` rewrite.
 The sign-in page asks `/auth/providers` at runtime and renders a
 provider button only for a name it answers with, so a build cannot
 offer a door the backend would answer 404 for
-(`site/src/app/(auth)/login/page.tsx`, reading through
-`site/src/features/auth/api/list-providers.ts`). A read that fails
+(`site-web/src/app/(auth)/login/page.tsx`, reading through
+`site-web/src/features/auth/api/list-providers.ts`). A read that fails
 yields no names, so the password form stays the way in. Which ADR holds
 that decision is open (§Not established).
 
@@ -131,7 +131,7 @@ The console's structure is `Organizations → organization → section`,
 carried by a collapsible sidebar shell over every `/console/*` route
 ([ADR-0011](./adr/0011-console-shell.md)). Its org-scoped sections are
 declared in one place,
-`console/src/app/console/_components/navigation.ts`, which is what the
+`platform-web/src/app/console/_components/navigation.ts`, which is what the
 sidebar, the breadcrumb, the command palette and the active marking all
 read. The sidebar is
 [ADR-0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md):
@@ -152,7 +152,7 @@ no section
 A section is left out of the sidebar and the palette where the server
 denies the caller its read. The organization's layout asks once for
 every section, in one permission check
-(`console/src/app/console/_components/org-shell-read.tsx`), and the
+(`platform-web/src/app/console/_components/org-shell-read.tsx`), and the
 sidebar says once, in one line, which sections it left out. Until the
 answer arrives, or where it never does, every section is listed. A
 section whose entries each have a page of their own declares it there
@@ -173,7 +173,7 @@ and `…/permissions/{policy}` and `…/permissions/new` are a policy's.
 On such a page the sidebar marks the section as the location, and the
 breadcrumb links the section and names the entry with the name the
 page read, handed to it through
-`console/src/app/console/_components/item-crumb.tsx` because the layout
+`platform-web/src/app/console/_components/item-crumb.tsx` because the layout
 cannot read the entry
 ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)).
 A section may also declare named views beside its entries, which the
@@ -184,7 +184,7 @@ garam keeps no template of its own, so none has a page (ADR-0117).
 
 The shell's links prefetch on intent, not on sight. The sidebar's
 sections and the breadcrumb are `IntentLink`s
-(`console/src/app/console/_components/intent-link.tsx`), which prefetch
+(`platform-web/src/app/console/_components/intent-link.tsx`), which prefetch
 a route once the pointer rests on the link, it takes focus, or it is
 touched. Next.js prefetches every visible link by default, and on a
 console page the shell's links were most of its server work: measured
@@ -199,16 +199,16 @@ The rest of the shell, and where each part is decided:
 - **The organization switcher** names the caller's role in the
   organization on screen. That organization's layout reads it from its
   members list behind `<Suspense>`
-  (`console/src/app/console/_components/org-shell-read.tsx`), so no page
+  (`platform-web/src/app/console/_components/org-shell-read.tsx`), so no page
   waits on it, and a refused or unanswered read shows no role.
 - **The top bar** carries the breadcrumb and a command palette, opened
   by ⌘K, Ctrl+K or `/`
-  (`console/src/app/console/_components/command-palette.tsx`). It finds
+  (`platform-web/src/app/console/_components/command-palette.tsx`). It finds
   the organization's people, agents, teams, policies and projects by
   name once something is typed and typing rests, through a Server
   Action that asks garam's `searchOrg` then and answers five of each
   kind with a link to the list for the rest
-  (`console/src/features/orgs/api/search-org-objects.ts`); no page load
+  (`platform-web/src/features/orgs/api/search-org-objects.ts`); no page load
   reads them for it. It also reaches the sections the caller may read,
   the page's actions, the caller's organizations and the theme. `.`
   opens it on the page's actions alone, each with its consequence in
@@ -216,14 +216,14 @@ The rest of the shell, and where each part is decided:
   its page is mounted, and choosing it opens that dialog. On a phone
   the breadcrumb keeps the organization's name beside the page's.
 - **The theme** is system, light or dark, chosen in the user menu or
-  the palette and kept in the browser alone. `console/src/lib/theme.ts`
+  the palette and kept in the browser alone. `platform-web/src/lib/theme.ts`
   applies it before the first paint, so a dark page is never served
   light first.
 - **A failure below the shell** renders
-  `console/src/app/console/error.tsx`, which says what happened in words
+  `platform-web/src/app/console/error.tsx`, which says what happened in words
   and offers the error's digest as a reference, never the thrown
   message. `notFound()` and any console address no route serves render
-  `console/src/app/console/not-found.tsx` inside the shell.
+  `platform-web/src/app/console/not-found.tsx` inside the shell.
 
 What a section can do differs, and the difference is the state of the
 API behind it rather than of the console:
@@ -234,7 +234,7 @@ API behind it rather than of the console:
 | Teams | **On the design system.** The organization's groups, presented as teams ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)): lists them, creates one, and on a team's page reads its members, adds and removes people and agents, renames it and deletes it. A member is shown by the name and type the organization's people and agents give it, and one neither holds stays listed and removable, marked as not found; where the caller is refused the people or agents list, those members are marked not checked and the team stays readable. An agent is offered and shown by its name, or by its identifier where it has none, with the identifier beside it ([ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)) |
 | People | **On Roster.** The organization's people, apart from its agents ([ADR-0116](./adr/0116-people-and-agents-are-listed-apart-under-organization-and-a-page-explains-only-what-is-not-self-evident.md)), each with their role, filtered by team, kept in the address. The chosen people, or one row's, are added to a team or given a policy, one request each since garam takes one member per request, offered only for the teams and policies the server does not deny, asked in one check; the policy dialog says that a first attachment narrows a policy that applied to the whole organization. Inviting a person ([ADR-0006](./adr/0006-invitation-tokens.md)) is the header's one action, kept there inactive with the reason where the server denies it. A person's page names their role and since when. A list the caller is refused is said, never shown as empty |
 | Agents | **On Roster.** The organization's agents, apart from its people (ADR-0116), each shown by the name the organization gave it or by its identifier where it has none ([ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)), failing ones first, each reading as one state derived from its two reports with both named under it, filtered by team and by what runs it, read from the assignment's assignee, kept in the address, and added to a team or given a policy as People's are. Creating one is the header's one action, and the empty state's, kept inactive with the reason where the server denies it. An agent's page, for every agent the agents list holds, shows in its header the two states its operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)), what holds it, an operator or a standalone host ([ADR-0082](./adr/0082-a-standalone-host-runs-its-agent-under-a-supervisor-an-administrator-approves-by-its-keys.md)), the generation garam last activated where the agent read answers one and nothing where it does not (#1576), and when it last reported. Replace host approves a new standalone host for an agent a standalone host holds, from exactly the assignment the header read, so garam refuses it if the agent has moved since. A new agent is created on its own page from a template the control service published, and no form there sends garam a definition or a value ([ADR-0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)); below the wizard, Templates lists the control service's published templates and profiles and publishes a template version, shown only where a hosted operator's grant reads them. An agent's page carries the report, saying its operator's control service created it or a standalone host enrolled it, and its name, renamed or cleared there and replaced by a sentence where the server denies `agent:rename` on that agent; a refused agents list is said rather than shown as none. The hosted operator's control service is reached for its published templates and profiles, publishing a template version, creating an agent from one, and an agent's pending, rendered and runtime-reported execution (§How it reaches a control service). garam's retired templates are not shown (ADR-0116) |
-| Projects | **On the design system.** Lists the projects the organization owns, each with its identifier, and creates one from a dialog the list's header opens, which is also its empty state's next step — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console. A project's page reads its members by name, adds and removes people and agents, renames it and deletes it once its name is typed, on the same membership parts a team's page uses (`console/src/app/console/_components/membership/`), with Your access. A list the caller is refused is said, never shown as empty |
+| Projects | **On the design system.** Lists the projects the organization owns, each with its identifier, and creates one from a dialog the list's header opens, which is also its empty state's next step — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console. A project's page reads its members by name, adds and removes people and agents, renames it and deletes it once its name is typed, on the same membership parts a team's page uses (`platform-web/src/app/console/_components/membership/`), with Your access. A list the caller is refused is said, never shown as empty |
 | Hosts | **On Roster.** The organization's standalone and direct hosts ([ADR-0082](./adr/0082-a-standalone-host-runs-its-agent-under-a-supervisor-an-administrator-approves-by-its-keys.md), [ADR-0111](./adr/0111-a-directly-attached-runtime-is-activated-by-a-one-agent-host-authority-on-the-generation-it-reports-and-its-store-lock.md)): its supervisors, each with the agent it runs, at which epoch and when that agent last activated, and the approvals that stood them up, with their state. A host is approved from the output of `garam standalone prepare` pasted whole, read against what that command prints and never said back, with the host's name, how it runs its agent and how long the approval lasts, at most the day garam allows. An unspent approval is withdrawn and an active supervisor revoked, each after a dialog saying what ends. Where the server denies `agent:enroll` each stays, inactive, with the reason. A list the caller is refused is said, never shown as empty |
 | Operators | **On the design system.** Lists the operators the organization registered ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md)) one row per Operator: its cluster manager and the control service whose record names it, or "Not connected", and a control service whose cluster manager garam no longer holds under a cluster manager that is "Not registered", paired by that record alone ([ADR-0124](./adr/0124-an-operator-is-registered-as-a-pair-in-one-step-and-its-control-service-names-its-manager.md)); each identity by name, with the identifier under it and its control endpoint's host, and the images each reported running and its last contact (#1047). Every hosted operator whose grant carries `operator:read` is asked, each through the operation-authority seam under its own authority, and the answers are merged by GRN, since a service answers only for the controllers that reached it: an operator a service that answered lists among its grant's controllers but left out, or one that reported no image, is not reported; one no answering service serves is not checked, with the reason in the console's words where a service refused or did not answer; a control service's own identity is named as one rather than as a controller; none is shown as an empty list; no service is asked where every operator is a control service, an organization with none hosted shows no notice, and the columns are left out only where the server denies the caller `operator:read`; connects one by registering its cluster manager and control service together in a dialog over the list, or the control service of a cluster manager no control service names yet, which that cluster manager's setup page preselects, offered unless the server denies the caller registering, which opens the setup page, since registering issues nothing ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)); that page issues a pair's two keys in one step, each shown once and saved as its own file, gives each the Secret it reads it from, and waits for both first sign-ins, resuming from the keys garam holds by issuing only the one missing; a single identity's page issues, rotates and replaces its one key ([ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)). An operator's page has Overview, Keys, Control service, Delegation and Settings: what garam knows of it, and the same report in full: each image's name and reference, its digest where one was given, shortened and copied whole, when they were reported, and its last contact; its keys, rotated from its setup page and revoked after a confirmation; its control endpoint; its delegation; and its name and description. A danger zone deletes it once its identifier is typed, saying that work already running in its cluster does not stop ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)) |
 | Consents | **On the design system.** Shows each cross-organization consent relation the organization is a side of as a card naming where the pair stands and both halves, the other organization by its identifier in a copy field alone ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)); grants this organization's half from the card of a pair the other side holds, after a confirmation saying messages cross from then on; opens a new pair from a dialog the header opens, which is also its empty state's next step; and withdraws a half after a confirmation saying what stops. A list the caller is refused is said, never shown as empty |
@@ -243,12 +243,12 @@ API behind it rather than of the console:
 
 Every section's empty state is one line, and the page's create action
 where it has one, the header's repeated (ADR-0116). What an empty state
-can carry is `console/src/app/console/_components/empty-state.tsx`,
+can carry is `platform-web/src/app/console/_components/empty-state.tsx`,
 which is authoritative for it.
 
 `/console/orgs/{org}/members`, the one list People and Agents were
 until ADR-0116, and a person's page under it redirect to People
-(`console/next.config.ts`); no other former address is kept (#1592).
+(`platform-web/next.config.ts`); no other former address is kept (#1592).
 
 Organizations are created, and an invitation is accepted at
 `/console/invitations/{token}` — which is itself behind sign-in,
@@ -261,13 +261,13 @@ sent through the console's `/auth/sign-in` to the site, whose `/login`
 takes the path as its `next` parameter, which
 `/login` and `/register` carry between them and return to once a
 session exists, so the token survives either way in
-(`console/src/lib/return-path.ts`, which returns only to a console
+(`platform-web/src/lib/return-path.ts`, which returns only to a console
 path, on the console's origin). The session reaches the console from
 the site by a one-time code the console redeems on its own host
-(`console/src/app/auth/`, [sign-in.md](./sign-in.md)). A session the
+(`platform-web/src/app/auth/`, [sign-in.md](./sign-in.md)). A session the
 backend rejects behind a cookie the browser still holds is sent the
 same way:
-`console/src/proxy.ts` stamps each console request with its path, and
+`platform-web/src/proxy.ts` stamps each console request with its path, and
 the redirect reads it back. The Google button
 posts the same path in its form body to `POST /auth/login/{provider}`,
 which holds it with the login's state, so the provider round trip lands
@@ -313,16 +313,16 @@ resources by the identifier segment the API's own paths take
 
 ## How it reaches garam
 
-**One module.** `console/src/lib/garam.ts` holds the only call to the
-backend anywhere under `console/src/`, and `site/src/lib/garam.ts`
-under `site/src/`, each a configuration of `platform/client/`'s one
+**One module.** `platform-web/src/lib/garam.ts` holds the only call to the
+backend anywhere under `platform-web/src/`, and `site-web/src/lib/garam.ts`
+under `site-web/src/`, each a configuration of `lib/platform-sdk-ts/`'s one
 client; every read and every Server
 Action goes through it. That is what makes the boundary checkable rather
 than asserted: one file to read to know everything the application asks
 for.
 
 **It words what it refuses.** A Server Action garam refused returns
-the sentence `console/src/lib/refusal-copy.ts` writes for the answer's
+the sentence `platform-web/src/lib/refusal-copy.ts` writes for the answer's
 `reason` where garam sent one it documents, naming the place its
 `path` points at. Otherwise the sentence is the one for the HTTP
 status and `kind`, read for the operation that asked where the pair
@@ -368,7 +368,7 @@ authoritative for what a deployment does about it, and `make ci`
 compares the value the release bakes against what the chart renders.
 
 The address is server-side only and never reaches a browser. It is
-declared once, as a typed schema in `console/src/env.ts`, parsed at
+declared once, as a typed schema in `platform-web/src/env.ts`, parsed at
 import so a missing value fails at start rather than inside the first
 request that needs it. That file is also the authority
 `make -C deploy/charts ci` reads the application's environment names
@@ -376,7 +376,7 @@ from
 ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)),
 so adding a variable here is a change the chart has to answer for.
 
-**A page asks what it offers.** `console/src/lib/permission-check.ts`
+**A page asks what it offers.** `platform-web/src/lib/permission-check.ts`
 puts the actions a page offers to `checkPermissions` in one request
 through the seam above, and answers each one allowed, denied or unknown
 ([api-surface.md](./api-surface.md) §What decides the rest). Unknown is
@@ -399,18 +399,18 @@ against them. The operators' reports are `GET /v1/orgs/{org}/operators`
 at garam-agent-operator
 `ba691a69ad0612ff5653d2facce5668ea12cbec9` (#364). The console's calls
 are tested against a stub of that wire, with garam real:
-`console/e2e/control-service.spec.ts` for the agent and template calls,
-and `console/e2e/operators.spec.ts` for the reports. A recovery control
+`platform-web/e2e/control-service.spec.ts` for the agent and template calls,
+and `platform-web/e2e/operators.spec.ts` for the reports. A recovery control
 is not built ([operators.md](./operators.md) §Delegated operation
 authority).
 
-**One module, in the browser.** `console/src/lib/operation-authority.ts`
+**One module, in the browser.** `platform-web/src/lib/operation-authority.ts`
 holds the only call to a control service. The browser makes it,
 because the control service's CORS answer is what admits the console's
 origin; the console's own server never calls one.
 
 - **One authority per call.** A Server Action mints it through
-  `console/src/lib/garam.ts` like any other write, and the browser holds
+  `platform-web/src/lib/garam.ts` like any other write, and the browser holds
   it only for that call: never in storage, a URL or a log line. It is
   sent as `Authorization: Garam-Operation`, with no cookie, and a
   redirect is an error rather than followed.
@@ -429,7 +429,7 @@ origin; the console's own server never calls one.
   `8e11169334086f00225654de1a57d5f16006412f`); the console shows the
   refusal.
 - **It words what it refuses.** A refusal reads the sentence
-  `console/src/lib/control-refusal-copy.ts` writes for the `kind` the
+  `platform-web/src/lib/control-refusal-copy.ts` writes for the `kind` the
   control service named, or for the HTTP status where it named none,
   read for the operation that asked where that means something
   particular to it. A kind that file does not list, and a status it
@@ -447,9 +447,9 @@ origin; the console's own server never calls one.
 ## Design system
 
 **The foundation is built.** The tokens, fonts, theme, shell,
-primitives and page templates exist (`design/src/styles/globals.css`,
-`design/src/ui/`, `design/src/components/`,
-`console/src/components/`, `console/src/app/console/_components/`). Each
+primitives and page templates exist (`lib/design/src/styles/globals.css`,
+`lib/design/src/ui/`, `lib/design/src/components/`,
+`platform-web/src/components/`, `platform-web/src/app/console/_components/`). Each
 area's migration lands under epic #1366, in its plan's order. Areas on
 the design system are marked in the table above; until an area is, §What
 it serves describes it as it is.
@@ -466,11 +466,11 @@ replaces its Members list and its sidebar. Built (§What it serves):
 - the sidebar, Home in place of the overview, and the palette that
   finds objects and the page's actions;
 - People and Agents, two lists, each member's kind told by the shape
-  of its mark (`console/src/components/member-mark.tsx`);
+  of its mark (`platform-web/src/components/member-mark.tsx`);
 - a uniform object header, the Detail template's mark and facts;
 - Your access on the pages of an agent, a person, a team, a project,
   a policy and an operator
-  (`console/src/app/console/_components/your-access.tsx`): one line
+  (`platform-web/src/app/console/_components/your-access.tsx`): one line
   names what the caller may not do, and an expander holds each action's
   grant, or the permission a denied one lacks and who holds it, never
   the reason the inactive control already gives;
@@ -489,7 +489,7 @@ asked or an action is denied, beside the shell's own reads.
 Unbuilt:
 - a denied action kept visible as an inactive control everywhere:
   People and Agents keep their denied actions so
-  (`console/src/app/console/_components/inactive-button.tsx`), and the
+  (`platform-web/src/app/console/_components/inactive-button.tsx`), and the
   other pages still leave theirs out;
 - replacing the host of an agent an operator holds, which its control
   service performs (ADR-0107): the agent's page keeps Replace host,
@@ -531,7 +531,7 @@ it is under Roster.
   dialog that confirms the action: a dialog given a `command` and no
   description says its consequence. Each page has one primary action,
   at the end of its header row
-  (`console/src/app/console/_components/page-header.tsx`). A table keeps
+  (`platform-web/src/app/console/_components/page-header.tsx`). A table keeps
   the columns a reader acts on (ADR-0116).
 - **Templates.** Every console page is a List, a Detail, a Settings
   page or a Wizard, as ADR-0103 §Page templates lays each out. A
@@ -544,7 +544,7 @@ it is under Roster.
   policy editor, the operator onboarding wizard and feedback. Success
   shows inline and an error attaches to its field, with no error
   toasts. Every write confirmed in a dialog goes through
-  `console/src/app/console/_components/action-dialog.tsx`, which stays
+  `platform-web/src/app/console/_components/action-dialog.tsx`, which stays
   open until garam answers, keeps a refusal until it closes and, for
   an act nothing undoes, asks for a typed name. A call garam's answer
   never comes back from, such as a Server Action's own POST answered
@@ -552,9 +552,9 @@ it is under Roster.
   submits through a Server Action, as a refusal saying garam did not
   answer, so the change may or may not have been made and is to be
   checked before trying again. It does not close as if cancelled
-  (`console/src/lib/unsent-action.ts`, #1631).
+  (`platform-web/src/lib/unsent-action.ts`, #1631).
   A read garam refused is
-  said by `console/src/app/console/_components/refused-read.tsx`, in one
+  said by `platform-web/src/app/console/_components/refused-read.tsx`, in one
   wording.
 - **Component base.** shadcn/ui stays on Radix. Base UI is declined
   for now, for the reasons ADR-0103 §Component base gives.
@@ -564,7 +564,7 @@ it is under Roster.
 The boundary is as much of the responsibility as the contents.
 
 - **No authorization decision; it asks the server instead.**
-  `console/src/proxy.ts` sends a request to `/console/*` carrying no
+  `platform-web/src/proxy.ts` sends a request to `/console/*` carrying no
   session cookie to the site's `/login`, and that is a fast path
   rather than a gate: a cookie can be expired or revoked, so the
   console verifies the session against `/me`, and a 401 from any read
@@ -585,7 +585,7 @@ The boundary is as much of the responsibility as the contents.
     permission from a role it read
     ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md) §Role-aware UI).
   - **Asked once per page.** The API is `checkPermissions`, asked
-    through `console/src/lib/permission-check.ts` (§How it reaches
+    through `platform-web/src/lib/permission-check.ts` (§How it reaches
     garam). Each migrated page asks `checkPermissions` once for every
     write it offers. A form on a page that does not ask, and that the
     API will refuse, still renders and is refused.
@@ -599,7 +599,7 @@ The boundary is as much of the responsibility as the contents.
 - **Serves no secret's value.** No surface does, and
   [ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)
   names the console when it says so.
-- **Owns no schema.** `console/src/types/api.ts` is generated from
+- **Owns no schema.** `platform-web/src/types/api.ts` is generated from
   `platform/api/openapi.yaml`, so a change to what an operation carries
   starts in the specification and arrives here (ADR-0004, ADR-0019).
 - **Its probes read nothing.** Neither answer reads the API, the
@@ -617,13 +617,13 @@ The boundary is as much of the responsibility as the contents.
 
 ## Its own toolchain and gate
 
-`make -C console ci` is the gate, and `make ci` runs it with every other
+`make -C platform-web ci` is the gate, and `make ci` runs it with every other
 module's, so the one name covers both toolchains. In order: `install`,
 `format`, `lint` (which also typechecks), `test`, `build`,
 `check-gen`.
 
-Three things are outside it. `make -C console e2e` runs the Playwright specs
-in `console/e2e/` against a real built application, a real backend and a
+Three things are outside it. `make -C platform-web e2e` runs the Playwright specs
+in `platform-web/e2e/` against a real built application, a real backend and a
 real Postgres, so it needs infrastructure the gate does not start.
 `make web-image-e2e`'s subject is the image a release publishes rather
 than this tree's application, and it runs that image, so it needs a
@@ -631,8 +631,8 @@ container runtime the gate never asks for. `make install` is a
 prerequisite rather than a check.
 
 Tests are in two locations by decision, not by accident: Vitest owns
-the tests colocated under `console/src/`, Playwright owns
-`console/e2e/`, and each config names the other's territory so neither
+the tests colocated under `platform-web/src/`, Playwright owns
+`platform-web/e2e/`, and each config names the other's territory so neither
 collects the other's files (ADR-0009, `docs/convention/stack-nextjs.md`
 §12. Testing — three layers, two locations).
 
@@ -657,8 +657,8 @@ collects the other's files (ADR-0009, `docs/convention/stack-nextjs.md`
   superseded that ADR to remove the second provider without carrying
   the discovery decision either way — so what the application does
   rests on a decision whose ADR is superseded.
-  `site/src/features/auth/api/list-providers.ts` and
-  `site/src/app/(auth)/login/page.tsx` both cite ADR-0010 for it.
+  `site-web/src/features/auth/api/list-providers.ts` and
+  `site-web/src/app/(auth)/login/page.tsx` both cite ADR-0010 for it.
 - **What the application promises a visitor across versions.** Nothing
   records it, and [api-surface.md](./api-surface.md) §Not decided
   records the same absence for the API it calls.
@@ -683,7 +683,7 @@ this document owes an update.
 These decide the application itself:
 
 - [ADR-0009](./adr/0009-web-frontend.md) — a Next.js application in
-  `console/` in this repository, reaching the API through a same-origin
+  `platform-web/` in this repository, reaching the API through a same-origin
   `/api/*` rewrite, with three test layers
 - [ADR-0011](./adr/0011-console-shell.md) — the console is a sidebar
   shell over `Organizations → organization → section`, and prints no
@@ -775,7 +775,7 @@ The rest bear on it without being about it:
   gated, and one refusal covers a wrong password and an unknown name
 - [ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
   — the chart describes the deployment, and reads this application's
-  environment names from `console/src/env.ts`
+  environment names from `platform-web/src/env.ts`
 - [ADR-0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)
   — the web workload carries an identity of its own and reads no
   credential
@@ -795,7 +795,7 @@ The rest bear on it without being about it:
   — a development build of this image bakes the same address, since it
   is built from what the release builds, and is told apart by its tag
 - [ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
-  — `structure.md` governs what a module under `console/src/` may
+  — `structure.md` governs what a module under `platform-web/src/` may
   import, so a feature reaches a sibling through its declared entry
   points and the stack file no longer refuses that edge
 - [ADR-0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)

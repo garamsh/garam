@@ -75,7 +75,7 @@ type returnPathVectors struct {
 // /console. A cross-site form can post any of them, so what it decides
 // is at most where inside the console the login lands. A path one rule
 // accepts and the other drops fails here or in
-// console/src/lib/__tests__/return-path.test.ts; the accepted vectors
+// platform-web/src/lib/__tests__/return-path.test.ts; the accepted vectors
 // are the control for the dropped ones.
 func TestLoginWithReturnPath_HoldsTheSharedVectors(t *testing.T) {
 	raw, err := os.ReadFile("testdata/return-path-vectors.json")

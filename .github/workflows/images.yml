@@ -9,7 +9,7 @@ name: images
 #
 # `docs/**` is the whole ignore list because it is the only path the
 # build itself keeps out of both images: `.dockerignore` names `docs`,
-# and the web image's context is `console/`. A wider one would rest on a
+# and the web image's context is `platform-web/`. A wider one would rest on a
 # property that holds today rather than one the build enforces, and a
 # filter that quietly stops covering a change is what #850 is about.
 #

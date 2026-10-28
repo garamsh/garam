@@ -173,7 +173,7 @@ services:
       context: ../..
       dockerfile: deploy/local/Dockerfile.web
       args:
-        APP: console
+        APP: platform-web
         GARAM_API_URL: http://api:8080
     environment:
       GARAM_API_URL: http://api:8080
@@ -198,7 +198,7 @@ services:
       context: ../..
       dockerfile: deploy/local/Dockerfile.web
       args:
-        APP: site
+        APP: site-web
         GARAM_API_URL: http://api:8080
     environment:
       GARAM_API_URL: http://api:8080

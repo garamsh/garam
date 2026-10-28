@@ -6,7 +6,7 @@
 # The subject is the image a release publishes, which neither app's e2e
 # suite opens — each builds this tree's app and serves it.
 #
-# APP names the app: `console`, the default, or `site`.
+# APP names the app's folder: `platform-web`, the default, or `site-web`.
 #
 # 3000 below is the PORT deploy/local/Dockerfile.web sets. The chart
 # probes 3000 as well and nothing ties the two, so nothing here
@@ -17,20 +17,20 @@
 set -eu
 
 image=${GARAM_WEB_IMAGE:-}
-app=${APP:-console}
+app=${APP:-platform-web}
 case $app in
-console)
+platform-web)
 	other=GARAM_SITE_URL
 	other_url=http://site.image-e2e.invalid
 	sent=/login
 	;;
-site)
+site-web)
 	other=GARAM_CONSOLE_URL
 	other_url=http://console.image-e2e.invalid
 	sent=/console/orgs
 	;;
 *)
-	echo "web-image-e2e: APP is '$app', and the apps are console and site" >&2
+	echo "web-image-e2e: APP is '$app', and the apps are platform-web and site-web" >&2
 	exit 1
 	;;
 esac

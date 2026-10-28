@@ -14,7 +14,7 @@ const maxReturnPath = 2048
 // bytes, with no backslash a browser reads as a slash, no control
 // character a browser drops, and no dot segment a browser resolves —
 // any of which can carry a console path out of the console or to
-// another origin. It is the rule `platform/client/src/return-path.ts`
+// another origin. It is the rule `lib/platform-sdk-ts/src/return-path.ts`
 // applies to the password sign-in, held here for the provider sign-in,
 // whose redirect this process writes;
 // `testdata/return-path-vectors.json` is the table both are tested

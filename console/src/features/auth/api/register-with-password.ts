@@ -8,7 +8,7 @@ import { GaramApiError, garamRequest, refusal } from "@/lib/garam";
 import { parsePassword, parseUsername } from "@garam/platform-client/password-credentials";
 import type { components } from "@garam/platform-client/api";
 
-import { keepSessionCookie } from "./session-cookie";
+import { keepSessionCookie } from "@garam/platform-client/session-cookie";
 
 /** A field of the register form a refusal can be about. */
 export type RegisterField = "invitationToken" | "username" | "password";

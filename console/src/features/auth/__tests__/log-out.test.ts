@@ -30,6 +30,32 @@ describe("logOut", () => {
   // Each test asserts what its own run deleted, not an earlier test's.
   beforeEach(() => deleted.mockClear());
 
+  it("clears the session on the domain garam scoped it to", async () => {
+    // A plain Response: msw's jar refuses a cookie for another domain.
+    server.use(
+      http.post(
+        `${API_URL}/auth/logout`,
+        () =>
+          new Response(null, {
+            status: 204,
+            headers: {
+              "set-cookie":
+                "garam_session=; Path=/; Domain=garam.test; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
+            },
+          }),
+      ),
+    );
+
+    await expect(logOut()).rejects.toThrow("NEXT_REDIRECT:/login");
+    // ADR-0131: a host-only delete leaves the parent domain's cookie,
+    // and the browser signed in on every other host.
+    expect(deleted).toHaveBeenCalledWith({
+      name: SESSION_COOKIE,
+      path: "/",
+      domain: "garam.test",
+    });
+  });
+
   it("logs the browser out when the backend already rejects the session", async () => {
     server.use(
       http.post(`${API_URL}/auth/logout`, () =>
@@ -41,7 +67,7 @@ describe("logOut", () => {
     );
 
     await expect(logOut()).rejects.toThrow("NEXT_REDIRECT:/login");
-    expect(deleted).toHaveBeenCalledWith(SESSION_COOKIE);
+    expect(deleted).toHaveBeenCalledWith({ name: SESSION_COOKIE, path: "/" });
   });
 
   it("clears the cookie while propagating a failure that is not an expired session", async () => {
@@ -55,6 +81,6 @@ describe("logOut", () => {
     );
 
     await expect(logOut()).rejects.toThrow("boom");
-    expect(deleted).toHaveBeenCalledWith(SESSION_COOKIE);
+    expect(deleted).toHaveBeenCalledWith({ name: SESSION_COOKIE, path: "/" });
   });
 });

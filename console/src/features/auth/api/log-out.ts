@@ -1,11 +1,9 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 
-import { garamFetch, isUnauthenticated } from "@/lib/garam";
-import { SESSION_COOKIE } from "@garam/platform-client/session";
+import { garamRequest, isUnauthenticated } from "@/lib/garam";
+import { clearSessionCookie } from "@garam/platform-client/session-cookie";
 
 /**
  * Revokes the session server-side and clears the cookie. A session the
@@ -15,15 +13,16 @@ import { SESSION_COOKIE } from "@garam/platform-client/session";
  * server-side revocation is best-effort.
  */
 export async function logOut() {
+  let response: Response | undefined;
   try {
-    await garamFetch("/auth/logout", z.unknown(), { method: "POST" });
+    response = await garamRequest("/auth/logout", { method: "POST" });
   } catch (error) {
     if (!isUnauthenticated(error)) throw error;
   } finally {
     // The backend's Set-Cookie does not reach the browser through a
-    // Server Action response, so the cookie is cleared here as well —
-    // in the finally, so a failed revocation cannot leave it behind.
-    (await cookies()).delete(SESSION_COOKIE);
+    // Server Action response, so it is replayed here — in the finally,
+    // so a failed revocation cannot leave the cookie behind.
+    await clearSessionCookie(response);
   }
   redirect("/login");
 }

@@ -8,7 +8,7 @@ import { PASSWORD_REFUSED } from "@garam/platform-client/password-credentials";
 import { RETURN_PARAM, safeReturnPath } from "@garam/platform-client/return-path";
 import type { components } from "@garam/platform-client/api";
 
-import { keepSessionCookie } from "./session-cookie";
+import { keepSessionCookie } from "@garam/platform-client/session-cookie";
 
 /** What the sign-in form has to show: nothing yet, or a refusal. */
 export type SignInWithPasswordState =

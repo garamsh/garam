@@ -100,6 +100,39 @@ describe("signInWithPassword", () => {
     ]);
   });
 
+  it("keeps the domain garam scoped the session to, so it reaches every host under it", async () => {
+    planted.length = 0;
+    // A plain Response: msw files the Set-Cookie of its own responses
+    // in a jar for the mocked host, which refuses a cookie scoped to
+    // another domain.
+    server.use(
+      http.post(
+        `${API_URL}/auth/password/login`,
+        () =>
+          new Response(JSON.stringify(alice), {
+            headers: {
+              "content-type": "application/json",
+              "set-cookie":
+                "garam_session=session-value; Path=/; Domain=garam.test; Max-Age=3600; HttpOnly; Secure; SameSite=Lax",
+            },
+          }),
+      ),
+    );
+
+    await expect(
+      signInWithPassword(
+        { status: "idle" },
+        form({ username: "alice", password: PASSWORD }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT:/console");
+
+    // ADR-0131: a cookie replanted host-only would sign the person in on
+    // the host that answered the form and on no other.
+    expect(planted).toEqual([
+      expect.objectContaining({ domain: "garam.test", secure: true }),
+    ]);
+  });
+
   it("lands where the visitor was going, and only inside the console", async () => {
     accepts();
 

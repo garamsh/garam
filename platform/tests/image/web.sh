@@ -104,9 +104,13 @@ print(s.getsockname()[1])') || fail "could not reserve a host port"
 echo "web-image-e2e: publishing on 127.0.0.1:$port"
 
 # --add-host rather than a network alias: the baked host is a DNS name
-# with dots, which an alias does not accept.
+# with dots, which an alias does not accept. GARAM_API_URL is given as
+# the chart gives it: each app's proxy reads its env, which requires it
+# in production. It names the baked target, so the rewrite check below
+# still says nothing the runtime value could have answered for.
 web=$net-web
 docker run -d --name "$web" --network "$net" -e "$other=$other_url" \
+	-e "GARAM_API_URL=$dest" \
 	--add-host "$api_host:$stub_ip" -p "127.0.0.1:$port:3000" "$image" >/dev/null
 
 # Wait on the condition the checks depend on — the server answering —

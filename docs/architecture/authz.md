@@ -6,6 +6,7 @@ engine (`garam serve authz`, see
 documents (see [ADR-0002](./adr/0002-iam-style-policy-model.md)).
 
 ## Contents
+- Decided and not yet built
 - Policy document
 - Evaluation
 - Statement collection
@@ -16,6 +17,23 @@ documents (see [ADR-0002](./adr/0002-iam-style-policy-model.md)).
 - Roles vs policies
 - Explain
 - Constraints
+
+## Decided and not yet built
+
+[ADR-0130](./adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
+replaces this engine with `policy/`, a Rust service of its own (#1689).
+Everything below this section describes `garam serve authz` as it runs
+today, and stays true until `policy/` serves the platform's checks.
+
+| Today | Under ADR-0130 |
+|-------|----------------|
+| IAM-style documents, matched by `internal/authz` | Cedar policies, evaluated by the `cedar-policy` crate and validated against `policy/schema/garam.cedarschema` |
+| `CheckRequest` carries collected statements, `subject_groups` and `subject_org` | `Evaluate(subject, action, resource, context)` in AuthZEN's shape; the service reads memberships and ancestors itself |
+| Roles are org data the api server turns into statements | A role is a system-tier template, and an assignment is a policy linking it |
+| A policy attaches to a user, an agent or a group | A grant names its principal; a guardrail is a `forbid` |
+| An organization's scope is checked by `subject_org` | Tenant isolation is a system `forbid` no policy overrides |
+| `CheckCurrent` | A request option reading storage instead of the cache |
+| `Explain` | The decision's reasons, and an access report over grants |
 
 ## Policy document
 

@@ -59,6 +59,8 @@ on are boundaries inside a service.
   `console/`, `site/`, `design/`, `tooling/`, `deploy/` and
   `docs/convention/` are the folders ADR-0125 names. No folder holds
   code without an owner: there is no `shared/`, `libs/` or `common/`.
+  ADR-0130 adds `policy/`, the policy engine, which its first pull
+  request creates.
 - **A service's folder is created by its first pull request**, and not
   before.
 - **A service owns its database.** No table is read or written by a
@@ -68,6 +70,8 @@ on are boundaries inside a service.
   into another service's `internal/` or its database is a defect, even
   where it builds.
 - **Dependencies point toward `platform/`**, and none points back.
+  `policy/` (ADR-0130, not yet built) sits below it: the platform and
+  cowork call `policy/`, and `policy/` calls no service.
 - **Services authenticate to one another with tokens `platform/`
   issues**, never by network position.
 - **`console/` calls only the services' public management APIs.**

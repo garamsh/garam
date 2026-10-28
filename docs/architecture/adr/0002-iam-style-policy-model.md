@@ -1,6 +1,8 @@
 # ADR 0002: IAM-style policy documents with a native evaluator
 
-> Status: accepted
+> Status: accepted; the document format and the evaluator are
+> superseded by
+> [ADR-0130](./0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
 > Date: 2026-07-25
 
 ## Context

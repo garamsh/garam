@@ -33,7 +33,7 @@ test.describe("signing in across hosts", () => {
 
     await expect(page).toHaveURL(`${WEB_URL}/${ws.orgSlug}/tasks`);
     await expect(
-      page.getByRole("navigation", { name: "Workspace" }),
+      page.getByRole("navigation", { name: "Workspace", exact: true }),
     ).toBeVisible();
 
     // Host-only on each of the two: a cookie with a Domain attribute
@@ -57,7 +57,7 @@ test.describe("signing in across hosts", () => {
     const page = await context.newPage();
     await page.goto(`${WEB_URL}/${ws.orgSlug}`);
     await expect(
-      page.getByRole("navigation", { name: "Workspace" }),
+      page.getByRole("navigation", { name: "Workspace", exact: true }),
     ).toBeVisible();
 
     const out = await context.request.post(`${SITE_URL}/api/auth/logout`);
@@ -90,7 +90,7 @@ test.describe("signing in across hosts", () => {
 
     await expect(page).toHaveURL(`${WEB_URL}/${ws.orgSlug}`);
     await expect(
-      page.getByRole("navigation", { name: "Workspace" }),
+      page.getByRole("navigation", { name: "Workspace", exact: true }),
     ).toBeVisible();
   });
 });

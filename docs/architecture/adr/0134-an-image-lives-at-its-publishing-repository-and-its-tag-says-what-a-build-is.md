@@ -71,8 +71,8 @@ at `b957e78197a96a2c6bb15ebe6308331c4979370e`, and garamsh/aurora at
 6. **What a pull request builds is what a release publishes.**
    `make image-build` builds all five from `release.yml`, once each, and
    the image checks read its output rather than building their own.
-7. **The test image moves when garamsh/aurora#711 creates `garam/test`.**
-   Until then `tooling/image-test-push.sh`, `tooling/image-test-pin.sh`
+7. **The test image moves once garamsh/aurora#711 creates its
+   repository, `garam/test`.** Until then `tooling/image-test-push.sh`, `tooling/image-test-pin.sh`
    and `tooling/image-test-ecr-test.sh` name `garam-dev/garam-test`, and
    ADR-0093's repository stands in practice; the change that moves them
    completes #1716.

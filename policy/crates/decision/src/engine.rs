@@ -70,9 +70,8 @@ impl Engine {
             EntityTypeName::from_str("Action").map_err(|error| refused(error.into()))?,
             EntityId::new(evaluation.action),
         );
-        let context =
-            Context::from_json_value(evaluation.context.clone(), Some((&self.schema, &action)))
-                .map_err(|error| refused(error.into()))?;
+        let context = Context::from_json_value(evaluation.context.clone(), None)
+            .map_err(|error| refused(error.into()))?;
         Request::new(principal, action, resource, context, Some(&self.schema))
             .map_err(|error| refused(error.into()))
     }

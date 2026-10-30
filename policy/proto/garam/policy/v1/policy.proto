@@ -106,6 +106,7 @@ message EvaluationsRequest {
 }
 
 message EvaluationsResponse {
-  // evaluations holds one answer per evaluation, in the request's order.
+  // evaluations holds one answer per evaluation, in the request's
+  // order.
   repeated EvaluateResponse evaluations = 1;
 }

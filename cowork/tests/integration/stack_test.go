@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
@@ -57,16 +58,72 @@ func pool(t *testing.T) *pgxpool.Pool {
 // acme, and eve, a member of none. A session cookie's value, or a
 // bearer, is the person's name. It allows every check a member asks
 // except those deny names, as `action` or `action@page`, for everyone,
-// or prefixed with a name and a space, for that person alone.
+// or prefixed with a name and a space, for that person alone. A person
+// signedOut is refused everything; one removed is no member of acme;
+// and while down, every request is answered 503 and counted.
 type fakePlatform struct {
-	mu   sync.Mutex
-	deny map[string]bool
+	mu        sync.Mutex
+	deny      map[string]bool
+	signedOut map[string]bool
+	removed   map[string]bool
+	down      bool
+	downCalls int
+}
+
+func newFakePlatform() *fakePlatform {
+	return &fakePlatform{deny: map[string]bool{}, signedOut: map[string]bool{}, removed: map[string]bool{}}
 }
 
 func (f *fakePlatform) denyCheck(key string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deny[key] = true
+}
+
+func (f *fakePlatform) allowCheck(key string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.deny, key)
+}
+
+func (f *fakePlatform) signOut(who string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.signedOut[who] = true
+}
+
+func (f *fakePlatform) remove(who string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removed[who] = true
+}
+
+func (f *fakePlatform) setDown(down bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.down = down
+}
+
+func (f *fakePlatform) callsWhileDown() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.downCalls
+}
+
+// refusal answers the status the current state refuses who with, or 0.
+func (f *fakePlatform) refusal(who string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	switch {
+	case f.down:
+		f.downCalls++
+		return http.StatusServiceUnavailable
+	case f.signedOut[who]:
+		return http.StatusUnauthorized
+	case f.removed[who]:
+		return http.StatusForbidden
+	}
+	return 0
 }
 
 func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +137,10 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if who != "ada" && who != "bob" && who != "carol" && who != "eve" {
 		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if status := f.refusal(who); status != 0 {
+		w.WriteHeader(status)
 		return
 	}
 	// garam's SDK decodes only an answer declared as JSON.
@@ -125,6 +186,11 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// socketRecheck is how often the suite's server asks of an open
+// WebSocket's caller, so a re-check is seen without waiting out the
+// interval the server ships.
+const socketRecheck = 50 * time.Millisecond
+
 // stack is cowork's server over real Postgres and the fake platform.
 type stack struct {
 	url string
@@ -140,7 +206,7 @@ type stack struct {
 func newStack(t *testing.T) *stack {
 	t.Helper()
 	p := pool(t)
-	fake := &fakePlatform{deny: map[string]bool{}}
+	fake := newFakePlatform()
 	platformSrv := httptest.NewServer(fake)
 	t.Cleanup(platformSrv.Close)
 	// The user-content origin listens before it is signed for, so the
@@ -150,7 +216,7 @@ func newStack(t *testing.T) *stack {
 	t.Cleanup(content.Close)
 	signer, err := usercontent.NewSigner(content.URL, []byte(strings.Repeat("k", 32)))
 	require.NoError(t, err)
-	cfg := cli.Config{PlatformURL: platformSrv.URL, Blobs: blobmemory.New(), UserContent: signer, WebOrigins: []string{"localhost:3100"}}
+	cfg := cli.Config{PlatformURL: platformSrv.URL, Blobs: blobmemory.New(), UserContent: signer, WebOrigins: []string{"localhost:3100"}, SocketRecheck: socketRecheck}
 	h, err := cli.NewHandler(cfg, p)
 	require.NoError(t, err)
 	contentHandler, err := cli.NewUserContentHandler(cfg, p)

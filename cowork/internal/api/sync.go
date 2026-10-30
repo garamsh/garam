@@ -42,9 +42,9 @@ func (w wsConn) Write(ctx context.Context, msg []byte) error {
 // SyncPage upgrades to a WebSocket for one page's content. Everything
 // it can refuse, it refuses before the upgrade, as getPage would:
 // cowork:page-read on the page, which also proves it exists. Whether
-// the connection's edits are kept is cowork:page-write on the page,
-// asked once, at the upgrade; a change of policy reaches an open
-// connection when it next reconnects.
+// the connection's edits are kept is cowork:page-write on the page.
+// Both are asked again while it is open (ADR-0139): a changed answer
+// to the second closes it to reconnect, and the upgrade decides again.
 func (s *Server) SyncPage(w http.ResponseWriter, r *http.Request) {
 	org, id := r.PathValue("org"), r.PathValue("page")
 	c, err := s.caller(r)
@@ -67,7 +67,10 @@ func (s *Server) SyncPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	conn.SetReadLimit(maxMessage)
-	err = s.collab.Serve(r.Context(), collab.Room{Org: org, Page: id, Writable: allowed[0]}, wsConn{conn})
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	go s.recheckSocket(ctx, conn, s.pageRecheck(c, org, id, allowed[0]))
+	err = s.collab.Serve(ctx, collab.Room{Org: org, Page: id, Writable: allowed[0]}, wsConn{conn})
 	closeFor(conn, err)
 }
 
@@ -79,8 +82,14 @@ func closeFor(conn *websocket.Conn, err error) {
 		_ = conn.Close(websocket.StatusNormalClosure, "")
 	case errorx.IsKind(err, errorx.KindInvalidArgument):
 		_ = conn.Close(websocket.StatusProtocolError, "malformed message")
+	case errorx.IsKind(err, errorx.KindUnauthenticated):
+		_ = conn.Close(closeSignedOut, "signed out")
+	case errorx.IsKind(err, errorx.KindPermissionDenied):
+		_ = conn.Close(closeNoAccess, "no longer allowed")
+	case errors.Is(err, errWritableChanged):
+		_ = conn.Close(websocket.StatusTryAgainLater, "write access changed")
 	case errorx.IsKind(err, errorx.KindNotFound):
-		_ = conn.Close(websocket.StatusPolicyViolation, "the page no longer exists")
+		_ = conn.Close(websocket.StatusPolicyViolation, "it no longer exists")
 	case errorx.IsKind(err, errorx.KindResourceExhausted):
 		_ = conn.Close(websocket.StatusTryAgainLater, "too far behind")
 	default:

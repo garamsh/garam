@@ -71,7 +71,7 @@ describe("MessageItem", () => {
 class FakeSocket {
   static last: FakeSocket;
   onopen?: () => void;
-  onclose?: () => void;
+  onclose?: (event: { code: number }) => void;
   onmessage?: (event: { data: string }) => void;
   constructor(public url: string) {
     FakeSocket.last = this;
@@ -87,6 +87,33 @@ class FakeSocket {
 
 describe("LiveMessages", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("sends a visitor the server signed out to sign in", () => {
+    vi.stubGlobal("WebSocket", FakeSocket);
+    const location = {
+      pathname: "/acme/channels/c1",
+      search: "",
+      assign: vi.fn(),
+      reload: vi.fn(),
+    };
+    vi.stubGlobal("location", location);
+    render(
+      <LiveMessages
+        org="acme"
+        channel="c1"
+        initial={[]}
+        syncUrl="ws://cowork"
+        names={names}
+        pages={{}}
+      />,
+    );
+
+    act(() => FakeSocket.last.onclose?.({ code: 4401 }));
+
+    expect(location.assign).toHaveBeenCalledWith(
+      "/auth/sign-in?next=%2Facme%2Fchannels%2Fc1",
+    );
+  });
 
   it("appends what arrives, once, and counts a reply on its thread rather than listing it", () => {
     vi.stubGlobal("WebSocket", FakeSocket);

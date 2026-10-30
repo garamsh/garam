@@ -59,8 +59,9 @@ type Props = {
  * A visitor the proxy sent here carries where they were going as the
  * return path, and signing in lands there. Where that is an invitation,
  * the page names the organization and role it admits to, and the way to
- * register carries the invitation along. Registering is the console's
- * alone, so that link carries no path of another app's.
+ * register carries the invitation along. Invitations and registering
+ * are the console's alone, so a path of another app's reads no
+ * invitation and that link does not carry it.
  */
 export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams;
@@ -76,7 +77,7 @@ export default async function LoginPage({ searchParams }: Props) {
   }
   const [providers, invitation] = await Promise.all([
     listProviders(),
-    readInvitationContext(returnPath),
+    readInvitationContext(app === "console" ? returnPath : null),
   ]);
   const offersGoogle = providers.includes("google");
   return (

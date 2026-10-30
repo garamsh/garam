@@ -530,6 +530,22 @@ this split:
 | `/mcp` | cowork's server, port 8090 | as it stands |
 | everything else | cowork-web, port 3000 | |
 
+The gateway keeps the request's `Host`, which cowork's WebSocket origin
+check compares the browser's `Origin` against, and says in
+`x-forwarded-proto` whether it terminated TLS, which decides whether
+cowork-web's state cookie is `Secure`.
+
+The two processes owe matching configuration:
+
+- `COWORK_SYNC_URL`, on cowork-web, is this host with the prefix:
+  `wss://cowork.garam.sh/api`. The browser opens the sync and live
+  WebSockets under it, and without `/api` they reach the web app.
+- `COWORK_API_URL`, on cowork-web, is the server's internal address,
+  with no prefix, since it does not pass the gateway.
+- `COWORK_WEB_ORIGINS`, on the server, names this host:
+  `cowork.garam.sh`. It lists the only ancestors an HTML artifact may
+  be framed by, so without it no artifact renders in the app.
+
 This chart deploys no cowork. The site's `site.coworkUrl` names this
 host, and its workloads and routes are the deployment's.
 `deploy/local/cowork-gateway.Caddyfile` is the same split on the local

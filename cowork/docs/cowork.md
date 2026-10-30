@@ -106,7 +106,10 @@ agents.
   ([sign-in.md](../../docs/architecture/sign-in.md)). The cookie is
   host-only, and no parent domain is involved. Signing out on any host
   ends it, which cowork-web learns on its next request, and sends the
-  visitor to sign in.
+  visitor to sign in. An open sync or live WebSocket makes no next
+  request: it is checked once, at the upgrade, so it stays open past a
+  sign-out until it closes. #1721 closes that window, and blocks the
+  deployment.
 - `checkPermissions` for messaging: `cowork:channel-read` and
   `cowork:channel-post` on the organization and on a
   `cowork-channel` (ADR-0128).

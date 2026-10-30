@@ -104,7 +104,10 @@ at the gateway.**
 - A person signed in on the site reaches cowork's host with a session
   of its own, and no cookie sits on a parent domain. Decision 5 of
   ADR-0131 applies unchanged, so a sign-out on any host ends
-  cowork-web's session on its next request to the platform.
+  cowork-web's session on its next request to the platform. An open
+  sync or live WebSocket makes no next request: it is checked once, at
+  the upgrade, and stays open past the sign-out until it closes. #1721
+  closes that window, and blocks the deployment.
 - A third app is a new identifier, a new origin in the site's
   configuration and a new line in the rule, in both languages, and in
   the column's check.

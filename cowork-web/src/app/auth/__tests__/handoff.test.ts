@@ -127,6 +127,41 @@ describe("redeeming a handoff", () => {
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
   });
 
+  // `%2Facme` above is this test's control: the same redemption,
+  // landing on the path it was given.
+  it.each([
+    "%2F%2Fevil.example%2Fsteal",
+    "https%3A%2F%2Fevil.example%2Fsteal",
+    "%2F%5Cevil.example%2Fsteal",
+    "%2Facme%2F..%2Fsteal",
+  ])(
+    "lands on cowork's home for a return path the rule drops: %s",
+    async (next) => {
+      redeems([], issued());
+
+      const response = await redeem(
+        request(`/auth/handoff?code=the-code&next=${next}`, STATE),
+      );
+
+      expect(response.status).toBe(303);
+      expect(response.headers.get("location")).toBe("/");
+    },
+  );
+
+  it.each([
+    ["past Latin-1", "%2Facme%2F%ED%95%9C", "/acme/%ED%95%9C"],
+    ["percent-encoded", "%2Facme%2Fa%2520b%3Fq%3D1", "/acme/a%20b?q=1"],
+    ["with a fragment", "%2Facme%23%ED%95%9C", "/acme#%ED%95%9C"],
+  ])("writes a return path %s as a header holds it", async (_, next, want) => {
+    redeems([], issued());
+
+    const response = await redeem(
+      request(`/auth/handoff?code=the-code&next=${next}`, STATE),
+    );
+
+    expect(response.headers.get("location")).toBe(want);
+  });
+
   it("sends a refused redemption to sign in on the site, carrying cowork", async () => {
     redeems([], new Response(null, { status: 401 }));
 

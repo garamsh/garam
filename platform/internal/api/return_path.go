@@ -115,11 +115,13 @@ func safeDestination(stored string) (string, bool) {
 	return stored, true
 }
 
-// hasDotSegment reports whether the path part of p holds a `.` or `..`
-// segment, written plainly or percent-encoded, as a browser's URL
-// parser resolves both (WHATWG URL §4.4).
+// hasDotSegment reports whether p holds a `.` or `..` segment before
+// its query, written plainly or percent-encoded, as a browser's URL
+// parser resolves both (WHATWG URL §4.4). A fragment counts as path:
+// http.Redirect cleans everything before the `?`, so `#/../..` there
+// would walk the Location off the app.
 func hasDotSegment(p string) bool {
-	if i := strings.IndexAny(p, "?#"); i >= 0 {
+	if i := strings.IndexByte(p, '?'); i >= 0 {
 		p = p[:i]
 	}
 	for _, segment := range strings.Split(p, "/") {

@@ -1,12 +1,29 @@
 // @vitest-environment node
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 
-import { proxy } from "@/proxy";
+import { config, proxy } from "@/proxy";
 import { RETURN_PATH_HEADER } from "@garam/platform-sdk-ts/return-path";
 import { SESSION_COOKIE } from "@garam/platform-sdk-ts/session";
 
 const HOST = "http://cowork.garam.localhost:3100";
+
+describe("the routes the proxy runs on", () => {
+  it.each(["/healthz", "/readyz", "/auth/sign-in", "/auth/handoff"])(
+    "leaves %s to a visitor without a session",
+    (url) => {
+      expect(unstable_doesMiddlewareMatch({ config, url })).toBe(false);
+    },
+  );
+
+  it.each(["/acme", "/healthz-co", "/healthz/page", "/readyzen"])(
+    "runs on %s, a path that only begins like a probe or is a workspace's",
+    (url) => {
+      expect(unstable_doesMiddlewareMatch({ config, url })).toBe(true);
+    },
+  );
+});
 
 describe("the proxy", () => {
   it("starts a handoff for a visitor without a session, carrying the address", () => {

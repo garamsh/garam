@@ -171,7 +171,8 @@ presents (ADR-0133).
   `cowork/api/openapi.yaml` on the same terms, as the platform session
   the command holds. cowork is the origin `--cowork-endpoint` names,
   else `COWORK_ENDPOINT`, else `https://cowork.garam.sh`, on the
-  endpoint's terms below, since the session's tokens cross it too.
+  endpoint's terms below, since the session's tokens cross it too. The
+  API is at `<origin>/api` (ADR-0135).
 - **cowork's MCP tools** for what its API does not carry, a page's
   content: `pages read`, `pages create` and `search` call `read_page`,
   `create_page` and `search` at cowork's `/mcp`, and `mcp cowork`

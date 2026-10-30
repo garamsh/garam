@@ -679,7 +679,7 @@ gRPC hop as an `ErrorInfo` status detail
 (`platform/internal/wire/error.go`), so the API answers the engine's
 code unchanged.
 
-**A provider sign-in can land on a console path.**
+**A provider sign-in can land on a path of one of garam's apps.**
 `POST /auth/login/{provider}` starts the same flow as `GET` and takes
 `app` and `next` in its form body (ADR-0135). `app` names the console
 or cowork, the console where it is absent, and any other value is

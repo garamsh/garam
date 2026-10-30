@@ -251,6 +251,32 @@ describe("login page", () => {
     );
   });
 
+  // The test above is the control: the same path, read for the console.
+  it("reads no invitation from a path on cowork, which only spells like one", async () => {
+    const read = vi.fn();
+    server.use(
+      ...signedOutWith([]),
+      http.get(`${API_URL}/invitations/secret-token`, () => {
+        read();
+        return HttpResponse.json(acmeInvitation);
+      }),
+    );
+
+    await renderServerComponent(
+      LoginPage({
+        searchParams: Promise.resolve({
+          app: "cowork",
+          next: "/console/invitations/secret-token",
+        }),
+      }),
+    );
+
+    expect(read).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("heading", { name: "Sign in to garam" }),
+    ).toBeInTheDocument();
+  });
+
   it("says an invitation can no longer be used, and still offers to sign in", async () => {
     server.use(
       ...signedOutWith([]),

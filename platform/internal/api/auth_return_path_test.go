@@ -65,6 +65,10 @@ func TestLoginWithReturnPath_LandsOnTheConsolePathItWasStartedFor(t *testing.T) 
 	assert.Equal(t, next, rec.Header().Get("Location"))
 }
 
+// maxReturnPath is the bound a held destination stays within, the
+// octet_length the oauth_states check holds.
+const maxReturnPath = 2048
+
 // returnPathVectors is testdata/return-path-vectors.json, the table the
 // console's TypeScript rule is tested against too.
 type returnPathVectors struct {
@@ -81,8 +85,8 @@ type returnPathVectors struct {
 // both rules share as `next`, for the app it names, and follows the
 // login to its callback: an accepted console path is where it lands
 // and a dropped one lands on /console, and a cowork path lands on the
-// site's handoff to cowork carrying it, or `/` where it was dropped
-// (ADR-0135). A cross-site form can post any of them, so what it
+// site's handoff to cowork carrying it, or `/` where it was dropped or
+// its handoff would pass the bound (ADR-0135). A cross-site form can post any of them, so what it
 // decides is at most where inside one of the apps the login lands. A
 // path one rule accepts and the other drops fails here or in
 // lib/platform-sdk-ts/src/__tests__/return-path.test.ts; the accepted
@@ -121,6 +125,9 @@ func TestLoginWithReturnPath_HoldsTheSharedVectors(t *testing.T) {
 				if v.Accepted {
 					landed = next
 				}
+				if len(coworkHandoffPath(landed)) > maxReturnPath {
+					landed = "/"
+				}
 				want = coworkHandoffPath(landed)
 			}
 			assert.Equal(t, want, rec.Header().Get("Location"))
@@ -146,6 +153,31 @@ func escapeNonASCII(path string) string {
 // where a provider sign-in for cowork lands (ADR-0135).
 func coworkHandoffPath(path string) string {
 	return "/handoff?" + url.Values{"app": {"cowork"}, "next": {path}}.Encode()
+}
+
+// TestLoginWithReturnPath_DropsACoworkPathItsHandoffWouldOverflow
+// posts a cowork path the rule accepts and whose handoff passes the
+// bound once encoded, and finds the login landing on cowork's home:
+// the row holds no more than the bound. The path one byte shorter,
+// whose handoff is exactly the bound, is the control.
+func TestLoginWithReturnPath_DropsACoworkPathItsHandoffWouldOverflow(t *testing.T) {
+	fits := "/" + strings.Repeat("a", 2020)
+	require.Len(t, coworkHandoffPath(fits), maxReturnPath)
+
+	for name, tc := range map[string]struct{ next, landed string }{
+		"the bound":      {fits, fits},
+		"past the bound": {fits + "a", "/"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := callbackFixture(t)
+			state, _ := startLoginFor(t, f, url.Values{"app": {"cowork"}, "next": {tc.next}})
+
+			rec := f.callback(t, state)
+
+			require.Equal(t, http.StatusFound, rec.Code, rec.Body.String())
+			assert.Equal(t, coworkHandoffPath(tc.landed), rec.Header().Get("Location"))
+		})
+	}
 }
 
 // TestLoginWithReturnPath_RefusesAnAppNotOnTheList posts an app the

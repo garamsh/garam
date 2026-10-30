@@ -31,5 +31,5 @@ export function proxy(request: NextRequest) {
 export const config = {
   // Everything but the handoff's own routes, the probes and static
   // assets, which a visitor without a session has to reach.
-  matcher: ["/((?!auth/|healthz|readyz|_next/|favicon\\.ico).*)"],
+  matcher: ["/((?!auth/|healthz$|readyz$|_next/|favicon\\.ico).*)"],
 };

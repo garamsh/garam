@@ -19,7 +19,7 @@ import type { HandoffApp } from "./handoff";
 export const RETURN_PARAM = "next";
 
 /**
- * The request header the console's `proxy.ts` stamps a request with: the path
+ * The request header an app's `proxy.ts` stamps a request with: the path
  * and query it asked for, so a page or an action that finds the
  * session gone can send the visitor to sign in carrying it. The proxy
  * overwrites whatever a client sent under this name, and every reader
@@ -73,12 +73,14 @@ export function safeReturnPath(
 }
 
 /**
- * Whether the path part of `path` holds a `.` or `..` segment, written
- * plainly or percent-encoded, which a browser's URL parser resolves.
+ * Whether `path` holds a `.` or `..` segment before its query, written
+ * plainly or percent-encoded, which a browser's URL parser resolves. A
+ * fragment counts as path, as `platform/internal/api/return_path.go`
+ * states.
  */
 function hasDotSegment(path: string): boolean {
   return path
-    .split(/[?#]/, 1)[0]
+    .split("?", 1)[0]
     .split("/")
     .some((segment) => {
       const plain = segment.toLowerCase().replaceAll("%2e", ".");

@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     });
     if (response.ok) {
       await keepSessionCookie(response);
-      destination = next;
+      destination = encodedPath(next);
     } else if (response.status !== 400 && response.status !== 401) {
       throw new Error(`platform: redeem answered ${response.status}`);
     }
@@ -64,6 +64,16 @@ export async function GET(request: NextRequest) {
     status: 303,
     headers: { location: destination, "referrer-policy": "no-referrer" },
   });
+}
+
+/**
+ * `path` as a header carries it: a return path may hold characters past
+ * Latin-1, which a `Response` refuses. It stays relative, and what is
+ * already percent-encoded stays as it is.
+ */
+function encodedPath(path: string): string {
+  const url = new URL(path, env.GARAM_SITE_URL);
+  return url.pathname + url.search + url.hash;
 }
 
 /** The site's sign-in, naming this app so it returns here. */

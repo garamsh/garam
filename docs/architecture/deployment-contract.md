@@ -50,23 +50,25 @@ strategy
 every Deployment sets and what an upgrade costs in service under it,
 and the hook phase the migration Job runs in.
 
-The repositories the chart's `image.*.repository` names,
-`garam/garam-server` and `garam/garam-web`, hold releases only: a bare
-`X.Y.Z`, which only a `vX.Y.Z` git tag publishes
-([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)).
-A development build a person made and pushed is in
-`garam-dev/garam-server` or `garam-dev/garam-web`
-([ADR-0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)),
-under a commit-derived or prerelease tag
+Each image has one repository, named `<publishing repository>/<image>`
+([ADR-0134](./adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)):
+`garam/server`, `garam/console` and `garam/site`, which the chart's
+`image.*.repository` names, and `garam/cowork` and `garam/cowork-web`,
+which no chart here deploys. The tag says what a build is. A bare
+`X.Y.Z` is a release, which only a `vX.Y.Z` git tag publishes
+([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
+and a development build a person made and pushed carries a
+commit-derived or prerelease tag
 ([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)),
-so a deployment running one sets the repository as well as the tag.
+so a deployment running one sets the tag alone.
 `tooling/image-build.sh` is authoritative for which development
 references this repository produces, and refuses every other tag
 before it builds; `README.md` §Development images is the procedure.
 The test image is none of these: an operator pushes it for another
 repository's CI to `garam-dev/garam-test`, an ECR repository of its
-own that no release writes to; no deployment runs it, and the chart
-names it nowhere
+own that no release writes to, and it moves to `garam/test` under
+ADR-0134 once garamsh/aurora#711 creates that repository; no deployment
+runs it, and the chart names it nowhere
 ([ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md),
 [ADR-0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)).
 
@@ -699,14 +701,17 @@ that would assert one:
 - [ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)
   — readiness reports what a replica cannot serve without
 - [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
-  — where the two images are published, under what names, and what
-  triggers a release
+  — where the images are published and what triggers a release; the
+  names and the number of images are superseded by ADR-0134
 - [ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
   — a development build is told apart by its tag, which this
   repository refuses to make a bare release version
+- [ADR-0134](./adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
+  — each image has one repository named `<publishing
+  repository>/<image>`, and its tag says what a build is
 - [ADR-0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)
-  — a development build lives under `garam-dev/`, and the release
-  repositories hold releases only
+  — a development build lived under `garam-dev/`; superseded by
+  ADR-0134, and the test image alone is still there
 - [ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
   — the test image is published outside the release repositories,
   and no deployment runs it; its registry, its commit tag and its

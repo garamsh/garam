@@ -92,21 +92,23 @@ already expose, built in parallel rather than gating P3.
   ([api-surface.md](../architecture/api-surface.md) §The surfaces).
   Spans are minted and propagated but not exported: there is nowhere to
   ship them yet.
-- Container image and a minimal deploy path — built. Both images come
-  from `deploy/local/Dockerfile` and `Dockerfile.web`, and the chart at
+- Container image and a minimal deploy path — built. The images come
+  from `deploy/local/Dockerfile`, `Dockerfile.web` and
+  `Dockerfile.cowork`, and the chart at
   `deploy/charts/garam/` is the description of a deployment (ADR-0042),
   checked by `make -C deploy/charts ci` inside `make ci`. What a
   deployment must plan for is
   [deployment-contract.md](../architecture/deployment-contract.md).
   Publishing is built and exercised: `.github/workflows/release.yml`
-  publishes both images on a `vX.Y.Z` tag push under the names and the
-  tag rule ADR-0039 fixed, and `v0.1.0` ran it on 2026-09-01. Both
-  repositories held `0.1.0` when ADR-0039's erratum of 2026-09-02 read
+  publishes the images on a `vX.Y.Z` tag push under the tag rule
+  ADR-0039 fixed, and `v0.1.0` ran it on 2026-09-01. Both repositories
+  it then wrote held `0.1.0` when ADR-0039's erratum of 2026-09-02 read
   them, and the release that tag created records each image's digest
-  beside it. A development build goes into `garam-dev/garam-server` and
-  `garam-dev/garam-web` under a commit-derived or prerelease tag:
-  `make image-build` builds one locally and a person pushes it
-  (ADR-0071, ADR-0097).
+  beside it. Each image now has one repository, `garam/<image>`, and
+  `release.yml` publishes five (ADR-0134); no tag has yet run that
+  version of it. A development build goes into the same repository under
+  a commit-derived or prerelease tag: `make image-build` builds one
+  locally and a person pushes it (ADR-0071, ADR-0134).
 
 ## Collaboration platform (decided, not started)
 

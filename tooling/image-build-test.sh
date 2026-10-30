@@ -1,7 +1,7 @@
 #!/bin/sh
 # Checks which tags tooling/image-build.sh accepts for a development
-# build (ADR-0071), that it names the development namespace and never
-# the release's (ADR-0097), and that a refused one reaches no build.
+# build (ADR-0071), that it names the repository the release publishes
+# to (ADR-0134), and that a refused one reaches no build.
 # Each case runs the script in a scratch repository holding this
 # tree's copy of it and of .github/workflows/release.yml, committed
 # once, with a `docker` on PATH that records its arguments: the tree is
@@ -79,27 +79,26 @@ accepted() {
 }
 
 reg=registry.invalid
-ns=garam-dev
 
-# The check's own names are what they were before a development build
-# existed. A development build takes the release's repository names
-# into `garam-dev/`, the release workflow naming them under `garam/`.
-accepted '. garam-server:ci' --names
-accepted '. garam-web:ci' --names
-accepted ". $reg/$ns/garam-server:$short" --names --registry "$reg"
-accepted ". $reg/$ns/garam-web:$short" --names --registry "$reg"
+# Every image the release publishes, under the repository it publishes
+# to. A development build takes those repositories in the registry it
+# is given, and its tag alone says it is not a release.
+for repository in garam/server garam/console garam/site garam/cowork garam/cowork-web; do
+	accepted ". $repository:ci" --names
+	accepted ". $reg/$repository:$short" --names --registry "$reg"
+done
 
 # A release version against the prerelease it is one suffix from.
 refused 'is a release version' --names --registry "$reg" --tag 1.2.3
 refused 'is a release version' --registry "$reg" --tag 1.2.3
 refused 'is a release version' --registry "$reg" --tag v1.2.3
-accepted ". $reg/$ns/garam-server:1.2.3-rc.1" --names --registry "$reg" --tag 1.2.3-rc.1
-accepted ". $reg/$ns/garam-server:1.2.3-0.dev.x-1" --names --registry "$reg" --tag 1.2.3-0.dev.x-1
+accepted ". $reg/garam/server:1.2.3-rc.1" --names --registry "$reg" --tag 1.2.3-rc.1
+accepted ". $reg/garam/server:1.2.3-0.dev.x-1" --names --registry "$reg" --tag 1.2.3-0.dev.x-1
 
 # A commit prefix names HEAD or is refused.
 refused 'is not a prefix of HEAD' --names --registry "$reg" --tag 0000000
-accepted ". $reg/$ns/garam-server:$head" --names --registry "$reg" --tag "$head"
-accepted ". $reg/$ns/garam-server:$(printf '%s' "$head" | cut -c1-7)" \
+accepted ". $reg/garam/server:$head" --names --registry "$reg" --tag "$head"
+accepted ". $reg/garam/server:$(printf '%s' "$head" | cut -c1-7)" \
 	--names --registry "$reg" --tag "$(printf '%s' "$head" | cut -c1-7)"
 
 # Anything else is refused.
@@ -111,19 +110,22 @@ done
 # A tag needs the registry it is for; a registry is a host alone.
 refused 'names the registry it is for' --names --tag 1.2.3-rc.1
 refused 'is not a host[:port]' --names --registry "$reg/garam"
-accepted ". $reg:5000/$ns/garam-server:1.2.3-rc.1" --names --registry "$reg:5000" --tag 1.2.3-rc.1
+accepted ". $reg:5000/garam/server:1.2.3-rc.1" --names --registry "$reg:5000" --tag 1.2.3-rc.1
 
 # The build itself: labels name HEAD and the tag, and a tree that is
 # not HEAD is refused before docker is called.
 cases=$((cases + 1))
 if ! run --registry "$reg" --tag 1.2.3-rc.1; then
 	fail 'refused a clean development build'
-elif ! grep -Fq -- "build -t $reg/$ns/garam-server:1.2.3-rc.1 " "$log" \
-	|| ! grep -Fq -- "build -t $reg/$ns/garam-web:1.2.3-rc.1 " "$log" \
+elif ! grep -Fq -- "build -t $reg/garam/server:1.2.3-rc.1 -f deploy/local/Dockerfile " "$log" \
+	|| ! grep -Fq -- "build -t $reg/garam/console:1.2.3-rc.1 -f deploy/local/Dockerfile.web --build-arg APP=platform-web " "$log" \
+	|| ! grep -Fq -- "build -t $reg/garam/site:1.2.3-rc.1 -f deploy/local/Dockerfile.web --build-arg APP=site-web " "$log" \
+	|| ! grep -Fq -- "build -t $reg/garam/cowork:1.2.3-rc.1 -f deploy/local/Dockerfile.cowork " "$log" \
+	|| ! grep -Fq -- "build -t $reg/garam/cowork-web:1.2.3-rc.1 -f deploy/local/Dockerfile.web --build-arg APP=cowork-web --build-arg IMAGE_REVISION=$head " "$log" \
 	|| ! grep -Fq -- "--build-arg IMAGE_REVISION=$head --build-arg IMAGE_VERSION=1.2.3-rc.1 " "$log"; then
 	fail "built with other arguments: $(cat "$log")"
-elif grep -Fq -- "$reg/garam/" "$log"; then
-	fail "a development build named the release namespace: $(cat "$log")"
+elif [ "$(grep -c '^build ' "$log")" != 5 ]; then
+	fail "built other than the five images a release publishes: $(cat "$log")"
 fi
 touch "$repo/untracked"
 refused 'differs from HEAD' --registry "$reg" --tag 1.2.3-rc.1
@@ -153,7 +155,7 @@ rm "$scratch/bin/git"
 cases=$((cases + 1))
 if ! run; then
 	fail 'refused the check build'
-elif ! grep -Fq -- 'build -t garam-server:ci -f deploy/local/Dockerfile .' "$log" \
+elif ! grep -Fq -- 'build -t garam/server:ci -f deploy/local/Dockerfile .' "$log" \
 	|| grep -q IMAGE_ "$log"; then
 	fail "check build ran other arguments: $(cat "$log")"
 fi

@@ -4,7 +4,10 @@
 > is `dev/`" are superseded by
 > [ADR-0097](./0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md),
 > under which the test image's repository is
-> `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test`
+> `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test`;
+> [ADR-0134](./0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
+> supersedes that repository with `garam/test` once
+> garamsh/aurora#711 creates it
 > Date: 2026-10-08
 
 Drafted for #1227, which reserved this number. On 2026-10-08 the owner

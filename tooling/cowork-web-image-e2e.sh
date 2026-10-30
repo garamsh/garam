@@ -6,18 +6,18 @@
 # (deploy/local/Dockerfile.web) and holds a state on this host
 # (ADR-0135), and the app's static assets are served, which the
 # standalone output leaves out unless the image copies them in. The
-# subject is the image that file builds with APP=cowork-web, which
+# subject is the image a release publishes to garam/cowork-web, which
 # cowork-web's e2e suite never opens.
 #
 # A visitor with no session asks nothing of cowork or the platform, so
 # every address below is one no request reaches.
 #
-# COWORK_WEB_IMAGE names an image to check instead of building one, so
-# the same checks run against an image pulled from a registry by
-# digest.
+# COWORK_WEB_IMAGE names the image, which `make cowork-web-image-e2e`
+# takes from `make image-build`, so the same checks run against one
+# pulled from a registry by digest.
 set -eu
 
-image=${COWORK_WEB_IMAGE:-}
+image=${COWORK_WEB_IMAGE:?COWORK_WEB_IMAGE names the image to check}
 site=http://site.image-e2e.invalid
 web=
 passed=0
@@ -32,11 +32,6 @@ fail() {
 	if [ -n "$web" ]; then docker logs "$web" >&2 2>&1 || true; fi
 	exit 1
 }
-
-if [ -z "$image" ]; then
-	image=cowork-web:image-e2e
-	docker build -t "$image" --build-arg APP=cowork-web -f deploy/local/Dockerfile.web .
-fi
 
 # The host's kernel picks the port, as platform/tests/image/web.sh
 # does it and for the reason it states (#1436).

@@ -1116,7 +1116,9 @@ ADRs:
   policies through the reference crates behind an AuthZEN-shaped gRPC
   contract; every grant is a readable policy, and the service reads
   membership from an entity store its owners feed; not yet built;
-  supersedes 0002, 0003, 0007, 0008, 0025 and 0038 in part
+  supersedes 0002, 0003, 0007, 0008, 0025 and 0038 in part; tenant
+  isolation's form and the role templates' scopes are superseded by
+  0137
 - [0131](./adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)
   — the session cookie stays host-only to each app; a person signs in
   on `site-web/`, and another app is handed a session of its own by a
@@ -1149,3 +1151,11 @@ ADRs:
   path on the chosen app, under a per-app rule; cowork's server and web
   app share `cowork.garam.sh`, split by path at the gateway; supersedes
   0131 in part, on decision 2's return path
+- [0137](./adr/0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)
+  — tenant isolation is `principal in resource.org.members`, read from
+  a group of each organization's members that no team or project sits
+  in, since a user may belong to several organizations and `in` is
+  transitive; any evaluation error is a deny; a role template's
+  principal scope is `principal in ?principal`, and organization roles
+  and team or project roles are two template sets; supersedes 0130 in
+  part

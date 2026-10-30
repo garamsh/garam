@@ -183,3 +183,29 @@ updates:
       - "/garam-cli"
     schedule:
       interval: "weekly"
+
+  # policy/Cargo.toml's [workspace.dependencies], with the Cargo.lock
+  # beside it.
+  #
+  # Does not cover a dependency only Cargo.lock names, which moves when
+  # what requires it moves, under the default rule that reaches direct
+  # dependencies alone.
+  - package-ecosystem: "cargo"
+    directory: "/policy"
+    schedule:
+      interval: "weekly"
+
+  # The channel policy/rust-toolchain.toml pins. The ecosystem is read
+  # from data/reusables/dependabot/supported-package-managers.md in
+  # github/docs at commit 5ecebc9f4d708c7cfda4d3ba80224815dd6a7f1d, and
+  # the file it reads from rust_toolchain/lib/dependabot/rust_toolchain/
+  # file_fetcher.rb in dependabot/dependabot-core at commit
+  # fdbe8b342118a62ac97da47e824666df11046fec.
+  #
+  # Does not cover what names the same version elsewhere:
+  # docs/convention/stack-rust.md's "Checked against" line. No image
+  # names it yet, so no toolchain pair in tooling/Makefile holds it.
+  - package-ecosystem: "rust-toolchain"
+    directory: "/policy"
+    schedule:
+      interval: "weekly"

@@ -23,6 +23,9 @@ Thumbs.db
 *.out
 /vendor/
 
+# Rust
+/policy/target/
+
 # What `make -C platform mutation` writes: a report of one run, not a record
 /platform/mutation.json
 

@@ -1,6 +1,8 @@
 # ADR 0130: The policy engine is a Rust service deciding Cedar policies behind an AuthZEN-shaped gRPC contract
 
-> Status: accepted; not yet built
+> Status: accepted; not yet built; tenant isolation's form, the role
+> templates' scopes and the GRN examples are superseded by
+> [ADR-0137](./0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)
 > Date: 2026-10-28
 
 Drafted for #1689, which reserves this number. The direction is the

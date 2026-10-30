@@ -30,6 +30,10 @@ cowork/engine
 # cowork's gen builds cowork/engine's bundle into internal/, and its
 # suites drive the client CLI they build from garam-cli.
 cowork cowork/engine deploy/local garam-cli
+# A test of policy's role templates reads the platform's role table
+# until roles leave the platform (ADR-0130). It is a test reading a
+# file: policy/ calls no service.
+policy platform
 # The chart's checks read the environment names the platform, the
 # console and the site declare.
 deploy/charts platform platform-web site-web

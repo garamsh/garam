@@ -3,19 +3,20 @@
 # migrations the image ships, `serve` starts as the image's own
 # account, and `probe` finds /healthz and /readyz answering, the
 # second once the database does. The subject is the image
-# deploy/local/Dockerfile.cowork builds, which cowork's suites never
-# open: they build the binary from this tree.
+# release publishes to garam/cowork, which cowork's suites never open:
+# they build the binary from this tree.
 #
 # The database is the postgres deploy/local/docker-compose.yml runs,
 # read from that file so the two cannot name different servers, and
 # pulled from Google's mirror for the reason deploy/local/Dockerfile
 # states.
 #
-# COWORK_IMAGE names an image to check instead of building one, so the
-# same checks run against an image pulled from a registry by digest.
+# COWORK_IMAGE names the image, which `make cowork-image-e2e` takes from
+# `make image-build`, so the same checks run against one pulled from a
+# registry by digest.
 set -eu
 
-image=${COWORK_IMAGE:-}
+image=${COWORK_IMAGE:?COWORK_IMAGE names the image to check}
 net=cowork-image-e2e-$$
 db=
 server=
@@ -33,11 +34,6 @@ fail() {
 	if [ -n "$server" ]; then docker logs "$server" >&2 2>&1 || true; fi
 	exit 1
 }
-
-if [ -z "$image" ]; then
-	image=cowork:image-e2e
-	docker build -t "$image" -f deploy/local/Dockerfile.cowork .
-fi
 
 postgres=$(awk '$1 == "postgres:" { s = 1 } s && $1 == "image:" { print $2; exit }' deploy/local/docker-compose.yml)
 case $postgres in

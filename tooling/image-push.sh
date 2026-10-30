@@ -7,8 +7,8 @@
 # push is separated from the build.
 #
 # Every reference is read out of the local image store before the first
-# one is pushed, so a run that built one image of a pair pushes neither.
-# The release repositories are IMMUTABLE and half a version cannot be
+# one is pushed, so a run that built only some of them pushes none. The
+# release repositories are IMMUTABLE and half a version cannot be
 # re-pushed, so the repair for a partial release is the next version
 # rather than this one (ADR-0039 §Consequences).
 #

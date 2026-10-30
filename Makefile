@@ -70,48 +70,45 @@ export SEARCH_Q = $(Q)
 search:
 	@tooling/search.sh
 
-# image-build builds the two images a release publishes, each from what
-# .github/workflows/release.yml says it is built from; nothing else
-# builds either (#760, #850). IMAGE_REGISTRY makes it a development
-# build under `garam-dev/` in that registry, tagged IMAGE_TAG or HEAD's
-# first twelve hex digits (ADR-0071, ADR-0097); the script refuses any
+# image-build builds the five images a release publishes, each from
+# what .github/workflows/release.yml says it is built from; nothing else
+# builds one (#760, #850). IMAGE_REGISTRY makes it a development build
+# of the same repositories in that registry, tagged IMAGE_TAG or HEAD's
+# first twelve hex digits (ADR-0071, ADR-0134); the script refuses any
 # other tag and pushes nothing.
 IMAGE_BUILD_ARGS = $(if $(IMAGE_REGISTRY),--registry '$(IMAGE_REGISTRY)') $(if $(IMAGE_TAG),--tag '$(IMAGE_TAG)') $(if $(IMAGE_BUILD_CACHE),--cache '$(IMAGE_BUILD_CACHE)')
 
 image-build:
 	tooling/image-build.sh $(IMAGE_BUILD_ARGS)
 
-# What image-build tagged the console's image, asked of the script that
-# tags it, so a tag rule in release.yml cannot leave this naming an
-# image an earlier run built (#870). Both images build from the root, so
-# the console's is told apart by its repository, garam-web. Empty when
-# the release builds none into it, which the target reports.
-WEB_IMAGE = $(shell tooling/image-build.sh --names $(IMAGE_BUILD_ARGS) | awk '$$2 ~ /(^|\/)garam-web:/ { print $$2 }')
+# What image-build tagged one repository's image, asked of the script
+# that tags it, so a tag rule in release.yml cannot leave this naming an
+# image an earlier run built (#870). Every image builds from the root,
+# so each is told apart by its repository. A release that builds none
+# into the repository stops the recipe reading this.
+image_ref = $(or $(shell tooling/image-build.sh --names $(IMAGE_BUILD_ARGS) | awk '$$2 ~ /\/$(1):/ { print $$2 }'),$(error .github/workflows/release.yml builds no image into garam/$(1)))
 
-# web-image-e2e checks the built image rather than the app: that the
-# standalone server starts, answers both probes and reaches the baked
-# `/api/*` target. Its subject is the web image image-build produced,
-# carrying the GARAM_API_URL a release bakes. GARAM_WEB_IMAGE names one
-# to check instead, which is how an image pulled from ECR by digest is
-# verified, and then nothing is built here.
+# Each check's subject is the image image-build produced, the one a
+# release publishes, rather than the app. GARAM_WEB_IMAGE, COWORK_IMAGE
+# or COWORK_WEB_IMAGE names one to check instead, which is how an image
+# pulled from ECR by digest is verified, and then nothing is built here.
+# Named in one `make` call, as images.yml names them, they share one
+# image-build.
+#
+# web-image-e2e and site-image-e2e: the standalone server starts,
+# answers both probes and reaches the baked `/api/*` target.
 web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
-	@image='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))'; \
-		test -n "$$image" || { echo 'web-image-e2e: nothing names the image to check — .github/workflows/release.yml builds none into garam-web'; exit 1; }; \
-		GARAM_WEB_IMAGE="$$image" platform/tests/image/web.sh
+	GARAM_WEB_IMAGE='$(or $(GARAM_WEB_IMAGE),$(call image_ref,console))' platform/tests/image/web.sh
 
-# site-image-e2e is the same check of the site's image (ADR-0131),
-# built here from deploy/local/Dockerfile.web: no release publishes
-# one yet, so there is no image-build output to take.
-site-image-e2e:
-	APP=site-web platform/tests/image/web.sh
+site-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
+	APP=site-web GARAM_WEB_IMAGE='$(or $(GARAM_WEB_IMAGE),$(call image_ref,site))' platform/tests/image/web.sh
 
-# cowork-image-e2e and cowork-web-image-e2e check cowork's server image,
-# built from deploy/local/Dockerfile.cowork, and cowork-web's, built
-# from deploy/local/Dockerfile.web; no release publishes either yet.
-# COWORK_IMAGE and COWORK_WEB_IMAGE name an image to check instead, and
-# then nothing is built here.
-cowork-image-e2e cowork-web-image-e2e:
-	tooling/$@.sh
+# cowork-image-e2e and cowork-web-image-e2e: what each script states.
+cowork-image-e2e: $(if $(COWORK_IMAGE),,image-build)
+	COWORK_IMAGE='$(or $(COWORK_IMAGE),$(call image_ref,cowork))' tooling/$@.sh
+
+cowork-web-image-e2e: $(if $(COWORK_WEB_IMAGE),,image-build)
+	COWORK_WEB_IMAGE='$(or $(COWORK_WEB_IMAGE),$(call image_ref,cowork-web))' tooling/$@.sh
 
 # test-image builds the test image another repository's CI copies
 # garam, testprincipal and the migrations out of (ADR-0092), tagged

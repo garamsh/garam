@@ -4,7 +4,10 @@ mod fixture;
 
 use cedar_policy::PolicyId;
 use decision::{Outcome, Reason, Role, RoleScope};
-use fixture::{ACME, BOT, GLOBEX, KIM, LEE, MIA, Named, RIVAL, World, link, policy};
+use fixture::{
+    ACME, BOT, ENG, GLOBEX, KIM, LEE, MIA, Named, OUTSIDER, RIVAL, STRANGER, WEB, World, link,
+    policy,
+};
 
 const EVERYTHING: &str = "permit (principal, action, resource);";
 
@@ -24,6 +27,49 @@ fn a_role_linked_across_organizations_is_refused() {
     assert_eq!(refused.reasons, decided_by_isolation());
 
     let control = world.ask(&policies, MIA, "agent:read", RIVAL);
+    assert_eq!(control.outcome, Outcome::Allow);
+}
+
+#[test]
+fn a_user_only_in_a_team_is_refused_though_the_team_holds_the_role() {
+    let world = World::new();
+    let held_by_team = link(Role::Member, RoleScope::Organization, ENG, ACME);
+    let policies = world.compose(&[held_by_team], &[]);
+
+    let refused = world.ask(&policies, OUTSIDER, "agent:read", BOT);
+    assert_eq!(refused.outcome, Outcome::Deny);
+    assert_eq!(refused.reasons, decided_by_isolation());
+
+    let control = world.ask(&policies, KIM, "agent:read", BOT);
+    assert_eq!(control.outcome, Outcome::Allow);
+}
+
+#[test]
+fn a_user_only_in_a_team_is_refused_though_a_role_names_it() {
+    let world = World::new();
+    let direct = link(Role::Member, RoleScope::Organization, OUTSIDER, ACME);
+    let member = link(Role::Member, RoleScope::Organization, LEE, ACME);
+    let policies = world.compose(&[direct, member], &[]);
+
+    let refused = world.ask(&policies, OUTSIDER, "agent:read", BOT);
+    assert_eq!(refused.outcome, Outcome::Deny);
+    assert_eq!(refused.reasons, decided_by_isolation());
+
+    let control = world.ask(&policies, LEE, "agent:read", BOT);
+    assert_eq!(control.outcome, Outcome::Allow);
+}
+
+#[test]
+fn a_user_only_in_a_project_is_refused_though_the_project_holds_the_role() {
+    let world = World::new();
+    let held_by_project = link(Role::Member, RoleScope::TeamOrProject, WEB, WEB);
+    let policies = world.compose(&[held_by_project], &[]);
+
+    let refused = world.ask(&policies, STRANGER, "project:read", WEB);
+    assert_eq!(refused.outcome, Outcome::Deny);
+    assert_eq!(refused.reasons, decided_by_isolation());
+
+    let control = world.ask(&policies, KIM, "project:read", WEB);
     assert_eq!(control.outcome, Outcome::Allow);
 }
 

@@ -1,19 +1,25 @@
 // The vocabulary a decision can name: entity types, actions and
 // attributes (ADR-0130). An entity's identifier is its GRN.
 
-// Every resource names its organization, which tenant isolation reads
-// (ADR-0137). An organization names itself. A User names none: it may
-// belong to several, each a parent, and no action is asked of a User.
+// Every resource names its organization, and an organization names
+// itself and its members, which is what tenant isolation reads
+// (ADR-0137). A User names no organization: it may be a member of
+// several, and no action is asked of a User.
 //
-// Parents are the fixed, shallow hierarchy: organization, then team and
-// project, then channel. No team sits in a team.
-entity Org { org: Org };
+// OrgMembers holds an organization's members and sits outside the
+// containment below, so `in` reaches it from a member and from nothing
+// else: a principal in a team of an organization is not in it.
+entity OrgMembers;
+
+// Containment is the fixed, shallow hierarchy: organization, then team
+// and project, then channel. No team sits in a team.
+entity Org { org: Org, members: OrgMembers };
 entity Team, Project in [Org] { org: Org };
 entity Channel in [Org, Project] { org: Org };
 entity Page, Task, Artifact in [Org] { org: Org };
 entity Operator, Policy in [Org] { org: Org };
-entity Agent in [Org, Team, Project] { org: Org };
-entity User in [Org, Team, Project];
+entity Agent in [OrgMembers, Org, Team, Project] { org: Org };
+entity User in [OrgMembers, Team, Project];
 
 // A role is an action group, granted through a template in
 // system-policies/. These three hold what Role.Actions grants in

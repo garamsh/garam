@@ -3,7 +3,7 @@
 mod fixture;
 
 use decision::{Engine, Error, Role, RoleScope};
-use fixture::{ACME, ENG, LEE, WEB, World, evaluation, link};
+use fixture::{ACME, ACME_MEMBERS, ENG, LEE, WEB, World, evaluation, link, organization};
 use serde_json::{Value, json};
 
 fn engine() -> Engine {
@@ -44,11 +44,38 @@ fn a_context_attribute_the_schema_does_not_name_is_refused() {
 
 fn team(id: &str, attrs: Value, parents: Value) -> Value {
     json!([
-        {"uid": {"type": "Org", "id": ACME.1},
-         "attrs": {"org": {"__entity": {"type": "Org", "id": ACME.1}}},
-         "parents": []},
+        organization(ACME, ACME_MEMBERS),
         {"uid": {"type": "Team", "id": id}, "attrs": attrs, "parents": parents},
     ])
+}
+
+#[test]
+fn an_organization_without_its_members_is_refused() {
+    let engine = engine();
+    let bare = json!({"org": {"__entity": {"type": "Org", "id": ACME.1}}});
+    let entity = json!([{"uid": {"type": "Org", "id": ACME.1}, "attrs": bare, "parents": []}]);
+
+    let refused = engine.entities(entity);
+    assert!(matches!(refused, Err(Error::Entities(_))), "{refused:?}");
+
+    let control = engine.entities(json!([organization(ACME, ACME_MEMBERS)]));
+    assert!(control.is_ok(), "{control:?}");
+}
+
+#[test]
+fn a_team_inside_an_organizations_members_is_refused() {
+    let engine = engine();
+    let org = json!({"org": {"__entity": {"type": "Org", "id": ACME.1}}});
+
+    let refused = engine.entities(team(
+        ENG.1,
+        org.clone(),
+        json!([{"type": "OrgMembers", "id": ACME.1}]),
+    ));
+    assert!(matches!(refused, Err(Error::Entities(_))), "{refused:?}");
+
+    let control = engine.entities(team(ENG.1, org, json!([{"type": "Org", "id": ACME.1}])));
+    assert!(control.is_ok(), "{control:?}");
 }
 
 #[test]

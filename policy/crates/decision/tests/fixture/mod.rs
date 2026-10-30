@@ -13,6 +13,8 @@ pub type Named = (&'static str, &'static str);
 
 pub const ACME: Named = ("Org", "grn:root:default:org:acme");
 pub const GLOBEX: Named = ("Org", "grn:root:default:org:globex");
+pub const ACME_MEMBERS: Named = ("OrgMembers", ACME.1);
+pub const GLOBEX_MEMBERS: Named = ("OrgMembers", GLOBEX.1);
 pub const ENG: Named = ("Team", "grn:acme:default:group:eng");
 pub const WEB: Named = ("Project", "grn:acme:default:project:web");
 pub const API: Named = ("Project", "grn:acme:default:project:api");
@@ -22,6 +24,10 @@ pub const KIM: Named = ("User", "grn:acme:default:user:kim");
 pub const LEE: Named = ("User", "grn:acme:default:user:lee");
 /// Belongs to globex alone.
 pub const MIA: Named = ("User", "grn:globex:default:user:mia");
+/// In acme's eng team and in no organization.
+pub const OUTSIDER: Named = ("User", "grn:acme:default:user:outsider");
+/// In acme's web project and in no organization.
+pub const STRANGER: Named = ("User", "grn:acme:default:user:stranger");
 /// Acme's agent, in the eng team.
 pub const BOT: Named = ("Agent", "grn:acme:default:agent:bot");
 pub const PEER: Named = ("Agent", "grn:acme:default:agent:peer");
@@ -100,6 +106,17 @@ fn org(named: Named) -> Value {
     json!({"org": {"__entity": parent(named)}})
 }
 
+pub fn organization(named: Named, members: Named) -> Value {
+    json!({
+        "uid": parent(named),
+        "attrs": {
+            "org": {"__entity": parent(named)},
+            "members": {"__entity": parent(members)},
+        },
+        "parents": [],
+    })
+}
+
 fn entity(named: Named, attrs: Value, parents: &[Named]) -> Value {
     let parents: Vec<Value> = parents.iter().copied().map(parent).collect();
     json!({"uid": parent(named), "attrs": attrs, "parents": parents})
@@ -107,16 +124,20 @@ fn entity(named: Named, attrs: Value, parents: &[Named]) -> Value {
 
 pub fn directory() -> Value {
     json!([
-        entity(ACME, org(ACME), &[]),
-        entity(GLOBEX, org(GLOBEX), &[]),
+        entity(ACME_MEMBERS, json!({}), &[]),
+        entity(GLOBEX_MEMBERS, json!({}), &[]),
+        organization(ACME, ACME_MEMBERS),
+        organization(GLOBEX, GLOBEX_MEMBERS),
         entity(ENG, org(ACME), &[ACME]),
         entity(WEB, org(ACME), &[ACME]),
         entity(API, org(ACME), &[ACME]),
-        entity(KIM, json!({}), &[ACME, GLOBEX, ENG, WEB]),
-        entity(LEE, json!({}), &[ACME]),
-        entity(MIA, json!({}), &[GLOBEX]),
-        entity(BOT, org(ACME), &[ACME, ENG]),
-        entity(PEER, org(ACME), &[ACME]),
-        entity(RIVAL, org(GLOBEX), &[GLOBEX]),
+        entity(KIM, json!({}), &[ACME_MEMBERS, GLOBEX_MEMBERS, ENG, WEB]),
+        entity(LEE, json!({}), &[ACME_MEMBERS]),
+        entity(MIA, json!({}), &[GLOBEX_MEMBERS]),
+        entity(OUTSIDER, json!({}), &[ENG]),
+        entity(STRANGER, json!({}), &[WEB]),
+        entity(BOT, org(ACME), &[ACME_MEMBERS, ACME, ENG]),
+        entity(PEER, org(ACME), &[ACME_MEMBERS, ACME]),
+        entity(RIVAL, org(GLOBEX), &[GLOBEX_MEMBERS, GLOBEX]),
     ])
 }

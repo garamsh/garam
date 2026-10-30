@@ -306,14 +306,15 @@ on hosted runners.
   version as the only repair (ADR-0039 §Consequences). What reads the
   guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names
   two files and not three (#899).
-- **Both images a release publishes are built on a pull request.**
-  `images.yml` builds each from what `release.yml` says it is built from
-  and then checks the web one, which is the image a release used to be
-  able to fail on irreversibly: the server image was pushed before the
-  web image was built, and immutability makes the repair the next
-  version (ADR-0039 §Consequences). `release.yml` builds both and pushes
-  neither until both are built (#945), so what a build failure there now
-  costs is the run. Until #850 neither image was built by any check.
+- **Every image a release publishes is built on a pull request.**
+  `images.yml` builds the five from what `release.yml` says each is
+  built from, once each, and then checks the console's, the site's,
+  cowork's and cowork-web's. The web one is the image a release used to
+  be able to fail on irreversibly: the server image was pushed before
+  the web image was built, and immutability makes the repair the next
+  version (ADR-0039 §Consequences). `release.yml` builds all five and
+  pushes none until all are built (#945), so what a build failure there
+  now costs is the run. Until #850 no image was built by any check.
 - **A pull request's image builds take their layers from the GitHub
   Actions cache and their bases from `mirror.gcr.io`.**
   The `suites` jobs' `make -C <module> stack-up` and `images`'
@@ -339,7 +340,7 @@ on hosted runners.
   hosted runners share. Its `429 toomanyrequests: Data limit exceeded`
   failed both attempts of v0.4.0's release run 39120748198 (#1532).
 - **No run here reaches a deployment, so `main` is not what a caller
-  meets.** `release.yml` publishes two images on a `vX.Y.Z` tag and no
+  meets.** `release.yml` publishes five images on a `vX.Y.Z` tag and no
   other workflow pushes one, so a merge to `main` publishes nothing;
   an operator pushes the test image, from a checkout, to an ECR
   repository no deployment pulls (ADR-0092, ADR-0093);
@@ -352,15 +353,15 @@ on hosted runners.
   a surface is the half this repository holds, and #1020 moved it from
   the tag onto the artifact: `release.yml` passes the commit
   `git rev-parse HEAD` names in the run that built the image, and the
-  version of its `vX.Y.Z` tag (ADR-0039), to both Dockerfiles, which
+  version of its `vX.Y.Z` tag (ADR-0039), to each Dockerfile, which
   record the pair as `org.opencontainers.image.revision` and
   `…version` — so `docker image inspect -f '{{json .Config.Labels}}'`
   names the commit whose `platform/api/openapi.yaml` and
   `platform/api/machine.yaml` a caller of that deployment meets. **A
   label is what the build claimed and not a property of the bytes.**
   Nothing derives it from the layers, so this replaces an unenforced
-  step with a readable one rather than removing it: both repositories
-  are IMMUTABLE, which makes a tag's digest a fact the registry
+  step with a readable one rather than removing it: a release tag is
+  immutable, which makes its digest a fact the registry
   enforces, and the single link left resting on trust is the git tag
   still naming the commit it named. What the registry held when #1033
   merged, 2026-09-04T16:44Z, was published before the change — `0.1.0`
@@ -369,8 +370,8 @@ on hosted runners.
   release after that reading. A development build, which
   `make image-build` produces when given `IMAGE_REGISTRY`, carries the
   same two labels, the version being its tag (ADR-0071), and reaches
-  `garam-dev/garam-server` or `garam-dev/garam-web` only by a person's
-  push (ADR-0097); without it the target tags `:ci` and passes neither
+  its repository only by a person's push (ADR-0134); without it the
+  target tags `:ci` and passes neither
   label a value. A reference this repository did not publish is still
   one only its builder can vouch for, which after the label is a claim
   about where it came from and no longer about what code is in it. An
@@ -585,8 +586,9 @@ ADRs:
 - [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
   — a version tag publishes both images to the account's registry;
   superseded in part by 0071, which lets a person push a development
-  build, and by 0092 for non-release artifacts, whose test-image
-  registry and publishing 0093 supersedes in turn
+  build, by 0092 for non-release artifacts, whose test-image registry
+  and publishing 0093 supersedes in turn, and by 0134 on the repository
+  names and on two images being all a release publishes
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
   certificates rotate without a restart; its client certificates, the
@@ -709,7 +711,8 @@ ADRs:
   release alone, a commit-derived or prerelease tag for a development
   build `make image-build` produces locally and pushes nowhere.
   Supersedes ADR-0039's "the only trigger that publishes" in part; its
-  one repository per image is superseded by 0095
+  one repository per image was superseded by 0095 and is restored by
+  0134
 - [0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)
   — the console presents a group as a team with a page of its own:
   Teams and People replace Groups and Members in the console, a team
@@ -871,7 +874,7 @@ ADRs:
   image 90 days after its push and bounds pins by a count of 50, not
   by age; supersedes ADR-0092's registry, its commit tag, its
   publishing from `dev` and its retention; its repository URI and its
-  namespace are superseded by 0097
+  namespace are superseded by 0097 and then 0134
 - [0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — a structural rule yields to a stack file only where the stack's
   framework imposes the case, taken from the conventions template at
@@ -897,7 +900,7 @@ ADRs:
   after 0095; `garam/` still holds releases only, and
   `make image-build`, `make test-image-push` and `make test-image-pin`
   name `garam-dev/<image>`. Supersedes 0095, and ADR-0093's
-  repository URI and namespace
+  repository URI and namespace; superseded by 0134
 - [0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)
   — garam syncs the conventions template to
   `b29f0f104c68b42bfb363351a8e0e3cdc9b52829`: the
@@ -1110,7 +1113,8 @@ ADRs:
   one-hour machine-listener token that posts only to that
   organization's agents, decided by `message:send`; the deployment
   holds the key and revokes a principal, which stops that
-  organization's cowork; not yet built
+  organization's cowork; not yet built; how an open WebSocket stops is
+  superseded by 0139
 - [0130](./adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
   — the policy engine becomes `policy/`, a Rust service deciding Cedar
   policies through the reference crates behind an AuthZEN-shaped gRPC
@@ -1145,6 +1149,15 @@ ADRs:
   as `garam mcp cowork`; one package holds the session; `cowork`
   keeps `serve`, `migrate` and `probe`; supersedes 0127 and 0132 in
   part
+- [0134](./adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
+  — an image lives at `<publishing repository>/<image>`, one repository
+  holding every build of it, and its tag says what a build is: a bare
+  `X.Y.Z` for a release, a commit prefix for a development build, a
+  `pinned-` prefix for the test image's moving pin; a release publishes
+  `garam/server`, `garam/console`, `garam/site`, `garam/cowork` and
+  `garam/cowork-web`, and the test image moves to `garam/test` once
+  garamsh/aurora#711 creates it; supersedes 0097, 0093's repository URI
+  and 0039's names and image count
 - [0135](./adr/0135-the-site-hands-a-sign-in-to-a-fixed-list-of-apps-and-cowork-shares-one-host-split-by-path.md)
   — the site hands a sign-in to a fixed list of apps, the console and
   cowork, named by identifier and never by origin; a return path is a
@@ -1165,3 +1178,8 @@ ADRs:
   offline against a JWKS file of one or two RS256 keys; an owner writes
   entities through `ApplyEntityChanges`, whose per-entity sequence makes
   a replayed or reordered delivery a no-op (#1689)
+- [0139](./adr/0139-an-open-cowork-websocket-is-asked-again-within-a-stated-bound.md)
+  — an open cowork WebSocket asks the platform again every 30 seconds
+  and closes within 40 of a refusal, with a code the client reads; a
+  platform that cannot be reached closes nothing; supersedes 0129 in
+  part, on §7's last sentence

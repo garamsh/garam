@@ -7,7 +7,9 @@
 > [ADR-0092](./0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md),
 > whose registry, commit tag, publishing from `dev` and retention are
 > in turn superseded by
-> [ADR-0093](./0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)
+> [ADR-0093](./0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md);
+> its repository names and its two images are superseded by
+> [ADR-0134](./0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
 > Date: 2026-08-22
 
 ## Contents

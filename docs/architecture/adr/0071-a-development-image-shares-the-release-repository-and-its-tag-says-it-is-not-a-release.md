@@ -3,7 +3,9 @@
 > Status: accepted — §Decision's "Each image has one repository, and
 > it holds every build of that image", and the release's repository
 > paths it gives a development build, are superseded by
-> [ADR-0095](./0095-development-images-live-under-dev-and-garam-holds-releases-only.md)
+> [ADR-0095](./0095-development-images-live-under-dev-and-garam-holds-releases-only.md),
+> and [ADR-0134](./0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
+> restores the first under the repository names it gives
 > Date: 2026-09-27
 
 ## Contents

@@ -178,14 +178,14 @@ URL, so `GARAM_DB_PORT` moves the suite with the server.
 
 ### The image a cluster runs
 
-`make web-image-e2e` builds the web image and checks it rather than the
-app: that the standalone server starts, that `/healthz` and `/readyz`
+`make web-image-e2e` builds the release's images and checks the
+console's rather than the app: that the standalone server starts, that `/healthz` and `/readyz`
 answer, and that `/api/*` reaches the URL baked into the build. The
 Playwright suite above runs the built app from the source tree, outside
 any container, so nothing else here exercises the image.
 
 ```sh
-make web-image-e2e                        # builds the image, then checks it
+make web-image-e2e                        # builds the images, then checks it
 GARAM_WEB_IMAGE=<ref> make web-image-e2e  # checks that image instead
 ```
 
@@ -195,14 +195,13 @@ stays outside `make -C platform-web ci`.
 
 ## Development images
 
-A development image goes into `garam-dev/garam-server` or
-`garam-dev/garam-web`
-([ADR-0097](./docs/architecture/adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)),
-and its tag is what says it is not a release
-([ADR-0071](./docs/architecture/adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)).
-`garam/garam-server` and `garam/garam-web` hold releases only: a bare
-`X.Y.Z` belongs to `.github/workflows/release.yml`, which publishes
-one on a `vX.Y.Z` git tag and on nothing else. Build one
+A development image goes into the repository its release does
+([ADR-0134](./docs/architecture/adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)):
+`garam/server`, `garam/console`, `garam/site`, `garam/cowork` or
+`garam/cowork-web`. Its tag is what says it is not a release
+([ADR-0071](./docs/architecture/adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)):
+a bare `X.Y.Z` belongs to `.github/workflows/release.yml`, which
+publishes one on a `vX.Y.Z` git tag and on nothing else. Build one
 from a clean checkout of the commit you mean to name:
 
 ```sh
@@ -211,9 +210,9 @@ make image-build IMAGE_REGISTRY=<registry> IMAGE_TAG=0.4.0-rc.1  # a prerelease 
 ```
 
 `<registry>` is the host in the chart's `image.*.repository`
-(`deploy/charts/garam/values.yaml`); the path under it is
-`garam-dev/<image>`, and the contexts, the Dockerfiles and the build
-arguments are the ones the release reads. Each image is labelled with
+(`deploy/charts/garam/values.yaml`); the path under it and the
+contexts, the Dockerfiles and the build arguments are the ones the
+release reads. Each image is labelled with
 HEAD and the tag.
 `tooling/image-build.sh` refuses, before building anything, a bare
 release version, a tag of any other form, a commit prefix that is not
@@ -221,21 +220,18 @@ HEAD's, and a working tree that differs from HEAD; its last line names
 the commit built.
 
 Nothing here pushes the result. Pushing takes a credential of your
-own for the `garam-dev/` repositories, which this repository neither
-holds nor grants, and the release's push role admits `v*` tags only.
-Those repositories are `garamsh/aurora`'s to declare, and its
-`infrastructure/aws/main.tf` declares them at
-`4df93d567fddb9afe9e5120449053222dee2b7c7`.
-`garamsh/infra`'s `ba7352930033f0eb1632ddb4340bb8fd2ba8b9c3`
-(garamsh/infra#309) declared them before aurora absorbed it.
-`GARAM_WEB_IMAGE=<registry>/garam-dev/garam-web:<tag> make web-image-e2e`
-checks the web image you built before you push it.
-A deployment running it sets `image.*.repository` to the `garam-dev/`
-repository as well as the tag.
+own for those repositories, which this repository neither holds nor
+grants, and the release's push role admits `v*` tags only. Those
+repositories are `garamsh/aurora`'s to declare (its ADR 0033, merged in
+garamsh/aurora#710).
+`GARAM_WEB_IMAGE=<registry>/garam/console:<tag> make web-image-e2e`
+checks the console image you built before you push it.
+A deployment running it sets the tag alone.
 
-Without `IMAGE_REGISTRY`, `make image-build` builds both images as
-`garam-server:ci` and `garam-web:ci`, which is what
-`.github/workflows/images.yml` runs through `make web-image-e2e`.
+Without `IMAGE_REGISTRY`, `make image-build` builds all five as
+`garam/<image>:ci`, which is what `.github/workflows/images.yml` runs
+through `make web-image-e2e site-image-e2e cowork-image-e2e
+cowork-web-image-e2e`.
 
 ## Test image
 

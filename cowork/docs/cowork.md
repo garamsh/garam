@@ -106,10 +106,25 @@ agents.
   ([sign-in.md](../../docs/architecture/sign-in.md)). The cookie is
   host-only, and no parent domain is involved. Signing out on any host
   ends it, which cowork-web learns on its next request, and sends the
-  visitor to sign in. An open sync or live WebSocket makes no next
-  request: it is checked once, at the upgrade, so it stays open past a
-  sign-out until it closes. #1721 closes that window, and blocks the
-  deployment.
+  visitor to sign in.
+- **An open WebSocket** makes no next request, so its caller is asked
+  again every 30 seconds
+  ([ADR-0139](../../docs/architecture/adr/0139-an-open-cowork-websocket-is-asked-again-within-a-stated-bound.md)).
+  - **The bound.** A sync or live socket closes within 40 seconds of
+    the platform refusing its caller: the interval and one request's
+    timeout. The re-check is one `checkPermissions` per socket, the
+    same caller and the same credential.
+  - **What it costs the platform.** Four Postgres reads per re-check,
+    with two engine checks on a page and one on a channel, so 10,000
+    open sockets ask 333 requests a second.
+  - **The close.** `4401` for a session the platform refuses, `4403`
+    for a member removed or a read denied, each the status its upgrade
+    would now answer. y-websocket does not reconnect after either.
+    cowork-web sends `4401` to sign in, and reloads the page on `4403`.
+  - **A platform that cannot be reached** closes nothing: as for a 503,
+    cowork decides nothing alone, so the connection stands as last
+    decided, the failure is logged and the next re-check asks again.
+    The bound runs again once the platform answers.
 - `checkPermissions` for messaging: `cowork:channel-read` and
   `cowork:channel-post` on the organization and on a
   `cowork-channel` (ADR-0128).
@@ -130,11 +145,12 @@ agents.
   any WebSocket. A browser may open it only from cowork's own host or
   a host `COWORK_WEB_ORIGINS` names, because the session cookie rides
   along.
-- **Writes** are `cowork:page-write` on the page, asked once at the
-  upgrade. A connection without it reads live and is answered
-  y-websocket's permission-denied message for any edit, which is
-  neither kept nor relayed. A policy change reaches an open connection
-  when it reconnects.
+- **Writes** are `cowork:page-write` on the page, asked at the upgrade
+  and at each re-check (§What it asks of the platform). A connection
+  without it reads live and is answered y-websocket's permission-denied
+  message for any edit, which is neither kept nor relayed. An answer
+  that changes closes the connection with `1013`; the client
+  reconnects, and the upgrade decides again.
 - **What the server does with the protocol.** It sends its state
   vector on connect, answers a client's state vector with what the
   client lacks, and keeps and relays every update it accepts. An
@@ -169,7 +185,8 @@ agents.
   read.
 - **Live.** `GET /orgs/{org}/channels/{channel}/live` carries each
   message posted there as one text frame, the API's `Message`. Reading
-  is decided at the upgrade, as for a page's sync.
+  is decided at the upgrade and at each re-check, as for a page's
+  sync, the participant list with it.
 
 ## Delivery to agents
 
@@ -382,6 +399,8 @@ builds from `garam-cli/` for the client commands.
   through goja, in a pure-Go binary (ADR-0127 §Context).
 - The platform decides permissions so that people, agents and AI
   services share one model (ADR-0127, ADR-0002).
+- Open sockets are asked again on a fixed interval, because the
+  platform tells cowork nothing when a session ends (ADR-0139).
 - Ports and adapters because that is the repository's shape already,
   and the storage swap the owner asked for is one adapter
   (`stack-go.md` §Service layout, ADR-0069).

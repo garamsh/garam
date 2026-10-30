@@ -53,6 +53,9 @@ type Config struct {
 	// UserContent signs the addresses HTML artifacts are viewed at;
 	// nil views none.
 	UserContent *usercontent.Signer
+	// SocketRecheck is how often an open WebSocket's caller is asked
+	// again; zero is api.SocketRecheck.
+	SocketRecheck time.Duration
 }
 
 // services are cowork's services as one Config wires them, which the
@@ -99,7 +102,11 @@ func NewHandler(cfg Config, pool *pgxpool.Pool) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return api.NewServer(s.pages, s.collab, s.channels, s.tasks, s.artifacts, s.platform, cfg.WebOrigins).Handler(pool.Ping), nil
+	recheck := cfg.SocketRecheck
+	if recheck == 0 {
+		recheck = api.SocketRecheck
+	}
+	return api.NewServer(s.pages, s.collab, s.channels, s.tasks, s.artifacts, s.platform, cfg.WebOrigins, recheck).Handler(pool.Ping), nil
 }
 
 // NewUserContentHandler assembles the user-content origin over pool:

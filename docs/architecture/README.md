@@ -1113,7 +1113,8 @@ ADRs:
   one-hour machine-listener token that posts only to that
   organization's agents, decided by `message:send`; the deployment
   holds the key and revokes a principal, which stops that
-  organization's cowork; not yet built
+  organization's cowork; not yet built; how an open WebSocket stops is
+  superseded by 0139
 - [0130](./adr/0130-the-policy-engine-is-a-rust-service-deciding-cedar-policies-behind-an-authzen-shaped-grpc-contract.md)
   — the policy engine becomes `policy/`, a Rust service deciding Cedar
   policies through the reference crates behind an AuthZEN-shaped gRPC
@@ -1171,3 +1172,8 @@ ADRs:
   principal scope is `principal in ?principal`, and organization roles
   and team or project roles are two template sets; supersedes 0130 in
   part
+- [0139](./adr/0139-an-open-cowork-websocket-is-asked-again-within-a-stated-bound.md)
+  — an open cowork WebSocket asks the platform again every 30 seconds
+  and closes within 40 of a refusal, with a code the client reads; a
+  platform that cannot be reached closes nothing; supersedes 0129 in
+  part, on §7's last sentence

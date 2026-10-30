@@ -9,6 +9,7 @@ import * as Y from "yjs";
 
 import { ArtifactEmbed } from "@/features/artifacts/components/artifact-embed";
 import { BlockToolbar } from "@/features/editor/components/block-toolbar";
+import { leaveOnRefusal } from "@/lib/socket-close";
 import { EmbedContext, type Embed } from "@/plugins/embed";
 import { registry } from "@/plugins/manifest";
 
@@ -49,9 +50,13 @@ export function PageEditor({ org, page, syncUrl, user }: Props) {
       `${encodeURIComponent(page)}/sync`,
       doc,
     );
-    provider.on("status", ({ status }: { status: Status }) =>
-      setStatus(status),
-    );
+    provider.on("status", ({ status }: { status: Status }) => {
+      setStatus(status);
+      // A connection's write access is its own, decided at each
+      // upgrade, so a refusal does not outlive the one it came on.
+      if (status === "connected") setReadOnly(false);
+    });
+    provider.on("closed", ({ code }: { code: number }) => leaveOnRefusal(code));
     // The server answers an edit it refuses with y-websocket's
     // permission-denied message, which the provider hands here.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

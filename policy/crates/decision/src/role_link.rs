@@ -61,8 +61,17 @@ impl RoleLink {
     }
 
     /// Refuses a link its templates would misread: an organization
-    /// template on a team would reach the team's member agents.
+    /// template on a team would reach the team's member agents, and an
+    /// organization as principal would grant through containment what
+    /// only `OrgMembers` may state (ADR-0137).
     pub(crate) fn check_scope(&self) -> Result<(), Error> {
+        let principal = self.principal.type_name().to_string();
+        if !matches!(principal.as_str(), "User" | "Agent" | "Team" | "Project") {
+            return Err(Error::RoleLinkPrincipal {
+                link: self.id.to_string(),
+                principal,
+            });
+        }
         let resource = self.resource.type_name().to_string();
         let (scope, fits) = match self.scope {
             RoleScope::Organization => ("organization", resource == "Org"),

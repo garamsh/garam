@@ -1159,3 +1159,9 @@ ADRs:
   principal scope is `principal in ?principal`, and organization roles
   and team or project roles are two template sets; supersedes 0130 in
   part
+- [0138](./adr/0138-a-caller-of-the-policy-service-presents-a-short-lived-signed-token-and-owners-write-entities-through-a-sequenced-rpc.md)
+  — a caller of `policy/` presents a JWT signed by the platform, with
+  the audience `policy` and at most five minutes to live, verified
+  offline against a JWKS file of one or two RS256 keys; an owner writes
+  entities through `ApplyEntityChanges`, whose per-entity sequence makes
+  a replayed or reordered delivery a no-op (#1689)

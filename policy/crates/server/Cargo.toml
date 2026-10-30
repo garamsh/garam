@@ -1,0 +1,39 @@
+[package]
+name = "server"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "policy"
+path = "src/main.rs"
+
+[dependencies]
+decision = { path = "../decision" }
+entity = { path = "../entity" }
+grant = { path = "../grant" }
+jsonwebtoken.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[build-dependencies]
+protox.workspace = true
+tonic-prost-build.workspace = true
+
+[dev-dependencies]
+cedar-policy.workspace = true
+rsa.workspace = true
+
+[lints]
+workspace = true

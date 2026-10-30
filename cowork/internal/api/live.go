@@ -36,7 +36,8 @@ func (l *listener) Deliver(msg []byte) {
 
 // ChannelLive upgrades to a WebSocket that carries each message posted
 // in the channel, one text frame each. The upgrade is refused as
-// getChannel would refuse it; reading is decided there, once.
+// getChannel would refuse it, and getChannel is asked again while it
+// is open (ADR-0139).
 func (s *Server) ChannelLive(w http.ResponseWriter, r *http.Request) {
 	org, id := r.PathValue("org"), r.PathValue("channel")
 	c, err := s.caller(r)
@@ -58,6 +59,10 @@ func (s *Server) ChannelLive(w http.ResponseWriter, r *http.Request) {
 	// The client sends nothing; CloseRead answers its pings and ends
 	// ctx when it leaves.
 	ctx := conn.CloseRead(r.Context())
+	go s.recheckSocket(ctx, conn, func(ctx context.Context) error {
+		_, err := s.channels.Get(ctx, c, org, id)
+		return err
+	})
 	for {
 		select {
 		case <-ctx.Done():

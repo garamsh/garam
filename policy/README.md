@@ -20,10 +20,11 @@ runs it yet, and nothing calls it (#1689).
 - `crates/entity/` — the containment and membership decisions read, and
   the sequenced write owners reach it by.
 - `crates/access-report/` — the policies naming a subject or a resource.
-- `crates/server/` — the binary, `policy`: serves the contract,
-  authenticates callers and joins the adapters to the ports. It reads
-  `POLICY_ADDR`, `POLICY_DATABASE_URL`, `POLICY_TOKEN_ISSUER` and
-  `POLICY_JWKS_FILE`.
+- `crates/server/` — the binary, `policy`. `policy serve` serves the
+  contract, authenticates callers and joins the adapters to the ports,
+  reading `POLICY_ADDR`, `POLICY_DATABASE_URL`, `POLICY_TOKEN_ISSUER`
+  and `POLICY_JWKS_FILE`. `policy migrate` applies the migrations and
+  exits, reading `POLICY_DATABASE_URL`.
 
 `make -C policy ci` is the fast gate, and `make -C policy stack-up
 suites` runs the store tests against Postgres.

@@ -74,3 +74,29 @@ fn a_type_the_schema_does_not_name_is_refused() {
     let control = change(uid("OrgMembers", ACME), None, vec![]);
     assert!(control.is_ok(), "{control:?}");
 }
+
+#[test]
+fn an_organization_carries_itself_and_its_own_members() {
+    let engine = Engine::load().unwrap();
+    let org = uid("Org", ACME);
+    let members = uid("OrgMembers", ACME);
+    let globex = "grn:root:default:org:globex";
+    let upsert = |org_attr: &EntityUid, members_attr: &EntityUid| {
+        EntityChange::upsert(
+            &engine,
+            org.clone(),
+            1,
+            Some(org_attr.clone()),
+            Some(members_attr.clone()),
+            vec![],
+        )
+    };
+
+    let refused = upsert(&uid("Org", globex), &members);
+    assert!(matches!(refused, Err(Error::OrgNotItself)), "{refused:?}");
+    let refused = upsert(&org, &uid("OrgMembers", globex));
+    assert!(matches!(refused, Err(Error::OrgNotItself)), "{refused:?}");
+
+    let control = upsert(&org, &members);
+    assert!(control.is_ok(), "{control:?}");
+}

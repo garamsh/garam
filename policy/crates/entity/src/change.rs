@@ -37,6 +37,9 @@ impl EntityChange {
         members: Option<EntityUid>,
         parents: Vec<EntityUid>,
     ) -> Result<Self, Error> {
+        if uid.type_name().to_string() == "Org" && !carries_itself(&uid, &org, &members) {
+            return Err(Error::OrgNotItself);
+        }
         let attrs: Map<String, Value> = [("org", &org), ("members", &members)]
             .into_iter()
             .filter_map(|(name, value)| {
@@ -69,6 +72,16 @@ impl EntityChange {
             operation: Parsed::Delete,
         }
     }
+}
+
+/// `resource.org.members` is what tenant isolation reads, so an `Org`
+/// naming another's members would lend that organization's members
+/// this one.
+fn carries_itself(uid: &EntityUid, org: &Option<EntityUid>, members: &Option<EntityUid>) -> bool {
+    org.as_ref() == Some(uid)
+        && members.as_ref().is_some_and(|members| {
+            members.type_name().to_string() == "OrgMembers" && members.id() == uid.id()
+        })
 }
 
 fn uid_json(uid: &EntityUid) -> Value {

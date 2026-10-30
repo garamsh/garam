@@ -2,7 +2,7 @@ use decision::{Cause, OrgGrn, OrgPolicies, PolicySource};
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
-use crate::body::{Body, StoredPolicy};
+use crate::body::{Body, Stored, StoredPolicy};
 use crate::error::Error;
 
 /// Whether a policy decides anything.
@@ -52,8 +52,10 @@ impl PolicyStore {
         Self { pool }
     }
 
-    /// Stores a policy as a draft holding version 1.
+    /// Stores a policy as a draft holding version 1. Its GRN is under
+    /// its organization, so no organization squats another's.
     pub async fn create(&self, policy: NewPolicy<'_>) -> Result<(), Error> {
+        owned(policy.org, policy.grn)?;
         let mut transaction = self.pool.begin().await.map_err(Error::Store)?;
         let inserted = sqlx::query(
             "INSERT INTO policies (grn, org_grn, name, status, default_version)
@@ -84,10 +86,12 @@ impl PolicyStore {
     /// the new version's number.
     pub async fn append_version(
         &self,
+        org: &OrgGrn,
         grn: &str,
         body: &Body,
         created_by: &str,
     ) -> Result<i32, Error> {
+        owned(org, grn)?;
         let mut transaction = self.pool.begin().await.map_err(Error::Store)?;
         // The row lock orders two appends to one policy.
         sqlx::query("SELECT 1 FROM policies WHERE grn = $1 FOR UPDATE")
@@ -109,7 +113,8 @@ impl PolicyStore {
     }
 
     /// Moves the default to any stored version, older or newer.
-    pub async fn roll_back(&self, grn: &str, version: i32) -> Result<(), Error> {
+    pub async fn roll_back(&self, org: &OrgGrn, grn: &str, version: i32) -> Result<(), Error> {
+        owned(org, grn)?;
         let moved = sqlx::query(
             "UPDATE policies SET default_version = $2, updated_at = now()
              WHERE grn = $1
@@ -131,7 +136,8 @@ impl PolicyStore {
     }
 
     /// Makes a policy decide, and leaves its default where it is.
-    pub async fn activate(&self, grn: &str) -> Result<(), Error> {
+    pub async fn activate(&self, org: &OrgGrn, grn: &str) -> Result<(), Error> {
+        owned(org, grn)?;
         let updated =
             sqlx::query("UPDATE policies SET status = 'active', updated_at = now() WHERE grn = $1")
                 .bind(grn)
@@ -145,7 +151,8 @@ impl PolicyStore {
     }
 
     /// Retires a policy: it goes with its versions (ADR-0117).
-    pub async fn delete(&self, grn: &str) -> Result<(), Error> {
+    pub async fn delete(&self, org: &OrgGrn, grn: &str) -> Result<(), Error> {
+        owned(org, grn)?;
         let deleted = sqlx::query("DELETE FROM policies WHERE grn = $1")
             .bind(grn)
             .execute(&self.pool)
@@ -158,7 +165,8 @@ impl PolicyStore {
     }
 
     /// Every stored version, oldest first.
-    pub async fn versions(&self, grn: &str) -> Result<Vec<Version>, Error> {
+    pub async fn versions(&self, org: &OrgGrn, grn: &str) -> Result<Vec<Version>, Error> {
+        owned(org, grn)?;
         let rows = sqlx::query(
             "SELECT version, body, created_by FROM policy_versions
              WHERE policy_grn = $1 ORDER BY version",
@@ -169,10 +177,10 @@ impl PolicyStore {
         .map_err(Error::Store)?;
         rows.into_iter()
             .map(|row| {
-                let body: Json<Body> = row.try_get("body").map_err(Error::Store)?;
+                let body: Json<Stored> = row.try_get("body").map_err(Error::Store)?;
                 Ok(Version {
                     version: row.try_get("version").map_err(Error::Store)?,
-                    body: body.0,
+                    body: Body(body.0),
                     created_by: row.try_get("created_by").map_err(Error::Store)?,
                 })
             })
@@ -196,8 +204,8 @@ impl PolicyStore {
         let mut policies = OrgPolicies::default();
         for row in rows {
             let grn: String = row.try_get("grn").map_err(Error::Store)?;
-            let body: Json<Body> = row.try_get("body").map_err(Error::Store)?;
-            match body.0.into_policy(&grn)? {
+            let body: Json<Stored> = row.try_get("body").map_err(Error::Store)?;
+            match Body(body.0).into_policy(&grn)? {
                 StoredPolicy::Link(link) => policies.links.push(link),
                 StoredPolicy::Guardrail(guardrail) => policies.guardrails.push(guardrail),
             }
@@ -210,6 +218,21 @@ impl PolicySource for PolicyStore {
     async fn active(&self, org: &OrgGrn) -> Result<OrgPolicies, Cause> {
         self.active_policies(org).await.map_err(Cause::from)
     }
+}
+
+/// Refuses a GRN that is not `grn:<org>:<project>:policy:<id>` under
+/// this organization, which also keeps a policy's id from the system
+/// tier's: those hold no segments.
+fn owned(org: &OrgGrn, grn: &str) -> Result<(), Error> {
+    let segments: Vec<&str> = grn.split(':').collect();
+    let shaped = matches!(
+        segments.as_slice(),
+        ["grn", _, project, "policy", id] if !project.is_empty() && !id.is_empty()
+    );
+    if shaped && org.owns_grn(grn) {
+        return Ok(());
+    }
+    Err(Error::ForeignPolicy(grn.to_owned()))
 }
 
 async fn insert_version(
@@ -225,7 +248,7 @@ async fn insert_version(
     )
     .bind(grn)
     .bind(version)
-    .bind(Json(body))
+    .bind(Json(&body.0))
     .bind(created_by)
     .execute(&mut **transaction)
     .await

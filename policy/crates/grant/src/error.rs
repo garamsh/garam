@@ -7,6 +7,15 @@ pub enum Error {
     /// An organization only narrows the system tier (ADR-0130 §4).
     #[error("a guardrail is a forbid, and this one permits")]
     GuardrailPermits,
+    /// The guardrail is past what parsing it on a task's stack bears.
+    #[error("the guardrail is too long or nested too deeply")]
+    GuardrailTooDeep,
+    /// The policy names an entity of another organization.
+    #[error("{0} is not this organization's")]
+    ForeignEntity(String),
+    /// The GRN is not a policy of this organization.
+    #[error("{0} is not a policy of this organization")]
+    ForeignPolicy(String),
     /// The policy does not fit the schema or the template sets.
     #[error(transparent)]
     Refused(decision::Error),

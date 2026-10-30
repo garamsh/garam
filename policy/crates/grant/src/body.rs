@@ -1,20 +1,29 @@
 use std::str::FromStr;
 
 use cedar_policy::{Effect, EntityId, EntityTypeName, EntityUid, Policy, PolicyId};
-use decision::{Engine, Role, RoleLink, RoleScope};
+use decision::{Engine, OrgGrn, Role, RoleLink, RoleScope};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 
+/// The longest guardrail. Cedar recurses over `+`, `.` and method
+/// chains, which hold no bracket: 4,375 terms overflow 1 MiB unoptimised
+/// and this admits 2,048, the stack being what a request runs on.
+const MAX_GUARDRAIL_BYTES: usize = 4 * 1024;
+/// The deepest brackets and `if`s in a guardrail. 18 brackets overflow
+/// the same 1 MiB and 186 `if`s do, and one level is the `when` block.
+const MAX_GUARDRAIL_NESTING: usize = 12;
+
 /// What one version of a policy says. Only [`Body::role_link`] and
-/// [`Body::guardrail`] make one, so the store is given nothing the
+/// [`Body::guardrail`] make one, and it neither serializes nor
+/// deserializes outside this crate, so the store is given nothing the
 /// schema has not admitted.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Body(Stored);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Body(pub(crate) Stored);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-enum Stored {
+pub(crate) enum Stored {
     RoleLink {
         role: StoredRole,
         scope: StoredScope,
@@ -28,7 +37,7 @@ enum Stored {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum StoredRole {
+pub(crate) enum StoredRole {
     Owner,
     Admin,
     Member,
@@ -36,28 +45,35 @@ enum StoredRole {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum StoredScope {
+pub(crate) enum StoredScope {
     Organization,
     TeamOrProject,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct StoredUid {
+pub(crate) struct StoredUid {
     r#type: String,
     id: String,
 }
 
 impl Body {
-    /// A role assignment, refused where its principal holds no role,
-    /// where its resource is outside its template set, or where the
-    /// schema does not admit it.
+    /// A role assignment of `org`, refused where it names another
+    /// organization's entity, where its principal holds no role, where
+    /// its resource is outside its template set, or where the schema
+    /// does not admit it.
     pub fn role_link(
         engine: &Engine,
+        org: &OrgGrn,
         role: Role,
         scope: RoleScope,
         principal: EntityUid,
         resource: EntityUid,
     ) -> Result<Self, Error> {
+        for entity in [&principal, &resource] {
+            if !org.owns(entity) {
+                return Err(Error::ForeignEntity(entity.to_string()));
+            }
+        }
         let link = RoleLink {
             id: PolicyId::new("candidate"),
             role,
@@ -83,10 +99,15 @@ impl Body {
         }))
     }
 
-    /// A guardrail, refused unless it is one `forbid` the schema
-    /// admits.
-    pub fn guardrail(engine: &Engine, source: &str) -> Result<Self, Error> {
+    /// A guardrail of `org`, refused unless it is one `forbid` the
+    /// schema admits, naming no other organization's entity.
+    pub fn guardrail(engine: &Engine, org: &OrgGrn, source: &str) -> Result<Self, Error> {
         let policy = parse_guardrail(PolicyId::new("candidate"), source)?;
+        for entity in policy.entity_literals() {
+            if entity.type_name().to_string() != "Action" && !org.owns(&entity) {
+                return Err(Error::ForeignEntity(entity.to_string()));
+            }
+        }
         engine.validate(&[], &[policy]).map_err(refused)?;
         Ok(Self(Stored::Guardrail {
             source: source.to_owned(),
@@ -137,13 +158,34 @@ pub(crate) enum StoredPolicy {
     Guardrail(Policy),
 }
 
+/// Parses a guardrail on the write path and on every read of one.
 fn parse_guardrail(id: PolicyId, source: &str) -> Result<Policy, Error> {
+    if source.len() > MAX_GUARDRAIL_BYTES || nesting(source) > MAX_GUARDRAIL_NESTING {
+        return Err(Error::GuardrailTooDeep);
+    }
     let policy =
         Policy::parse(Some(id), source).map_err(|error| Error::GuardrailSyntax(error.into()))?;
     match policy.effect() {
         Effect::Forbid => Ok(policy),
         Effect::Permit => Err(Error::GuardrailPermits),
     }
+}
+
+/// The deepest nesting in the text, counting a bracket inside a string
+/// too: refusing an odd literal costs less than a second lexer. An `if`
+/// has no closing bracket, so each one counts for the rest of the text.
+fn nesting(source: &str) -> usize {
+    let (mut depth, mut deepest, mut ifs) = (0_usize, 0_usize, 0_usize);
+    for (index, byte) in source.bytes().enumerate() {
+        match byte {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => depth = depth.saturating_sub(1),
+            b'i' if source.as_bytes()[index..].starts_with(b"if") => ifs += 1,
+            _ => {}
+        }
+        deepest = deepest.max(depth + ifs);
+    }
+    deepest
 }
 
 fn refused(error: decision::Error) -> Error {

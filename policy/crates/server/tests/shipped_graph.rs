@@ -14,7 +14,7 @@ use entity::{EntityChange, EntityStore};
 use grant::{Body, NewPolicy, PolicyStore};
 use server::proto::policy_service_client::PolicyServiceClient;
 use server::proto::{Action, EvaluateRequest, Evaluation, EvaluationsRequest, Resource, Subject};
-use server::{Verifier, serve};
+use server::{Verifier, connect, migrate, serve};
 use sqlx::PgPool;
 use sqlx::migrate::Migrator;
 use tokio::net::TcpListener;
@@ -26,7 +26,10 @@ type Named = (&'static str, &'static str);
 const ACME: &str = "grn:root:default:org:acme";
 const ORG: Named = ("Org", ACME);
 const MEMBERS: Named = ("OrgMembers", ACME);
+const ENG: Named = ("Team", "grn:acme:default:group:eng");
 const LEE: Named = ("User", "grn:acme:default:user:lee");
+/// A member, in eng, which holds a role on the organization.
+const DUO: Named = ("User", "grn:acme:default:user:duo");
 const MIA: Named = ("User", "grn:globex:default:user:mia");
 const BOT: Named = ("Agent", "grn:acme:default:agent:bot");
 const PEER: Named = ("Agent", "grn:acme:default:agent:peer");
@@ -66,6 +69,8 @@ async fn seed(pool: &PgPool) {
         upsert(&engine, ORG, Some(ORG), Some(MEMBERS), &[]),
         upsert(&engine, LEE, None, None, &[MEMBERS]),
         upsert(&engine, MIA, None, None, &[]),
+        upsert(&engine, ENG, Some(ORG), None, &[ORG]),
+        upsert(&engine, DUO, None, None, &[MEMBERS, ENG]),
         upsert(&engine, BOT, Some(ORG), None, &[MEMBERS, ORG]),
     ];
     EntityStore::new(pool.clone(), engine.clone())
@@ -76,25 +81,28 @@ async fn seed(pool: &PgPool) {
     let org = OrgGrn::new(ACME);
     let grn = "grn:acme:default:policy:lee-member";
     let store = PolicyStore::new(pool.clone());
-    let body = Body::role_link(
-        &engine,
-        Role::Member,
-        RoleScope::Organization,
-        uid(LEE),
-        uid(ORG),
-    )
-    .unwrap();
-    store
-        .create(NewPolicy {
+    let held_by = |principal: Named| {
+        Body::role_link(
+            &engine,
+            &org,
+            Role::Member,
+            RoleScope::Organization,
+            uid(principal),
+            uid(ORG),
+        )
+        .unwrap()
+    };
+    for (grn, principal) in [(grn, LEE), ("grn:acme:default:policy:eng-member", ENG)] {
+        let policy = NewPolicy {
             grn,
             org: &org,
-            name: "lee",
-            body,
+            name: "seeded",
+            body: held_by(principal),
             created_by: "test",
-        })
-        .await
-        .unwrap();
-    store.activate(grn).await.unwrap();
+        };
+        store.create(policy).await.unwrap();
+        store.activate(&org, grn).await.unwrap();
+    }
 }
 
 async fn client(pool: PgPool) -> PolicyServiceClient<Channel> {
@@ -136,6 +144,17 @@ fn resource(named: Named) -> Option<Resource> {
 
 fn action(name: &str) -> Option<Action> {
     Some(Action { name: name.into() })
+}
+
+fn context_field() -> prost_types::Struct {
+    let mut fields = prost_types::Struct::default();
+    fields.fields.insert(
+        "org".into(),
+        prost_types::Value {
+            kind: Some(prost_types::value::Kind::StringValue("x".into())),
+        },
+    );
+    fields
 }
 
 fn question(who: Named, name: &str, what: Named) -> EvaluateRequest {
@@ -190,6 +209,194 @@ async fn a_resource_outside_the_store_is_denied_with_its_error_as_a_reason(pool:
 
 #[sqlx::test(migrator = "MIGRATIONS")]
 #[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn deleting_a_team_or_org_members_ends_what_it_held(pool: PgPool) {
+    seed(&pool).await;
+    let store = EntityStore::new(pool.clone(), Engine::load().unwrap());
+    let mut client = client(pool).await;
+    let ask = || authenticated(question(DUO, "agent:read", BOT));
+    let held = client.evaluate(ask()).await.unwrap().into_inner();
+    assert!(held.decision, "{held:?}");
+
+    store
+        .apply(&[EntityChange::delete(uid(ENG), 2)])
+        .await
+        .unwrap();
+    let after_team = client.evaluate(ask()).await.unwrap().into_inner();
+    assert!(!after_team.decision, "{after_team:?}");
+
+    let lees = || authenticated(question(LEE, "agent:read", BOT));
+    let control = client.evaluate(lees()).await.unwrap().into_inner();
+    assert!(control.decision, "{control:?}");
+
+    store
+        .apply(&[EntityChange::delete(uid(MEMBERS), 2)])
+        .await
+        .unwrap();
+    let after_members = client.evaluate(lees()).await.unwrap().into_inner();
+    assert!(!after_members.decision, "{after_members:?}");
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn evaluations_with_no_entries_answer_the_question_the_defaults_state(pool: PgPool) {
+    seed(&pool).await;
+    let mut client = client(pool).await;
+    let empty = |who: Named| EvaluationsRequest {
+        subject: subject(who),
+        action: action("agent:read"),
+        resource: resource(BOT),
+        context: None,
+        read: 0,
+        evaluations: vec![],
+    };
+
+    for (who, decision) in [(LEE, true), (MIA, false)] {
+        let answers = client
+            .evaluations(authenticated(empty(who)))
+            .await
+            .unwrap()
+            .into_inner()
+            .evaluations;
+        assert_eq!(answers.len(), 1);
+        assert_eq!(answers[0].decision, decision, "{answers:?}");
+    }
+
+    let no_subject = EvaluationsRequest {
+        subject: None,
+        ..empty(LEE)
+    };
+    let answers = client
+        .evaluations(authenticated(no_subject))
+        .await
+        .unwrap()
+        .into_inner()
+        .evaluations;
+    assert_eq!(answers.len(), 1);
+    assert!(!answers[0].decision, "{answers:?}");
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_bad_entry_is_denied_where_it_stands_and_the_rest_are_answered(pool: PgPool) {
+    seed(&pool).await;
+    let mut client = client(pool).await;
+    let entry = |who: Named| Evaluation {
+        subject: subject(who),
+        action: None,
+        resource: None,
+        context: None,
+    };
+
+    let answers = client
+        .evaluations(authenticated(EvaluationsRequest {
+            subject: None,
+            action: action("agent:read"),
+            resource: resource(BOT),
+            context: None,
+            read: 0,
+            evaluations: vec![
+                entry(LEE),
+                entry(("Nope", "x")),
+                entry(("User", "a\0b")),
+                entry(LEE),
+            ],
+        }))
+        .await
+        .unwrap()
+        .into_inner()
+        .evaluations;
+
+    let decisions: Vec<bool> = answers.iter().map(|a| a.decision).collect();
+    assert_eq!(decisions, [true, false, false, true]);
+    let reasons = answers[1].context.as_ref().unwrap();
+    assert!(!reasons.reasons[0].error.is_empty(), "{reasons:?}");
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_batch_past_the_bound_is_refused(pool: PgPool) {
+    seed(&pool).await;
+    let mut client = client(pool).await;
+    let batch = |entries: usize| EvaluationsRequest {
+        subject: subject(LEE),
+        action: action("agent:read"),
+        resource: resource(BOT),
+        context: None,
+        read: 0,
+        evaluations: vec![
+            Evaluation {
+                subject: None,
+                action: None,
+                resource: None,
+                context: None,
+            };
+            entries
+        ],
+    };
+
+    let refused = client.evaluations(authenticated(batch(1001))).await;
+    assert_eq!(refused.unwrap_err().code(), Code::InvalidArgument);
+
+    let control = client.evaluations(authenticated(batch(1000))).await;
+    assert_eq!(control.unwrap().into_inner().evaluations.len(), 1000);
+}
+
+#[sqlx::test(migrations = false)]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn migrate_applies_the_schema_and_serving_does_not(pool: PgPool) {
+    let tables = |pool: PgPool| async move {
+        let count: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'policies'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        count
+    };
+    let options = pool.connect_options();
+    let url = format!(
+        "postgres://{}:garam@{}:{}/{}",
+        options.get_username(),
+        options.get_host(),
+        options.get_port(),
+        options.get_database().unwrap()
+    );
+
+    connect(&url).await.unwrap();
+    let verifier = Verifier::from_jwks(&jwks(&[signer()]), ISSUER).unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    serve(pool.clone(), verifier, listener, std::future::ready(()))
+        .await
+        .unwrap();
+    assert_eq!(tables(pool.clone()).await, 0);
+
+    migrate(&pool).await.unwrap();
+    assert_eq!(tables(pool.clone()).await, 1);
+    migrate(&pool).await.unwrap();
+}
+
+#[sqlx::test(migrations = false)]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn migrate_refuses_a_dirty_database_and_leaves_it_dirty(pool: PgPool) {
+    migrate(&pool).await.unwrap();
+    sqlx::query("UPDATE _sqlx_migrations SET success = false WHERE version = 2")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let refused = migrate(&pool).await;
+
+    assert!(refused.is_err(), "{refused:?}");
+    let dirty: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations WHERE success = false")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(dirty, 1);
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
 async fn evaluations_answer_in_order_and_take_the_requests_defaults(pool: PgPool) {
     seed(&pool).await;
     let mut client = client(pool).await;
@@ -224,23 +431,25 @@ async fn a_caller_supplies_no_grounds_and_names_only_the_schema(pool: PgPool) {
     let mut client = client(pool).await;
 
     let mut with_properties = question(LEE, "agent:read", BOT);
-    let mut grounds = prost_types::Struct::default();
-    grounds.fields.insert(
-        "org".into(),
-        prost_types::Value {
-            kind: Some(prost_types::value::Kind::StringValue("x".into())),
-        },
-    );
     if let Some(resource) = with_properties.resource.as_mut() {
-        resource.properties = Some(grounds);
+        resource.properties = Some(context_field());
     }
     let refused = client.evaluate(authenticated(with_properties)).await;
+    assert_eq!(refused.unwrap_err().code(), Code::InvalidArgument);
+
+    let mut with_context = question(LEE, "agent:read", BOT);
+    with_context.context = Some(context_field());
+    let refused = client.evaluate(authenticated(with_context)).await;
     assert_eq!(refused.unwrap_err().code(), Code::InvalidArgument);
 
     let unnamed = client
         .evaluate(authenticated(question(LEE, "no:such", BOT)))
         .await;
     assert_eq!(unnamed.unwrap_err().code(), Code::InvalidArgument);
+
+    let nul = question(("User", "a\0b"), "agent:read", BOT);
+    let refused = client.evaluate(authenticated(nul)).await;
+    assert_eq!(refused.unwrap_err().code(), Code::InvalidArgument);
 
     let control = client
         .evaluate(authenticated(question(LEE, "agent:read", BOT)))

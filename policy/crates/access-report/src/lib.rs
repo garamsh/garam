@@ -1,13 +1,15 @@
-//! Lists the active policies naming a subject with its teams, or a
-//! resource with its ancestors. It is a lookup over grants, not a
-//! decision (ADR-0130 §9).
+//! Lists the active policies whose scope reaches a subject with its
+//! teams, or a resource with its ancestors, in one organization. It is
+//! a lookup over grants, not a decision (ADR-0130 §9): a guardrail's
+//! condition is not evaluated, so one is listed wherever its scope
+//! reaches.
 
 use std::collections::BTreeSet;
 
 use cedar_policy::{
-    Entities, EntityUid, Policy, PolicyId, PrincipalConstraint, ResourceConstraint,
+    Entities, EntityTypeName, EntityUid, Policy, PolicyId, PrincipalConstraint, ResourceConstraint,
 };
-use decision::{Cause, EntitySource, OrgGrn, OrgPolicies, PolicySource, RoleLink};
+use decision::{Cause, EntitySource, OrgGrn, OrgPolicies, PolicySource, RoleLink, RoleScope};
 
 /// Why a report could not be read.
 #[derive(Debug, thiserror::Error)]
@@ -25,9 +27,9 @@ pub enum Error {
 pub struct Entry {
     /// The policy.
     pub policy: PolicyId,
-    /// What it names of the subject or resource asked about. Empty for
-    /// a guardrail that reaches everything on that side and names
-    /// nothing asked about.
+    /// What it names of the subject or resource asked about and what
+    /// holds it. Empty for a guardrail whose scope reaches what was
+    /// asked and names none of it.
     pub named: Vec<EntityUid>,
 }
 
@@ -66,21 +68,39 @@ async fn report<P: PolicySource, E: EntitySource>(
     side: Side,
 ) -> Result<Vec<Entry>, Error> {
     let slice = entities.slice(uid, uid).await.map_err(Error::EntityRead)?;
-    let asked = with_ancestors(uid, &slice.entities);
+    let asked = Asked {
+        uid,
+        held_by: with_ancestors(uid, &slice.entities, org),
+    };
     let org_policies = policies.active(org).await.map_err(Error::PolicyRead)?;
     Ok(entries(&org_policies, &asked, side))
 }
 
-fn with_ancestors(uid: &EntityUid, entities: &Entities) -> BTreeSet<EntityUid> {
-    let mut asked: BTreeSet<EntityUid> = entities
-        .ancestors(uid)
-        .map(|ancestors| ancestors.cloned().collect())
-        .unwrap_or_default();
-    asked.insert(uid.clone());
-    asked
+/// What a report is asked about, and what holds it in this
+/// organization.
+struct Asked<'a> {
+    uid: &'a EntityUid,
+    held_by: BTreeSet<EntityUid>,
 }
 
-fn entries(policies: &OrgPolicies, asked: &BTreeSet<EntityUid>, side: Side) -> Vec<Entry> {
+impl Asked<'_> {
+    fn is_of_type(&self, entity_type: &EntityTypeName) -> bool {
+        self.uid.type_name() == entity_type
+    }
+}
+
+/// `uid` and its ancestors in `org`: a principal's teams elsewhere are
+/// no business of this organization's report.
+fn with_ancestors(uid: &EntityUid, entities: &Entities, org: &OrgGrn) -> BTreeSet<EntityUid> {
+    let mut held_by: BTreeSet<EntityUid> = entities
+        .ancestors(uid)
+        .map(|ancestors| ancestors.filter(|a| org.owns(a)).cloned().collect())
+        .unwrap_or_default();
+    held_by.insert(uid.clone());
+    held_by
+}
+
+fn entries(policies: &OrgPolicies, asked: &Asked<'_>, side: Side) -> Vec<Entry> {
     let links = policies
         .links
         .iter()
@@ -94,42 +114,63 @@ fn entries(policies: &OrgPolicies, asked: &BTreeSet<EntityUid>, side: Side) -> V
     entries
 }
 
-fn link_entry(link: &RoleLink, asked: &BTreeSet<EntityUid>, side: Side) -> Option<Entry> {
-    let named = match side {
-        Side::Subject => &link.principal,
-        Side::Resource => &link.resource,
+/// A link reaches what `in` reaches, but a scoped role's `resource ==`
+/// reaches its team alone and nothing the team contains (ADR-0137).
+fn link_entry(link: &RoleLink, asked: &Asked<'_>, side: Side) -> Option<Entry> {
+    let (named, reached) = match (side, link.scope) {
+        (Side::Subject, _) => (&link.principal, asked.held_by.contains(&link.principal)),
+        (Side::Resource, RoleScope::Organization) => {
+            (&link.resource, asked.held_by.contains(&link.resource))
+        }
+        (Side::Resource, RoleScope::TeamOrProject) => (&link.resource, link.resource == *asked.uid),
     };
-    asked.contains(named).then(|| Entry {
+    reached.then(|| Entry {
         policy: link.id.clone(),
         named: vec![named.clone()],
     })
 }
 
-fn guardrail_entry(guardrail: &Policy, asked: &BTreeSet<EntityUid>, side: Side) -> Option<Entry> {
+fn guardrail_entry(guardrail: &Policy, asked: &Asked<'_>, side: Side) -> Option<Entry> {
+    if !scope_reaches(guardrail, asked, side) {
+        return None;
+    }
     let mut named: Vec<EntityUid> = guardrail
         .entity_literals()
         .into_iter()
-        .filter(|literal| asked.contains(literal))
+        .filter(|literal| asked.held_by.contains(literal))
         .collect();
     named.sort();
     named.dedup();
-    (!named.is_empty() || reaches_everything(guardrail, side)).then(|| Entry {
+    Some(Entry {
         policy: guardrail.id().clone(),
         named,
     })
 }
 
-/// A scope naming no entity on this side applies to whatever is asked
-/// about, so a report that left it out would read as if nothing did.
-fn reaches_everything(guardrail: &Policy, side: Side) -> bool {
-    match side {
-        Side::Subject => matches!(
-            guardrail.principal_constraint(),
-            PrincipalConstraint::Any | PrincipalConstraint::Is(_)
-        ),
-        Side::Resource => matches!(
-            guardrail.resource_constraint(),
-            ResourceConstraint::Any | ResourceConstraint::Is(_)
-        ),
-    }
+/// Reads the scope as Cedar does: `==` is the entity alone, `in` what
+/// holds it, and `is` its type.
+fn scope_reaches(guardrail: &Policy, asked: &Asked<'_>, side: Side) -> bool {
+    let (is_of, equals, within) = match side {
+        Side::Subject => match guardrail.principal_constraint() {
+            PrincipalConstraint::Any => (None, None, None),
+            PrincipalConstraint::Eq(entity) => (None, Some(entity), None),
+            PrincipalConstraint::In(entity) => (None, None, Some(entity)),
+            PrincipalConstraint::Is(entity_type) => (Some(entity_type), None, None),
+            PrincipalConstraint::IsIn(entity_type, entity) => {
+                (Some(entity_type), None, Some(entity))
+            }
+        },
+        Side::Resource => match guardrail.resource_constraint() {
+            ResourceConstraint::Any => (None, None, None),
+            ResourceConstraint::Eq(entity) => (None, Some(entity), None),
+            ResourceConstraint::In(entity) => (None, None, Some(entity)),
+            ResourceConstraint::Is(entity_type) => (Some(entity_type), None, None),
+            ResourceConstraint::IsIn(entity_type, entity) => {
+                (Some(entity_type), None, Some(entity))
+            }
+        },
+    };
+    is_of.is_none_or(|entity_type| asked.is_of_type(&entity_type))
+        && equals.is_none_or(|entity| entity == *asked.uid)
+        && within.is_none_or(|entity| asked.held_by.contains(&entity))
 }

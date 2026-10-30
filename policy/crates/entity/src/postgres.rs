@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use cedar_policy::EntityUid;
 use decision::{Cause, Engine, EntitySlice, EntitySource, OrgGrn};
 use serde_json::Value;
@@ -77,22 +79,17 @@ impl EntityStore {
         .map_err(Error::Store)?;
 
         let mut documents = Vec::with_capacity(rows.len());
-        let mut org = None;
         for row in rows {
             let document: Json<Value> = row.try_get("document").map_err(Error::Store)?;
-            let entity_type: String = row.try_get("entity_type").map_err(Error::Store)?;
-            let entity_id: String = row.try_get("entity_id").map_err(Error::Store)?;
-            if entity_type == resource.type_name().to_string()
-                && entity_id == resource.id().unescaped()
-            {
-                org = document
-                    .0
-                    .pointer("/attrs/org/__entity/id")
-                    .and_then(Value::as_str)
-                    .map(OrgGrn::new);
-            }
             documents.push(document.0);
         }
+        let org = documents
+            .iter()
+            .find(|document| names(document, resource))
+            .and_then(|document| document.pointer("/attrs/org/__entity/id"))
+            .and_then(Value::as_str)
+            .map(OrgGrn::new);
+        keep_live_parents(&mut documents);
         let entities = self
             .engine
             .entities(Value::Array(documents))
@@ -110,6 +107,28 @@ impl EntitySource for EntityStore {
         self.read_slice(principal, resource)
             .await
             .map_err(Cause::from)
+    }
+}
+
+fn names(document: &Value, uid: &EntityUid) -> bool {
+    document.pointer("/uid/type").and_then(Value::as_str)
+        == Some(uid.type_name().to_string().as_str())
+        && document.pointer("/uid/id").and_then(Value::as_str) == Some(uid.id().unescaped())
+}
+
+/// Drops every parent with no row here. Cedar honours a parent that has
+/// no entity, and a deleted team stays named by its members' documents
+/// until each owner rewrites them, so a membership ends when its group
+/// does, whatever an outbox delivers next (ADR-0137, ADR-0138).
+fn keep_live_parents(documents: &mut [Value]) {
+    let live: HashSet<Value> = documents
+        .iter()
+        .filter_map(|document| document.get("uid").cloned())
+        .collect();
+    for document in documents {
+        if let Some(Value::Array(parents)) = document.get_mut("parents") {
+            parents.retain(|parent| live.contains(parent));
+        }
     }
 }
 

@@ -6,7 +6,9 @@
 use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use jsonwebtoken::jwk::{Jwk, JwkSet};
+use base64::Engine as _;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use jsonwebtoken::jwk::{Jwk, JwkSet, PublicKeyUse};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use rsa::pkcs1::{EncodeRsaPrivateKey, EncodeRsaPublicKey, LineEnding};
 use rsa::rand_core::OsRng;
@@ -15,6 +17,7 @@ use serde::Serialize;
 
 pub const ISSUER: &str = "https://garam.test";
 pub const KID: &str = "current";
+pub const HEADER: &str = r#"{"alg":"RS256","kid":"current","typ":"JWT"}"#;
 pub const CALLER: &str = "grn:root:default:service:platform";
 
 pub struct Signer {
@@ -51,9 +54,23 @@ impl Signer {
         encode(&header, claims, &self.key).unwrap()
     }
 
+    /// A token over exactly these bytes, for what no well-behaved
+    /// encoder writes.
+    pub fn sign_raw(&self, header: &str, payload: &str) -> String {
+        let message = format!(
+            "{}.{}",
+            URL_SAFE_NO_PAD.encode(header),
+            URL_SAFE_NO_PAD.encode(payload)
+        );
+        let signature =
+            jsonwebtoken::crypto::sign(message.as_bytes(), &self.key, Algorithm::RS256).unwrap();
+        format!("{message}.{signature}")
+    }
+
     fn jwk(&self) -> Jwk {
         let mut jwk = Jwk::from_encoding_key(&self.key, Algorithm::RS256).unwrap();
         jwk.common.key_id = Some(self.kid.clone());
+        jwk.common.public_key_use = Some(PublicKeyUse::Signature);
         jwk
     }
 }
@@ -69,10 +86,15 @@ pub fn jwks(signers: &[&Signer]) -> String {
     serde_json::to_string(&JwkSet { keys }).unwrap()
 }
 
-/// `jwks` with a member taken off its first key.
-pub fn without(jwks: &str, member: &str) -> String {
+/// `jwks` with a member of its first key set, or taken off by `Null`.
+pub fn with(jwks: &str, member: &str, value: serde_json::Value) -> String {
     let mut parsed: serde_json::Value = serde_json::from_str(jwks).unwrap();
-    parsed["keys"][0].as_object_mut().unwrap().remove(member);
+    let key = parsed["keys"][0].as_object_mut().unwrap();
+    if value.is_null() {
+        key.remove(member);
+    } else {
+        key.insert(member.to_owned(), value);
+    }
     parsed.to_string()
 }
 

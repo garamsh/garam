@@ -35,18 +35,24 @@ audience `policy`, verified offline against a configured JWKS file.
 An owner writes through `ApplyEntityChanges`, whose per-entity sequence
 makes a replayed or reordered delivery a no-op.**
 
-1. **The token.** A compact JWS, RS256 as ADR-0102 profiles it, with
-   `iss`, `aud` equal to `policy`, `sub`, `iat` and `exp`. Any other
-   algorithm is refused, and a missing claim refuses the token.
+1. **The token.** A compact JWS under ADR-0102's profile. Its protected
+   header is `alg`, `kid` and `typ` and nothing else, with `alg` RS256
+   and `typ` `JWT`, so an unknown `crit` or a `jku` refuses the token.
+   `iss` is the configured issuer, `aud` is the one string `policy` and
+   never an array, `sub` names someone, and `iat` and `exp` are integer
+   dates. `nbf` is optional, checked, and no later than `exp`. A
+   duplicate member refuses the token.
 2. **Its lifetime.** `0 < exp - iat <= 300` seconds, checked apart from
    skew. Dates allow ADR-0102's 30 seconds of skew, and an `iat` ahead
    of that is refused, or a token could state a short lifetime and
    outlive it.
 3. **The keys.** One issuer and one JWKS file, named by configuration.
-   Each key names a `kid`, which is how a token finds it, and states
-   RS256. The file holds one or two keys, ADR-0129's rotation: add the
-   successor, move the issuer, remove the old one. A file breaking this
-   stops the service at start.
+   Each key is `kty` RSA, `use` sig and `alg` RS256, names a `kid`,
+   which is how a token finds it, and has a modulus of 2048 to 4096
+   bits. A member the profile does not name, a private one above all,
+   refuses the file. It holds one or two keys, ADR-0129's rotation: add
+   the successor, move the issuer, remove the old one. A file breaking
+   this stops the service at start.
 4. **Keys load at start,** so a rotation is a rollout. A compromised
    key is removed by rolling the service.
 5. **`ApplyEntityChanges`.** A batch of upserts and deletes, each
@@ -59,7 +65,24 @@ makes a replayed or reordered delivery a no-op.**
    else,** which is ADR-0130's rule that entities carry containment and
    membership. Each is validated against the schema on write.
 7. **Until a caller can be shown to own a type, none supplies an
-   entity:** `Resource.properties` is refused.
+   entity:** `Resource.properties` is refused, and so is a `context`
+   holding a field, the schema declaring none.
+8. **A membership ends when its group does.** A slice drops every
+   parent with no live row, whatever an owner's outbox delivers next,
+   because Cedar honours a parent that has no entity.
+9. **Every write names its organization.** A policy's GRN sits under
+   its organization, and a link or guardrail naming another
+   organization's entity is refused. A user is nobody's entity: it may
+   belong to several organizations, and tenant isolation decides each.
+10. **`Evaluations` never answers nothing.** An absent or empty list is
+    the one question the request's defaults state, as in AuthZEN 1.0
+    §7.1, since a caller folding answers reads none as nothing denied.
+    A question at fault is denied in its own answer with the fault as
+    its reason, and the rest are answered. A store failure fails the
+    call. A request holds at most 1000 evaluations.
+11. **`policy migrate` applies the migrations and exits, and `policy
+    serve` applies none,** as `deployment-contract.md` §The migrate job
+    states it for the platform. A dirty database refuses the run.
 
 The issuer lands in slice 4 of #1689, and the RPC in slice 3. Slice 2a
 builds the verifier against a key its tests generate, and the write as
@@ -78,11 +101,18 @@ a library call with item 5's semantics.
   platform and answers while the platform is down.
 - A compromise of a key is contained by a rollout rather than by a file
   write, which is slower than ADR-0129's read per exchange.
+- A guardrail is at most 4 KiB and 12 levels deep, measured against
+  the stack a request runs on, since an overflow aborts the process
+  rather than failing the request.
 - Every owner keeps a per-entity counter, and the store keeps a row for
   each deleted entity.
 - One caller identity authenticates, and the service does not yet
   decide what that caller may ask, so nothing in slice 2a separates one
-  service from another.
+  service from another. That is owed to slice 3 with per-type
+  ownership.
+- A transport carrying the bearer token is plaintext until slice 2b
+  gives the server a certificate. It lands before anything calls the
+  service, ADR-0125 ruling out network position.
 
 ## Signs the decision was wrong
 
@@ -107,6 +137,8 @@ a library call with item 5's semantics.
 - **A last-writer-wins upsert with no sequence.** A redelivered older
   change would undo a newer one, and a membership would come back after
   it was removed.
+- **Failing the whole `Evaluations` call on one bad entry.** One
+  malformed object would deny a caller the whole page it was filtering.
 - **Reading the JWKS file on every verification.** It would match
   ADR-0129's "no restart" and parse keys on the hot path of every
   decision, for a rotation that happens rarely.

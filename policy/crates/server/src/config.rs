@@ -5,7 +5,16 @@ use std::path::PathBuf;
 #[error("{0} is not set")]
 pub struct ConfigError(&'static str);
 
-/// What the binary reads from its environment.
+/// `POLICY_DATABASE_URL`, all `policy migrate` reads.
+pub fn database_url() -> Result<String, ConfigError> {
+    required("POLICY_DATABASE_URL")
+}
+
+fn required(name: &'static str) -> Result<String, ConfigError> {
+    std::env::var(name).map_err(|_| ConfigError(name))
+}
+
+/// What `policy serve` reads from its environment.
 #[derive(Debug, Clone)]
 pub struct Config {
     /// `POLICY_ADDR`, the address to listen on.
@@ -21,10 +30,9 @@ pub struct Config {
 impl Config {
     /// Reads the environment, refusing to start without any setting.
     pub fn from_env() -> Result<Self, ConfigError> {
-        let required = |name: &'static str| std::env::var(name).map_err(|_| ConfigError(name));
         Ok(Self {
             addr: required("POLICY_ADDR")?,
-            database_url: required("POLICY_DATABASE_URL")?,
+            database_url: database_url()?,
             token_issuer: required("POLICY_TOKEN_ISSUER")?,
             jwks_file: required("POLICY_JWKS_FILE")?.into(),
         })

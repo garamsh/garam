@@ -1,13 +1,15 @@
 use decision::{
     Decision, Engine, EntityRef, EntitySource, Evaluation, Outcome, PolicySource, Reason,
 };
-use prost_types::value::Kind;
-use serde_json::{Map, Number, Value, json};
+use serde_json::json;
 use tonic::{Request, Response, Status};
 
 use crate::proto;
 use crate::proto::policy_service_server::PolicyService;
-use crate::status::to_status;
+use crate::status::{ServiceError, to_status};
+
+/// The most evaluations one request holds: a page, not a table.
+const MAX_EVALUATIONS: usize = 1000;
 
 /// Serves `garam.policy.v1`. Every read goes to storage, as no cache
 /// exists yet, so both `Read` options answer what `READ_CURRENT`
@@ -31,13 +33,58 @@ impl<P, E> Service<P, E> {
 }
 
 impl<P: PolicySource, E: EntitySource> Service<P, E> {
-    async fn answer(&self, question: Question<'_>) -> Result<proto::EvaluateResponse, Status> {
+    async fn answer(
+        &self,
+        question: Question<'_>,
+    ) -> Result<proto::EvaluateResponse, ServiceError> {
         let decision = self
             .engine
             .evaluate(&self.policies, &self.entities, &question.evaluation()?)
-            .await
-            .map_err(to_status)?;
+            .await?;
         Ok(response(&decision))
+    }
+
+    /// Answers one entry of a batch: a question at fault is denied
+    /// there, with the fault as its reason, and only what fails the
+    /// whole call fails it.
+    async fn answer_entry(
+        &self,
+        question: Question<'_>,
+    ) -> Result<proto::EvaluateResponse, ServiceError> {
+        match self.answer(question).await {
+            Err(error) if error.is_the_questions() => {
+                tracing::info!(error = ?error, "refused an entry of a batch");
+                Ok(refused(&error))
+            }
+            answer => answer,
+        }
+    }
+
+    async fn answer_batch(
+        &self,
+        request: &proto::EvaluationsRequest,
+    ) -> Result<proto::EvaluationsResponse, ServiceError> {
+        if request.evaluations.len() > MAX_EVALUATIONS {
+            return Err(ServiceError::TooManyEvaluations {
+                max: MAX_EVALUATIONS,
+            });
+        }
+        // An empty list states one question, as AuthZEN's does: no
+        // answers would read as nothing denied to a caller folding them.
+        if request.evaluations.is_empty() {
+            let answer = self.answer_entry(Question::defaults_of(request)).await?;
+            return Ok(proto::EvaluationsResponse {
+                evaluations: vec![answer],
+            });
+        }
+        let mut evaluations = Vec::with_capacity(request.evaluations.len());
+        for entry in &request.evaluations {
+            evaluations.push(
+                self.answer_entry(Question::of_entry(request, entry))
+                    .await?,
+            );
+        }
+        Ok(proto::EvaluationsResponse { evaluations })
     }
 }
 
@@ -52,14 +99,13 @@ where
         request: Request<proto::EvaluateRequest>,
     ) -> Result<Response<proto::EvaluateResponse>, Status> {
         let request = request.into_inner();
-        let answer = self
-            .answer(Question {
-                subject: request.subject.as_ref(),
-                action: request.action.as_ref(),
-                resource: request.resource.as_ref(),
-                context: request.context.as_ref(),
-            })
-            .await?;
+        let question = Question {
+            subject: request.subject.as_ref(),
+            action: request.action.as_ref(),
+            resource: request.resource.as_ref(),
+            context: request.context.as_ref(),
+        };
+        let answer = self.answer(question).await.map_err(|e| to_status(&e))?;
         Ok(Response::new(answer))
     }
 
@@ -67,20 +113,11 @@ where
         &self,
         request: Request<proto::EvaluationsRequest>,
     ) -> Result<Response<proto::EvaluationsResponse>, Status> {
-        let request = request.into_inner();
-        let mut evaluations = Vec::with_capacity(request.evaluations.len());
-        for entry in &request.evaluations {
-            let answer = self
-                .answer(Question {
-                    subject: entry.subject.as_ref().or(request.subject.as_ref()),
-                    action: entry.action.as_ref().or(request.action.as_ref()),
-                    resource: entry.resource.as_ref().or(request.resource.as_ref()),
-                    context: entry.context.as_ref().or(request.context.as_ref()),
-                })
-                .await?;
-            evaluations.push(answer);
-        }
-        Ok(Response::new(proto::EvaluationsResponse { evaluations }))
+        let answers = self
+            .answer_batch(&request.into_inner())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(answers))
     }
 }
 
@@ -94,26 +131,36 @@ struct Question<'a> {
 }
 
 impl<'a> Question<'a> {
-    fn evaluation(&self) -> Result<Evaluation<'a>, Status> {
-        let subject = self
-            .subject
-            .ok_or_else(|| Status::invalid_argument("subject is required"))?;
-        let action = self
-            .action
-            .ok_or_else(|| Status::invalid_argument("action is required"))?;
-        let resource = self
-            .resource
-            .ok_or_else(|| Status::invalid_argument("resource is required"))?;
+    fn defaults_of(request: &'a proto::EvaluationsRequest) -> Self {
+        Self {
+            subject: request.subject.as_ref(),
+            action: request.action.as_ref(),
+            resource: request.resource.as_ref(),
+            context: request.context.as_ref(),
+        }
+    }
+
+    fn of_entry(request: &'a proto::EvaluationsRequest, entry: &'a proto::Evaluation) -> Self {
+        Self {
+            subject: entry.subject.as_ref().or(request.subject.as_ref()),
+            action: entry.action.as_ref().or(request.action.as_ref()),
+            resource: entry.resource.as_ref().or(request.resource.as_ref()),
+            context: entry.context.as_ref().or(request.context.as_ref()),
+        }
+    }
+
+    fn evaluation(&self) -> Result<Evaluation<'a>, ServiceError> {
+        let subject = self.subject.ok_or(ServiceError::Missing("subject"))?;
+        let action = self.action.ok_or(ServiceError::Missing("action"))?;
+        let resource = self.resource.ok_or(ServiceError::Missing("resource"))?;
         // A caller sends no grounds until it can be shown to own the
         // type (ADR-0130 §8), which arrives with ApplyEntityChanges.
-        if resource
-            .properties
-            .as_ref()
-            .is_some_and(|properties| !properties.fields.is_empty())
-        {
-            return Err(Status::invalid_argument(
-                "resource properties are not accepted",
-            ));
+        if holds_fields(resource.properties.as_ref()) {
+            return Err(ServiceError::Grounds("resource properties"));
+        }
+        // No action of the schema declares a context, so none has one.
+        if holds_fields(self.context) {
+            return Err(ServiceError::Grounds("context"));
         }
         Ok(Evaluation {
             subject: EntityRef {
@@ -125,8 +172,24 @@ impl<'a> Question<'a> {
                 entity_type: &resource.r#type,
                 id: &resource.id,
             },
-            context: self.context.map_or_else(|| json!({}), object),
+            context: json!({}),
         })
+    }
+}
+
+fn holds_fields(fields: Option<&prost_types::Struct>) -> bool {
+    fields.is_some_and(|fields| !fields.fields.is_empty())
+}
+
+fn refused(error: &ServiceError) -> proto::EvaluateResponse {
+    proto::EvaluateResponse {
+        decision: false,
+        context: Some(proto::DecisionContext {
+            reasons: vec![proto::Reason {
+                policy_id: String::new(),
+                error: error.to_string(),
+            }],
+        }),
     }
 }
 
@@ -150,37 +213,4 @@ fn reason(reason: &Reason) -> proto::Reason {
             error: message.clone(),
         },
     }
-}
-
-fn object(fields: &prost_types::Struct) -> Value {
-    Value::Object(
-        fields
-            .fields
-            .iter()
-            .map(|(name, value)| (name.clone(), json_value(value)))
-            .collect::<Map<_, _>>(),
-    )
-}
-
-fn json_value(value: &prost_types::Value) -> Value {
-    match &value.kind {
-        None | Some(Kind::NullValue(_)) => Value::Null,
-        Some(Kind::BoolValue(value)) => Value::Bool(*value),
-        Some(Kind::StringValue(value)) => Value::String(value.clone()),
-        Some(Kind::NumberValue(value)) => number(*value),
-        Some(Kind::StructValue(value)) => object(value),
-        Some(Kind::ListValue(list)) => Value::Array(list.values.iter().map(json_value).collect()),
-    }
-}
-
-/// `Struct` carries every number as a double, and Cedar has only
-/// integers, so a whole number travels as one.
-fn number(value: f64) -> Value {
-    #[allow(clippy::cast_possible_truncation)]
-    let whole = value as i64;
-    #[allow(clippy::cast_precision_loss)]
-    if whole as f64 == value {
-        return Value::Number(whole.into());
-    }
-    Number::from_f64(value).map_or(Value::Null, Value::Number)
 }

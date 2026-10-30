@@ -246,3 +246,18 @@ async fn a_deleted_entity_is_gone_and_an_earlier_write_does_not_revive_it(pool: 
     let slice = store.read_slice(&uid(LEE), &uid(CHANNEL)).await.unwrap();
     assert!(holds(&slice, CHANNEL));
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_slice_holds_no_parent_the_store_has_deleted(pool: PgPool) {
+    let store = store(pool).await;
+    let before = store.read_slice(&uid(LEE), &uid(CHANNEL)).await.unwrap();
+    assert!(before.entities.is_ancestor_of(&uid(ENG), &uid(LEE)));
+    assert!(before.entities.is_ancestor_of(&uid(MEMBERS), &uid(LEE)));
+
+    store.apply(&[delete(ENG, 2)]).await.unwrap();
+
+    let slice = store.read_slice(&uid(LEE), &uid(CHANNEL)).await.unwrap();
+    assert!(!slice.entities.is_ancestor_of(&uid(ENG), &uid(LEE)));
+    assert!(slice.entities.is_ancestor_of(&uid(MEMBERS), &uid(LEE)));
+}

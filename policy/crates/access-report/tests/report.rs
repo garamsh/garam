@@ -21,6 +21,7 @@ const ENG: Named = ("Team", "grn:acme:default:group:eng");
 const OPS: Named = ("Team", "grn:acme:default:group:ops");
 const BOT: Named = ("Agent", "grn:acme:default:agent:bot");
 const WEB: Named = ("Project", "grn:acme:default:project:web");
+const RIVALS: Named = ("Team", "grn:globex:default:group:secret");
 const ORG: Named = ("Org", ACME);
 const MEMBERS: Named = ("OrgMembers", ACME);
 
@@ -29,6 +30,9 @@ const ON_ENG: &str =
 const ON_OPS_IN_CONDITION: &str = r#"forbid (principal, action, resource is Agent)
     when { principal in Team::"grn:acme:default:group:ops" };"#;
 const EVERYONE: &str = "forbid (principal, action, resource);";
+const ON_ENG_ALONE: &str =
+    r#"forbid (principal == Team::"grn:acme:default:group:eng", action, resource);"#;
+const ON_AGENTS: &str = "forbid (principal is Agent, action, resource);";
 const ON_LEE: &str =
     r#"forbid (principal == User::"grn:acme:default:user:lee", action, resource);"#;
 
@@ -63,7 +67,7 @@ impl EntitySource for Directory {
             entity(ORG, organization, &[]),
             entity(ENG, org.clone(), &[ORG]),
             entity(OPS, org.clone(), &[ORG]),
-            entity(KIM, json!({}), &[MEMBERS, ENG, OPS]),
+            entity(KIM, json!({}), &[MEMBERS, ENG, OPS, RIVALS]),
             entity(LEE, json!({}), &[MEMBERS]),
             entity(BOT, org, &[MEMBERS, ORG, ENG]),
         ]))?;
@@ -155,7 +159,7 @@ async fn a_subjects_report_leaves_out_a_link_held_on_its_team() {
 }
 
 #[tokio::test]
-async fn a_resources_report_lists_links_on_it_and_its_ancestors() {
+async fn a_resources_report_lists_what_reaches_it_and_no_scoped_role_above_it() {
     let policies = links(vec![
         link("on-org", LEE, ORG),
         link("on-eng", LEE, ENG),
@@ -166,7 +170,38 @@ async fn a_resources_report_lists_links_on_it_and_its_ancestors() {
     let entries = for_resource(&policies, &directory, &OrgGrn::new(ACME), &uid(BOT))
         .await
         .unwrap();
+    assert_eq!(ids(&entries), ["on-org"]);
+
+    let entries = for_resource(&policies, &directory, &OrgGrn::new(ACME), &uid(ENG))
+        .await
+        .unwrap();
     assert_eq!(ids(&entries), ["on-eng", "on-org"]);
+}
+
+#[tokio::test]
+async fn a_report_reads_no_membership_of_another_organization() {
+    let policies = links(vec![link("probe", RIVALS, WEB), link("control", ENG, WEB)]);
+
+    let entries = subject_report(&policies, KIM).await;
+
+    assert_eq!(ids(&entries), ["control"]);
+}
+
+#[tokio::test]
+async fn a_guardrail_scoped_past_what_is_asked_is_left_out() {
+    let policies = Held(OrgPolicies {
+        links: vec![],
+        guardrails: vec![
+            guardrail("eng-alone", ON_ENG_ALONE),
+            guardrail("agents", ON_AGENTS),
+        ],
+    });
+
+    let entries = subject_report(&policies, KIM).await;
+    assert!(entries.is_empty(), "{entries:?}");
+
+    assert_eq!(ids(&subject_report(&policies, ENG).await), ["eng-alone"]);
+    assert_eq!(ids(&subject_report(&policies, BOT).await), ["agents"]);
 }
 
 #[tokio::test]

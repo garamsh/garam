@@ -19,7 +19,7 @@ use tonic::service::interceptor::InterceptedService;
 use tonic::transport::Server;
 
 pub use caller::{Caller, KeysError, Refusal, Verifier};
-pub use config::{Config, ConfigError};
+pub use config::{Config, ConfigError, database_url};
 pub use policy_service::Service;
 
 /// The generated contract.
@@ -46,17 +46,23 @@ pub enum Error {
     Transport(#[source] tonic::transport::Error),
 }
 
-/// Opens the service's database and brings its schema up to date.
-pub async fn database(url: &str) -> Result<PgPool, Error> {
-    let pool = PgPoolOptions::new()
+/// Opens the service's database. It applies nothing: `migrate` does,
+/// as a job of its own.
+pub async fn connect(url: &str) -> Result<PgPool, Error> {
+    PgPoolOptions::new()
         .connect(url)
         .await
-        .map_err(Error::Database)?;
+        .map_err(Error::Database)
+}
+
+/// Applies every pending migration. `sqlx` runs each in a transaction
+/// under an advisory lock, and refuses a database an earlier run left
+/// dirty rather than clearing it.
+pub async fn migrate(pool: &PgPool) -> Result<(), Error> {
     sqlx::migrate!("../../migrations")
-        .run(&pool)
+        .run(pool)
         .await
-        .map_err(Error::Migration)?;
-    Ok(pool)
+        .map_err(Error::Migration)
 }
 
 /// The contract behind caller authentication.

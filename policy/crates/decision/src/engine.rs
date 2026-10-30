@@ -157,9 +157,14 @@ impl Engine {
     }
 }
 
+/// Refuses a NUL as the caller's mistake: no store can hold one, so it
+/// would otherwise surface as the store failing.
 fn entity_uid(
     entity: EntityRef<'_>,
 ) -> Result<EntityUid, Box<dyn std::error::Error + Send + Sync>> {
+    if entity.id.contains('\0') {
+        return Err("an entity id holds a NUL".into());
+    }
     Ok(EntityUid::from_type_name_and_id(
         EntityTypeName::from_str(entity.entity_type)?,
         EntityId::new(entity.id),

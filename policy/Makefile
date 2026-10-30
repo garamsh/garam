@@ -45,8 +45,9 @@ build:
 	cargo build --workspace --all-targets --locked
 
 # The dev Postgres, which holds policy's databases beside the others'.
-# `#[sqlx::test]` connects to the URL below and creates and drops one
-# database per test on that server.
+# `#[sqlx::test]` connects to the URL below and creates one database
+# per test on that server, named `_sqlx_test_<n>`. It drops each on a
+# pass and leaves a failed test's behind.
 stack-up:
 	@$(MAKE) --no-print-directory -C ../deploy/local db-up
 

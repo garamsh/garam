@@ -10,6 +10,7 @@ name = "policy"
 path = "src/main.rs"
 
 [dependencies]
+base64.workspace = true
 decision = { path = "../decision" }
 entity = { path = "../entity" }
 grant = { path = "../grant" }

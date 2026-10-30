@@ -1,7 +1,7 @@
 use std::fmt;
 use std::future::Future;
 
-use cedar_policy::Policy;
+use cedar_policy::{EntityUid, Policy};
 
 use crate::error::Cause;
 use crate::role_link::RoleLink;
@@ -19,6 +19,30 @@ impl OrgGrn {
     /// The GRN.
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+
+    /// The organization's name, the last segment of its GRN and the
+    /// organization segment of every GRN beneath it (ADR-0001).
+    pub fn slug(&self) -> &str {
+        self.0.rsplit(':').next().unwrap_or_default()
+    }
+
+    /// Whether this GRN is one this organization owns. A policy GRN's
+    /// other segments are the caller's.
+    pub fn owns_grn(&self, grn: &str) -> bool {
+        grn.split(':').nth(1) == Some(self.slug())
+    }
+
+    /// Whether the entity is this organization's. A user is nobody's:
+    /// it may belong to several organizations, and tenant isolation
+    /// decides each (ADR-0137).
+    pub fn owns(&self, entity: &EntityUid) -> bool {
+        let id = entity.id().unescaped();
+        match entity.type_name().to_string().as_str() {
+            "User" => true,
+            "Org" | "OrgMembers" => id == self.0,
+            _ => self.owns_grn(id),
+        }
     }
 }
 

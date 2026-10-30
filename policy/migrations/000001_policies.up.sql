@@ -23,6 +23,14 @@ CREATE TABLE policy_versions (
     PRIMARY KEY (policy_grn, version)
 );
 
+-- A policy always has the version it decides on. Deferred, because a
+-- policy and its first version are written in one transaction.
+ALTER TABLE policies
+    ADD CONSTRAINT policies_default_version_fkey
+    FOREIGN KEY (grn, default_version)
+    REFERENCES policy_versions (policy_grn, version)
+    DEFERRABLE INITIALLY DEFERRED;
+
 -- A cascade runs after the parent row is gone, which is what tells it
 -- from a direct delete.
 CREATE FUNCTION policy_versions_append_only() RETURNS trigger AS $$

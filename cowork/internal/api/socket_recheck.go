@@ -46,7 +46,7 @@ func (s *Server) recheckSocket(ctx context.Context, conn *websocket.Conn, rechec
 		case refuses(err):
 			// Closing the connection, rather than ending ctx, is what
 			// reaches the client with this code: a read whose ctx ends
-			// closes it with a code of the library's own.
+			// drops the connection with no close frame.
 			closeFor(conn, err)
 			return
 		default:

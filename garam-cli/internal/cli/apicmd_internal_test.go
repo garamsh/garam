@@ -396,7 +396,7 @@ func TestCoworkCommand_CallsCoworkAsThePlatformSession(t *testing.T) {
 	stdout, stderr, _, err := runRoot(t, "cowork", "pages", "get", "p1",
 		"--endpoint", platform.URL, "--cowork-endpoint", cowork.URL)
 	require.NoError(t, err, stderr)
-	assert.Equal(t, "/orgs/acme/pages/p1", asked)
+	assert.Equal(t, "/api/orgs/acme/pages/p1", asked)
 	assert.Equal(t, "Bearer access", presented)
 	assert.Regexp(t, `(?m)^TITLE\s+Retro$`, stdout)
 	assert.Zero(t, platformCalls.Load())

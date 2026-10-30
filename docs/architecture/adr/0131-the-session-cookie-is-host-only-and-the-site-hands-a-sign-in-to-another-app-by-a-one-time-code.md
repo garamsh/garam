@@ -1,6 +1,7 @@
 # ADR 0131: The session cookie is host-only, and the site hands a sign-in to another app by a one-time code
 
-> Status: accepted
+> Status: accepted; decision 2's return path is superseded by
+> [ADR-0135](./0135-the-site-hands-a-sign-in-to-a-fixed-list-of-apps-and-cowork-shares-one-host-split-by-path.md)
 > Date: 2026-10-28
 
 ## Context

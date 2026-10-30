@@ -45,8 +45,9 @@ lib/platform-sdk-ts platform
 # site it sends a signed-out visitor to.
 platform-web platform deploy/local site-web
 # cowork-web generates its API types from cowork's spec, and its browser
-# suite drives the cowork binary and signs in through the platform.
-cowork-web cowork platform deploy/local
+# suite drives the cowork binary and signs in through the platform and
+# the site.
+cowork-web cowork platform deploy/local site-web
 # The site's browser suite drives the platform's api, and signs in to
 # the console it hands a visitor to.
 site-web platform deploy/local platform-web

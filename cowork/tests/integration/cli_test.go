@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -55,6 +59,23 @@ func garamCLI(t *testing.T) string {
 	return garamBin
 }
 
+// gatewayTo answers an origin that serves the server at target as a
+// deployment's gateway does (ADR-0135): `/api/` with the prefix
+// stripped, and `/mcp` as it stands. The client takes an origin and
+// reaches the API under it, so this is what it is pointed at.
+func gatewayTo(t *testing.T, target string) string {
+	t.Helper()
+	to, err := url.Parse(target)
+	require.NoError(t, err)
+	proxy := httputil.NewSingleHostReverseProxy(to)
+	mux := http.NewServeMux()
+	mux.Handle("/api/", http.StripPrefix("/api", proxy))
+	mux.Handle("/mcp", proxy)
+	gateway := httptest.NewServer(mux)
+	t.Cleanup(gateway.Close)
+	return gateway.URL
+}
+
 // signIn keeps who's CLI session for the stack's platform in a fresh
 // credentials file, as `garam login` leaves one, with acme saved as the
 // workspace, and points the CLI at the stack. The file is written in
@@ -64,7 +85,7 @@ func (s *stack) signIn(t *testing.T, who string) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	t.Setenv("COWORK_ENDPOINT", s.url)
+	t.Setenv("COWORK_ENDPOINT", gatewayTo(t, s.url))
 	t.Setenv("GARAM_ENDPOINT", s.platformURL)
 	if who == "" {
 		return

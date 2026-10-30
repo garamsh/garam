@@ -460,6 +460,24 @@ func (e InvitationPreviewState) Valid() bool {
 	}
 }
 
+// Defines values for LoginReturnPathApp.
+const (
+	Console LoginReturnPathApp = "console"
+	Cowork  LoginReturnPathApp = "cowork"
+)
+
+// Valid indicates whether the value is a known member of the LoginReturnPathApp enum.
+func (e LoginReturnPathApp) Valid() bool {
+	switch e {
+	case Console:
+		return true
+	case Cowork:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OAuthErrorError.
 const (
 	AccessDenied         OAuthErrorError = "access_denied"
@@ -1188,9 +1206,15 @@ type IssuedOperatorKey struct {
 
 // LoginReturnPath defines model for LoginReturnPath.
 type LoginReturnPath struct {
-	// Next The console path to land on once signed in.
+	// App The app the sign-in is for; the console where absent.
+	App *LoginReturnPathApp `json:"app,omitempty"`
+
+	// Next The path on that app to land on once signed in.
 	Next *string `json:"next,omitempty"`
 }
+
+// LoginReturnPathApp The app the sign-in is for; the console where absent.
+type LoginReturnPathApp string
 
 // Member defines model for Member.
 type Member struct {
@@ -2006,7 +2030,7 @@ type ServerInterface interface {
 	// Login Start the OAuth authorization code flow.
 	// (GET /auth/login/{provider})
 	Login(w http.ResponseWriter, r *http.Request, provider Provider)
-	// LoginWithReturnPath Start the OAuth flow, landing on a console path afterwards.
+	// LoginWithReturnPath Start the OAuth flow, landing on a path of one of garam's apps afterwards.
 	// (POST /auth/login/{provider})
 	LoginWithReturnPath(w http.ResponseWriter, r *http.Request, provider Provider)
 	// Logout Revoke the current session and clear the cookie.

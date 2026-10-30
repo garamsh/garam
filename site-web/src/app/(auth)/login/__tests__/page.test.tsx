@@ -12,6 +12,9 @@ import {
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
   redirect: (url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   },
@@ -265,6 +268,53 @@ describe("login page", () => {
       screen.getByRole("heading", { name: "Sign in to garam" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("sends a visitor signed in here on to the cowork path they were going to", async () => {
+    await expect(
+      renderServerComponent(
+        LoginPage({
+          searchParams: Promise.resolve({ app: "cowork", next: "/acme" }),
+        }),
+      ),
+    ).rejects.toThrow(
+      /^NEXT_REDIRECT:http:\/\/cowork\.garam\.localhost:3100\/acme$/,
+    );
+  });
+
+  it("has no page for an app off the list, rather than signing in to the console", async () => {
+    await expect(
+      renderServerComponent(
+        LoginPage({
+          searchParams: Promise.resolve({ app: "evil", next: "/console" }),
+        }),
+      ),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("carries cowork in both forms, and leaves its path off the way to register", async () => {
+    server.use(...signedOutWith(["google"]));
+
+    await renderServerComponent(
+      LoginPage({
+        searchParams: Promise.resolve({ app: "cowork", next: "/acme" }),
+      }),
+    );
+
+    const google = screen
+      .getByRole("button", { name: "Sign in with Google" })
+      .closest("form");
+    const password = screen
+      .getByRole("button", { name: "Sign in" })
+      .closest("form");
+    for (const form of [google, password]) {
+      expect(form?.querySelector('input[name="app"]')).toHaveValue("cowork");
+      expect(form?.querySelector('input[name="next"]')).toHaveValue("/acme");
+    }
+    expect(screen.getByRole("link", { name: "Create one" })).toHaveAttribute(
+      "href",
+      "/register",
+    );
   });
 
   it("hands the Google sign-in the invitation it was reached for, in the form body", async () => {

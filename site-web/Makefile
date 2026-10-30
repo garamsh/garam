@@ -72,11 +72,13 @@ test:
 	pnpm test
 
 # `next build` runs with NODE_ENV=production, where env.ts requires
-# GARAM_API_URL (the `/api/*` rewrite is baked into the build) and
-# GARAM_CONSOLE_URL, which is read again at runtime. Nothing calls
-# either during the build, so a placeholder is enough.
+# GARAM_API_URL (the `/api/*` rewrite is baked into the build),
+# GARAM_CONSOLE_URL and GARAM_COWORK_URL, the last two read again at
+# runtime. Nothing calls them during the build, so a placeholder is
+# enough.
 build:
-	GARAM_API_URL=http://localhost:8080 GARAM_CONSOLE_URL=http://console.garam.localhost:3000 pnpm build
+	GARAM_API_URL=http://localhost:8080 GARAM_CONSOLE_URL=http://console.garam.localhost:3000 \
+		GARAM_COWORK_URL=http://cowork.garam.localhost:3100 pnpm build
 
 # The backend the browser suite drives: postgres, the one-shot
 # migration, authz and api.

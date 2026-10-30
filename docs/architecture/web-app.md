@@ -296,6 +296,8 @@ Where the token may appear is fixed:
 - **In the invitation link and the sign-in's own URLs only:** the
   site's `/login?next=…`, `/register?next=…` and `/handoff?next=…`, and
   the console's `/auth/sign-in?next=…` and `/auth/handoff?next=…`.
+  cowork-web's routes of those names carry cowork's own paths
+  (ADR-0135), which hold no token.
   Every one is served or redirected to with `referrer: no-referrer`,
   and a link carrying one does not prefetch. The invitation link is
   the console's and the sign-in the site's, so a redirect between them

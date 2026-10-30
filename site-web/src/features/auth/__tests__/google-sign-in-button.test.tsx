@@ -29,6 +29,17 @@ describe("Google sign-in button", () => {
     ).toHaveValue("/console/invitations/tok-1");
   });
 
+  it("names the app the sign-in is for in the form body", () => {
+    render(<GoogleSignInButton app="cowork" returnPath="/acme" />);
+
+    const form = screen
+      .getByRole("button", { name: "Sign in with Google" })
+      .closest("form");
+    expect(form?.querySelector('input[type="hidden"][name="app"]')).toHaveValue(
+      "cowork",
+    );
+  });
+
   it("renders Google's own button asset for the light and dark themes", () => {
     const { container } = render(<GoogleSignInButton />);
 

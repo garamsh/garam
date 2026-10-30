@@ -1,5 +1,5 @@
 {
-  "description": "The return-path rule's test vectors, read by internal/api/return_path_test.go and platform-web/src/lib/__tests__/return-path.test.ts so the Go and TypeScript rules cannot drift. A vector with inputHex is raw bytes; goOnly marks one a JavaScript string cannot hold.",
+  "description": "The return-path rule's test vectors, read by internal/api/auth_return_path_test.go and lib/platform-sdk-ts/src/__tests__/return-path.test.ts so the Go and TypeScript rules cannot drift. A vector names the app it is a path on, the console where it names none (ADR-0135). A vector with inputHex is raw bytes; goOnly marks one a JavaScript string cannot hold.",
   "vectors": [
     {
       "name": "the console",
@@ -101,6 +101,77 @@
       "inputHex": "2f636f6e736f6c652fff",
       "accepted": false,
       "goOnly": true
+    },
+    {
+      "name": "cowork's home",
+      "app": "cowork",
+      "input": "/",
+      "accepted": true
+    },
+    {
+      "name": "a cowork page",
+      "app": "cowork",
+      "input": "/acme/page-1",
+      "accepted": true
+    },
+    {
+      "name": "a cowork query",
+      "app": "cowork",
+      "input": "/acme/tasks?view=board",
+      "accepted": true
+    },
+    {
+      "name": "a console path is a path on cowork too",
+      "app": "cowork",
+      "input": "/console",
+      "accepted": true
+    },
+    {
+      "name": "a relative path on cowork",
+      "app": "cowork",
+      "input": "acme",
+      "accepted": false
+    },
+    {
+      "name": "a protocol-relative host on cowork",
+      "app": "cowork",
+      "input": "//evil.example",
+      "accepted": false
+    },
+    {
+      "name": "another origin on cowork",
+      "app": "cowork",
+      "input": "https://evil.example/",
+      "accepted": false
+    },
+    {
+      "name": "a dot-dot segment on cowork",
+      "app": "cowork",
+      "input": "/acme/..",
+      "accepted": false
+    },
+    {
+      "name": "a backslash on cowork",
+      "app": "cowork",
+      "input": "/\\evil.example",
+      "accepted": false
+    },
+    {
+      "name": "a tab on cowork",
+      "app": "cowork",
+      "input": "/acme/\tpage",
+      "accepted": false
+    },
+    {
+      "name": "empty on cowork",
+      "app": "cowork",
+      "input": "",
+      "accepted": false
+    },
+    {
+      "name": "a cowork path is not the console's",
+      "input": "/acme/page-1",
+      "accepted": false
     }
   ]
 }

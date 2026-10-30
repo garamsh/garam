@@ -1123,7 +1123,7 @@ ADRs:
   one-time code the site issues and the app redeems on its own host,
   bound to a state the app holds; signing out on any host ends the
   sign-in on all of them; the site redirects `/console/*` to the
-  console's origin
+  console's origin; decision 2's return path is superseded by 0135
 - [0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)
   — a top-level folder is a service's own tree, an executable unit
   named `<service>-<surface>` (`platform-web/`, `site-web/`,
@@ -1143,3 +1143,9 @@ ADRs:
   as `garam mcp cowork`; one package holds the session; `cowork`
   keeps `serve`, `migrate` and `probe`; supersedes 0127 and 0132 in
   part
+- [0135](./adr/0135-the-site-hands-a-sign-in-to-a-fixed-list-of-apps-and-cowork-shares-one-host-split-by-path.md)
+  — the site hands a sign-in to a fixed list of apps, the console and
+  cowork, named by identifier and never by origin; a return path is a
+  path on the chosen app, under a per-app rule; cowork's server and web
+  app share `cowork.garam.sh`, split by path at the gateway; supersedes
+  0131 in part, on decision 2's return path

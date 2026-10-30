@@ -6,6 +6,7 @@ import { FormField } from "@garam/design/components/form-field";
 import { Refusal } from "@garam/design/components/refusal";
 import { Button } from "@garam/design/ui/button";
 import { Input } from "@garam/design/ui/input";
+import { APP_PARAM, type HandoffApp } from "@garam/platform-sdk-ts/handoff";
 import { RETURN_PARAM } from "@garam/platform-sdk-ts/return-path";
 
 import { signInWithPassword, type SignInWithPasswordState } from "../actions";
@@ -22,11 +23,13 @@ const initialState: SignInWithPasswordState = { status: "idle" };
  * one (ADR-0041).
  *
  * `returnPath` is where the visitor was going before they were sent
- * here; the action lands there once signed in.
+ * here, on `app`; the action lands there once signed in.
  */
 export function PasswordSignInForm({
+  app = "console",
   returnPath = null,
 }: {
+  app?: HandoffApp;
   returnPath?: string | null;
 }) {
   const [state, formAction, pending] = useActionState(
@@ -41,6 +44,7 @@ export function PasswordSignInForm({
 
   return (
     <form action={formAction} className="flex w-full flex-col gap-4">
+      <input type="hidden" name={APP_PARAM} value={app} />
       {returnPath !== null && (
         <input type="hidden" name={RETURN_PARAM} value={returnPath} />
       )}

@@ -232,6 +232,11 @@ fails without them:
   hands back, and every address under `/console`, to the console. Both
   are read when a request arrives, so the published images name no
   deployment's hosts.
+- `site.coworkUrl` — where the site sends a sign-in for cowork
+  (ADR-0135), on the same terms. The site will not start without it,
+  and this chart deploys no cowork: the address is cowork's host, and
+  `docs/architecture/deployment-contract.md` §cowork's host states what
+  its gateway routes.
 
 **Each app holds a host-only session.** A person signs in on the site,
 and the console is handed a session of its own on its host by a

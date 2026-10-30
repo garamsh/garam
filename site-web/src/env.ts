@@ -18,6 +18,12 @@ const schema = z.object({
     process.env.NODE_ENV === "production"
       ? z.url()
       : z.url().default("http://console.garam.localhost:3000"),
+  // Where cowork's web app is served (ADR-0135), the other app the site
+  // hands a sign-in to. Read when a request arrives, as the console's.
+  GARAM_COWORK_URL:
+    process.env.NODE_ENV === "production"
+      ? z.url()
+      : z.url().default("http://cowork.garam.localhost:3100"),
 });
 
 /**
@@ -27,4 +33,5 @@ const schema = z.object({
 export const env = schema.parse({
   GARAM_API_URL: process.env.GARAM_API_URL,
   GARAM_CONSOLE_URL: process.env.GARAM_CONSOLE_URL,
+  GARAM_COWORK_URL: process.env.GARAM_COWORK_URL,
 });

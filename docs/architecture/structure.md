@@ -30,9 +30,8 @@ decision, and the same partitioning serves one deployable or many.
 
 ## Services
 
-**The tree is laid out as this section states, except for
-`policy/`,** which ADR-0130 decides and its first pull request creates.
-The platform's module is `platform/`, and its server binary is
+**The tree is laid out as this section states.** The platform's module
+is `platform/`, and its server binary is
 `platform/cmd/garam`
 ([ADR-0125](./adr/0125-the-repository-is-a-monorepo-of-services-laid-out-by-responsibility.md),
 [ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)).
@@ -50,6 +49,9 @@ Beside it:
 - **`cowork/`**, the first service in its own folder: its module,
   binary, database and documents
   ([cowork.md](../../cowork/docs/cowork.md)).
+- **`policy/`**, the policy service's Cargo workspace (ADR-0130): its
+  contract, its schema, its system tier and `crates/decision`. Its
+  binary and its database are not built yet (#1689).
 - **`go.work`** at the root, naming `platform/`, `garam-cli/`,
   `cowork/` and each Go library under `lib/`. Every Go entry point in
   the `Makefile` covers every module it names.
@@ -62,8 +64,8 @@ on are boundaries inside a service.
 - **A top-level folder is one responsibility**, of one of three kinds
   ([ADR-0132](./adr/0132-a-root-folder-is-an-executable-unit-named-service-surface-and-code-libraries-sit-under-lib.md)):
   - **a service's own tree**, its server binary under `cmd/`:
-    `platform/` and `cowork/`. ADR-0130 adds `policy/`, which its
-    first pull request creates;
+    `platform/` and `cowork/`. `policy/` is the Rust one, whose binary
+    is to sit at `crates/server/` (ADR-0130);
   - **an executable unit named `<service>-<surface>`**: `platform-web/`
     (the console), `site-web/` (the site) and `cowork-web/`. The one
     client spanning services is named for the product, `garam-cli/`
@@ -93,8 +95,8 @@ on are boundaries inside a service.
   into another service's `internal/` or its database is a
   defect, even where it builds.
 - **Dependencies point toward `platform/`**, and none points back.
-  `policy/` (ADR-0130, not yet built) sits below it: the platform and
-  cowork call `policy/`, and `policy/` calls no service.
+  `policy/` (ADR-0130, built in part) sits below it: the platform and
+  cowork are to call `policy/`, and `policy/` calls no service.
 - **Services authenticate to one another with tokens `platform/`
   issues**, never by network position.
 - **`platform-web/` and `site-web/` call only the services' public

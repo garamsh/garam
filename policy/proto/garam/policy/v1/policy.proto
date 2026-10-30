@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package garam.policy.v1;
+
+import "google/protobuf/struct.proto";
+
+// PolicyService is the policy service's wire contract (ADR-0130). Its
+// messages take the shape of OpenID AuthZEN Authorization API 1.0, over
+// gRPC. A caller sends who asks, what for and on what; the service
+// reads the subject's memberships and the resource's ancestors from its
+// own store, so no caller supplies the grounds of its own decision.
+service PolicyService {
+  // Evaluate answers whether the subject may perform the action on the
+  // resource.
+  rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
+
+  // Evaluations answers Evaluate's question many times in one call
+  // (ADR-0115). Each entry of the request is one question.
+  rpc Evaluations(EvaluationsRequest) returns (EvaluationsResponse);
+}
+
+// Subject is who asks. It carries no properties, unlike AuthZEN's: a
+// subject's attributes are the grounds a caller does not supply.
+message Subject {
+  // type is an entity type of the Cedar schema, such as `User`.
+  string type = 1;
+  // id is the subject's GRN.
+  string id = 2;
+}
+
+// Action is what the subject asks to do.
+message Action {
+  // name is an action of the Cedar schema, such as `project:read`.
+  string name = 1;
+}
+
+// Resource is what the action is asked of.
+message Resource {
+  // type is an entity type of the Cedar schema, such as `Project`.
+  string type = 1;
+  // id is the resource's GRN.
+  string id = 2;
+  // properties are the resource's attributes, sent only by a caller
+  // owning the resource's type.
+  google.protobuf.Struct properties = 3;
+}
+
+// Read says where an evaluation reads policies and entities from.
+enum Read {
+  READ_UNSPECIFIED = 0;
+  // READ_CACHED answers from the service's cache.
+  READ_CACHED = 1;
+  // READ_CURRENT reads storage when asked and fails rather than answer
+  // when storage cannot be read, as CheckCurrent does today (ADR-0078).
+  READ_CURRENT = 2;
+}
+
+// EvaluateRequest is one authorization question.
+message EvaluateRequest {
+  Subject subject = 1;
+  Action action = 2;
+  Resource resource = 3;
+  // context is the request's context, which the schema constrains.
+  google.protobuf.Struct context = 4;
+  Read read = 5;
+}
+
+// Reason names one ground of a decision.
+message Reason {
+  // policy_id names a policy that decided, or the policy an evaluation
+  // error arose in.
+  string policy_id = 1;
+  // error is empty unless the policy failed to evaluate, and any such
+  // failure makes the decision a deny (ADR-0137).
+  string error = 2;
+}
+
+// DecisionContext is what a decision carries beside its answer.
+message DecisionContext {
+  repeated Reason reasons = 1;
+}
+
+message EvaluateResponse {
+  // decision is the answer. The zero value is deny.
+  bool decision = 1;
+  DecisionContext context = 2;
+}
+
+// Evaluation is one question of an EvaluationsRequest. A field left
+// unset takes the request's value, as AuthZEN's defaults do.
+message Evaluation {
+  Subject subject = 1;
+  Action action = 2;
+  Resource resource = 3;
+  google.protobuf.Struct context = 4;
+}
+
+// EvaluationsRequest holds the defaults its evaluations share.
+message EvaluationsRequest {
+  Subject subject = 1;
+  Action action = 2;
+  Resource resource = 3;
+  google.protobuf.Struct context = 4;
+  Read read = 5;
+  repeated Evaluation evaluations = 6;
+}
+
+message EvaluationsResponse {
+  // evaluations holds one answer per evaluation, in the request's order.
+  repeated EvaluateResponse evaluations = 1;
+}

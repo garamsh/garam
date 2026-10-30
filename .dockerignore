@@ -11,4 +11,5 @@ site-web
 **/node_modules
 deploy
 platform/tests
+policy
 *.md

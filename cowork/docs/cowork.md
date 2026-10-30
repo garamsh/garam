@@ -66,6 +66,10 @@ nothing publishes or deploys either.
   request (`make cowork-image-e2e cowork-web-image-e2e`), and
   `deploy/local/docker-compose.yml` runs them behind its `cowork`
   profile, as `deploy/local/README.md` §cowork states.
+- **Its host.** The server and the web app share `cowork.garam.sh`,
+  split by path at the gateway (ADR-0135,
+  [deployment-contract.md](../../docs/architecture/deployment-contract.md)
+  §cowork's host).
 - **Not yet:** the Postgres hub several instances need, and publishing
   and deploying the images.
 
@@ -97,6 +101,15 @@ agents.
   `cowork-page` for one page. Every role grants both (#1663).
 - cowork answers 503 whenever the platform cannot be reached, and
   decides nothing alone.
+- **The session.** A person signs in on the site and cowork-web is
+  handed a session of its own on its host, by ADR-0131's one-time code
+  ([sign-in.md](../../docs/architecture/sign-in.md)). The cookie is
+  host-only, and no parent domain is involved. Signing out on any host
+  ends it, which cowork-web learns on its next request, and sends the
+  visitor to sign in. An open sync or live WebSocket makes no next
+  request: it is checked once, at the upgrade, so it stays open past a
+  sign-out until it closes. #1721 closes that window, and blocks the
+  deployment.
 - `checkPermissions` for messaging: `cowork:channel-read` and
   `cowork:channel-post` on the organization and on a
   `cowork-channel` (ADR-0128).
@@ -286,7 +299,8 @@ signs in, what it keeps and the contract its commands keep.
 - **The session is garam's.** `garam login` signs it in, and every
   cowork command presents its bearer.
 - **Where it talks.** `--cowork-endpoint` or `COWORK_ENDPOINT` names
-  cowork (default `https://cowork.garam.sh`), and `--endpoint` or
+  cowork's origin (default `https://cowork.garam.sh`), where the API
+  is under `/api` and MCP at `/mcp`, and `--endpoint` or
   `GARAM_ENDPOINT` the platform.
 - **The workspace** is `--org`, or the one `garam orgs use` saved.
 - **The commands.** `garam cowork ...` derives one per operation of
@@ -374,10 +388,6 @@ builds from `garam-cli/` for the client commands.
 
 ## Open questions
 
-- **The session cookie in production.** The platform's cookie is
-  host-only, so it reaches cowork on `localhost` at any port, but not
-  `cowork.garam.sh` from `console.garam.sh`. Scoping it to the parent
-  domain is #1660's.
 - **OAuth for remote AI services.** Claude's and ChatGPT's remote
   connectors sign in by OAuth, which needs the platform as an
   authorization server. Not scheduled.

@@ -462,6 +462,24 @@ func (e InvitationPreviewState) Valid() bool {
 	}
 }
 
+// Defines values for LoginReturnPathApp.
+const (
+	Console LoginReturnPathApp = "console"
+	Cowork  LoginReturnPathApp = "cowork"
+)
+
+// Valid indicates whether the value is a known member of the LoginReturnPathApp enum.
+func (e LoginReturnPathApp) Valid() bool {
+	switch e {
+	case Console:
+		return true
+	case Cowork:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OAuthErrorError.
 const (
 	AccessDenied         OAuthErrorError = "access_denied"
@@ -1190,9 +1208,15 @@ type IssuedOperatorKey struct {
 
 // LoginReturnPath defines model for LoginReturnPath.
 type LoginReturnPath struct {
-	// Next The console path to land on once signed in.
+	// App The app the sign-in is for; the console where absent.
+	App *LoginReturnPathApp `json:"app,omitempty"`
+
+	// Next The path on that app to land on once signed in.
 	Next *string `json:"next,omitempty"`
 }
+
+// LoginReturnPathApp The app the sign-in is for; the console where absent.
+type LoginReturnPathApp string
 
 // Member defines model for Member.
 type Member struct {
@@ -2173,18 +2197,18 @@ type ClientInterface interface {
 	// Corresponds with GET /auth/login/{provider} (the `Login` operationId).
 	Login(ctx context.Context, provider Provider, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// LoginWithReturnPathWithBody Start the OAuth flow, landing on a console path afterwards.
+	// LoginWithReturnPathWithBody Start the OAuth flow, landing on a path of one of garam's apps afterwards.
 	//
-	// The `GET` flow, with where to land once it completes. `next` is taken only where it is a console path (`/console` or below it, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on `/console`. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it.
+	// The `GET` flow, with where to land once it completes. `app` names the app the sign-in is for, the console where it is absent, and any other value is refused (ADR-0135). `next` is taken only where it is a path on that app (`/console` or below it for the console, an absolute path with no host for cowork, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on the app's default. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it. A sign-in for cowork lands on the site's `/handoff` for it.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /auth/login/{provider} (the `LoginWithReturnPath` operationId).
 	LoginWithReturnPathWithBody(ctx context.Context, provider Provider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// LoginWithReturnPathWithFormdataBody Start the OAuth flow, landing on a console path afterwards.
+	// LoginWithReturnPathWithFormdataBody Start the OAuth flow, landing on a path of one of garam's apps afterwards.
 	//
-	// The `GET` flow, with where to land once it completes. `next` is taken only where it is a console path (`/console` or below it, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on `/console`. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it.
+	// The `GET` flow, with where to land once it completes. `app` names the app the sign-in is for, the console where it is absent, and any other value is refused (ADR-0135). `next` is taken only where it is a path on that app (`/console` or below it for the console, an absolute path with no host for cowork, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on the app's default. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it. A sign-in for cowork lands on the site's `/handoff` for it.
 	//
 	// Takes a body of the `application/x-www-form-urlencoded` content type.
 	//
@@ -3264,9 +3288,9 @@ func (c *Client) Login(ctx context.Context, provider Provider, reqEditors ...Req
 	return c.Client.Do(req)
 }
 
-// LoginWithReturnPathWithBody Start the OAuth flow, landing on a console path afterwards.
+// LoginWithReturnPathWithBody Start the OAuth flow, landing on a path of one of garam's apps afterwards.
 //
-// The `GET` flow, with where to land once it completes. `next` is taken only where it is a console path (`/console` or below it, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on `/console`. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it.
+// The `GET` flow, with where to land once it completes. `app` names the app the sign-in is for, the console where it is absent, and any other value is refused (ADR-0135). `next` is taken only where it is a path on that app (`/console` or below it for the console, an absolute path with no host for cowork, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on the app's default. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it. A sign-in for cowork lands on the site's `/handoff` for it.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3283,9 +3307,9 @@ func (c *Client) LoginWithReturnPathWithBody(ctx context.Context, provider Provi
 	return c.Client.Do(req)
 }
 
-// LoginWithReturnPathWithFormdataBody Start the OAuth flow, landing on a console path afterwards.
+// LoginWithReturnPathWithFormdataBody Start the OAuth flow, landing on a path of one of garam's apps afterwards.
 //
-// The `GET` flow, with where to land once it completes. `next` is taken only where it is a console path (`/console` or below it, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on `/console`. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it.
+// The `GET` flow, with where to land once it completes. `app` names the app the sign-in is for, the console where it is absent, and any other value is refused (ADR-0135). `next` is taken only where it is a path on that app (`/console` or below it for the console, an absolute path with no host for cowork, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on the app's default. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it. A sign-in for cowork lands on the site's `/handoff` for it.
 //
 // Takes a body of the `application/x-www-form-urlencoded` content type.
 //
@@ -9315,18 +9339,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /auth/login/{provider} (the `Login` operationId).
 	LoginWithResponse(ctx context.Context, provider Provider, reqEditors ...RequestEditorFn) (*LoginResponse, error)
 
-	// LoginWithReturnPathWithBodyWithResponse Start the OAuth flow, landing on a console path afterwards.
+	// LoginWithReturnPathWithBodyWithResponse Start the OAuth flow, landing on a path of one of garam's apps afterwards.
 	//
-	// The `GET` flow, with where to land once it completes. `next` is taken only where it is a console path (`/console` or below it, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on `/console`. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it.
+	// The `GET` flow, with where to land once it completes. `app` names the app the sign-in is for, the console where it is absent, and any other value is refused (ADR-0135). `next` is taken only where it is a path on that app (`/console` or below it for the console, an absolute path with no host for cowork, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on the app's default. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it. A sign-in for cowork lands on the site's `/handoff` for it.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /auth/login/{provider} (the `LoginWithReturnPath` operationId).
 	LoginWithReturnPathWithBodyWithResponse(ctx context.Context, provider Provider, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*LoginWithReturnPathResponse, error)
 
-	// LoginWithReturnPathWithFormdataBodyWithResponse Start the OAuth flow, landing on a console path afterwards.
+	// LoginWithReturnPathWithFormdataBodyWithResponse Start the OAuth flow, landing on a path of one of garam's apps afterwards.
 	//
-	// The `GET` flow, with where to land once it completes. `next` is taken only where it is a console path (`/console` or below it, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on `/console`. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it.
+	// The `GET` flow, with where to land once it completes. `app` names the app the sign-in is for, the console where it is absent, and any other value is refused (ADR-0135). `next` is taken only where it is a path on that app (`/console` or below it for the console, an absolute path with no host for cowork, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on the app's default. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it. A sign-in for cowork lands on the site's `/handoff` for it.
 	//
 	// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -15921,9 +15945,9 @@ func (c *ClientWithResponses) LoginWithResponse(ctx context.Context, provider Pr
 	return ParseLoginResponse(rsp)
 }
 
-// LoginWithReturnPathWithBodyWithResponse Start the OAuth flow, landing on a console path afterwards.
+// LoginWithReturnPathWithBodyWithResponse Start the OAuth flow, landing on a path of one of garam's apps afterwards.
 //
-// The `GET` flow, with where to land once it completes. `next` is taken only where it is a console path (`/console` or below it, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on `/console`. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it.
+// The `GET` flow, with where to land once it completes. `app` names the app the sign-in is for, the console where it is absent, and any other value is refused (ADR-0135). `next` is taken only where it is a path on that app (`/console` or below it for the console, an absolute path with no host for cowork, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on the app's default. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it. A sign-in for cowork lands on the site's `/handoff` for it.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -15936,9 +15960,9 @@ func (c *ClientWithResponses) LoginWithReturnPathWithBodyWithResponse(ctx contex
 	return ParseLoginWithReturnPathResponse(rsp)
 }
 
-// LoginWithReturnPathWithFormdataBodyWithResponse Start the OAuth flow, landing on a console path afterwards.
+// LoginWithReturnPathWithFormdataBodyWithResponse Start the OAuth flow, landing on a path of one of garam's apps afterwards.
 //
-// The `GET` flow, with where to land once it completes. `next` is taken only where it is a console path (`/console` or below it, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on `/console`. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it.
+// The `GET` flow, with where to land once it completes. `app` names the app the sign-in is for, the console where it is absent, and any other value is refused (ADR-0135). `next` is taken only where it is a path on that app (`/console` or below it for the console, an absolute path with no host for cowork, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on the app's default. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it. A sign-in for cowork lands on the site's `/handoff` for it.
 //
 // Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
 //

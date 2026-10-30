@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import {
   Card,
@@ -14,7 +14,9 @@ import {
   getSession,
   listProviders,
 } from "@/features/auth";
+import { APP_PARAM, handoffAppOf } from "@garam/platform-sdk-ts/handoff";
 import {
+  DEFAULT_RETURN_PATH,
   RETURN_PARAM,
   safeReturnPath,
   withReturnPath,
@@ -25,7 +27,7 @@ import {
   InvitationContext,
   readInvitationContext,
 } from "../_components/invitation-context";
-import { consoleUrl } from "@/lib/console-url";
+import { appUrl } from "@/lib/app-url";
 
 /**
  * Head metadata for the sign-in route; Next.js reads it by name. The
@@ -43,9 +45,12 @@ type Props = {
 
 /**
  * The way in. A visitor who already holds a valid session is sent on
- * to the console instead of being offered the form again. An API that
- * did not answer is said out loud: every way in from here runs through
- * it, so offering the buttons would be offering a door that is shut.
+ * to the app they came for instead of being offered the form again:
+ * the console, unless the address names another (ADR-0135). One off the
+ * list has no page here, rather than signing in to another app. An API
+ * that did not answer is said out loud: every way in from here runs
+ * through it, so offering the buttons would be offering a door that is
+ * shut.
  *
  * Which provider buttons appear is the backend's answer rather than
  * this build's assumption (ADR-0010): a provider it has not registered
@@ -54,20 +59,25 @@ type Props = {
  * A visitor the proxy sent here carries where they were going as the
  * return path, and signing in lands there. Where that is an invitation,
  * the page names the organization and role it admits to, and the way to
- * register carries the invitation along.
+ * register carries the invitation along. Invitations and registering
+ * are the console's alone, so a path of another app's reads no
+ * invitation and that link does not carry it.
  */
 export default async function LoginPage({ searchParams }: Props) {
-  const returnPath = safeReturnPath((await searchParams)[RETURN_PARAM]);
+  const params = await searchParams;
+  const app = handoffAppOf(params[APP_PARAM]);
+  if (app === null) notFound();
+  const returnPath = safeReturnPath(params[RETURN_PARAM], app);
   const session = await getSession();
   if (session.status === "signed-in") {
-    redirect(consoleUrl(returnPath ?? "/console"));
+    redirect(appUrl(app, returnPath ?? DEFAULT_RETURN_PATH[app]));
   }
   if (session.status === "unreachable") {
     return <ApiUnreachableCard subject="the way in" />;
   }
   const [providers, invitation] = await Promise.all([
     listProviders(),
-    readInvitationContext(returnPath),
+    readInvitationContext(app === "console" ? returnPath : null),
   ]);
   const offersGoogle = providers.includes("google");
   return (
@@ -94,7 +104,7 @@ export default async function LoginPage({ searchParams }: Props) {
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         {invitation !== null && <InvitationContext context={invitation} />}
-        <PasswordSignInForm returnPath={returnPath} />
+        <PasswordSignInForm app={app} returnPath={returnPath} />
         {offersGoogle && (
           <>
             <div className="flex items-center gap-3">
@@ -103,7 +113,7 @@ export default async function LoginPage({ searchParams }: Props) {
               <span aria-hidden className="h-px flex-1 bg-border" />
             </div>
             <div className="flex flex-col items-center gap-3">
-              <GoogleSignInButton returnPath={returnPath} />
+              <GoogleSignInButton app={app} returnPath={returnPath} />
             </div>
           </>
         )}
@@ -114,7 +124,10 @@ export default async function LoginPage({ searchParams }: Props) {
             ? "No garam account yet?"
             : "Holding an invitation and no account yet?"}{" "}
           <Link
-            href={withReturnPath("/register", returnPath)}
+            href={withReturnPath(
+              "/register",
+              app === "console" ? returnPath : null,
+            )}
             // The return path can hold an invitation token: a prefetch
             // would send it in a request nobody asked for.
             prefetch={false}

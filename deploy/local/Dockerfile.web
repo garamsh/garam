@@ -28,12 +28,13 @@ ARG APP
 ARG GARAM_API_URL=http://api:8080
 ENV GARAM_API_URL=$GARAM_API_URL
 
-# Each app's env.ts requires the other's address in production, and
-# cowork-web's requires cowork's too, and the build evaluates it.
-# Nothing the build emits holds them: each is read again when a request
-# arrives, so this stage's values stop here and the runtime's are the
-# ones served (ADR-0131).
+# Each app's env.ts requires the addresses of the apps it sends a
+# visitor to in production, and the build evaluates it. Nothing the
+# build emits holds them: each is read again when a request arrives, so
+# this stage's values stop here and the runtime's are the ones served
+# (ADR-0131).
 ENV GARAM_CONSOLE_URL=http://console.invalid GARAM_SITE_URL=http://site.invalid \
+  GARAM_COWORK_URL=http://cowork-web.invalid \
   COWORK_API_URL=http://cowork.invalid COWORK_SYNC_URL=ws://cowork.invalid
 
 COPY . .

@@ -12,6 +12,29 @@ import (
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 )
 
+// TestOAuthStateStore_HoldsACoworkHandoff stores the form a provider
+// sign-in for cowork holds, which `loginDestination` in
+// platform/internal/api/return_path.go writes, against the schema's
+// check, and reads it back. The handoff naming another app is refused
+// by the same check, so the first is the check admitting that form and
+// not a store that admits everything.
+func TestOAuthStateStore_HoldsACoworkHandoff(t *testing.T) {
+	ctx := context.Background()
+	s := authnpg.NewOAuthStateStore(pool(t))
+
+	const handoff = "/handoff?app=cowork&next=%2Facme%2Fpage-1"
+	state, err := authn.NewToken()
+	require.NoError(t, err)
+	require.NoError(t, s.Issue(ctx, state, time.Minute, handoff))
+	returnPath, err := s.Consume(ctx, state)
+	require.NoError(t, err)
+	assert.Equal(t, handoff, returnPath, "the handoff is spent with its state")
+
+	refused, err := authn.NewToken()
+	require.NoError(t, err)
+	assert.Error(t, s.Issue(ctx, refused, time.Minute, "/handoff?app=evil&next=%2F"))
+}
+
 // TestOAuthStateStore_RoundTrip drives a login state through the shape
 // the callback rests on: live once, spent by the callback that
 // completes, and gone when its flow has run out. The first consume is

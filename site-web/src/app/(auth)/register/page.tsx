@@ -20,7 +20,7 @@ import {
   InvitationContext,
   readInvitationContext,
 } from "../_components/invitation-context";
-import { consoleUrl } from "@/lib/console-url";
+import { appUrl } from "@/lib/app-url";
 
 /**
  * Head metadata for the register route; Next.js reads it by name. The
@@ -50,7 +50,7 @@ export default async function RegisterPage({ searchParams }: Props) {
   const returnPath = safeReturnPath((await searchParams)[RETURN_PARAM]);
   const session = await getSession();
   if (session.status === "signed-in") {
-    redirect(consoleUrl(returnPath ?? "/console"));
+    redirect(appUrl("console", returnPath ?? "/console"));
   }
   if (session.status === "unreachable") {
     return <ApiUnreachableCard subject="the registration form" />;

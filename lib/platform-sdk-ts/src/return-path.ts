@@ -5,17 +5,21 @@
  * exists — which is how an invitation link opened signed out keeps its
  * token through either.
  *
- * `next` arrives in a URL anyone can write, so only a path inside the
- * console is returned to. Anything else — another origin, a
- * protocol-relative `//host`, a backslash a browser reads as a slash —
- * is dropped, and the caller lands where it would have without one.
+ * `next` arrives in a URL anyone can write, so only a path on the app
+ * the sign-in is for is returned to (ADR-0135): inside `/console` for
+ * the console, any path of cowork's for cowork. Anything else — another
+ * origin, a protocol-relative `//host`, a backslash a browser reads as
+ * a slash — is dropped, and the caller lands where it would have
+ * without one.
  */
+
+import type { HandoffApp } from "./handoff";
 
 /** The parameter `/login` and `/register` read the return path from. */
 export const RETURN_PARAM = "next";
 
 /**
- * The request header the console's `proxy.ts` stamps a request with: the path
+ * The request header an app's `proxy.ts` stamps a request with: the path
  * and query it asked for, so a page or an action that finds the
  * session gone can send the visitor to sign in carrying it. The proxy
  * overwrites whatever a client sent under this name, and every reader
@@ -28,21 +32,38 @@ const INVITATION_PATH = /^\/console\/invitations\/([^/?#]+)$/;
 /** The bound on a return path, in UTF-8 bytes, as the backend counts. */
 const MAX_RETURN_PATH_BYTES = 2048;
 
+/** Where a sign-in for each app lands when it carries no return path. */
+export const DEFAULT_RETURN_PATH: Record<HandoffApp, string> = {
+  console: "/console",
+  cowork: "/",
+};
+
 /**
- * `value` as a console path to return to, or null where it is not one:
- * the console or a path below it, well-formed and at most
- * `MAX_RETURN_PATH_BYTES` in UTF-8, with no backslash, control
- * character or dot segment. `platform/internal/api/return_path.go`
- * holds the same rule for the provider sign-in, and
+ * `value` as a path on `app` to return to, or null where it is not one:
+ * an absolute path with no host, inside `/console` for the console,
+ * well-formed and at most `MAX_RETURN_PATH_BYTES` in UTF-8, with no
+ * backslash, control character or dot segment.
+ * `platform/internal/api/return_path.go` holds the same rule for the
+ * provider sign-in, and
  * `platform/internal/api/testdata/return-path-vectors.json` is the
  * table both are tested against.
  */
-export function safeReturnPath(value: unknown): string | null {
+export function safeReturnPath(
+  value: unknown,
+  app: HandoffApp = "console",
+): string | null {
   if (typeof value !== "string" || !value.isWellFormed()) return null;
   if (new TextEncoder().encode(value).length > MAX_RETURN_PATH_BYTES) {
     return null;
   }
-  if (value !== "/console" && !value.startsWith("/console/")) return null;
+  if (!value.startsWith("/") || value.startsWith("//")) return null;
+  if (
+    app === "console" &&
+    value !== "/console" &&
+    !value.startsWith("/console/")
+  ) {
+    return null;
+  }
   // A backslash or a control character is read by some browsers as a
   // path separator or dropped, either of which can turn a console path
   // into another origin's.
@@ -52,12 +73,14 @@ export function safeReturnPath(value: unknown): string | null {
 }
 
 /**
- * Whether the path part of `path` holds a `.` or `..` segment, written
- * plainly or percent-encoded, which a browser's URL parser resolves.
+ * Whether `path` holds a `.` or `..` segment before its query, written
+ * plainly or percent-encoded, which a browser's URL parser resolves. A
+ * fragment counts as path, as `platform/internal/api/return_path.go`
+ * states.
  */
 function hasDotSegment(path: string): boolean {
   return path
-    .split(/[?#]/, 1)[0]
+    .split("?", 1)[0]
     .split("/")
     .some((segment) => {
       const plain = segment.toLowerCase().replaceAll("%2e", ".");

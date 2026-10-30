@@ -13,6 +13,7 @@ what the binary enforces about key material, and what is not known.
 - A Transit provider for message signing keys
 - The message issuer is kept for the deployment's life
 - The migrate job
+- cowork's host
 - Termination
 - The PodSecurity level is the deployment's
 - Not established
@@ -515,6 +516,42 @@ as 403 `signature rejected: issuer` on every message once the adapter's
   `github.com/golang-migrate/migrate/v4` v4.20.1 (`go.mod`) and is
   checkable against the driver it pins.
 
+## cowork's host
+
+cowork's server and web app share one host, `cowork.garam.sh`
+(ADR-0135). The session cookie is host-only to the host it was handed
+to and the browser opens the sync and live WebSockets to the server, so
+the two have to answer there. The gateway in front of the host owes
+this split:
+
+| Path | Goes to | Note |
+|---|---|---|
+| `/api/` | cowork's server, port 8090 | the `/api` prefix stripped; WebSocket upgrades carried |
+| `/mcp` | cowork's server, port 8090 | as it stands |
+| everything else | cowork-web, port 3000 | |
+
+The gateway keeps the request's `Host`, which cowork's WebSocket origin
+check compares the browser's `Origin` against, and says in
+`x-forwarded-proto` whether it terminated TLS, which decides whether
+cowork-web's state cookie is `Secure`.
+
+The two processes owe matching configuration:
+
+- `COWORK_SYNC_URL`, on cowork-web, is this host with the prefix:
+  `wss://cowork.garam.sh/api`. The browser opens the sync and live
+  WebSockets under it, and without `/api` they reach the web app.
+- `COWORK_API_URL`, on cowork-web, is the server's internal address,
+  with no prefix, since it does not pass the gateway.
+- `COWORK_WEB_ORIGINS`, on the server, names this host:
+  `cowork.garam.sh`. It lists the only ancestors an HTML artifact may
+  be framed by, so without it no artifact renders in the app.
+
+This chart deploys no cowork. The site's `site.coworkUrl` names this
+host, and its workloads and routes are the deployment's.
+`deploy/local/cowork-gateway.Caddyfile` is the same split on the local
+stack. No check runs it: the browser suite reaches the server on a port
+of its own.
+
 ## Termination
 
 Every serve command installs a SIGTERM and SIGINT handler
@@ -638,6 +675,8 @@ that would assert one:
   reached over plaintext gRPC inside the trust boundary
 - [ADR-0009](./adr/0009-web-frontend.md) — the web app and its `/api/*`
   rewrite
+- [ADR-0135](./adr/0135-the-site-hands-a-sign-in-to-a-fixed-list-of-apps-and-cowork-shares-one-host-split-by-path.md)
+  — the split on cowork's host
 - [ADR-0014](./adr/0014-agent-authentication.md) — a listener of its
   own for machine callers
 - [ADR-0015](./adr/0015-operator-identity.md) — key material travels as

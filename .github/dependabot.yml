@@ -94,6 +94,10 @@ updates:
   # Covers a newer tag, rewriting the tag and the digest together. It
   # runs the docker ecosystem's own update checker, so the two cases
   # that entry does not cover are not covered here either.
+  #
+  # Not confirmed to cover: the caddy image cowork-gateway pulls from
+  # mirror.gcr.io in that file. Until a proposed bump shows it does, no
+  # bot moves that pin, so moving it is the PM's (AGENTS.md §Roles).
   - package-ecosystem: "docker-compose"
     directory: "/deploy/local"
     schedule:

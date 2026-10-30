@@ -91,6 +91,7 @@ moves that one server rather than standing up a second.
 - `Dockerfile.cowork` — multi-stage build of the `cowork` binary;
   context is the repository root, kept to cowork's module by
   `Dockerfile.cowork.dockerignore`.
+- `cowork-gateway.Caddyfile` — the path split on cowork's host.
 - `Dockerfile.web` — multi-stage Next.js standalone build of the app
   `APP` names: `platform-web`, `site-web` or `cowork-web`; context is
   the repository root, kept to the web packages by
@@ -141,39 +142,46 @@ docker compose -f deploy/local/docker-compose.yml --profile web --profile cowork
 docker compose -f deploy/local/docker-compose.yml --profile web --profile cowork down
 ```
 
-The `cowork` profile adds four services: `cowork-db`, a one-shot that
+The `cowork` profile adds five services: `cowork-db`, a one-shot that
 creates the `cowork` database on the one Postgres where absent;
 `cowork-migrate`, which applies `cowork/migrations/` to it; `cowork`,
-the server; and `cowork-web`, its web app. cowork keeps artifacts in
-the `rustfs` service's `cowork` bucket.
+the server; `cowork-web`, its web app; and `cowork-gateway`, which
+serves both on one host. cowork keeps artifacts in the `rustfs`
+service's `cowork` bucket.
 
-Open cowork at `http://console.garam.localhost:3100`. It has no
-sign-in of its own: sign in at the console, which needs the `web`
-profile, and the console's session cookie, which names that host and
-not a port, reaches cowork-web there. For the same reason the browser
-opens a page's sync WebSocket to `console.garam.localhost:8090`.
+Open cowork at `http://cowork.garam.localhost:3100`. It has no sign-in
+of its own: a visitor is sent to sign in on the site, which needs the
+`web` profile, and is handed a session of that host's own (ADR-0131,
+ADR-0135).
 
-- `localhost:8090` — cowork's API, sync, live and MCP endpoints, and
-  its `/healthz` and `/readyz`.
-- `localhost:8092` — the user-content origin HTML artifacts are viewed
-  from.
-- `localhost:3100` — cowork-web.
+The gateway splits the host by path as a deployment's does
+(`cowork-gateway.Caddyfile`, and
+[deployment-contract.md](../../docs/architecture/deployment-contract.md)
+§cowork's host), so the session cookie rides the sync and live
+WebSockets:
 
-`COWORK_LOCAL_PORT`, `COWORK_LOCAL_USERCONTENT_PORT` and
-`COWORK_LOCAL_WEB_PORT` move them. `make cowork-image-e2e
-cowork-web-image-e2e` checks both images outside the stack, as
-`images.yml` does.
+- `/api/`, with the prefix stripped — cowork's API, sync, live,
+  `/healthz` and `/readyz`.
+- `/mcp` — cowork's MCP endpoint.
+- Everything else — cowork-web.
+
+`garam` refuses plain HTTP to a host that is not loopback, so point it
+at this gateway with `COWORK_ENDPOINT=http://localhost:3100`.
+`localhost:8092` is the user-content origin HTML artifacts are viewed
+from. `COWORK_LOCAL_WEB_PORT` and `COWORK_LOCAL_USERCONTENT_PORT` move
+them, and a moved gateway port moves `GARAM_COWORK_URL` with it. `make
+cowork-image-e2e cowork-web-image-e2e` checks both images outside the
+stack, as `images.yml` does.
 
 ## Startup order
 
 `migrate` runs once against a healthy Postgres and exits; `authz` and
 `api` wait for it to have exited successfully. `api` additionally waits
 for `authz`, and `web` and `site` for `api`. `cowork-migrate` waits
-for `cowork-db`, `cowork` for it, `rustfs` and `api`, and `cowork-web`
-for `cowork`. Every server's healthcheck is its own readiness probe,
-so a service is healthy here when it can serve a request and not
-merely when it has bound its port; cowork-web, which serves no probe,
-is healthy once it renders its home page.
+for `cowork-db`, `cowork` for it, `rustfs` and `api`, `cowork-web` for
+`cowork`, and `cowork-gateway` for `cowork-web`. Every server's
+healthcheck is its own readiness probe, so a service is healthy here
+when it can serve a request and not merely when it has bound its port.
 
 ## Probes
 

@@ -10,8 +10,13 @@ import (
 )
 
 // defaultCoworkEndpoint is the cowork a command talks to where neither
-// --cowork-endpoint nor COWORK_ENDPOINT names one.
+// --cowork-endpoint nor COWORK_ENDPOINT names one. The origin is shared
+// with cowork's web app, and its gateway serves the API under
+// coworkAPIPath and the tools at coworkMCPPath (ADR-0135).
 const defaultCoworkEndpoint = "https://cowork.garam.sh"
+
+// coworkAPIPath is where a cowork origin serves the API.
+const coworkAPIPath = "/api"
 
 // coworkFlag binds --cowork-endpoint to cmd and every command under
 // it, and answers where the value lands.
@@ -35,6 +40,17 @@ func coworkServer(flag *string) apiServer {
 	}
 }
 
+// coworkAPI answers the base of the API at the origin server answers.
+func coworkAPI(server apiServer) apiServer {
+	return func(c *userCommand) (string, error) {
+		origin, err := server(c)
+		if err != nil {
+			return "", err
+		}
+		return origin + coworkAPIPath, nil
+	}
+}
+
 // newCoworkCommand is the noun cowork's commands sit under (ADR-0133):
 // those derived from cowork's API, added beside it, and the three that
 // call cowork's MCP tools because the API does not carry a page's
@@ -47,7 +63,7 @@ func newCoworkCommand() (*cobra.Command, apiServer) {
 	pages := &cobra.Command{Use: "pages", Short: "The API's pages"}
 	pages.AddCommand(newCoworkPagesReadCommand(flags, server), newCoworkPagesCreateCommand(flags, server))
 	cowork.AddCommand(pages, newCoworkSearchCommand(flags, server))
-	return cowork, server
+	return cowork, coworkAPI(server)
 }
 
 // coworkRun is one run of a command calling cowork's tools: the user

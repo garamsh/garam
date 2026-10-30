@@ -17,12 +17,19 @@ import (
 )
 
 // startLoginWith posts the provider login form with next, as the
-// console's Google button does, and answers the state cookie the login
-// set and the response.
+// site's Google button does for the console, and answers the state
+// cookie the login set and the response.
 func startLoginWith(t *testing.T, f *fixture, next string) (string, *httptest.ResponseRecorder) {
 	t.Helper()
+	return startLoginFor(t, f, url.Values{"next": {next}})
+}
+
+// startLoginFor posts the provider login form with form, as the site's
+// Google button does, and answers the same.
+func startLoginFor(t *testing.T, f *fixture, form url.Values) (string, *httptest.ResponseRecorder) {
+	t.Helper()
 	req := httptest.NewRequest(http.MethodPost, "/auth/login/google",
-		strings.NewReader(url.Values{"next": {next}}.Encode()))
+		strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 	f.handler.ServeHTTP(rec, req)
@@ -58,11 +65,16 @@ func TestLoginWithReturnPath_LandsOnTheConsolePathItWasStartedFor(t *testing.T) 
 	assert.Equal(t, next, rec.Header().Get("Location"))
 }
 
+// maxReturnPath is the bound a held destination stays within, the
+// octet_length the oauth_states check holds.
+const maxReturnPath = 2048
+
 // returnPathVectors is testdata/return-path-vectors.json, the table the
 // console's TypeScript rule is tested against too.
 type returnPathVectors struct {
 	Vectors []struct {
 		Name     string `json:"name"`
+		App      string `json:"app"`
 		Input    string `json:"input"`
 		InputHex string `json:"inputHex"`
 		Accepted bool   `json:"accepted"`
@@ -70,12 +82,14 @@ type returnPathVectors struct {
 }
 
 // TestLoginWithReturnPath_HoldsTheSharedVectors posts every vector
-// both rules share as `next` and follows the login to its callback:
-// an accepted path is where it lands, and a dropped one lands on
-// /console. A cross-site form can post any of them, so what it decides
-// is at most where inside the console the login lands. A path one rule
-// accepts and the other drops fails here or in
-// platform-web/src/lib/__tests__/return-path.test.ts; the accepted
+// both rules share as `next`, for the app it names, and follows the
+// login to its callback: an accepted console path is where it lands
+// and a dropped one lands on /console, and a cowork path lands on the
+// site's handoff to cowork carrying it, or `/` where it was dropped or
+// its handoff would pass the bound (ADR-0135). A cross-site form can post any of them, so what it
+// decides is at most where inside one of the apps the login lands. A
+// path one rule accepts and the other drops fails here or in
+// lib/platform-sdk-ts/src/__tests__/return-path.test.ts; the accepted
 // vectors are the control for the dropped ones.
 func TestLoginWithReturnPath_HoldsTheSharedVectors(t *testing.T) {
 	raw, err := os.ReadFile("testdata/return-path-vectors.json")
@@ -92,8 +106,12 @@ func TestLoginWithReturnPath_HoldsTheSharedVectors(t *testing.T) {
 				require.NoError(t, err)
 				next = string(decoded)
 			}
+			form := url.Values{"next": {next}}
+			if v.App != "" {
+				form.Set("app", v.App)
+			}
 			f := callbackFixture(t)
-			state, _ := startLoginWith(t, f, next)
+			state, _ := startLoginFor(t, f, form)
 
 			rec := f.callback(t, state)
 
@@ -101,6 +119,16 @@ func TestLoginWithReturnPath_HoldsTheSharedVectors(t *testing.T) {
 			want := "/console"
 			if v.Accepted {
 				want = escapeNonASCII(next)
+			}
+			if v.App == "cowork" {
+				landed := "/"
+				if v.Accepted {
+					landed = next
+				}
+				if len(coworkHandoffPath(landed)) > maxReturnPath {
+					landed = "/"
+				}
+				want = coworkHandoffPath(landed)
 			}
 			assert.Equal(t, want, rec.Header().Get("Location"))
 		})
@@ -121,16 +149,80 @@ func escapeNonASCII(path string) string {
 	return b.String()
 }
 
+// coworkHandoffPath is the site's handoff to cowork carrying path,
+// where a provider sign-in for cowork lands (ADR-0135).
+func coworkHandoffPath(path string) string {
+	return "/handoff?" + url.Values{"app": {"cowork"}, "next": {path}}.Encode()
+}
+
+// TestLoginWithReturnPath_DropsACoworkPathItsHandoffWouldOverflow
+// posts a cowork path the rule accepts and whose handoff passes the
+// bound once encoded, and finds the login landing on cowork's home:
+// the row holds no more than the bound. The path one byte shorter,
+// whose handoff is exactly the bound, is the control.
+func TestLoginWithReturnPath_DropsACoworkPathItsHandoffWouldOverflow(t *testing.T) {
+	fits := "/" + strings.Repeat("a", 2020)
+	require.Len(t, coworkHandoffPath(fits), maxReturnPath)
+
+	for name, tc := range map[string]struct{ next, landed string }{
+		"the bound":      {fits, fits},
+		"past the bound": {fits + "a", "/"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := callbackFixture(t)
+			state, _ := startLoginFor(t, f, url.Values{"app": {"cowork"}, "next": {tc.next}})
+
+			rec := f.callback(t, state)
+
+			require.Equal(t, http.StatusFound, rec.Code, rec.Body.String())
+			assert.Equal(t, coworkHandoffPath(tc.landed), rec.Header().Get("Location"))
+		})
+	}
+}
+
+// TestLoginWithReturnPath_RefusesAnAppNotOnTheList posts an app the
+// site hands no sign-in to and finds the login refused before any
+// state is issued, rather than read as the console. cowork beside it
+// is the control: the same form, starting a login.
+func TestLoginWithReturnPath_RefusesAnAppNotOnTheList(t *testing.T) {
+	f := callbackFixture(t)
+	_, control := startLoginFor(t, f, url.Values{"app": {"cowork"}, "next": {"/acme"}})
+	require.Equal(t, http.StatusFound, control.Code)
+
+	for _, app := range []string{"evil", "", "console,cowork"} {
+		t.Run(app, func(t *testing.T) {
+			form := url.Values{"app": {app}, "next": {"/console"}}
+			if app == "console,cowork" {
+				form = url.Values{"app": {"console", "cowork"}, "next": {"/console"}}
+			}
+			req := httptest.NewRequest(http.MethodPost, "/auth/login/google", strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rec := httptest.NewRecorder()
+			f.handler.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Empty(t, rec.Result().Cookies(), "no state is issued")
+		})
+	}
+}
+
 // TestOauthCallback_ChecksTheStoredPathAgain issues a state whose
-// stored path is off the console, as a row nothing but this surface
-// should write would hold, and finds the callback landing on /console
-// rather than following it. The console path beside it is the control:
-// the same store, the same callback, landing where it was told.
+// stored destination is off the apps, as a row nothing but this
+// surface should write would hold, and finds the callback landing on
+// /console rather than following it. The console path and cowork's
+// handoff beside them are the control: the same store, the same
+// callback, landing where it was told.
 func TestOauthCallback_ChecksTheStoredPathAgain(t *testing.T) {
 	for _, tc := range []struct{ stored, want string }{
 		{stored: "/console/invitations/tok-1", want: "/console/invitations/tok-1"},
+		{stored: coworkHandoffPath("/acme/page-1"), want: coworkHandoffPath("/acme/page-1")},
 		{stored: "//evil.example", want: "/console"},
 		{stored: "https://evil.example/console", want: "/console"},
+		{stored: "/acme/page-1", want: "/console"},
+		{stored: coworkHandoffPath("//evil.example"), want: "/console"},
+		{stored: "/handoff?app=evil&next=%2F", want: "/console"},
+		{stored: "/handoff?app=cowork&next=%2F&state=x", want: "/console"},
+		{stored: "/handoff?next=%2F&app=cowork", want: "/console"},
 	} {
 		t.Run(tc.stored, func(t *testing.T) {
 			f := callbackFixture(t)

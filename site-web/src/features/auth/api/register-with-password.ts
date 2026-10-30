@@ -12,7 +12,7 @@ import {
 import type { components } from "@garam/platform-sdk-ts/api";
 
 import { keepSessionCookie } from "@garam/platform-sdk-ts/session-cookie";
-import { consoleUrl } from "@/lib/console-url";
+import { appUrl } from "@/lib/app-url";
 
 /** A field of the register form a refusal can be about. */
 export type RegisterField = "invitationToken" | "username" | "password";
@@ -83,7 +83,7 @@ export async function registerWithPassword(
     };
   }
 
-  redirect(consoleUrl(await joinedOrgPath(parsed.data.invitationToken)));
+  redirect(appUrl("console", await joinedOrgPath(parsed.data.invitationToken)));
 }
 
 /**

@@ -228,6 +228,10 @@ site:
   # Where the console is served. Every address under `/console`, and
   # a signed-in visitor, is sent there.
   consoleUrl: ""
+  # Where cowork's web app is served. A sign-in for cowork is sent
+  # there. This chart deploys no cowork; the address is required
+  # because the site hands a sign-in to it in every deployment.
+  coworkUrl: ""
   resources: {}
 
 migrate:

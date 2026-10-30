@@ -39,7 +39,7 @@ makes any evaluation error a deny.
 | `CheckRequest` carries collected statements, `subject_groups` and `subject_org` | `Evaluate(subject, action, resource, context)` in AuthZEN's shape; the service reads memberships and ancestors itself |
 | Roles are org data the api server turns into statements | A role is a system-tier template, one set for an organization and one for a team or project, and an assignment is a policy linking it |
 | A policy attaches to a user, an agent or a group | A grant names its principal; a guardrail is a `forbid` |
-| An organization's scope is checked by `subject_org` | Tenant isolation is a system `forbid` no policy overrides, unless the subject is in the resource's organization |
+| An organization's scope is checked by `subject_org` | Tenant isolation is a system `forbid` no policy overrides, unless the subject is in the resource's organization's `OrgMembers`, which no team or project sits in |
 | `CheckCurrent` | A request option reading storage instead of the cache |
 | `Explain` | The decision's reasons, and an access report over grants |
 

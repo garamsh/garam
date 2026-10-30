@@ -1146,8 +1146,10 @@ ADRs:
   keeps `serve`, `migrate` and `probe`; supersedes 0127 and 0132 in
   part
 - [0137](./adr/0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)
-  — tenant isolation is `principal in resource.org`, read from entity
-  parents, since a user may belong to several organizations; any
-  evaluation error is a deny; a role template's principal scope is
-  `principal in ?principal`, and organization roles and team or project
-  roles are two template sets; supersedes 0130 in part
+  — tenant isolation is `principal in resource.org.members`, read from
+  a group of each organization's members that no team or project sits
+  in, since a user may belong to several organizations and `in` is
+  transitive; any evaluation error is a deny; a role template's
+  principal scope is `principal in ?principal`, and organization roles
+  and team or project roles are two template sets; supersedes 0130 in
+  part

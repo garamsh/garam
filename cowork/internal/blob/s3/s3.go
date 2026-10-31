@@ -122,6 +122,16 @@ func (s *Store) Get(ctx context.Context, key string) (blob.Blob, error) {
 	return blob.Blob{ContentType: aws.ToString(out.ContentType), Body: body}, nil
 }
 
+// Delete implements blob.Store. S3 answers a key it does not hold as
+// it answers one it removed.
+func (s *Store) Delete(ctx context.Context, key string) error {
+	_, err := s.client.DeleteObject(ctx, &awss3.DeleteObjectInput{Bucket: aws.String(s.bucket), Key: aws.String(key)})
+	if err != nil {
+		return errorx.Wrap(err, "blob store: delete", errorx.KindUnavailable)
+	}
+	return nil
+}
+
 // status is the HTTP status an S3 call answered, 0 for none.
 func status(err error) int {
 	var re interface{ HTTPStatusCode() int }

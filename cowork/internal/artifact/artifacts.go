@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -18,6 +20,10 @@ import (
 const (
 	idAlphabet = "abcdefghijklmnopqrstuvwxyz234567"
 	idLength   = 12
+
+	// discardTimeout bounds removing a blob, which outlives a cancelled
+	// request.
+	discardTimeout = 5 * time.Second
 )
 
 func newID() string {
@@ -89,6 +95,22 @@ func (s *service) keep(ctx context.Context, caller platform.Caller, org, id stri
 	}, nil
 }
 
+// discard removes the blob of a version whose record failed with
+// cause, whether or not ctx is still live. A record in doubt may name
+// the blob, so that blob stays: bytes no version names cost storage,
+// and a version without its bytes is lost.
+func (s *service) discard(ctx context.Context, key string, cause error) {
+	if errors.Is(cause, ErrRecordInDoubt) {
+		slog.WarnContext(ctx, "artifact: kept a blob its version may name", slog.String("key", key))
+		return
+	}
+	detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), discardTimeout)
+	defer cancel()
+	if err := s.blobs.Delete(detached, key); err != nil {
+		slog.WarnContext(ctx, "artifact: left a blob no version names", slog.String("key", key), slog.String("error", err.Error()))
+	}
+}
+
 // Create adds an artifact with its first version, as the caller.
 func (s *service) Create(ctx context.Context, caller platform.Caller, org string, in CreateInput) (Artifact, error) {
 	if s.blobs == nil {
@@ -113,6 +135,7 @@ func (s *service) Create(ctx context.Context, caller platform.Caller, org string
 	v.Number = 1
 	a.CreatedAt, a.UpdatedAt = v.CreatedAt, v.CreatedAt
 	if err := s.repo.Create(ctx, a, v); err != nil {
+		s.discard(ctx, v.BlobKey, err)
 		return Artifact{}, err
 	}
 	return a, nil
@@ -140,6 +163,9 @@ func (s *service) Save(ctx context.Context, caller platform.Caller, org, id stri
 		return Artifact{}, err
 	}
 	a, _, err = s.repo.AddVersion(ctx, org, v)
+	if err != nil {
+		s.discard(ctx, v.BlobKey, err)
+	}
 	return a, err
 }
 

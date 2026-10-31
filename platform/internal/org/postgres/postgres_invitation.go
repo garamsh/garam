@@ -70,7 +70,10 @@ func (s *Store) ListPendingInvitations(ctx context.Context, orgGRN grn.GRN, f li
 // survives the delete was spent, or never the org's: the second read
 // tells the two apart and changes nothing.
 func (s *Store) RevokeInvitation(ctx context.Context, orgGRN grn.GRN, id org.InvitationID) error {
-	n, err := s.q.RevokeInvitation(ctx, invitationID(id))
+	n, err := s.q.RevokeInvitation(ctx, db.RevokeInvitationParams{
+		OrgGrn: orgGRN.String(),
+		ID:     invitationID(id),
+	})
 	if err != nil {
 		return pgxerr.Classify(err, "revoke invitation", nil, nil)
 	}

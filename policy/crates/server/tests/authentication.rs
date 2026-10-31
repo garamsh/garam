@@ -301,8 +301,14 @@ fn claims_outside_the_profile_are_refused() {
         payload("aud", json!(["policy"])),
         payload("iss", json!([ISSUER])),
         payload("sub", json!("")),
-        payload("nbf", json!(now + 3600)),
-        payload("nbf", json!(now + 301)),
+        // Ahead of the clock past the skew, and still before `exp`.
+        payload("nbf", json!(now + 100)),
+        // Inside the skew, and after `exp`.
+        format!(
+            r#"{{"iss":"{ISSUER}","aud":"policy","sub":"s","iat":{now},"exp":{},"nbf":{}}}"#,
+            now + 5,
+            now + 10
+        ),
         payload("exp", json!((now + 100) as f64 + 0.5)),
         payload("exp", json!((now + 100).to_string())),
         format!(

@@ -8,7 +8,7 @@ async function signedIn(browser: Browser, person: Person): Promise<Page> {
     {
       name: "garam_session",
       value: person.sessionToken,
-      domain: "localhost",
+      domain: "cowork.garam.localhost",
       path: "/",
       httpOnly: true,
     },

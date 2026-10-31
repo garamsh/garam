@@ -71,10 +71,10 @@ a node failure.
 
 Every object here is named after the release, and the name is a
 deployment's to choose — with one exception no render shows. **A
-published web image reaches the api Service a release named `garam`
-renders.** The browser's `/api/*` calls are rewritten to an address
-baked into the image when it is built, and every image
-`.github/workflows/release.yml` publishes is built with
+published console or site image reaches the api Service a release named
+`garam` renders.** The browser's `/api/*` calls are rewritten to an
+address baked into the image when it is built, and
+`.github/workflows/release.yml` builds both with
 `http://garam-api:8080`
 ([ADR-0056](../../../docs/architecture/adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)).
 Under any other release name this chart renders `<release>-garam-api`,
@@ -83,8 +83,9 @@ it: every object is `Ready`, the web app's probes read nothing outside
 the process (ADR-0023), and the first report is a console that shows
 nothing.
 
-So a deployment pinning `image.web.tag` to a published version installs
-under the release name `garam`, or makes `garam-api` resolve to its own
+So a deployment pinning `image.web.tag` or `image.site.tag` to a
+published version installs under the release name `garam`, or makes
+`garam-api` resolve to its own
 api Service — a Service of that name over the same selector labels is
 one shape, and rendering it and checking it are that deployment's. A
 deployment that builds its own web image bakes its own address and is
@@ -232,6 +233,11 @@ fails without them:
   hands back, and every address under `/console`, to the console. Both
   are read when a request arrives, so the published images name no
   deployment's hosts.
+- `site.coworkUrl` — where the site sends a sign-in for cowork
+  (ADR-0135), on the same terms. The site will not start without it,
+  and this chart deploys no cowork: the address is cowork's host, and
+  `docs/architecture/deployment-contract.md` §cowork's host states what
+  its gateway routes.
 
 **Each app holds a host-only session.** A person signs in on the site,
 and the console is handed a session of its own on its host by a
@@ -461,26 +467,26 @@ ref of `garamsh/garam` — a tag, or a commit SHA, which cannot come to
 mean something else. `Chart.yaml`'s `version` moves when the chart
 changes and names no garam version.
 
-The images are pinned separately, through `image.server.tag` and
-`image.web.tag`. A release is a `vX.Y.Z` git tag and the image tag is
-that tag with the `v` dropped; one commit publishes both images under
-one version, so a deployment pins one version across the pair
-(ADR-0039). The tags are immutable, so the tag answers what is deployed
-on its own. The release repositories, `garam/garam-server` and
-`garam/garam-web`, hold releases only. A development build
-is in `garam-dev/garam-server` or `garam-dev/garam-web` (ADR-0097),
-tagged by a commit prefix or `X.Y.Z-<prerelease>` rather than a bare
-version (ADR-0071), so running one sets `image.*.repository` as well
-as the tag, and pins a build nobody released.
+The images are pinned separately, through `image.server.tag`,
+`image.web.tag` and `image.site.tag`. A release is a `vX.Y.Z` git tag
+and the image tag is that tag with the `v` dropped; one commit publishes
+every image under one version, so a deployment pins one version across
+them (ADR-0039). A release tag is immutable, so the tag answers what is
+deployed on its own. Each image has one repository, `garam/server`,
+`garam/console` or `garam/site`, and a development build is in the same
+one, tagged by a commit prefix or `X.Y.Z-<prerelease>` rather than a
+bare version (ADR-0071,
+[ADR-0134](../../../docs/architecture/adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)),
+so running one sets the tag alone, and pins a build nobody released.
 
 **A digest is optional and names the bytes.** `image.server.digest` and
 `image.web.digest` render after the tag rather than in place of it —
 `repository:tag@digest`, the form a kubelet resolves by digest — so the
 tag goes on naming the version a deployment chose and the two are one
-value a reader holds in one place. Against the two release repositories
-it restates what an immutable tag already fixes; what it is for is an
-image mirrored into a registry that is not, and a deployment whose
-policy is that a reference names bytes.
+value a reader holds in one place. Against a release tag it restates
+what an immutable tag already fixes; what it is for is an image mirrored
+into a registry that is not, and a deployment whose policy is that a
+reference names bytes.
 
 A deployment must be able to pull both references, and how it does that
 is not garam's to decide: the registry admits no anonymous pull and the
@@ -523,8 +529,9 @@ covered and fails when a count is zero:
   read, so a failure cannot pass as a value file that named nothing
   while the other kept the count above zero.
 - `chart-rewrite` — the `/api/*` target `.github/workflows/release.yml`
-  bakes into the web image against the api Service this chart renders
-  under the release name `garam` (§Choosing a release name). It renders
+  bakes into the console's and the site's images, which must be one URL,
+  against the api Service this chart renders under the release name
+  `garam` (§Choosing a release name). It renders
   again under `chart-names`' release name as the control: that render
   must name something else, so the equality is read rather than assumed.
 - `chart-guards` — each value file under `ci/refused/` rendered on top
@@ -593,12 +600,13 @@ print.
   `/api/*` rewrite does not, which §Choosing a release name states and
   `chart-rewrite` reads.
 - `chart-rewrite` is complete over **one URL against one rendered
-  Service**: the `GARAM_API_URL` build argument in
-  `.github/workflows/release.yml` against the api Service and port a
+  Service**: the `GARAM_API_URL` build arguments in
+  `.github/workflows/release.yml`, which must agree, against the api
+  Service and port a
   render under the release name `garam` names. It reads no other build
   argument, no other workload's address and no image — what a build
-  actually baked is the image's fact, and `make web-image-e2e` is what
-  reads that one.
+  actually baked is the image's fact, and `make web-image-e2e` and
+  `make site-image-e2e` are what read that one.
 - `chart-guards` is complete over **the values named by the files in
   `ci/refused/`**: each must refuse the render and name the value its
   filename names, and `minimal-values.yaml` must still render. It reads

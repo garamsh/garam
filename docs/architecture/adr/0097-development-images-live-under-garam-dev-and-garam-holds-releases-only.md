@@ -1,6 +1,7 @@
 # ADR 0097: Development images live under `garam-dev/`, and `garam/` holds releases only
 
-> Status: accepted
+> Status: superseded by
+> [ADR-0134](./0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
 > Date: 2026-10-09
 
 Drafted for #1241, which reserved this number. The decision is the

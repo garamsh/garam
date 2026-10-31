@@ -181,13 +181,15 @@ chart-names:
 		test -z "$$over" || { echo 'chart-names: over the 63-character limit, which an apply refuses and a render does not:'; echo "$$over"; exit 1; }; \
 		echo "chart-names: $$total distinct object names, longest $$(awk '{ if (length($$0) > m) m = length($$0) } END { print m }' "$$out/names"), none over 63"
 
-# chart-rewrite holds the `/api/*` target a release bakes into the web
-# image against the api Service rendered under release `garam`, two
-# facts nothing else reads together (#861). The render under
-# $(CHART_LONG_RELEASE) is the control and must differ, or the equality
-# proves nothing (ADR-0056). tooling/image-build.sh reads the same file
-# for what the release builds.
-CHART_BAKED_API_URL = $(shell sed -n 's/^ *GARAM_API_URL=\(.*\)$$/\1/p' ../../.github/workflows/release.yml)
+# chart-rewrite holds the `/api/*` target a release bakes into the
+# console's and the site's images against the api Service rendered under
+# release `garam`, two facts nothing else reads together (#861). $(sort)
+# drops the repeat, so the two images baking one URL read as one and
+# baking two fail the count. The render under $(CHART_LONG_RELEASE) is
+# the control and must differ, or the equality proves nothing
+# (ADR-0056). tooling/image-build.sh reads the same file for what the
+# release builds.
+CHART_BAKED_API_URL = $(sort $(shell sed -n 's/^ *GARAM_API_URL=\(.*\)$$/\1/p' ../../.github/workflows/release.yml))
 
 chart-rewrite:
 	@echo 'chart-rewrite: $(CHART_BAKED_API_URL), baked by .github/workflows/release.yml — one URL against the api Service, $(CHART_DIR)/README.md §What the checks are complete over'

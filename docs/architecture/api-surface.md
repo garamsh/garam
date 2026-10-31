@@ -679,19 +679,21 @@ gRPC hop as an `ErrorInfo` status detail
 (`platform/internal/wire/error.go`), so the API answers the engine's
 code unchanged.
 
-**A provider sign-in can land on a console path.**
+**A provider sign-in can land on a path of one of garam's apps.**
 `POST /auth/login/{provider}` starts the same flow as `GET` and takes
-`next` in its form body. A path off the console is dropped by the rule
-the console applies to the password sign-in
-(`platform/internal/api/return_path.go`,
-`platform-web/src/lib/return-path.ts`), which bounds it in UTF-8 bytes
-and is tested on both sides against one table,
+`app` and `next` in its form body (ADR-0135). `app` names the console
+or cowork, the console where it is absent, and any other value is
+refused. A path off that app is dropped by the rule the site applies to
+the password sign-in (`platform/internal/api/return_path.go`,
+`lib/platform-sdk-ts/src/return-path.ts`), which bounds it in UTF-8
+bytes and is tested on both sides against one table,
 `platform/internal/api/testdata/return-path-vectors.json`. What is kept
-is held on the login's `oauth_states` row, so it is spent with the state
-by the callback that completes and expires with it. The callback
-redirects to it, checked again, or to `/console`, and no answer repeats
-it. A cross-site form can start such a login, and the most it decides is
-where inside the console that login lands.
+is held on the login's `oauth_states` row: the console path, or the
+site's `/handoff` for cowork carrying the cowork path. It is spent with
+the state by the callback that completes and expires with it. The
+callback redirects to it, checked again, or to `/console`, and no answer
+repeats it. A cross-site form can start such a login, and the most it
+decides is where inside one of garam's apps that login lands.
 
 The other three surfaces are fixed differently. The engine's wire
 contract is `platform/proto/garam/authz/v1`, generated and checked the

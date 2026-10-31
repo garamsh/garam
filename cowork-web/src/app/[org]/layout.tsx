@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { NewPageForm } from "@/features/pages/components/page-forms";
 import { PageTree } from "@/features/pages/components/page-tree";
 import { listPages } from "@/lib/cowork";
+import { redirectToSignIn } from "@/lib/sign-in-redirect";
 
 /** A workspace: its page tree beside whatever page is open. */
 export default async function WorkspaceLayout({
@@ -15,6 +16,7 @@ export default async function WorkspaceLayout({
 }) {
   const { org } = await params;
   const pages = await listPages(org);
+  if (!pages.ok && pages.status === 401) return redirectToSignIn();
   if (!pages.ok && pages.status === 404) notFound();
   return (
     <div className="grid min-h-screen grid-cols-[16rem_1fr]">

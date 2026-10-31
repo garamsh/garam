@@ -6,6 +6,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	apigen "github.com/garamsh/garam/cowork/api"
 	"github.com/garamsh/garam/cowork/internal/artifact"
@@ -31,14 +32,16 @@ type Server struct {
 	// origins are the host patterns a browser may open a sync
 	// WebSocket from, besides cowork's own host.
 	origins []string
+	// recheck is how often an open WebSocket's caller is asked again.
+	recheck time.Duration
 }
 
 var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer answers the surface over its services.
-func NewServer(pages page.Service, collabs collab.Service, channels channel.Service, tasks task.Service, artifacts artifact.Service, p platform.Platform, origins []string) *Server {
+func NewServer(pages page.Service, collabs collab.Service, channels channel.Service, tasks task.Service, artifacts artifact.Service, p platform.Platform, origins []string, recheck time.Duration) *Server {
 	return &Server{
-		pages: pages, collab: collabs, channels: channels, tasks: tasks, artifacts: artifacts, platform: p, origins: origins,
+		pages: pages, collab: collabs, channels: channels, tasks: tasks, artifacts: artifacts, platform: p, origins: origins, recheck: recheck,
 		tools: mcp.New(pages, collabs, channels, tasks, artifacts, p),
 	}
 }

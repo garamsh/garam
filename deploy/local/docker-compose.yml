@@ -48,7 +48,7 @@ services:
   # Dependabot's docker-compose entry moves the pair, as it does
   # postgres's.
   openbao:
-    image: openbao/openbao:2.7.1@sha256:6d2b93856e3fcf7b18ad855a0b51eaba474dc8b79cf554379ea32034797d2acf
+    image: openbao/openbao:2.7.2@sha256:5046911075e137e154ce49ab051502f4ec7cf367d484ae4a4dce665d9b90561f
     command: ["server", "-dev", "-dev-tls", "-dev-tls-cert-dir=/openbao/file"]
     ports:
       - "${GARAM_OPENBAO_PORT:-28200}:8200"
@@ -203,6 +203,7 @@ services:
     environment:
       GARAM_API_URL: http://api:8080
       GARAM_CONSOLE_URL: ${GARAM_CONSOLE_URL:-http://console.garam.localhost:3000}
+      GARAM_COWORK_URL: ${GARAM_COWORK_URL:-http://cowork.garam.localhost:3100}
     ports:
       - "${GARAM_LOCAL_SITE_PORT:-3001}:3000"
     depends_on:
@@ -214,11 +215,11 @@ services:
       timeout: 5s
       retries: 10
 
-  # Opt-in: `docker compose --profile cowork up`, which starts cowork
-  # and its web app against the platform above. cowork-web answers at
-  # console.garam.localhost:3100: the console's session cookie names its
-  # host and not a port, so it reaches cowork-web there and, through
-  # the sync WebSocket, cowork at console.garam.localhost:8090.
+  # Opt-in: `docker compose --profile web --profile cowork up`, which
+  # starts cowork and its web app against the platform above, behind
+  # cowork-gateway at cowork.garam.localhost:3100. A person signs in on
+  # the site, which the `web` profile starts, and is handed a session of
+  # that host's own (ADR-0135).
   #
   # cowork owns its database (ADR-0125), `cowork` on the one server.
   # Postgres has no CREATE DATABASE IF NOT EXISTS, so this one-shot asks
@@ -258,7 +259,9 @@ services:
 
   # Artifacts go to the rustfs above, in a bucket serve creates where it
   # is missing, and HTML artifacts are viewed from a user-content origin
-  # of their own on localhost:8092 (ADR-0127 §8). The signing key, like
+  # of their own on localhost:8092 (ADR-0127 §8). The API is published
+  # only through cowork-gateway, as a deployment serves it. The signing
+  # key, like
   # rustfs's keys, is this stack's alone and signs nothing a deployment
   # trusts.
   cowork:
@@ -271,7 +274,7 @@ services:
       COWORK_DATABASE_URL: postgres://garam:garam@postgres:5432/cowork?sslmode=disable
       COWORK_PLATFORM_URL: http://api:8080
       COWORK_LISTEN_ADDR: ":8090"
-      COWORK_WEB_ORIGINS: console.garam.localhost:${COWORK_LOCAL_WEB_PORT:-3100}
+      COWORK_WEB_ORIGINS: cowork.garam.localhost:${COWORK_LOCAL_WEB_PORT:-3100}
       COWORK_BLOB_STORE: s3
       COWORK_S3_ENDPOINT: http://rustfs:9000
       COWORK_S3_BUCKET: cowork
@@ -283,7 +286,6 @@ services:
       COWORK_USERCONTENT_ADDR: ":8092"
       COWORK_USERCONTENT_SECRET: local-stack-only-usercontent-signing-key
     ports:
-      - "${COWORK_LOCAL_PORT:-8090}:8090"
       - "${COWORK_LOCAL_USERCONTENT_PORT:-8092}:8092"
     depends_on:
       cowork-migrate:
@@ -302,7 +304,8 @@ services:
 
   # cowork-web reads every address at runtime; nothing is baked. Its
   # server reaches cowork and the api inside the network, and the
-  # browser reaches cowork's sync WebSocket on the host.
+  # browser reaches cowork's sync WebSocket through cowork-gateway, on
+  # the host its session cookie names.
   cowork-web:
     profiles: ["cowork"]
     build:
@@ -312,18 +315,37 @@ services:
         APP: cowork-web
     environment:
       COWORK_API_URL: http://cowork:8090
-      COWORK_SYNC_URL: ws://console.garam.localhost:${COWORK_LOCAL_PORT:-8090}
+      COWORK_SYNC_URL: ws://cowork.garam.localhost:${COWORK_LOCAL_WEB_PORT:-3100}/api
       GARAM_API_URL: http://api:8080
-      GARAM_CONSOLE_URL: ${GARAM_CONSOLE_URL:-http://console.garam.localhost:3000}
-    ports:
-      - "${COWORK_LOCAL_WEB_PORT:-3100}:3000"
+      GARAM_SITE_URL: ${GARAM_SITE_URL:-http://garam.localhost:3001}
     depends_on:
       cowork:
         condition: service_healthy
-    # The app serves no probe route; its home page asks nothing outside
-    # the process of a visitor with no session.
+    # /readyz, as the other apps use. It reads nothing outside the
+    # process (ADR-0023).
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/readyz"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  # cowork's one host, split by path as a deployment's gateway splits it
+  # (cowork-gateway.Caddyfile, ADR-0135). Digest as well as tag, the
+  # digest of the multi-platform index, pulled from Google's mirror for
+  # the reason deploy/local/Dockerfile states.
+  cowork-gateway:
+    profiles: ["cowork"]
+    image: mirror.gcr.io/library/caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
+    volumes:
+      - ./cowork-gateway.Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - "${COWORK_LOCAL_WEB_PORT:-3100}:8080"
+    depends_on:
+      cowork-web:
+        condition: service_healthy
+    # Through the split, so healthy means the route to the app works.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/readyz"]
       interval: 2s
       timeout: 5s
       retries: 10

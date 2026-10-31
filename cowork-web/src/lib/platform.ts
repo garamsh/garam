@@ -2,8 +2,9 @@ import "server-only";
 
 import { cookies } from "next/headers";
 
+import { SESSION_COOKIE } from "@garam/platform-sdk-ts/session";
+
 import { env } from "@/env";
-import { SESSION_COOKIE } from "@/lib/cowork";
 
 /** An organization the caller belongs to, as cowork names it. */
 export type Organization = { slug: string; name: string };

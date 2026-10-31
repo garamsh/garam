@@ -236,7 +236,7 @@ garam's retired templates and the browser's `operatorGrn`
   that used to stand in for this was removed
   ([ADR-0044](./adr/0044-the-development-only-sign-in-provider-is-removed.md))
   and nothing replaced it.
-- Reconciling a cluster garam does not run. garam publishes two images
+- Reconciling a cluster garam does not run. garam publishes five images
   and the chart at `deploy/charts/garam/` that describes a deployment
   (ADR-0042); which address each process answers on and which of them
   leaves the cluster stays the repository that owns the cluster's, and

@@ -45,6 +45,9 @@ spec:
             # `/console`, is sent (ADR-0131).
             - name: GARAM_CONSOLE_URL
               value: {{ required "site.consoleUrl is required: without it the site has nowhere to send a person who signed in" .Values.site.consoleUrl | quote }}
+            # Where a sign-in for cowork is sent (ADR-0135).
+            - name: GARAM_COWORK_URL
+              value: {{ required "site.coworkUrl is required: without it the site cannot start" .Values.site.coworkUrl | quote }}
           # PORT=3000 is set in the image (deploy/local/Dockerfile.web);
           # the chart does not set it, so the port below is the image's.
           ports:

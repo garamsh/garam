@@ -44,6 +44,21 @@ state the app drew and holds in a cookie, and the app's server redeems
 it through `POST /auth/handoff/redeem` with that state
 (`platform/internal/api/handoff.go`). A code lives one minute, redeems
 once, and is issued only on a browser's session, never on a bearer.
+
+The handoff's clients are a fixed list, the console and cowork-web
+(ADR-0135). An app is named by an identifier and never by an origin:
+`lib/platform-sdk-ts/src/handoff.ts` holds the list, and the site maps
+each identifier to `GARAM_CONSOLE_URL` or `GARAM_COWORK_URL`
+(`site-web/src/lib/app-url.ts`). One off the list is refused. A return
+path is a path on the app it is for, under the rule
+`lib/platform-sdk-ts/src/return-path.ts` and
+`platform/internal/api/return_path.go` both hold. A sign-in carries the
+app through `/login`: a provider sign-in holds the destination with its
+state, the site's `/handoff` for cowork, and a password sign-in goes to
+the app's origin. Either way the app starts the handoff again, and
+this time the site has a session to hand. `/register` stays the
+console's.
+
 The session a redemption creates records the sign-in it came from
 (`sessions.handed_off_from`) and expires with it, and signing out or
 revoking any session of that family deletes the sign-in, which takes

@@ -26,13 +26,14 @@ on an origin of its own
 the signed-in application. Both build on `lib/design/`, the shared
 tokens and primitives, and on `lib/platform-sdk-ts/`, the one client of
 the backend they share. What follows names the console where only the
-console is meant; the site's image is built from the same Dockerfile and
-is not yet published. It is the one part of this
+console is meant; the site's image is built from the same Dockerfile.
+It is the one part of this
 repository that is not Go, it carries a toolchain and a gate of its
-own, and it ships as one of the two images a version tag publishes
-([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
-and its development builds go to `garam-dev/garam-web`
-([ADR-0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md))
+own, and each app ships as an image a version tag publishes
+([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)):
+`garam/console` and `garam/site`, which also take the app's development
+builds
+([ADR-0134](./adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md))
 under a tag that is not a release version
 ([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)).
 
@@ -296,6 +297,8 @@ Where the token may appear is fixed:
 - **In the invitation link and the sign-in's own URLs only:** the
   site's `/login?next=…`, `/register?next=…` and `/handoff?next=…`, and
   the console's `/auth/sign-in?next=…` and `/auth/handoff?next=…`.
+  cowork-web's routes of those names, and the site's with `app=cowork`,
+  carry a path on cowork (ADR-0135), from which no invitation is read.
   Every one is served or redirected to with `referrer: no-referrer`,
   and a link carrying one does not prefetch. The invitation link is
   the console's and the sign-in the site's, so a redirect between them
@@ -360,10 +363,10 @@ the process starts, so a deployment sets it; the browser's rewrite is
 resolved when the image is built, so what is in it is whatever that
 build was given and no environment moves it
 ([ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)).
-Every image `.github/workflows/release.yml` publishes is built with
-`http://garam-api:8080` — the api Service a release named `garam`
-renders and no other — so a deployment running a published image
-installs under that release name or makes the name resolve.
+`.github/workflows/release.yml` builds the console's and the site's
+images with `http://garam-api:8080` — the api Service a release named
+`garam` renders and no other — so a deployment running a published
+image installs under that release name or makes the name resolve.
 `deploy/charts/garam/README.md` §Choosing a release name is
 authoritative for what a deployment does about it, and `make ci`
 compares the value the release bakes against what the chart renders.
@@ -803,6 +806,6 @@ The rest bear on it without being about it:
   — `structure.md` governs what a module under `platform-web/src/` may
   import, so a feature reaches a sibling through its declared entry
   points and the stack file no longer refuses that edge
-- [ADR-0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)
-  — that development build lives in `garam-dev/garam-web`, apart from
-  the release repository
+- [ADR-0134](./adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
+  — that development build lives in `garam/console`, beside the
+  releases, and its tag tells the two apart

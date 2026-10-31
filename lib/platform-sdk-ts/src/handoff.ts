@@ -28,6 +28,29 @@ export const HANDOFF_STATE_MAX_AGE = 10 * 60;
 export const STATE_PARAM = "state";
 export const CODE_PARAM = "code";
 
+/**
+ * The parameter naming the app a handoff is for (ADR-0135). It names
+ * the app by identifier and never by origin: the site maps each one to
+ * the origin it is configured with, so no request decides where a code
+ * is sent. Absent, it is the console, as before cowork was handed to.
+ */
+export const APP_PARAM = "app";
+
+/** The apps the site hands a sign-in to. */
+export const HANDOFF_APPS = ["console", "cowork"] as const;
+
+export type HandoffApp = (typeof HANDOFF_APPS)[number];
+
+/**
+ * `value` as the app a handoff names: the console where it names none,
+ * and null where it names one not on the list, which is refused rather
+ * than read as another app.
+ */
+export function handoffAppOf(value: unknown): HandoffApp | null {
+  if (value === null || value === undefined) return "console";
+  return HANDOFF_APPS.find((app) => app === value) ?? null;
+}
+
 /** A fresh state: 32 random bytes, base64url, 43 characters. */
 export function newHandoffState(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32));

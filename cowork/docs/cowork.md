@@ -66,6 +66,10 @@ nothing publishes or deploys either.
   request (`make cowork-image-e2e cowork-web-image-e2e`), and
   `deploy/local/docker-compose.yml` runs them behind its `cowork`
   profile, as `deploy/local/README.md` §cowork states.
+- **Its host.** The server and the web app share `cowork.garam.sh`,
+  split by path at the gateway (ADR-0135,
+  [deployment-contract.md](../../docs/architecture/deployment-contract.md)
+  §cowork's host).
 - **Not yet:** the Postgres hub several instances need, and publishing
   and deploying the images.
 
@@ -97,6 +101,30 @@ agents.
   `cowork-page` for one page. Every role grants both (#1663).
 - cowork answers 503 whenever the platform cannot be reached, and
   decides nothing alone.
+- **The session.** A person signs in on the site and cowork-web is
+  handed a session of its own on its host, by ADR-0131's one-time code
+  ([sign-in.md](../../docs/architecture/sign-in.md)). The cookie is
+  host-only, and no parent domain is involved. Signing out on any host
+  ends it, which cowork-web learns on its next request, and sends the
+  visitor to sign in.
+- **An open WebSocket** makes no next request, so its caller is asked
+  again every 30 seconds
+  ([ADR-0139](../../docs/architecture/adr/0139-an-open-cowork-websocket-is-asked-again-within-a-stated-bound.md)).
+  - **The bound.** A sync or live socket closes within 40 seconds of
+    the platform refusing its caller: the interval and one request's
+    timeout. The re-check is one `checkPermissions` per socket, the
+    same caller and the same credential.
+  - **What it costs the platform.** Four Postgres reads per re-check,
+    with two engine checks on a page and one on a channel, so 10,000
+    open sockets ask 333 requests a second.
+  - **The close.** `4401` for a session the platform refuses, `4403`
+    for a member removed or a read denied, each the status its upgrade
+    would now answer. y-websocket does not reconnect after either.
+    cowork-web sends `4401` to sign in, and reloads the page on `4403`.
+  - **A platform that cannot be reached** closes nothing: as for a 503,
+    cowork decides nothing alone, so the connection stands as last
+    decided, the failure is logged and the next re-check asks again.
+    The bound runs again once the platform answers.
 - `checkPermissions` for messaging: `cowork:channel-read` and
   `cowork:channel-post` on the organization and on a
   `cowork-channel` (ADR-0128).
@@ -117,11 +145,12 @@ agents.
   any WebSocket. A browser may open it only from cowork's own host or
   a host `COWORK_WEB_ORIGINS` names, because the session cookie rides
   along.
-- **Writes** are `cowork:page-write` on the page, asked once at the
-  upgrade. A connection without it reads live and is answered
-  y-websocket's permission-denied message for any edit, which is
-  neither kept nor relayed. A policy change reaches an open connection
-  when it reconnects.
+- **Writes** are `cowork:page-write` on the page, asked at the upgrade
+  and at each re-check (§What it asks of the platform). A connection
+  without it reads live and is answered y-websocket's permission-denied
+  message for any edit, which is neither kept nor relayed. An answer
+  that changes closes the connection with `1013`; the client
+  reconnects, and the upgrade decides again.
 - **What the server does with the protocol.** It sends its state
   vector on connect, answers a client's state vector with what the
   client lacks, and keeps and relays every update it accepts. An
@@ -156,7 +185,8 @@ agents.
   read.
 - **Live.** `GET /orgs/{org}/channels/{channel}/live` carries each
   message posted there as one text frame, the API's `Message`. Reading
-  is decided at the upgrade, as for a page's sync.
+  is decided at the upgrade and at each re-check, as for a page's
+  sync, the participant list with it.
 
 ## Delivery to agents
 
@@ -286,7 +316,8 @@ signs in, what it keeps and the contract its commands keep.
 - **The session is garam's.** `garam login` signs it in, and every
   cowork command presents its bearer.
 - **Where it talks.** `--cowork-endpoint` or `COWORK_ENDPOINT` names
-  cowork (default `https://cowork.garam.sh`), and `--endpoint` or
+  cowork's origin (default `https://cowork.garam.sh`), where the API
+  is under `/api` and MCP at `/mcp`, and `--endpoint` or
   `GARAM_ENDPOINT` the platform.
 - **The workspace** is `--org`, or the one `garam orgs use` saved.
 - **The commands.** `garam cowork ...` derives one per operation of
@@ -368,16 +399,14 @@ builds from `garam-cli/` for the client commands.
   through goja, in a pure-Go binary (ADR-0127 §Context).
 - The platform decides permissions so that people, agents and AI
   services share one model (ADR-0127, ADR-0002).
+- Open sockets are asked again on a fixed interval, because the
+  platform tells cowork nothing when a session ends (ADR-0139).
 - Ports and adapters because that is the repository's shape already,
   and the storage swap the owner asked for is one adapter
   (`stack-go.md` §Service layout, ADR-0069).
 
 ## Open questions
 
-- **The session cookie in production.** The platform's cookie is
-  host-only, so it reaches cowork on `localhost` at any port, but not
-  `cowork.garam.sh` from `console.garam.sh`. Scoping it to the parent
-  domain is #1660's.
 - **OAuth for remote AI services.** Claude's and ChatGPT's remote
   connectors sign in by OAuth, which needs the platform as an
   authorization server. Not scheduled.

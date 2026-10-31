@@ -30,18 +30,28 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request, provider apigen.P
 	s.startLogin(w, r, provider, "")
 }
 
-// LoginWithReturnPath starts the same flow, landing on the console path
-// the form body names once it completes. The path is held with the
-// login's state rather than echoed anywhere, and one that is not a
-// console path is dropped: a cross-site form can start a login, and
-// the most it decides is where inside the console that login lands.
+// LoginWithReturnPath starts the same flow, landing once it completes
+// on the path the form body names, on the app it names (ADR-0135). The
+// destination is held with the login's state rather than echoed
+// anywhere, and a path that is not the app's is dropped for the app's
+// default: a cross-site form can start a login, and the most it decides
+// is where inside one of garam's apps that login lands. An app not on
+// the list is refused rather than read as another.
 func (s *Server) LoginWithReturnPath(w http.ResponseWriter, r *http.Request, provider apigen.Provider) {
 	if err := r.ParseForm(); err != nil {
 		writeError(w, errorx.Wrap(err, "login form", errorx.KindInvalidArgument))
 		return
 	}
-	returnPath, _ := safeReturnPath(r.PostForm.Get("next"))
-	s.startLogin(w, r, provider, returnPath)
+	app := appConsole
+	if v, named := r.PostForm["app"]; named {
+		app = strings.Join(v, ",")
+	}
+	destination, ok := loginDestination(app, r.PostForm.Get("next"))
+	if !ok {
+		writeError(w, errorx.New(errorx.KindInvalidArgument, "app names none the site hands a sign-in to"))
+		return
+	}
+	s.startLogin(w, r, provider, destination)
 }
 
 // startLogin issues the state, records it with returnPath, and sends
@@ -126,10 +136,10 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 	s.expireCookie(w, verifierCookie)
 	s.setCookie(w, sessionCookie, token, s.cfg.SessionTTL)
 	// `/` is the public landing page; a signed-in visitor belongs in
-	// the console, at the path the login was started for where there
-	// is one. It was checked before it was stored, and is checked again
+	// the app the login was started for, at its path where there is
+	// one. It was checked before it was stored, and is checked again
 	// here so a row written by anything else cannot redirect off it.
-	destination, ok := safeReturnPath(returnPath)
+	destination, ok := safeDestination(returnPath)
 	if !ok {
 		destination = "/console"
 	}

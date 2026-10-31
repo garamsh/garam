@@ -135,6 +135,34 @@ describe("signInWithPassword", () => {
     );
   });
 
+  it("lands on the app the form names, and refuses one off the list", async () => {
+    accepts();
+
+    await expect(
+      signInWithPassword(
+        { status: "idle" },
+        form({
+          username: "alice",
+          password: PASSWORD,
+          app: "cowork",
+          next: "/acme",
+        }),
+      ),
+    ).rejects.toThrow(
+      /^NEXT_REDIRECT:http:\/\/cowork\.garam\.localhost:3100\/acme$/,
+    );
+
+    await expect(
+      signInWithPassword(
+        { status: "idle" },
+        form({ username: "alice", password: PASSWORD, app: "evil" }),
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message: "The form did not arrive complete.",
+    });
+  });
+
   it("carries the Secure a backend on HTTPS marks the session with", async () => {
     planted.length = 0;
     accepts(`${SET_COOKIE}; Secure`);

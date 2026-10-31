@@ -50,8 +50,8 @@ Beside it:
   binary, database and documents
   ([cowork.md](../../cowork/docs/cowork.md)).
 - **`policy/`**, the policy service's Cargo workspace (ADR-0130): its
-  contract, its schema, its system tier and `crates/decision`. Its
-  binary and its database are not built yet (#1689).
+  contract, its schema, its system tier, its crates, its migrations and
+  its binary. No image runs it yet (#1689).
 - **`go.work`** at the root, naming `platform/`, `garam-cli/`,
   `cowork/` and each Go library under `lib/`. Every Go entry point in
   the `Makefile` covers every module it names.

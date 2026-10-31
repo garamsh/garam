@@ -27,8 +27,13 @@ replaces this engine with `policy/`, a Rust service of its own (#1689).
 Everything below this section describes `garam serve authz` as it runs
 today, and stays true until `policy/` serves the platform's checks.
 
-`policy/` holds the contract, the schema, the system tier and
-`crates/decision`, and no binary yet, so nothing calls it.
+`policy/` holds the contract, the schema, the system tier, its stores
+of grants and entities, the access report and the binary. No image
+runs it, nothing calls it and no owner feeds it, so it decides over
+nothing yet.
+[ADR-0138](./adr/0138-a-caller-of-the-policy-service-presents-a-short-lived-signed-token-and-owners-write-entities-through-a-sequenced-rpc.md)
+states how a caller authenticates and how an owner writes. Neither the
+platform's issuer nor the write RPC is built.
 [ADR-0137](./adr/0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)
 revises ADR-0130 on isolation's form and the templates' scopes, and
 makes any evaluation error a deny.

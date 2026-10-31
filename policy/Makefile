@@ -1,11 +1,12 @@
 # policy — the Rust workspace behind the policy service (ADR-0130). Its
 # verbs are every module's (#1661); `make -C policy ci` is its fast
-# gate, which needs no Docker. No suite exists yet, so it defines no
-# `stack-up` or `suites`, and with nothing generated, no `gen`.
+# gate, which needs no Docker, and `stack-up suites` the half that does.
+# With nothing generated into the tree, it defines no `gen`.
 
 include ../tooling/make/go.mk
+include ../tooling/make/stack.mk
 
-.PHONY: ci format lint test build
+.PHONY: ci format lint test build stack-up suites integration
 
 ci: format lint test build
 
@@ -29,8 +30,10 @@ lint:
 	$(BUF) lint
 
 # `cargo test` prints `ok. 0 passed` and exits 0 for a crate holding no
-# tests, so the tests are listed and counted first.
+# tests, so the tests are listed and counted first. A test marked
+# `#[ignore]` needs Postgres and is left to `integration`.
 test:
+	@echo 'test: the #[ignore]d store tests not covered here — they need Postgres (make -C policy stack-up suites)'
 	@n="$$(cargo test --workspace --locked -- --list | grep -c ': test$$' || true)"; \
 		echo "test: $$n tests, listed by cargo test --workspace -- --list"; \
 		test "$$n" -gt 0 || { echo 'test: nothing to run — the listing above held no test'; exit 1; }
@@ -40,3 +43,21 @@ build:
 	@echo 'build: $(words $(CRATES)) crates under crates/'
 	@test -n '$(CRATES)' || { echo 'build: nothing to build — crates/ holds no crate'; exit 1; }
 	cargo build --workspace --all-targets --locked
+
+# The dev Postgres, which holds policy's databases beside the others'.
+# `#[sqlx::test]` connects to the URL below and creates one database
+# per test on that server, named `_sqlx_test_<n>`. It drops each on a
+# pass and leaves a failed test's behind.
+stack-up:
+	@$(MAKE) --no-print-directory -C ../deploy/local db-up
+
+POLICY_TEST_SERVER_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/postgres)
+
+suites: integration
+
+integration:
+	@test -n '$(POLICY_TEST_SERVER_URL)' || { echo "integration: no postgres published on this host — run make -C policy stack-up" >&2; exit 1; }
+	@n="$$(cargo test --workspace --locked -- --list --ignored | grep -c ': test$$' || true)"; \
+		echo "integration: $$n tests, listed by cargo test --workspace -- --list --ignored, against the postgres at $(POLICY_TEST_SERVER_URL)"; \
+		test "$$n" -gt 0 || { echo 'integration: nothing to run — the listing above held no test'; exit 1; }
+	DATABASE_URL='$(POLICY_TEST_SERVER_URL)' cargo test --workspace --locked -- --ignored

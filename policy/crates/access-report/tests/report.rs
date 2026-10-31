@@ -197,6 +197,14 @@ async fn a_guardrail_scoped_past_what_is_asked_is_left_out() {
         ],
     });
 
+    let in_eng = Held(OrgPolicies {
+        links: vec![],
+        guardrails: vec![guardrail("in-eng", ON_ENG)],
+    });
+    let entries = subject_report(&in_eng, LEE).await;
+    assert!(entries.is_empty(), "{entries:?}");
+    assert_eq!(ids(&subject_report(&in_eng, KIM).await), ["in-eng"]);
+
     let entries = subject_report(&policies, KIM).await;
     assert!(entries.is_empty(), "{entries:?}");
 

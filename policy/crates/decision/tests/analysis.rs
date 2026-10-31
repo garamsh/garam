@@ -2,9 +2,12 @@
 //! property below is proved by cvc5 for every request and every entity
 //! store the schema admits, not for the fixture's. It holds of a link
 //! of each template, so it covers an organization's links as far as a
-//! link differs only in the entities it names. It says nothing of
-//! what the store holds, or of a request the schema refuses: those are
-//! `tests/` beside this file. `make -C policy suites` runs it.
+//! link differs only in the entities it names. `cedar-policy-symcc`
+//! 0.8.0 compiles no linked policy, so a link is read here as the
+//! static policy its template renders, and a test below holds the two
+//! together. It says nothing of what the store holds, or of a request
+//! the schema refuses: those are `tests/` beside this file.
+//! `make -C policy suites` runs it.
 
 #![cfg(test)]
 
@@ -15,8 +18,8 @@ use cedar_policy::{
 };
 use cedar_policy_symcc::solver::LocalSolver;
 use cedar_policy_symcc::{CedarSymCompiler, CompiledPolicy, CompiledPolicySet};
-use decision::{Engine, Role, RoleLink, RoleScope};
-use fixture::{ACME, ENG, LEE, Named, World, link, policy, uid};
+use decision::{Role, RoleScope};
+use fixture::{ACME, BOT, ENG, KIM, LEE, Named, OUTSIDER, World, link, policy, uid};
 
 type Compiler = CedarSymCompiler<LocalSolver>;
 
@@ -45,26 +48,41 @@ fn set(sources: &[&str]) -> PolicySet {
     policies
 }
 
+/// What a link of `role` holds: its template with both slots filled.
+fn rendered(world: &World, role: Role, scope: RoleScope, who: Named, what: Named) -> Policy {
+    let scope_name = match scope {
+        RoleScope::Organization => "org",
+        RoleScope::TeamOrProject => "scoped",
+    };
+    let role_name = format!("{role:?}").to_lowercase();
+    let template = world
+        .compose(&[], &[])
+        .policy_set()
+        .template(&PolicyId::new(format!("role-{scope_name}-{role_name}")))
+        .expect("the tier holds the template")
+        .to_string()
+        .replace("?principal", &uid(who).to_string())
+        .replace("?resource", &uid(what).to_string());
+    let id = format!("{scope_name}-{role_name}");
+    Policy::parse(Some(PolicyId::new(id)), template).expect("the rendered link parses")
+}
+
 /// A link of every template, as an organization's links reach a
 /// composition.
-fn every_link() -> Vec<RoleLink> {
-    let named = |prefix: &str, role: Role, base: RoleLink| RoleLink {
-        id: PolicyId::new(format!("{prefix}-{role:?}")),
-        ..base
-    };
+fn every_link(world: &World) -> Vec<Policy> {
     ROLES
         .into_iter()
         .flat_map(|role| {
             [
-                named("org", role, link(role, RoleScope::Organization, ENG, ACME)),
-                named("team", role, link(role, RoleScope::TeamOrProject, LEE, ENG)),
+                rendered(world, role, RoleScope::Organization, ENG, ACME),
+                rendered(world, role, RoleScope::TeamOrProject, LEE, ENG),
             ]
         })
         .collect()
 }
 
-fn composed(world: &World, links: &[RoleLink], guardrails: &[Policy]) -> PolicySet {
-    world.compose(links, guardrails).policy_set().clone()
+fn composed(world: &World, policies: &[Policy]) -> PolicySet {
+    world.compose(&[], policies).policy_set().clone()
 }
 
 fn every_request(schema: &Schema) -> Vec<RequestEnv> {
@@ -86,7 +104,7 @@ fn compiled(policies: &PolicySet, request: &RequestEnv, schema: &Schema) -> Comp
 async fn no_system_policy_and_no_link_can_error_on_a_request_the_schema_admits() {
     let world = World::new();
     let schema = world.engine.schema();
-    let policies = composed(&world, &every_link(), &[]);
+    let policies = composed(&world, &every_link(&world));
     let mut proved = 0;
     let mut solver = compiler();
     for request in every_request(schema) {
@@ -110,7 +128,9 @@ async fn no_system_policy_and_no_link_can_error_on_a_request_the_schema_admits()
 async fn nothing_reaches_a_resource_but_a_member_of_its_organization() {
     let world = World::new();
     let schema = world.engine.schema();
-    let widest = composed(&world, &every_link(), &[policy("everything", EVERYTHING)]);
+    let mut links = every_link(&world);
+    links.push(policy("everything", EVERYTHING));
+    let widest = composed(&world, &links);
     let members = set(&[MEMBERS_ONLY]);
     let mut solver = compiler();
     assert!(implied_everywhere(&mut solver, schema, &widest, &members).await);
@@ -175,7 +195,7 @@ fn action_of(request: &RequestEnv) -> String {
 async fn the_tier_alone_allows_only_an_agents_sending() {
     let world = World::new();
     let schema = world.engine.schema();
-    let tier = composed(&world, &[], &[]);
+    let tier = composed(&world, &[]);
     let mut solver = compiler();
     let mut sending = 0;
     let mut proved = 0;
@@ -203,7 +223,7 @@ async fn the_tier_alone_allows_only_an_agents_sending() {
 async fn no_role_holds_agent_watch() {
     let world = World::new();
     let schema = world.engine.schema();
-    let linked = composed(&world, &every_link(), &[]);
+    let linked = composed(&world, &every_link(&world));
     let mut solver = compiler();
     let requests: Vec<RequestEnv> = every_request(schema)
         .into_iter()
@@ -219,18 +239,12 @@ async fn no_role_holds_agent_watch() {
     }
 }
 
-/// One link, with nothing else, on the same subject and resource.
-fn one_link(engine: &Engine, role: Role, scope: RoleScope, resource: Named) -> PolicySet {
-    let mut policies = engine
-        .compose(&[link(role, scope, ENG, resource)], &[])
-        .expect("the link composes")
-        .policy_set()
-        .clone();
-    for id in ["tenant-isolation", "agent-message-send"] {
-        policies
-            .remove_static(PolicyId::new(id))
-            .expect("the tier holds it");
-    }
+/// One link, with nothing else.
+fn one_link(world: &World, role: Role, scope: RoleScope, what: Named) -> PolicySet {
+    let mut policies = PolicySet::new();
+    policies
+        .add(rendered(world, role, scope, ENG, what))
+        .expect("the set is empty");
     policies
 }
 
@@ -256,16 +270,15 @@ async fn implied_everywhere(
 #[ignore = "needs cvc5: make -C policy suites"]
 async fn each_role_holds_what_the_role_below_it_holds() {
     let world = World::new();
-    let engine = &world.engine;
-    let schema = engine.schema();
+    let schema = world.engine.schema();
     let mut solver = compiler();
     for (scope, resource) in [
         (RoleScope::Organization, ACME),
         (RoleScope::TeamOrProject, ENG),
     ] {
         for (below, above) in ROLE_PAIRS {
-            let narrow = one_link(engine, below, scope, resource);
-            let wide = one_link(engine, above, scope, resource);
+            let narrow = one_link(&world, below, scope, resource);
+            let wide = one_link(&world, above, scope, resource);
             assert!(
                 implied_everywhere(&mut solver, schema, &narrow, &wide).await,
                 "{above:?} does not hold what {below:?} holds"
@@ -287,8 +300,7 @@ async fn each_role_holds_what_the_role_below_it_holds() {
 #[ignore = "needs cvc5: make -C policy suites"]
 async fn a_scoped_role_reaches_only_what_it_names() {
     let world = World::new();
-    let engine = &world.engine;
-    let schema = engine.schema();
+    let schema = world.engine.schema();
     let team: EntityUid = uid(ENG);
     let organization: EntityUid = uid(ACME);
     let only_team = set(&[&format!("permit (principal, action, resource == {team});")]);
@@ -297,9 +309,49 @@ async fn a_scoped_role_reaches_only_what_it_names() {
     )]);
     let mut solver = compiler();
 
-    let scoped = one_link(engine, Role::Owner, RoleScope::TeamOrProject, ENG);
+    let scoped = one_link(&world, Role::Owner, RoleScope::TeamOrProject, ENG);
     assert!(implied_everywhere(&mut solver, schema, &scoped, &only_team).await);
 
-    let whole = one_link(engine, Role::Owner, RoleScope::Organization, ACME);
+    let whole = one_link(&world, Role::Owner, RoleScope::Organization, ACME);
     assert!(!implied_everywhere(&mut solver, schema, &whole, &only_organization).await);
+}
+
+/// What the proofs read is what a decision reads: a rendered link
+/// answers as the link it stands for, on every question below.
+#[test]
+fn a_rendered_link_decides_as_the_link_does() {
+    let world = World::new();
+    let mut allowed = 0;
+    for role in ROLES {
+        for (scope, what) in [
+            (RoleScope::Organization, ACME),
+            (RoleScope::TeamOrProject, ENG),
+        ] {
+            let linked = world.compose(&[link(role, scope, ENG, what)], &[]);
+            let static_form = world.compose(&[], &[rendered(&world, role, scope, ENG, what)]);
+            for who in [KIM, LEE, OUTSIDER] {
+                for action in [
+                    "agent:read",
+                    "agent:configure",
+                    "org:delete",
+                    "group:update",
+                ] {
+                    for resource in [ACME, ENG, BOT] {
+                        let question = fixture::evaluation(who, action, resource);
+                        let Ok(request) = world.engine.request(&question) else {
+                            continue;
+                        };
+                        let by_link = world.engine.decide(&request, &linked, &world.entities);
+                        let by_text = world.engine.decide(&request, &static_form, &world.entities);
+                        assert_eq!(
+                            by_link.outcome, by_text.outcome,
+                            "{who:?} {action} {resource:?}"
+                        );
+                        allowed += usize::from(by_link.outcome == decision::Outcome::Allow);
+                    }
+                }
+            }
+        }
+    }
+    assert!(allowed > 0, "no question reached a link");
 }

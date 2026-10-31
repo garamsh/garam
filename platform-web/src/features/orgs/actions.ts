@@ -86,6 +86,10 @@ export {
   type RevokeAgentSupervisorState,
 } from "./api/revoke-agent-supervisor";
 export {
+  revokeInvitation,
+  type RevokeInvitationState,
+} from "./api/revoke-invitation";
+export {
   revokeOperatorKey,
   type RevokeOperatorKeyState,
 } from "./api/revoke-operator-key";

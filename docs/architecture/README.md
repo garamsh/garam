@@ -1164,6 +1164,11 @@ ADRs:
   path on the chosen app, under a per-app rule; cowork's server and web
   app share `cowork.garam.sh`, split by path at the gateway; supersedes
   0131 in part, on decision 2's return path
+- [0136](./adr/0136-a-pending-invitation-is-listed-by-an-id-that-admits-no-one-and-revoking-deletes-it.md)
+  — an invitation carries a random `id` that admits no one, by which
+  the organization lists the pending ones and revokes one on
+  `org:invite`; revoking deletes the row, so its token is answered as
+  an unknown one, and a spent invitation is not revoked
 - [0137](./adr/0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)
   — tenant isolation is `principal in resource.org.members`, read from
   a group of each organization's members that no team or project sits

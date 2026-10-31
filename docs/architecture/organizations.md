@@ -66,6 +66,16 @@ dies after the user was created also leaves an account, possibly with
 a password, and no membership. That account reaches no organization,
 and its username stays taken.
 
+**A pending invitation is listed and revoked by an id that admits no
+one**
+([ADR-0136](./adr/0136-a-pending-invitation-is-listed-by-an-id-that-admits-no-one-and-revoking-deletes-it.md)).
+The token is a bearer secret, so `listInvitations` answers each
+invitation neither spent nor expired by its `id`, on `org:invite`, the
+action that issues it. Revoking deletes the row, matching only an
+unspent one of the organization in the path, so a token answers as
+unknown afterwards and a revocation and a use never both take effect.
+A spent invitation is refused as `invitation_accepted`.
+
 **A group or project holds no member another organization owns.** An
 org-owned GRN names its organization in the organization segment
 (ADR-0001), so the store refuses an add whose member names an

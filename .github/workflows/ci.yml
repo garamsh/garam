@@ -40,9 +40,11 @@ jobs:
   # contributor runs locally (ci.md §One entry point per task):
   # `make affected` prints each module with its reason and hands the
   # jobs below the ones defining each verb. The pull request's merge
-  # ref has the base as its first parent, so a depth of two holds the
-  # merge base. A promotion into `main` runs every module (git.md
-  # §Promotion).
+  # ref has the base as its first parent, so a depth of two holds it
+  # and `HEAD^1` names it. The event's `base.sha` is not that parent
+  # once the base branch moved after the event: it is then absent from
+  # the checkout, and git answers `Not a valid commit name` (#1733).
+  # A promotion into `main` runs every module (git.md §Promotion).
   changes:
     runs-on: ubuntu-24.04
     outputs:
@@ -55,7 +57,7 @@ jobs:
       - run: tooling/record-runner-image.sh
       - id: affected
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
+          BASE: HEAD^1
           AFFECTED_EVERY: ${{ github.base_ref == 'main' && 'a promotion into main runs every module' || '' }}
         run: AFFECTED_OUTPUT="$GITHUB_OUTPUT" make affected BASE="$BASE"
 

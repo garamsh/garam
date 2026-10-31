@@ -315,6 +315,8 @@ on hosted runners.
   version (ADR-0039 §Consequences). `release.yml` builds all five and
   pushes none until all are built (#945), so what a build failure there
   now costs is the run. Until #850 no image was built by any check.
+  `images.yml` also runs `make policy-image-e2e`, which builds
+  `garam/policy` itself, since no release publishes it yet (#1689).
 - **A pull request's image builds take their layers from the GitHub
   Actions cache and their bases from `mirror.gcr.io`.**
   The `suites` jobs' `make -C <module> stack-up` and `images`'

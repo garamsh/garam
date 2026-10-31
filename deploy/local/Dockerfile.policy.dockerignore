@@ -1,0 +1,6 @@
+# Build context for deploy/local/Dockerfile.policy, the repository
+# root. The build compiles the policy workspace, whose schema, system
+# policies, proto and migrations it reads at compile time.
+*
+!policy
+policy/target

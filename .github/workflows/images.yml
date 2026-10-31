@@ -9,8 +9,9 @@ name: images
 #
 # `docs/**` is the whole ignore list because it is the only path the
 # build itself keeps out of every image: `.dockerignore` names `docs`,
-# and Dockerfile.web.dockerignore and Dockerfile.cowork.dockerignore
-# leave it out of the contexts they allow. A wider one would
+# and Dockerfile.web.dockerignore, Dockerfile.cowork.dockerignore and
+# Dockerfile.policy.dockerignore leave it out of the contexts they
+# allow. A wider one would
 # rest on a property that holds today rather than one the build
 # enforces, and a filter that quietly stops covering a change is what
 # #850 is about.
@@ -42,7 +43,9 @@ jobs:
   # two come apart (#760). This builds the five images from what
   # release.yml says each is built from, once each, then checks the
   # console's, the site's, cowork's and cowork-web's, a failure during
-  # a release being the irreversible case (ADR-0039 §Consequences).
+  # a release being the irreversible case (ADR-0039 §Consequences). The
+  # policy service's image is built by its own check: no release
+  # publishes it yet.
   #
   # Neither toolchain is reached except through a Dockerfile, so the
   # runner's own Docker and make are all this needs, with the python3
@@ -56,6 +59,6 @@ jobs:
       - run: tooling/enable-containerd-image-store.sh
       - uses: crazy-max/ghaction-github-runtime@04d248b84655b509d8c44dc1d6f990c879747487 # v4.0.0
       # One `make` call, so the four checks share one image-build.
-      - run: make web-image-e2e site-image-e2e cowork-image-e2e cowork-web-image-e2e
+      - run: make web-image-e2e site-image-e2e cowork-image-e2e cowork-web-image-e2e policy-image-e2e
         env:
           IMAGE_BUILD_CACHE: gha

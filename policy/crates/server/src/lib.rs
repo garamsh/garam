@@ -4,7 +4,9 @@
 mod caller;
 mod config;
 mod policy_service;
+mod probes;
 mod status;
+mod tls;
 
 use std::future::Future;
 
@@ -16,11 +18,13 @@ use sqlx::postgres::PgPoolOptions;
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::service::interceptor::InterceptedService;
-use tonic::transport::Server;
+use tonic::transport::{Identity, Server, ServerTlsConfig};
 
 pub use caller::{Caller, KeysError, Refusal, Verifier};
 pub use config::{Config, ConfigError, database_url};
 pub use policy_service::Service;
+pub use probes::{ProbeError, probe};
+pub use tls::{TlsError, load_identity};
 
 /// The generated contract.
 pub mod proto {
@@ -44,6 +48,18 @@ pub enum Error {
     /// The server failed.
     #[error("the server failed")]
     Transport(#[source] tonic::transport::Error),
+    /// The probes' listener failed.
+    #[error("the probes' listener failed")]
+    Probes(#[source] std::io::Error),
+}
+
+/// What `serve` listens on.
+#[derive(Debug)]
+pub struct Listeners {
+    /// The contract, over TLS.
+    pub contract: TcpListener,
+    /// `/healthz` and `/readyz`.
+    pub probes: TcpListener,
 }
 
 /// Opens the service's database. It applies nothing: `migrate` does,
@@ -78,22 +94,29 @@ where
 }
 
 /// The shipped graph: the Postgres stores behind the contract, served
-/// on `listener` until `shutdown` resolves.
+/// over TLS under `identity`, with the probes beside it, until
+/// `shutdown` resolves. No path serves the contract in plaintext: a
+/// bearer token rides it (ADR-0138).
 pub async fn serve(
     pool: PgPool,
     verifier: Verifier,
-    listener: TcpListener,
+    identity: Identity,
+    listeners: Listeners,
     shutdown: impl Future<Output = ()>,
 ) -> Result<(), Error> {
     let engine = Engine::load().map_err(Error::Engine)?;
     let service = Service::new(
         engine.clone(),
         PolicyStore::new(pool.clone()),
-        EntityStore::new(pool, engine),
+        EntityStore::new(pool.clone(), engine),
     );
-    Server::builder()
+    let contract = Server::builder()
+        .tls_config(ServerTlsConfig::new().identity(identity))
+        .map_err(Error::Transport)?
         .add_service(authenticated(service, verifier))
-        .serve_with_incoming_shutdown(TcpListenerStream::new(listener), shutdown)
-        .await
-        .map_err(Error::Transport)
+        .serve_with_incoming_shutdown(TcpListenerStream::new(listeners.contract), shutdown);
+    tokio::select! {
+        served = contract => served.map_err(Error::Transport),
+        answered = probes::answer(listeners.probes, pool) => answered.map_err(Error::Probes),
+    }
 }

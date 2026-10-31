@@ -2,7 +2,7 @@
 
 Runs the whole garam stack on one machine with Docker Compose:
 Postgres, migrations, the authz engine, the API, and — behind
-profiles — the web frontend and cowork.
+profiles — the web frontend, cowork and the policy service.
 
 `garam serve machine` — the listener a machine identity authenticates
 on — is not part of this stack
@@ -29,6 +29,7 @@ no second compose file.
 - Up and down
 - Startup order
 - cowork
+- policy
 - Probes
 - Metrics
 - Configuration
@@ -84,13 +85,20 @@ moves that one server rather than standing up a second.
 
 ## Files
 
-- `docker-compose.yml` — the stack; the `web` and `cowork` services are
-  profile-gated.
+- `docker-compose.yml` — the stack; the `web`, `cowork` and `policy`
+  services are profile-gated.
 - `Dockerfile` — multi-stage build of the `garam` binary; context is the
   repository root.
 - `Dockerfile.cowork` — multi-stage build of the `cowork` binary;
   context is the repository root, kept to cowork's module by
   `Dockerfile.cowork.dockerignore`.
+- `Dockerfile.policy` — multi-stage build of the `policy` binary;
+  context is the repository root, kept to `policy/` by
+  `Dockerfile.policy.dockerignore`.
+- `policy-tls.sh` — the throwaway certificate the `policy` profile
+  serves under.
+- `policy-jwks.json` — the public key the `policy` profile verifies
+  against, whose private half was never kept.
 - `cowork-gateway.Caddyfile` — the path split on cowork's host.
 - `Dockerfile.web` — multi-stage Next.js standalone build of the app
   `APP` names: `platform-web`, `site-web` or `cowork-web`; context is
@@ -173,13 +181,36 @@ them, and a moved gateway port moves `GARAM_COWORK_URL` with it. `make
 cowork-image-e2e cowork-web-image-e2e` checks both images outside the
 stack, as `images.yml` does.
 
+## policy
+
+```sh
+docker compose -f deploy/local/docker-compose.yml --profile policy up --build
+docker compose -f deploy/local/docker-compose.yml --profile policy down
+```
+
+The `policy` profile adds four services: `policy-db`, a one-shot that
+creates the `policy` database on the one Postgres where absent;
+`policy-migrate`, which applies `policy/migrations/` to it;
+`policy-tls`, a one-shot that writes a new throwaway certificate into a
+volume at each start; and `policy`, the server. Nothing calls the
+service yet, so
+no port is published, and no token verifies against `policy-jwks.json`
+(ADR-0138).
+
+The service serves no plaintext, here or anywhere (`policy/README.md`
+§Transport). The stack's connection to Postgres is the one thing here
+that is plaintext, because this Postgres serves no TLS. `make
+policy-image-e2e` checks the image outside the stack, against a Postgres
+that refuses anything else.
+
 ## Startup order
 
 `migrate` runs once against a healthy Postgres and exits; `authz` and
 `api` wait for it to have exited successfully. `api` additionally waits
 for `authz`, and `web` and `site` for `api`. `cowork-migrate` waits
 for `cowork-db`, `cowork` for it, `rustfs` and `api`, `cowork-web` for
-`cowork`, and `cowork-gateway` for `cowork-web`. Every server's
+`cowork`, and `cowork-gateway` for `cowork-web`. `policy-migrate` waits
+for `policy-db`, and `policy` for it and `policy-tls`. Every server's
 healthcheck is its own readiness probe, so a service is healthy here
 when it can serve a request and not merely when it has bound its port.
 
@@ -202,7 +233,9 @@ outside its process, so a database outage does not restart the stack.
 
 `garam serve machine` is not part of this stack; it answers both on
 `GARAM_MACHINE_HEALTH_ADDR`, a port of its own, because its own
-listener serves no probe route.
+listener serves no probe route. `policy` does the same on
+`POLICY_HEALTH_ADDR`, which compose fixes at port 8091 and publishes to
+nothing.
 
 ## Metrics
 

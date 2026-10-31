@@ -302,6 +302,85 @@ services:
       timeout: 5s
       retries: 10
 
+  # The policy service keeps a database of its own on the one Postgres
+  # (ADR-0130), created as cowork-db creates cowork's. Nothing calls the
+  # service yet.
+  policy-db:
+    profiles: ["policy"]
+    image: postgres:17.11-alpine3.24@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    environment:
+      PGHOST: postgres
+      PGUSER: garam
+      PGPASSWORD: garam
+    entrypoint:
+      - sh
+      - -c
+      - >-
+        present=$$(psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='policy'") || exit 1;
+        test -n "$$present" || createdb policy
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  policy-migrate:
+    profiles: ["policy"]
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.policy
+    command: ["migrate"]
+    environment:
+      POLICY_DATABASE_URL: postgres://garam:garam@postgres:5432/policy?sslmode=disable
+    depends_on:
+      policy-db:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # policy serves no plaintext, here as anywhere: this one-shot writes
+  # it a certificate only this stack trusts, a new one at each start,
+  # owned by the account the image runs as.
+  policy-tls:
+    profiles: ["policy"]
+    image: alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+    command: ["sh", "/policy-tls.sh", "policy", "10001"]
+    volumes:
+      - ./policy-tls.sh:/policy-tls.sh:ro
+      - policy-tls:/tls
+    restart: "no"
+
+  # policy-jwks.json holds a public key whose private half was never
+  # kept, so no token verifies here until the platform's issuer lands
+  # (ADR-0138). The contract's port is published to nothing.
+  policy:
+    profiles: ["policy"]
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile.policy
+    command: ["serve"]
+    environment:
+      POLICY_ADDR: 0.0.0.0:8443
+      POLICY_HEALTH_ADDR: 0.0.0.0:8091
+      POLICY_DATABASE_URL: postgres://garam:garam@postgres:5432/policy?sslmode=disable
+      POLICY_TOKEN_ISSUER: https://garam.localhost
+      POLICY_JWKS_FILE: /etc/policy/jwks.json
+      POLICY_TLS_CERT_FILE: /etc/policy/tls/tls.crt
+      POLICY_TLS_KEY_FILE: /etc/policy/tls/tls.key
+    volumes:
+      - ./policy-jwks.json:/etc/policy/jwks.json:ro
+      - policy-tls:/etc/policy/tls:ro
+    depends_on:
+      policy-migrate:
+        condition: service_completed_successfully
+      policy-tls:
+        condition: service_completed_successfully
+    # /readyz, which answers while the database does. The image is
+    # scratch, so the check runs the binary's own probe subcommand.
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/policy", "probe", "http://127.0.0.1:8091/readyz"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
   # cowork-web reads every address at runtime; nothing is baked. Its
   # server reaches cowork and the api inside the network, and the
   # browser reaches cowork's sync WebSocket through cowork-gateway, on
@@ -352,3 +431,4 @@ services:
 
 volumes:
   postgres-data:
+  policy-tls:

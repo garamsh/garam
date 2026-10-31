@@ -11,9 +11,9 @@
 # before the web ones. A change to a file the root owns selects every
 # module; those files are named in ROOT_FILES in tooling/ci/affected.sh.
 
-# check-toolchain reads the platform's go.mod, the console's .nvmrc and
-# the stack's Dockerfiles.
-tooling platform platform-web deploy/local
+# check-toolchain reads the platform's go.mod, the console's .nvmrc,
+# policy's rust-toolchain.toml and the stack's Dockerfiles.
+tooling platform platform-web policy deploy/local
 lib/errorx
 lib/grn
 # The platform's Go client generates from the platform's OpenAPI spec.
@@ -32,8 +32,8 @@ cowork/engine
 cowork cowork/engine deploy/local garam-cli
 # A test of policy's role templates reads the platform's role table
 # until roles leave the platform (ADR-0130). It is a test reading a
-# file: policy/ calls no service.
-policy platform
+# file: policy/ calls no service. Its suites run against the stack.
+policy platform deploy/local
 # The chart's checks read the environment names the platform, the
 # console and the site declare.
 deploy/charts platform platform-web site-web

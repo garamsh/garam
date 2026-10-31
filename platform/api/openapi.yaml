@@ -259,7 +259,8 @@ paths:
         grow by invitation rather than open signup (ADR-0006), and the
         token is the possession proof that authorizes the account
         (ADR-0041). The account is a local one, distinct from any
-        account the same person holds through a provider.
+        account the same person holds through a provider. A revoked
+        token is answered 404, as an unknown one is.
       security: []
       requestBody:
         required: true
@@ -2681,6 +2682,34 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
   /orgs/{org}/invitations:
+    get:
+      operationId: listInvitations
+      tags: [org]
+      summary: List the invitations that can still be accepted. Requires `org:invite`.
+      description: >-
+        Answers each invitation neither spent nor expired, newest
+        first, by its `id`. A token is a bearer secret and no answer
+        here carries one, so a link is shown only when it is created
+        (ADR-0136).
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: The pending invitations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PendingInvitation'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
     post:
       operationId: createInvitation
       tags: [org]
@@ -2712,6 +2741,41 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/invitations/{invitation}:
+    delete:
+      operationId: revokeInvitation
+      tags: [org]
+      summary: Revoke an invitation no one has used. Requires `org:invite`.
+      description: >-
+        Deletes the invitation, so its token is answered 404 from then
+        on, as a token that never existed is, by `getInvitation`,
+        `acceptInvitation` and registering. An invitation already used
+        is refused with 409 `invitation_accepted`, and a revocation and
+        a use of one invitation never both take effect. Revoking leaves
+        a member who joined by an earlier invitation where they are.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - name: invitation
+          in: path
+          required: true
+          description: The `id` `listInvitations` answers, never the token.
+          x-go-name: InvitationID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Invitation revoked.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
   /invitations/{token}:
     get:
       operationId: getInvitation
@@ -2723,8 +2787,8 @@ paths:
         accepting would do before anyone accepts. It needs no session:
         possession of the token is the whole claim (ADR-0006), and the
         answer carries nothing accepting it would not reveal — no
-        inviter, no member of the organization. An unknown token is
-        answered as any other not-found.
+        inviter, no member of the organization. An unknown token, a
+        revoked one among them, is answered as any other not-found.
       security: []
       parameters:
         - name: token
@@ -2749,7 +2813,8 @@ paths:
       description: >-
         The signed-in user joins the invitation's org with the
         invitation's role. Expired or already-accepted tokens are
-        rejected.
+        rejected, and a revoked one is answered 404 as an unknown token
+        is.
       parameters:
         - name: token
           in: path
@@ -3583,6 +3648,27 @@ components:
           type: string
         role:
           $ref: '#/components/schemas/Role'
+        expiresAt:
+          type: string
+          format: date-time
+    PendingInvitation:
+      type: object
+      description: >-
+        An invitation that can still be accepted, without its token.
+      required: [id, role, createdByGrn, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Names the invitation to `revokeInvitation`; it admits no one.
+        role:
+          $ref: '#/components/schemas/Role'
+        createdByGrn:
+          type: string
+          description: Who issued it, who may since have left the organization.
+        createdAt:
+          type: string
+          format: date-time
         expiresAt:
           type: string
           format: date-time

@@ -5,11 +5,13 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/org/postgres/db"
 	"github.com/garamsh/garam/platform/internal/pgxerr"
@@ -21,6 +23,7 @@ import (
 // records where a membership came from.
 func (s *Store) CreateInvitation(ctx context.Context, inv *org.Invitation) error {
 	err := s.q.CreateInvitation(ctx, db.CreateInvitationParams{
+		ID:        invitationID(inv.ID),
 		Token:     inv.Token,
 		OrgGrn:    inv.Organization.String(),
 		Role:      string(inv.Role),
@@ -39,6 +42,55 @@ func (s *Store) GetInvitation(ctx context.Context, token string) (*org.Invitatio
 		return nil, pgxerr.Classify(err, "get invitation", org.ErrInvitationNotFound, nil)
 	}
 	return rowToInvitation(row)
+}
+
+// ListPendingInvitations returns the org's Invitations that can still
+// be accepted, newest first.
+func (s *Store) ListPendingInvitations(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*org.Invitation, error) {
+	rows, err := s.q.ListPendingInvitations(ctx, db.ListPendingInvitationsParams{
+		OrgGrn:    orgGRN.String(),
+		RowOffset: int32(f.Offset),
+		RowLimit:  limit(f.Limit),
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "list pending invitations", nil, nil)
+	}
+	invitations := make([]*org.Invitation, 0, len(rows))
+	for _, row := range rows {
+		inv, err := rowToInvitation(row)
+		if err != nil {
+			return nil, err
+		}
+		invitations = append(invitations, inv)
+	}
+	return invitations, nil
+}
+
+// RevokeInvitation deletes an unspent Invitation of the org. A row that
+// survives the delete was spent, or never the org's: the second read
+// tells the two apart and changes nothing.
+func (s *Store) RevokeInvitation(ctx context.Context, orgGRN grn.GRN, id org.InvitationID) error {
+	n, err := s.q.RevokeInvitation(ctx, db.RevokeInvitationParams{
+		OrgGrn: orgGRN.String(),
+		ID:     invitationID(id),
+	})
+	if err != nil {
+		return pgxerr.Classify(err, "revoke invitation", nil, nil)
+	}
+	if n > 0 {
+		return nil
+	}
+	spent, err := s.q.InvitationExists(ctx, db.InvitationExistsParams{
+		OrgGrn: orgGRN.String(),
+		ID:     invitationID(id),
+	})
+	if err != nil {
+		return pgxerr.Classify(err, "revoke invitation", nil, nil)
+	}
+	if spent {
+		return org.ErrInvitationAccepted
+	}
+	return org.ErrInvitationNotFound
 }
 
 // AcceptInvitation spends a pending, unexpired Invitation and adds the
@@ -128,6 +180,10 @@ func (s *Store) ReleaseInvitationClaim(ctx context.Context, inv *org.Invitation)
 	return claimRows(n, err, "release invitation claim")
 }
 
+func invitationID(id org.InvitationID) pgtype.UUID {
+	return pgtype.UUID{Bytes: uuid.UUID(id), Valid: true}
+}
+
 // claimRows refuses a claim update that matched no row: the claim it
 // names is not held.
 func claimRows(n int64, err error, op string) error {
@@ -174,6 +230,7 @@ func rowToInvitation(row db.Invitation) (*org.Invitation, error) {
 		return nil, errorx.Wrap(err, "invitation row creator grn", errorx.KindInternal)
 	}
 	inv := &org.Invitation{
+		ID:           org.InvitationID(row.ID.Bytes),
 		Token:        row.Token,
 		Organization: og,
 		Role:         role,

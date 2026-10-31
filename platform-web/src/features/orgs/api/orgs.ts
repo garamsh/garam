@@ -27,6 +27,8 @@ export type Project = components["schemas"]["Project"];
 export type Member = components["schemas"]["Member"];
 /** A pending invitation and its bearer token, as the API returns one. */
 export type Invitation = components["schemas"]["Invitation"];
+/** An invitation that can still be accepted, without its token. */
+export type PendingInvitation = components["schemas"]["PendingInvitation"];
 /**
  * An agent an operator provisioned outside garam, as the API returns
  * one. What the operator reports about its pod and what the agent
@@ -140,6 +142,16 @@ export const InvitationParser = parserFor<Invitation>()(
     token: z.string(),
     orgGrn: GrnParser,
     role: RoleParser,
+    expiresAt: z.string(),
+  }),
+);
+
+const PendingInvitationParser = parserFor<PendingInvitation>()(
+  z.object({
+    id: z.string(),
+    role: RoleParser,
+    createdByGrn: GrnParser,
+    createdAt: z.string(),
     expiresAt: z.string(),
   }),
 );
@@ -315,6 +327,22 @@ export function lookupOrgMembers(
     garamFetchAuthenticated(
       `/orgs/${orgPath(org)}/members`,
       z.array(MemberParser),
+    ),
+  );
+}
+
+/**
+ * The invitations of an organization that can still be accepted. A
+ * caller without `org:invite` is refused them, and that refusal is
+ * returned rather than answered with not-found.
+ */
+export function lookupPendingInvitations(
+  org: string,
+): Promise<RefusableRead<PendingInvitation[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/invitations`,
+      z.array(PendingInvitationParser),
     ),
   );
 }

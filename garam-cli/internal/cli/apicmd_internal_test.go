@@ -36,7 +36,7 @@ func TestAPIOperations_PlaceEveryOperationOfTheSpecification(t *testing.T) {
 	}{
 		// The counts docs/architecture/cli.md §Coverage states; an
 		// operation added or removed changes both.
-		{"../../../platform/api/openapi.yaml", "commands.yaml", apiOperations, 83},
+		{"../../../platform/api/openapi.yaml", "commands.yaml", apiOperations, 85},
 		{"../../../cowork/api/openapi.yaml", "cowork.yaml", coworkOperations, 28},
 	} {
 		t.Run(tc.config, func(t *testing.T) {

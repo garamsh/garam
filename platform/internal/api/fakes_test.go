@@ -661,6 +661,45 @@ func (s *fakeOrgStore) GetInvitation(_ context.Context, token string) (*org.Invi
 	return inv, nil
 }
 
+// ListPendingInvitations ignores paging, as ListGroups here does.
+func (s *fakeOrgStore) ListPendingInvitations(_ context.Context, orgGRN grn.GRN, _ listfilter.Filter) ([]*org.Invitation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	out := []*org.Invitation{}
+	for token, inv := range s.invitations {
+		if inv.Organization == orgGRN && !s.accepted[token] && !inv.Expired(now) {
+			out = append(out, inv)
+		}
+	}
+	slices.SortFunc(out, func(a, b *org.Invitation) int { return b.CreatedAt.Compare(a.CreatedAt) })
+	return out, nil
+}
+
+// holdsInvitation reports whether the token is still stored.
+func (s *fakeOrgStore) holdsInvitation(token string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.invitations[token]
+	return ok
+}
+
+func (s *fakeOrgStore) RevokeInvitation(_ context.Context, orgGRN grn.GRN, id org.InvitationID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for token, inv := range s.invitations {
+		if inv.ID != id || inv.Organization != orgGRN {
+			continue
+		}
+		if s.accepted[token] {
+			return org.ErrInvitationAccepted
+		}
+		delete(s.invitations, token)
+		return nil
+	}
+	return org.ErrInvitationNotFound
+}
+
 func (s *fakeOrgStore) AcceptInvitation(_ context.Context, token string, userGRN grn.GRN) (*org.Membership, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

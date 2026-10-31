@@ -3,7 +3,6 @@ package integration_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -387,46 +386,36 @@ func TestListPendingInvitations_PagesTheNewestFirst(t *testing.T) {
 	assert.Equal(t, oldest, second[0].Token)
 }
 
-// TestRevokeInvitation_AnAcceptRacingARevocationTakesOneEffect races an
-// accept against a revocation of one invitation: the person joins and
-// the revocation is refused as spent, or the invitation goes and the
-// accept is refused as unknown, and never both (ADR-0136).
-func TestRevokeInvitation_AnAcceptRacingARevocationTakesOneEffect(t *testing.T) {
+// TestRevokeInvitation_WaitsOnAClaimAndFindsTheInvitationSpent holds a
+// claim on the invitation's row in an open transaction, as an accept
+// does, and revokes meanwhile: the revocation waits on the row, and
+// once the claim commits it is refused as spent and the row stays. A
+// revocation and a use never both take effect (ADR-0136). A pair of
+// racing calls would not show this: the delete is a single statement
+// and reached the row first in all twelve rounds of a mutated run.
+func TestRevokeInvitation_WaitsOnAClaimAndFindsTheInvitationSpent(t *testing.T) {
 	st := newInvitationStack(t)
 	ctx := context.Background()
-	bob := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "bob")
-	require.NoError(t, st.users.Create(ctx, user.New(bob, "bob")))
+	acme, token := st.invite(t, "acme")
+	pending, err := st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{})
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
 
-	for round := range raceRounds {
-		orgGRN, token := st.invite(t, fmt.Sprintf("acme-%d", round))
-		pending, err := st.orgs.ListPendingInvitations(ctx, orgGRN, listfilter.Filter{})
-		require.NoError(t, err)
-		require.Len(t, pending, 1)
+	claim, err := st.pool.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = claim.Rollback(ctx) }()
+	_, err = claim.Exec(ctx, "UPDATE invitations SET accepted_at = now() WHERE token = $1", token)
+	require.NoError(t, err)
 
-		start := make(chan struct{})
-		var acceptErr, revokeErr error
-		var wg sync.WaitGroup
-		wg.Go(func() {
-			<-start
-			_, acceptErr = st.orgs.AcceptInvitation(ctx, token, bob)
-		})
-		wg.Go(func() {
-			<-start
-			revokeErr = st.orgs.RevokeInvitation(ctx, orgGRN, pending[0].ID)
-		})
-		close(start)
-		wg.Wait()
+	revoked := make(chan error, 1)
+	go func() { revoked <- st.orgs.RevokeInvitation(ctx, acme, pending[0].ID) }()
+	require.Eventually(t, func() bool {
+		return countRows(t, st.pool, `SELECT count(*) FROM pg_stat_activity
+			WHERE wait_event_type = 'Lock' AND query LIKE '%DELETE FROM invitations%'`) > 0
+	}, 10*time.Second, 10*time.Millisecond, "the revocation waits on the claimed row")
 
-		joined := 0
-		switch {
-		case acceptErr == nil && errors.Is(revokeErr, org.ErrInvitationAccepted):
-			joined = 1
-		case errors.Is(acceptErr, org.ErrInvitationNotFound) && revokeErr == nil:
-		default:
-			t.Fatalf("round %d: want one effect, got accept %v, revoke %v", round, acceptErr, revokeErr)
-		}
-		assert.Equal(t, joined, countRows(t, st.pool,
-			"SELECT count(*) FROM org_members WHERE org_grn = $1 AND user_grn = $2",
-			orgGRN.String(), bob.String()), "round %d: the member", round)
-	}
+	require.NoError(t, claim.Commit(ctx))
+
+	assert.ErrorIs(t, <-revoked, org.ErrInvitationAccepted)
+	assert.Equal(t, 1, countRows(t, st.pool, "SELECT count(*) FROM invitations WHERE token = $1", token))
 }

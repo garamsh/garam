@@ -284,10 +284,15 @@ async fn each_role_holds_what_the_role_below_it_holds() {
                 "{above:?} does not hold what {below:?} holds"
             );
             // The control: the order matters, so the proof is not of
-            // two sets that happen to be equal.
-            assert!(
-                !implied_everywhere(&mut solver, schema, &wide, &narrow).await,
-                "{below:?} holds what {above:?} holds"
+            // two sets that happen to be equal. The one pair that is
+            // equal is the scoped owner and admin: all an owner adds
+            // is `org:*`, which asks of an Org, and a scoped role
+            // names a team or a project.
+            let equal = scope == RoleScope::TeamOrProject && above == Role::Owner;
+            assert_eq!(
+                implied_everywhere(&mut solver, schema, &wide, &narrow).await,
+                equal,
+                "{below:?} against {above:?} on {scope:?}"
             );
         }
     }

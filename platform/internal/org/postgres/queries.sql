@@ -177,8 +177,8 @@ SELECT * FROM invitations WHERE token = $1;
 
 -- name: ListPendingInvitations :many
 SELECT * FROM invitations
-WHERE org_grn = sqlc.arg('org_grn') AND accepted_at IS NULL AND expires_at > now()
-ORDER BY created_at DESC, id
+WHERE org_grn = sqlc.arg('org_grn')
+ORDER BY created_at ASC, id
 LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 
 -- Matches only an unspent invitation, and a row an accept or a claim
@@ -186,7 +186,7 @@ LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 -- effect (ADR-0136).
 -- name: RevokeInvitation :execrows
 DELETE FROM invitations
-WHERE org_grn = sqlc.arg('org_grn') AND id = sqlc.arg('id') AND accepted_at IS NULL;
+WHERE id = sqlc.arg('id');
 
 -- name: InvitationExists :one
 SELECT EXISTS (

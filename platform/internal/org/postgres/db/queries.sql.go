@@ -706,8 +706,8 @@ func (q *Queries) ListOrgsByMember(ctx context.Context, arg ListOrgsByMemberPara
 
 const listPendingInvitations = `-- name: ListPendingInvitations :many
 SELECT token, org_grn, role, created_by, created_at, expires_at, accepted_by, accepted_at, id FROM invitations
-WHERE org_grn = $1 AND accepted_at IS NULL AND expires_at > now()
-ORDER BY created_at DESC, id
+WHERE org_grn = $1
+ORDER BY created_at ASC, id
 LIMIT $3 OFFSET $2
 `
 
@@ -918,19 +918,14 @@ func (q *Queries) RemoveProjectMember(ctx context.Context, arg RemoveProjectMemb
 
 const revokeInvitation = `-- name: RevokeInvitation :execrows
 DELETE FROM invitations
-WHERE org_grn = $1 AND id = $2 AND accepted_at IS NULL
+WHERE id = $1
 `
-
-type RevokeInvitationParams struct {
-	OrgGrn string
-	ID     pgtype.UUID
-}
 
 // Matches only an unspent invitation, and a row an accept or a claim
 // holds is waited on, so a revocation and a spending never both take
 // effect (ADR-0136).
-func (q *Queries) RevokeInvitation(ctx context.Context, arg RevokeInvitationParams) (int64, error) {
-	result, err := q.db.Exec(ctx, revokeInvitation, arg.OrgGrn, arg.ID)
+func (q *Queries) RevokeInvitation(ctx context.Context, id pgtype.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeInvitation, id)
 	if err != nil {
 		return 0, err
 	}

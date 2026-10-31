@@ -2,6 +2,7 @@ package artifact_test
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/garamsh/garam/cowork/internal/artifact"
 	"github.com/garamsh/garam/cowork/internal/artifact/memory"
+	"github.com/garamsh/garam/cowork/internal/blob"
 	blobmemory "github.com/garamsh/garam/cowork/internal/blob/memory"
 	"github.com/garamsh/garam/cowork/internal/collab"
 	"github.com/garamsh/garam/cowork/internal/page"
@@ -192,4 +194,113 @@ func TestCreate_RefusesWhatItCannotKeep(t *testing.T) {
 	none := artifact.NewService(memory.New(), nil, &policy{}, &pages{}, &pages{}, viewer{})
 	_, err := none.Create(ctx, ada, "acme", artifact.CreateInput{Kind: artifact.KindHTML, Title: "x", Content: artifact.Content{HTML: "x"}})
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable))
+}
+
+// strictBlobs refuses a cancelled context, as a store over a network
+// does and the in-memory one does not.
+type strictBlobs struct{ *blobmemory.Store }
+
+func (b strictBlobs) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return b.Store.Delete(ctx, key)
+}
+
+// unrecording fails every record with err once err is set, after
+// noting the key it was asked to record and whether its blob was
+// there by then.
+type unrecording struct {
+	artifact.Repository
+	blobs  blob.Store
+	err    error
+	onFail func()
+	key    string
+	put    bool
+}
+
+func (r *unrecording) fail(ctx context.Context, key string) error {
+	r.key = key
+	_, err := r.blobs.Get(ctx, key)
+	r.put = err == nil
+	if r.onFail != nil {
+		r.onFail()
+	}
+	return r.err
+}
+
+func (r *unrecording) Create(ctx context.Context, a artifact.Artifact, v artifact.Version) error {
+	if r.err != nil {
+		return r.fail(ctx, v.BlobKey)
+	}
+	return r.Repository.Create(ctx, a, v)
+}
+
+func (r *unrecording) AddVersion(ctx context.Context, org string, v artifact.Version) (artifact.Artifact, artifact.Version, error) {
+	if r.err != nil {
+		return artifact.Artifact{}, artifact.Version{}, r.fail(ctx, v.BlobKey)
+	}
+	return r.Repository.AddVersion(ctx, org, v)
+}
+
+// TestRecordFailure_RemovesTheBlobUnlessTheRecordMayStand fails the
+// record after the put. The blob goes, even where the request was
+// cancelled, and stays where the record is in doubt.
+func TestRecordFailure_RemovesTheBlobUnlessTheRecordMayStand(t *testing.T) {
+	failure := errors.New("no database")
+	input := artifact.CreateInput{Kind: artifact.KindHTML, Title: "Chart", Content: artifact.Content{HTML: "<p>1</p>"}}
+	verbs := map[string]func(ctx context.Context, s artifact.Service, r *unrecording, cause error) error{
+		"create": func(ctx context.Context, s artifact.Service, r *unrecording, cause error) error {
+			r.err = cause
+			_, err := s.Create(ctx, ada, "acme", input)
+			return err
+		},
+		"save": func(ctx context.Context, s artifact.Service, r *unrecording, cause error) error {
+			a, err := s.Create(context.Background(), ada, "acme", input)
+			require.NoError(t, err)
+			r.err = cause
+			_, err = s.Save(ctx, ada, "acme", a.ID, artifact.Content{HTML: "<p>2</p>"})
+			got, readErr := s.Served(context.Background(), "acme", a.ID, 1)
+			require.NoError(t, readErr, "the version that stands keeps its blob")
+			assert.Equal(t, "<p>1</p>", string(got.Body))
+			return err
+		},
+	}
+	tests := []struct {
+		name    string
+		cause   error
+		cancels bool
+		kept    bool
+	}{
+		{name: "the record fails", cause: failure},
+		{name: "the artifact went", cause: artifact.ErrArtifactNotFound},
+		{name: "the request is cancelled", cause: context.Canceled, cancels: true},
+		{name: "the record is in doubt", cause: artifact.ErrRecordInDoubt, kept: true},
+	}
+	for verb, run := range verbs {
+		for _, tc := range tests {
+			t.Run(verb+": "+tc.name, func(t *testing.T) {
+				blobs := strictBlobs{blobmemory.New()}
+				repo := &unrecording{Repository: memory.New(), blobs: blobs}
+				p := &pages{}
+				s := artifact.NewService(repo, blobs, &policy{}, p, p, viewer{})
+				requestCtx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				if tc.cancels {
+					repo.onFail = cancel
+				}
+
+				err := run(requestCtx, s, repo, tc.cause)
+				require.ErrorIs(t, err, tc.cause)
+				require.True(t, repo.put, "the blob was there when the record failed")
+
+				_, err = blobs.Get(context.Background(), repo.key)
+				if tc.kept {
+					assert.NoError(t, err)
+				} else {
+					assert.True(t, errorx.IsKind(err, errorx.KindNotFound), "%v", err)
+				}
+			})
+		}
+	}
 }

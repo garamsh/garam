@@ -243,6 +243,15 @@ mentions and delivers none.
   and none replaces another. A version's bytes are a blob under a key
   of its own, written once; the blob store refuses a second write to a
   key, so nothing kept is replaced even by a bug.
+- **A version that is never recorded.** The blob is written first, so
+  no version names bytes that are not there. Where recording then
+  fails, the save removes the blob, even if its request was cancelled.
+  - **Left behind, with nothing to collect it:** the process stopping
+    between the write and the record, a delete that fails (logged with
+    the key), and a write that fails after reaching the store.
+  - **Kept on purpose:** a commit whose answer never came (logged with
+    the key). The version may stand, and a version without its bytes
+    is lost, where a stray blob only costs storage.
 - **Where HTML is served** (ADR-0127 §8). Never from cowork's own
   origin. `viewArtifact` asks `cowork:artifact-read` as the viewer and
   answers an address on the user-content origin, signed for that

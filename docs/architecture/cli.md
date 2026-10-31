@@ -92,7 +92,7 @@ runs and `make -C garam-cli check-gen` holds current.
   removed if garam refuses or cannot be reached. The command prints the
   answer without the secret and names the file on stderr; without
   `--out`, or with a file already there, it sends nothing.
-- **Coverage.** Each of the platform's 83 operations and cowork's 28
+- **Coverage.** Each of the platform's 85 operations and cowork's 28
   is derived, served by a hand-written command, excluded with its
   reason, or pending, and in exactly one of those. `cligen` refuses
   anything else, and so does
@@ -207,6 +207,9 @@ API's message under its kind.
 
 ## Decisions this rests on
 
+- [ADR-0136](./adr/0136-a-pending-invitation-is-listed-by-an-id-that-admits-no-one-and-revoking-deletes-it.md)
+  — `invitations list` names each pending invitation by an id, and
+  `invitations revoke <id>` takes that id and never a token
 - [ADR-0003](./adr/0003-single-cli-topology.md) — one binary carries
   every server command; the client's is its own (ADR-0132)
 - [ADR-0005](./adr/0005-server-side-sessions.md) — a session is a row

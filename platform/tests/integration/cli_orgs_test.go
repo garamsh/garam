@@ -102,6 +102,27 @@ func TestCLIOrgs_CreateAnOrgAndItsTeamsProjectsMembersAndInvitations(t *testing.
 	require.NoError(t, err)
 	assert.Contains(t, out, "grn:root:default:user:mel")
 
+	// A second invitation is listed by an id that is not its token,
+	// and revoking by that id stops the token admitting anyone. The
+	// first was spent, so the list names this one alone.
+	second := filepath.Join(t.TempDir(), "second.json")
+	_, err = runCLI(t, io.Discard, "invitations", "create", "--role", "member", "--out", second, "--org", globex)
+	require.NoError(t, err)
+	raw, err = os.ReadFile(second)
+	require.NoError(t, err)
+	var revoked struct{ Token string }
+	require.NoError(t, json.Unmarshal(raw, &revoked))
+	var pending []struct{ ID string }
+	cliJSON(t, &pending, "invitations", "list", "--org", globex)
+	require.Len(t, pending, 1)
+	assert.NotEqual(t, revoked.Token, pending[0].ID)
+	_, err = runCLI(t, io.Discard, "invitations", "revoke", pending[0].ID, "--org", globex)
+	require.NoError(t, err)
+	cliJSON(t, &pending, "invitations", "list", "--org", globex)
+	assert.Empty(t, pending, "revoked")
+	_, err = runCLI(t, io.Discard, "invitations", "get", "--", revoked.Token)
+	require.Error(t, err, "a revoked token answers as an unknown one")
+
 	_, err = runCLI(t, io.Discard, "orgs", "deletion-preview", "--org", globex)
 	require.NoError(t, err)
 	_, err = runCLI(t, io.Discard, "orgs", "delete", globex)

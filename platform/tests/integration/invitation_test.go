@@ -20,6 +20,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
+	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/user"
@@ -301,4 +302,118 @@ func TestInvitation_AnAcceptRacingARegistrationAdmitsOne(t *testing.T) {
 				"round %d: the refused registration created no user", round)
 		}
 	}
+}
+
+// TestRevokeInvitation_ItsTokenAdmitsNoOneAndAnotherOrgCannotReachIt
+// revokes one of two live invitations against the real store: the
+// revoked token is refused as unknown by the preview, the accept and
+// the registration, while the other stays listed and is still
+// accepted, which is the control that the refusals are the revocation's
+// doing. Another organization's path does not reach it, and a spent
+// invitation is not revoked.
+func TestRevokeInvitation_ItsTokenAdmitsNoOneAndAnotherOrgCannotReachIt(t *testing.T) {
+	st := newInvitationStack(t)
+	ctx := context.Background()
+	acme, token := st.invite(t, "acme")
+	kept, err := org.NewInvitationToken()
+	require.NoError(t, err)
+	require.NoError(t, st.orgs.CreateInvitation(ctx,
+		org.NewInvitation(kept, acme, org.RoleAdmin, st.owner, time.Now().UTC().Add(time.Hour))))
+	stale, err := org.NewInvitationToken()
+	require.NoError(t, err)
+	require.NoError(t, st.orgs.CreateInvitation(ctx,
+		org.NewInvitation(stale, acme, org.RoleAdmin, st.owner, time.Now().UTC().Add(-time.Minute))))
+	globex, _ := st.invite(t, "globex")
+	bob := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "bob")
+	require.NoError(t, st.users.Create(ctx, user.New(bob, "bob")))
+
+	pending, err := st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{})
+	require.NoError(t, err)
+	require.Len(t, pending, 2, "the expired invitation is not pending")
+	byToken := map[string]org.InvitationID{}
+	for _, inv := range pending {
+		byToken[inv.Token] = inv.ID
+	}
+	id := byToken[token]
+	require.NotZero(t, id)
+
+	assert.ErrorIs(t, st.orgs.RevokeInvitation(ctx, globex, id), org.ErrInvitationNotFound,
+		"an id is only the organization's that issued it")
+	_, err = st.orgs.GetInvitation(ctx, token)
+	require.NoError(t, err, "another organization's revocation deleted nothing")
+
+	require.NoError(t, st.orgs.RevokeInvitation(ctx, acme, id))
+
+	_, err = st.orgs.GetInvitation(ctx, token)
+	assert.ErrorIs(t, err, org.ErrInvitationNotFound)
+	_, err = st.orgs.AcceptInvitation(ctx, token, bob)
+	assert.ErrorIs(t, err, org.ErrInvitationNotFound)
+	_, err = st.orgs.ClaimInvitation(ctx, token)
+	assert.ErrorIs(t, err, org.ErrInvitationNotFound)
+	assert.ErrorIs(t, st.orgs.RevokeInvitation(ctx, acme, id), org.ErrInvitationNotFound)
+
+	pending, err = st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{})
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+	assert.Equal(t, kept, pending[0].Token)
+	_, err = st.orgs.AcceptInvitation(ctx, kept, bob)
+	require.NoError(t, err, "the other invitation still admits")
+	assert.ErrorIs(t, st.orgs.RevokeInvitation(ctx, acme, pending[0].ID), org.ErrInvitationAccepted)
+	_, err = st.orgs.GetMember(ctx, acme, bob)
+	assert.NoError(t, err, "the spent invitation's member stays")
+}
+
+// TestListPendingInvitations_PagesTheNewestFirst holds the order the
+// specification states, which a page's limit and offset rest on.
+func TestListPendingInvitations_PagesTheNewestFirst(t *testing.T) {
+	st := newInvitationStack(t)
+	ctx := context.Background()
+	acme, oldest := st.invite(t, "acme")
+	newest, err := org.NewInvitationToken()
+	require.NoError(t, err)
+	inv := org.NewInvitation(newest, acme, org.RoleMember, st.owner, time.Now().UTC().Add(time.Hour))
+	inv.CreatedAt = inv.CreatedAt.Add(time.Minute)
+	require.NoError(t, st.orgs.CreateInvitation(ctx, inv))
+
+	first, err := st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{Limit: 1})
+	require.NoError(t, err)
+	second, err := st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{Limit: 1, Offset: 1})
+	require.NoError(t, err)
+
+	require.Len(t, first, 1)
+	require.Len(t, second, 1)
+	assert.Equal(t, newest, first[0].Token)
+	assert.Equal(t, oldest, second[0].Token)
+}
+
+// TestRevokeInvitation_WaitsOnAClaimAndFindsTheInvitationSpent holds a
+// claim on the invitation's row in an open transaction, as an accept
+// does, and revokes meanwhile: the revocation waits on the row, and
+// once the claim commits it is refused as spent and the row stays. A
+// revocation and a use never both take effect (ADR-0136).
+func TestRevokeInvitation_WaitsOnAClaimAndFindsTheInvitationSpent(t *testing.T) {
+	st := newInvitationStack(t)
+	ctx := context.Background()
+	acme, token := st.invite(t, "acme")
+	pending, err := st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{})
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+
+	claim, err := st.pool.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = claim.Rollback(ctx) }()
+	_, err = claim.Exec(ctx, "UPDATE invitations SET accepted_at = now() WHERE token = $1", token)
+	require.NoError(t, err)
+
+	revoked := make(chan error, 1)
+	go func() { revoked <- st.orgs.RevokeInvitation(ctx, acme, pending[0].ID) }()
+	require.Eventually(t, func() bool {
+		return countRows(t, st.pool, `SELECT count(*) FROM pg_stat_activity
+			WHERE wait_event_type = 'Lock' AND query LIKE '%DELETE FROM invitations%'`) > 0
+	}, 10*time.Second, 10*time.Millisecond, "the revocation waits on the claimed row")
+
+	require.NoError(t, claim.Commit(ctx))
+
+	assert.ErrorIs(t, <-revoked, org.ErrInvitationAccepted)
+	assert.Equal(t, 1, countRows(t, st.pool, "SELECT count(*) FROM invitations WHERE token = $1", token))
 }

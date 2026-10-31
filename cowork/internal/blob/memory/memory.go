@@ -42,3 +42,11 @@ func (s *Store) Get(_ context.Context, key string) (blob.Blob, error) {
 	}
 	return blob.Blob{ContentType: b.ContentType, Body: slices.Clone(b.Body)}, nil
 }
+
+// Delete implements blob.Store.
+func (s *Store) Delete(_ context.Context, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.blobs, key)
+	return nil
+}

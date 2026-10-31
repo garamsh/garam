@@ -24,6 +24,10 @@ type Store interface {
 	Put(ctx context.Context, key string, b Blob) error
 	// Get answers the blob under key, ErrNotFound where there is none.
 	Get(ctx context.Context, key string) (Blob, error)
+	// Delete removes the blob under key, and answers nil where there
+	// is none. It is for a blob nothing names: what a version records
+	// stays.
+	Delete(ctx context.Context, key string) error
 }
 
 var (

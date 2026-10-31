@@ -27,6 +27,7 @@ type Invitation struct {
 	ExpiresAt  pgtype.Timestamptz
 	AcceptedBy pgtype.Text
 	AcceptedAt pgtype.Timestamptz
+	ID         pgtype.UUID
 }
 
 type Org struct {

@@ -169,11 +169,29 @@ LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 WITH pruned AS (
     DELETE FROM invitations WHERE expires_at <= now() AND accepted_at IS NULL
 )
-INSERT INTO invitations (token, org_grn, role, created_by, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO invitations (id, token, org_grn, role, created_by, created_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
 
 -- name: GetInvitation :one
 SELECT * FROM invitations WHERE token = $1;
+
+-- name: ListPendingInvitations :many
+SELECT * FROM invitations
+WHERE org_grn = sqlc.arg('org_grn') AND accepted_at IS NULL AND expires_at > now()
+ORDER BY created_at DESC, id
+LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
+
+-- Matches only an unspent invitation, and a row an accept or a claim
+-- holds is waited on, so a revocation and a spending never both take
+-- effect (ADR-0136).
+-- name: RevokeInvitation :execrows
+DELETE FROM invitations
+WHERE org_grn = sqlc.arg('org_grn') AND id = sqlc.arg('id') AND accepted_at IS NULL;
+
+-- name: InvitationExists :one
+SELECT EXISTS (
+    SELECT 1 FROM invitations WHERE org_grn = sqlc.arg('org_grn') AND id = sqlc.arg('id')
+);
 
 -- name: AcceptInvitation :one
 UPDATE invitations SET accepted_by = $2, accepted_at = $3

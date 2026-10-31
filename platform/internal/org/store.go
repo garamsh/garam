@@ -99,6 +99,14 @@ type Store interface {
 	// Invitation — pending until accepted, single-use.
 	CreateInvitation(ctx context.Context, inv *Invitation) error
 	GetInvitation(ctx context.Context, token string) (*Invitation, error)
+	// ListPendingInvitations pages the Organization's Invitations that
+	// can still be accepted, newest first.
+	ListPendingInvitations(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*Invitation, error)
+	// RevokeInvitation deletes an unspent Invitation of the
+	// Organization, so its token answers as one that never existed. A
+	// spent one yields ErrInvitationAccepted, and an id the Organization
+	// does not hold ErrInvitationNotFound.
+	RevokeInvitation(ctx context.Context, orgGRN grn.GRN, id InvitationID) error
 	// AcceptInvitation spends the invitation and adds the user as a
 	// member with its role, both or neither.
 	AcceptInvitation(ctx context.Context, token string, userGRN grn.GRN) (*Membership, error)

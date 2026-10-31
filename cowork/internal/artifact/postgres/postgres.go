@@ -41,6 +41,29 @@ func translate(err error, op string, notFound error) error {
 	return errorx.Wrap(err, "artifacts: "+op, errorx.KindUnavailable)
 }
 
+// beginner opens a transaction: the pool, or a test's stand-in.
+type beginner interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+// record runs fn in a transaction. Until COMMIT is sent a failure
+// leaves nothing behind; once it is, a failure says nothing about
+// whether it took effect, so it is artifact.ErrRecordInDoubt.
+func record(ctx context.Context, b beginner, fn func(pgx.Tx) error) error {
+	committing := false
+	err := pgx.BeginFunc(ctx, b, func(tx pgx.Tx) error {
+		if err := fn(tx); err != nil {
+			return err
+		}
+		committing = true
+		return nil
+	})
+	if err != nil && committing {
+		return errorx.Wrap(artifact.ErrRecordInDoubt, "artifacts: commit: "+err.Error())
+	}
+	return err
+}
+
 func timestamp(t time.Time) pgtype.Timestamptz { return pgtype.Timestamptz{Time: t, Valid: true} }
 
 func artifactOf(r db.Artifact) (artifact.Artifact, error) {
@@ -74,7 +97,7 @@ func insertVersion(ctx context.Context, q *db.Queries, org string, v artifact.Ve
 
 // Create implements artifact.Repository.
 func (r *Repository) Create(ctx context.Context, a artifact.Artifact, v artifact.Version) error {
-	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+	err := record(ctx, r.pool, func(tx pgx.Tx) error {
 		q := db.New(tx)
 		if err := q.InsertArtifact(ctx, db.InsertArtifactParams{
 			Org: a.Org, ID: a.ID, Kind: string(a.Kind), Title: a.Title, Latest: int32(a.Latest),
@@ -90,7 +113,7 @@ func (r *Repository) Create(ctx context.Context, a artifact.Artifact, v artifact
 // AddVersion implements artifact.Repository.
 func (r *Repository) AddVersion(ctx context.Context, org string, v artifact.Version) (artifact.Artifact, artifact.Version, error) {
 	var a artifact.Artifact
-	err := pgx.BeginFunc(ctx, r.pool, func(tx pgx.Tx) error {
+	err := record(ctx, r.pool, func(tx pgx.Tx) error {
 		q := db.New(tx)
 		row, err := q.NextVersion(ctx, db.NextVersionParams{Org: org, ID: v.Artifact, UpdatedAt: timestamp(v.CreatedAt)})
 		if err != nil {

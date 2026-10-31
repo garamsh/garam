@@ -132,3 +132,18 @@ fn a_role_link_outside_its_template_set_is_refused() {
     let control = link(Role::Admin, RoleScope::Organization, LEE, ACME);
     assert!(world.engine.compose(&[control], &[]).is_ok());
 }
+
+#[test]
+fn an_organization_holds_no_role() {
+    let world = World::new();
+
+    let held_by_an_org = link(Role::Member, RoleScope::Organization, ACME, ACME);
+    let refused = world.engine.compose(&[held_by_an_org], &[]);
+    assert!(
+        matches!(refused, Err(Error::RoleLinkPrincipal { .. })),
+        "{refused:?}"
+    );
+
+    let control = link(Role::Member, RoleScope::Organization, ENG, ACME);
+    assert!(world.engine.compose(&[control], &[]).is_ok());
+}

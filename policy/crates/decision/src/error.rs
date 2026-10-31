@@ -13,6 +13,14 @@ pub enum Error {
     /// Entities do not conform to the schema.
     #[error("the entities do not fit the schema")]
     Entities(#[source] Cause),
+    /// A role link names a principal no grant can be held by.
+    #[error("role link {link}: {principal} holds no role")]
+    RoleLinkPrincipal {
+        /// The link's id.
+        link: String,
+        /// The principal's entity type.
+        principal: String,
+    },
     /// A role link names a resource its template set does not take.
     #[error("role link {link}: a {scope} role does not link to {resource}")]
     RoleLinkScope {
@@ -23,6 +31,15 @@ pub enum Error {
         /// The resource it names.
         resource: String,
     },
+    /// An organization's policy does not fit the schema.
+    #[error("the policy does not fit the schema: {0}")]
+    Validation(String),
+    /// The entity store could not be read.
+    #[error("the entity store could not be read")]
+    EntityRead(#[source] Cause),
+    /// An organization's policies could not be read.
+    #[error("the policy store could not be read")]
+    PolicyRead(#[source] Cause),
     /// An organization's policy does not join the system tier.
     #[error("policy {policy} does not join the system tier")]
     Composition {

@@ -15,7 +15,9 @@ service PolicyService {
   rpc Evaluate(EvaluateRequest) returns (EvaluateResponse);
 
   // Evaluations answers Evaluate's question many times in one call
-  // (ADR-0115). Each entry of the request is one question.
+  // (ADR-0115). Each entry of the request is one question, and an empty
+  // list is the one question the request's defaults state. A question
+  // at fault is denied in its own answer, with the fault as its reason.
   rpc Evaluations(EvaluationsRequest) returns (EvaluationsResponse);
 }
 
@@ -40,8 +42,8 @@ message Resource {
   string type = 1;
   // id is the resource's GRN.
   string id = 2;
-  // properties are the resource's attributes, sent only by a caller
-  // owning the resource's type.
+  // properties are refused until a caller can be shown to own the
+  // resource's type (ADR-0138).
   google.protobuf.Struct properties = 3;
 }
 
@@ -60,7 +62,8 @@ message EvaluateRequest {
   Subject subject = 1;
   Action action = 2;
   Resource resource = 3;
-  // context is the request's context, which the schema constrains.
+  // context is the request's context. The schema declares none yet, so
+  // a context holding a field is refused.
   google.protobuf.Struct context = 4;
   Read read = 5;
 }
@@ -68,10 +71,10 @@ message EvaluateRequest {
 // Reason names one ground of a decision.
 message Reason {
   // policy_id names a policy that decided, or the policy an evaluation
-  // error arose in.
+  // error arose in. It is empty when the question itself was refused.
   string policy_id = 1;
-  // error is empty unless the policy failed to evaluate, and any such
-  // failure makes the decision a deny (ADR-0137).
+  // error is empty unless the policy failed to evaluate or the question
+  // was refused, and either makes the decision a deny (ADR-0137).
   string error = 2;
 }
 
@@ -107,6 +110,6 @@ message EvaluationsRequest {
 
 message EvaluationsResponse {
   // evaluations holds one answer per evaluation, in the request's
-  // order.
+  // order, and never none.
   repeated EvaluateResponse evaluations = 1;
 }

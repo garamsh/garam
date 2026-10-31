@@ -390,9 +390,7 @@ func TestListPendingInvitations_PagesTheNewestFirst(t *testing.T) {
 // claim on the invitation's row in an open transaction, as an accept
 // does, and revokes meanwhile: the revocation waits on the row, and
 // once the claim commits it is refused as spent and the row stays. A
-// revocation and a use never both take effect (ADR-0136). A pair of
-// racing calls would not show this: the delete is a single statement
-// and reached the row first in all twelve rounds of a mutated run.
+// revocation and a use never both take effect (ADR-0136).
 func TestRevokeInvitation_WaitsOnAClaimAndFindsTheInvitationSpent(t *testing.T) {
 	st := newInvitationStack(t)
 	ctx := context.Background()

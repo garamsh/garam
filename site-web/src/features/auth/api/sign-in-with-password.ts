@@ -5,14 +5,16 @@ import { z } from "zod";
 
 import { GaramApiError, garamRequest, refusal } from "@/lib/garam";
 import { PASSWORD_REFUSED } from "@garam/platform-sdk-ts/password-credentials";
+import { APP_PARAM, handoffAppOf } from "@garam/platform-sdk-ts/handoff";
 import {
+  DEFAULT_RETURN_PATH,
   RETURN_PARAM,
   safeReturnPath,
 } from "@garam/platform-sdk-ts/return-path";
 import type { components } from "@garam/platform-sdk-ts/api";
 
 import { keepSessionCookie } from "@garam/platform-sdk-ts/session-cookie";
-import { consoleUrl } from "@/lib/console-url";
+import { appUrl } from "@/lib/app-url";
 
 /** What the sign-in form has to show: nothing yet, or a refusal. */
 export type SignInWithPasswordState =
@@ -26,7 +28,8 @@ const Schema = z.object({ username: z.string(), password: z.string() });
 
 /**
  * Signs in with a username and a password and lands where the visitor
- * was going — the return path the form carries — or on the console.
+ * was going — the app and the return path the form carries — or on the
+ * console.
  * The password travels in this request's body and nowhere else: no
  * path, no query, and no field of the state this returns.
  */
@@ -38,7 +41,8 @@ export async function signInWithPassword(
     username: formData.get("username"),
     password: formData.get("password"),
   });
-  if (!parsed.success) {
+  const app = handoffAppOf(formData.get(APP_PARAM));
+  if (!parsed.success || app === null) {
     return { status: "error", message: "The form did not arrive complete." };
   }
 
@@ -66,6 +70,10 @@ export async function signInWithPassword(
   }
 
   redirect(
-    consoleUrl(safeReturnPath(formData.get(RETURN_PARAM)) ?? "/console"),
+    appUrl(
+      app,
+      safeReturnPath(formData.get(RETURN_PARAM), app) ??
+        DEFAULT_RETURN_PATH[app],
+    ),
   );
 }

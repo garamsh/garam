@@ -1,0 +1,20 @@
+# cowork's host as a deployment's gateway splits it by path (ADR-0135;
+# docs/architecture/deployment-contract.md §cowork's host): the API and
+# its WebSockets with `/api` stripped, the MCP endpoint as it stands,
+# and everything else to the web app.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	handle_path /api/* {
+		reverse_proxy cowork:8090
+	}
+	handle /mcp {
+		reverse_proxy cowork:8090
+	}
+	handle {
+		reverse_proxy cowork-web:3000
+	}
+}

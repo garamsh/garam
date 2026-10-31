@@ -109,6 +109,81 @@ describe("the site's handoff", () => {
     );
   });
 
+  it("hands a visitor signed in here to cowork, whatever host the request names", async () => {
+    const sent: unknown[] = [];
+    issues(sent);
+
+    const response = await GET(
+      request(`/handoff?app=cowork&next=%2Facme%2Fpage-1&state=${STATE}`),
+    );
+
+    expect(sent).toEqual([
+      { body: { state: STATE }, cookie: "garam_session=test-session-token" },
+    ]);
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.origin + location.pathname).toBe(
+      "http://cowork.garam.localhost:3100/auth/handoff",
+    );
+    expect(location.searchParams.get("next")).toBe("/acme/page-1");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+
+  it("carries cowork through a sign-in", async () => {
+    const response = await GET(
+      request(`/handoff?app=cowork&next=%2Facme&state=${STATE}`, {
+        signedIn: false,
+      }),
+    );
+
+    const location = new URL(
+      response.headers.get("location") ?? "",
+      "http://garam.localhost:3001",
+    );
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("app")).toBe("cowork");
+    expect(location.searchParams.get("next")).toBe("/acme");
+  });
+
+  it("asks cowork to start over for a request carrying no state", async () => {
+    const response = await GET(request("/handoff?app=cowork&next=%2Facme"));
+
+    expect(response.headers.get("location")).toBe(
+      "http://cowork.garam.localhost:3100/auth/sign-in?next=%2Facme",
+    );
+  });
+
+  // The console's constraint is the console's: a path cowork accepts
+  // is dropped for the console, and the same path on cowork is the
+  // control.
+  it("reads a return path by the app it is for", async () => {
+    issues([]);
+
+    const response = await GET(request(`/handoff?next=%2Facme&state=${STATE}`));
+
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.searchParams.get("next")).toBe("/console");
+  });
+
+  // An origin in the request decides nothing, and an app off the list
+  // is refused rather than read as the console.
+  it.each(["evil", "https://evil.example", ""])(
+    "refuses app=%j and issues nothing",
+    async (app) => {
+      const sent: unknown[] = [];
+      issues(sent);
+
+      const response = await GET(
+        request(
+          `/handoff?app=${encodeURIComponent(app)}&next=%2Fconsole&state=${STATE}`,
+        ),
+      );
+
+      expect(sent).toEqual([]);
+      expect(response.status).toBe(400);
+      expect(response.headers.get("location")).toBeNull();
+    },
+  );
+
   it("drops a return path that leaves the console", async () => {
     issues([]);
 

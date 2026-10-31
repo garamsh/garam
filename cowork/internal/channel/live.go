@@ -47,9 +47,8 @@ func Live(m Message) []byte {
 	return raw
 }
 
-// Listen implements Service. Reading is decided once, when the caller
-// starts listening; a change of policy reaches a listener when it
-// listens again.
+// Listen implements Service. Reading is decided when the caller starts
+// listening; whoever holds the listener asks Get again (ADR-0139).
 func (s *service) Listen(ctx context.Context, caller platform.Caller, org, id string, peer fanout.Peer) (func(), error) {
 	if _, err := s.channel(ctx, caller, org, id, ActionRead); err != nil {
 		return nil, err

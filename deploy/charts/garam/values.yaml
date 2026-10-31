@@ -37,14 +37,14 @@ image:
   # image, so a deployment running it under another account moves one
   # pair rather than four.
   server:
-    repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-server
+    repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/server
     tag: ""
     digest: ""
     # `USER garam`, the uid and gid deploy/local/Dockerfile creates.
     runAsUser: 10001
     runAsGroup: 10001
   web:
-    repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-web
+    repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/console
     tag: ""
     digest: ""
     # `USER node`, the uid and gid the node base image carries
@@ -54,7 +54,7 @@ image:
   # The site (ADR-0131), built from the same Dockerfile as `web` with
   # `APP=site-web`, so it runs as the same account.
   site:
-    repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-site
+    repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/site
     tag: ""
     digest: ""
     runAsUser: 1000
@@ -228,6 +228,10 @@ site:
   # Where the console is served. Every address under `/console`, and
   # a signed-in visitor, is sent there.
   consoleUrl: ""
+  # Where cowork's web app is served. A sign-in for cowork is sent
+  # there. This chart deploys no cowork; the address is required
+  # because the site hands a sign-in to it in every deployment.
+  coworkUrl: ""
   resources: {}
 
 migrate:

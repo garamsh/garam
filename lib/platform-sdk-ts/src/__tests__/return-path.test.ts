@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import type { HandoffApp } from "../handoff";
 import {
   invitationTokenOf,
   safeReturnPath,
@@ -12,11 +13,13 @@ import {
 /**
  * The vectors the Go rule is tested against too
  * (`platform/internal/api/auth_return_path_test.go`), so a path one
- * rule accepts and the other drops fails on one side. A `goOnly` vector
- * is raw bytes a JavaScript string cannot hold.
+ * rule accepts and the other drops fails on one side. A vector names
+ * the app it is a path on, the console where it names none. A `goOnly`
+ * vector is raw bytes a JavaScript string cannot hold.
  */
 const VECTORS: {
   name: string;
+  app?: HandoffApp;
   input?: string;
   accepted: boolean;
   goOnly?: boolean;
@@ -37,10 +40,16 @@ describe("safeReturnPath", () => {
     );
   });
 
+  it("reads vectors for both apps", () => {
+    expect(new Set(VECTORS.map((vector) => vector.app ?? "console"))).toEqual(
+      new Set(["console", "cowork"]),
+    );
+  });
+
   it.each(VECTORS.filter((vector) => !vector.goOnly))(
     "holds the shared vector: $name",
-    ({ input, accepted }) => {
-      expect(safeReturnPath(input)).toBe(accepted ? input : null);
+    ({ app, input, accepted }) => {
+      expect(safeReturnPath(input, app)).toBe(accepted ? input : null);
     },
   );
 

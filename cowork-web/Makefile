@@ -32,7 +32,7 @@ test:
 # every URL. Nothing calls them during the build, so placeholders do.
 build:
 	COWORK_API_URL=http://localhost:8090 COWORK_SYNC_URL=ws://localhost:8090 \
-		GARAM_API_URL=http://localhost:8080 GARAM_CONSOLE_URL=http://localhost:3000 pnpm build
+		GARAM_API_URL=http://localhost:8080 GARAM_SITE_URL=http://localhost:3001 pnpm build
 
 gen:
 	pnpm gen:api
@@ -52,8 +52,9 @@ stack-up:
 
 suites: install e2e
 
-# e2e drives the built app and the built cowork binary in a real
-# browser, against the platform stack-up starts. cowork keeps its own
+# e2e drives the built app, the built cowork binary and the site its
+# sign-in goes through in a real browser, against the platform stack-up
+# starts. cowork keeps its own
 # database on the stack's Postgres, created here where absent; the seed
 # writes sessions into the platform's.
 E2E_DB_NAME = cowork_e2e

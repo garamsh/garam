@@ -17,9 +17,9 @@ permissions: read-all
 # `cancel-in-progress: false` that would read like one. A group cancels
 # a pending run of that group when a newer one queues behind it,
 # whichever way that key is set, so a `vX.Y.Z` tag could publish
-# nothing; and a run cancelled between the two pushes leaves the
-# version half-published, which only the next version repairs
-# (ADR-0039 §Consequences).
+# nothing; and a run cancelled between two pushes leaves the version
+# half-published, which only the next version repairs (ADR-0039
+# §Consequences).
 
 jobs:
   images:
@@ -34,7 +34,10 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       registry: ${{ steps.ecr.outputs.registry }}
       server-digest: ${{ steps.push.outputs.server-digest }}
-      web-digest: ${{ steps.push.outputs.web-digest }}
+      console-digest: ${{ steps.push.outputs.console-digest }}
+      site-digest: ${{ steps.push.outputs.site-digest }}
+      cowork-digest: ${{ steps.push.outputs.cowork-digest }}
+      cowork-web-digest: ${{ steps.push.outputs.cowork-web-digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: tooling/record-runner-image.sh
@@ -88,8 +91,8 @@ jobs:
       # docker/setup-buildx-action selects takes the `docker-container`
       # driver, whose result stays in a build cache `docker push` cannot
       # reach, and `load` writes each image into the runner's image
-      # store. `push: false` defers both pushes to the step below, which
-      # pushes neither image unless both were built (ADR-0039
+      # store. `push: false` defers every push to the step below, which
+      # pushes no image unless all five were built (ADR-0039
       # §Consequences, tooling/image-push.sh).
       - id: server
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -113,9 +116,9 @@ jobs:
           build-args: |
             IMAGE_REVISION=${{ steps.revision.outputs.revision }}
             IMAGE_VERSION=${{ steps.version.outputs.version }}
-          tags: ${{ steps.ecr.outputs.registry }}/garam/garam-server:${{ steps.version.outputs.version }}
+          tags: ${{ steps.ecr.outputs.registry }}/garam/server:${{ steps.version.outputs.version }}
 
-      - id: web
+      - id: console
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -138,20 +141,76 @@ jobs:
             GARAM_API_URL=http://garam-api:8080
             IMAGE_REVISION=${{ steps.revision.outputs.revision }}
             IMAGE_VERSION=${{ steps.version.outputs.version }}
-          tags: ${{ steps.ecr.outputs.registry }}/garam/garam-web:${{ steps.version.outputs.version }}
+          tags: ${{ steps.ecr.outputs.registry }}/garam/console:${{ steps.version.outputs.version }}
 
-      # Both images are in the runner's image store and neither
+      - id: site
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/local/Dockerfile.web
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+          push: false
+          load: true
+          # The site rewrites `/api/*` as the console does, so it bakes
+          # the same address on the same terms. chart-rewrite refuses
+          # the two differing.
+          build-args: |
+            APP=site-web
+            GARAM_API_URL=http://garam-api:8080
+            IMAGE_REVISION=${{ steps.revision.outputs.revision }}
+            IMAGE_VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ steps.ecr.outputs.registry }}/garam/site:${{ steps.version.outputs.version }}
+
+      - id: cowork
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/local/Dockerfile.cowork
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+          push: false
+          load: true
+          build-args: |
+            IMAGE_REVISION=${{ steps.revision.outputs.revision }}
+            IMAGE_VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ steps.ecr.outputs.registry }}/garam/cowork:${{ steps.version.outputs.version }}
+
+      - id: cowork-web
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/local/Dockerfile.web
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+          push: false
+          load: true
+          # cowork-web has no `/api/*` rewrite and reads every address
+          # at runtime, so nothing is baked but the app it is.
+          build-args: |
+            APP=cowork-web
+            IMAGE_REVISION=${{ steps.revision.outputs.revision }}
+            IMAGE_VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ steps.ecr.outputs.registry }}/garam/cowork-web:${{ steps.version.outputs.version }}
+
+      # All five images are in the runner's image store and no
       # repository has been written to yet. Each reference is named
       # again here rather than read off the step that built it: the
       # `tags:` above are also what tooling/image-build.sh parses to
-      # build the same two on a pull request (#870), so they stay
+      # build the same five on a pull request (#870), so they stay
       # written out, and a rename reaching one site and not the other
       # fails this step before it pushes anything.
       - id: push
         env:
-          SERVER: ${{ steps.ecr.outputs.registry }}/garam/garam-server:${{ steps.version.outputs.version }}
-          WEB: ${{ steps.ecr.outputs.registry }}/garam/garam-web:${{ steps.version.outputs.version }}
-        run: tooling/image-push.sh "server=$SERVER" "web=$WEB"
+          SERVER: ${{ steps.ecr.outputs.registry }}/garam/server:${{ steps.version.outputs.version }}
+          CONSOLE: ${{ steps.ecr.outputs.registry }}/garam/console:${{ steps.version.outputs.version }}
+          SITE: ${{ steps.ecr.outputs.registry }}/garam/site:${{ steps.version.outputs.version }}
+          COWORK: ${{ steps.ecr.outputs.registry }}/garam/cowork:${{ steps.version.outputs.version }}
+          COWORK_WEB: ${{ steps.ecr.outputs.registry }}/garam/cowork-web:${{ steps.version.outputs.version }}
+        run: tooling/image-push.sh "server=$SERVER" "console=$CONSOLE" "site=$SITE" "cowork=$COWORK" "cowork-web=$COWORK_WEB"
 
   release:
     needs: images
@@ -174,8 +233,17 @@ jobs:
       - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           body: |
-            ${{ needs.images.outputs.registry }}/garam/garam-server:${{ needs.images.outputs.version }}
+            ${{ needs.images.outputs.registry }}/garam/server:${{ needs.images.outputs.version }}
             ${{ needs.images.outputs.server-digest }}
 
-            ${{ needs.images.outputs.registry }}/garam/garam-web:${{ needs.images.outputs.version }}
-            ${{ needs.images.outputs.web-digest }}
+            ${{ needs.images.outputs.registry }}/garam/console:${{ needs.images.outputs.version }}
+            ${{ needs.images.outputs.console-digest }}
+
+            ${{ needs.images.outputs.registry }}/garam/site:${{ needs.images.outputs.version }}
+            ${{ needs.images.outputs.site-digest }}
+
+            ${{ needs.images.outputs.registry }}/garam/cowork:${{ needs.images.outputs.version }}
+            ${{ needs.images.outputs.cowork-digest }}
+
+            ${{ needs.images.outputs.registry }}/garam/cowork-web:${{ needs.images.outputs.version }}
+            ${{ needs.images.outputs.cowork-web-digest }}

@@ -12,11 +12,12 @@ const schema = z.object({
   // The platform's browser API, asked which organizations the caller
   // belongs to.
   GARAM_API_URL: url("http://localhost:8080"),
-  // Where a caller signs in: the console. cowork has no sign-in page
-  // of its own; the platform's session is the credential (ADR-0127).
-  GARAM_CONSOLE_URL: url("http://localhost:3000"),
+  // Where a caller signs in: the site, which hands this host a session
+  // of its own (ADR-0131, ADR-0135). cowork has no sign-in page.
+  GARAM_SITE_URL: url("http://garam.localhost:3001"),
   // cowork's server as the browser reaches it for a page's sync
-  // WebSocket. Read here and handed to the editor, so the bundle
+  // WebSocket, on this app's own host, since the session cookie is
+  // host-only. Read here and handed to the editor, so the bundle
   // carries no value of its own.
   COWORK_SYNC_URL: url("ws://localhost:8090"),
 });
@@ -28,6 +29,6 @@ const schema = z.object({
 export const env = schema.parse({
   COWORK_API_URL: process.env.COWORK_API_URL,
   GARAM_API_URL: process.env.GARAM_API_URL,
-  GARAM_CONSOLE_URL: process.env.GARAM_CONSOLE_URL,
+  GARAM_SITE_URL: process.env.GARAM_SITE_URL,
   COWORK_SYNC_URL: process.env.COWORK_SYNC_URL,
 });

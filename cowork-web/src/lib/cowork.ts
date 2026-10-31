@@ -2,6 +2,8 @@ import "server-only";
 
 import { cookies } from "next/headers";
 
+import { SESSION_COOKIE } from "@garam/platform-sdk-ts/session";
+
 import { env } from "@/env";
 import type { components } from "@/types/api";
 
@@ -16,9 +18,6 @@ export type PageUpdate = components["schemas"]["PageUpdate"];
  */
 export type Result<T> =
   { ok: true; value: T } | { ok: false; status: number; message: string };
-
-/** The platform's session cookie, which cowork's server is handed. */
-export const SESSION_COOKIE = "garam_session";
 
 async function call<T>(path: string, init?: RequestInit): Promise<Result<T>> {
   const session = (await cookies()).get(SESSION_COOKIE)?.value;

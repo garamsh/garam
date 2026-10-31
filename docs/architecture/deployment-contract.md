@@ -13,6 +13,7 @@ what the binary enforces about key material, and what is not known.
 - A Transit provider for message signing keys
 - The message issuer is kept for the deployment's life
 - The migrate job
+- cowork's host
 - Termination
 - The PodSecurity level is the deployment's
 - Not established
@@ -49,23 +50,25 @@ strategy
 every Deployment sets and what an upgrade costs in service under it,
 and the hook phase the migration Job runs in.
 
-The repositories the chart's `image.*.repository` names,
-`garam/garam-server` and `garam/garam-web`, hold releases only: a bare
-`X.Y.Z`, which only a `vX.Y.Z` git tag publishes
-([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)).
-A development build a person made and pushed is in
-`garam-dev/garam-server` or `garam-dev/garam-web`
-([ADR-0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)),
-under a commit-derived or prerelease tag
+Each image has one repository, named `<publishing repository>/<image>`
+([ADR-0134](./adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)):
+`garam/server`, `garam/console` and `garam/site`, which the chart's
+`image.*.repository` names, and `garam/cowork` and `garam/cowork-web`,
+which no chart here deploys. The tag says what a build is. A bare
+`X.Y.Z` is a release, which only a `vX.Y.Z` git tag publishes
+([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
+and a development build a person made and pushed carries a
+commit-derived or prerelease tag
 ([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)),
-so a deployment running one sets the repository as well as the tag.
+so a deployment running one sets the tag alone.
 `tooling/image-build.sh` is authoritative for which development
 references this repository produces, and refuses every other tag
 before it builds; `README.md` §Development images is the procedure.
 The test image is none of these: an operator pushes it for another
 repository's CI to `garam-dev/garam-test`, an ECR repository of its
-own that no release writes to; no deployment runs it, and the chart
-names it nowhere
+own that no release writes to, and it moves to `garam/test` under
+ADR-0134 once garamsh/aurora#711 creates that repository; no deployment
+runs it, and the chart names it nowhere
 ([ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md),
 [ADR-0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)).
 
@@ -515,6 +518,42 @@ as 403 `signature rejected: issuer` on every message once the adapter's
   `github.com/golang-migrate/migrate/v4` v4.20.1 (`go.mod`) and is
   checkable against the driver it pins.
 
+## cowork's host
+
+cowork's server and web app share one host, `cowork.garam.sh`
+(ADR-0135). The session cookie is host-only to the host it was handed
+to and the browser opens the sync and live WebSockets to the server, so
+the two have to answer there. The gateway in front of the host owes
+this split:
+
+| Path | Goes to | Note |
+|---|---|---|
+| `/api/` | cowork's server, port 8090 | the `/api` prefix stripped; WebSocket upgrades carried |
+| `/mcp` | cowork's server, port 8090 | as it stands |
+| everything else | cowork-web, port 3000 | |
+
+The gateway keeps the request's `Host`, which cowork's WebSocket origin
+check compares the browser's `Origin` against, and says in
+`x-forwarded-proto` whether it terminated TLS, which decides whether
+cowork-web's state cookie is `Secure`.
+
+The two processes owe matching configuration:
+
+- `COWORK_SYNC_URL`, on cowork-web, is this host with the prefix:
+  `wss://cowork.garam.sh/api`. The browser opens the sync and live
+  WebSockets under it, and without `/api` they reach the web app.
+- `COWORK_API_URL`, on cowork-web, is the server's internal address,
+  with no prefix, since it does not pass the gateway.
+- `COWORK_WEB_ORIGINS`, on the server, names this host:
+  `cowork.garam.sh`. It lists the only ancestors an HTML artifact may
+  be framed by, so without it no artifact renders in the app.
+
+This chart deploys no cowork. The site's `site.coworkUrl` names this
+host, and its workloads and routes are the deployment's.
+`deploy/local/cowork-gateway.Caddyfile` is the same split on the local
+stack. No check runs it: the browser suite reaches the server on a port
+of its own.
+
 ## Termination
 
 Every serve command installs a SIGTERM and SIGINT handler
@@ -638,6 +677,8 @@ that would assert one:
   reached over plaintext gRPC inside the trust boundary
 - [ADR-0009](./adr/0009-web-frontend.md) — the web app and its `/api/*`
   rewrite
+- [ADR-0135](./adr/0135-the-site-hands-a-sign-in-to-a-fixed-list-of-apps-and-cowork-shares-one-host-split-by-path.md)
+  — the split on cowork's host
 - [ADR-0014](./adr/0014-agent-authentication.md) — a listener of its
   own for machine callers
 - [ADR-0015](./adr/0015-operator-identity.md) — key material travels as
@@ -660,14 +701,17 @@ that would assert one:
 - [ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)
   — readiness reports what a replica cannot serve without
 - [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
-  — where the two images are published, under what names, and what
-  triggers a release
+  — where the images are published and what triggers a release; the
+  names and the number of images are superseded by ADR-0134
 - [ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
   — a development build is told apart by its tag, which this
   repository refuses to make a bare release version
+- [ADR-0134](./adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
+  — each image has one repository named `<publishing
+  repository>/<image>`, and its tag says what a build is
 - [ADR-0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)
-  — a development build lives under `garam-dev/`, and the release
-  repositories hold releases only
+  — a development build lived under `garam-dev/`; superseded by
+  ADR-0134, and the test image alone is still there
 - [ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
   — the test image is published outside the release repositories,
   and no deployment runs it; its registry, its commit tag and its

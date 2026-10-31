@@ -3,6 +3,9 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // lib/platform-sdk-ts/ ships TypeScript source, which this app
+  // compiles.
+  transpilePackages: ["@garam/platform-sdk-ts"],
   // A self-contained server, as the console's: the image carries only
   // the runtime it needs.
   output: "standalone",

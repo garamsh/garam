@@ -1,6 +1,8 @@
 # ADR 0129: cowork acts in each organization as a principal the platform issues with it, proving one deployment key
 
-> Status: accepted
+> Status: accepted; §7's last sentence, on an open WebSocket, is
+> superseded by
+> [ADR-0139](./0139-an-open-cowork-websocket-is-asked-again-within-a-stated-bound.md)
 > Date: 2026-10-28
 
 Drafted for #1664; #1655 reserves this number. The direction is the

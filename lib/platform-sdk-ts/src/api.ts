@@ -18,8 +18,8 @@ export interface paths {
         get: operations["login"];
         put?: never;
         /**
-         * Start the OAuth flow, landing on a console path afterwards.
-         * @description The `GET` flow, with where to land once it completes. `next` is taken only where it is a console path (`/console` or below it, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on `/console`. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it.
+         * Start the OAuth flow, landing on a path of one of garam's apps afterwards.
+         * @description The `GET` flow, with where to land once it completes. `app` names the app the sign-in is for, the console where it is absent, and any other value is refused (ADR-0135). `next` is taken only where it is a path on that app (`/console` or below it for the console, an absolute path with no host for cowork, at most 2048 characters, no backslash and no control character); anything else is dropped and the login lands on the app's default. It is held server-side with the login's state, spent with it by the callback that completes, and expires with it. It travels in the form body so a path that names an invitation reaches no URL (ADR-0006), and nothing in the answer repeats it. A sign-in for cowork lands on the site's `/handoff` for it.
          */
         post: operations["loginWithReturnPath"];
         delete?: never;
@@ -1607,7 +1607,12 @@ export interface components {
             expiresAt: string;
         };
         LoginReturnPath: {
-            /** @description The console path to land on once signed in. */
+            /**
+             * @description The app the sign-in is for; the console where absent.
+             * @enum {string}
+             */
+            app?: "console" | "cowork";
+            /** @description The path on that app to land on once signed in. */
             next?: string;
         };
         InvitationPreview: {

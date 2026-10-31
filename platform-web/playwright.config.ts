@@ -84,6 +84,8 @@ export default defineConfig({
         HOSTNAME: "127.0.0.1",
         PORT: portOf(site),
         GARAM_CONSOLE_URL: BASE_URL,
+        // Required of the site; this suite follows no handoff to cowork.
+        GARAM_COWORK_URL: "http://cowork.garam.localhost:3100",
       },
       url: `http://127.0.0.1:${portOf(site)}/healthz`,
       reuseExistingServer: false,

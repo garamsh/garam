@@ -5,9 +5,17 @@ import (
 	"encoding/hex"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 )
+
+// InvitationID names an Invitation to the organization that issued it.
+// Unlike the token it admits no one, so it can be listed (ADR-0136).
+type InvitationID uuid.UUID
+
+func (id InvitationID) String() string { return uuid.UUID(id).String() }
 
 // Invitation is a one-time bearer token that admits a user into an
 // Organization with a fixed Role. Orgs grow by invitation and
@@ -16,6 +24,7 @@ import (
 // they are exported and whatever restores a row does it from outside
 // this package (ADR-0069).
 type Invitation struct {
+	ID           InvitationID
 	Token        string
 	Organization grn.GRN
 	Role         Role
@@ -40,6 +49,7 @@ func NewInvitationToken() (string, error) {
 // NewInvitation constructs a pending Invitation, stamping CreatedAt.
 func NewInvitation(token string, orgGRN grn.GRN, role Role, createdBy grn.GRN, expiresAt time.Time) *Invitation {
 	return &Invitation{
+		ID:           InvitationID(uuid.New()),
 		Token:        token,
 		Organization: orgGRN,
 		Role:         role,

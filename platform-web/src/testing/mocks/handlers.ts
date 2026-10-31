@@ -294,6 +294,7 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
     body: [{ memberGrn: alice.grn }],
   },
   { path: "/orgs/acme/members", guarded: true, body: [aliceMembership] },
+  { path: "/orgs/acme/invitations", guarded: true, body: [] },
   { path: "/orgs/acme/operators", guarded: true, body: [fieldOne] },
   { path: "/orgs/acme/operators/field-one", guarded: true, body: fieldOne },
   {

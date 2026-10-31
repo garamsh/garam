@@ -92,3 +92,111 @@ func TestGetInvitation_AnswersAnUnknownTokenAsAnyNotFound(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, gone.Code)
 	assert.JSONEq(t, accept.Body.String(), gone.Body.String())
 }
+
+// acmeInvitations creates an organization with an owner, a member and
+// a pending invitation, answering the org's identifier, the two
+// cookies and the invitation.
+func acmeInvitations(t *testing.T, f *fixture) (string, *http.Cookie, *http.Cookie, *org.Invitation) {
+	t.Helper()
+	f.enforce()
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "Acme Robotics")
+	member := f.sessionCookieFor(t, "member-sub", "Member")
+	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), memberGRN, org.RoleMember)))
+	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	inv := org.NewInvitation("pending-tok", orgGRNOf(slug), org.RoleAdmin, creator, time.Now().UTC().Add(time.Hour))
+	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), inv))
+	return slug, owner, member, inv
+}
+
+// TestListInvitations_NamesEachPendingOneAndNeverItsToken reads the
+// list as the owner: the pending invitation is named by its id, the
+// spent and the lapsed are left out, and no token reaches the answer.
+func TestListInvitations_NamesEachPendingOneAndNeverItsToken(t *testing.T) {
+	f := newFixture(t)
+	slug, owner, _, inv := acmeInvitations(t, f)
+	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	require.NoError(t, f.orgs.CreateInvitation(testCtx(t),
+		org.NewInvitation("lapsed-tok", orgGRNOf(slug), org.RoleMember, creator, time.Now().UTC().Add(-time.Minute))))
+	require.NoError(t, f.orgs.CreateInvitation(testCtx(t),
+		org.NewInvitation("spent-tok", orgGRNOf(slug), org.RoleMember, creator, time.Now().UTC().Add(time.Hour))))
+	joiner := f.sessionCookieFor(t, "joiner-sub", "Joiner")
+	require.Equal(t, http.StatusOK, f.do(t, "POST", "/invitations/spent-tok/accept", "", joiner).Code)
+
+	rec := f.do(t, "GET", "/orgs/"+slug+"/invitations", "", owner)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	got := decodeBody[[]apigen.PendingInvitation](t, rec)
+	require.Len(t, got, 1)
+	assert.Equal(t, inv.ID.String(), got[0].Id.String())
+	assert.Equal(t, apigen.RoleAdmin, got[0].Role)
+	assert.Equal(t, inv.CreatedBy.String(), got[0].CreatedByGrn)
+	assert.NotContains(t, rec.Body.String(), "-tok", "no token, of any invitation, is listed")
+}
+
+// TestInvitationManagement_RefusesAMemberWhomTheRoleGrantsNoInvite asks
+// both operations as a member, who holds no org:invite, and as the
+// owner, who does, so the refusal is the action's.
+func TestInvitationManagement_RefusesAMemberWhomTheRoleGrantsNoInvite(t *testing.T) {
+	f := newFixture(t)
+	slug, owner, member, inv := acmeInvitations(t, f)
+	path := "/orgs/" + slug + "/invitations"
+
+	assert.Equal(t, http.StatusForbidden, f.do(t, "GET", path, "", member).Code)
+	assert.Equal(t, http.StatusForbidden, f.do(t, "DELETE", path+"/"+inv.ID.String(), "", member).Code)
+	assert.True(t, f.orgs.holdsInvitation(inv.Token), "the refused revocation deleted nothing")
+
+	assert.Equal(t, http.StatusOK, f.do(t, "GET", path, "", owner).Code)
+	assert.Equal(t, http.StatusNoContent, f.do(t, "DELETE", path+"/"+inv.ID.String(), "", owner).Code)
+}
+
+// TestRevokeInvitation_AnswersItsTokenAsUnknown revokes a live
+// invitation and then presents its token: the preview and the accept
+// each answer 404, where the same token answered 200 before.
+func TestRevokeInvitation_AnswersItsTokenAsUnknown(t *testing.T) {
+	f := newFixture(t)
+	slug, owner, _, inv := acmeInvitations(t, f)
+	invitee := f.sessionCookieFor(t, "invitee-sub", "Invitee")
+	require.Equal(t, http.StatusOK, f.do(t, "GET", "/invitations/"+inv.Token, "").Code)
+
+	rec := f.do(t, "DELETE", "/orgs/"+slug+"/invitations/"+inv.ID.String(), "", owner)
+	require.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
+
+	assert.Equal(t, http.StatusNotFound, f.do(t, "GET", "/invitations/"+inv.Token, "").Code)
+	assert.Equal(t, http.StatusNotFound, f.do(t, "POST", "/invitations/"+inv.Token+"/accept", "", invitee).Code)
+	assert.Equal(t, http.StatusNotFound,
+		f.do(t, "DELETE", "/orgs/"+slug+"/invitations/"+inv.ID.String(), "", owner).Code,
+		"it is gone, so a second revocation finds nothing")
+}
+
+// TestRevokeInvitation_RefusesOneAlreadyUsedByItsReason answers a
+// revocation after the accept with the refusal that says why, and the
+// member stays.
+func TestRevokeInvitation_RefusesOneAlreadyUsedByItsReason(t *testing.T) {
+	f := newFixture(t)
+	slug, owner, _, inv := acmeInvitations(t, f)
+	invitee := f.sessionCookieFor(t, "invitee-sub", "Invitee")
+	require.Equal(t, http.StatusOK, f.do(t, "POST", "/invitations/"+inv.Token+"/accept", "", invitee).Code)
+
+	rec := f.do(t, "DELETE", "/orgs/"+slug+"/invitations/"+inv.ID.String(), "", owner)
+
+	require.Equal(t, http.StatusConflict, rec.Code)
+	reason := decodeBody[apigen.Error](t, rec).Reason
+	require.NotNil(t, reason)
+	assert.Equal(t, org.ReasonInvitationAccepted, *reason)
+}
+
+// TestRevokeInvitation_ReachesOnlyTheOrganizationInThePath presents
+// one organization's id under another's path as that one's owner, and
+// the id stays where it was.
+func TestRevokeInvitation_ReachesOnlyTheOrganizationInThePath(t *testing.T) {
+	f := newFixture(t)
+	_, owner, _, inv := acmeInvitations(t, f)
+	other := createOrg(t, f, owner, "Globex")
+
+	rec := f.do(t, "DELETE", "/orgs/"+other+"/invitations/"+inv.ID.String(), "", owner)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.True(t, f.orgs.holdsInvitation(inv.Token))
+}

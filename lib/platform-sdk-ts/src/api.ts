@@ -136,7 +136,7 @@ export interface paths {
         put?: never;
         /**
          * Create an account from an invitation and sign in.
-         * @description Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider.
+         * @description Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider. A revoked token is answered 404, as an unknown one is.
          */
         post: operations["registerPassword"];
         delete?: never;
@@ -1213,7 +1213,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List the invitations that can still be accepted. Requires `org:invite`.
+         * @description Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
+         */
+        get: operations["listInvitations"];
         put?: never;
         /**
          * Create an invitation. Requires the `admin` role.
@@ -1221,6 +1225,26 @@ export interface paths {
          */
         post: operations["createInvitation"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/invitations/{invitation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an invitation no one has used. Requires `org:invite`.
+         * @description Deletes the invitation, so its token is answered 404 from then on, as a token that never existed is, by `getInvitation`, `acceptInvitation` and registering. An invitation already used is refused with 409 `invitation_accepted`, and a revocation and a use of one invitation never both take effect. Revoking leaves a member who joined by an earlier invitation where they are.
+         */
+        delete: operations["revokeInvitation"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1235,7 +1259,7 @@ export interface paths {
         };
         /**
          * Read what an invitation would admit its holder to.
-         * @description Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token is answered as any other not-found.
+         * @description Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token, a revoked one among them, is answered as any other not-found.
          */
         get: operations["getInvitation"];
         put?: never;
@@ -1257,7 +1281,7 @@ export interface paths {
         put?: never;
         /**
          * Accept an invitation.
-         * @description The signed-in user joins the invitation's org with the invitation's role. Expired or already-accepted tokens are rejected.
+         * @description The signed-in user joins the invitation's org with the invitation's role. Expired or already-accepted tokens are rejected, and a revoked one is answered 404 as an unknown token is.
          */
         post: operations["acceptInvitation"];
         delete?: never;
@@ -1603,6 +1627,21 @@ export interface components {
             token: string;
             orgGrn: string;
             role: components["schemas"]["Role"];
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        /** @description An invitation that can still be accepted, without its token. */
+        PendingInvitation: {
+            /**
+             * Format: uuid
+             * @description Names the invitation to `revokeInvitation`; it admits no one.
+             */
+            id: string;
+            role: components["schemas"]["Role"];
+            /** @description Who issued it, who may since have left the organization. */
+            createdByGrn: string;
+            /** Format: date-time */
+            createdAt: string;
             /** Format: date-time */
             expiresAt: string;
         };
@@ -4472,6 +4511,36 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
+    listInvitations: {
+        parameters: {
+            query?: {
+                /** @description Maximum entries to return; 0 means no limit. */
+                limit?: components["parameters"]["limit"];
+                offset?: components["parameters"]["offset"];
+            };
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pending invitations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingInvitation"][];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+        };
+    };
     createInvitation: {
         parameters: {
             query?: never;
@@ -4501,6 +4570,34 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    revokeInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description The `id` `listInvitations` answers, never the token. */
+                invitation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invitation revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     getInvitation: {

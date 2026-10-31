@@ -1482,6 +1482,19 @@ type PasswordRegistration struct {
 	Username string `json:"username"`
 }
 
+// PendingInvitation An invitation that can still be accepted, without its token.
+type PendingInvitation struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedByGrn Who issued it, who may since have left the organization.
+	CreatedByGrn string    `json:"createdByGrn"`
+	ExpiresAt    time.Time `json:"expiresAt"`
+
+	// Id Names the invitation to `revokeInvitation`; it admits no one.
+	Id   openapi_types.UUID `json:"id"`
+	Role Role               `json:"role"`
+}
+
 // PermissionBasis `statements` is a decision the policy engine reached, explained by `statements`. `operation` is an action the operation decides past the engine's `Check`, explained no further than the decision. `undefined-action` is a name garam does not define.
 type PermissionBasis string
 
@@ -1831,6 +1844,13 @@ type ListGroupsParams struct {
 // ListGroupsParamsMember defines parameters for ListGroups.
 type ListGroupsParamsMember string
 
+// ListInvitationsParams defines parameters for ListInvitations.
+type ListInvitationsParams struct {
+	// Limit Maximum entries to return; 0 means no limit.
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // MintOperationAuthorityParams defines parameters for MintOperationAuthority.
 type MintOperationAuthorityParams struct {
 	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
@@ -2141,9 +2161,15 @@ type ServerInterface interface {
 	// RemoveGroupMember Remove a member from a group. Requires the `admin` role.
 	// (DELETE /orgs/{org}/groups/{group}/members/{member})
 	RemoveGroupMember(w http.ResponseWriter, r *http.Request, org Org, groupSlug GroupSlug, memberGrn MemberGrn)
+	// ListInvitations List the invitations that can still be accepted. Requires `org:invite`.
+	// (GET /orgs/{org}/invitations)
+	ListInvitations(w http.ResponseWriter, r *http.Request, org Org, params ListInvitationsParams)
 	// CreateInvitation Create an invitation. Requires the `admin` role.
 	// (POST /orgs/{org}/invitations)
 	CreateInvitation(w http.ResponseWriter, r *http.Request, org Org)
+	// RevokeInvitation Revoke an invitation no one has used. Requires `org:invite`.
+	// (DELETE /orgs/{org}/invitations/{invitation})
+	RevokeInvitation(w http.ResponseWriter, r *http.Request, org Org, invitationID openapi_types.UUID)
 	// ListOrgMembers List members of an organization. Requires the `member` role.
 	// (GET /orgs/{org}/members)
 	ListOrgMembers(w http.ResponseWriter, r *http.Request, org Org)
@@ -3615,6 +3641,61 @@ func (siw *ServerInterfaceWrapper) RemoveGroupMember(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ListInvitations operation middleware
+func (siw *ServerInterfaceWrapper) ListInvitations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListInvitationsParams
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "offset" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "offset", r.URL.Query(), &params.Offset, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "offset"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "offset", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListInvitations(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // CreateInvitation operation middleware
 func (siw *ServerInterfaceWrapper) CreateInvitation(w http.ResponseWriter, r *http.Request) {
 
@@ -3632,6 +3713,41 @@ func (siw *ServerInterfaceWrapper) CreateInvitation(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateInvitation(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeInvitation operation middleware
+func (siw *ServerInterfaceWrapper) RevokeInvitation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "invitation" -------------
+	var invitationID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "invitation", r.PathValue("invitation"), &invitationID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "invitation", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeInvitation(w, r, org, invitationID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5426,7 +5542,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/consents", wrapper.ListOrgConsents)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/consents/{other}", wrapper.WithdrawOrgConsent)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/consents/{other}", wrapper.GrantOrgConsent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/invitations", wrapper.ListInvitations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/invitations", wrapper.CreateInvitation)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/invitations/{invitation}", wrapper.RevokeInvitation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/invitations/{token}", wrapper.GetInvitation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/invitations/{token}/accept", wrapper.AcceptInvitation)
 

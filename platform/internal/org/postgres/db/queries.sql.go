@@ -14,7 +14,7 @@ import (
 const acceptInvitation = `-- name: AcceptInvitation :one
 UPDATE invitations SET accepted_by = $2, accepted_at = $3
 WHERE token = $1 AND accepted_at IS NULL AND expires_at > $3
-RETURNING token, org_grn, role, created_by, created_at, expires_at, accepted_by, accepted_at
+RETURNING token, org_grn, role, created_by, created_at, expires_at, accepted_by, accepted_at, id
 `
 
 type AcceptInvitationParams struct {
@@ -35,6 +35,7 @@ func (q *Queries) AcceptInvitation(ctx context.Context, arg AcceptInvitationPara
 		&i.ExpiresAt,
 		&i.AcceptedBy,
 		&i.AcceptedAt,
+		&i.ID,
 	)
 	return i, err
 }
@@ -93,7 +94,7 @@ const claimInvitation = `-- name: ClaimInvitation :one
 UPDATE invitations SET accepted_at = $1
 WHERE token = $2 AND accepted_at IS NULL
   AND expires_at > $1
-RETURNING token, org_grn, role, created_by, created_at, expires_at, accepted_by, accepted_at
+RETURNING token, org_grn, role, created_by, created_at, expires_at, accepted_by, accepted_at, id
 `
 
 type ClaimInvitationParams struct {
@@ -118,6 +119,7 @@ func (q *Queries) ClaimInvitation(ctx context.Context, arg ClaimInvitationParams
 		&i.ExpiresAt,
 		&i.AcceptedBy,
 		&i.AcceptedAt,
+		&i.ID,
 	)
 	return i, err
 }
@@ -209,11 +211,12 @@ const createInvitation = `-- name: CreateInvitation :exec
 WITH pruned AS (
     DELETE FROM invitations WHERE expires_at <= now() AND accepted_at IS NULL
 )
-INSERT INTO invitations (token, org_grn, role, created_by, created_at, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO invitations (id, token, org_grn, role, created_by, created_at, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type CreateInvitationParams struct {
+	ID        pgtype.UUID
 	Token     string
 	OrgGrn    string
 	Role      string
@@ -224,6 +227,7 @@ type CreateInvitationParams struct {
 
 func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationParams) error {
 	_, err := q.db.Exec(ctx, createInvitation,
+		arg.ID,
 		arg.Token,
 		arg.OrgGrn,
 		arg.Role,
@@ -340,7 +344,7 @@ func (q *Queries) GetGroup(ctx context.Context, grn string) (Group, error) {
 }
 
 const getInvitation = `-- name: GetInvitation :one
-SELECT token, org_grn, role, created_by, created_at, expires_at, accepted_by, accepted_at FROM invitations WHERE token = $1
+SELECT token, org_grn, role, created_by, created_at, expires_at, accepted_by, accepted_at, id FROM invitations WHERE token = $1
 `
 
 func (q *Queries) GetInvitation(ctx context.Context, token string) (Invitation, error) {
@@ -355,6 +359,7 @@ func (q *Queries) GetInvitation(ctx context.Context, token string) (Invitation, 
 		&i.ExpiresAt,
 		&i.AcceptedBy,
 		&i.AcceptedAt,
+		&i.ID,
 	)
 	return i, err
 }
@@ -428,6 +433,24 @@ func (q *Queries) HoldsCertificateAuthority(ctx context.Context, orgGrn string) 
 	var held bool
 	err := row.Scan(&held)
 	return held, err
+}
+
+const invitationExists = `-- name: InvitationExists :one
+SELECT EXISTS (
+    SELECT 1 FROM invitations WHERE org_grn = $1 AND id = $2
+)
+`
+
+type InvitationExistsParams struct {
+	OrgGrn string
+	ID     pgtype.UUID
+}
+
+func (q *Queries) InvitationExists(ctx context.Context, arg InvitationExistsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, invitationExists, arg.OrgGrn, arg.ID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const listGroupMembers = `-- name: ListGroupMembers :many
@@ -681,6 +704,49 @@ func (q *Queries) ListOrgsByMember(ctx context.Context, arg ListOrgsByMemberPara
 	return items, nil
 }
 
+const listPendingInvitations = `-- name: ListPendingInvitations :many
+SELECT token, org_grn, role, created_by, created_at, expires_at, accepted_by, accepted_at, id FROM invitations
+WHERE org_grn = $1 AND accepted_at IS NULL AND expires_at > now()
+ORDER BY created_at DESC, id
+LIMIT $3 OFFSET $2
+`
+
+type ListPendingInvitationsParams struct {
+	OrgGrn    string
+	RowOffset int32
+	RowLimit  pgtype.Int4
+}
+
+func (q *Queries) ListPendingInvitations(ctx context.Context, arg ListPendingInvitationsParams) ([]Invitation, error) {
+	rows, err := q.db.Query(ctx, listPendingInvitations, arg.OrgGrn, arg.RowOffset, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Invitation
+	for rows.Next() {
+		var i Invitation
+		if err := rows.Scan(
+			&i.Token,
+			&i.OrgGrn,
+			&i.Role,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.AcceptedBy,
+			&i.AcceptedAt,
+			&i.ID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listProjectMembers = `-- name: ListProjectMembers :many
 SELECT member_grn FROM project_members WHERE project_grn = $1 ORDER BY member_grn
 `
@@ -844,6 +910,27 @@ type RemoveProjectMemberParams struct {
 
 func (q *Queries) RemoveProjectMember(ctx context.Context, arg RemoveProjectMemberParams) (int64, error) {
 	result, err := q.db.Exec(ctx, removeProjectMember, arg.ProjectGrn, arg.MemberGrn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeInvitation = `-- name: RevokeInvitation :execrows
+DELETE FROM invitations
+WHERE org_grn = $1 AND id = $2 AND accepted_at IS NULL
+`
+
+type RevokeInvitationParams struct {
+	OrgGrn string
+	ID     pgtype.UUID
+}
+
+// Matches only an unspent invitation, and a row an accept or a claim
+// holds is waited on, so a revocation and a spending never both take
+// effect (ADR-0136).
+func (q *Queries) RevokeInvitation(ctx context.Context, arg RevokeInvitationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeInvitation, arg.OrgGrn, arg.ID)
 	if err != nil {
 		return 0, err
 	}

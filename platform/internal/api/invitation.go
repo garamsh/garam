@@ -4,8 +4,11 @@ import (
 	"net/http"
 	"time"
 
+	openapi_types "github.com/oapi-codegen/runtime/types"
+
 	"github.com/garamsh/garam/lib/errorx"
 	apigen "github.com/garamsh/garam/platform/api"
+	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
 )
 
@@ -63,6 +66,63 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, orgSlu
 		Role:      apigen.Role(inv.Role),
 		ExpiresAt: inv.ExpiresAt,
 	})
+}
+
+// ListInvitations lists the org's invitations that can still be
+// accepted, by the id that admits no one and never by their token. It
+// is authorized on org:invite, the action that issues them (ADR-0136).
+func (s *Server) ListInvitations(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListInvitationsParams) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	g := orgGRN(orgSlug)
+	if err := s.authorize(r, g, u, org.ActionOrgInvite); err != nil {
+		writeError(w, err)
+		return
+	}
+	f, err := listfilter.Parse(params.Limit, params.Offset)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	invitations, err := s.orgs.ListPendingInvitations(r.Context(), g, f)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	out := make([]apigen.PendingInvitation, 0, len(invitations))
+	for _, inv := range invitations {
+		out = append(out, apigen.PendingInvitation{
+			Id:           openapi_types.UUID(inv.ID),
+			Role:         apigen.Role(inv.Role),
+			CreatedByGrn: inv.CreatedBy.String(),
+			CreatedAt:    inv.CreatedAt,
+			ExpiresAt:    inv.ExpiresAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// RevokeInvitation withdraws an unspent invitation of the org, so its
+// token answers as one that never existed (ADR-0136).
+func (s *Server) RevokeInvitation(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, invitationID openapi_types.UUID) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	g := orgGRN(orgSlug)
+	if err := s.authorize(r, g, u, org.ActionOrgInvite); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.orgs.RevokeInvitation(r.Context(), g, org.InvitationID(invitationID)); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GetInvitation answers what an invitation would admit its holder to,

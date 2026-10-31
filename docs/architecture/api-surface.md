@@ -134,6 +134,8 @@ because possession of it is the whole claim
 organization's identifier and name, the role and whether the invitation
 is pending, accepted or expired, which is what accepting it would
 reveal, and nothing about who invited or who belongs. An unknown token,
+one revoked
+([ADR-0136](./adr/0136-a-pending-invitation-is-listed-by-an-id-that-admits-no-one-and-revoking-deletes-it.md)),
 and one whose organization is gone, answer the not-found body the accept
 operation answers. The request line, and the `url.path` of the request's
 trace span, name the route pattern rather than the path, so the token
@@ -872,6 +874,9 @@ document owes an update.
   — a cross-organization message needs both organizations' consent
 - [ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)
   — no surface serves a secret's value
+- [ADR-0136](./adr/0136-a-pending-invitation-is-listed-by-an-id-that-admits-no-one-and-revoking-deletes-it.md)
+  — a pending invitation is listed by an id that admits no one, and
+  revoking deletes it
 - [ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)
   — the engine checks the organization it was handed against the
   object's, and refuses a call naming none

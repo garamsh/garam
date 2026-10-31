@@ -3,6 +3,7 @@ package integration_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/api"
 	"github.com/garamsh/garam/platform/internal/authn"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
+	"github.com/garamsh/garam/platform/internal/listfilter"
 	"github.com/garamsh/garam/platform/internal/org"
 	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/user"
@@ -300,5 +302,131 @@ func TestInvitation_AnAcceptRacingARegistrationAdmitsOne(t *testing.T) {
 			assert.Equal(t, 0, countRows(t, p, "SELECT count(*) FROM users WHERE grn = $1", account),
 				"round %d: the refused registration created no user", round)
 		}
+	}
+}
+
+// TestRevokeInvitation_ItsTokenAdmitsNoOneAndAnotherOrgCannotReachIt
+// revokes one of two live invitations against the real store: the
+// revoked token is refused as unknown by the preview, the accept and
+// the registration, while the other stays listed and is still
+// accepted, which is the control that the refusals are the revocation's
+// doing. Another organization's path does not reach it, and a spent
+// invitation is not revoked.
+func TestRevokeInvitation_ItsTokenAdmitsNoOneAndAnotherOrgCannotReachIt(t *testing.T) {
+	st := newInvitationStack(t)
+	ctx := context.Background()
+	acme, token := st.invite(t, "acme")
+	kept, err := org.NewInvitationToken()
+	require.NoError(t, err)
+	require.NoError(t, st.orgs.CreateInvitation(ctx,
+		org.NewInvitation(kept, acme, org.RoleAdmin, st.owner, time.Now().UTC().Add(time.Hour))))
+	stale, err := org.NewInvitationToken()
+	require.NoError(t, err)
+	require.NoError(t, st.orgs.CreateInvitation(ctx,
+		org.NewInvitation(stale, acme, org.RoleAdmin, st.owner, time.Now().UTC().Add(-time.Minute))))
+	globex, _ := st.invite(t, "globex")
+	bob := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "bob")
+	require.NoError(t, st.users.Create(ctx, user.New(bob, "bob")))
+
+	pending, err := st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{})
+	require.NoError(t, err)
+	require.Len(t, pending, 2, "the expired invitation is not pending")
+	byToken := map[string]org.InvitationID{}
+	for _, inv := range pending {
+		byToken[inv.Token] = inv.ID
+	}
+	id := byToken[token]
+	require.NotZero(t, id)
+
+	assert.ErrorIs(t, st.orgs.RevokeInvitation(ctx, globex, id), org.ErrInvitationNotFound,
+		"an id is only the organization's that issued it")
+	_, err = st.orgs.GetInvitation(ctx, token)
+	require.NoError(t, err, "another organization's revocation deleted nothing")
+
+	require.NoError(t, st.orgs.RevokeInvitation(ctx, acme, id))
+
+	_, err = st.orgs.GetInvitation(ctx, token)
+	assert.ErrorIs(t, err, org.ErrInvitationNotFound)
+	_, err = st.orgs.AcceptInvitation(ctx, token, bob)
+	assert.ErrorIs(t, err, org.ErrInvitationNotFound)
+	_, err = st.orgs.ClaimInvitation(ctx, token)
+	assert.ErrorIs(t, err, org.ErrInvitationNotFound)
+	assert.ErrorIs(t, st.orgs.RevokeInvitation(ctx, acme, id), org.ErrInvitationNotFound)
+
+	pending, err = st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{})
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+	assert.Equal(t, kept, pending[0].Token)
+	_, err = st.orgs.AcceptInvitation(ctx, kept, bob)
+	require.NoError(t, err, "the other invitation still admits")
+	assert.ErrorIs(t, st.orgs.RevokeInvitation(ctx, acme, pending[0].ID), org.ErrInvitationAccepted)
+	_, err = st.orgs.GetMember(ctx, acme, bob)
+	assert.NoError(t, err, "the spent invitation's member stays")
+}
+
+// TestListPendingInvitations_PagesTheNewestFirst holds the order the
+// specification states, which a page's limit and offset rest on.
+func TestListPendingInvitations_PagesTheNewestFirst(t *testing.T) {
+	st := newInvitationStack(t)
+	ctx := context.Background()
+	acme, oldest := st.invite(t, "acme")
+	newest, err := org.NewInvitationToken()
+	require.NoError(t, err)
+	inv := org.NewInvitation(newest, acme, org.RoleMember, st.owner, time.Now().UTC().Add(time.Hour))
+	inv.CreatedAt = inv.CreatedAt.Add(time.Minute)
+	require.NoError(t, st.orgs.CreateInvitation(ctx, inv))
+
+	first, err := st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{Limit: 1})
+	require.NoError(t, err)
+	second, err := st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{Limit: 1, Offset: 1})
+	require.NoError(t, err)
+
+	require.Len(t, first, 1)
+	require.Len(t, second, 1)
+	assert.Equal(t, newest, first[0].Token)
+	assert.Equal(t, oldest, second[0].Token)
+}
+
+// TestRevokeInvitation_AnAcceptRacingARevocationTakesOneEffect races an
+// accept against a revocation of one invitation: the person joins and
+// the revocation is refused as spent, or the invitation goes and the
+// accept is refused as unknown, and never both (ADR-0136).
+func TestRevokeInvitation_AnAcceptRacingARevocationTakesOneEffect(t *testing.T) {
+	st := newInvitationStack(t)
+	ctx := context.Background()
+	bob := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "bob")
+	require.NoError(t, st.users.Create(ctx, user.New(bob, "bob")))
+
+	for round := range raceRounds {
+		orgGRN, token := st.invite(t, fmt.Sprintf("acme-%d", round))
+		pending, err := st.orgs.ListPendingInvitations(ctx, orgGRN, listfilter.Filter{})
+		require.NoError(t, err)
+		require.Len(t, pending, 1)
+
+		start := make(chan struct{})
+		var acceptErr, revokeErr error
+		var wg sync.WaitGroup
+		wg.Go(func() {
+			<-start
+			_, acceptErr = st.orgs.AcceptInvitation(ctx, token, bob)
+		})
+		wg.Go(func() {
+			<-start
+			revokeErr = st.orgs.RevokeInvitation(ctx, orgGRN, pending[0].ID)
+		})
+		close(start)
+		wg.Wait()
+
+		joined := 0
+		switch {
+		case acceptErr == nil && errors.Is(revokeErr, org.ErrInvitationAccepted):
+			joined = 1
+		case errors.Is(acceptErr, org.ErrInvitationNotFound) && revokeErr == nil:
+		default:
+			t.Fatalf("round %d: want one effect, got accept %v, revoke %v", round, acceptErr, revokeErr)
+		}
+		assert.Equal(t, joined, countRows(t, st.pool,
+			"SELECT count(*) FROM org_members WHERE org_grn = $1 AND user_grn = $2",
+			orgGRN.String(), bob.String()), "round %d: the member", round)
 	}
 }

@@ -433,6 +433,19 @@ var apiOperations = []apiOperation{
 		},
 	},
 	{
+		ID: "listInvitations", Method: "GET", Path: "/orgs/{org}/invitations",
+		Words: []string{"invitations"}, Verb: "list", Short: "List the invitations that can still be accepted. Requires `org:invite`.",
+		Args: []string(nil), FromOrg: true,
+		Fields: []apiField{
+			{Name: "limit", In: "query", Kind: "integer", Required: false, Help: "Maximum entries to return; 0 means no limit."},
+			{Name: "offset", In: "query", Kind: "integer", Required: false, Help: ""},
+		},
+		Columns: []string{"id", "role", "createdByGrn", "createdAt", "expiresAt"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewListInvitationsRequest(server, path[0], nil)
+		},
+	},
+	{
 		ID: "createInvitation", Method: "POST", Path: "/orgs/{org}/invitations",
 		Words: []string{"invitations"}, Verb: "create", Short: "Create an invitation. Requires the `admin` role.",
 		Args: []string(nil), FromOrg: true,
@@ -445,6 +458,18 @@ var apiOperations = []apiOperation{
 		Secrets:  []string{"token"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
 			return sdk.NewCreateInvitationRequestWithBody(server, path[0], contentType, body)
+		},
+	},
+	{
+		ID: "revokeInvitation", Method: "DELETE", Path: "/orgs/{org}/invitations/{invitation}",
+		Words: []string{"invitations"}, Verb: "revoke", Short: "Revoke an invitation no one has used. Requires `org:invite`.",
+		Args: []string{"invitation"}, FromOrg: true,
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			p1, err := uuid.Parse(path[1])
+			if err != nil {
+				return nil, err
+			}
+			return sdk.NewRevokeInvitationRequest(server, path[0], p1)
 		},
 	},
 	{

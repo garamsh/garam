@@ -1484,6 +1484,19 @@ type PasswordRegistration struct {
 	Username string `json:"username"`
 }
 
+// PendingInvitation An invitation that can still be accepted, without its token.
+type PendingInvitation struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedByGrn Who issued it, who may since have left the organization.
+	CreatedByGrn string    `json:"createdByGrn"`
+	ExpiresAt    time.Time `json:"expiresAt"`
+
+	// Id Names the invitation to `revokeInvitation`; it admits no one.
+	Id   openapi_types.UUID `json:"id"`
+	Role Role               `json:"role"`
+}
+
 // PermissionBasis `statements` is a decision the policy engine reached, explained by `statements`. `operation` is an action the operation decides past the engine's `Check`, explained no further than the decision. `undefined-action` is a name garam does not define.
 type PermissionBasis string
 
@@ -1832,6 +1845,13 @@ type ListGroupsParams struct {
 
 // ListGroupsParamsMember defines parameters for ListGroups.
 type ListGroupsParamsMember string
+
+// ListInvitationsParams defines parameters for ListInvitations.
+type ListInvitationsParams struct {
+	// Limit Maximum entries to return; 0 means no limit.
+	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
+	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
 
 // MintOperationAuthorityParams defines parameters for MintOperationAuthority.
 type MintOperationAuthorityParams struct {
@@ -2240,7 +2260,7 @@ type ClientInterface interface {
 
 	// RegisterPasswordWithBody Create an account from an invitation and sign in.
 	//
-	// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider.
+	// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider. A revoked token is answered 404, as an unknown one is.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2249,7 +2269,7 @@ type ClientInterface interface {
 
 	// RegisterPassword Create an account from an invitation and sign in.
 	//
-	// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider.
+	// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider. A revoked token is answered 404, as an unknown one is.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -2265,14 +2285,14 @@ type ClientInterface interface {
 
 	// GetInvitation Read what an invitation would admit its holder to.
 	//
-	// Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token is answered as any other not-found.
+	// Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token, a revoked one among them, is answered as any other not-found.
 	//
 	// Corresponds with GET /invitations/{token} (the `GetInvitation` operationId).
 	GetInvitation(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// AcceptInvitation Accept an invitation.
 	//
-	// The signed-in user joins the invitation's org with the invitation's role. Expired or already-accepted tokens are rejected.
+	// The signed-in user joins the invitation's org with the invitation's role. Expired or already-accepted tokens are rejected, and a revoked one is answered 404 as an unknown token is.
 	//
 	// Corresponds with POST /invitations/{token}/accept (the `AcceptInvitation` operationId).
 	AcceptInvitation(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2558,6 +2578,13 @@ type ClientInterface interface {
 	// Corresponds with DELETE /orgs/{org}/groups/{group}/members/{member} (the `RemoveGroupMember` operationId).
 	RemoveGroupMember(ctx context.Context, org Org, groupSlug GroupSlug, memberGrn MemberGrn, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListInvitations List the invitations that can still be accepted. Requires `org:invite`.
+	//
+	// Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
+	//
+	// Corresponds with GET /orgs/{org}/invitations (the `ListInvitations` operationId).
+	ListInvitations(ctx context.Context, org Org, params *ListInvitationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateInvitationWithBody Create an invitation. Requires the `admin` role.
 	//
 	// Returns an invitation token. A signed-in user who presents the token to `/invitations/{token}/accept` joins the org with the role chosen here.
@@ -2575,6 +2602,13 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
 	CreateInvitation(ctx context.Context, org Org, body CreateInvitationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeInvitation Revoke an invitation no one has used. Requires `org:invite`.
+	//
+	// Deletes the invitation, so its token is answered 404 from then on, as a token that never existed is, by `getInvitation`, `acceptInvitation` and registering. An invitation already used is refused with 409 `invitation_accepted`, and a revocation and a use of one invitation never both take effect. Revoking leaves a member who joined by an earlier invitation where they are.
+	//
+	// Corresponds with DELETE /orgs/{org}/invitations/{invitation} (the `RevokeInvitation` operationId).
+	RevokeInvitation(ctx context.Context, org Org, invitationID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOrgMembers List members of an organization. Requires the `member` role.
 	//
@@ -3381,7 +3415,7 @@ func (c *Client) LoginPassword(ctx context.Context, body LoginPasswordJSONReques
 
 // RegisterPasswordWithBody Create an account from an invitation and sign in.
 //
-// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider.
+// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider. A revoked token is answered 404, as an unknown one is.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3400,7 +3434,7 @@ func (c *Client) RegisterPasswordWithBody(ctx context.Context, contentType strin
 
 // RegisterPassword Create an account from an invitation and sign in.
 //
-// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider.
+// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider. A revoked token is answered 404, as an unknown one is.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3436,7 +3470,7 @@ func (c *Client) ListProviders(ctx context.Context, reqEditors ...RequestEditorF
 
 // GetInvitation Read what an invitation would admit its holder to.
 //
-// Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token is answered as any other not-found.
+// Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token, a revoked one among them, is answered as any other not-found.
 //
 // Corresponds with GET /invitations/{token} (the `GetInvitation` operationId).
 func (c *Client) GetInvitation(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -3453,7 +3487,7 @@ func (c *Client) GetInvitation(ctx context.Context, token string, reqEditors ...
 
 // AcceptInvitation Accept an invitation.
 //
-// The signed-in user joins the invitation's org with the invitation's role. Expired or already-accepted tokens are rejected.
+// The signed-in user joins the invitation's org with the invitation's role. Expired or already-accepted tokens are rejected, and a revoked one is answered 404 as an unknown token is.
 //
 // Corresponds with POST /invitations/{token}/accept (the `AcceptInvitation` operationId).
 func (c *Client) AcceptInvitation(ctx context.Context, token string, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4119,6 +4153,23 @@ func (c *Client) RemoveGroupMember(ctx context.Context, org Org, groupSlug Group
 	return c.Client.Do(req)
 }
 
+// ListInvitations List the invitations that can still be accepted. Requires `org:invite`.
+//
+// Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
+//
+// Corresponds with GET /orgs/{org}/invitations (the `ListInvitations` operationId).
+func (c *Client) ListInvitations(ctx context.Context, org Org, params *ListInvitationsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListInvitationsRequest(c.Server, org, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // CreateInvitationWithBody Create an invitation. Requires the `admin` role.
 //
 // Returns an invitation token. A signed-in user who presents the token to `/invitations/{token}/accept` joins the org with the role chosen here.
@@ -4147,6 +4198,23 @@ func (c *Client) CreateInvitationWithBody(ctx context.Context, org Org, contentT
 // Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
 func (c *Client) CreateInvitation(ctx context.Context, org Org, body CreateInvitationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateInvitationRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// RevokeInvitation Revoke an invitation no one has used. Requires `org:invite`.
+//
+// Deletes the invitation, so its token is answered 404 from then on, as a token that never existed is, by `getInvitation`, `acceptInvitation` and registering. An invitation already used is refused with 409 `invitation_accepted`, and a revocation and a use of one invitation never both take effect. Revoking leaves a member who joined by an earlier invitation where they are.
+//
+// Corresponds with DELETE /orgs/{org}/invitations/{invitation} (the `RevokeInvitation` operationId).
+func (c *Client) RevokeInvitation(ctx context.Context, org Org, invitationID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeInvitationRequest(c.Server, org, invitationID)
 	if err != nil {
 		return nil, err
 	}
@@ -7157,6 +7225,79 @@ func NewRemoveGroupMemberRequest(server string, org Org, groupSlug GroupSlug, me
 	return req, nil
 }
 
+// NewListInvitationsRequest constructs an http.Request for the ListInvitations method
+func NewListInvitationsRequest(server string, org Org, params *ListInvitationsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/invitations", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewCreateInvitationRequest calls the generic CreateInvitation builder with application/json body
 func NewCreateInvitationRequest(server string, org Org, body CreateInvitationJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -7200,6 +7341,47 @@ func NewCreateInvitationRequestWithBody(server string, org Org, contentType stri
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRevokeInvitationRequest constructs an http.Request for the RevokeInvitation method
+func NewRevokeInvitationRequest(server string, org Org, invitationID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "invitation", invitationID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/invitations/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -9384,7 +9566,7 @@ type ClientWithResponsesInterface interface {
 
 	// RegisterPasswordWithBodyWithResponse Create an account from an invitation and sign in.
 	//
-	// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider.
+	// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider. A revoked token is answered 404, as an unknown one is.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9393,7 +9575,7 @@ type ClientWithResponsesInterface interface {
 
 	// RegisterPasswordWithResponse Create an account from an invitation and sign in.
 	//
-	// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider.
+	// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider. A revoked token is answered 404, as an unknown one is.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9411,7 +9593,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetInvitationWithResponse Read what an invitation would admit its holder to.
 	//
-	// Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token is answered as any other not-found.
+	// Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token, a revoked one among them, is answered as any other not-found.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9420,7 +9602,7 @@ type ClientWithResponsesInterface interface {
 
 	// AcceptInvitationWithResponse Accept an invitation.
 	//
-	// The signed-in user joins the invitation's org with the invitation's role. Expired or already-accepted tokens are rejected.
+	// The signed-in user joins the invitation's org with the invitation's role. Expired or already-accepted tokens are rejected, and a revoked one is answered 404 as an unknown token is.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9754,6 +9936,15 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /orgs/{org}/groups/{group}/members/{member} (the `RemoveGroupMember` operationId).
 	RemoveGroupMemberWithResponse(ctx context.Context, org Org, groupSlug GroupSlug, memberGrn MemberGrn, reqEditors ...RequestEditorFn) (*RemoveGroupMemberResponse, error)
 
+	// ListInvitationsWithResponse List the invitations that can still be accepted. Requires `org:invite`.
+	//
+	// Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/invitations (the `ListInvitations` operationId).
+	ListInvitationsWithResponse(ctx context.Context, org Org, params *ListInvitationsParams, reqEditors ...RequestEditorFn) (*ListInvitationsResponse, error)
+
 	// CreateInvitationWithBodyWithResponse Create an invitation. Requires the `admin` role.
 	//
 	// Returns an invitation token. A signed-in user who presents the token to `/invitations/{token}/accept` joins the org with the role chosen here.
@@ -9771,6 +9962,15 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/invitations (the `CreateInvitation` operationId).
 	CreateInvitationWithResponse(ctx context.Context, org Org, body CreateInvitationJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateInvitationResponse, error)
+
+	// RevokeInvitationWithResponse Revoke an invitation no one has used. Requires `org:invite`.
+	//
+	// Deletes the invitation, so its token is answered 404 from then on, as a token that never existed is, by `getInvitation`, `acceptInvitation` and registering. An invitation already used is refused with 409 `invitation_accepted`, and a revocation and a use of one invitation never both take effect. Revoking leaves a member who joined by an earlier invitation where they are.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/invitations/{invitation} (the `RevokeInvitation` operationId).
+	RevokeInvitationWithResponse(ctx context.Context, org Org, invitationID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeInvitationResponse, error)
 
 	// ListOrgMembersWithResponse List members of an organization. Requires the `member` role.
 	//
@@ -12924,6 +13124,68 @@ func (r RemoveGroupMemberResponse) ContentType() string {
 	return ""
 }
 
+type ListInvitationsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]PendingInvitation
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListInvitationsResponse) GetJSON200() *[]PendingInvitation {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ListInvitationsResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ListInvitationsResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r ListInvitationsResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetBody returns the raw response body bytes
+func (r ListInvitationsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListInvitationsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListInvitationsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListInvitationsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type CreateInvitationResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12987,6 +13249,75 @@ func (r CreateInvitationResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r CreateInvitationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type RevokeInvitationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *Error
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *Error
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *Error
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r RevokeInvitationResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r RevokeInvitationResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r RevokeInvitationResponse) GetJSON403() *Error {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r RevokeInvitationResponse) GetJSON404() *Error {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r RevokeInvitationResponse) GetJSON409() *Error {
+	return r.JSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r RevokeInvitationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeInvitationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeInvitationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r RevokeInvitationResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -16020,7 +16351,7 @@ func (c *ClientWithResponses) LoginPasswordWithResponse(ctx context.Context, bod
 
 // RegisterPasswordWithBodyWithResponse Create an account from an invitation and sign in.
 //
-// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider.
+// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider. A revoked token is answered 404, as an unknown one is.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16035,7 +16366,7 @@ func (c *ClientWithResponses) RegisterPasswordWithBodyWithResponse(ctx context.C
 
 // RegisterPasswordWithResponse Create an account from an invitation and sign in.
 //
-// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider.
+// Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider. A revoked token is answered 404, as an unknown one is.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16065,7 +16396,7 @@ func (c *ClientWithResponses) ListProvidersWithResponse(ctx context.Context, req
 
 // GetInvitationWithResponse Read what an invitation would admit its holder to.
 //
-// Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token is answered as any other not-found.
+// Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token, a revoked one among them, is answered as any other not-found.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16080,7 +16411,7 @@ func (c *ClientWithResponses) GetInvitationWithResponse(ctx context.Context, tok
 
 // AcceptInvitationWithResponse Accept an invitation.
 //
-// The signed-in user joins the invitation's org with the invitation's role. Expired or already-accepted tokens are rejected.
+// The signed-in user joins the invitation's org with the invitation's role. Expired or already-accepted tokens are rejected, and a revoked one is answered 404 as an unknown token is.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -16642,6 +16973,21 @@ func (c *ClientWithResponses) RemoveGroupMemberWithResponse(ctx context.Context,
 	return ParseRemoveGroupMemberResponse(rsp)
 }
 
+// ListInvitationsWithResponse List the invitations that can still be accepted. Requires `org:invite`.
+//
+// Answers each invitation neither spent nor expired, newest first, by its `id`. A token is a bearer secret and no answer here carries one, so a link is shown only when it is created (ADR-0136).
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/invitations (the `ListInvitations` operationId).
+func (c *ClientWithResponses) ListInvitationsWithResponse(ctx context.Context, org Org, params *ListInvitationsParams, reqEditors ...RequestEditorFn) (*ListInvitationsResponse, error) {
+	rsp, err := c.ListInvitations(ctx, org, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListInvitationsResponse(rsp)
+}
+
 // CreateInvitationWithBodyWithResponse Create an invitation. Requires the `admin` role.
 //
 // Returns an invitation token. A signed-in user who presents the token to `/invitations/{token}/accept` joins the org with the role chosen here.
@@ -16670,6 +17016,21 @@ func (c *ClientWithResponses) CreateInvitationWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParseCreateInvitationResponse(rsp)
+}
+
+// RevokeInvitationWithResponse Revoke an invitation no one has used. Requires `org:invite`.
+//
+// Deletes the invitation, so its token is answered 404 from then on, as a token that never existed is, by `getInvitation`, `acceptInvitation` and registering. An invitation already used is refused with 409 `invitation_accepted`, and a revocation and a use of one invitation never both take effect. Revoking leaves a member who joined by an earlier invitation where they are.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/invitations/{invitation} (the `RevokeInvitation` operationId).
+func (c *ClientWithResponses) RevokeInvitationWithResponse(ctx context.Context, org Org, invitationID openapi_types.UUID, reqEditors ...RequestEditorFn) (*RevokeInvitationResponse, error) {
+	rsp, err := c.RevokeInvitation(ctx, org, invitationID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeInvitationResponse(rsp)
 }
 
 // ListOrgMembersWithResponse List members of an organization. Requires the `member` role.
@@ -19559,6 +19920,53 @@ func ParseRemoveGroupMemberResponse(rsp *http.Response) (*RemoveGroupMemberRespo
 	return response, nil
 }
 
+// ParseListInvitationsResponse parses an HTTP response from a ListInvitationsWithResponse call
+func ParseListInvitationsResponse(rsp *http.Response) (*ListInvitationsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListInvitationsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []PendingInvitation
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseCreateInvitationResponse parses an HTTP response from a CreateInvitationWithResponse call
 func ParseCreateInvitationResponse(rsp *http.Response) (*CreateInvitationResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -19607,6 +20015,63 @@ func ParseCreateInvitationResponse(rsp *http.Response) (*CreateInvitationRespons
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeInvitationResponse parses an HTTP response from a RevokeInvitationWithResponse call
+func ParseRevokeInvitationResponse(rsp *http.Response) (*RevokeInvitationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeInvitationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 

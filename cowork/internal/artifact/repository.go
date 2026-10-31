@@ -3,7 +3,9 @@ package artifact
 import "context"
 
 // Repository keeps artifacts and their versions' records. Every method
-// is scoped to an organization.
+// is scoped to an organization. Create and AddVersion answer
+// ErrRecordInDoubt where the record may stand after all; any other
+// error means it does not, and the version's blob is removed.
 type Repository interface {
 	// Create stores a and its first version.
 	Create(ctx context.Context, a Artifact, v Version) error

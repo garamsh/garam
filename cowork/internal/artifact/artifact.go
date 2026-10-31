@@ -108,6 +108,9 @@ var (
 	// ErrNoUserContent is an HTML version viewed on a server run
 	// without a user-content origin, the one place it may be served.
 	ErrNoUserContent = errorx.New(errorx.KindUnavailable, "this server views no html artifacts: no user-content origin is configured")
+	// ErrRecordInDoubt is a version the repository may or may not have
+	// recorded: the commit was sent and its answer never came.
+	ErrRecordInDoubt = errorx.New(errorx.KindUnavailable, "the repository did not answer whether it recorded the version")
 	// ErrNoBlobStore is an artifact asked of a server run without one.
 	ErrNoBlobStore = errorx.New(errorx.KindUnavailable, "this server keeps no artifacts: no blob store is configured")
 )

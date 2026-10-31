@@ -46,6 +46,20 @@ func Run(t *testing.T, s blob.Store) {
 		assert.True(t, errorx.IsKind(err, errorx.KindNotFound), "%v", err)
 	})
 
+	t.Run("deletes one key, and answers nil for a key it never kept", func(t *testing.T) {
+		require.NoError(t, s.Put(ctx, prefix+"/gone", blob.Blob{ContentType: "text/plain", Body: []byte("gone")}))
+		require.NoError(t, s.Put(ctx, prefix+"/stays", blob.Blob{ContentType: "text/plain", Body: []byte("stays")}))
+
+		require.NoError(t, s.Delete(ctx, prefix+"/gone"))
+		_, err := s.Get(ctx, prefix+"/gone")
+		assert.True(t, errorx.IsKind(err, errorx.KindNotFound), "%v", err)
+		got, err := s.Get(ctx, prefix+"/stays")
+		require.NoError(t, err)
+		assert.Equal(t, []byte("stays"), got.Body)
+
+		assert.NoError(t, s.Delete(ctx, prefix+"/never"))
+	})
+
 	t.Run("keeps an empty blob and a large one", func(t *testing.T) {
 		require.NoError(t, s.Put(ctx, prefix+"/empty", blob.Blob{ContentType: "text/plain"}))
 		got, err := s.Get(ctx, prefix+"/empty")

@@ -59,11 +59,13 @@ test:
 # which ci.md §Security baseline keeps out of a command line.
 NODE_VERSION := $(shell cat $(REPO_ROOT)/platform-web/.nvmrc)
 COWORK_GO_DIRECTIVE := $(shell sed -n 's/^go //p' $(REPO_ROOT)/cowork/go.mod)
+POLICY_RUST_CHANNEL := $(shell sed -n 's/^channel = "\(.*\)"$$/\1/p' $(REPO_ROOT)/policy/rust-toolchain.toml)
 
 export TOOLCHAIN_PAIRS = \
 	platform-web/.nvmrc,$(NODE_VERSION),deploy/local/Dockerfile.web,node \
 	platform/go.mod,$(GO_DIRECTIVE),deploy/local/Dockerfile,golang \
 	cowork/go.mod,$(COWORK_GO_DIRECTIVE),deploy/local/Dockerfile.cowork,golang \
+	policy/rust-toolchain.toml,$(POLICY_RUST_CHANNEL),deploy/local/Dockerfile.policy,rust \
 	platform/go.mod,$(GO_DIRECTIVE),platform/tests/testprincipal/Dockerfile,golang
 
 check-toolchain:

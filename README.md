@@ -231,7 +231,9 @@ A deployment running it sets the tag alone.
 Without `IMAGE_REGISTRY`, `make image-build` builds all five as
 `garam/<image>:ci`, which is what `.github/workflows/images.yml` runs
 through `make web-image-e2e site-image-e2e cowork-image-e2e
-cowork-web-image-e2e`.
+cowork-web-image-e2e`. It runs `make policy-image-e2e` beside them,
+which builds its own image, since no release publishes `garam/policy`
+yet.
 
 ## Test image
 

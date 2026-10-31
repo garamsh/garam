@@ -4,6 +4,7 @@
 #![cfg(test)]
 
 mod caller_tokens;
+mod listening;
 
 use std::str::FromStr;
 
@@ -12,12 +13,12 @@ use cedar_policy::{EntityId, EntityTypeName, EntityUid};
 use decision::{Engine, OrgGrn, Role, RoleScope};
 use entity::{EntityChange, EntityStore};
 use grant::{Body, NewPolicy, PolicyStore};
+use listening::{Pair, bound, trusting};
 use server::proto::policy_service_client::PolicyServiceClient;
 use server::proto::{Action, EvaluateRequest, Evaluation, EvaluationsRequest, Resource, Subject};
-use server::{Verifier, connect, migrate, serve};
+use server::{Verifier, connect, migrate, probe, serve};
 use sqlx::PgPool;
 use sqlx::migrate::Migrator;
-use tokio::net::TcpListener;
 use tonic::transport::Channel;
 use tonic::{Code, Request};
 
@@ -107,15 +108,16 @@ async fn seed(pool: &PgPool) {
 
 async fn client(pool: PgPool) -> PolicyServiceClient<Channel> {
     let verifier = Verifier::from_jwks(&jwks(&[signer()]), ISSUER).unwrap();
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    tokio::spawn(serve(pool, verifier, listener, std::future::pending()));
-    let channel = Channel::from_shared(format!("http://{address}"))
-        .unwrap()
-        .connect()
-        .await
-        .unwrap();
-    PolicyServiceClient::new(channel)
+    let pair = Pair::new();
+    let bound = bound().await;
+    tokio::spawn(serve(
+        pool,
+        verifier,
+        pair.identity(),
+        bound.listeners,
+        std::future::pending(),
+    ));
+    PolicyServiceClient::new(trusting(&pair.cert, bound.contract).await)
 }
 
 fn authenticated<T>(message: T) -> Request<T> {
@@ -364,10 +366,16 @@ async fn migrate_applies_the_schema_and_serving_does_not(pool: PgPool) {
 
     connect(&url).await.unwrap();
     let verifier = Verifier::from_jwks(&jwks(&[signer()]), ISSUER).unwrap();
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    serve(pool.clone(), verifier, listener, std::future::ready(()))
-        .await
-        .unwrap();
+    let bound = bound().await;
+    serve(
+        pool.clone(),
+        verifier,
+        Pair::new().identity(),
+        bound.listeners,
+        std::future::ready(()),
+    )
+    .await
+    .unwrap();
     assert_eq!(tables(pool.clone()).await, 0);
 
     migrate(&pool).await.unwrap();
@@ -473,4 +481,27 @@ async fn a_store_that_cannot_be_read_fails_the_call_rather_than_answering(pool: 
         .evaluate(authenticated(question(LEE, "agent:read", BOT)))
         .await;
     assert_eq!(failed.unwrap_err().code(), Code::Unavailable);
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn ready_answers_while_the_database_does(pool: PgPool) {
+    let verifier = Verifier::from_jwks(&jwks(&[signer()]), ISSUER).unwrap();
+    let bound = bound().await;
+    let ready = format!("http://{}/readyz", bound.probes);
+    tokio::spawn(serve(
+        pool.clone(),
+        verifier,
+        Pair::new().identity(),
+        bound.listeners,
+        std::future::pending(),
+    ));
+
+    let answered = probe(&ready).await;
+    assert!(answered.is_ok(), "{answered:?}");
+
+    pool.close().await;
+
+    let refused = probe(&ready).await;
+    assert!(refused.is_err(), "{refused:?}");
 }

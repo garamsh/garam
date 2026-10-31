@@ -39,6 +39,13 @@ pub struct Evaluation<'a> {
 #[derive(Debug, Clone)]
 pub struct Policies(PolicySet);
 
+impl Policies {
+    /// The composed set, as Cedar's analysis reads it.
+    pub fn policy_set(&self) -> &PolicySet {
+        &self.0
+    }
+}
+
 /// Holds the schema and the system tier, and decides.
 #[derive(Debug, Clone)]
 pub struct Engine {

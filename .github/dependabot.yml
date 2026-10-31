@@ -14,7 +14,7 @@
 # the list, correctly recording nothing, while the alpine image beside
 # them in the same file is on it.
 #
-# Eight pins meet both tests. Five record the absence at their own site,
+# Nine pins meet both tests. Six record the absence at their own site,
 # so the list is checked against the tree rather than trusted:
 #
 #   - HELM in deploy/charts/Makefile and CNPG_MANIFEST in
@@ -24,11 +24,12 @@
 #   - the key-material container's image in
 #     deploy/local/minikube/garam.yaml
 #   - imageName in deploy/local/minikube/postgres.yaml
+#   - CVC5_VERSION and its digests in policy/Makefile
 #
 # Each says at the pin that no bot proposes a bump and no scheduled
 # review is named, so it is the PM's to move under AGENTS.md §Roles. A
-# sixth such record, or a pin without one, is what this list going stale
-# looks like.
+# seventh such record, or a pin without one, is what this list going
+# stale looks like.
 #
 # Three record it here instead: platform/go.mod's `go` directive, which
 # the gomod entry never edits; `packageManager`, pinned to pnpm@11.11.0
@@ -49,7 +50,8 @@
 # at commit 98786d7814bb4f7199ca3cdb08350b6180b82983.
 version: 2
 updates:
-  # deploy/local/Dockerfile, Dockerfile.cowork and Dockerfile.web.
+  # deploy/local/Dockerfile, Dockerfile.cowork, Dockerfile.policy and
+  # Dockerfile.web.
   #
   # Covers a newer tag for each, rewriting the tag and the digest
   # together.
@@ -64,10 +66,11 @@ updates:
   #
   # It also moves only the FROM line. platform/go.mod's `go` directive
   # names the same Go version Dockerfile does, cowork/go.mod's the same
-  # as Dockerfile.cowork, and platform-web/.nvmrc the same Node major as
-  # Dockerfile.web, so every bump this proposes arrives half-done and
-  # splits the container's toolchain from the repository's declared
-  # version unless the other half lands with it.
+  # as Dockerfile.cowork, policy/rust-toolchain.toml's channel the same
+  # Rust version as Dockerfile.policy, and platform-web/.nvmrc the same
+  # Node major as Dockerfile.web, so every bump this proposes arrives
+  # half-done and splits the container's toolchain from the repository's
+  # declared version unless the other half lands with it.
   # `make -C tooling check-toolchain` fails on that split (#803); it
   # reads the pairs and not why they are pairs, which is what this
   # paragraph is for.
@@ -88,8 +91,9 @@ updates:
     schedule:
       interval: "weekly"
 
-  # deploy/local/docker-compose.yml's images — postgres, openbao and
-  # rustfs — which the entry above does not read.
+  # deploy/local/docker-compose.yml's images — postgres, openbao, rustfs
+  # and the alpine policy-tls runs — which the entry above does not
+  # read.
   #
   # Covers a newer tag, rewriting the tag and the digest together. It
   # runs the docker ecosystem's own update checker, so the two cases
@@ -194,10 +198,17 @@ updates:
   # Does not cover a dependency only Cargo.lock names, which moves when
   # what requires it moves, under the default rule that reaches direct
   # dependencies alone.
+  #
+  # cedar-policy-symcc requires one exact cedar-policy, so the group
+  # moves the two in one pull request or neither resolves.
   - package-ecosystem: "cargo"
     directory: "/policy"
     schedule:
       interval: "weekly"
+    groups:
+      cedar:
+        patterns:
+          - "cedar-policy*"
 
   # The channel policy/rust-toolchain.toml pins. The ecosystem is read
   # from data/reusables/dependabot/supported-package-managers.md in
@@ -207,8 +218,9 @@ updates:
   # fdbe8b342118a62ac97da47e824666df11046fec.
   #
   # Does not cover what names the same version elsewhere:
-  # docs/convention/stack-rust.md's "Checked against" line. No image
-  # names it yet, so no toolchain pair in tooling/Makefile holds it.
+  # docs/convention/stack-rust.md's "Checked against" line, and
+  # deploy/local/Dockerfile.policy's FROM line, which the docker entry
+  # above moves and `make -C tooling check-toolchain` holds against it.
   - package-ecosystem: "rust-toolchain"
     directory: "/policy"
     schedule:

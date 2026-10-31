@@ -1,0 +1,50 @@
+# Multi-stage build of the policy service's binary, policy (ADR-0130).
+# The same image runs `migrate` and `serve`; the compose file picks the
+# subcommand, and its healthcheck runs `probe`, since the runtime stage
+# is scratch. Build context is the repository root, and
+# Dockerfile.policy.dockerignore keeps it to policy/.
+#
+# Pulled from Google's mirror for the reasons deploy/local/Dockerfile
+# states. The tag's Rust version is policy/rust-toolchain.toml's, which
+# `make -C tooling check-toolchain` holds together.
+FROM mirror.gcr.io/library/rust:1.99.1-alpine3.24@sha256:7e9e2d068a107a2adafd19930011178d14a78326053cd4c3a9f7ad3fd049557d AS build
+
+# rust-toolchain.toml also names rustfmt and clippy, which this stage
+# does not run and rustup would fetch: this names the image's own
+# toolchain, the one that file pins.
+ENV RUSTUP_TOOLCHAIN=$RUST_VERSION CARGO_PROFILE_RELEASE_STRIP=true
+
+WORKDIR /src
+COPY policy .
+
+# musl links the binary statically, so scratch runs it. The migrations
+# compile into it, and nothing else of the tree ships.
+RUN cargo build --release --locked -p server \
+  && mkdir /out \
+  && cp target/release/policy /out/policy
+
+# The account the processes run as; scratch has no adduser, so only
+# its lines travel and the image carries no root account.
+RUN adduser -D -u 10001 policy \
+  && grep '^policy:' /etc/passwd > /out/passwd \
+  && grep '^policy:' /etc/group > /out/group
+
+FROM scratch
+
+# ca-certificates: the roots a database's certificate verifies against
+# when its URL names no sslrootcert.
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /out/passwd /etc/passwd
+COPY --from=build /out/group /etc/group
+
+COPY --from=build /out/policy /usr/local/bin/policy
+
+# The commit and the version the build was given, on the terms
+# deploy/local/Dockerfile records them.
+ARG IMAGE_REVISION
+ARG IMAGE_VERSION
+LABEL org.opencontainers.image.revision=$IMAGE_REVISION \
+  org.opencontainers.image.version=$IMAGE_VERSION
+
+USER policy
+ENTRYPOINT ["policy"]

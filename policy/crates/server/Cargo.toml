@@ -10,6 +10,7 @@ name = "policy"
 path = "src/main.rs"
 
 [dependencies]
+axum.workspace = true
 base64.workspace = true
 decision = { path = "../decision" }
 entity = { path = "../entity" }
@@ -17,6 +18,7 @@ grant = { path = "../grant" }
 jsonwebtoken.workspace = true
 prost.workspace = true
 prost-types.workspace = true
+rustix.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
@@ -34,6 +36,7 @@ tonic-prost-build.workspace = true
 
 [dev-dependencies]
 cedar-policy.workspace = true
+rcgen.workspace = true
 rsa.workspace = true
 
 [lints]

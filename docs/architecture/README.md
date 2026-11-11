@@ -1198,3 +1198,12 @@ ADRs:
   and read at delivery under one shared sequence; a signer moves to
   slice 3's delivery; the policy service's half is built (#1689);
   supersedes 0138 in part, on when the issuer lands
+- [0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
+  — garam is an OIDC and OAuth issuer inside `platform/` that exchanges
+  a CLI session or an agent's token (RFC 8693) for a JWT of at most 300
+  seconds bound to one service from a closed static list, with an
+  introspection endpoint (RFC 7662) beside offline verification by the
+  JWKS of ADR-0138's signer; services call the policy service directly,
+  each owning a Cedar namespace and feeding its own entities; codehub
+  is the worked example; unbuilt; supersedes 0127 in part, on §5, and
+  0140 in part, on §2

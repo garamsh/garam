@@ -303,6 +303,53 @@ listener.
 - **Its mint is a credential event of its own kind** (§Credential
   events), with the agent's GRN as subject.
 
+## The issuer
+
+**Unbuilt.**
+[ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
+makes garam an OIDC and OAuth issuer, so a service that garam does
+not deploy can learn who is calling. Today a session is a server-side
+row only garam reads, and no endpoint turns one into anything else.
+
+- **An exchange, not a new credential.** A CLI session's access token
+  or an agent's browser token (§Browser tokens) is presented as an RFC
+  8693 `subject_token` of the access-token type, naming one audience.
+  The answer is a JWT of at most 300 seconds, never longer than the
+  subject's session, that the client holds until it lapses and then
+  exchanges again. A refresh token, an ID token and a machine token
+  are refused.
+- **Bound to one service.** The audience is one of a closed static
+  list held in code, `policy` and `codehub` first; an unknown one
+  refuses. A service verifies the token offline against the JWKS and
+  introspects (RFC 7662) only for an action that cannot wait out the
+  token's life, authenticating as cowork's principal does, by a
+  `private_key_jwt` assertion, and for tokens of its own audience
+  alone.
+- **Claims.** `iss`, `sub` as the subject's GRN, `aud`, `iat`, `exp`,
+  `jti`, and `sid`, the id of the row the exchange read. No
+  organization is named, since tenancy is the membership the policy
+  service reads.
+- **A service's own caller token** comes from the machine listener's
+  `exchangeClientAssertion` (§cowork's principal): the assertion
+  signed with the service's deployment key, `audience` `policy`
+  requested, the issuer's JWT with `sub` its service principal
+  returned. The browser-facing token endpoint takes no
+  client-credentials grant, and the machine listener's existing
+  `POST /oauth/token` is unchanged. Built with cowork's direct calls.
+- **One signer.** The key, the profile and the JWKS are the policy
+  service's token profile
+  ([ADR-0138](./adr/0138-a-caller-of-the-policy-service-presents-a-short-lived-signed-token-and-owners-write-entities-through-a-sequenced-rpc.md)),
+  and a caller's own `aud=policy` token is this issuer's first case.
+- **A revoked subject refuses its next exchange**, because the
+  exchange reads the row when it is asked. A token already issued
+  lives to `exp`, so an offline verifier sees a revocation within 300
+  seconds and the skew, and an introspecting one at once.
+- **Off with no signing key.** No endpoint is registered and no other
+  path changes.
+
+Where its endpoints are served is
+[api-surface.md](./api-surface.md) §The issuer's endpoints.
+
 ## cowork's principal
 
 **Unbuilt (#1664).**
@@ -473,3 +520,13 @@ snapshot; a 200 is a status answer, and only `credential` and
 `generation` both `current`, with the expected binding, is positive. The
 credential's GRN still answers who is calling; these answer whether that
 caller is still the one allowed to act.
+
+## codehub's principal
+
+**Unbuilt.** codehub, a service garam does not deploy, acts in an
+organization as `grn:<org>:default:service:codehub`, the form cowork's
+principal takes (§cowork's principal). It reaches the policy service as
+a direct caller owning a `Codehub` namespace
+([ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)).
+Its row is built when codehub calls: the closed list of services holds
+no entry before a caller proves it.

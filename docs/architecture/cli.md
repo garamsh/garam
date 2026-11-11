@@ -127,6 +127,12 @@ built it is read where the session's bearer is answered,
 `garam-cli/internal/session`, so cowork's commands and its bridge take
 it with the platform's (ADR-0133).
 
+- **A service that rests on garam reads the same token.** codehub's
+  `ch` reads the garam session, or the file `GARAM_TOKEN_FILE` names,
+  and exchanges it at the issuer for a `codehub` token
+  ([ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md));
+  `garam` gains a noun for a person who uses garam and a
+  service on it. Unbuilt.
 - **`GARAM_TOKEN_FILE`** names a file holding the agent's browser
   token ([machine-identity.md](./machine-identity.md) §Browser tokens).
   Where it is set, every command reads that file, presents the token
@@ -230,3 +236,6 @@ API's message under its kind.
   — `garam`, built from `garam-cli/`, is the one client of every
   service, with cowork's commands under `garam cowork`, its bridge as
   `garam mcp cowork`, and one package for the session
+- [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
+  — the session the CLI holds is exchanged at garam's issuer for a
+  token bound to one service; unbuilt

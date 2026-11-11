@@ -61,6 +61,7 @@ and nowhere else.
 | `supervisor` | runs one agent on a standalone host; garam mints the identifier and registers it for that agent on an administrator's approval (ADR-0082) | `grn:acme:default:supervisor:0a1b2c3d4e5f6071` |
 | `policy` | stored policy document | `grn:acme:default:policy:a1b2c3d4` |
 | `service` | a first-party service acting in one organization, one per organization and service, the identifier the service's name (planned, ADR-0129) | `grn:acme:default:service:cowork` |
+| `repo` | a repository codehub stores, owned by an organization at project `default` and carrying the organization's slug (planned, ADR-0141) | `grn:acme:default:repo:api-server` |
 | `doc` | permissioned document (planned) | `grn:acme:frontend:doc:readme` |
 | `secret` | reference to a value an external store holds, never the value (planned, ADR-0036) | `grn:acme:default:secret:model-api-key` |
 

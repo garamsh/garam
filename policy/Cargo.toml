@@ -10,7 +10,7 @@ publish = false
 
 [workspace.dependencies]
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
-base64 = "0.22"
+base64 = "0.23"
 cedar-policy = "4.14.0"
 cedar-policy-symcc = "0.8.0"
 jsonwebtoken = { version = "11", default-features = false, features = ["rust_crypto", "use_pem"] }

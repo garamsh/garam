@@ -14,6 +14,7 @@ supplies.
 - Exposure is the cluster owner's
 - Key material and secrets
 - Message signing keys in OpenBao Transit
+- Delivering the policy feed
 - Pinning a version
 - What keeps it true
 - What the checks are complete over
@@ -459,6 +460,28 @@ stated in
   is how a writer that injects itself into the pod, such as OpenBao
   Agent's injector, is asked for; the chart renders no writer and no
   volume for one.
+
+## Delivering the policy feed
+
+`api.policy` holds where `serve api` delivers the policy feed and what
+it signs the delivery with
+([ADR-0140](../../../docs/architecture/adr/0140-owners-feed-the-policy-service-from-a-dirty-set-of-entities-read-at-delivery-and-a-caller-is-a-closed-list-of-services.md)).
+It is off while `api.policy.address` is empty, and the render then
+carries none of its variables. The feed itself is off by default too,
+and an address with the feed off delivers nothing. Set, `tokenIssuer`,
+`caSecretName` and `signingKeyFile` are required and the render refuses
+without each, naming it: garam refuses to start holding part of the
+setting.
+
+- **The CA** is read from the Secret `caSecretName` names, under
+  `caKey`, and projected as it is: it is public.
+- **The signing key is not in this chart.** `signingKeyFile` names where
+  in the api container the binary reads the RSA key, once at startup,
+  and whatever writes it is the deployment's. The file is held to the
+  arrival rule above: owned by `image.server.runAsUser`, no group or
+  other bit. `api.podAnnotations` is how a writer that injects itself
+  into the pod is asked for; the chart renders no writer and no volume
+  for one.
 
 ## Pinning a version
 

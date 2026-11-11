@@ -1,8 +1,6 @@
 # ADR 0140: Owners feed the policy service from a dirty set of entities read at delivery, and a caller is a closed list of services
 
-> Status: accepted; the policy service's half and the
-> platform's outbox are built, and the platform's delivery is not;
-> superseded in part by
+> Status: accepted; built; superseded in part by
 > [ADR-0141](./0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
 > (§2, who the callers are and who asks for cowork)
 > Date: 2026-10-31

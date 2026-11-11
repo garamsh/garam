@@ -25,6 +25,10 @@ spec:
     metadata:
       labels:
         {{- include "garam.selectorLabels" (dict "root" $ "component" "api") | nindent 8 }}
+      {{- with .Values.api.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
 {{- include "garam.serviceAccountName" (dict "root" $ "component" "api") }}
 {{- include "garam.imagePullSecrets" . }}
@@ -58,6 +62,19 @@ spec:
                   name: {{ required "api.google.clientSecret.secretName is required once any api.google value is set: the secret is a Secret reference, never a value" $google.clientSecret.secretName }}
                   key: {{ required "api.google.clientSecret.secretKey is required once any api.google value is set" $google.clientSecret.secretKey }}
             {{- end }}
+            {{- $policy := .Values.api.policy }}
+            {{- if $policy.address }}
+            # The policy feed is delivered here (ADR-0140). The signing
+            # key file is written by what the deployment runs.
+            - name: GARAM_POLICY_ADDR
+              value: {{ $policy.address | quote }}
+            - name: GARAM_POLICY_CA_FILE
+              value: {{ printf "/etc/garam/policy/%s" (required "api.policy.caKey is required" $policy.caKey) | quote }}
+            - name: GARAM_POLICY_SIGNING_KEY_FILE
+              value: {{ required "api.policy.signingKeyFile is required beside api.policy.address: it names the file the token signing key is read from" $policy.signingKeyFile | quote }}
+            - name: GARAM_POLICY_TOKEN_ISSUER
+              value: {{ required "api.policy.tokenIssuer is required beside api.policy.address: it is the issuer the policy service trusts" $policy.tokenIssuer | quote }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080
@@ -70,7 +87,24 @@ spec:
               path: /readyz
               port: 8080
             timeoutSeconds: 3
+          {{- if $policy.address }}
+          volumeMounts:
+            - name: policy-ca
+              mountPath: /etc/garam/policy
+              readOnly: true
+          {{- end }}
           resources: {{- toYaml .Values.api.resources | nindent 12 }}
+      {{- if $policy.address }}
+      volumes:
+        # The root the policy service is verified against. It is public,
+        # so it is projected as it is.
+        - name: policy-ca
+          secret:
+            secretName: {{ required "api.policy.caSecretName is required beside api.policy.address: it names the Secret holding the root the policy service's certificate is verified against" $policy.caSecretName }}
+            items:
+              - key: {{ $policy.caKey }}
+                path: {{ $policy.caKey }}
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

@@ -188,6 +188,7 @@ updates:
       - "/lib/errorx"
       - "/lib/grn"
       - "/lib/platform-sdk-go"
+      - "/lib/policy-sdk-go"
       - "/garam-cli"
     schedule:
       interval: "weekly"

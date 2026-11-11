@@ -1,0 +1,9 @@
+# The policy feed turned on with no signing key. The render must refuse
+# and name api.policy.signingKeyFile: garam refuses to start holding
+# part of the setting (ADR-0140), so the render refuses first.
+api:
+  policy:
+    address: policy.garam.example:8443
+    tokenIssuer: https://garam.example
+    caSecretName: garam-policy-ca
+    signingKeyFile: ""

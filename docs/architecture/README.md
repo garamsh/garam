@@ -1196,7 +1196,8 @@ ADRs:
   only the types it owns; the platform feeds the service from a set of
   dirty entities with no payload, written by triggers, off by default
   and read at delivery under one shared sequence; a signer moves to
-  slice 3's delivery; the policy service's half is built (#1689);
+  slice 3's delivery; built: the policy service's half, the platform's
+  outbox and its delivery (#1689);
   supersedes 0138 in part, on when the issuer lands
 - [0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
   — garam is an OIDC and OAuth issuer inside `platform/` that exchanges

@@ -49,6 +49,16 @@ api:
     clientSecret:
       secretName: garam-google
       secretKey: client-secret
+  # The policy feed delivered, with an injector's annotation putting
+  # the signing key file in the pod (ADR-0140). The minimal file leaves
+  # it unset, so each branch renders.
+  policy:
+    address: policy.garam.example:8443
+    tokenIssuer: https://garam.example
+    caSecretName: garam-policy-ca
+    signingKeyFile: /vault/secrets/policy-signing-key
+  podAnnotations:
+    vault.hashicorp.com/agent-inject: "true"
 authz:
   serviceAccount:
     name: garam-authz

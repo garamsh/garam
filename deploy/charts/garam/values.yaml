@@ -91,6 +91,27 @@ api:
     clientSecret:
       secretName: ""
       secretKey: ""
+  # Delivers the policy feed to the policy service (ADR-0140). Off while
+  # `address` is empty, and the feed is off by default too; set, the
+  # rest are required and the render refuses a partial setting. None of
+  # these carries a secret: the signing key arrives as a file something
+  # the deployment runs writes, as the process's UID and readable by it
+  # alone — see the README, §Delivering the policy feed.
+  policy:
+    # The policy service's host:port, which serves TLS.
+    address: ""
+    # The `iss` of the tokens garam signs for it, and the issuer the
+    # policy service trusts.
+    tokenIssuer: ""
+    # The Secret holding the PEM root the policy service's certificate
+    # is verified against, and its key.
+    caSecretName: ""
+    caKey: ca.crt
+    # Where in the api container the RSA signing key is read from.
+    signingKeyFile: ""
+  # Annotations on the api pod, for whatever the deployment uses to put
+  # the signing key file there, such as OpenBao Agent's injector.
+  podAnnotations: {}
   resources: {}
 
 authz:

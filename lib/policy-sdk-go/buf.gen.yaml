@@ -1,0 +1,16 @@
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/garamsh/garam/lib/policy-sdk-go/gen
+# The two plugins are tool directives in platform/go.mod, which go.work
+# makes every module's. A move lands with the `make gen` that follows it
+# or `check-gen` fails.
+plugins:
+  - local: [go, tool, protoc-gen-go]
+    out: gen
+    opt: paths=source_relative
+  - local: [go, tool, protoc-gen-go-grpc]
+    out: gen
+    opt: paths=source_relative

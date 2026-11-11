@@ -103,6 +103,18 @@
 //	                       the runtime is Sherlock v0.4.0 or later and
 //	                       trusts garam's issuer (docs/architecture/
 //	                       adapter.md §Foreign facts this rests on)
+//	GARAM_POLICY_ADDR      the policy service's gRPC address (optional;
+//	                       unset, serve api runs no delivery loop and
+//	                       the other three names are not read). Set, it
+//	                       requires the three below
+//	GARAM_POLICY_CA_FILE   the PEM root the service's certificate is
+//	                       verified against
+//	GARAM_POLICY_SIGNING_KEY_FILE  the platform's RSA private key, PEM,
+//	                       readable by its owner alone, which signs the
+//	                       token of each call (docs/architecture/
+//	                       authz.md §Delivery)
+//	GARAM_POLICY_TOKEN_ISSUER  the iss of those tokens, which the
+//	                       service's POLICY_TOKEN_ISSUER names
 package cli
 
 import (
@@ -215,6 +227,10 @@ const (
 	envAdapterOutboxDir      envName = "GARAM_ADAPTER_OUTBOX_DIR"
 	envAdapterControlSocket  envName = "GARAM_ADAPTER_CONTROL_SOCKET"
 	envAdapterSignMessages   envName = "GARAM_ADAPTER_SIGN_MESSAGES"
+	envPolicyAddr            envName = "GARAM_POLICY_ADDR"
+	envPolicyCAFile          envName = "GARAM_POLICY_CA_FILE"
+	envPolicySigningKeyFile  envName = "GARAM_POLICY_SIGNING_KEY_FILE"
+	envPolicyTokenIssuer     envName = "GARAM_POLICY_TOKEN_ISSUER"
 )
 
 // envOr reads a declared name, or the fallback when it is unset or

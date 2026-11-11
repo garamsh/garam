@@ -23,11 +23,12 @@ WORKDIR /src
 # so the download is tried three times, 10 and 20 seconds apart. Each
 # attempt fetches only what the last left missing, and verifies every
 # module against go.sum as the first did. platform/go.mod replaces
-# lib/errorx and lib/grn with their folders (ADR-0132), so those
-# modules' manifests come along.
+# lib/errorx, lib/grn and lib/policy-sdk-go with their folders
+# (ADR-0132), so those modules' manifests come along.
 COPY platform/go.mod platform/go.sum ./platform/
 COPY lib/errorx/go.mod lib/errorx/go.sum ./lib/errorx/
 COPY lib/grn/go.mod lib/grn/go.sum ./lib/grn/
+COPY lib/policy-sdk-go/go.mod lib/policy-sdk-go/go.sum ./lib/policy-sdk-go/
 RUN for attempt in 1 2 3; do \
       go -C platform mod download && exit 0; \
       [ "$attempt" = 3 ] && exit 1; \

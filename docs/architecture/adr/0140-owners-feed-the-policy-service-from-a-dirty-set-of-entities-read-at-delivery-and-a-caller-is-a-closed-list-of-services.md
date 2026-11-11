@@ -1,7 +1,7 @@
 # ADR 0140: Owners feed the policy service from a dirty set of entities read at delivery, and a caller is a closed list of services
 
-> Status: accepted; the policy service's half is built, and the
-> platform's outbox and delivery are not
+> Status: accepted; the policy service's half and the
+> platform's outbox are built, and the platform's delivery is not
 > Date: 2026-10-31
 
 Drafted for #1689, which reserves this number and holds the rulings

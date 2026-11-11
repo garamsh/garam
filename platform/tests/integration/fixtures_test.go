@@ -142,7 +142,11 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 		agent_assignments, operators, certificate_authorities,
 		operator_assertions,
 		messages, message_consents, message_signing_keys, agent_watches,
-		audit_send_events CASCADE`)
+		audit_send_events, policy_outbox CASCADE`)
+	require.NoError(t, err)
+	// A suite that turned the feed on and died before it turned it off
+	// would otherwise leave every later test writing marks.
+	_, err = p.Exec(context.Background(), `UPDATE policy_feed SET enabled = false`)
 	require.NoError(t, err)
 }
 

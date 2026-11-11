@@ -1,0 +1,14 @@
+DROP TRIGGER policy_outbox_users ON users;
+DROP TRIGGER policy_outbox_operators ON operators;
+DROP TRIGGER policy_outbox_agents ON agents;
+DROP TRIGGER policy_outbox_project_members ON project_members;
+DROP TRIGGER policy_outbox_group_members ON group_members;
+DROP TRIGGER policy_outbox_org_members ON org_members;
+DROP TRIGGER policy_outbox_projects ON projects;
+DROP TRIGGER policy_outbox_groups ON groups;
+DROP TRIGGER policy_outbox_orgs ON orgs;
+DROP FUNCTION policy_entity_state(text, text);
+DROP FUNCTION policy_outbox_track();
+DROP FUNCTION policy_outbox_mark(text, text);
+DROP TABLE policy_outbox;
+DROP TABLE policy_feed;

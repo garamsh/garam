@@ -40,12 +40,13 @@ closes who may call: `platform` alone until cowork does, every other
 `sub` refused, and each caller writing only the types it owns. The list
 is `policy/README.md` §Callers.
 
-**The platform's outbox and its delivery are unbuilt.** Under ADR-0140
-triggers mark each entity a row change reaches, in a set holding one
-row per entity and no document, and a loop reads each entity's state at
-delivery under one shared sequence. It is off by default, so a
-deployment with no policy service writes no rows and runs no loop, and
-a later one starts by a backfill from the owners' tables. Restoring the
+**The platform's outbox is built and its delivery is not.** Under
+ADR-0140 triggers mark each entity a row change reaches, in a set
+holding one row per entity and no document, and a loop reads each
+entity's state at delivery under one shared sequence. It is off by
+default, so a deployment with no policy service writes no rows and runs
+no loop, and a later one starts by a backfill from the owners' tables,
+which `garam policy-feed start` runs and `stop` undoes. Restoring the
 platform's database rewinds that sequence, so it means rebuilding the
 entity store.
 [ADR-0137](./adr/0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)

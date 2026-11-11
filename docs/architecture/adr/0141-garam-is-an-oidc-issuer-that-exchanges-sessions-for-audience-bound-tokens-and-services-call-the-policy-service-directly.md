@@ -14,8 +14,9 @@ supersedes in part
 [ADR-0138](./0138-a-caller-of-the-policy-service-presents-a-short-lived-signed-token-and-owners-write-entities-through-a-sequenced-rpc.md)'s
 token profile and signer, and it keeps what
 [ADR-0005](./0005-server-side-sessions.md) decided about
-sessions. garam is read at `c2667176e08546ca0dfe19b917bbc0a0ff8df268`; a claim below that names no
-revision holds for it.
+sessions. garam is read at
+`c2667176e08546ca0dfe19b917bbc0a0ff8df268`; a claim below that names
+no revision holds for it.
 
 ## Context
 
@@ -171,8 +172,8 @@ namespace each.**
     principal. The browser-facing token endpoint gains no
     client-credentials grant, so no second client authentication
     exists. This route is built with cowork's direct calls and not
-    with the issuer. Each service owns a Cedar namespace, its entity types
-    and its actions, and feeds its own entities through
+    with the issuer. Each service owns a Cedar namespace, its entity
+    types and its actions, and feeds its own entities through
     `ApplyEntityChanges` under the per-entity sequence ADR-0138
     decided. An HTTP AuthZEN gateway (ADR-0130 §2) is added when a
     caller that does not speak gRPC needs one, and is not built

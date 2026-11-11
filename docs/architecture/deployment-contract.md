@@ -65,10 +65,9 @@ so a deployment running one sets the tag alone.
 references this repository produces, and refuses every other tag
 before it builds; `README.md` §Development images is the procedure.
 The test image is none of these: an operator pushes it for another
-repository's CI to `garam-dev/garam-test`, an ECR repository of its
-own that no release writes to, and it moves to `garam/test` under
-ADR-0134 once garamsh/aurora#711 creates that repository; no deployment
-runs it, and the chart names it nowhere
+repository's CI to `garam/test`, an ECR repository of its own that
+no release writes to (ADR-0134); no deployment runs it, and the chart
+names it nowhere
 ([ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md),
 [ADR-0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)).
 

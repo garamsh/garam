@@ -14,8 +14,13 @@ use decision::{Engine, OrgGrn, Role, RoleScope};
 use entity::{EntityChange, EntityStore};
 use grant::{Body, NewPolicy, PolicyStore};
 use listening::{Pair, bound, trusting};
+use server::proto::entity_change::Operation;
 use server::proto::policy_service_client::PolicyServiceClient;
-use server::proto::{Action, EvaluateRequest, Evaluation, EvaluationsRequest, Resource, Subject};
+use server::proto::{
+    Action, ApplyEntityChangesRequest, ApplyEntityChangesResponse, EntityChange as WireChange,
+    EntityDelete, EntityRef, EntityUpsert, EvaluateRequest, Evaluation, EvaluationsRequest,
+    Resource, Subject,
+};
 use server::{Verifier, connect, migrate, probe, serve};
 use sqlx::PgPool;
 use sqlx::migrate::Migrator;
@@ -341,6 +346,178 @@ async fn a_batch_past_the_bound_is_refused(pool: PgPool) {
 
     let control = client.evaluations(authenticated(batch(1000))).await;
     assert_eq!(control.unwrap().into_inner().evaluations.len(), 1000);
+}
+
+fn wire_ref(named: Named) -> EntityRef {
+    EntityRef {
+        r#type: named.0.into(),
+        id: named.1.into(),
+    }
+}
+
+fn wire_upsert(named: Named, sequence: i64, parents: &[Named]) -> WireChange {
+    WireChange {
+        entity: Some(wire_ref(named)),
+        sequence,
+        operation: Some(Operation::Upsert(EntityUpsert {
+            org: None,
+            members: None,
+            parents: parents.iter().copied().map(wire_ref).collect(),
+        })),
+    }
+}
+
+fn wire_delete(named: Named, sequence: i64) -> WireChange {
+    WireChange {
+        entity: Some(wire_ref(named)),
+        sequence,
+        operation: Some(Operation::Delete(EntityDelete {})),
+    }
+}
+
+async fn apply(
+    client: &mut PolicyServiceClient<Channel>,
+    changes: Vec<WireChange>,
+) -> ApplyEntityChangesResponse {
+    client
+        .apply_entity_changes(authenticated(ApplyEntityChangesRequest { changes }))
+        .await
+        .unwrap()
+        .into_inner()
+}
+
+/// Whether mia, who holds an organization role of her own, may read
+/// the agent: what her `OrgMembers` parent alone decides.
+async fn mia_may_read(client: &mut PolicyServiceClient<Channel>) -> bool {
+    client
+        .evaluate(authenticated(EvaluateRequest {
+            subject: subject(MIA),
+            action: action("agent:read"),
+            resource: resource(BOT),
+            context: None,
+            read: 0,
+        }))
+        .await
+        .unwrap()
+        .into_inner()
+        .decision
+}
+
+async fn grant_mia_the_member_role(pool: &PgPool) {
+    let engine = Engine::load().unwrap();
+    let org = OrgGrn::new(ACME);
+    let grn = "grn:acme:default:policy:mia-member";
+    let store = PolicyStore::new(pool.clone());
+    let body = Body::role_link(
+        &engine,
+        &org,
+        Role::Member,
+        RoleScope::Organization,
+        uid(MIA),
+        uid(ORG),
+    )
+    .unwrap();
+    let policy = NewPolicy {
+        grn,
+        org: &org,
+        name: "seeded",
+        body,
+        created_by: "test",
+    };
+    store.create(policy).await.unwrap();
+    store.activate(&org, grn).await.unwrap();
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn an_owners_write_decides_the_next_question(pool: PgPool) {
+    seed(&pool).await;
+    grant_mia_the_member_role(&pool).await;
+    let mut client = client(pool).await;
+    assert!(!mia_may_read(&mut client).await);
+
+    let joined = apply(&mut client, vec![wire_upsert(MIA, 10, &[MEMBERS])]).await;
+    assert_eq!((joined.written, joined.dropped), (1, 0));
+    assert!(mia_may_read(&mut client).await);
+
+    let left = apply(&mut client, vec![wire_upsert(MIA, 11, &[])]).await;
+    assert_eq!((left.written, left.dropped), (1, 0));
+    assert!(!mia_may_read(&mut client).await);
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_replayed_or_reordered_delivery_changes_nothing(pool: PgPool) {
+    seed(&pool).await;
+    grant_mia_the_member_role(&pool).await;
+    let mut client = client(pool).await;
+    apply(&mut client, vec![wire_upsert(MIA, 10, &[MEMBERS])]).await;
+
+    let earlier = apply(&mut client, vec![wire_upsert(MIA, 9, &[])]).await;
+    assert_eq!((earlier.written, earlier.dropped), (0, 1));
+    let replayed = apply(&mut client, vec![wire_upsert(MIA, 10, &[])]).await;
+    assert_eq!((replayed.written, replayed.dropped), (0, 1));
+    assert!(mia_may_read(&mut client).await);
+
+    let later = apply(&mut client, vec![wire_upsert(MIA, 11, &[])]).await;
+    assert_eq!((later.written, later.dropped), (1, 0));
+    assert!(!mia_may_read(&mut client).await);
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_deleted_entity_is_not_revived_by_an_earlier_write(pool: PgPool) {
+    seed(&pool).await;
+    grant_mia_the_member_role(&pool).await;
+    let mut client = client(pool).await;
+    apply(&mut client, vec![wire_upsert(MIA, 10, &[MEMBERS])]).await;
+    assert!(mia_may_read(&mut client).await);
+
+    let deleted = apply(&mut client, vec![wire_delete(MIA, 12)]).await;
+    assert_eq!((deleted.written, deleted.dropped), (1, 0));
+    assert!(!mia_may_read(&mut client).await);
+
+    let late = apply(&mut client, vec![wire_upsert(MIA, 11, &[MEMBERS])]).await;
+    assert_eq!((late.written, late.dropped), (0, 1));
+    assert!(!mia_may_read(&mut client).await);
+
+    let again = apply(&mut client, vec![wire_upsert(MIA, 13, &[MEMBERS])]).await;
+    assert_eq!((again.written, again.dropped), (1, 0));
+    assert!(mia_may_read(&mut client).await);
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_refused_change_leaves_the_rest_of_its_batch_written(pool: PgPool) {
+    seed(&pool).await;
+    grant_mia_the_member_role(&pool).await;
+    let mut client = client(pool).await;
+
+    let bad = wire_upsert(ENG, 10, &[ORG]);
+    let answer = apply(&mut client, vec![bad, wire_upsert(MIA, 10, &[MEMBERS])]).await;
+
+    assert_eq!((answer.written, answer.dropped), (1, 0));
+    let refused: Vec<u32> = answer.refusals.iter().map(|r| r.index).collect();
+    assert_eq!(refused, [0]);
+    assert!(mia_may_read(&mut client).await);
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_type_of_another_service_writes_nothing_through_the_shipped_graph(pool: PgPool) {
+    seed(&pool).await;
+    grant_mia_the_member_role(&pool).await;
+    let mut client = client(pool).await;
+
+    let foreign = wire_upsert(("Channel", "grn:acme:default:channel:one"), 10, &[ORG]);
+    let batch = vec![wire_upsert(MIA, 10, &[MEMBERS]), foreign];
+    let refused = client
+        .apply_entity_changes(authenticated(ApplyEntityChangesRequest { changes: batch }))
+        .await
+        .unwrap_err();
+
+    assert_eq!(refused.code(), Code::PermissionDenied);
+    assert!(!mia_may_read(&mut client).await);
 }
 
 #[sqlx::test(migrations = false)]

@@ -10,6 +10,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use caller_tokens::*;
 use cedar_policy::EntityUid;
 use decision::{Cause, Engine, EntitySlice, EntitySource, OrgGrn, OrgPolicies, PolicySource};
+use entity::{Applied, EntityChange, Error};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use rsa::RsaPrivateKey;
 use rsa::pkcs1::{EncodeRsaPrivateKey, LineEnding};
@@ -17,7 +18,7 @@ use rsa::rand_core::OsRng;
 use serde_json::{Value, json};
 use server::proto::policy_service_client::PolicyServiceClient;
 use server::proto::{Action, EvaluateRequest, Resource, Subject};
-use server::{KeysError, Refusal, Service, Verifier, authenticated};
+use server::{Caller, EntitySink, KeysError, Refusal, Service, Verifier, authenticated};
 use tokio::net::TcpListener;
 use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::{Channel, Server};
@@ -36,6 +37,15 @@ impl EntitySource for Empty {
         Ok(EntitySlice {
             entities: self.0.entities(json!([]))?,
             org: None,
+        })
+    }
+}
+
+impl EntitySink for Empty {
+    async fn apply(&self, _: &[EntityChange]) -> Result<Applied, Error> {
+        Ok(Applied {
+            written: 0,
+            dropped: 0,
         })
     }
 }
@@ -112,6 +122,44 @@ async fn a_request_with_no_bearer_token_is_refused() {
         Err(Code::Unauthenticated)
     );
     assert_eq!(answer_with(Some(format!("Bearer {token}"))).await, Ok(()));
+}
+
+#[tokio::test]
+async fn a_verified_token_of_a_service_this_one_does_not_serve_is_refused() {
+    for subject in [
+        "cowork",
+        "Platform",
+        "platform ",
+        "grn:root:default:service:platform",
+        "grn:acme:default:service:cowork",
+    ] {
+        let token = signer().sign(&Claims {
+            sub: subject.to_owned(),
+            ..claims()
+        });
+        assert_eq!(
+            answer_to(token).await,
+            Err(Code::PermissionDenied),
+            "{subject}"
+        );
+    }
+
+    let control = signer().sign(&claims());
+    assert_eq!(answer_to(control).await, Ok(()));
+}
+
+#[test]
+fn a_verified_token_is_read_as_the_service_its_subject_names() {
+    let verifier = verifier();
+
+    let platform = verifier.verify(&signer().sign(&claims()));
+    assert!(matches!(platform, Ok(Caller::Platform)), "{platform:?}");
+
+    let other = verifier.verify(&signer().sign(&Claims {
+        sub: "cowork".to_owned(),
+        ..claims()
+    }));
+    assert!(matches!(other, Err(Refusal::UnknownService)), "{other:?}");
 }
 
 #[tokio::test]

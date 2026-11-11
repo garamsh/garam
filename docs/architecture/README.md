@@ -1190,3 +1190,11 @@ ADRs:
   and closes within 40 of a refusal, with a code the client reads; a
   platform that cannot be reached closes nothing; supersedes 0129 in
   part, on §7's last sentence
+- [0140](./adr/0140-owners-feed-the-policy-service-from-a-dirty-set-of-entities-read-at-delivery-and-a-caller-is-a-closed-list-of-services.md)
+  — a caller of `policy/` is one of a closed list of services read from
+  its token's `sub`, `platform` alone until cowork calls, and it writes
+  only the types it owns; the platform feeds the service from a set of
+  dirty entities with no payload, written by triggers, off by default
+  and read at delivery under one shared sequence; a signer moves to
+  slice 3's delivery; the policy service's half is built (#1689);
+  supersedes 0138 in part, on when the issuer lands

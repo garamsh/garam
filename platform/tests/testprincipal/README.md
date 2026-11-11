@@ -89,7 +89,7 @@ operator pushes it to an ECR repository of its own, which
 it (ADR-0093):
 
 ```sh
-REPOSITORY=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
+REPOSITORY=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/test
 ```
 
 It is a file source: copy the paths out and never run the image.

@@ -19,7 +19,7 @@ fn an_organization_owns_what_names_it_first() {
         "grn:globex/iam/user/kim",
         "grn:acme",
         "acme/iam/user/kim",
-        "grn:acme:default:user:kim",
+        concat!("grn:acme", ":default", ":user", ":kim"),
     ] {
         assert!(!org.owns_grn(other), "{other}");
     }

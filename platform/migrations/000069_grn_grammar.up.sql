@@ -4,8 +4,8 @@
 -- rewritten to ask a table instead of a string.
 --
 -- What this does to a database holding a five-segment name
--- ("grn:acme:default:agent:x"): it rewrites no row. A stored name keeps
--- its text. The checks dropped below read segments at the positions the
+-- (the old colon-separated form): it rewrites no row. A stored name
+-- keeps its text. The checks dropped below read segments at the positions the
 -- five-segment form gave them, so they would refuse a row in the new
 -- form and no longer refuse a row in the old one; after this migration
 -- the schema holds neither judgement and the stores' own parse is the

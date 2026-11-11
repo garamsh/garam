@@ -39,7 +39,7 @@ const PLATFORM_TYPES: [&str; 7] = [
 /// may ask is decided here and nowhere else (ADR-0140).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Caller {
-    /// The platform, which asks anything and owns [`PLATFORM_TYPES`].
+    /// The platform, which asks anything and owns `PLATFORM_TYPES`.
     Platform,
 }
 

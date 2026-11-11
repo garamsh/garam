@@ -34,11 +34,19 @@ nothing yet.
 [ADR-0138](./adr/0138-a-caller-of-the-policy-service-presents-a-short-lived-signed-token-and-owners-write-entities-through-a-sequenced-rpc.md)
 states how a caller authenticates and how an owner writes, and
 `ApplyEntityChanges` serves that write. The platform's issuer is not
-built.
+built, and
+[ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
+decides it: garam is an OIDC issuer whose exchanged token a service
+verifies offline, and each service calls the policy service directly
+under its own caller token, owning a Cedar namespace and feeding its
+own entities. Nothing of that is built.
 [ADR-0140](./adr/0140-owners-feed-the-policy-service-from-a-dirty-set-of-entities-read-at-delivery-and-a-caller-is-a-closed-list-of-services.md)
 closes who may call: `platform` alone until cowork does, every other
 `sub` refused, and each caller writing only the types it owns. The list
 is `policy/README.md` §Callers.
+ADR-0141 supersedes in part its §2: the platform no longer asks for
+cowork's checks, since cowork asks the policy service itself, and the
+list stays closed and static.
 
 **The platform's outbox is built and its delivery is not.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set
@@ -416,6 +424,11 @@ decision and every matched statement was the same for both
 gives each organization a cowork principal on the machine listener
 ([machine-identity.md](./machine-identity.md) §cowork's principal).
 No such subject reaches the engine today.
+[ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
+supersedes in part ADR-0127 §5: when slice 5 is built cowork asks the
+policy service itself, under a caller token from
+`exchangeClientAssertion` with `audience` `policy` and `sub` its
+principal, and not through the platform. That route is unbuilt.
 
 - **Decided as a machine sender.** Its `postMessage` asks `message:send`
   with its GRN as subject and the recipient as object, on the

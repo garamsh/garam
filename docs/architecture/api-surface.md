@@ -12,6 +12,7 @@ authoritative for.
 - What decides the rest
 - An agent on the browser-facing listener
 - cowork's principal on the machine listener
+- The issuer's endpoints
 - What a specification is authoritative for
 - What nothing checks
 - Where a change to a surface lands
@@ -613,6 +614,25 @@ Until it is built, no token the listener reads names one.
 - **What decides the rest** is `message:send`, as for any sender
   ([authz.md](./authz.md) §cowork's principal).
 
+## The issuer's endpoints
+
+**Unbuilt.** [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md) adds four endpoints, served only when a signing key is
+configured. With none, none is registered and nothing else changes.
+
+- **The issuer is one identity**, `GARAM_IDENTITY_ISSUER`, the API's
+  origin with its `/api` prefix, so the console's rewrite forwards all
+  three public paths and no new host exists.
+- **Discovery and the JWKS** are
+  `<issuer>/.well-known/openid-configuration` and
+  `<issuer>/oauth/jwks`, on the browser-facing listener and answered
+  without a credential.
+- **The token endpoint** is `<issuer>/oauth/token`, on the
+  browser-facing listener. The subject token is the whole credential
+  ([machine-identity.md](./machine-identity.md) §The issuer).
+- **Introspection** is `/oauth/introspect` on the machine listener,
+  admitting a first-party service by its `private_key_jwt` assertion
+  and answering for tokens of that service's audience alone.
+
 ## What a specification is authoritative for
 
 One specification per listener, and a third listener repeats that
@@ -947,3 +967,6 @@ document owes an update.
   — cowork acts in each organization as a principal the platform
   writes with it, proving one deployment key for a machine-listener
   token that posts to that organization's agents alone; unbuilt
+- [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
+  — the issuer's discovery, JWKS, token and introspection endpoints,
+  served only with a signing key; unbuilt

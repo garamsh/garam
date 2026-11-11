@@ -126,6 +126,12 @@ session.
   are live, decided in the statement that writes, as ADR-0030 bounds a
   login state.
 
+- **Exchange, unbuilt.** [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md) lets the CLI exchange this session's
+  access token for a JWT of at most 300 seconds bound to one service
+  ([machine-identity.md](./machine-identity.md) §The issuer). The
+  session itself is unchanged, and revoking it refuses the next
+  exchange.
+
 The `/device` page is the console's
 ([web-app.md](./web-app.md) §What it serves). No read answers a pending
 code's client name, so the page shows the code the person entered, to

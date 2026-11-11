@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -243,7 +244,7 @@ embedding:
 		return len(got) == 1 && got[0].Attempts == 1
 	})
 	adapter := h.container("adapter")
-	gateway := "http://127.0.0.1:8080/agents/" + agentGRN + "/messages/" + m1.ID
+	gateway := "http://127.0.0.1:8080/agents/" + url.PathEscape(agentGRN) + "/messages/" + m1.ID
 	s.eventually("the runtime holding the message", func() bool {
 		said, err := s.probeIn(adapter, "get", gateway)
 		return err == nil && strings.Contains(said, "pending")
@@ -303,11 +304,11 @@ embedding:
 	// follows once the generation stops.
 	adapter = h.container("adapter")
 	content := envelope(t, from.grn, body)
-	said, err := s.probeIn(adapter, "post", "http://127.0.0.1:8080/agents/"+agentGRN+"/messages",
+	said, err := s.probeIn(adapter, "post", "http://127.0.0.1:8080/agents/"+url.PathEscape(agentGRN)+"/messages",
 		mustJSON(t, map[string]string{"id": m1.ID, "content": content}))
 	require.NoError(t, err, s.scrub(said))
 	assert.Equal(t, "200", said, "the same id and content answers as the one completed source")
-	said, err = s.probeIn(adapter, "post", "http://127.0.0.1:8080/agents/"+agentGRN+"/messages",
+	said, err = s.probeIn(adapter, "post", "http://127.0.0.1:8080/agents/"+url.PathEscape(agentGRN)+"/messages",
 		mustJSON(t, map[string]string{"id": m1.ID, "content": content + " "}))
 	require.NoError(t, err, s.scrub(said))
 	assert.Equal(t, "409", said, "the control: the id is held, so other content is refused")

@@ -82,7 +82,7 @@ func agentName(t *testing.T, browser string, cookie *http.Cookie, g grn.GRN) str
 func TestAgentName_AManagedCreationNamesTheAgentAndARetryAsksForTheSameName(t *testing.T) {
 	s := newManagedStack(t)
 	ref := s.creationRef(t, s.member, "named-1")
-	path := "/operators/" + s.controller.String() + "/managed-agents"
+	path := "/operators/" + pathEscape(s.controller.String()) + "/managed-agents"
 	got := s.enrollment(t, s.hostedTLS, path, namedCreationBody("named-1", ref, "  sherlock  "))
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var m machinegen.ManagedAgent

@@ -301,7 +301,7 @@ func (h *directHost) activate(t *testing.T, requestID, epoch, generation string)
 		"requestId": requestID, "epoch": epoch, "generation": generation, "configRevision": "r1",
 	})
 	require.NoError(t, err)
-	req, err := http.NewRequest(http.MethodPost, "https://"+workload.ControlName+"/v1/agents/"+h.agent.String()+"/activations",
+	req, err := http.NewRequest(http.MethodPost, "https://"+workload.ControlName+"/v1/agents/"+pathEscape(h.agent.String())+"/activations",
 		bytes.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Garam-Contract-Version", workload.TokenExecutionContract)

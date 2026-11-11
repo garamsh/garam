@@ -137,7 +137,7 @@ func (s *executionStack) enrolled(t *testing.T, _ standaloneHost, got reply) sta
 	epoch, err := strconv.Atoi(e.Epoch)
 	require.NoError(t, err)
 	supervisor := s.supervisorToken(t, c.credential)
-	minted := s.send(t, tokenPresenting(t, supervisor), http.MethodPost, "/agents/"+c.agent.String()+"/tokens",
+	minted := s.send(t, tokenPresenting(t, supervisor), http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens",
 		operator.TokenContractVersion, "", `{}`)
 	require.Equal(t, http.StatusCreated, minted.status, minted.body)
 	var own machinegen.AgentToken

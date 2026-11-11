@@ -354,7 +354,7 @@ func TestTransitSigning_AClaimOpenBaoCannotSignSpendsNoAttempt(t *testing.T) {
 	require.NoError(t, closed.Close())
 	unreachable := s.listenerHolding(t, key.custodian(t, nowhere))
 
-	status, answer := machineSend(t, s.recipient, http.MethodPost, unreachable+"/agents/"+s.recipientGRN.String()+"/claims", "")
+	status, answer := machineSend(t, s.recipient, http.MethodPost, unreachable+"/agents/"+pathEscape(s.recipientGRN.String())+"/claims", "")
 	assert.GreaterOrEqual(t, status, http.StatusInternalServerError, string(answer))
 	var attempts int
 	require.NoError(t, s.pool.QueryRow(ctx, `SELECT attempts FROM messages WHERE id = $1`, posted.Id).Scan(&attempts))
@@ -369,7 +369,7 @@ func TestTransitSigning_AClaimOpenBaoCannotSignSpendsNoAttempt(t *testing.T) {
 // url.
 func claimOn(t *testing.T, s signingStack, url string) machinegen.Claim {
 	t.Helper()
-	status, answer := machineSend(t, s.recipient, http.MethodPost, url+"/agents/"+s.recipientGRN.String()+"/claims", "")
+	status, answer := machineSend(t, s.recipient, http.MethodPost, url+"/agents/"+pathEscape(s.recipientGRN.String())+"/claims", "")
 	require.Equal(t, http.StatusOK, status, string(answer))
 	var claimed machinegen.Claim
 	require.NoError(t, json.Unmarshal(answer, &claimed))

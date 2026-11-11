@@ -100,7 +100,7 @@ func (s *replacementStack) agentTokenAs(t *testing.T, token string, g grn.GRN, a
 	if audience != nil {
 		body = `{"audience":"` + audience.String() + `"}`
 	}
-	return s.v2(t, http.MethodPost, "/agents/"+g.String()+"/tokens", operator.TokenContractVersion, token, "", body)
+	return s.v2(t, http.MethodPost, "/agents/"+pathEscape(g.String())+"/tokens", operator.TokenContractVersion, token, "", body)
 }
 
 // activationAt is an execution-fence.v2 activation body at epoch.
@@ -159,10 +159,10 @@ func TestAgentReplacement_MovesTheAgentFromTheExpectedEpochAndItStartsOnTheDesti
 	require.NoError(t, json.Unmarshal([]byte(got.body), &shown))
 	assert.Equal(t, 2, shown.Epoch)
 
-	got = s.v2(t, http.MethodPost, "/agents/"+g.String()+"/activations", agent.TokenExecutionContractVersion,
+	got = s.v2(t, http.MethodPost, "/agents/"+pathEscape(g.String())+"/activations", agent.TokenExecutionContractVersion,
 		s.hostedToken, "", activationAt("first", "2", generation(1), nil, nil, shown.Token))
 	assert.Equal(t, http.StatusForbidden, got.status, "a first activation needs its reference: %s", got.body)
-	got = s.v2(t, http.MethodPost, "/agents/"+g.String()+"/activations", agent.TokenExecutionContractVersion,
+	got = s.v2(t, http.MethodPost, "/agents/"+pathEscape(g.String())+"/activations", agent.TokenExecutionContractVersion,
 		s.hostedToken, "", activationAt("first", "2", generation(1), nil, &ref, shown.Token))
 	assert.Equal(t, http.StatusCreated, got.status, "the replacement's reference starts it: %s", got.body)
 }
@@ -176,7 +176,7 @@ func TestAgentReplacement_TheEarlierLineagesTokensAreRefusedFromTheNextRequest(t
 	g, created := s.admitted(t, "enrol-1")
 	own := s.agentToken(t, g, nil)
 	shown := s.agentToken(t, g, &s.hosted)
-	path := "/agents/" + g.String()
+	path := "/agents/" + pathEscape(g.String())
 	got := s.v2(t, http.MethodPost, path+"/activations", agent.TokenExecutionContractVersion, s.hostedToken, "",
 		tokenActivationBody("first", generation(1), nil, &created, shown.Token))
 	require.Equal(t, http.StatusCreated, got.status, got.body)

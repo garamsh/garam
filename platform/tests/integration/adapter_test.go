@@ -50,7 +50,7 @@ func newRuntimeDouble(t *testing.T, agentGRN grn.GRN, epoch int, generation agen
 		"started_at": time.Now().UTC().Format(time.RFC3339),
 	}}
 	mux := http.NewServeMux()
-	served := "/agents/" + agentGRN.String()
+	served := "/agents/" + pathEscape(agentGRN.String())
 	mux.HandleFunc("GET "+served+"/status", func(w http.ResponseWriter, _ *http.Request) {
 		r.mu.Lock()
 		defer r.mu.Unlock()

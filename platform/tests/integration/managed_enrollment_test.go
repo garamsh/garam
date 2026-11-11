@@ -68,7 +68,7 @@ func creationBody(requestID, ref string) string {
 
 func (s *executionStack) createManaged(t *testing.T, client *http.Client, controller grn.GRN, requestID, ref string) reply {
 	t.Helper()
-	return s.enrollment(t, client, "/operators/"+controller.String()+"/managed-agents", creationBody(requestID, ref))
+	return s.enrollment(t, client, "/operators/"+pathEscape(controller.String())+"/managed-agents", creationBody(requestID, ref))
 }
 
 // managed is a created agent and the reference that created it.
@@ -111,7 +111,7 @@ func managedActivationBody(requestID string, g agent.Generation, replaces, ref *
 
 func (s *executionStack) activateManaged(t *testing.T, m grn.GRN, requestID string, g agent.Generation, replaces, ref *string, forwarded string) reply {
 	t.Helper()
-	return s.lifecycle(t, s.hostedTLS, "/agents/"+m.String()+"/activations", "", managedActivationBody(requestID, g, replaces, ref, forwarded))
+	return s.lifecycle(t, s.hostedTLS, "/agents/"+pathEscape(m.String())+"/activations", "", managedActivationBody(requestID, g, replaces, ref, forwarded))
 }
 
 func activationOf(t *testing.T, got reply) machinegen.Activation {
@@ -127,7 +127,7 @@ func (s *executionStack) standingOf(t *testing.T, g grn.GRN, forwarded string) m
 	t.Helper()
 	raw, err := json.Marshal(map[string]any{"token": forwarded})
 	require.NoError(t, err)
-	got := s.lifecycle(t, s.hostedTLS, "/agents/"+g.String()+"/execution/introspection", "", string(raw))
+	got := s.lifecycle(t, s.hostedTLS, "/agents/"+pathEscape(g.String())+"/execution/introspection", "", string(raw))
 	require.Equal(t, http.StatusOK, got.status, got.body)
 	var in machinegen.ExecutionIntrospection
 	require.NoError(t, json.Unmarshal([]byte(got.body), &in))
@@ -138,7 +138,7 @@ func (s *executionStack) standingOf(t *testing.T, g grn.GRN, forwarded string) m
 // carrying token: a runtime report and a turn event.
 func (s *executionStack) collaborate(t *testing.T, client *http.Client, g grn.GRN, token string) map[string]int {
 	t.Helper()
-	path := "/agents/" + g.String()
+	path := "/agents/" + pathEscape(g.String())
 	return map[string]int{
 		"runtime-state": s.send(t, client, http.MethodPost, path+"/runtime-state", "", bearer(token), reportBody(1, "connected")).status,
 		"turn-event":    s.send(t, client, http.MethodPost, path+"/turn-events", "", bearer(token), `{"kind":"turn.start","body":"b"}`).status,
@@ -227,7 +227,7 @@ func (s *executionStack) failing(t *testing.T, table string) func() {
 func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 	s := newManagedStack(t)
 	ref := s.creationRef(t, s.member, "create-1")
-	path := "/operators/" + s.controller.String() + "/managed-agents"
+	path := "/operators/" + pathEscape(s.controller.String()) + "/managed-agents"
 
 	got := s.send(t, s.hostedTLS, http.MethodPost, path, "", "", creationBody("create-1", ref))
 	assert.Equal(t, http.StatusBadRequest, got.status, "no contract version: %s", got.body)
@@ -323,7 +323,7 @@ func TestManagedEnrollment_AManagedAgentIsFencedFromBirth(t *testing.T) {
 
 	raw, err := json.Marshal(map[string]any{"token": s.forwarded})
 	require.NoError(t, err)
-	got := s.lifecycle(t, s.hostedTLS, "/agents/"+m.agent.String()+"/execution/introspection", "", string(raw))
+	got := s.lifecycle(t, s.hostedTLS, "/agents/"+pathEscape(m.agent.String())+"/execution/introspection", "", string(raw))
 	assert.Equal(t, http.StatusUnprocessableEntity, got.status, "another agent's token proves nothing of it: %s", got.body)
 	got = s.activateManaged(t, m.agent, "a-other", generationOf(1), nil, &m.ref, s.forwarded)
 	assert.Equal(t, http.StatusUnprocessableEntity, got.status, "nor activates it: %s", got.body)
@@ -391,7 +391,7 @@ func TestManagedEnrollment_TheFirstActivationNeedsTheCreationOrAConfigureReferen
 	got = s.activateManaged(t, a.agent, "a-reuse", generationOf(3), &second.ActivationId, &a.ref, aLeaf)
 	assert.Equal(t, http.StatusForbidden, got.status, "the creation reference launches no later generation: %s", got.body)
 
-	got = s.lifecycle(t, s.hostedTLS, "/agents/"+a.agent.String()+"/activations/"+second.ActivationId+"/deactivation", "", "")
+	got = s.lifecycle(t, s.hostedTLS, "/agents/"+pathEscape(a.agent.String())+"/activations/"+second.ActivationId+"/deactivation", "", "")
 	require.Equal(t, http.StatusOK, got.status, got.body)
 	got = s.activateManaged(t, a.agent, "a-after-deactivation", generationOf(3), &second.ActivationId, nil, aLeaf)
 	assert.Equal(t, http.StatusCreated, got.status, "deactivation keeps the history a restart rests on: %s", got.body)
@@ -424,7 +424,7 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 		require.Equal(t, http.StatusCreated, status, minted)
 		ref := authorityOf(t, minted).OperationRef
 		creation := creationBody(requestID, ref)
-		got := s.enrollment(t, s.hostedTLS, "/operators/"+s.controller.String()+"/managed-agents", creation)
+		got := s.enrollment(t, s.hostedTLS, "/operators/"+pathEscape(s.controller.String())+"/managed-agents", creation)
 		require.Equal(t, http.StatusCreated, got.status, got.body)
 		var m machinegen.ManagedAgent
 		require.NoError(t, json.Unmarshal([]byte(got.body), &m))
@@ -434,7 +434,7 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 	}
 	retried := func(creation string) int {
 		t.Helper()
-		return s.enrollment(t, s.hostedTLS, "/operators/"+s.controller.String()+"/managed-agents", creation).status
+		return s.enrollment(t, s.hostedTLS, "/operators/"+pathEscape(s.controller.String())+"/managed-agents", creation).status
 	}
 
 	t.Run("an expired grant", func(t *testing.T) {

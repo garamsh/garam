@@ -30,6 +30,12 @@ func formerGRN(org, typ, id string) string {
 	return strings.Join([]string{"grn", org, "default", typ, id}, ":")
 }
 
+// pathEscape escapes a GRN for use as one URL path segment: its '/'
+// would otherwise split the route.
+func pathEscape(g string) string {
+	return url.PathEscape(g)
+}
+
 // isolatedSchema creates an empty schema of its own and returns a
 // database URL that resolves to it. golang-migrate keeps
 // schema_migrations in the connection's current schema, so a migration

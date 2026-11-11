@@ -63,7 +63,7 @@ func agentCall(t *testing.T, client *http.Client, method, url, token string, exe
 // answers it.
 func mintedFor(t *testing.T, client *http.Client, url, operatorToken string, agentGRN grn.GRN) machinegen.AgentToken {
 	t.Helper()
-	status, body := tokenCall(t, client, http.MethodPost, url+"/agents/"+agentGRN.String()+"/tokens",
+	status, body := tokenCall(t, client, http.MethodPost, url+"/agents/"+pathEscape(agentGRN.String())+"/tokens",
 		operatorToken, operator.TokenContractVersion, `{}`)
 	require.Equal(t, http.StatusCreated, status, body)
 	var token machinegen.AgentToken
@@ -100,13 +100,13 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 	assert.True(t, agent.WellFormedAccessToken(minted.Token))
 	assert.NotEmpty(t, minted.ServerRootPem)
 
-	claims := url + "/agents/" + bot.String() + "/claims"
+	claims := url + "/agents/" + pathEscape(bot.String()) + "/claims"
 	status := agentCall(t, client, http.MethodPost, claims, minted.Token, execution)
 	require.Equal(t, http.StatusNoContent, status, "the agent claims on its own queue with its token")
 
 	// The second operator holds nothing yet, so it mints nothing.
 	secondToken := exchangeKey(t, client, url, second, secondKey, nil)
-	status, _ = tokenCall(t, client, http.MethodPost, url+"/agents/"+bot.String()+"/tokens",
+	status, _ = tokenCall(t, client, http.MethodPost, url+"/agents/"+pathEscape(bot.String())+"/tokens",
 		secondToken, operator.TokenContractVersion, `{}`)
 	assert.Equal(t, http.StatusForbidden, status, "an operator mints only for an agent it holds")
 
@@ -126,7 +126,7 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 	status = agentCall(t, client, http.MethodPost, claims, again.Token, execution)
 	assert.Equal(t, http.StatusNoContent, status, "the new assignee's token claims")
 
-	status, _ = tokenCall(t, client, http.MethodPost, url+"/agents/"+bot.String()+"/tokens",
+	status, _ = tokenCall(t, client, http.MethodPost, url+"/agents/"+pathEscape(bot.String())+"/tokens",
 		firstToken, operator.TokenContractVersion, `{}`)
 	assert.Equal(t, http.StatusForbidden, status, "the operator the reassignment replaced mints nothing")
 
@@ -163,7 +163,7 @@ func TestAgentToken_AnAgentHoldsItsNewestFiveTokens(t *testing.T) {
 
 	assert.Equal(t, agent.LiveAccessTokensPerAudience, countRows(t, p,
 		`SELECT count(*) FROM agent_tokens WHERE agent_grn = $1`, bot.String()))
-	claims := url + "/agents/" + bot.String() + "/claims"
+	claims := url + "/agents/" + pathEscape(bot.String()) + "/claims"
 	status := agentCall(t, client, http.MethodPost, claims, tokens[0], execution)
 	assert.Equal(t, http.StatusUnauthorized, status, "the oldest is past the bound")
 	status = agentCall(t, client, http.MethodPost, claims, tokens[6], execution)
@@ -189,8 +189,8 @@ func TestAgentToken_AnAudienceTokenReachesNoGaramRoute(t *testing.T) {
 	operatorToken := exchangeKey(t, client, url, controller, key, nil)
 	f, _, execution := lineaged(t, p, controller)
 	bot := f.agent
-	mint := url + "/agents/" + bot.String() + "/tokens"
-	claims := url + "/agents/" + bot.String() + "/claims"
+	mint := url + "/agents/" + pathEscape(bot.String()) + "/tokens"
+	claims := url + "/agents/" + pathEscape(bot.String()) + "/claims"
 
 	status, body := tokenCall(t, client, http.MethodPost, mint, operatorToken, operator.TokenContractVersion,
 		`{"audience":"`+hosted.String()+`"}`)
@@ -228,7 +228,7 @@ func TestAgentToken_AnAgentHoldsTenTokensAcrossItsAudiences(t *testing.T) {
 	operatorToken := exchangeKey(t, client, url, controller, key, nil)
 	f, _, _ := lineaged(t, p, controller)
 	bot := f.agent
-	mint := url + "/agents/" + bot.String() + "/tokens"
+	mint := url + "/agents/" + pathEscape(bot.String()) + "/tokens"
 
 	for _, body := range []string{`{}`, `{"audience":"` + first.String() + `"}`, `{"audience":"` + second.String() + `"}`} {
 		for range agent.LiveAccessTokensPerAudience {

@@ -66,7 +66,8 @@ func TestMigration000069_RestatesTheChecksInTheGrammarAndRewritesNoRow(t *testin
 
 	var trigger int
 	require.NoError(t, sp.QueryRow(ctx, `SELECT count(*) FROM pg_trigger
-		WHERE tgname = 'policy_attachments_same_org'`).Scan(&trigger))
+		WHERE tgname = 'policy_attachments_same_org'
+		AND tgrelid = 'policy_attachments'::regclass`).Scan(&trigger))
 	assert.Equal(t, 1, trigger, "the attachment trigger stays")
 
 	require.NoError(t, m.Migrate(68), "000069 down runs over the rows it left")

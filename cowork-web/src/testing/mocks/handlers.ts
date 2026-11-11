@@ -10,6 +10,6 @@ export const API_URL = "http://localhost:8080";
  */
 export const handlers = [
   http.get(`${API_URL}/me`, () =>
-    HttpResponse.json({ grn: "grn:root:default:user:ada", nickname: "Ada" }),
+    HttpResponse.json({ grn: "grn:root/iam/user/ada", nickname: "Ada" }),
   ),
 ];

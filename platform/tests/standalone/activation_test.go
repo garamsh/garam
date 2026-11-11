@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -86,7 +87,7 @@ func TestStandalone_ReplaysALostActivationAndRefusesAnEndedOne(t *testing.T) {
 		if r.Intent.Replaces != "" {
 			replaces = r.Intent.Replaces
 		}
-		status, raw := h.call(h.supervisorClient(), "/agents/"+agentGRN+"/activations", "execution-fence.v2", "",
+		status, raw := h.call(h.supervisorClient(), "/agents/"+url.PathEscape(agentGRN)+"/activations", "execution-fence.v2", "",
 			map[string]any{
 				"requestId": r.Intent.RequestID, "epoch": epoch, "generation": r.Intent.Generation,
 				"replacesActivationId": replaces, "operationRef": nil, "token": forwarded,

@@ -27,7 +27,7 @@ vi.mock("@/features/orgs/actions", () => ({
 }));
 
 const ENDPOINT = "https://control.example.test/garam";
-const HOSTED = "grn:acme:default:operator:hosted";
+const HOSTED = "grn:acme/iam/operator/hosted";
 
 function page() {
   return NewAgentPage({ params: Promise.resolve({ org: "acme" }) });
@@ -56,7 +56,7 @@ function hostedWith(operations: string[]) {
         controllers: [fieldOne.grn],
         operations,
         expiresAt: "2099-01-01T00:00:00Z",
-        grantedBy: "grn:root:default:user:alice",
+        grantedBy: "grn:root/iam/user/alice",
         grantedAt: "2026-10-01T00:00:00Z",
       }),
     ),

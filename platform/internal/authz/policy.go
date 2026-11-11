@@ -97,7 +97,7 @@ func NewPolicyGRN(orgGRN grn.GRN) (grn.GRN, error) {
 	if _, err := rand.Read(b); err != nil {
 		return grn.GRN{}, errorx.Wrap(err, "policy id")
 	}
-	return grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceTypePolicy, hex.EncodeToString(b)), nil
+	return grn.New(orgGRN.Identifier, ServiceTypePolicy, hex.EncodeToString(b)), nil
 }
 
 // ParsePolicyDocument parses and validates a policy document (ADR-0002)

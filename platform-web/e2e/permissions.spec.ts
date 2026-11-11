@@ -4,6 +4,7 @@ import { z } from "zod";
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, holdSession, test } from "./fixtures";
 import { seedMember, type Seed } from "./seed";
+import { formatGrn, slugFromGrn } from "../src/lib/grn";
 
 /** Opens a tab of the page and waits until it is the one shown. */
 async function openTab(page: Page, name: string | RegExp): Promise<void> {
@@ -29,14 +30,14 @@ function denyDocument(orgSlug: string, actions: string[]): string {
   return JSON.stringify({
     Version: "2026-07-25",
     Statement: [
-      { Effect: "Deny", Action: actions, Resource: [`grn:${orgSlug}:*`] },
+      { Effect: "Deny", Action: actions, Resource: [`grn:${orgSlug}/*`] },
     ],
   });
 }
 
 /** The seeded team's GRN: its identifier is `engineering`. */
 function teamGrn(seed: Seed): string {
-  return `grn:${seed.orgSlug}:default:group:engineering`;
+  return formatGrn(seed.orgSlug, "iam", "group", "engineering");
 }
 
 /**
@@ -54,7 +55,7 @@ async function createPolicy(
   });
   expect(created.status()).toBe(201);
   const { grn } = z.object({ grn: z.string() }).parse(await created.json());
-  return grn.split(":")[4];
+  return slugFromGrn(grn);
 }
 
 /** Attaches a policy to the seeded team and activates it, through the API. */
@@ -163,7 +164,7 @@ test.describe("permissions", () => {
           {
             Effect: "Deny",
             Action: ["project:update"],
-            Resource: [`grn:${signedIn.orgSlug}:default:project:*`],
+            Resource: [`grn:${signedIn.orgSlug}/iam/project/*`],
           },
         ],
       }),
@@ -276,7 +277,7 @@ test.describe("permissions", () => {
           {
             Effect: "Allow",
             Action: ["org:read"],
-            Resource: [`grn:${signedIn.orgSlug}:*`],
+            Resource: [`grn:${signedIn.orgSlug}/*`],
           },
         ],
       }),

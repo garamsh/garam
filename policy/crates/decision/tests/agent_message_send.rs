@@ -38,7 +38,7 @@ fn an_organization_narrows_sending_with_a_forbid() {
     let guardrail = policy(
         "keep-bot-quiet",
         r#"forbid (
-            principal == Agent::"grn:acme:default:agent:bot",
+            principal == Agent::"grn:acme/iam/agent/bot",
             action == Action::"message:send",
             resource
         );"#,

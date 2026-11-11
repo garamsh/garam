@@ -21,7 +21,7 @@ function issued(token: string, role = "member") {
   return HttpResponse.json(
     {
       token,
-      orgGrn: "grn:root:default:org:acme",
+      orgGrn: "grn:root/iam/org/acme",
       role,
       expiresAt: "2026-01-09T03:04:05Z",
     },

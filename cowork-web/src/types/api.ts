@@ -450,7 +450,7 @@ export interface components {
             id: string;
             /**
              * @description The name the platform's permission checks know the page by.
-             * @example grn:acme:default:cowork-page:k3v7q2m9x4ab
+             * @example grn:acme/cowork/page/k3v7q2m9x4ab
              */
             grn: string;
             org: string;
@@ -483,7 +483,7 @@ export interface components {
             id: string;
             /**
              * @description The name the platform's permission checks know the channel by.
-             * @example grn:acme:default:cowork-channel:k3v7q2m9x4ab
+             * @example grn:acme/cowork/channel/k3v7q2m9x4ab
              */
             grn: string;
             org: string;
@@ -554,7 +554,7 @@ export interface components {
             id: string;
             /**
              * @description The name the platform's permission checks know the task by.
-             * @example grn:acme:default:cowork-task:k3v7q2m9x4ab
+             * @example grn:acme/cowork/task/k3v7q2m9x4ab
              */
             grn: string;
             org: string;
@@ -615,7 +615,7 @@ export interface components {
         ArtifactKind: "html" | "document";
         Artifact: {
             id: string;
-            /** @example grn:acme:default:cowork-artifact:k3v7q2m9x4ab */
+            /** @example grn:acme/cowork/artifact/k3v7q2m9x4ab */
             grn: string;
             org: string;
             kind: components["schemas"]["ArtifactKind"];

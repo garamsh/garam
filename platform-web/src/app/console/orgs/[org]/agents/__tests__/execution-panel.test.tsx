@@ -17,21 +17,21 @@ vi.mock("@/features/orgs/actions", () => ({
 }));
 
 const ENDPOINT = "https://control.example.test/garam";
-const AGENT = "grn:acme:default:agent:0123456789abcdef";
+const AGENT = "grn:acme/iam/agent/0123456789abcdef";
 const GENERATION = "0123456789abcdef0123456789abcdef";
 
 const hosted: DelegatedOperator = {
-  grn: "grn:acme:default:operator:hosted",
+  grn: "grn:acme/iam/operator/hosted",
   identifier: "hosted",
   name: "Hosted",
   endpoint: ENDPOINT,
   delegation: {
     grantId: "grant-1",
-    operatorGrn: "grn:acme:default:operator:hosted",
+    operatorGrn: "grn:acme/iam/operator/hosted",
     controllers: [],
     operations: ["agent:execution-read"],
     expiresAt: "2099-01-01T00:00:00Z",
-    grantedBy: "grn:acme:default:user:alice",
+    grantedBy: "grn:acme/iam/user/alice",
     grantedAt: "2026-10-01T00:00:00Z",
   },
   problem: null,

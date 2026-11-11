@@ -278,7 +278,7 @@ func verifyAsTheRuntime(entry map[string]string, caPEM []byte, signature string)
 // the test agent, under key and named kid, with ADR-0101's claims.
 func garamSignature(t *testing.T, key *ecdsa.PrivateKey, kid string) string {
 	t.Helper()
-	sender, err := grn.Parse("grn:acme:default:agent:9f8e7d6c5b4a3021")
+	sender, err := grn.Parse("grn:acme/iam/agent/9f8e7d6c5b4a3021")
 	require.NoError(t, err)
 	m, err := message.New(testAgent, sender, "key-1", "hello")
 	require.NoError(t, err)

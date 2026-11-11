@@ -4,6 +4,7 @@ import { z } from "zod";
 import { axeViolations, expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
 import type { Seed } from "./seed";
+import { slugFromGrn } from "../src/lib/grn";
 
 /** A policy in the test's organization, for the routes that read one. */
 async function seedPolicy(request: APIRequestContext, signedIn: Seed) {
@@ -16,7 +17,7 @@ async function seedPolicy(request: APIRequestContext, signedIn: Seed) {
           {
             Effect: "Deny",
             Action: ["project:delete"],
-            Resource: [`grn:${signedIn.orgSlug}:*`],
+            Resource: [`grn:${signedIn.orgSlug}/*`],
           },
         ],
       },
@@ -26,7 +27,7 @@ async function seedPolicy(request: APIRequestContext, signedIn: Seed) {
   const { grn } = z.object({ grn: z.string() }).parse(await created.json());
   return {
     base: `/console/orgs/${signedIn.orgSlug}/permissions`,
-    policy: grn.split(":")[4],
+    policy: slugFromGrn(grn),
     person: signedIn.userSlug,
   };
 }

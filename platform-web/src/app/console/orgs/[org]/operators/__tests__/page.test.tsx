@@ -56,7 +56,7 @@ describe("operators list", () => {
       http.get(`${API_URL}/orgs/acme/operators`, () =>
         HttpResponse.json([
           fieldOne,
-          { ...fieldOne, grn: "grn:acme:default:operator:field-two" },
+          { ...fieldOne, grn: "grn:acme/iam/operator/field-two" },
         ]),
       ),
     );
@@ -89,7 +89,7 @@ describe("operators list", () => {
   // would pair by, and only the record joins it (#1636).
   const control = {
     ...fieldOne,
-    grn: "grn:acme:default:operator:field-one-control",
+    grn: "grn:acme/iam/operator/field-one-control",
     name: "Field one control",
     controlEndpoint: "https://control.example.com",
   };
@@ -157,7 +157,7 @@ describe("operators list", () => {
   it("offers only cluster managers without a control service to connect one to, choosing the one the address names", async () => {
     const fieldTwo = {
       ...fieldOne,
-      grn: "grn:acme:default:operator:field-two",
+      grn: "grn:acme/iam/operator/field-two",
       name: "Field cluster two",
     };
     listing(fieldOne, { ...control, manager: fieldOne.grn }, fieldTwo);

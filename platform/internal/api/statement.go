@@ -136,5 +136,5 @@ func projectRoleStatements(p *org.Project, member bool) []Statement {
 // GRNs are root-owned, so the org identifier is the organization
 // segment of every resource beneath it.
 func orgScope(orgGRN grn.GRN) string {
-	return "grn:" + orgGRN.Identifier + ":*"
+	return grn.OrgPattern(orgGRN.Identifier)
 }

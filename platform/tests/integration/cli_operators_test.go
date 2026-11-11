@@ -46,7 +46,7 @@ func signedInCLI(t *testing.T) string {
 	users := userpg.New(p)
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
-	ada := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "ada")
+	ada := grn.New(grn.RootOwner, user.ServiceType, "ada")
 	require.NoError(t, users.Create(ctx, user.New(ada, "ada")))
 	require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, ada, org.RoleOwner)))
 	token, err := authn.NewToken()
@@ -88,14 +88,14 @@ func TestCLIOperators_RegisterIssueAKeyListRevokeAndDelete(t *testing.T) {
 	require.NoError(t, err)
 	var op apigen.Operator
 	require.NoError(t, json.Unmarshal([]byte(out), &op))
-	assert.Equal(t, "grn:acme:default:operator:hosted", op.Grn)
+	assert.Equal(t, "grn:acme/iam/operator/hosted", op.Grn)
 
 	out, err = runCLI(t, io.Discard, "operators", "update", "hosted", "--description", "runs the agents")
 	require.NoError(t, err)
 	assert.Regexp(t, `(?m)^DESCRIPTION\s+runs the agents$`, out, "one answer is shown as field and value")
 	out, err = runCLI(t, io.Discard, "operators", "list")
 	require.NoError(t, err)
-	assert.Regexp(t, `(?m)^grn:acme:default:operator:hosted\s+Hosted\s+runs the agents`, out)
+	assert.Regexp(t, `(?m)^grn:acme/iam/operator/hosted\s+Hosted\s+runs the agents`, out)
 
 	keyFile := filepath.Join(t.TempDir(), "hosted-key.json")
 	stderr := &lockedBuffer{}

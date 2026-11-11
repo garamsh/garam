@@ -46,7 +46,7 @@ func (p *policy) Allowed(_ context.Context, _ platform.Caller, org string, check
 	return out, nil
 }
 
-var ada = platform.Caller{GRN: grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada")}
+var ada = platform.Caller{GRN: grn.New(grn.RootOwner, "user", "ada")}
 
 func newService(t *testing.T) (page.Service, *policy) {
 	t.Helper()
@@ -80,7 +80,7 @@ func TestCreate_PlacesAPageAfterItsSiblings(t *testing.T) {
 
 	assert.Equal(t, []int{0, 1, 0}, []int{a.Position, b.Position, child.Position})
 	assert.Equal(t, ada.GRN, a.CreatedBy)
-	assert.Equal(t, "grn:acme:default:cowork-page:"+a.ID, a.GRN().String())
+	assert.Equal(t, grn.New("acme", "page", a.ID).String(), a.GRN().String())
 	assert.NoError(t, a.GRN().Validate())
 }
 

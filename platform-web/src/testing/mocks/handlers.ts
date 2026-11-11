@@ -1,6 +1,7 @@
 import { HttpResponse, http, type JsonBodyType } from "msw";
 import { z } from "zod";
 
+import { parseGrn } from "@/lib/grn";
 import type { PermissionExplanation } from "@/lib/permission-explanation";
 import type { components } from "@garam/platform-sdk-ts/api";
 import type { Session, User } from "@/features/auth";
@@ -31,20 +32,20 @@ export const API_URL = "http://localhost:8080";
 
 /** The signed-in user every test runs as. */
 export const alice: User = {
-  grn: "grn:root:default:user:alice",
+  grn: "grn:root/iam/user/alice",
   nickname: "Alice",
 };
 
 /** The one organization the fixtures place Alice in. */
 export const acme: Organization = {
-  grn: "grn:root:default:org:acme",
+  grn: "grn:root/iam/org/acme",
   name: "Acme",
   createdAt: "2026-01-02T03:04:05Z",
 };
 
 /** The single group Acme holds. */
 export const engineering: Group = {
-  grn: "grn:acme:default:group:eng",
+  grn: "grn:acme/iam/group/eng",
   name: "Engineering",
   orgGrn: acme.grn,
   roles: ["member"],
@@ -52,7 +53,7 @@ export const engineering: Group = {
 
 /** The single project Acme owns. */
 export const frontend: Project = {
-  grn: "grn:acme:default:project:frontend",
+  grn: "grn:acme/iam/project/frontend",
   name: "Frontend",
   orgGrn: acme.grn,
   roles: [],
@@ -63,7 +64,7 @@ export const frontend: Project = {
  * identifier, so a page showing one where the other belongs is caught.
  */
 export const fieldOne: Operator = {
-  grn: "grn:acme:default:operator:field-one",
+  grn: "grn:acme/iam/operator/field-one",
   name: "Field cluster one",
   description: "Runs the batch agents.",
   orgGrn: acme.grn,
@@ -85,7 +86,7 @@ export const fieldOneKey: OperatorKey = {
 
 /** The single agent Acme holds. */
 export const reportedAgent: Agent = {
-  grn: "grn:acme:default:agent:1c3d5e7f90a2b4c6",
+  grn: "grn:acme/iam/agent/1c3d5e7f90a2b4c6",
   orgGrn: acme.grn,
   provisioningState: "failed",
   runtimeState: "disconnected",
@@ -100,7 +101,7 @@ export const reportedAgent: Agent = {
  * otherwise read.
  */
 export const globexConsent: OrgConsent = {
-  orgGrn: "grn:root:default:org:globex",
+  orgGrn: "grn:root/iam/org/globex",
   grantedHere: true,
   grantedThere: true,
   stands: true,
@@ -132,7 +133,7 @@ export const engineeringMembers: GroupMember[] = [
  * first of its two versions.
  */
 export const denyDeletes: Policy = {
-  grn: "grn:acme:default:policy:d1e2f3a4b5c6d7e8",
+  grn: "grn:acme/iam/policy/d1e2f3a4b5c6d7e8",
   orgGrn: acme.grn,
   name: "Deny project deletion",
   status: "active",
@@ -151,7 +152,7 @@ export const denyDeletesVersions: PolicyVersion[] = [1, 2].map((version) => ({
       {
         Effect: "Deny",
         Action: version === 1 ? ["project:delete"] : ["project:*"],
-        Resource: ["grn:acme:*"],
+        Resource: ["grn:acme/*"],
       },
     ],
   },
@@ -170,7 +171,7 @@ export const denyDeletesAttachments: PolicyAttachment[] = [
 
 /** An active policy of Acme with no attachment: it reaches everyone. */
 export const baselineRead: Policy = {
-  grn: "grn:acme:default:policy:0a1b2c3d4e5f6071",
+  grn: "grn:acme/iam/policy/0a1b2c3d4e5f6071",
   orgGrn: acme.grn,
   name: "Baseline read",
   status: "active",
@@ -212,8 +213,8 @@ export const pendingApproval: AgentEnrollmentListing = {
   id: "0f8c2a5e-9d1b-4c3a-8e7f-6a5b4c3d2e1f",
   placement: "standalone",
   state: "pending",
-  agentGrn: "grn:acme:default:agent:5a6b7c8d9e0f1a2b",
-  supervisorGrn: "grn:acme:default:supervisor:build-08",
+  agentGrn: "grn:acme/iam/agent/5a6b7c8d9e0f1a2b",
+  supervisorGrn: "grn:acme/iam/supervisor/build-08",
   hostName: "build-08",
   approvedBy: alice.grn,
   createdAt: "2026-10-18T09:00:00Z",
@@ -222,8 +223,8 @@ export const pendingApproval: AgentEnrollmentListing = {
 
 /** The supervisor of a standalone host running Scout, at epoch 2. */
 export const buildHost: AgentSupervisor = {
-  grn: "grn:acme:default:supervisor:build-07",
-  agentGrn: "grn:acme:default:agent:9f2ac1b40d8e7a35",
+  grn: "grn:acme/iam/supervisor/build-07",
+  agentGrn: "grn:acme/iam/agent/9f2ac1b40d8e7a35",
   enrollmentId: "1a2b3c4d-5e6f-4a1b-8c2d-3e4f5a6b7c8d",
   placement: "standalone",
   state: "active",
@@ -419,7 +420,8 @@ function searchFixtures(org: string, q: string, limit: number): OrgSearch {
         org === "acme"
           ? objects
               .filter(
-                ({ grn, name }) => holds(name) || holds(grn.split(":").at(-1)),
+                ({ grn, name }) =>
+                  holds(name) || holds(parseGrn(grn)?.identifier),
               )
               .map(({ grn, name }) => ({ grn, name }))
           : [];

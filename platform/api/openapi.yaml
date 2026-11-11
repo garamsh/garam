@@ -3115,7 +3115,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:garam:default:user:117421510527410544321
+          example: grn:garam/iam/user/117421510527410544321
         nickname:
           type: string
     PasswordLogin:
@@ -3194,7 +3194,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:garam:default:org:acme
+          example: grn:garam/iam/org/acme
         name:
           type: string
         createdAt:
@@ -3219,7 +3219,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:group:eng
+          example: grn:acme/iam/group/eng
         name:
           type: string
         orgGrn:
@@ -3249,7 +3249,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:project:frontend
+          example: grn:acme/iam/project/frontend
         name:
           type: string
         orgGrn:
@@ -3280,7 +3280,7 @@ components:
       properties:
         memberGrn:
           type: string
-          example: grn:acme:default:user:alice
+          example: grn:acme/iam/user/alice
     Role:
       type: string
       enum: [owner, admin, member]
@@ -3612,7 +3612,7 @@ components:
       properties:
         orgGrn:
           type: string
-          example: grn:root:default:org:globex
+          example: grn:root/iam/org/globex
         grantedHere:
           type: boolean
           description: The path organization's half stands.
@@ -3720,7 +3720,7 @@ components:
           - Sid: AllowOrgRead
             Effect: Allow
             Action: [org:read]
-            Resource: ['grn:acme:*']
+            Resource: ['grn:acme/*']
     PolicyStatus:
       type: string
       description: >-
@@ -3733,7 +3733,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:policy:9f2ac1b40d8e7a35
+          example: grn:acme/iam/policy/9f2ac1b40d8e7a35
         orgGrn:
           type: string
         name:
@@ -3800,7 +3800,7 @@ components:
           type: string
         subjectGrn:
           type: string
-          example: grn:acme:default:group:eng
+          example: grn:acme/iam/group/eng
         createdAt:
           type: string
           format: date-time
@@ -3811,7 +3811,7 @@ components:
       properties:
         subjectGrn:
           type: string
-          example: grn:acme:default:group:eng
+          example: grn:acme/iam/group/eng
     AgentProvisioningState:
       type: string
       description: >-
@@ -4004,7 +4004,7 @@ components:
       properties:
         assigneeGrn:
           type: string
-          example: grn:acme:default:operator:field-one
+          example: grn:acme/iam/operator/field-one
         epoch:
           type: integer
           minimum: 1
@@ -4031,7 +4031,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:agent:9f2ac1b40d8e7a35
+          example: grn:acme/iam/agent/9f2ac1b40d8e7a35
         name:
           type: string
           description: >-
@@ -4110,7 +4110,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:operator:field-one
+          example: grn:acme/iam/operator/field-one
         name:
           type: string
           description: >-
@@ -4151,7 +4151,7 @@ components:
             `setOperatorManager` on a record naming none, and it names
             the identity rather than a live record: it stays after that
             manager's registration is deleted.
-          example: grn:acme:default:operator:field-one
+          example: grn:acme/iam/operator/field-one
     OperatorKeyIssuance:
       type: object
       description: How an issued key stands beside the keys the operator holds (ADR-0102).
@@ -4187,7 +4187,7 @@ components:
         clientId:
           type: string
           description: The operator's canonical GRN, which its assertions name as `iss`, `sub` and `client_id`.
-          example: grn:acme:default:operator:controller
+          example: grn:acme/iam/operator/controller
         tokenUrl:
           type: string
           format: uri
@@ -4272,7 +4272,7 @@ components:
             (ADR-0124). It is how a control service joins a manager
             registered on its own, as every pair made before
             `controlService` was. Not given with `controlService`.
-          example: grn:acme:default:operator:field-one
+          example: grn:acme/iam/operator/field-one
         controlService:
           type: object
           description: >-
@@ -4355,7 +4355,7 @@ components:
           description: >-
             The GRN of the cluster manager this operator is the control
             service of: another operator of this organization.
-          example: grn:acme:default:operator:field-one
+          example: grn:acme/iam/operator/field-one
     ControlEndpointWrite:
       type: object
       required: [url]

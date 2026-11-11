@@ -6,6 +6,10 @@ use cedar_policy::{EntityUid, Policy};
 use crate::error::Cause;
 use crate::role_link::RoleLink;
 
+/// What an organization's GRN begins with: organizations are owned by
+/// `root` (ADR-0142).
+const ORG_PREFIX: &str = "grn:root/iam/org/";
+
 /// An organization's GRN, the key its policies are held under.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OrgGrn(String);
@@ -21,16 +25,36 @@ impl OrgGrn {
         &self.0
     }
 
-    /// The organization's name, the last segment of its GRN and the
-    /// organization segment of every GRN beneath it (ADR-0001).
+    /// The organization's name: what follows `grn:root/iam/org/` in its
+    /// GRN, and the organization every GRN beneath it names first
+    /// (ADR-0142).
     pub fn slug(&self) -> &str {
-        self.0.rsplit(':').next().unwrap_or_default()
+        self.0.strip_prefix(ORG_PREFIX).unwrap_or_default()
     }
 
-    /// Whether this GRN is one this organization owns. A policy GRN's
-    /// other segments are the caller's.
+    /// What follows `grn:<org>/` in a GRN this organization owns, or
+    /// `None` for a GRN it does not. An organization with no name owns
+    /// nothing.
+    fn beneath<'a>(&self, grn: &'a str) -> Option<&'a str> {
+        let slug = self.slug();
+        let rest = grn.strip_prefix("grn:")?.strip_prefix(slug)?;
+        rest.strip_prefix('/').filter(|_| !slug.is_empty())
+    }
+
+    /// Whether this GRN is one this organization owns: it names the
+    /// organization first. The rest is the caller's.
     pub fn owns_grn(&self, grn: &str) -> bool {
-        grn.split(':').nth(1) == Some(self.slug())
+        self.beneath(grn).is_some()
+    }
+
+    /// Whether the GRN is a policy of this organization, the one form a
+    /// policy takes: `grn:<org>/iam/policy/<id>`, whose id is one
+    /// segment. This also keeps a policy's id from the system tier's:
+    /// those hold no segments.
+    pub fn owns_policy(&self, grn: &str) -> bool {
+        self.beneath(grn)
+            .and_then(|rest| rest.strip_prefix("iam/policy/"))
+            .is_some_and(|id| !id.is_empty() && !id.contains(['/', '#']))
     }
 
     /// Whether the entity is this organization's. A user is nobody's:

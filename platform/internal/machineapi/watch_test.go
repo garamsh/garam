@@ -3,6 +3,7 @@ package machineapi_test
 import (
 	"context"
 	"net/http"
+	neturl "net/url"
 	"sync"
 	"testing"
 	"time"
@@ -113,7 +114,7 @@ func TestServer_ForwardsTheTurnEventsOfTheAgentItAuthenticatedAs(t *testing.T) {
 	relay := &announced{}
 	url, client := listener(t, &agentService{}, nil, &messageService{}, consenting(), watching(t, relay), &memberGroups{}, &engine{}, caller)
 
-	status, body := send(t, client, http.MethodPost, url+"/agents/"+caller.String()+"/turn-events",
+	status, body := send(t, client, http.MethodPost, url+"/agents/"+neturl.PathEscape(caller.String())+"/turn-events",
 		`{"kind":"turn.output","body":"first line\nsecond line"}`)
 	require.Equal(t, http.StatusAccepted, status, body)
 	assert.Empty(t, body, "an answer that reports something about a stream nothing kept")
@@ -125,7 +126,7 @@ func TestServer_ForwardsTheTurnEventsOfTheAgentItAuthenticatedAs(t *testing.T) {
 
 	// The events of another agent are not this caller's to forward, and
 	// nothing about them is announced.
-	status, body = send(t, client, http.MethodPost, url+"/agents/"+other.String()+"/turn-events",
+	status, body = send(t, client, http.MethodPost, url+"/agents/"+neturl.PathEscape(other.String())+"/turn-events",
 		`{"kind":"turn.output","body":"not mine to say"}`)
 	assert.Equal(t, http.StatusForbidden, status, body)
 	assert.JSONEq(t, `{"kind":"permission_denied","message":"`+watch.ErrNotAgent.Error()+`"}`, body)
@@ -133,12 +134,12 @@ func TestServer_ForwardsTheTurnEventsOfTheAgentItAuthenticatedAs(t *testing.T) {
 
 	// An event that cannot be framed is refused where it arrives rather
 	// than carried and dropped later.
-	status, body = send(t, client, http.MethodPost, url+"/agents/"+caller.String()+"/turn-events",
+	status, body = send(t, client, http.MethodPost, url+"/agents/"+neturl.PathEscape(caller.String())+"/turn-events",
 		`{"kind":"","body":"hello"}`)
 	assert.Equal(t, http.StatusBadRequest, status, body)
 	assert.Contains(t, body, `"kind":"invalid_argument"`)
 
-	status, body = send(t, client, http.MethodPost, url+"/agents/"+caller.String()+"/turn-events", `not json`)
+	status, body = send(t, client, http.MethodPost, url+"/agents/"+neturl.PathEscape(caller.String())+"/turn-events", `not json`)
 	assert.Equal(t, http.StatusBadRequest, status, body)
 	assert.Contains(t, body, `"kind":"invalid_argument"`)
 

@@ -105,7 +105,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
 	session := func(id string, role org.Role) *http.Cookie {
-		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+		g := grn.New(grn.RootOwner, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
 		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, role)))
 		token, err := authn.NewToken()
@@ -175,7 +175,7 @@ func (s *executionStack) agentToken(t *testing.T, g grn.GRN, audience *grn.GRN) 
 	if audience != nil {
 		body = `{"audience":"` + audience.String() + `"}`
 	}
-	got := s.send(t, s.controlTLS, http.MethodPost, "/agents/"+g.String()+"/tokens", operator.TokenContractVersion, "", body)
+	got := s.send(t, s.controlTLS, http.MethodPost, "/agents/"+pathEscape(g.String())+"/tokens", operator.TokenContractVersion, "", body)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var minted machinegen.AgentToken
 	require.NoError(t, json.Unmarshal([]byte(got.body), &minted))
@@ -296,7 +296,7 @@ func (s *executionStack) lifecycle(t *testing.T, client *http.Client, path, cred
 }
 
 func (s *executionStack) agentPath(suffix string) string {
-	return "/agents/" + s.agent.String() + suffix
+	return "/agents/" + pathEscape(s.agent.String()) + suffix
 }
 
 func activationBody(t *testing.T, requestID string, epoch int, generation agent.Generation, replaces *string, forwarded string) string {
@@ -771,7 +771,7 @@ func TestExecutionFence_EachContractFamilyAnswersItsOwnVersion(t *testing.T) {
 	}{
 		{s.agentPath("/execution/introspection"), string(introspection), agent.TokenExecutionContractVersion, operator.TokenAuthorityContractVersion, http.StatusOK},
 		{"/operation-authorities/introspection", `{"authority":"absent"}`, operator.TokenAuthorityContractVersion, agent.TokenExecutionContractVersion, http.StatusNotFound},
-		{"/operators/" + s.controller.String() + "/managed-agents", `{"requestId":"r-1","operationRef":"absent"}`,
+		{"/operators/" + pathEscape(s.controller.String()) + "/managed-agents", `{"requestId":"r-1","operationRef":"absent"}`,
 			agent.TokenEnrollmentContractVersion, agent.TokenExecutionContractVersion, http.StatusNotFound},
 	}
 	for _, f := range families {

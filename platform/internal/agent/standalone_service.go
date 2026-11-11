@@ -209,5 +209,5 @@ func newSupervisorGRN(orgGRN grn.GRN) (grn.GRN, error) {
 	if _, err := rand.Read(b); err != nil {
 		return grn.GRN{}, errorx.Wrap(err, "supervisor id")
 	}
-	return grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceTypeSupervisor, hex.EncodeToString(b)), nil
+	return grn.New(orgGRN.Identifier, ServiceTypeSupervisor, hex.EncodeToString(b)), nil
 }

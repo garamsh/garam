@@ -40,7 +40,7 @@ func TestOrgDeletionPreview_CountsRowsNotAPage(t *testing.T) {
 
 	const groups = 5
 	for i := range groups {
-		g := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeGroup,
+		g := grn.New(grn.RootOwner, org.ServiceTypeGroup,
 			"preview-paging-g"+string(rune('a'+i)))
 		require.NoError(t, orgs.CreateGroup(ctx, org.NewGroup(g, "g", orgGRN)))
 	}
@@ -84,13 +84,13 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 		_ = orgs.DeleteOrg(ctx, otherGRN)
 	})
 
-	ownerGRN := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "preview-owner")
+	ownerGRN := grn.New(grn.RootOwner, user.ServiceType, "preview-owner")
 	require.NoError(t, users.Create(ctx, user.New(ownerGRN, "owner")))
 	require.NoError(t, orgs.AddMember(ctx, org.NewMembership(orgGRN, ownerGRN, org.RoleOwner)))
 
-	groupGRN := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeGroup, "preview-cascade-g")
+	groupGRN := grn.New(grn.RootOwner, org.ServiceTypeGroup, "preview-cascade-g")
 	require.NoError(t, orgs.CreateGroup(ctx, org.NewGroup(groupGRN, "g", orgGRN)))
-	projectGRN := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeProject, "preview-cascade-p")
+	projectGRN := grn.New(grn.RootOwner, org.ServiceTypeProject, "preview-cascade-p")
 	require.NoError(t, orgs.CreateProject(ctx, org.NewProject(projectGRN, "p", orgGRN)))
 	require.NoError(t, orgs.CreateInvitation(ctx, org.NewInvitation(
 		"preview-cascade-token", orgGRN, org.RoleMember, ownerGRN, time.Now().Add(time.Hour))))

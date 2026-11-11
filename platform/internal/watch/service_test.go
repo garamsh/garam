@@ -20,7 +20,7 @@ import (
 const lease = 2 * time.Second
 
 func agentGRN(id string) grn.GRN {
-	return grn.New("acme", grn.DefaultProject, "agent", id)
+	return grn.New("acme", "agent", id)
 }
 
 // leases is a watch.Store in memory: one entry per open watch and none

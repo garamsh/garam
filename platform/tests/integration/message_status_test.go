@@ -73,7 +73,7 @@ func TestMessageStatus_ASenderReadsItsOwnMessageThroughEveryStateItReaches(t *te
 	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	_, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
-	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+	queue := url + "/agents/" + pathEscape(recipientGRN.String()) + "/claims"
 
 	status, body := machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-1"))
 	require.Equal(t, http.StatusCreated, status, string(body))

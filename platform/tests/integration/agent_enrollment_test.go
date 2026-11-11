@@ -122,7 +122,7 @@ func TestAgentEnrollment_AdmitsAManagedAgentFencedAndActivatesItThroughTheShared
 
 	own := s.agentToken(t, g, nil)
 	shown := s.agentToken(t, g, &s.hosted)
-	got = s.v2(t, http.MethodPost, "/agents/"+g.String()+"/activations", agent.TokenExecutionContractVersion,
+	got = s.v2(t, http.MethodPost, "/agents/"+pathEscape(g.String())+"/activations", agent.TokenExecutionContractVersion,
 		s.hostedToken, "", tokenActivationBody("first", generation(1), nil, &ref, shown.Token))
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	assert.Equal(t, http.StatusNoContent, s.claimWith(t, g, own.Token, activationOf(t, got).Token),

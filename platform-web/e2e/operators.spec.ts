@@ -20,6 +20,7 @@ import {
   seedKeyExchange,
   seedMember,
 } from "./seed";
+import { formatGrn } from "../src/lib/grn";
 
 /** Where the seeded hosted operator's control service is registered. */
 const ENDPOINT = "https://control.example.test/garam";
@@ -438,7 +439,12 @@ test.describe("operators", () => {
       body: {
         operators: [
           {
-            grn: `grn:${signedIn.orgSlug}:default:operator:${signedIn.operatorIdentifier}`,
+            grn: formatGrn(
+              signedIn.orgSlug,
+              "iam",
+              "operator",
+              signedIn.operatorIdentifier,
+            ),
             images: [
               {
                 name: "manager",
@@ -502,8 +508,8 @@ test.describe("operators", () => {
       expect(recorded).toMatchObject({
         operation: "operator:read",
         actorGrn: signedIn.userGrn,
-        audienceGrn: `grn:${signedIn.orgSlug}:default:operator:hosted`,
-        targetGrn: `grn:root:default:org:${signedIn.orgSlug}`,
+        audienceGrn: formatGrn(signedIn.orgSlug, "iam", "operator", "hosted"),
+        targetGrn: `grn:root/iam/org/${signedIn.orgSlug}`,
         requestTarget: read.path,
       });
     }

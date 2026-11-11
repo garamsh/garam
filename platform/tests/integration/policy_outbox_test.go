@@ -17,13 +17,13 @@ import (
 )
 
 const (
-	outboxOrg      = "grn:root:default:org:acme"
-	outboxUser     = "grn:acme:default:user:lee"
-	outboxAgent    = "grn:acme:default:agent:bot"
-	outboxOperator = "grn:acme:default:operator:op1"
-	outboxTeam     = "grn:acme:default:group:eng"
-	outboxTeam2    = "grn:acme:default:group:ops"
-	outboxProject  = "grn:acme:default:project:web"
+	outboxOrg      = "grn:root/iam/org/acme"
+	outboxUser     = "grn:acme/iam/user/lee"
+	outboxAgent    = "grn:acme/iam/agent/bot"
+	outboxOperator = "grn:acme/iam/operator/op1"
+	outboxTeam     = "grn:acme/iam/group/eng"
+	outboxTeam2    = "grn:acme/iam/group/ops"
+	outboxProject  = "grn:acme/iam/project/web"
 )
 
 // seedOutboxOrg writes one organization holding a user, an agent, an
@@ -119,7 +119,7 @@ func seedWithFeedOn(t *testing.T, p *pgxpool.Pool) {
 }
 
 func TestPolicyOutbox_EachChangeMarksTheEntitiesItReaches(t *testing.T) {
-	const org2 = "grn:root:default:org:globex"
+	const org2 = "grn:root/iam/org/globex"
 	tests := []struct {
 		name string
 		sql  string
@@ -127,16 +127,16 @@ func TestPolicyOutbox_EachChangeMarksTheEntitiesItReaches(t *testing.T) {
 	}{
 		{"an organization is added", `INSERT INTO orgs (grn, name, created_at, updated_at) VALUES ('` + org2 + `', 'globex', now(), now())`,
 			[]string{"Org " + org2, "OrgMembers " + org2}},
-		{"a team is added", `INSERT INTO groups (grn, org_grn, name, created_at, updated_at) VALUES ('grn:acme:default:group:new', '` + outboxOrg + `', 'new', now(), now())`,
-			[]string{"Team grn:acme:default:group:new"}},
-		{"a project is added", `INSERT INTO projects (grn, org_grn, name, created_at, updated_at) VALUES ('grn:acme:default:project:new', '` + outboxOrg + `', 'new', now(), now())`,
-			[]string{"Project grn:acme:default:project:new"}},
-		{"a user is added", `INSERT INTO users (grn, nickname, created_at, updated_at) VALUES ('grn:acme:default:user:new', 'new', now(), now())`,
-			[]string{"User grn:acme:default:user:new"}},
-		{"an agent is added", `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at) VALUES ('grn:acme:default:agent:new', '` + outboxOrg + `', 'ready', 'unknown', now(), now())`,
-			[]string{"Agent grn:acme:default:agent:new"}},
-		{"an operator is added", `INSERT INTO operators (grn, org_grn, registered_by, created_at, name) VALUES ('grn:acme:default:operator:new', '` + outboxOrg + `', 'x', now(), 'new')`,
-			[]string{"Operator grn:acme:default:operator:new"}},
+		{"a team is added", `INSERT INTO groups (grn, org_grn, name, created_at, updated_at) VALUES ('grn:acme/iam/group/new', '` + outboxOrg + `', 'new', now(), now())`,
+			[]string{"Team grn:acme/iam/group/new"}},
+		{"a project is added", `INSERT INTO projects (grn, org_grn, name, created_at, updated_at) VALUES ('grn:acme/iam/project/new', '` + outboxOrg + `', 'new', now(), now())`,
+			[]string{"Project grn:acme/iam/project/new"}},
+		{"a user is added", `INSERT INTO users (grn, nickname, created_at, updated_at) VALUES ('grn:acme/iam/user/new', 'new', now(), now())`,
+			[]string{"User grn:acme/iam/user/new"}},
+		{"an agent is added", `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at) VALUES ('grn:acme/iam/agent/new', '` + outboxOrg + `', 'ready', 'unknown', now(), now())`,
+			[]string{"Agent grn:acme/iam/agent/new"}},
+		{"an operator is added", `INSERT INTO operators (grn, org_grn, registered_by, created_at, name) VALUES ('grn:acme/iam/operator/new', '` + outboxOrg + `', 'x', now(), 'new')`,
+			[]string{"Operator grn:acme/iam/operator/new"}},
 		{"a user joins a team", `INSERT INTO group_members (group_grn, member_grn) VALUES ('` + outboxTeam2 + `', '` + outboxUser + `')`,
 			[]string{"User " + outboxUser}},
 		{"an agent joins a team", `INSERT INTO group_members (group_grn, member_grn) VALUES ('` + outboxTeam2 + `', '` + outboxAgent + `')`,
@@ -301,7 +301,7 @@ func TestPolicyFeedStop_TurnsTheFeedOffAndEmptiesTheOutbox(t *testing.T) {
 	assert.Equal(t, int64(len(outboxEntities)), removed)
 	assert.False(t, feedEnabled(t, p))
 	assert.Empty(t, outboxMarks(t, p))
-	execSQL(t, p, `INSERT INTO users (grn, nickname, created_at, updated_at) VALUES ('grn:acme:default:user:late', 'late', now(), now())`)
+	execSQL(t, p, `INSERT INTO users (grn, nickname, created_at, updated_at) VALUES ('grn:acme/iam/user/late', 'late', now(), now())`)
 	assert.Empty(t, outboxMarks(t, p), "a write after stop marks nothing")
 }
 
@@ -390,7 +390,7 @@ func TestPolicyEntityState_ReturnsWhatTheOwnersTablesSay(t *testing.T) {
 		// rows behind, which must not read as a user.
 		require.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM group_members WHERE member_grn = $1`, outboxUser))
 		assert.Nil(t, readEntityState(t, p, "User", outboxUser))
-		assert.Nil(t, readEntityState(t, p, "Team", "grn:acme:default:group:absent"))
+		assert.Nil(t, readEntityState(t, p, "Team", "grn:acme/iam/group/absent"))
 	})
 
 	t.Run("a change to a membership reaches the next read", func(t *testing.T) {

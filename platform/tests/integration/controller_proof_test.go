@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptrace"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -212,7 +211,7 @@ func (s *proofStack) prove(t *testing.T, client *http.Client, controller grn.GRN
 	var got proof
 	trace := &httptrace.ClientTrace{GotConn: func(info httptrace.GotConnInfo) { got.reused = info.Reused }}
 	req, err := http.NewRequestWithContext(httptrace.WithClientTrace(context.Background(), trace), http.MethodPost,
-		s.url+"/operators/"+url.PathEscape(controller.String())+"/introspection", bytes.NewReader(raw))
+		s.url+"/operators/"+pathEscape(controller.String())+"/introspection", bytes.NewReader(raw))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(operator.ContractVersionHeader, operator.TokenAuthorityContractVersion)

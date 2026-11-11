@@ -430,7 +430,7 @@ func TestPolicyDelivery_ABatchHoldsAtMostTheLimit(t *testing.T) {
 	d := newDeliverer(t, p, fake, key)
 	seedWithFeedOn(t, p)
 	execSQL(t, p, `INSERT INTO policy_outbox (entity_type, entity_id)
-		SELECT 'Team', 'grn:acme:default:group:g' || n FROM generate_series(1, 7) n`)
+		SELECT 'Team', 'grn:acme/iam/group/g' || n FROM generate_series(1, 7) n`)
 
 	result, err := d.store.Deliver(context.Background(), 3, d.sender)
 	require.NoError(t, err)

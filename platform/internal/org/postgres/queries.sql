@@ -53,12 +53,13 @@ WHERE org_grn = sqlc.arg('org_grn')
 ORDER BY grn
 LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 
--- SearchGroups answers the org's groups whose name or identifier (the
--- GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+-- SearchGroups answers the org's groups whose name matches pattern or
+-- whose GRN matches id_pattern, case aside, ordered by GRN. id_pattern
+-- is a LIKE pattern over the whole GRN that lib/grn builds.
 -- name: SearchGroups :many
 SELECT * FROM groups
 WHERE org_grn = sqlc.arg('org_grn')
-  AND (name ILIKE sqlc.arg('pattern') OR split_part(grn, ':', 5) ILIKE sqlc.arg('pattern'))
+  AND (name ILIKE sqlc.arg('pattern') OR grn ILIKE sqlc.arg('id_pattern'))
 ORDER BY grn;
 
 -- name: UpdateGroup :one
@@ -115,7 +116,7 @@ LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 -- name: SearchProjects :many
 SELECT * FROM projects
 WHERE org_grn = sqlc.arg('org_grn')
-  AND (name ILIKE sqlc.arg('pattern') OR split_part(grn, ':', 5) ILIKE sqlc.arg('pattern'))
+  AND (name ILIKE sqlc.arg('pattern') OR grn ILIKE sqlc.arg('id_pattern'))
 ORDER BY grn;
 
 -- name: UpdateProject :one

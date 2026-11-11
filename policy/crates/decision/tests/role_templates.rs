@@ -192,7 +192,7 @@ fn no_role_reaches_agent_watch_and_a_grant_written_for_it_does() {
     let watch = policy(
         "lee-watches",
         r#"permit (
-            principal == User::"grn:acme:default:user:lee",
+            principal == User::"grn:acme/iam/user/lee",
             action == Action::"agent:watch",
             resource
         );"#,

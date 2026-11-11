@@ -10,7 +10,7 @@ const ID = "1c3d5e7f90a2b4c6";
 
 function member(overrides: Partial<TeamMember>): TeamMember {
   return {
-    grn: `grn:acme:default:agent:${ID}`,
+    grn: `grn:acme/iam/agent/${ID}`,
     identifier: ID,
     kind: "agent",
     label: null,

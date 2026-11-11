@@ -56,7 +56,7 @@ func TestCreatePolicy_AnswersTheEnginesReasonAndPointer(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyCreate})
 	_, p := policyFixture(slug)
 
@@ -88,7 +88,7 @@ func TestInvitationRefusals_SayWhichRefusalTheyWere(t *testing.T) {
 	invitee := f.sessionCookieFor(t, "invitee-sub", "Invitee")
 	invitedOrg(t, f, "used-tok", time.Now().UTC().Add(time.Hour))
 	require.Equal(t, http.StatusOK, f.do(t, "POST", "/invitations/used-tok/accept", "", invitee).Code)
-	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	creator := grn.New("root", user.ServiceType, "owner-sub")
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t),
 		org.NewInvitation("old-tok", orgGRNOf("acme-robotics"), org.RoleMember, creator, time.Now().UTC().Add(-time.Minute))))
 

@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/cowork/internal/platform"
 	platformhttp "github.com/garamsh/garam/cowork/internal/platform/http"
 	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // fakePlatform answers `me` for the session "ada" and the bearer
@@ -41,7 +42,7 @@ func (f *fakePlatform) ServeHTTP(w nethttp.ResponseWriter, r *nethttp.Request) {
 	}
 	switch r.URL.Path {
 	case "/me":
-		_ = json.NewEncoder(w).Encode(map[string]string{"grn": "grn:root:default:user:" + who, "nickname": who})
+		_ = json.NewEncoder(w).Encode(map[string]string{"grn": grn.New(grn.RootOwner, "user", who).String(), "nickname": who})
 	case "/orgs/acme/permission-checks":
 		var body struct {
 			Checks []map[string]any `json:"checks"`
@@ -62,7 +63,7 @@ func (f *fakePlatform) ServeHTTP(w nethttp.ResponseWriter, r *nethttp.Request) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"results": results})
 	case "/orgs":
-		_ = json.NewEncoder(w).Encode([]map[string]string{{"grn": "grn:root:default:org:acme", "name": "Acme"}})
+		_ = json.NewEncoder(w).Encode([]map[string]string{{"grn": "grn:root/iam/org/acme", "name": "Acme"}})
 	case "/orgs/globex/permission-checks":
 		w.WriteHeader(nethttp.StatusForbidden)
 	default:
@@ -91,7 +92,7 @@ func TestIdentify_PresentsTheCallersCredential(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			caller, err := c.Identify(context.Background(), cred)
 			require.NoError(t, err)
-			assert.Equal(t, "grn:root:default:user:ada", caller.GRN.String())
+			assert.Equal(t, "grn:root/iam/user/ada", caller.GRN.String())
 			assert.Equal(t, cred, caller.Credential)
 		})
 	}

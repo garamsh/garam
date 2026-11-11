@@ -29,16 +29,16 @@ use tonic::{Code, Request};
 
 type Named = (&'static str, &'static str);
 
-const ACME: &str = "grn:root:default:org:acme";
+const ACME: &str = "grn:root/iam/org/acme";
 const ORG: Named = ("Org", ACME);
 const MEMBERS: Named = ("OrgMembers", ACME);
-const ENG: Named = ("Team", "grn:acme:default:group:eng");
-const LEE: Named = ("User", "grn:acme:default:user:lee");
+const ENG: Named = ("Team", "grn:acme/iam/group/eng");
+const LEE: Named = ("User", "grn:acme/iam/user/lee");
 /// A member, in eng, which holds a role on the organization.
-const DUO: Named = ("User", "grn:acme:default:user:duo");
-const MIA: Named = ("User", "grn:globex:default:user:mia");
-const BOT: Named = ("Agent", "grn:acme:default:agent:bot");
-const PEER: Named = ("Agent", "grn:acme:default:agent:peer");
+const DUO: Named = ("User", "grn:acme/iam/user/duo");
+const MIA: Named = ("User", "grn:globex/iam/user/mia");
+const BOT: Named = ("Agent", "grn:acme/iam/agent/bot");
+const PEER: Named = ("Agent", "grn:acme/iam/agent/peer");
 
 static MIGRATIONS: Migrator = sqlx::migrate!("../../migrations");
 
@@ -85,7 +85,7 @@ async fn seed(pool: &PgPool) {
         .unwrap();
 
     let org = OrgGrn::new(ACME);
-    let grn = "grn:acme:default:policy:lee-member";
+    let grn = "grn:acme/iam/policy/lee-member";
     let store = PolicyStore::new(pool.clone());
     let held_by = |principal: Named| {
         Body::role_link(
@@ -98,7 +98,7 @@ async fn seed(pool: &PgPool) {
         )
         .unwrap()
     };
-    for (grn, principal) in [(grn, LEE), ("grn:acme:default:policy:eng-member", ENG)] {
+    for (grn, principal) in [(grn, LEE), ("grn:acme/iam/policy/eng-member", ENG)] {
         let policy = NewPolicy {
             grn,
             org: &org,
@@ -187,7 +187,7 @@ async fn evaluate_decides_from_the_services_own_stores(pool: PgPool) {
         .into_inner();
     assert!(allowed.decision, "{allowed:?}");
     let reasons = allowed.context.unwrap().reasons;
-    assert_eq!(reasons[0].policy_id, "grn:acme:default:policy:lee-member");
+    assert_eq!(reasons[0].policy_id, "grn:acme/iam/policy/lee-member");
 
     let outside = client
         .evaluate(authenticated(question(MIA, "agent:read", BOT)))
@@ -406,7 +406,7 @@ async fn mia_may_read(client: &mut PolicyServiceClient<Channel>) -> bool {
 async fn grant_mia_the_member_role(pool: &PgPool) {
     let engine = Engine::load().unwrap();
     let org = OrgGrn::new(ACME);
-    let grn = "grn:acme:default:policy:mia-member";
+    let grn = "grn:acme/iam/policy/mia-member";
     let store = PolicyStore::new(pool.clone());
     let body = Body::role_link(
         &engine,
@@ -509,7 +509,7 @@ async fn a_type_of_another_service_writes_nothing_through_the_shipped_graph(pool
     grant_mia_the_member_role(&pool).await;
     let mut client = client(pool).await;
 
-    let foreign = wire_upsert(("Channel", "grn:acme:default:channel:one"), 10, &[ORG]);
+    let foreign = wire_upsert(("Channel", "grn:acme/cowork/channel/one"), 10, &[ORG]);
     let batch = vec![wire_upsert(MIA, 10, &[MEMBERS]), foreign];
     let refused = client
         .apply_entity_changes(authenticated(ApplyEntityChangesRequest { changes: batch }))

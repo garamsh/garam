@@ -216,7 +216,7 @@ test.describe("teams", () => {
     // outlive whoever it named.
     const added = await page.request.post(
       `/api/orgs/${signedIn.orgSlug}/groups/engineering/members`,
-      { data: { memberGrn: "grn:root:default:user:departed" } },
+      { data: { memberGrn: "grn:root/iam/user/departed" } },
     );
     expect(added.status()).toBe(204);
 

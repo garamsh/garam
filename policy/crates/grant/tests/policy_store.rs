@@ -9,9 +9,9 @@ use decision::{Engine, OrgGrn, OrgPolicies, PolicySource, Role, RoleLink, RoleSc
 use grant::{Body, Error, NewPolicy, PolicyStore};
 use sqlx::PgPool;
 
-const ACME: &str = "grn:root:default:org:acme";
-const GLOBEX: &str = "grn:root:default:org:globex";
-const GRANT: &str = "grn:acme:default:policy:lee-member";
+const ACME: &str = "grn:root/iam/org/acme";
+const GLOBEX: &str = "grn:root/iam/org/globex";
+const GRANT: &str = "grn:acme/iam/policy/lee-member";
 
 fn uid(entity_type: &str, id: &str) -> EntityUid {
     EntityUid::from_type_name_and_id(
@@ -26,7 +26,7 @@ fn role(role: Role) -> Body {
         &OrgGrn::new(ACME),
         role,
         RoleScope::Organization,
-        uid("User", "grn:acme:default:user:lee"),
+        uid("User", "grn:acme/iam/user/lee"),
         uid("Org", ACME),
     )
     .unwrap()
@@ -38,7 +38,7 @@ fn draft(body: Body, org: &OrgGrn) -> NewPolicy<'_> {
         org,
         name: "lee",
         body,
-        created_by: "grn:acme:default:user:kim",
+        created_by: "grn:acme/iam/user/kim",
     }
 }
 
@@ -73,7 +73,7 @@ async fn a_policy_is_read_and_written_only_by_its_own_organization(pool: PgPool)
     let store = PolicyStore::new(pool);
     let org = OrgGrn::new(ACME);
     let other = OrgGrn::new(GLOBEX);
-    let kim = "grn:acme:default:user:kim";
+    let kim = "grn:acme/iam/user/kim";
     store.create(draft(role(Role::Member), &org)).await.unwrap();
     store.activate(&org, GRANT).await.unwrap();
 
@@ -105,11 +105,11 @@ async fn a_policy_is_created_only_under_its_own_organizations_grn(pool: PgPool) 
     };
 
     for grn in [
-        "grn:globex:default:policy:squatted",
+        "grn:globex/iam/policy/squatted",
         "tenant-isolation",
         "role-org-owner",
-        "grn:acme:default:group:eng",
-        "grn:acme:default:policy:",
+        "grn:acme/iam/group/eng",
+        "grn:acme/iam/policy/",
     ] {
         let refused = store.create(named(grn)).await;
         assert!(
@@ -175,7 +175,7 @@ async fn appending_a_version_leaves_the_default_where_it_is(pool: PgPool) {
     store.activate(&org, GRANT).await.unwrap();
 
     let version = store
-        .append_version(&org, GRANT, &role(Role::Admin), "grn:acme:default:user:kim")
+        .append_version(&org, GRANT, &role(Role::Admin), "grn:acme/iam/user/kim")
         .await
         .unwrap();
 
@@ -191,7 +191,7 @@ async fn the_default_moves_to_any_stored_version_and_no_other(pool: PgPool) {
     let org = OrgGrn::new(ACME);
     store.create(draft(role(Role::Member), &org)).await.unwrap();
     store.activate(&org, GRANT).await.unwrap();
-    let kim = "grn:acme:default:user:kim";
+    let kim = "grn:acme/iam/user/kim";
     store
         .append_version(&org, GRANT, &role(Role::Admin), kim)
         .await
@@ -228,7 +228,7 @@ async fn a_stored_version_cannot_be_rewritten_or_removed(pool: PgPool) {
 
     let versions = store.versions(&org, GRANT).await.unwrap();
     assert_eq!(versions.len(), 1);
-    assert_eq!(versions[0].created_by, "grn:acme:default:user:kim");
+    assert_eq!(versions[0].created_by, "grn:acme/iam/user/kim");
 }
 
 #[sqlx::test(migrations = "../../migrations")]

@@ -130,7 +130,7 @@ func TestCLI_WorksInAWorkspaceAsItsSession(t *testing.T) {
 
 	out, code := garam(t, "", "whoami", "-o", "json")
 	require.Equal(t, 0, code, out)
-	assert.Contains(t, out, `"grn": "grn:root:default:user:ada"`)
+	assert.Contains(t, out, `"grn": "grn:root/iam/user/ada"`)
 
 	out, code = garam(t, "", "orgs", "list")
 	require.Equal(t, 0, code, out)

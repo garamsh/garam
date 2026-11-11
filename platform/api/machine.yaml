@@ -1818,7 +1818,9 @@ components:
       name: agent
       in: path
       required: true
-      description: Agent GRN, as its creation or admission answered it.
+      description: >-
+        Agent GRN, as its creation or admission answered it,
+        percent-encoded as one path segment, its `/` as `%2F`.
       x-go-name: AgentGrn
       schema:
         type: string
@@ -1837,7 +1839,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+          example: grn:acme/iam/agent/0a1b2c3d4e5f6071
     ProvisioningState:
       type: string
       description: >-
@@ -1918,7 +1920,7 @@ components:
         client_id:
           type: string
           description: The operator's canonical GRN, which the assertion's `iss` and `sub` equal.
-          example: grn:acme:default:operator:controller
+          example: grn:acme/iam/operator/controller
         client_assertion_type:
           type: string
           enum: ['urn:ietf:params:oauth:client-assertion-type:jwt-bearer']
@@ -1931,7 +1933,7 @@ components:
           description: >-
             The GRN of another operator of the caller's organization the
             token is to be shown to. Absent, the token is garam's.
-          example: grn:acme:default:operator:control
+          example: grn:acme/iam/operator/control
     OAuthToken:
       type: object
       description: RFC 6749's successful token response (ADR-0102).
@@ -1982,7 +1984,7 @@ components:
         grn:
           type: string
           description: The operator or the supervisor the token authenticates as.
-          example: grn:acme:default:operator:controller
+          example: grn:acme/iam/operator/controller
         audience:
           type: string
           description: The hosted operator the token is minted for, where one was asked for.
@@ -2002,7 +2004,7 @@ components:
         grn:
           type: string
           description: The agent the token authenticates as.
-          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+          example: grn:acme/iam/agent/0a1b2c3d4e5f6071
         epoch:
           type: integer
           description: The assignment epoch the token was minted at.
@@ -2026,7 +2028,7 @@ components:
           description: >-
             GRN of the identity the message is addressed to. It does
             not have to name an agent garam knows.
-          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+          example: grn:acme/iam/agent/0a1b2c3d4e5f6071
         idempotencyKey:
           type: string
           description: >-
@@ -2057,7 +2059,7 @@ components:
           description: >-
             GRN of the identity the message is addressed to. It does
             not have to name an agent garam knows.
-          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+          example: grn:acme/iam/agent/0a1b2c3d4e5f6071
         idempotencyKey:
           type: string
           description: >-
@@ -2091,10 +2093,10 @@ components:
             and not a GRN.
         recipient:
           type: string
-          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+          example: grn:acme/iam/agent/0a1b2c3d4e5f6071
         sender:
           type: string
-          example: grn:acme:default:agent:9f8e7d6c5b4a3021
+          example: grn:acme/iam/agent/9f8e7d6c5b4a3021
         idempotencyKey:
           type: string
         body:
@@ -2574,7 +2576,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+          example: grn:acme/iam/agent/0a1b2c3d4e5f6071
         placement:
           type: string
           enum: [managed]
@@ -2624,7 +2626,7 @@ components:
       properties:
         grn:
           type: string
-          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+          example: grn:acme/iam/agent/0a1b2c3d4e5f6071
         epoch:
           type: string
           description: The first assignment's epoch. Opaque.

@@ -50,7 +50,7 @@ func (r registered) Registered(_ context.Context, operator grn.GRN) error {
 
 // hosted is the one operator the registry below holds besides the
 // controller: the hosted control service a token may be shown to.
-var hosted = grn.New("acme", grn.DefaultProject, ServiceTypeOperator, "control")
+var hosted = grn.New("acme", ServiceTypeOperator, "control")
 
 func minting(t *testing.T, store *minted, lifetime time.Duration) (Service, time.Time) {
 	t.Helper()
@@ -64,8 +64,8 @@ func minting(t *testing.T, store *minted, lifetime time.Duration) (Service, time
 func TestService_MintAccessTokenAnswersATokenForTheAgentAtItsEpoch(t *testing.T) {
 	store := &minted{epoch: 4}
 	svc, at := minting(t, store, 0)
-	controller := grn.New("acme", grn.DefaultProject, ServiceTypeOperator, "controller")
-	bot := grn.New("acme", grn.DefaultProject, ServiceType, "0a1b2c3d4e5f6071")
+	controller := grn.New("acme", ServiceTypeOperator, "controller")
+	bot := grn.New("acme", ServiceType, "0a1b2c3d4e5f6071")
 
 	token, err := svc.MintAccessToken(context.Background(), controller, bot, nil)
 	require.NoError(t, err)
@@ -91,8 +91,8 @@ func TestService_MintAccessTokenAnswersATokenForTheAgentAtItsEpoch(t *testing.T)
 func TestService_MintAccessTokenRefusesWhatTheStoreIsNotAsked(t *testing.T) {
 	store := &minted{epoch: 1}
 	svc, _ := minting(t, store, 0)
-	controller := grn.New("acme", grn.DefaultProject, ServiceTypeOperator, "controller")
-	bot := grn.New("acme", grn.DefaultProject, ServiceType, "0a1b2c3d4e5f6071")
+	controller := grn.New("acme", ServiceTypeOperator, "controller")
+	bot := grn.New("acme", ServiceType, "0a1b2c3d4e5f6071")
 
 	_, err := svc.MintAccessToken(context.Background(), bot, bot, nil)
 	assert.ErrorIs(t, err, ErrNotAnOperator, "an agent mints no token")
@@ -101,9 +101,9 @@ func TestService_MintAccessTokenRefusesWhatTheStoreIsNotAsked(t *testing.T) {
 	require.NoError(t, err)
 	for name, audience := range map[string]grn.GRN{
 		"the caller":      controller,
-		"another org":     grn.New("globex", grn.DefaultProject, ServiceTypeOperator, "control"),
+		"another org":     grn.New("globex", ServiceTypeOperator, "control"),
 		"not an operator": bot,
-		"not registered":  grn.New("acme", grn.DefaultProject, ServiceTypeOperator, "x1"),
+		"not registered":  grn.New("acme", ServiceTypeOperator, "x1"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := svc.MintAccessToken(context.Background(), controller, bot, &audience)

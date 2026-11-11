@@ -126,7 +126,7 @@ describe("attachments page", () => {
       http.get(BASELINE, () =>
         HttpResponse.json([
           {
-            policyGrn: "grn:acme:default:policy:0a1b2c3d4e5f6071",
+            policyGrn: "grn:acme/iam/policy/0a1b2c3d4e5f6071",
             subjectGrn: reportedAgent.grn,
             createdAt: "2026-01-02T03:04:05Z",
           },
@@ -256,7 +256,7 @@ describe("attachments page", () => {
   it("asks at most the API's limit and leaves the policies past it to the server", async () => {
     const policies = Array.from({ length: 30 }, (_, index) => ({
       ...denyDeletes,
-      grn: `grn:acme:default:policy:p${index + 1}`,
+      grn: `grn:acme/iam/policy/p${index + 1}`,
       name: `Policy ${index + 1}`,
       status: "draft",
     }));

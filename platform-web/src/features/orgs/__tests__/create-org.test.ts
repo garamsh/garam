@@ -24,7 +24,7 @@ function form(entries: Record<string, string>): FormData {
 }
 
 const created = {
-  grn: "grn:root:default:org:acme2",
+  grn: "grn:root/iam/org/acme2",
   name: "Acme 2",
   createdAt: "2026-01-02T03:04:05Z",
 };

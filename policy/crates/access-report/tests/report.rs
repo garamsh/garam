@@ -14,27 +14,25 @@ use serde_json::{Value, json};
 
 type Named = (&'static str, &'static str);
 
-const ACME: &str = "grn:root:default:org:acme";
-const KIM: Named = ("User", "grn:acme:default:user:kim");
-const LEE: Named = ("User", "grn:acme:default:user:lee");
-const ENG: Named = ("Team", "grn:acme:default:group:eng");
-const OPS: Named = ("Team", "grn:acme:default:group:ops");
-const BOT: Named = ("Agent", "grn:acme:default:agent:bot");
-const WEB: Named = ("Project", "grn:acme:default:project:web");
-const RIVALS: Named = ("Team", "grn:globex:default:group:secret");
+const ACME: &str = "grn:root/iam/org/acme";
+const KIM: Named = ("User", "grn:acme/iam/user/kim");
+const LEE: Named = ("User", "grn:acme/iam/user/lee");
+const ENG: Named = ("Team", "grn:acme/iam/group/eng");
+const OPS: Named = ("Team", "grn:acme/iam/group/ops");
+const BOT: Named = ("Agent", "grn:acme/iam/agent/bot");
+const WEB: Named = ("Project", "grn:acme/iam/project/web");
+const RIVALS: Named = ("Team", "grn:globex/iam/group/secret");
 const ORG: Named = ("Org", ACME);
 const MEMBERS: Named = ("OrgMembers", ACME);
 
-const ON_ENG: &str =
-    r#"forbid (principal in Team::"grn:acme:default:group:eng", action, resource);"#;
+const ON_ENG: &str = r#"forbid (principal in Team::"grn:acme/iam/group/eng", action, resource);"#;
 const ON_OPS_IN_CONDITION: &str = r#"forbid (principal, action, resource is Agent)
-    when { principal in Team::"grn:acme:default:group:ops" };"#;
+    when { principal in Team::"grn:acme/iam/group/ops" };"#;
 const EVERYONE: &str = "forbid (principal, action, resource);";
 const ON_ENG_ALONE: &str =
-    r#"forbid (principal == Team::"grn:acme:default:group:eng", action, resource);"#;
+    r#"forbid (principal == Team::"grn:acme/iam/group/eng", action, resource);"#;
 const ON_AGENTS: &str = "forbid (principal is Agent, action, resource);";
-const ON_LEE: &str =
-    r#"forbid (principal == User::"grn:acme:default:user:lee", action, resource);"#;
+const ON_LEE: &str = r#"forbid (principal == User::"grn:acme/iam/user/lee", action, resource);"#;
 
 fn uid(named: Named) -> EntityUid {
     EntityUid::from_type_name_and_id(

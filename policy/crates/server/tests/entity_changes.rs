@@ -25,8 +25,8 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::{Channel, Server};
 use tonic::{Code, Request, Status};
 
-const ACME: &str = "grn:root:default:org:acme";
-const ENG: &str = "grn:acme:default:group:eng";
+const ACME: &str = "grn:root/iam/org/acme";
+const ENG: &str = "grn:acme/iam/group/eng";
 
 /// Counts what reaches the store, and writes it nowhere.
 #[derive(Clone)]
@@ -132,7 +132,7 @@ async fn a_type_the_caller_does_not_own_refuses_the_whole_batch() {
 
     for not_owned in ["Channel", "Page", "Task", "Artifact", "Policy"] {
         let foreign = upsert(
-            named(not_owned, "grn:acme:default:thing:one"),
+            named(not_owned, "grn:acme/iam/thing/one"),
             Some(named("Org", ACME)),
             vec![named("Org", ACME)],
         );
@@ -189,11 +189,11 @@ async fn a_change_at_fault_is_refused_where_it_stands_and_the_rest_are_written()
     };
     let not_itself = upsert(
         named("Org", ACME),
-        Some(named("Org", "grn:root:default:org:globex")),
+        Some(named("Org", "grn:root/iam/org/globex")),
         vec![],
     );
     let nul = upsert(
-        named("Team", "grn:acme:\0"),
+        named("Team", "grn:acme/\0"),
         Some(named("Org", ACME)),
         vec![],
     );
@@ -244,7 +244,7 @@ async fn a_change_at_fault_is_refused_where_it_stands_and_the_rest_are_written()
 async fn a_type_an_id_and_a_parent_list_are_bounded() {
     let (mut client, reached) = served().await;
     let org = || Some(named("Org", ACME));
-    let id = |len: usize| format!("grn:acme:{}", "a".repeat(len - "grn:acme:".len()));
+    let id = |len: usize| format!("grn:acme/{}", "a".repeat(len - "grn:acme/".len()));
     let at_limit = id(512);
     let parents = |count: usize| vec![named("Org", ACME); count];
 

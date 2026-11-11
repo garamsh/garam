@@ -55,7 +55,7 @@ func newExplainStack(t *testing.T) *explainStack {
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	session := func(id string, role org.Role) (*http.Cookie, grn.GRN) {
-		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+		g := grn.New(grn.RootOwner, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
 		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, role)))
 		token, err := authn.NewToken()
@@ -67,7 +67,7 @@ func newExplainStack(t *testing.T) *explainStack {
 	s.ada, s.adaGRN = session("ada", org.RoleOwner)
 	s.bob, s.bobGRN = session("bob", org.RoleMember)
 	s.carol, s.carolGRN = session("carol", org.RoleMember)
-	s.eng = grn.New("acme", grn.DefaultProject, org.ServiceTypeGroup, "eng")
+	s.eng = grn.New("acme", org.ServiceTypeGroup, "eng")
 	require.NoError(t, orgs.CreateGroup(ctx, org.NewGroup(s.eng, "eng", acme)))
 	require.NoError(t, orgs.AddGroupMember(ctx, s.eng, s.adaGRN))
 	require.NoError(t, orgs.AddGroupMember(ctx, s.eng, s.bobGRN))

@@ -287,7 +287,7 @@ function StatementControls({
         label="Resources"
         itemLabel={`${name} resource`}
         addLabel="Add resource"
-        placeholder="grn:org:default:project:*"
+        placeholder="grn:org/iam/project/*"
         values={fields.resources}
         readOnly={readOnly}
         invalid={invalid("Resource")}

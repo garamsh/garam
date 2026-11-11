@@ -175,11 +175,11 @@ func TestMigration25_NamesEveryExistingOperatorByItsIdentifier(t *testing.T) {
 
 	ctx := context.Background()
 	_, err = p.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.orgs (grn, name, created_at, updated_at)
-		VALUES ('grn:root:default:org:acme', 'acme', now(), now())`, schema))
+		VALUES ('`+formerGRN("root", "org", "acme")+`', 'acme', now(), now())`, schema))
 	require.NoError(t, err)
 	_, err = p.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.operators (grn, org_grn, registered_by, created_at) VALUES
-		('grn:acme:default:operator:field-one', 'grn:root:default:org:acme', 'grn:acme:default:user:ada', now()),
-		('grn:acme:default:operator:field-two', 'grn:root:default:org:acme', 'grn:acme:default:user:ada', now())`, schema))
+		('`+formerGRN("acme", "operator", "field-one")+`', '`+formerGRN("root", "org", "acme")+`', '`+formerGRN("acme", "user", "ada")+`', now()),
+		('`+formerGRN("acme", "operator", "field-two")+`', '`+formerGRN("root", "org", "acme")+`', '`+formerGRN("acme", "user", "ada")+`', now())`, schema))
 	require.NoError(t, err)
 
 	for _, name := range later {
@@ -198,8 +198,8 @@ func TestMigration25_NamesEveryExistingOperatorByItsIdentifier(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 	assert.Equal(t, [][3]string{
-		{"grn:acme:default:operator:field-one", "field-one", ""},
-		{"grn:acme:default:operator:field-two", "field-two", ""},
+		{formerGRN("acme", "operator", "field-one"), "field-one", ""},
+		{formerGRN("acme", "operator", "field-two"), "field-two", ""},
 	}, got)
 }
 

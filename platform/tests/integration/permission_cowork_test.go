@@ -60,7 +60,7 @@ func TestCheckPermissions_RefusesANonMemberCoworkPages(t *testing.T) {
 // another page, the control, allowed.
 func TestCheckPermissions_NarrowsACoworkPageByPolicy(t *testing.T) {
 	s := newCheckStack(t)
-	locked := grn.New(s.acme.Identifier, grn.DefaultProject, org.ServiceTypeCoworkPage, "locked")
+	locked := grn.New(s.acme.Identifier, org.ServiceTypeCoworkPage, "locked")
 	require.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow},
 		checkedDecisions(t, s.url, s.member, coworkPage(org.ActionCoworkPageWrite, "locked")))
 
@@ -96,7 +96,7 @@ func TestCheckPermissions_AllowsAMemberCoworkChannels(t *testing.T) {
 			coworkChannel(org.ActionCoworkChannelPost, "general"),
 		))
 
-	locked := grn.New(s.acme.Identifier, grn.DefaultProject, org.ServiceTypeCoworkChannel, "announcements")
+	locked := grn.New(s.acme.Identifier, org.ServiceTypeCoworkChannel, "announcements")
 	deny := activePolicy(t, s.policies, s.acme, "read-only-announcements",
 		statementDoc("read-only-announcements", wire.EffectDeny, org.ActionCoworkChannelPost, locked.String()))
 	attachPolicy(t, s.policies, deny, s.memberGRN)
@@ -130,7 +130,7 @@ func TestCheckPermissions_AllowsAMemberCoworkTasks(t *testing.T) {
 			coworkTask(org.ActionCoworkTaskWrite, "launch"),
 		))
 
-	locked := grn.New(s.acme.Identifier, grn.DefaultProject, org.ServiceTypeCoworkTask, "audit")
+	locked := grn.New(s.acme.Identifier, org.ServiceTypeCoworkTask, "audit")
 	deny := activePolicy(t, s.policies, s.acme, "read-only-audit",
 		statementDoc("read-only-audit", wire.EffectDeny, org.ActionCoworkTaskWrite, locked.String()))
 	attachPolicy(t, s.policies, deny, s.memberGRN)
@@ -153,7 +153,7 @@ func TestCheckPermissions_AllowsAMemberCoworkArtifacts(t *testing.T) {
 		return apigen.PermissionCheck{Action: action,
 			Resource: &apigen.PermissionResource{Type: apigen.PermissionResourceTypeCoworkArtifact, Id: id}}
 	}
-	locked := grn.New(s.acme.Identifier, grn.DefaultProject, org.ServiceTypeCoworkArtifact, "brand")
+	locked := grn.New(s.acme.Identifier, org.ServiceTypeCoworkArtifact, "brand")
 	deny := activePolicy(t, s.policies, s.acme, "read-only-brand",
 		statementDoc("read-only-brand", wire.EffectDeny, org.ActionCoworkArtifactWrite, locked.String()))
 	attachPolicy(t, s.policies, deny, s.memberGRN)

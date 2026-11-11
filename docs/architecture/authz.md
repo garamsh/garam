@@ -141,7 +141,7 @@ evaluation reads it. Every other key below is read.
       "Sid": "AllowOrgRead",
       "Effect": "Allow",
       "Action": ["org:read", "project:list"],
-      "Resource": ["grn:acme:*"]
+      "Resource": ["grn:acme/*"]
     }
   ]
 }
@@ -153,7 +153,7 @@ evaluation reads it. Every other key below is read.
   the defining domain (`platform/internal/org`,
   `platform/internal/user`, …). The engine matches strings only.
 - `Resource`: GRN patterns with the same wildcard rules
-  (`grn:acme:*` scopes to an org).
+  (`grn:acme/*` scopes to an org).
 - `Condition`: reserved, as above.
 
 Reserved is not dropped, and neither is anything else. The parse
@@ -201,8 +201,8 @@ the statements that apply to that resource:
 
 | Origin | Action patterns | Resource patterns |
 |--------|-----------------|-------------------|
-| org membership role | `Role.Actions()` | the org GRN and `grn:<org>:*` |
-| subject's direct roles | `org.ActionsFor(user.Roles())` | the org GRN and `grn:<org>:*` |
+| org membership role | `Role.Actions()` | the org GRN and `grn:<org>/*` |
+| subject's direct roles | `org.ActionsFor(user.Roles())` | the org GRN and `grn:<org>/*` |
 | target group's roles, when the subject is a member | `org.ActionsFor(group.Roles())` | the group GRN |
 | target project's roles, when the subject is a member | `org.ActionsFor(project.Roles())` | the project GRN |
 

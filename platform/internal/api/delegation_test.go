@@ -79,7 +79,7 @@ func TestWriteOperatorDelegation_PassesTheParsedWrite(t *testing.T) {
 
 	grant := &operator.Grant{ID: "grant-1", Org: orgG, Operator: hosted,
 		Controllers: []grn.GRN{controller}, Operations: []operator.Operation{operator.OperationAgentCreate},
-		ExpiresAt: expiresAt, GrantedBy: grn.New("root", "default", user.ServiceType, "owner-sub")}
+		ExpiresAt: expiresAt, GrantedBy: grn.New("root", user.ServiceType, "owner-sub")}
 	f.authority.EXPECT().WriteGrant(mock.Anything, mock.MatchedBy(func(w operator.GrantWrite) bool {
 		return w.Org == orgG && w.Operator == hosted && w.RequestID == "grant-1" &&
 			w.Expected != nil && *w.Expected == expected && w.Actor == grant.GrantedBy &&
@@ -135,7 +135,7 @@ func TestMintOperationAuthority_AnswersTheMintedAuthority(t *testing.T) {
 	f.authority.EXPECT().Mint(mock.Anything, mock.MatchedBy(func(r operator.MintRequest) bool {
 		return r.Org == orgGRNForTest("acme") && r.Operation == operator.OperationAgentCreate &&
 			r.Digest == operator.BodyDigest(digest) && r.RequestID == "req-1" &&
-			r.Actor == grn.New("root", "default", user.ServiceType, "member-sub")
+			r.Actor == grn.New("root", user.ServiceType, "member-sub")
 	})).Return(&operator.Minted{Authority: "secret", ExpiresAt: expiresAt, Ref: "ref-1", Grant: "grant-1"}, nil).Once()
 	rec = f.doVersioned(t, "POST", "/orgs/acme/operation-authorities", operator.ContractVersion, body, cookie)
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
@@ -148,7 +148,7 @@ func TestMintOperationAuthority_AnswersTheMintedAuthority(t *testing.T) {
 // decide answers 503 naming no cause.
 func TestMintOperationAuthority_MapsRefusals(t *testing.T) {
 	body := `{"audience":"` + operatorGRNOf("acme", "hosted").String() + `","operation":"agent:configure","target":"` +
-		grn.New("acme", "default", "agent", "a1").String() + `","requestId":"req-1","bodySha256":"` + strings.Repeat("0", 64) + `"}`
+		grn.New("acme", "agent", "a1").String() + `","requestId":"req-1","bodySha256":"` + strings.Repeat("0", 64) + `"}`
 	cases := []struct {
 		err    error
 		status int
@@ -186,7 +186,7 @@ func TestGetOperatorDelegation_IsAMemberRead(t *testing.T) {
 	cookie = f.sessionCookieFor(t, "member-sub", "Member")
 	slug = createOrg(t, f, cookie, "acme")
 	path = "/orgs/" + slug + "/operators/hosted/delegation"
-	f.permit(permission{grn.New("root", "default", user.ServiceType, "member-sub"), org.ActionOperatorRead})
+	f.permit(permission{grn.New("root", user.ServiceType, "member-sub"), org.ActionOperatorRead})
 	f.authority.EXPECT().CurrentGrant(mock.Anything, orgGRNForTest(slug), operatorGRNOf(slug, "hosted")).
 		Return(&operator.Grant{ID: "grant-1", Operator: operatorGRNOf(slug, "hosted")}, nil).Once()
 	rec = f.doVersioned(t, "GET", path, operator.ContractVersion, "", cookie)

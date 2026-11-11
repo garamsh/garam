@@ -170,7 +170,7 @@ func (s *Server) assignmentOf(ctx context.Context, g grn.GRN) (*agent.Assignment
 // segment scopes the identifier, so an agent of another org is not
 // addressable through that org's paths.
 func agentGRN(orgSlug, agentSlug string) grn.GRN {
-	return grn.New(orgSlug, grn.DefaultProject, agent.ServiceType, agentSlug)
+	return grn.New(orgSlug, agent.ServiceType, agentSlug)
 }
 
 // agentToAPI renders an Agent together with the assignment holding it,

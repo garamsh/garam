@@ -19,7 +19,7 @@ import (
 // group creates a group of acme holding members and answers its GRN.
 func (s *explainStack) group(t *testing.T, slug string, members ...grn.GRN) grn.GRN {
 	t.Helper()
-	g := grn.New("acme", grn.DefaultProject, org.ServiceTypeGroup, slug)
+	g := grn.New("acme", org.ServiceTypeGroup, slug)
 	require.NoError(t, s.orgs.CreateGroup(context.Background(), org.NewGroup(g, slug, s.acme)))
 	for _, m := range members {
 		require.NoError(t, s.orgs.AddGroupMember(context.Background(), g, m))

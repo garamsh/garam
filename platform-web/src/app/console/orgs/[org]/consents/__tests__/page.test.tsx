@@ -121,7 +121,7 @@ describe("consents section", () => {
     serveConsents(
       { ...globexConsent, grantedHere: false, stands: false },
       {
-        orgGrn: "grn:root:default:org:initech",
+        orgGrn: "grn:root/iam/org/initech",
         grantedHere: true,
         grantedThere: true,
         stands: true,
@@ -171,13 +171,13 @@ describe("consents section", () => {
     const hex = "3fa9c2d1e0b4a7f6";
     serveConsents(
       {
-        orgGrn: `grn:root:default:org:${hex}`,
+        orgGrn: `grn:root/iam/org/${hex}`,
         grantedHere: false,
         grantedThere: true,
         stands: false,
       },
       {
-        orgGrn: "grn:root:default:org:initech",
+        orgGrn: "grn:root/iam/org/initech",
         grantedHere: true,
         grantedThere: true,
         stands: true,
@@ -201,7 +201,7 @@ describe("consents section", () => {
     serveConsents(
       { ...globexConsent, grantedHere: false, stands: false },
       {
-        orgGrn: "grn:root:default:org:initech",
+        orgGrn: "grn:root/iam/org/initech",
         grantedHere: true,
         grantedThere: true,
         stands: true,
@@ -228,7 +228,7 @@ describe("consents section", () => {
     serveConsents(
       { ...globexConsent, grantedHere: false, stands: false },
       {
-        orgGrn: "grn:root:default:org:initech",
+        orgGrn: "grn:root/iam/org/initech",
         grantedHere: true,
         grantedThere: true,
         stands: true,

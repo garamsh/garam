@@ -12,12 +12,12 @@ import (
 )
 
 func TestNewGRN_IsOwnedByTheOrgAndUnique(t *testing.T) {
-	orgGRN := grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme")
+	orgGRN := grn.New(grn.RootOwner, "org", "acme")
 
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
 	assert.Equal(t, "acme", g.Organization)
-	assert.Equal(t, grn.DefaultProject, g.Project)
+	assert.Empty(t, g.Ancestors)
 	assert.Equal(t, agent.ServiceType, g.ServiceType)
 	assert.Len(t, g.Identifier, 16, "eight random bytes, hex-encoded")
 
@@ -27,7 +27,7 @@ func TestNewGRN_IsOwnedByTheOrgAndUnique(t *testing.T) {
 }
 
 func TestNew_StartsBeforeProvisioningAndBeforeRunning(t *testing.T) {
-	orgGRN := grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme")
+	orgGRN := grn.New(grn.RootOwner, "org", "acme")
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
 
@@ -40,7 +40,7 @@ func TestNew_StartsBeforeProvisioningAndBeforeRunning(t *testing.T) {
 }
 
 func TestNew_RejectsAGRNTheOrganizationDoesNotOwn(t *testing.T) {
-	orgGRN := grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme")
+	orgGRN := grn.New(grn.RootOwner, "org", "acme")
 
 	tests := []struct {
 		name string
@@ -48,11 +48,11 @@ func TestNew_RejectsAGRNTheOrganizationDoesNotOwn(t *testing.T) {
 	}{
 		{
 			name: "another service type",
-			g:    grn.New("acme", grn.DefaultProject, agent.ServiceTypeOperator, "one"),
+			g:    grn.New("acme", agent.ServiceTypeOperator, "one"),
 		},
 		{
 			name: "another organization",
-			g:    grn.New("evilcorp", grn.DefaultProject, agent.ServiceType, "deadbeef"),
+			g:    grn.New("evilcorp", agent.ServiceType, "deadbeef"),
 		},
 	}
 	for _, tt := range tests {

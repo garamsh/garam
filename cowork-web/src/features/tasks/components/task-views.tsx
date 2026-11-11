@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { TASK_STATUSES, type Task } from "@/lib/cowork";
+import { identifierOf } from "@/lib/grn";
 
 import { STATUS_LABEL } from "../status";
 import { MoveTask } from "./task-forms";
@@ -8,7 +9,7 @@ import { MoveTask } from "./task-forms";
 export type Names = Record<string, string>;
 
 const nameOf = (names: Names, grn: string) =>
-  grn ? (names[grn] ?? grn.split(":").at(-1) ?? grn) : "";
+  grn ? (names[grn] ?? identifierOf(grn)) : "";
 
 function Meta({ task, names }: { task: Task; names: Names }) {
   return (

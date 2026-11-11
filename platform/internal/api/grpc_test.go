@@ -71,14 +71,14 @@ func evalInput() api.EvalInput {
 
 func evalInputWith(effect wire.Effect) api.EvalInput {
 	return api.EvalInput{
-		Subject: grn.New("root", "default", "user", "alice"),
-		Object:  grn.New("root", "default", "org", "acme"),
+		Subject: grn.New("root", "user", "alice"),
+		Object:  grn.New("root", "org", "acme"),
 		Action:  "org:update",
 		Statements: []api.Statement{{
 			Sid:      "org-role-owner",
 			Effect:   effect,
 			Action:   []string{"org:*"},
-			Resource: []string{"grn:root:default:org:acme"},
+			Resource: []string{"grn:root/iam/org/acme"},
 		}},
 	}
 }
@@ -106,7 +106,7 @@ func TestGRPCEvaluator_SendsTheQuestionAndReadsTheEnginesRefusal(t *testing.T) {
 	require.Len(t, stub.got.GetStatements(), 1)
 	assert.Equal(t, "org-role-owner", stub.got.GetStatements()[0].GetSid())
 	assert.Equal(t, authzv1.Effect_EFFECT_ALLOW, stub.got.GetStatements()[0].GetEffect())
-	assert.Equal(t, "grn:root:default:user:alice", stub.got.GetSubjectGrn())
+	assert.Equal(t, "grn:root/iam/user/alice", stub.got.GetSubjectGrn())
 
 	refused := &stubAuthzServer{allowed: true}
 	allowed, err = newGRPCEvaluator(t, refused).Evaluate(context.Background(), evalInputWith(wire.Effect("Maybe")))
@@ -126,8 +126,8 @@ func TestGRPCEvaluator_SendsTheQuestionAndReadsTheEnginesRefusal(t *testing.T) {
 // fault and fails the call as internal; the trace beside it that
 // parses is the control.
 func TestGRPCEvaluator_ExplainParsesEachTrace(t *testing.T) {
-	policy := grn.New("acme", grn.DefaultProject, "policy", "p1")
-	eng := grn.New("acme", grn.DefaultProject, "group", "eng")
+	policy := grn.New("acme", "policy", "p1")
+	eng := grn.New("acme", "group", "eng")
 	traced := []*authzv1.StatementTrace{
 		{Sid: "deny", Matched: true, Effect: authzv1.Effect_EFFECT_DENY, PolicyGrn: policy.String(), AttachedTo: []string{eng.String()}},
 		{Sid: "org-role-owner", Matched: true, Effect: authzv1.Effect_EFFECT_ALLOW},

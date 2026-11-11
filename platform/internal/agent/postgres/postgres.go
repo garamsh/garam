@@ -83,7 +83,8 @@ func recheck(ctx context.Context, q *db.Queries, agentGRN grn.GRN, authority age
 	if err != nil {
 		return 0, time.Time{}, storageError(err, "read assignment", agent.ErrNotAssigned, nil)
 	}
-	if assignment.AssigneeGrn != authority.Assignee.String() || !assignment.AssigneeRegistered {
+	if assignment.AssigneeGrn != authority.Assignee.String() ||
+		(authority.Assignee.ServiceType == agent.ServiceTypeSupervisor && !assignment.SupervisorRegistered) {
 		return 0, time.Time{}, agent.ErrNotAssigned
 	}
 	now, err := q.Now(ctx)

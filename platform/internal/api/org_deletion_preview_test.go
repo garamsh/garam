@@ -32,10 +32,10 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 	// 1 group, 2 projects, 3 invitations. Creating the org already
 	// made the owner a member, so members reaches 2 with one more.
 	require.NoError(t, f.orgs.CreateGroup(ctx, org.NewGroup(
-		grn.New("root", "default", org.ServiceTypeGroup, "g1"), "g1", orgGRN)))
+		grn.New("root", org.ServiceTypeGroup, "g1"), "g1", orgGRN)))
 	for _, id := range []string{"p1", "p2"} {
 		require.NoError(t, f.orgs.CreateProject(ctx, org.NewProject(
-			grn.New("root", "default", org.ServiceTypeProject, id), id, orgGRN)))
+			grn.New("root", org.ServiceTypeProject, id), id, orgGRN)))
 	}
 	for _, tok := range []string{"t1", "t2", "t3"} {
 		require.NoError(t, f.orgs.CreateInvitation(ctx, org.NewInvitation(

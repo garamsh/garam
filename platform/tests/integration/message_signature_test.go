@@ -200,7 +200,7 @@ func (s signingStack) post(t *testing.T, body string) machinegen.Message {
 // claim hands the recipient its next message.
 func (s signingStack) claim(t *testing.T) machinegen.Claim {
 	t.Helper()
-	status, answer := machineSend(t, s.recipient, http.MethodPost, s.url+"/agents/"+s.recipientGRN.String()+"/claims", "")
+	status, answer := machineSend(t, s.recipient, http.MethodPost, s.url+"/agents/"+pathEscape(s.recipientGRN.String())+"/claims", "")
 	require.Equal(t, http.StatusOK, status, string(answer))
 	var claimed machinegen.Claim
 	require.NoError(t, json.Unmarshal(answer, &claimed))
@@ -251,7 +251,7 @@ func TestMessageSignature_EveryAttemptCarriesTheSameContentAndIdentifier(t *test
 	// redelivery ADR-0018 makes of an attempt nobody reported.
 	var second machinegen.Claim
 	require.Eventually(t, func() bool {
-		status, answer := machineSend(t, s.recipient, http.MethodPost, s.url+"/agents/"+s.recipientGRN.String()+"/claims", "")
+		status, answer := machineSend(t, s.recipient, http.MethodPost, s.url+"/agents/"+pathEscape(s.recipientGRN.String())+"/claims", "")
 		if status != http.StatusOK {
 			return false
 		}
@@ -327,7 +327,7 @@ func TestMessageSignature_GaramSignsTheRefusalItWroteAsItsOwn(t *testing.T) {
 	require.NoError(t, json.Unmarshal(body, &refusal))
 	require.Equal(t, strangerGRN.String(), refusal.Recipient, "the setup stored a refusal back to the sender")
 
-	status, body = machineSend(t, stranger, http.MethodPost, url+"/agents/"+strangerGRN.String()+"/claims", "")
+	status, body = machineSend(t, stranger, http.MethodPost, url+"/agents/"+pathEscape(strangerGRN.String())+"/claims", "")
 	require.Equal(t, http.StatusOK, status, string(body))
 	var claimed machinegen.Claim
 	require.NoError(t, json.Unmarshal(body, &claimed))
@@ -341,9 +341,9 @@ func TestMessageSignature_GaramSignsTheRefusalItWroteAsItsOwn(t *testing.T) {
 	// The control: a message inside globex is signed under its poster.
 	status, body = machineSend(t, sibling, http.MethodPost, url+"/messages", submissionTo(strangerGRN, "key-2"))
 	require.Equal(t, http.StatusCreated, status, string(body))
-	status, body = machineSend(t, stranger, http.MethodPost, url+"/agents/"+strangerGRN.String()+"/claims/"+claimed.Id+"/completion", "")
+	status, body = machineSend(t, stranger, http.MethodPost, url+"/agents/"+pathEscape(strangerGRN.String())+"/claims/"+claimed.Id+"/completion", "")
 	require.Equal(t, http.StatusNoContent, status, string(body))
-	status, body = machineSend(t, stranger, http.MethodPost, url+"/agents/"+strangerGRN.String()+"/claims", "")
+	status, body = machineSend(t, stranger, http.MethodPost, url+"/agents/"+pathEscape(strangerGRN.String())+"/claims", "")
 	require.Equal(t, http.StatusOK, status, string(body))
 	require.NoError(t, json.Unmarshal(body, &claimed))
 	claims, err = verify(set, string(testIssuer), strangerGRN.String(), claimed.Message.Id, *claimed.Content, *claimed.Signature)

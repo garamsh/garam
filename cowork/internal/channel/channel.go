@@ -12,9 +12,9 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 )
 
-// ServiceType is a channel's GRN service type, the kind the platform's
-// permission checks name it by. A direct message is a channel too.
-const ServiceType = "cowork-channel"
+// ServiceType is a channel's GRN type. A direct message is a channel
+// too.
+const ServiceType = "channel"
 
 // Kind is who a channel is open to, within what the platform allows.
 type Kind string
@@ -44,7 +44,7 @@ type Channel struct {
 
 // GRN is the channel's resource name under its organization.
 func (c Channel) GRN() grn.GRN {
-	return grn.New(c.Org, grn.DefaultProject, ServiceType, c.ID)
+	return grn.New(c.Org, ServiceType, c.ID)
 }
 
 // Lists reports whether the channel keeps a participant list.

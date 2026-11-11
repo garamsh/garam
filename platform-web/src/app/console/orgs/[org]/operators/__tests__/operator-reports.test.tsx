@@ -50,12 +50,12 @@ type Service = {
 
 const fieldTwo = {
   ...fieldOne,
-  grn: "grn:acme:default:operator:field-two",
+  grn: "grn:acme/iam/operator/field-two",
   name: "Field cluster two",
 };
 const fieldThree = {
   ...fieldOne,
-  grn: "grn:acme:default:operator:field-three",
+  grn: "grn:acme/iam/operator/field-three",
   name: "Field cluster three",
 };
 
@@ -85,7 +85,7 @@ function acme(services: Service[], controllers: object[] = [fieldOne]) {
         ...controllers,
         ...services.map((s) => ({
           ...fieldOne,
-          grn: `grn:acme:default:operator:${s.identifier}`,
+          grn: `grn:acme/iam/operator/${s.identifier}`,
           name: s.name,
           controlEndpoint: s.endpoint,
         })),
@@ -103,11 +103,11 @@ function acme(services: Service[], controllers: object[] = [fieldOne]) {
         () =>
           HttpResponse.json({
             grantId: `g-${s.identifier}`,
-            operatorGrn: `grn:acme:default:operator:${s.identifier}`,
+            operatorGrn: `grn:acme/iam/operator/${s.identifier}`,
             controllers: s.controllers,
             operations: s.operations,
             expiresAt: "2099-01-01T00:00:00Z",
-            grantedBy: "grn:root:default:user:alice",
+            grantedBy: "grn:root/iam/user/alice",
             grantedAt: "2026-10-14T00:00:00Z",
           }),
       ),

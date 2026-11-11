@@ -86,7 +86,7 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 	operator := operatorClient(t, p, url, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	senderGRN, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
-	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+	queue := url + "/agents/" + pathEscape(recipientGRN.String()) + "/claims"
 
 	submission := `{"recipient":"` + recipientGRN.String() + `","idempotencyKey":"key-1","body":"hello"}`
 	status, body := machineSend(t, sender, http.MethodPost, url+"/messages", submission)
@@ -200,7 +200,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	recipientGRN, recipient := provisioned(t, url, acmeOperator)
 	strangerGRN, stranger := provisioned(t, url, globexOperator)
 	require.Equal(t, "globex", strangerGRN.Organization, "the stranger was minted in the operator's organization")
-	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+	queue := url + "/agents/" + pathEscape(recipientGRN.String()) + "/claims"
 
 	status, body := machineSend(t, sender, http.MethodPost, url+"/messages",
 		`{"recipient":"`+recipientGRN.String()+`","idempotencyKey":"key-1","body":"hello"}`)
@@ -248,7 +248,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	assert.Equal(t, recipientGRN.String(), refusal.Sender, "written under the intended recipient's identity")
 
 	// It sits in the sender's own queue like any other message.
-	strangerQueue := url + "/agents/" + strangerGRN.String() + "/claims"
+	strangerQueue := url + "/agents/" + pathEscape(strangerGRN.String()) + "/claims"
 	status, body = machineSend(t, stranger, http.MethodPost, strangerQueue, "")
 	require.Equal(t, http.StatusOK, status, string(body))
 	require.NoError(t, json.Unmarshal(body, &claimed))
@@ -263,7 +263,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	// ADR-0035). The Allow below matches every resource there is and
 	// buys nothing.
 	reachAll := activePolicy(t, policies, orgRootGRN("acme"), "reach-everything",
-		statementDoc("reach-everything", wire.EffectAllow, message.ActionSend, "grn:*:*"))
+		statementDoc("reach-everything", wire.EffectAllow, message.ActionSend, "grn:*/*"))
 	attachPolicy(t, policies, reachAll, senderGRN)
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages",
 		submissionTo(strangerGRN, "key-3"))
@@ -372,7 +372,7 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	// What the recipient's queue holds is every accepted message and no
 	// refused one: a policy refusal stores nothing, where a message
 	// garam merely cannot route is stored (ADR-0013).
-	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+	queue := url + "/agents/" + pathEscape(recipientGRN.String()) + "/claims"
 	var keys []string
 	for range 4 {
 		status, body = machineSend(t, recipient, http.MethodPost, queue, "")
@@ -476,7 +476,7 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 
 	// What the recipient's queue holds is every accepted message and no
 	// refused one.
-	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+	queue := url + "/agents/" + pathEscape(recipientGRN.String()) + "/claims"
 	var keys []string
 	for range 4 {
 		status, body = machineSend(t, recipient, http.MethodPost, queue, "")
@@ -571,7 +571,7 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 		Sid:      "machine-own-org",
 		Effect:   wire.EffectAllow,
 		Action:   []string{message.ActionSend},
-		Resource: []string{"grn:" + recipientGRN.Organization + ":*"},
+		Resource: []string{grn.OrgPattern(recipientGRN.Organization)},
 	}}
 	crossing := machineapi.EvalInput{
 		Subject:    foreignGRN,
@@ -605,7 +605,7 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	// attaches it to nobody, which is what an administrator does by
 	// detaching the last attachment from one they had aimed at a subject.
 	openDoor := activePolicy(t, policies, orgRootGRN("beta"), "everything",
-		statementDoc("everything", wire.EffectAllow, "*", "grn:beta:*"))
+		statementDoc("everything", wire.EffectAllow, "*", "grn:beta/*"))
 
 	// That policy does not reach the foreign subject: the same
 	// question, refused the same way now that beta has written one
@@ -644,7 +644,7 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	assert.Equal(t, foreignGRN.String(), refusal.Recipient)
 
 	// Nothing the foreign sender posted is in the recipient's queue.
-	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+	queue := url + "/agents/" + pathEscape(recipientGRN.String()) + "/claims"
 	var senders []string
 	for range 2 {
 		status, body = machineSend(t, recipient, http.MethodPost, queue, "")
@@ -663,7 +663,7 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	// Every one of the foreign sender's posts is in its own queue
 	// instead: three refusals, one per post, each written under the
 	// intended recipient's identity.
-	foreignQueue := url + "/agents/" + foreignGRN.String() + "/claims"
+	foreignQueue := url + "/agents/" + pathEscape(foreignGRN.String()) + "/claims"
 	var refusals []string
 	for range 3 {
 		status, body = machineSend(t, foreign, http.MethodPost, foreignQueue, "")
@@ -720,7 +720,7 @@ func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *test
 	recipientGRN, recipient := provisioned(t, url, globexOperator)
 	bystanderGRN, _ := provisioned(t, url, initechOperator)
 	consents := messagepg.New(p)
-	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+	queue := url + "/agents/" + pathEscape(recipientGRN.String()) + "/claims"
 
 	// No relation anywhere: the post comes back to the sender.
 	status, body := machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-1"))

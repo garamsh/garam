@@ -54,7 +54,7 @@ func TestCheckPermissions_AnswersAgentEnrollAsAnApprovalDecides(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, approveAs(s.member, nil), "the approval refuses the member the check denied")
 	assert.Equal(t, http.StatusCreated, approveAs(s.owner, nil), "the approval the check allowed")
 
-	ada := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "ada")
+	ada := grn.New(grn.RootOwner, user.ServiceType, "ada")
 	deny := activePolicy(t, policies, s.acme, "no-enroll-held",
 		statementDoc("no-enroll-held", wire.EffectDeny, org.ActionAgentEnroll, held.agent.String()))
 	attachPolicy(t, policies, deny, ada)

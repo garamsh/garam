@@ -47,7 +47,7 @@ import (
 const testPrefix = "garam-sa-test-"
 
 var testAgent = func() grn.GRN {
-	g, err := grn.Parse("grn:acme:default:agent:0a1b2c3d4e5f6071")
+	g, err := grn.Parse("grn:acme/iam/agent/0a1b2c3d4e5f6071")
 	if err != nil {
 		panic(err)
 	}

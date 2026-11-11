@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"testing"
 	"time"
@@ -318,7 +319,7 @@ func TestServer_ActsOnTheQueueThePathNames(t *testing.T) {
 	caller := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
 	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, caller)
-	claims := url + "/agents/" + caller.String() + "/claims"
+	claims := url + "/agents/" + neturl.PathEscape(caller.String()) + "/claims"
 
 	// A poll that found nothing is the ordinary empty answer rather
 	// than an error the caller has to tell apart.
@@ -413,7 +414,7 @@ func TestServer_SendsWhereTheSendersOwnOrganizationReaches(t *testing.T) {
 		Sid:      "machine-own-org",
 		Effect:   wire.EffectAllow,
 		Action:   []string{message.ActionSend},
-		Resource: []string{"grn:acme:*"},
+		Resource: []string{"grn:acme/*"},
 	}}
 	assert.Equal(t, []machineapi.EvalInput{
 		{Subject: sender, Object: sibling, Action: message.ActionSend, Statements: ownOrg, SubjectOrg: organization("acme")},
@@ -732,7 +733,7 @@ func TestServer_AnswersAMessageItHasNoneOfAsNotFound(t *testing.T) {
 // that answers every failure that way.
 func TestServer_ReadsAnEmptyPollFromTheKindNotTheSentinel(t *testing.T) {
 	caller := agentGRN("acme", "0a1b2c3d4e5f6071")
-	claims := "/agents/" + caller.String() + "/claims"
+	claims := "/agents/" + neturl.PathEscape(caller.String()) + "/claims"
 
 	empty := &messageService{err: errorx.New(errorx.KindNotFound, "no message ready")}
 	url, client := listener(t, nil, nil, empty, nil, nil, nil, nil, caller)
@@ -904,7 +905,7 @@ func (unopenableKeyring) Signer(context.Context) (message.Signer, error) {
 // it reaches the queue.
 func TestServer_AClaimGaramCannotSignSpendsNoAttempt(t *testing.T) {
 	caller := agentGRN("acme", "0a1b2c3d4e5f6071")
-	claims := "/agents/" + caller.String() + "/claims"
+	claims := "/agents/" + neturl.PathEscape(caller.String()) + "/claims"
 
 	unsigned := &messageService{}
 	url, client := serveTLS(t, machineapi.NewServer(&agentService{}, nil, unsigned, consenting(), unwatched(t),

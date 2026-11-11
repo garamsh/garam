@@ -67,7 +67,7 @@ func (viewer) URL(org, id string, n int) string {
 }
 
 func person(name string) platform.Caller {
-	return platform.Caller{GRN: grn.New(grn.RootOwner, grn.DefaultProject, "user", name)}
+	return platform.Caller{GRN: grn.New(grn.RootOwner, "user", name)}
 }
 
 var (

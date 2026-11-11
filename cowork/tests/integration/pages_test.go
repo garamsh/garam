@@ -12,6 +12,7 @@ import (
 
 	"github.com/garamsh/garam/cowork/internal/cli"
 	"github.com/garamsh/garam/cowork/internal/collab"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 type apiPage struct {
@@ -45,8 +46,8 @@ func TestPages_BuildAndReshapeATree(t *testing.T) {
 	var child apiPage
 	require.NoError(t, json.Unmarshal([]byte(body), &child))
 	assert.Equal(t, parent, child.Parent)
-	assert.Equal(t, "grn:root:default:user:bob", child.CreatedBy)
-	assert.Equal(t, "grn:acme:default:cowork-page:"+child.ID, child.Grn)
+	assert.Equal(t, "grn:root/iam/user/bob", child.CreatedBy)
+	assert.Equal(t, grn.New("acme", "page", child.ID).String(), child.Grn)
 
 	status, body = s.call(t, "ada", http.MethodPatch, "/orgs/acme/pages/"+child.ID,
 		`{"title":"renamed","parent":"","position":0}`)

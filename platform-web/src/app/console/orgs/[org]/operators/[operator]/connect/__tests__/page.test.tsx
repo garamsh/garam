@@ -48,7 +48,7 @@ function currentStep() {
 
 const CONTROL = {
   ...fieldOne,
-  grn: "grn:acme:default:operator:field-one-control",
+  grn: "grn:acme/iam/operator/field-one-control",
   name: "field-one-control",
   manager: fieldOne.grn,
 };

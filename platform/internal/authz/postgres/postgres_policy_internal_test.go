@@ -23,8 +23,8 @@ const corrupt = "not a grn"
 // one field of.
 func policyRow() db.Policy {
 	return db.Policy{
-		Grn:            "grn:acme:default:policy:9f2ac1b40d8e7a35",
-		OrgGrn:         "grn:root:default:org:acme",
+		Grn:            "grn:acme/iam/policy/9f2ac1b40d8e7a35",
+		OrgGrn:         "grn:root/iam/org/acme",
 		Name:           "read-only",
 		Status:         string(wire.PolicyStatusDraft),
 		DefaultVersion: 1,
@@ -34,10 +34,10 @@ func policyRow() db.Policy {
 // policyVersionRow is a stored version row that parses.
 func policyVersionRow() db.PolicyVersion {
 	return db.PolicyVersion{
-		PolicyGrn: "grn:acme:default:policy:9f2ac1b40d8e7a35",
+		PolicyGrn: "grn:acme/iam/policy/9f2ac1b40d8e7a35",
 		Version:   1,
-		Document:  []byte(`{"Version":"2026-07-25","Statement":[{"Sid":"s","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`),
-		CreatedBy: "grn:root:default:user:alice",
+		Document:  []byte(`{"Version":"2026-07-25","Statement":[{"Sid":"s","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme/*"]}]}`),
+		CreatedBy: "grn:root/iam/user/alice",
 		CreatedAt: pgtype.Timestamptz{Valid: true},
 	}
 }

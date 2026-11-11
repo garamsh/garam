@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/org"
@@ -196,7 +197,7 @@ func TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind(t *testing.T) {
 		assert.Equal(t, http.StatusCreated, status, "the %s control: %s", operation, got)
 	}
 
-	const globex = "grn:globex:default:operator:hosted"
+	const globex = "grn:globex/iam/operator/hosted"
 	for _, operation := range []string{"agent-template:read", "agent-template:publish", "execution-profile:read"} {
 		status, got := s.mintBound(t, s.owner, globex, operation, s.acme.String(), id("tenant-", operation), emptyBodySHA256, "/v1/orgs/acme/templates")
 		assert.Equal(t, http.StatusBadRequest, status, "%s for another organization's audience: %s", operation, got)
@@ -382,14 +383,14 @@ func migrationRows(t *testing.T, p *pgxpool.Pool, schema string, operations []st
 		_, err := p.Exec(ctx, strings.ReplaceAll(sql, "§", schema+"."), args...)
 		return err
 	}
-	org := "grn:root:default:org:mig"
-	hosted := "grn:mig:default:operator:hosted"
+	org := grn.Org("mig").String()
+	hosted := grn.New("mig", "operator", "hosted").String()
 	require.NoError(t, exec(`INSERT INTO §orgs (grn, name, created_at, updated_at) VALUES ($1, 'mig', now(), now())`, org))
 	require.NoError(t, exec(`INSERT INTO §operators (grn, org_grn, registered_by, created_at, name)
-		VALUES ($1, $2, 'grn:root:default:user:ada', now(), 'hosted')`, hosted, org))
+		VALUES ($1, $2, '`+grn.New(grn.RootOwner, "user", "ada").String()+`', now(), 'hosted')`, hosted, org))
 	require.NoError(t, exec(`INSERT INTO §operator_delegations
 		(id, org_grn, operator_grn, request_id, operations, expires_at, granted_by, granted_at)
-		VALUES ('g-1', $1, $2, 'r-1', $3, now() + interval '1 day', 'grn:root:default:user:ada', now())`,
+		VALUES ('g-1', $1, $2, 'r-1', $3, now() + interval '1 day', '`+grn.New(grn.RootOwner, "user", "ada").String()+`', now())`,
 		org, hosted, operations))
 	return func(ref, operation, requestTarget string) error {
 		var target any
@@ -399,7 +400,7 @@ func migrationRows(t *testing.T, p *pgxpool.Pool, schema string, operations []st
 		return exec(`INSERT INTO §operation_authorities
 			(ref, org_grn, audience_grn, request_id, delegation_id, actor_grn, operation, target_grn,
 			 body_sha256, request_target, token_hash, token_expires_at, created_at)
-			VALUES ($1, $2, $3, $1, 'g-1', 'grn:root:default:user:ada', $4, $2,
+			VALUES ($1, $2, $3, $1, 'g-1', '`+grn.New(grn.RootOwner, "user", "ada").String()+`', $4, $2,
 			        $5, $6, $1, now() + interval '5 minutes', now())`,
 			ref, org, hosted, operation, emptyBodySHA256, target)
 	}

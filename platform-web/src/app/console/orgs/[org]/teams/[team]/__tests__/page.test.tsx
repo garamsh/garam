@@ -88,7 +88,7 @@ describe("team page", () => {
         HttpResponse.json([
           aliceMembership,
           {
-            userGrn: "grn:root:default:user:bob",
+            userGrn: "grn:root/iam/user/bob",
             nickname: "Bob",
             role: "member",
             since: "2026-01-02T03:04:05Z",
@@ -110,7 +110,7 @@ describe("team page", () => {
 
   it("tells two agents apart by their rows and removes the one chosen", async () => {
     const first = reportedAgent.grn;
-    const second = "grn:acme:default:agent:0a1b2c3d4e5f6071";
+    const second = "grn:acme/iam/agent/0a1b2c3d4e5f6071";
     const removed: string[] = [];
     server.use(
       membersAre(first, second),
@@ -187,9 +187,9 @@ describe("team page", () => {
     server.use(
       membersAre(
         alice.grn,
-        "grn:root:default:user:gone",
-        "grn:acme:default:agent:retired",
-        "grn:acme:default:project:frontend",
+        "grn:root/iam/user/gone",
+        "grn:acme/iam/agent/retired",
+        "grn:acme/iam/project/frontend",
       ),
     );
 

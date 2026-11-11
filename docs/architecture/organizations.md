@@ -10,7 +10,7 @@ engine owns (ADR-0008), not through this list.
 
 **An organization's cowork principal is unbuilt (#1664).**
 [ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
-has the platform write one, `grn:<org>:default:service:cowork`, in the
+has the platform write one, `grn:<org>/iam/service/cowork`, in the
 transaction that creates the organization, and a migration write one
 for each organization that exists. Deleting the organization takes it
 by the cascade below. No member manages it: a server command of the

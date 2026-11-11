@@ -99,11 +99,11 @@ func TestCredentialAudit_RecordsASupervisorsCredentialAndItsAgentsTokens(t *test
 	browser := auditBrowser(t, s.executionStack, engine)
 
 	c, token := supervisedHost(t, s)
-	minted := s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens", operator.TokenContractVersion, token, "", `{}`)
+	minted := s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens", operator.TokenContractVersion, token, "", `{}`)
 	require.Equal(t, http.StatusCreated, minted.status, minted.body)
 	var own machinegen.AgentToken
 	require.NoError(t, json.Unmarshal([]byte(minted.body), &own))
-	shown := s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens", operator.TokenContractVersion, token, "",
+	shown := s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens", operator.TokenContractVersion, token, "",
 		`{"audience":"`+s.hosted.String()+`"}`)
 	require.Equal(t, http.StatusBadRequest, shown.status, shown.body)
 
@@ -141,9 +141,9 @@ func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
 	browser := auditBrowser(t, s.executionStack, engine)
 	c, token := supervisedHost(t, s)
-	require.Equal(t, http.StatusCreated, s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens",
+	require.Equal(t, http.StatusCreated, s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens",
 		operator.TokenContractVersion, token, "", `{}`).status)
-	require.Equal(t, http.StatusBadRequest, s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens",
+	require.Equal(t, http.StatusBadRequest, s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens",
 		operator.TokenContractVersion, token, "", `{"audience":"`+s.hosted.String()+`"}`).status)
 	status, body := browserDo(t, http.MethodPost, browser+"/orgs/acme/operators", s.owner,
 		jsonReader(t, map[string]string{"identifier": "field-read"}))
@@ -165,7 +165,7 @@ func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 
 	denied := activePolicy(t, policies, s.acme, "no-operator-read",
 		statementDoc("no-operator-read", wire.EffectDeny, org.ActionOperatorRead, s.acme.String()))
-	attachPolicy(t, policies, denied, grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "bob"))
+	attachPolicy(t, policies, denied, grn.New(grn.RootOwner, user.ServiceType, "bob"))
 
 	status, body = read(operatorGRN, "")
 	assert.Equal(t, http.StatusForbidden, status, body)
@@ -173,7 +173,7 @@ func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 	assert.Equal(t, http.StatusOK, status, "a supervisor is read on agent:read: %s", body)
 	status, body = read(scopedGRN("globex", operator.ServiceType, "x"), "")
 	assert.Equal(t, http.StatusBadRequest, status, body)
-	status, body = read(grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "ada"), "")
+	status, body = read(grn.New(grn.RootOwner, user.ServiceType, "ada"), "")
 	assert.Equal(t, http.StatusBadRequest, status, body)
 }
 

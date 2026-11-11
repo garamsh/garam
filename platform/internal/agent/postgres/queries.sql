@@ -86,12 +86,14 @@ WHERE grn = sqlc.arg('grn')
   )
 RETURNING *;
 
--- SearchAgentsByOrg answers the org's agents whose identifier (the
--- GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+-- SearchAgentsByOrg answers the org's agents whose name matches
+-- pattern, or whose GRN matches id_pattern, case aside, ordered by GRN.
+-- id_pattern is a LIKE pattern over the whole GRN that lib/grn builds,
+-- so that no SQL reads a GRN's segments.
 -- name: SearchAgentsByOrg :many
 SELECT * FROM agents
 WHERE org_grn = sqlc.arg('org_grn')
-  AND (split_part(grn, ':', 5) ILIKE sqlc.arg('pattern') OR name ILIKE sqlc.arg('pattern'))
+  AND (grn ILIKE sqlc.arg('id_pattern') OR name ILIKE sqlc.arg('pattern')::text)
 ORDER BY grn;
 
 -- name: CountAgentsByOrg :one
@@ -216,12 +218,15 @@ WHERE e.agent_grn = $1;
 -- assignee is registered only while its registration is current, which
 -- a revocation or a replacement ends under the same execution lock
 -- (ADR-0082); an operator's record is read on the listener instead.
+-- supervisor_registered says whether the assignee holds a current
+-- registration; whether the assignee is a supervisor, and so whether
+-- that is required, is the caller's to say from its GRN.
 -- name: ShareAssignment :one
 SELECT a.assignee_grn, a.epoch,
-       (split_part(a.assignee_grn, ':', 4) <> 'supervisor' OR EXISTS (
+       EXISTS (
            SELECT 1 FROM agent_supervisors s
            WHERE s.grn = a.assignee_grn AND s.agent_grn = a.agent_grn AND s.ended_at IS NULL
-       ))::boolean AS assignee_registered
+       )::boolean AS supervisor_registered
 FROM agent_assignments a WHERE a.agent_grn = $1 FOR SHARE OF a;
 
 -- Now is read after the lock it follows was granted, so an expiry is

@@ -196,7 +196,7 @@ decides how cowork reaches an agent's queue. Today it keeps the
 mentions and delivers none.
 
 - **One principal per organization**,
-  `grn:<org>:default:service:cowork`, written by the platform with the
+  `grn:<org>/iam/service/cowork`, written by the platform with the
   organization. cowork derives it and installs nothing.
 - **One deployment key.** cowork keeps its private half in an
   owner-only file and signs an assertion naming the organization's

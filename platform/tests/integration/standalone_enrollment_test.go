@@ -137,7 +137,7 @@ func (s *executionStack) enrolled(t *testing.T, _ standaloneHost, got reply) sta
 	epoch, err := strconv.Atoi(e.Epoch)
 	require.NoError(t, err)
 	supervisor := s.supervisorToken(t, c.credential)
-	minted := s.send(t, tokenPresenting(t, supervisor), http.MethodPost, "/agents/"+c.agent.String()+"/tokens",
+	minted := s.send(t, tokenPresenting(t, supervisor), http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens",
 		operator.TokenContractVersion, "", `{}`)
 	require.Equal(t, http.StatusCreated, minted.status, minted.body)
 	var own machinegen.AgentToken
@@ -331,7 +331,7 @@ func TestStandalone_BootstrapRefusals(t *testing.T) {
 	require.NoError(t, err)
 	got = s.spend(t, demoted.secret, demoted.enrollment(t))
 	assert.Equal(t, http.StatusForbidden, got.status, "the approver no longer holds agent:enroll: %s", got.body)
-	_, err = s.pool.Exec(ctx, `UPDATE org_members SET role = 'owner' WHERE org_grn = $1 AND user_grn LIKE '%:ada'`, s.acme.String())
+	_, err = s.pool.Exec(ctx, `UPDATE org_members SET role = 'owner' WHERE org_grn = $1 AND user_grn LIKE '%/ada'`, s.acme.String())
 	require.NoError(t, err)
 
 	// The control: the same approval spends once its approver holds

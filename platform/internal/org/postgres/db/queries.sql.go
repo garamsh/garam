@@ -940,19 +940,21 @@ func (q *Queries) RevokeInvitation(ctx context.Context, arg RevokeInvitationPara
 const searchGroups = `-- name: SearchGroups :many
 SELECT grn, org_grn, name, roles, policies, created_at, updated_at FROM groups
 WHERE org_grn = $1
-  AND (name ILIKE $2 OR split_part(grn, ':', 5) ILIKE $2)
+  AND (name ILIKE $2 OR grn ILIKE $3)
 ORDER BY grn
 `
 
 type SearchGroupsParams struct {
-	OrgGrn  string
-	Pattern string
+	OrgGrn    string
+	Pattern   string
+	IDPattern string
 }
 
-// SearchGroups answers the org's groups whose name or identifier (the
-// GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+// SearchGroups answers the org's groups whose name matches pattern or
+// whose GRN matches id_pattern, case aside, ordered by GRN. id_pattern
+// is a LIKE pattern over the whole GRN that lib/grn builds.
 func (q *Queries) SearchGroups(ctx context.Context, arg SearchGroupsParams) ([]Group, error) {
-	rows, err := q.db.Query(ctx, searchGroups, arg.OrgGrn, arg.Pattern)
+	rows, err := q.db.Query(ctx, searchGroups, arg.OrgGrn, arg.Pattern, arg.IDPattern)
 	if err != nil {
 		return nil, err
 	}
@@ -982,19 +984,20 @@ func (q *Queries) SearchGroups(ctx context.Context, arg SearchGroupsParams) ([]G
 const searchProjects = `-- name: SearchProjects :many
 SELECT grn, org_grn, name, roles, policies, created_at, updated_at FROM projects
 WHERE org_grn = $1
-  AND (name ILIKE $2 OR split_part(grn, ':', 5) ILIKE $2)
+  AND (name ILIKE $2 OR grn ILIKE $3)
 ORDER BY grn
 `
 
 type SearchProjectsParams struct {
-	OrgGrn  string
-	Pattern string
+	OrgGrn    string
+	Pattern   string
+	IDPattern string
 }
 
 // SearchProjects answers the org's projects as SearchGroups answers
 // its groups.
 func (q *Queries) SearchProjects(ctx context.Context, arg SearchProjectsParams) ([]Project, error) {
-	rows, err := q.db.Query(ctx, searchProjects, arg.OrgGrn, arg.Pattern)
+	rows, err := q.db.Query(ctx, searchProjects, arg.OrgGrn, arg.Pattern, arg.IDPattern)
 	if err != nil {
 		return nil, err
 	}

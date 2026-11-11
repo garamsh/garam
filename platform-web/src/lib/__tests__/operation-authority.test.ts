@@ -22,9 +22,9 @@ function readCall(): ControlCall<{ name: string }> {
     method: "GET",
     requestId: "req-1",
     org: "acme",
-    audience: "grn:acme:default:operator:hosted",
+    audience: "grn:acme/iam/operator/hosted",
     operation: "agent-template:read",
-    target: "grn:root:default:org:acme",
+    target: "grn:root/iam/org/acme",
     parser: z.object({ name: z.string() }),
   };
 }
@@ -105,7 +105,7 @@ describe("callControl", () => {
     const mint = minting();
     answering(
       Response.json({
-        agent: "grn:acme:default:agent:1",
+        agent: "grn:acme/iam/agent/1",
         revision: "1",
         epoch: "1",
       }),
@@ -119,7 +119,7 @@ describe("callControl", () => {
         body: { requestId: "req-3" },
         requestId: "req-3",
         operation: "agent:create",
-        target: "grn:acme:default:operator:field-one",
+        target: "grn:acme/iam/operator/field-one",
         parser: z.unknown(),
       },
       mint,
@@ -250,7 +250,7 @@ describe("TemplateVersionParser", () => {
 
 describe("OperatorReportsParser", () => {
   const reported = {
-    grn: "grn:acme:default:operator:field-one",
+    grn: "grn:acme/iam/operator/field-one",
     images: [
       {
         name: "manager",

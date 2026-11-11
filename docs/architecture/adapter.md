@@ -445,6 +445,12 @@ The v0.1.0 rows above still hold for an unsigned message.
 | A signature is refused with 403 `signature rejected: <check>`, a missing one under `require-signature` with 403 `signature required`, and an issuer with no usable key set with 503 `issuer keys unavailable` | `docs/architecture/gateway.md` §Signed messages | A refusal would not read as a message not delivered |
 | A trusted issuer is an exact `iss` in the runtime's `issuers` | `docs/architecture/gateway.md` §Signed messages | garam's `GARAM_MACHINE_ISSUER` would not need to match it byte for byte (deployment-contract.md §The message issuer is kept for the deployment's life) |
 
+garam calls the runtime's `/agents/{agent}/...` routes with the agent
+segment percent-encoded, because an agent's GRN holds `/`
+([grn-model.md](./grn-model.md) §Format). Whether the pinned Sherlock
+release, `v0.8.0`, routes an escaped `/` in that segment was not
+verified in this pull request; nothing above states that it does.
+
 This promotes an observability surface into a delivery contract, and
 the two carry different obligations: observability may lose an event, a
 delivery contract may not. Naming the buffer here is what makes it

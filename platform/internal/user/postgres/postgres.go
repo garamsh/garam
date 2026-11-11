@@ -88,7 +88,11 @@ func (s *Store) SearchByGRNs(ctx context.Context, grns []grn.GRN, n listfilter.N
 	for _, g := range grns {
 		keys = append(keys, g.String())
 	}
-	rows, err := s.q.SearchUsersByGRNs(ctx, db.SearchUsersByGRNsParams{Grns: keys, Pattern: pgxtype.Contains(n.Text())})
+	rows, err := s.q.SearchUsersByGRNs(ctx, db.SearchUsersByGRNsParams{
+		Grns:      keys,
+		Pattern:   pgxtype.Contains(n.Text()),
+		IDPattern: grn.New("%", user.ServiceType, pgxtype.Contains(n.Text())).String(),
+	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "search by grns", nil, nil)
 	}

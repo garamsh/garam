@@ -218,7 +218,7 @@ describe("grant consent dialog", () => {
   it("grants the half for the organization typed, closes, and says where the pair stands without its identifier", async () => {
     const granted = record("put", () =>
       HttpResponse.json({
-        orgGrn: `grn:root:default:org:${HEX}`,
+        orgGrn: `grn:root/iam/org/${HEX}`,
         grantedHere: true,
         grantedThere: false,
         stands: false,

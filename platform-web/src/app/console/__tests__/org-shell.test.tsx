@@ -96,7 +96,7 @@ describe("the caller's role in an organization", () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/members`, () =>
         HttpResponse.json([
-          { ...aliceMembership, userGrn: "grn:root:default:user:bob" },
+          { ...aliceMembership, userGrn: "grn:root/iam/user/bob" },
         ]),
       ),
     );

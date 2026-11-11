@@ -10,7 +10,7 @@ import (
 
 // matchResource is a literal every case below matches on, so that only
 // the action pattern under test decides the result.
-const matchResource = "grn:root:default:org:acme"
+const matchResource = "grn:root/iam/org/acme"
 
 // TestStatementMatches_LiteralPatternNeverBacktracks pins the guard on
 // the matcher's backtracking branch: a pattern holding no `*` has
@@ -94,11 +94,11 @@ func TestStatementMatches_Wildcards(t *testing.T) {
 func TestStatementMatches_RequiresBothActionAndResource(t *testing.T) {
 	st := authz.Statement{
 		Action:   []string{"org:read", "org:update"},
-		Resource: []string{"grn:root:default:org:acme", "grn:acme:*"},
+		Resource: []string{"grn:root/iam/org/acme", "grn:acme/*"},
 	}
-	assert.True(t, st.Matches("org:read", "grn:root:default:org:acme"), "first entry of each list")
-	assert.True(t, st.Matches("org:update", "grn:acme:default:project:web"), "last entry of each list")
-	assert.False(t, st.Matches("org:delete", "grn:root:default:org:acme"), "action matches no entry")
-	assert.False(t, st.Matches("org:read", "grn:globex:default:org:other"), "resource matches no entry")
-	assert.False(t, authz.Statement{}.Matches("org:read", "grn:root:default:org:acme"), "no patterns at all")
+	assert.True(t, st.Matches("org:read", "grn:root/iam/org/acme"), "first entry of each list")
+	assert.True(t, st.Matches("org:update", "grn:acme/iam/project/web"), "last entry of each list")
+	assert.False(t, st.Matches("org:delete", "grn:root/iam/org/acme"), "action matches no entry")
+	assert.False(t, st.Matches("org:read", "grn:globex/iam/org/other"), "resource matches no entry")
+	assert.False(t, authz.Statement{}.Matches("org:read", "grn:root/iam/org/acme"), "no patterns at all")
 }

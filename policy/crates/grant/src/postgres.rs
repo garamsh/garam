@@ -220,16 +220,11 @@ impl PolicySource for PolicyStore {
     }
 }
 
-/// Refuses a GRN that is not `grn:<org>:<project>:policy:<id>` under
-/// this organization, which also keeps a policy's id from the system
-/// tier's: those hold no segments.
+/// Refuses a GRN that is not `grn:<org>/iam/policy/<id>` under this
+/// organization, which also keeps a policy's id from the system tier's:
+/// those hold no segments.
 fn owned(org: &OrgGrn, grn: &str) -> Result<(), Error> {
-    let segments: Vec<&str> = grn.split(':').collect();
-    let shaped = matches!(
-        segments.as_slice(),
-        ["grn", _, project, "policy", id] if !project.is_empty() && !id.is_empty()
-    );
-    if shaped && org.owns_grn(grn) {
+    if org.owns_policy(grn) {
         return Ok(());
     }
     Err(Error::ForeignPolicy(grn.to_owned()))

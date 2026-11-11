@@ -38,7 +38,7 @@ fn a_forbid_that_errors_denies_what_a_role_allows() {
 
 #[test]
 fn a_principal_missing_from_the_store_is_denied_by_isolation_itself() {
-    const GHOST: Named = ("User", "grn:acme:default:user:ghost");
+    const GHOST: Named = ("User", "grn:acme/iam/user/ghost");
     let world = World::new();
     let ghost = link(Role::Member, RoleScope::Organization, GHOST, ACME);
     let member = link(Role::Member, RoleScope::Organization, LEE, ACME);
@@ -105,7 +105,7 @@ fn a_resource_whose_organization_is_missing_from_the_store_is_denied() {
 
 #[test]
 fn a_resource_missing_from_the_store_is_denied_by_isolation_erroring() {
-    const UNKNOWN: Named = ("Project", "grn:acme:default:project:gone");
+    const UNKNOWN: Named = ("Project", "grn:acme/iam/project/gone");
     let world = World::new();
     let known = link(Role::Member, RoleScope::TeamOrProject, LEE, WEB);
     let gone = link(Role::Member, RoleScope::TeamOrProject, LEE, UNKNOWN);

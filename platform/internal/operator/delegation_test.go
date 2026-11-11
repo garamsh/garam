@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	acme       = grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme")
-	hosted     = grn.New("acme", grn.DefaultProject, operator.ServiceType, "hosted")
-	controller = grn.New("acme", grn.DefaultProject, operator.ServiceType, "controller")
+	acme       = grn.New(grn.RootOwner, "org", "acme")
+	hosted     = grn.New("acme", operator.ServiceType, "hosted")
+	controller = grn.New("acme", operator.ServiceType, "controller")
 )
 
 // TestParseGrantTerms_BoundsWhatAGrantCanReach holds every bound a
@@ -34,18 +34,18 @@ func TestParseGrantTerms_BoundsWhatAGrantCanReach(t *testing.T) {
 
 	many := make([]string, 33)
 	for i := range many {
-		many[i] = grn.New("acme", grn.DefaultProject, operator.ServiceType, "c"+strings.Repeat("x", i+1)).String()
+		many[i] = grn.New("acme", operator.ServiceType, "c"+strings.Repeat("x", i+1)).String()
 	}
 	cases := map[string]func() ([]string, []string, time.Time){
 		"no controller":  func() ([]string, []string, time.Time) { _, o, e := valid(); return nil, o, e },
 		"33 controllers": func() ([]string, []string, time.Time) { _, o, e := valid(); return many, o, e },
 		"another organization": func() ([]string, []string, time.Time) {
 			_, o, e := valid()
-			return []string{"grn:globex:default:operator:c"}, o, e
+			return []string{"grn:globex/iam/operator/c"}, o, e
 		},
 		"not an operator": func() ([]string, []string, time.Time) {
 			_, o, e := valid()
-			return []string{"grn:acme:default:agent:c"}, o, e
+			return []string{"grn:acme/iam/agent/c"}, o, e
 		},
 		"the hosted operator itself": func() ([]string, []string, time.Time) { _, o, e := valid(); return []string{hosted.String()}, o, e },
 		"a controller twice": func() ([]string, []string, time.Time) {
@@ -149,7 +149,7 @@ func TestParseRequestTarget_AcceptsOnlyOriginForm(t *testing.T) {
 	for _, ok := range []string{
 		"/v1/orgs/acme/templates",
 		"/prefix/v1/orgs/acme/templates/web%20agent/versions/3",
-		"/v1/orgs/acme/agents/grn:acme:default:agent:9f2a/execution",
+		"/v1/orgs/acme/agents/grn:acme/iam/agent/9f2a/execution",
 		"/v1/orgs/acme/templates?after=b&after=a",
 		"/v1/orgs/acme/templates?next=../a",
 		"/v1/orgs/acme/templates/v1.2",

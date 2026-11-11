@@ -48,8 +48,8 @@ func identityHandler() http.Handler {
 func certPath(dir string) string { return filepath.Join(dir, "tls.crt") }
 func keyPath(dir string) string  { return filepath.Join(dir, "tls.key") }
 
-func agentGRN(org, id string) grn.GRN      { return grn.New(org, grn.DefaultProject, "agent", id) }
-func operatorGRNOf(org, id string) grn.GRN { return grn.New(org, grn.DefaultProject, "operator", id) }
+func agentGRN(org, id string) grn.GRN      { return grn.New(org, "agent", id) }
+func operatorGRNOf(org, id string) grn.GRN { return grn.New(org, "operator", id) }
 
 // serverRoot is a garam server certificate authority as these tests
 // hold it (ADR-0040): the root a machine identity pins, and the key

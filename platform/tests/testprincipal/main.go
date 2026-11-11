@@ -210,7 +210,7 @@ func seed(ctx context.Context, target *pgxpool.Config, dir string, ttl time.Dura
 		return nil, err
 	}
 	id := "principal-" + suffix
-	g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+	g := grn.New(grn.RootOwner, user.ServiceType, id)
 	if err := userpg.New(pool).Create(ctx, user.New(g, id)); err != nil {
 		return nil, errorx.Wrap(err, "create the principal")
 	}

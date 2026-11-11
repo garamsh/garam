@@ -16,7 +16,7 @@ import (
 // refused one a reason and nothing issued. Each constructor is the
 // other's control.
 func TestCredential_IsClosedOverItsOutcome(t *testing.T) {
-	subject := grn.New("acme", grn.DefaultProject, "operator", "one")
+	subject := grn.New("acme", "operator", "one")
 	v := audit.Validity{NotBefore: time.Unix(100, 0), NotAfter: time.Unix(200, 0)}
 
 	issued := audit.CredentialIssued(subject, audit.CredentialOperatorCertificate, audit.ActionRenew, "42", v, true)

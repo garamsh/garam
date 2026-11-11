@@ -228,7 +228,11 @@ var _ agent.Store = (*Store)(nil)
 // SearchByOrg returns the organization's agents whose identifier or
 // name holds n, ordered by GRN.
 func (s *Store) SearchByOrg(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*agent.Agent, error) {
-	rows, err := s.q.SearchAgentsByOrg(ctx, db.SearchAgentsByOrgParams{OrgGrn: orgGRN.String(), Pattern: pgxtype.Contains(n.Text())})
+	rows, err := s.q.SearchAgentsByOrg(ctx, db.SearchAgentsByOrgParams{
+		OrgGrn:    orgGRN.String(),
+		Pattern:   pgxtype.Contains(n.Text()),
+		IDPattern: grn.New(orgGRN.Identifier, agent.ServiceType, pgxtype.Contains(n.Text())).String(),
+	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "search agents", nil, nil)
 	}

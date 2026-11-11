@@ -79,7 +79,7 @@ func (s *tokenStack) shownToHosted(t *testing.T) string {
 func (s *tokenStack) createdV2(t *testing.T, requestID string) managed {
 	t.Helper()
 	ref := s.creationRef(t, s.member, requestID)
-	got := s.v2(t, http.MethodPost, "/operators/"+s.controller.String()+"/managed-agents",
+	got := s.v2(t, http.MethodPost, "/operators/"+pathEscape(s.controller.String())+"/managed-agents",
 		agent.TokenEnrollmentContractVersion, s.hostedToken, "", creationBody(requestID, ref))
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var m machinegen.ManagedAgent
@@ -103,7 +103,7 @@ func (s *tokenStack) standingV2(t *testing.T, g grn.GRN, token string) machinege
 	t.Helper()
 	raw, err := json.Marshal(map[string]any{"token": token})
 	require.NoError(t, err)
-	got := s.v2(t, http.MethodPost, "/agents/"+g.String()+"/execution/introspection",
+	got := s.v2(t, http.MethodPost, "/agents/"+pathEscape(g.String())+"/execution/introspection",
 		agent.TokenExecutionContractVersion, s.hostedToken, "", string(raw))
 	require.Equal(t, http.StatusOK, got.status, got.body)
 	var in machinegen.ExecutionIntrospection
@@ -115,7 +115,7 @@ func (s *tokenStack) standingV2(t *testing.T, g grn.GRN, token string) machinege
 // the execution token beside it, as its adapter sends one.
 func (s *tokenStack) claimWith(t *testing.T, g grn.GRN, token, execution string) int {
 	t.Helper()
-	return s.tokenSend(t, http.MethodPost, "/agents/"+g.String()+"/claims", map[string]string{
+	return s.tokenSend(t, http.MethodPost, "/agents/"+pathEscape(g.String())+"/claims", map[string]string{
 		"Authorization": "Garam-Token " + token, "Garam-Execution": execution,
 	}, "").status
 }
@@ -138,7 +138,7 @@ func TestTokenContracts_AHostedOperatorDrivesAManagedAgentWithTokensAlone(t *tes
 	opened := s.lineageOf(t, m.agent)
 	require.NotEmpty(t, opened, "creation opened the lineage the controller mints in")
 
-	path := "/agents/" + m.agent.String()
+	path := "/agents/" + pathEscape(m.agent.String())
 	got := s.v2(t, http.MethodPost, path+"/activations", agent.TokenExecutionContractVersion, s.hostedToken, "",
 		tokenActivationBody("first", generation(1), nil, &m.ref, shown.Token))
 	require.Equal(t, http.StatusCreated, got.status, got.body)
@@ -165,7 +165,7 @@ func TestTokenContracts_AHostedOperatorDrivesAManagedAgentWithTokensAlone(t *tes
 	proof := func(token string) reply {
 		raw, err := json.Marshal(map[string]any{"token": token, "agent": m.agent.String()})
 		require.NoError(t, err)
-		return s.v2(t, http.MethodPost, "/operators/"+s.controller.String()+"/introspection",
+		return s.v2(t, http.MethodPost, "/operators/"+pathEscape(s.controller.String())+"/introspection",
 			operator.TokenAuthorityContractVersion, s.hostedToken, "", string(raw))
 	}
 	got = proof(s.shownToHosted(t))
@@ -256,14 +256,14 @@ func (s *tokenStack) mintRecovery(t *testing.T, g grn.GRN, digest, requestID str
 // past the contract check, whatever the rest of it then meets.
 func TestTokenContracts_EachFamilyIsServedUnderItsOneValue(t *testing.T) {
 	s := newTokenStack(t)
-	agentPath := "/agents/" + s.agent.String()
+	agentPath := "/agents/" + pathEscape(s.agent.String())
 	for _, family := range []struct {
 		name, method, path string
 		removed, served    string
 	}{
 		{"operation authority", http.MethodGet, "/operation-references/unknown", "operation-authority.v1", operator.TokenAuthorityContractVersion},
 		{"execution fence", http.MethodPost, agentPath + "/execution/introspection", "execution-fence.v1", agent.TokenExecutionContractVersion},
-		{"managed enrollment", http.MethodPost, "/operators/" + s.controller.String() + "/managed-agents", "managed-enrollment.v1", agent.TokenEnrollmentContractVersion},
+		{"managed enrollment", http.MethodPost, "/operators/" + pathEscape(s.controller.String()) + "/managed-agents", "managed-enrollment.v1", agent.TokenEnrollmentContractVersion},
 		{"durable delivery", http.MethodPost, "/outbox-messages", "durable-delivery.v1", message.TokenDeliveryContractVersion},
 	} {
 		t.Run(family.name, func(t *testing.T) {
@@ -301,7 +301,7 @@ func TestTokenContracts_AForwardedTokenProvesItsOwnAgentAlone(t *testing.T) {
 	s := newTokenStack(t)
 	m := s.createdV2(t, "c-1")
 	shown := s.agentToken(t, m.agent, &s.hosted)
-	path := "/agents/" + m.agent.String() + "/execution/introspection"
+	path := "/agents/" + pathEscape(m.agent.String()) + "/execution/introspection"
 	assert.Equal(t, machinegen.ExecutionIntrospectionCredential("current"), s.standingV2(t, m.agent, shown.Token).Credential,
 		"control: the agent's own token is admitted")
 

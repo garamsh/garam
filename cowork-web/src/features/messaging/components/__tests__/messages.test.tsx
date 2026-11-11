@@ -1,4 +1,11 @@
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -157,6 +164,29 @@ describe("LiveMessages", () => {
           "/auth/sign-in?next=%2Facme%2Fchannels%2Fc1",
         ),
       );
+    });
+
+    it("asks nothing of a feed the page closed itself", async () => {
+      const location = { assign: vi.fn() };
+      const asked = vi.fn();
+      server.use(
+        http.get("http://cowork.test/auth/session", () => {
+          asked();
+          return new HttpResponse(null, { status: 401 });
+        }),
+      );
+      render_(location);
+      const closedByPage = FakeSocket.last;
+      cleanup();
+      render_(location);
+
+      // The page's own close first, then a lost connection: once the
+      // second has been answered, the first has had its chance to ask.
+      act(() => closedByPage.onclose?.({ code: 1005 }));
+      act(() => FakeSocket.last.onclose?.({ code: 1006 }));
+
+      await waitFor(() => expect(location.assign).toHaveBeenCalled());
+      expect(asked).toHaveBeenCalledOnce();
     });
 
     it("keeps a visitor on the page when the network fails", async () => {

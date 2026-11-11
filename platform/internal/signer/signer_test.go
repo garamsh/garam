@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -222,6 +223,36 @@ func TestVerify_ReturnsWhatSignSigned(t *testing.T) {
 	assert.Equal(t, c.Lifetime, got.Lifetime)
 	assert.Equal(t, "tok-1", got.JTI)
 	assert.Equal(t, "sid-1", got.SessionID)
+}
+
+// TestVerify_RefusesAHeaderOutsideTheProfile: a token this key's own
+// private half signed, with a typ or kid the profile does not name, is
+// refused. The profile's own header is the control.
+func TestVerify_RefusesAHeaderOutsideTheProfile(t *testing.T) {
+	private, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKCS8PrivateKey(private)
+	require.NoError(t, err)
+	key, err := signer.ParseKey(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+	require.NoError(t, err)
+
+	signed := func(typ, kid string) string {
+		s, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: private},
+			(&jose.SignerOptions{}).WithType(jose.ContentType(typ)).WithHeader("kid", kid))
+		require.NoError(t, err)
+		object, err := s.Sign([]byte(`{"iss":"i","sub":"s","aud":"a","iat":` +
+			strconv.FormatInt(issuedAt.Unix(), 10) + `,"exp":` + strconv.FormatInt(issuedAt.Add(time.Minute).Unix(), 10) + `}`))
+		require.NoError(t, err)
+		compact, err := object.CompactSerialize()
+		require.NoError(t, err)
+		return compact
+	}
+	_, err = key.Verify(signed("JWT", key.ID()), issuedAt)
+	require.NoError(t, err, "control")
+	_, err = key.Verify(signed("at+jwt", key.ID()), issuedAt)
+	assert.Error(t, err, "another typ")
+	_, err = key.Verify(signed("JWT", "other"), issuedAt)
+	assert.Error(t, err, "another kid")
 }
 
 func TestVerify_RefusesWhatThisKeyDidNotSignOrIsOutOfTime(t *testing.T) {

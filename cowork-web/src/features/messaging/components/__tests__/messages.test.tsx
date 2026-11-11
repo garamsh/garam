@@ -1,7 +1,17 @@
-import { act, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
+import { HttpResponse, http } from "msw";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Message } from "@/lib/cowork";
+import { startFreshPage } from "@/testing/clock";
+import { server } from "@/testing/setup";
 
 // An embed reads its artifact through a server action, which a test
 // renders no server for.
@@ -86,11 +96,16 @@ class FakeSocket {
 }
 
 describe("LiveMessages", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(startFreshPage);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it("sends a visitor the server signed out to sign in", () => {
     vi.stubGlobal("WebSocket", FakeSocket);
     const location = {
+      origin: "http://cowork.test",
       pathname: "/acme/channels/c1",
       search: "",
       assign: vi.fn(),
@@ -113,6 +128,88 @@ describe("LiveMessages", () => {
     expect(location.assign).toHaveBeenCalledWith(
       "/auth/sign-in?next=%2Facme%2Fchannels%2Fc1",
     );
+  });
+
+  describe("after the feed closes without a refusal it can read", () => {
+    function render_(location: { assign: () => void }) {
+      vi.stubGlobal("WebSocket", FakeSocket);
+      vi.stubGlobal("location", {
+        origin: "http://cowork.test",
+        pathname: "/acme/channels/c1",
+        search: "",
+        assign: location.assign,
+        reload: vi.fn(),
+      });
+      render(
+        <LiveMessages
+          org="acme"
+          channel="c1"
+          initial={[]}
+          syncUrl="ws://cowork"
+          names={names}
+          pages={{}}
+        />,
+      );
+    }
+
+    it("sends a visitor whose session the platform refuses to sign in", async () => {
+      const location = { assign: vi.fn() };
+      server.use(
+        http.get(
+          "http://cowork.test/auth/session",
+          () => new HttpResponse(null, { status: 401 }),
+        ),
+      );
+      render_(location);
+
+      act(() => FakeSocket.last.onclose?.({ code: 1006 }));
+
+      await waitFor(() =>
+        expect(location.assign).toHaveBeenCalledWith(
+          "/auth/sign-in?next=%2Facme%2Fchannels%2Fc1",
+        ),
+      );
+    });
+
+    it("asks nothing of a feed the page closed itself", async () => {
+      const location = { assign: vi.fn() };
+      const asked = vi.fn();
+      server.use(
+        http.get("http://cowork.test/auth/session", () => {
+          asked();
+          return new HttpResponse(null, { status: 401 });
+        }),
+      );
+      render_(location);
+      const closedByPage = FakeSocket.last;
+      cleanup();
+      render_(location);
+
+      // The page's own close first, then a lost connection: once the
+      // second has been answered, the first has had its chance to ask.
+      act(() => closedByPage.onclose?.({ code: 1005 }));
+      act(() => FakeSocket.last.onclose?.({ code: 1006 }));
+
+      await waitFor(() => expect(location.assign).toHaveBeenCalled());
+      expect(asked).toHaveBeenCalledOnce();
+    });
+
+    it("keeps a visitor on the page when the network fails", async () => {
+      const location = { assign: vi.fn() };
+      const asked = vi.fn();
+      server.use(
+        http.get("http://cowork.test/auth/session", () => {
+          asked();
+          return HttpResponse.error();
+        }),
+      );
+      render_(location);
+
+      act(() => FakeSocket.last.onclose?.({ code: 1006 }));
+
+      await waitFor(() => expect(asked).toHaveBeenCalledOnce());
+      expect(location.assign).not.toHaveBeenCalled();
+    });
   });
 
   it("appends what arrives, once, and counts a reply on its thread rather than listing it", () => {

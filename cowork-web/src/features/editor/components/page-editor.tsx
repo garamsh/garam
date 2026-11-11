@@ -9,7 +9,7 @@ import * as Y from "yjs";
 
 import { ArtifactEmbed } from "@/features/artifacts/components/artifact-embed";
 import { BlockToolbar } from "@/features/editor/components/block-toolbar";
-import { leaveOnRefusal } from "@/lib/socket-close";
+import { leaveOnClose } from "@/lib/socket-close";
 import { EmbedContext, type Embed } from "@/plugins/embed";
 import { registry } from "@/plugins/manifest";
 
@@ -56,7 +56,10 @@ export function PageEditor({ org, page, syncUrl, user }: Props) {
       // upgrade, so a refusal does not outlive the one it came on.
       if (status === "connected") setReadOnly(false);
     });
-    provider.on("closed", ({ code }: { code: number }) => leaveOnRefusal(code));
+    // `null` is a close the provider made itself, never the server's.
+    provider.on("connection-close", (event: CloseEvent | null) => {
+      if (event) void leaveOnClose(event.code);
+    });
     // The server answers an edit it refuses with y-websocket's
     // permission-denied message, which the provider hands here.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

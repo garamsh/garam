@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import type { Message } from "@/lib/cowork";
-import { leaveOnRefusal } from "@/lib/socket-close";
+import { leaveOnClose } from "@/lib/socket-close";
 
 import { readMessagesAction } from "../actions";
 
@@ -61,7 +61,7 @@ export function LiveMessages({
     };
     ws.onclose = (event) => {
       setLive(false);
-      leaveOnRefusal(event.code);
+      if (open) void leaveOnClose(event.code);
     };
     ws.onmessage = (event) => {
       const m = JSON.parse(String(event.data)) as Message;

@@ -131,6 +131,9 @@ importers:
       jsdom:
         specifier: ^30.0.1
         version: 30.1.3
+      msw:
+        specifier: 2.15.0
+        version: 2.15.0(@types/node@24.13.3)(typescript@5.9.3)
       openapi-typescript:
         specifier: 7.13.0
         version: 7.13.0(typescript@5.9.3)

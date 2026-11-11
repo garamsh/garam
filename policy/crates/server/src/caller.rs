@@ -23,11 +23,40 @@ const MODULUS_BITS: std::ops::RangeInclusive<usize> = 2048..=4096;
 /// The skew allowed against the issuer's clock, as ADR-0102's.
 const CLOCK_SKEW_SECONDS: u64 = 30;
 
-/// An authenticated service.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Caller {
-    /// The `sub` of its token.
-    pub subject: String,
+/// The entity types the platform owns (ADR-0130 §7, ADR-0140).
+const PLATFORM_TYPES: [&str; 7] = [
+    "Org",
+    "OrgMembers",
+    "Team",
+    "Project",
+    "User",
+    "Agent",
+    "Operator",
+];
+
+/// An authenticated service, read from the `sub` of its token. Another
+/// `sub` is refused however well its token verifies, so what a service
+/// may ask is decided here and nowhere else (ADR-0140).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Caller {
+    /// The platform, which asks anything and owns [`PLATFORM_TYPES`].
+    Platform,
+}
+
+impl Caller {
+    fn from_subject(subject: &str) -> Option<Self> {
+        match subject {
+            "platform" => Some(Self::Platform),
+            _ => None,
+        }
+    }
+
+    /// Whether this service writes entities of this type (ADR-0130 §8).
+    pub fn owns(self, entity_type: &str) -> bool {
+        match self {
+            Self::Platform => PLATFORM_TYPES.contains(&entity_type),
+        }
+    }
 }
 
 /// Why the configured keys do not load.
@@ -100,6 +129,9 @@ pub enum Refusal {
     /// stated lifetime says nothing about when the token ends.
     #[error("the token is issued in the future")]
     IssuedInTheFuture,
+    /// The token verifies, and its `sub` is no service this one serves.
+    #[error("the token's subject is no known service")]
+    UnknownService,
 }
 
 /// A key as the file states it. Every member is named, so a private
@@ -224,9 +256,7 @@ impl Verifier {
         if claims.sub.is_empty() || claims.nbf.is_some_and(|nbf| nbf > claims.exp) {
             return Err(Refusal::Claims);
         }
-        Ok(Caller {
-            subject: claims.sub,
-        })
+        Caller::from_subject(&claims.sub).ok_or(Refusal::UnknownService)
     }
 }
 

@@ -19,6 +19,14 @@ service PolicyService {
   // list is the one question the request's defaults state. A question
   // at fault is denied in its own answer, with the fault as its reason.
   rpc Evaluations(EvaluationsRequest) returns (EvaluationsResponse);
+
+  // ApplyEntityChanges writes what an entity's owner says it now is
+  // (ADR-0138). A change at or below the stored sequence changes
+  // nothing, so a replayed or reordered delivery is a no-op. A change
+  // to a type the caller does not own fails the call and writes
+  // nothing. A change at fault otherwise is refused in the response
+  // and the rest are written.
+  rpc ApplyEntityChanges(ApplyEntityChangesRequest) returns (ApplyEntityChangesResponse);
 }
 
 // Subject is who asks. It carries no properties, unlike AuthZEN's: a
@@ -42,8 +50,8 @@ message Resource {
   string type = 1;
   // id is the resource's GRN.
   string id = 2;
-  // properties are refused until a caller can be shown to own the
-  // resource's type (ADR-0138).
+  // properties are refused: an owner writes an entity through
+  // ApplyEntityChanges, and no question carries one (ADR-0140).
   google.protobuf.Struct properties = 3;
 }
 
@@ -112,4 +120,59 @@ message EvaluationsResponse {
   // evaluations holds one answer per evaluation, in the request's
   // order, and never none.
   repeated EvaluateResponse evaluations = 1;
+}
+
+// EntityRef names an entity of the Cedar schema.
+message EntityRef {
+  // type is an entity type of the Cedar schema, such as `Team`.
+  string type = 1;
+  // id is the entity's identifier, its GRN for all but `OrgMembers`,
+  // which takes its organization's.
+  string id = 2;
+}
+
+// EntityUpsert is what an entity now is. It carries containment and
+// membership and nothing else (ADR-0138).
+message EntityUpsert {
+  // org is required of every resource type, and an `Org` names itself.
+  EntityRef org = 1;
+  // members is required of an `Org`, and names its own `OrgMembers`.
+  EntityRef members = 2;
+  repeated EntityRef parents = 3;
+}
+
+// EntityDelete says the owner no longer has the entity.
+message EntityDelete {}
+
+// EntityChange is one write.
+message EntityChange {
+  EntityRef entity = 1;
+  // sequence is above zero and rises with every change the owner makes
+  // to this entity.
+  int64 sequence = 2;
+  oneof operation {
+    EntityUpsert upsert = 3;
+    EntityDelete delete = 4;
+  }
+}
+
+message ApplyEntityChangesRequest {
+  // changes holds at most 1000 changes, applied in order in one
+  // transaction.
+  repeated EntityChange changes = 1;
+}
+
+// EntityChangeRefusal is one change refused for its own fault.
+message EntityChangeRefusal {
+  // index is the change's place in the request.
+  uint32 index = 1;
+  string error = 2;
+}
+
+message ApplyEntityChangesResponse {
+  // written counts the changes that took effect.
+  uint32 written = 1;
+  // dropped counts the changes at or below the stored sequence.
+  uint32 dropped = 2;
+  repeated EntityChangeRefusal refusals = 3;
 }

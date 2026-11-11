@@ -15,12 +15,24 @@ pub(crate) enum ServiceError {
     /// A caller sent grounds a decision reads for itself (ADR-0130 §8).
     #[error("{0} is not accepted")]
     Grounds(&'static str),
+    /// A write to an entity type another service owns (ADR-0130 §8).
+    #[error("this caller does not own {0}")]
+    NotOwned(String),
     /// A batch past the bound.
     #[error("a request holds at most {max} evaluations")]
     TooManyEvaluations {
         /// The bound.
         max: usize,
     },
+    /// A write past the bound.
+    #[error("a request holds at most {max} changes")]
+    TooManyChanges {
+        /// The bound.
+        max: usize,
+    },
+    /// The entity store failed.
+    #[error(transparent)]
+    EntityWrite(entity::Error),
     /// The domain refused or failed.
     #[error(transparent)]
     Decision(#[from] Error),
@@ -44,6 +56,14 @@ impl ServiceError {
 /// platform's error kinds, and what a status withholds the log carries.
 pub(crate) fn to_status(error: &ServiceError) -> Status {
     match error {
+        ServiceError::Unauthenticated(Refusal::UnknownService) => {
+            tracing::info!(error = ?error, "refused a service this one does not serve");
+            Status::permission_denied("this service does not serve the caller")
+        }
+        ServiceError::NotOwned(_) => {
+            tracing::info!(error = ?error, "refused a write");
+            Status::permission_denied(error.to_string())
+        }
         ServiceError::Unauthenticated(_) => {
             tracing::info!(error = ?error, "refused a caller");
             Status::unauthenticated(error.to_string())
@@ -51,9 +71,14 @@ pub(crate) fn to_status(error: &ServiceError) -> Status {
         ServiceError::Missing(_)
         | ServiceError::Grounds(_)
         | ServiceError::TooManyEvaluations { .. }
+        | ServiceError::TooManyChanges { .. }
         | ServiceError::Decision(Error::Evaluation(_) | Error::Entities(_)) => {
             tracing::info!(error = ?error, "refused a question");
             Status::invalid_argument(error.to_string())
+        }
+        ServiceError::EntityWrite(_) => {
+            tracing::error!(error = ?error, "a change could not be written");
+            Status::unavailable("the policy service could not write its stores")
         }
         ServiceError::Decision(Error::EntityRead(_) | Error::PolicyRead(_)) => {
             tracing::error!(error = ?error, "a store could not be read");

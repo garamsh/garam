@@ -18,7 +18,7 @@ use serde::Serialize;
 pub const ISSUER: &str = "https://garam.test";
 pub const KID: &str = "current";
 pub const HEADER: &str = r#"{"alg":"RS256","kid":"current","typ":"JWT"}"#;
-pub const CALLER: &str = "grn:root:default:service:platform";
+pub const CALLER: &str = "platform";
 
 pub struct Signer {
     kid: String,

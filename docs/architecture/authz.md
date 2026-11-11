@@ -32,8 +32,22 @@ of grants and entities, the access report and the binary. No image
 runs it, nothing calls it and no owner feeds it, so it decides over
 nothing yet.
 [ADR-0138](./adr/0138-a-caller-of-the-policy-service-presents-a-short-lived-signed-token-and-owners-write-entities-through-a-sequenced-rpc.md)
-states how a caller authenticates and how an owner writes. Neither the
-platform's issuer nor the write RPC is built.
+states how a caller authenticates and how an owner writes, and
+`ApplyEntityChanges` serves that write. The platform's issuer is not
+built.
+[ADR-0140](./adr/0140-owners-feed-the-policy-service-from-a-dirty-set-of-entities-read-at-delivery-and-a-caller-is-a-closed-list-of-services.md)
+closes who may call: `platform` alone until cowork does, every other
+`sub` refused, and each caller writing only the types it owns. The list
+is `policy/README.md` §Callers.
+
+**The platform's outbox and its delivery are unbuilt.** Under ADR-0140
+triggers mark each entity a row change reaches, in a set holding one
+row per entity and no document, and a loop reads each entity's state at
+delivery under one shared sequence. It is off by default, so a
+deployment with no policy service writes no rows and runs no loop, and
+a later one starts by a backfill from the owners' tables. Restoring the
+platform's database rewinds that sequence, so it means rebuilding the
+entity store.
 [ADR-0137](./adr/0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)
 revises ADR-0130 on isolation's form and the templates' scopes, and
 makes any evaluation error a deny.

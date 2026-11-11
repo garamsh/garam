@@ -1,7 +1,8 @@
 # policy
 
-The policy service's Cargo workspace (ADR-0130, ADR-0137, ADR-0138). It
-decides over its own stores and authenticates its callers. The local
+The policy service's Cargo workspace (ADR-0130, ADR-0137, ADR-0138,
+ADR-0140). It decides over its own stores and authenticates its callers,
+and an owner writes its entities over `ApplyEntityChanges`. The local
 stack runs its image under the `policy` profile, and nothing calls it
 yet (#1689).
 
@@ -28,6 +29,28 @@ yet (#1689).
   `POLICY_TLS_KEY_FILE`. `policy migrate` applies the migrations and
   exits, reading `POLICY_DATABASE_URL`. `policy probe <url>` is what a
   healthcheck runs on an image with no shell.
+
+## Callers
+
+- **A caller is a service this list names, read from its token's
+  `sub`.** Any other `sub` is refused with `PERMISSION_DENIED`, however
+  well its token verifies. `Caller` in `crates/server/src/caller.rs` is
+  that list, and a test holds it to the schema: every entity type is
+  owned, or stated as no caller's.
+
+| `sub` | Writes | Asks |
+|-------|--------|------|
+| `platform` | `Org`, `OrgMembers`, `Team`, `Project`, `User`, `Agent`, `Operator` | anything |
+
+- **No caller writes the rest.** `Channel`, `Page`, `Task` and
+  `Artifact` wait for cowork as a caller, and `Policy` for `grant`.
+- **A type the caller does not own refuses the whole
+  `ApplyEntityChanges`.** Any other fault refuses that entry, named by
+  its index in the response, and the rest are written. A request holds
+  at most 1000 changes.
+- **The caller's address is `GARAM_POLICY_ADDR`,** unset until the
+  platform's delivery exists. `POLICY_ADDR` is where this service
+  listens.
 
 ## Transport
 

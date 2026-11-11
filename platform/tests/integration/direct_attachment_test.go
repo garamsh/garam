@@ -75,7 +75,13 @@ func startDirectRuntime(t *testing.T, store, address, agentID, epoch string) (*d
 	}
 	started := time.Now().UTC().Format(time.RFC3339)
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /agents/"+agentID+"/status", func(w http.ResponseWriter, _ *http.Request) {
+	// An agent's GRN holds `/`, so it reaches the runtime as one
+	// escaped segment; req.URL.Path is the decoded path either way.
+	mux.HandleFunc("GET /agents/", func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/agents/"+agentID+"/status" {
+			http.NotFound(w, req)
+			return
+		}
 		r.mu.Lock()
 		reported := r.reportedID
 		r.mu.Unlock()

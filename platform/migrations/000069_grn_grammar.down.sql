@@ -1,8 +1,10 @@
--- The CHECKs 000069 restated are dropped and not returned to their
--- five-segment form: each read a name at the positions of that form,
--- so on a database in ADR-0142's grammar it would refuse every row it
--- was written for. The trigger function and the outbox function are
--- restored as the five-segment form read them.
+-- The CHECKs 000069 restated are dropped and the five-segment CHECKs
+-- of 000068 are added back NOT VALID: a rollback of an earlier
+-- migration drops them by name, so they must exist. NOT VALID leaves
+-- the rows already stored unjudged by a CHECK that reads the
+-- five-segment positions; a row written afterwards is judged by it.
+-- The trigger function and the outbox function are restored as the
+-- five-segment form read them.
 ALTER TABLE agents DROP CONSTRAINT agents_grn_ownership;
 ALTER TABLE agent_assignments
     DROP CONSTRAINT agent_assignments_assignee_service_type,
@@ -19,6 +21,46 @@ ALTER TABLE agent_tokens DROP CONSTRAINT agent_tokens_audience_service_type;
 ALTER TABLE machine_authentication_evidence
     DROP CONSTRAINT machine_authentication_evidence_ownership;
 ALTER TABLE audit_credential_events DROP CONSTRAINT audit_credential_events_ownership;
+
+ALTER TABLE agent_assignments
+    ADD CONSTRAINT agent_assignments_assignee_service_type
+    CHECK ((split_part(assignee_grn, ':'::text, 4) = ANY (ARRAY['operator'::text, 'supervisor'::text]))) NOT VALID;
+ALTER TABLE agent_assignments
+    ADD CONSTRAINT agent_assignments_same_org
+    CHECK ((split_part(assignee_grn, ':'::text, 2) = split_part(agent_grn, ':'::text, 2))) NOT VALID;
+ALTER TABLE agent_enrollments
+    ADD CONSTRAINT agent_enrollments_ownership
+    CHECK (((split_part(agent_grn, ':'::text, 4) = 'agent'::text) AND (split_part(supervisor_grn, ':'::text, 4) = 'supervisor'::text) AND (split_part(agent_grn, ':'::text, 2) = split_part(org_grn, ':'::text, 5)) AND (split_part(supervisor_grn, ':'::text, 2) = split_part(org_grn, ':'::text, 5)))) NOT VALID;
+ALTER TABLE agents
+    ADD CONSTRAINT agents_grn_ownership
+    CHECK (((split_part(grn, ':'::text, 4) = 'agent'::text) AND (split_part(grn, ':'::text, 2) = split_part(org_grn, ':'::text, 5)))) NOT VALID;
+ALTER TABLE agent_supervisors
+    ADD CONSTRAINT agent_supervisors_ownership
+    CHECK (((split_part(grn, ':'::text, 4) = 'supervisor'::text) AND (split_part(grn, ':'::text, 2) = split_part(agent_grn, ':'::text, 2)))) NOT VALID;
+ALTER TABLE agent_tokens
+    ADD CONSTRAINT agent_tokens_audience_service_type
+    CHECK (((audience_grn IS NULL) OR (split_part(audience_grn, ':'::text, 4) = 'operator'::text))) NOT VALID;
+ALTER TABLE agent_watches
+    ADD CONSTRAINT agent_watches_agent_service_type
+    CHECK ((split_part(agent_grn, ':'::text, 4) = 'agent'::text)) NOT VALID;
+ALTER TABLE audit_credential_events
+    ADD CONSTRAINT audit_credential_events_ownership
+    CHECK ((split_part(subject_grn, ':'::text, 2) = split_part(org_grn, ':'::text, 5))) NOT VALID;
+ALTER TABLE machine_authentication_evidence
+    ADD CONSTRAINT machine_authentication_evidence_ownership
+    CHECK ((split_part(caller_grn, ':'::text, 2) = split_part(org_grn, ':'::text, 5))) NOT VALID;
+ALTER TABLE operator_delegations
+    ADD CONSTRAINT operator_delegations_ownership
+    CHECK (((split_part(operator_grn, ':'::text, 4) = 'operator'::text) AND (split_part(operator_grn, ':'::text, 2) = split_part(org_grn, ':'::text, 5)))) NOT VALID;
+ALTER TABLE operators
+    ADD CONSTRAINT operators_grn_ownership
+    CHECK (((split_part(grn, ':'::text, 4) = 'operator'::text) AND (split_part(grn, ':'::text, 2) = split_part(org_grn, ':'::text, 5)))) NOT VALID;
+ALTER TABLE operators
+    ADD CONSTRAINT operators_manager
+    CHECK (((manager_grn IS NULL) OR ((manager_grn <> grn) AND (split_part(manager_grn, ':'::text, 4) = 'operator'::text) AND (split_part(manager_grn, ':'::text, 2) = split_part(grn, ':'::text, 2))))) NOT VALID;
+ALTER TABLE operator_tokens
+    ADD CONSTRAINT operator_tokens_audience_service_type
+    CHECK (((audience_grn IS NULL) OR (split_part(audience_grn, ':'::text, 4) = 'operator'::text))) NOT VALID;
 
 CREATE OR REPLACE FUNCTION policy_attachments_same_org() RETURNS trigger AS $$
 DECLARE

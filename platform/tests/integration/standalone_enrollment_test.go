@@ -331,7 +331,7 @@ func TestStandalone_BootstrapRefusals(t *testing.T) {
 	require.NoError(t, err)
 	got = s.spend(t, demoted.secret, demoted.enrollment(t))
 	assert.Equal(t, http.StatusForbidden, got.status, "the approver no longer holds agent:enroll: %s", got.body)
-	_, err = s.pool.Exec(ctx, `UPDATE org_members SET role = 'owner' WHERE org_grn = $1 AND user_grn LIKE '%:ada'`, s.acme.String())
+	_, err = s.pool.Exec(ctx, `UPDATE org_members SET role = 'owner' WHERE org_grn = $1 AND user_grn LIKE '%/ada'`, s.acme.String())
 	require.NoError(t, err)
 
 	// The control: the same approval spends once its approver holds

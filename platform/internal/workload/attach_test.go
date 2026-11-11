@@ -75,12 +75,22 @@ func (h *host) attachConfig(status workload.StatusReader, tokens workload.AgentT
 	}
 }
 
+// handedFiles are the files an attaching supervisor writes into the
+// adapter's directory.
+var handedFiles = []string{"control-root.pem", "placement-token", "control-token", "agent-token"}
+
 // runAttached runs an attaching supervisor in the background, as the
-// latest run, and waits until its control serves.
+// latest run, and waits until its control accepts a connection and the
+// adapter's files are handed. A socket path that exists only says the
+// listener is bound.
 func (h *host) runAttached(cfg workload.Config) *running {
 	h.t.Helper()
 	s, err := workload.NewSupervisor(nil, h.garam, cfg)
 	require.NoError(h.t, err)
+	// The previous run's files would satisfy the wait below.
+	for _, name := range handedFiles {
+		require.NoError(h.t, os.RemoveAll(filepath.Join(h.adapterDir(), name)))
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &running{cancel: cancel, done: make(chan struct{})}
 	go func() {
@@ -91,8 +101,19 @@ func (h *host) runAttached(cfg workload.Config) *running {
 	h.latest = r
 	socket := filepath.Join(h.adapterDir(), "control", "control.sock")
 	require.Eventually(h.t, func() bool {
-		_, err := os.Stat(socket)
-		return err == nil || r.returned()
+		if r.returned() {
+			return true
+		}
+		for _, name := range handedFiles {
+			if _, err := os.Stat(filepath.Join(h.adapterDir(), name)); err != nil {
+				return false
+			}
+		}
+		conn, err := net.Dial("unix", socket)
+		if err == nil {
+			_ = conn.Close()
+		}
+		return err == nil
 	}, 5*time.Second, 5*time.Millisecond)
 	require.False(h.t, r.returned(), "the run returned before serving: %v", r.err)
 	return r
@@ -282,6 +303,31 @@ func TestRun_AttachedResumesItsIntentAcrossARestart(t *testing.T) {
 	retried, err := activateAttached(auth, again, generation)
 	require.NoError(t, err)
 	assert.Equal(t, first.ID, retried.ID)
+}
+
+// TestRun_AttachedListensBeforeItHandsTheAdapterItsFiles holds that the
+// first file the adapter reads appears only once the control accepts a
+// connection: an adapter dials as soon as it has them.
+func TestRun_AttachedListensBeforeItHandsTheAdapterItsFiles(t *testing.T) {
+	h := newHost(t)
+	status := &stubStatus{}
+	status.serving(newGeneration())
+	cfg := h.attachConfig(status, h.tokens)
+	s, err := workload.NewSupervisor(nil, h.garam, cfg)
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- s.Run(ctx) }()
+	t.Cleanup(func() { cancel(); <-done })
+
+	dir := h.adapterDir()
+	require.Eventually(t, func() bool {
+		_, err := os.Stat(filepath.Join(dir, "control-root.pem"))
+		return err == nil
+	}, 5*time.Second, time.Microsecond)
+	conn, err := net.Dial("unix", filepath.Join(dir, "control", "control.sock"))
+	require.NoError(t, err, "the control listens before its files are handed")
+	require.NoError(t, conn.Close())
 }
 
 // TestRun_AttachedRefusesAGenerationThisHostStarted holds an attaching

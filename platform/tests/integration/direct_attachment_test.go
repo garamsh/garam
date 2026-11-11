@@ -222,10 +222,19 @@ func (r *hostRun) result(t *testing.T) error {
 	}
 }
 
+// handedFiles are the files the supervisor writes into the adapter's
+// directory once its control listens.
+var handedFiles = []string{"control-root.pem", "placement-token", "control-token", "agent-token"}
+
 // run starts the host's supervisor as the CLI ships it, as the host's
-// init would, and waits until its control serves the adapter.
+// init would, and waits until its control accepts a connection and the
+// adapter's files are handed.
 func (h *directHost) run(t *testing.T, s *executionStack) *hostRun {
 	t.Helper()
+	// The previous run's files would satisfy the wait below.
+	for _, name := range handedFiles {
+		require.NoError(t, os.RemoveAll(filepath.Join(h.agentDir, name)))
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &hostRun{cancel: cancel, done: make(chan struct{})}
 	root := cli.NewRootCommand()
@@ -241,8 +250,19 @@ func (h *directHost) run(t *testing.T, s *executionStack) *hostRun {
 	t.Cleanup(func() { r.cancel(); <-r.done })
 	socket := filepath.Join(h.agentDir, "control", "control.sock")
 	require.Eventually(t, func() bool {
-		_, err := os.Stat(socket)
-		return err == nil || r.returned()
+		if r.returned() {
+			return true
+		}
+		for _, name := range handedFiles {
+			if _, err := os.Stat(filepath.Join(h.agentDir, name)); err != nil {
+				return false
+			}
+		}
+		conn, err := net.Dial("unix", socket)
+		if err == nil {
+			_ = conn.Close()
+		}
+		return err == nil
 	}, 10*time.Second, 10*time.Millisecond)
 	require.False(t, r.returned(), "the supervisor returned before serving: %v %s", r.err, out.String())
 	return r

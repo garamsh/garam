@@ -7,9 +7,10 @@ import {
   within,
 } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Message } from "@/lib/cowork";
+import { startFreshPage } from "@/testing/clock";
 import { server } from "@/testing/setup";
 
 // An embed reads its artifact through a server action, which a test
@@ -95,7 +96,11 @@ class FakeSocket {
 }
 
 describe("LiveMessages", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(startFreshPage);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it("sends a visitor the server signed out to sign in", () => {
     vi.stubGlobal("WebSocket", FakeSocket);

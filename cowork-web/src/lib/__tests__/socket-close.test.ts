@@ -1,6 +1,7 @@
 import { HttpResponse, http } from "msw";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { advance, startFreshPage } from "@/testing/clock";
 import { server } from "@/testing/setup";
 
 import { leaveOnClose } from "../socket-close";
@@ -27,7 +28,11 @@ function sessionAnswers(respond: () => Response) {
 const SIGN_IN = "/auth/sign-in?next=%2Facme%2Fp1%3Fview%3Dboard";
 
 describe("leaveOnClose", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(startFreshPage);
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it("sends a signed-out visitor to sign in, carrying the page", async () => {
     const location = stubLocation();
@@ -61,5 +66,21 @@ describe("leaveOnClose", () => {
     await leaveOnClose(1006);
     expect(location.assign).not.toHaveBeenCalled();
     expect(location.reload).not.toHaveBeenCalled();
+  });
+
+  it("asks once for the closes of one interval, and again after it", async () => {
+    stubLocation();
+    let asked = 0;
+    sessionAnswers(() => {
+      asked++;
+      return new HttpResponse(null, { status: 204 });
+    });
+
+    for (let i = 0; i < 12; i++) await leaveOnClose(1006);
+    expect(asked).toBe(1);
+
+    advance(30_000);
+    await leaveOnClose(1006);
+    expect(asked).toBe(2);
   });
 });

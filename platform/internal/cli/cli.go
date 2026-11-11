@@ -127,7 +127,8 @@ func NewRootCommand() *cobra.Command {
 	}
 	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(),
 		newAdapterCommand(), newStandaloneCommand(),
-		newCopyMemoryCommand(), newRetireMessageSigningKeyCommand())
+		newCopyMemoryCommand(), newRetireMessageSigningKeyCommand(),
+		newPolicyFeedCommand())
 	silenceUsageOnRun(root)
 	return root
 }

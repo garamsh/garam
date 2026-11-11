@@ -138,6 +138,12 @@ func serveAPI(cmd *cobra.Command) error {
 	).WithCredentialAudit(auditpg.NewCredentialStore(pool)).
 		WithDeviceGrant(authnpg.NewDeviceStore(pool))
 
+	stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger)
+	if err != nil {
+		return err
+	}
+	defer stopDelivery()
+
 	addr := envOr(envHTTPAddr, ":8080")
 	// A request needs both to be served: rows out of the database, and
 	// the decision that admits it.

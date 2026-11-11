@@ -43,7 +43,10 @@ Beside it:
   imports them directly.
 - **`lib/platform-sdk-go/`** and **`lib/cowork-sdk-go/`**, the Go
   clients generated from `platform/api/openapi.yaml` and
-  `cowork/api/openapi.yaml`, and **`garam-cli/`**, the one client CLI
+  `cowork/api/openapi.yaml`, **`lib/policy-sdk-go/`**, the Go client
+  generated from `policy/proto` that the platform feeds the policy
+  service through and cowork is to ask it through (ADR-0140), and
+  **`garam-cli/`**, the one client CLI
   built on them ([cli.md](./cli.md),
   [ADR-0133](./adr/0133-garam-is-the-one-client-cli-and-carries-every-services-commands-from-garam-cli.md)).
 - **`cowork/`**, the first service in its own folder: its module,
@@ -76,7 +79,8 @@ on are boundaries inside a service.
 - **`lib/` holds code libraries, and no binary.** Each package in it is
   named for what it is and is linked by more than one unit:
   `lib/design/`, `lib/platform-sdk-ts/`, `lib/platform-sdk-go/`,
-  `lib/cowork-sdk-go/`, `lib/grn/` and `lib/errorx/`. A Go library is a
+  `lib/cowork-sdk-go/`, `lib/policy-sdk-go/`, `lib/grn/` and
+  `lib/errorx/`. A Go library is a
   module of its own, its package at the module root, as
   `docs/convention/stack-go.md` §1 lays out a module that ships no
   binary. No folder is a catch-all: there is no `shared/`, `utils/` or

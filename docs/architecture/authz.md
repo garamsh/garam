@@ -29,17 +29,17 @@ today, and stays true until `policy/` serves the platform's checks.
 
 `policy/` holds the contract, the schema, the system tier, its stores
 of grants and entities, the access report and the binary. No image
-runs it, nothing calls it and no owner feeds it, so it decides over
-nothing yet.
+runs it, nothing calls it for a decision and the platform feeds it
+entities, so it decides over nothing yet.
 [ADR-0138](./adr/0138-a-caller-of-the-policy-service-presents-a-short-lived-signed-token-and-owners-write-entities-through-a-sequenced-rpc.md)
 states how a caller authenticates and how an owner writes, and
-`ApplyEntityChanges` serves that write. The platform's issuer is not
-built, and
+`ApplyEntityChanges` serves that write. The platform signs its own
+calls with a minimal signer, and
 [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
-decides it: garam is an OIDC issuer whose exchanged token a service
-verifies offline, and each service calls the policy service directly
-under its own caller token, owning a Cedar namespace and feeding its
-own entities. Nothing of that is built.
+decides the issuer: garam is an OIDC issuer whose exchanged token a
+service verifies offline, and each service calls the policy service
+directly under its own caller token, owning a Cedar namespace and
+feeding its own entities. Nothing of that issuer is built.
 [ADR-0140](./adr/0140-owners-feed-the-policy-service-from-a-dirty-set-of-entities-read-at-delivery-and-a-caller-is-a-closed-list-of-services.md)
 closes who may call: `platform` alone until cowork does, every other
 `sub` refused, and each caller writing only the types it owns. The list
@@ -48,7 +48,7 @@ ADR-0141 supersedes in part its §2: the platform no longer asks for
 cowork's checks, since cowork asks the policy service itself, and the
 list stays closed and static.
 
-**The platform's outbox is built and its delivery is not.** Under
+**The platform's outbox, its delivery and its signer are built.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set
 holding one row per entity and no document, and a loop reads each
 entity's state at delivery under one shared sequence. It is off by
@@ -57,6 +57,62 @@ no loop, and a later one starts by a backfill from the owners' tables,
 which `garam policy-feed start` runs and `stop` undoes. Restoring the
 platform's database rewinds that sequence, so it means rebuilding the
 entity store.
+
+### Delivery
+
+`serve api` runs the loop when `GARAM_POLICY_ADDR` is set, and only
+then. It then requires `GARAM_POLICY_CA_FILE`, the PEM root the
+service's certificate is verified against;
+`GARAM_POLICY_SIGNING_KEY_FILE`, the platform's RSA key; and
+`GARAM_POLICY_TOKEN_ISSUER`, the `iss` the service's
+`POLICY_TOKEN_ISSUER` names. Setting the address without the rest
+refuses to start. With none set nothing runs, and the process logs an
+error at start if the feed is on, since nothing then delivers it and
+the outbox grows with every write.
+
+A pass is one transaction (`platform/internal/policyfeed/postgres`):
+
+1. Lock the `policy_feed` row with `FOR UPDATE SKIP LOCKED`, so one
+   replica delivers and the others skip. A feed that is off ends the
+   pass.
+2. Read up to 500 marks with their generations, then each entity's
+   state through `policy_entity_state`. No row is an entity the owners
+   no longer hold, which goes out as a delete.
+3. Take the next value of `policy_feed_sequence` (migration 000068) and
+   send every entity in one `ApplyEntityChanges` call under it, with a
+   30 second deadline.
+4. Delete each mark still at the generation read, and commit. A write
+   landing mid-pass raised its mark's generation, so the mark
+   survives and goes out at a higher sequence.
+
+A failed call rolls the pass back and leaves every mark. The loop
+polls every second, goes straight on after a full batch, and after a
+failing pass waits twice as long each time up to 30 seconds. It logs
+once when delivery starts failing and once when it recovers, and is not
+part of readiness (ADR-0029).
+
+**A refused entity is deleted.** The service refuses a change for its
+own fault, as one that breaks a limit of the schema. The pass sends
+that entity's delete under a second sequence, logs an error naming the
+entity and the reason, and deletes its mark. A bad entity then denies
+rather than decides on what it last said (ADR-0137). Nothing retries
+it: a later write to the entity marks it again.
+
+### The signer
+
+`platform/internal/signer` signs the token each call carries under
+ADR-0138's profile: RS256, `sub` `platform`, `aud` `policy`, `iss` from
+`GARAM_POLICY_TOKEN_ISSUER`, a header of `alg`, `kid` and `typ`, and a
+lifetime of at most 300 seconds. The delivery signs one per call with a
+lifetime of 60 seconds. The key is PKCS#8 or PKCS#1 RSA of 2048 to 4096
+bits, and its `kid` is its RFC 7638 thumbprint.
+
+Loading a key, signing and producing the public JWKS are separate calls
+(`LoadKey`, `Sign`, `JWKS`), so an issuer endpoint can reuse them. None
+is built: the service reads its JWKS from a file, and nothing in the
+platform writes it yet. `lib/policy-sdk-go` is the client of the
+service's API, generated from `policy/proto` (ADR-0130).
+
 [ADR-0137](./adr/0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)
 revises ADR-0130 on isolation's form and the templates' scopes, and
 makes any evaluation error a deny.

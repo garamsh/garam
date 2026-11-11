@@ -7,5 +7,6 @@ use (
 	./lib/errorx
 	./lib/grn
 	./lib/platform-sdk-go
+	./lib/policy-sdk-go
 	./platform
 )

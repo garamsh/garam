@@ -229,7 +229,9 @@ is that the two agree, not that either is garam's.
 key file when any group or other permission bit is set, and separately
 when its owner is not the process's own UID, and every key file a
 process reads at startup goes through it: the key-encryption key and the
-machine listener's own TLS key (`platform/internal/cli/machine.go`), so
+machine listener's own TLS key (`platform/internal/cli/machine.go`), and
+the key that signs the platform's calls to the policy service
+(`platform/internal/signer`, read when `GARAM_POLICY_ADDR` is set), so
 either refusal stops the start of that process. Plain Kubernetes Secret
 projection satisfies neither half — a projected file is root-owned, and
 `fsGroup` changes the group owner rather than the user owner (read

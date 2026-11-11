@@ -14,7 +14,7 @@ supersedes in part
 [ADR-0138](./0138-a-caller-of-the-policy-service-presents-a-short-lived-signed-token-and-owners-write-entities-through-a-sequenced-rpc.md)'s
 token profile and signer, and it keeps what
 [ADR-0005](./0005-server-side-sessions.md) decided about
-sessions. garam is read at `c2667176`; a claim below that names no
+sessions. garam is read at `c2667176e08546ca0dfe19b917bbc0a0ff8df268`; a claim below that names no
 revision holds for it.
 
 ## Context
@@ -140,15 +140,20 @@ namespace each.**
    registered, and no session, agent-token or machine-token path
    changes. A deployment that configures no key behaves as it did.
 10. **Where it lives.** The issuer is one configured identity, an
-    https origin and path in the spelling `deployment-contract.md`
-    gives an issuer, named `GARAM_IDENTITY_ISSUER`, which is an
-    identity and not an address. It is the API's origin with the
-    `/api` prefix the console rewrite already forwards, so no new
-    rewrite and no new host exists. Discovery is at
+    named `GARAM_IDENTITY_ISSUER`, which is an identity and not an
+    address. It is spelled https, a lowercase host, no empty port, the
+    path `/api` and no trailing slash, and is compared byte for byte;
+    it is not the spelling `GARAM_MACHINE_ISSUER` takes, which allows
+    no path. It is the API's origin with the `/api` prefix the console
+    rewrite already forwards, so no new rewrite and no new host
+    exists. Discovery is at
     `<issuer>/.well-known/openid-configuration`, the JWKS and the
     token endpoint are at `<issuer>/oauth/jwks` and
     `<issuer>/oauth/token`, and introspection is at
     `/oauth/introspect` on the machine listener.
+    The machine listener's existing `POST /oauth/token`
+    (`exchangeClientAssertion`) is a different endpoint and is
+    unchanged.
 11. **What the browser does, and what is later.** A browser signs in
     and holds a session as it does today. The issuer adds nothing to
     that path. An authorization-code flow, for a third-party web
@@ -158,7 +163,15 @@ namespace each.**
 12. **Services call the policy service directly.** Each service holds
     a caller token the issuer mints for it, and asks the engine over
     the policy service's gRPC AuthZEN endpoint without the platform
-    between. Each service owns a Cedar namespace, its entity types
+    between. A service other than the platform obtains that token
+    from the machine listener's `exchangeClientAssertion`, a
+    client-credentials grant whose RFC 7523 assertion is signed with
+    the per-service key ADR-0129 decided, requesting `audience`
+    `policy`; it receives the issuer's JWT with `sub` its service
+    principal. The browser-facing token endpoint gains no
+    client-credentials grant, so no second client authentication
+    exists. This route is built with cowork's direct calls and not
+    with the issuer. Each service owns a Cedar namespace, its entity types
     and its actions, and feeds its own entities through
     `ApplyEntityChanges` under the per-entity sequence ADR-0138
     decided. An HTTP AuthZEN gateway (ADR-0130 §2) is added when a

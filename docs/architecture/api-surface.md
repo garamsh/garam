@@ -616,8 +616,10 @@ Until it is built, no token the listener reads names one.
 
 ## The issuer's endpoints
 
-**Unbuilt.** [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md) adds four endpoints, served only when a signing key is
-configured. With none, none is registered and nothing else changes.
+**Unbuilt.**
+[ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
+adds four endpoints, served only when a signing key is configured.
+With none, none is registered and nothing else changes.
 
 - **The issuer is one identity**, `GARAM_IDENTITY_ISSUER`, the API's
   origin with its `/api` prefix, so the console's rewrite forwards all

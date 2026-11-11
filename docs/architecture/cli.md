@@ -130,7 +130,8 @@ it with the platform's (ADR-0133).
 - **A service that rests on garam reads the same token.** codehub's
   `ch` reads the garam session, or the file `GARAM_TOKEN_FILE` names,
   and exchanges it at the issuer for a `codehub` token
-  ([ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)); `garam` gains a noun for a person who uses garam and a
+  ([ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md));
+  `garam` gains a noun for a person who uses garam and a
   service on it. Unbuilt.
 - **`GARAM_TOKEN_FILE`** names a file holding the agent's browser
   token ([machine-identity.md](./machine-identity.md) §Browser tokens).

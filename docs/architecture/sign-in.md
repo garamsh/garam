@@ -126,7 +126,7 @@ session.
   are live, decided in the statement that writes, as ADR-0030 bounds a
   login state.
 
-- **Exchange, unbuilt.**
+- **Exchange, built.**
   [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
   lets the CLI exchange this session's access token for a JWT of at
   most 300 seconds bound to one service

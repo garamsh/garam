@@ -97,9 +97,9 @@ func fillPath(t *testing.T, path string, values map[string]string) string {
 	}
 }
 
-// standaloneEnrollmentRoute, the two exchanges and keySetRoute are the
-// operations reached without a token (ADR-0082, ADR-0100,
-// ADR-0101, ADR-0102). They are named here so that what a reader
+// standaloneEnrollmentRoute, the two exchanges, keySetRoute and
+// introspectionRoute are the operations reached without a token
+// (ADR-0082, ADR-0100, ADR-0101, ADR-0102, ADR-0141). They are named here so that what a reader
 // checks is the exemption rather than the routes that are not exempt,
 // which are whatever is left.
 const (
@@ -107,6 +107,7 @@ const (
 	tokenExchangeRoute        = http.MethodPost + " /tokens"
 	assertionExchangeRoute    = http.MethodPost + " /oauth/token"
 	keySetRoute               = http.MethodGet + " /message-signing-keys"
+	introspectionRoute        = http.MethodPost + " /oauth/introspect"
 )
 
 // TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches
@@ -160,6 +161,16 @@ func TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches(t *t
 	status, body = send(t, client, assertion.method, url+assertion.path, "")
 	assert.Equal(t, http.StatusBadRequest, status)
 	assert.Contains(t, body, `"error":"invalid_request"`)
+
+	// Introspection authenticates by a client assertion of its own, and
+	// where no issuer is configured, as here, it is not registered: it
+	// answers as a path the listener has no route for (ADR-0141).
+	introspection, ok := routes[introspectionRoute]
+	require.True(t, ok, "the exemption names no operation the specification declares")
+	delete(routes, introspectionRoute)
+	status, body = send(t, client, introspection.method, url+introspection.path, "")
+	assert.Equal(t, http.StatusNotFound, status)
+	assert.Equal(t, "404 page not found\n", body)
 
 	// The key set is public: a verifier anywhere reads it (ADR-0101).
 	keySet, ok := routes[keySetRoute]

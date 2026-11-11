@@ -94,13 +94,13 @@ func (e AgentEnrollmentBindingPlacement) Valid() bool {
 
 // Defines values for ClientAssertionRequestClientAssertionType.
 const (
-	UrnIetfParamsOauthClientAssertionTypeJwtBearer ClientAssertionRequestClientAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+	ClientAssertionRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer ClientAssertionRequestClientAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
 )
 
 // Valid indicates whether the value is a known member of the ClientAssertionRequestClientAssertionType enum.
 func (e ClientAssertionRequestClientAssertionType) Valid() bool {
 	switch e {
-	case UrnIetfParamsOauthClientAssertionTypeJwtBearer:
+	case ClientAssertionRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer:
 		return true
 	default:
 		return false
@@ -158,6 +158,21 @@ func (e ExecutionIntrospectionGeneration) Valid() bool {
 	case ExecutionIntrospectionGenerationNotCurrent:
 		return true
 	case ExecutionIntrospectionGenerationNotSupplied:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IntrospectionRequestClientAssertionType.
+const (
+	IntrospectionRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer IntrospectionRequestClientAssertionType = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+)
+
+// Valid indicates whether the value is a known member of the IntrospectionRequestClientAssertionType enum.
+func (e IntrospectionRequestClientAssertionType) Valid() bool {
+	switch e {
+	case IntrospectionRequestClientAssertionTypeUrnIetfParamsOauthClientAssertionTypeJwtBearer:
 		return true
 	default:
 		return false
@@ -664,6 +679,40 @@ type Identity struct {
 	Grn string `json:"grn"`
 }
 
+// Introspection RFC 7662's introspection response. `active` false carries no other member.
+type Introspection struct {
+	Active bool    `json:"active"`
+	Aud    *string `json:"aud,omitempty"`
+	Exp    *int    `json:"exp,omitempty"`
+	Iat    *int    `json:"iat,omitempty"`
+	Iss    *string `json:"iss,omitempty"`
+	Jti    *string `json:"jti,omitempty"`
+
+	// Sid The id of the session row the token was exchanged from.
+	Sid *string `json:"sid,omitempty"`
+
+	// Sub The user's GRN.
+	Sub *string `json:"sub,omitempty"`
+}
+
+// IntrospectionRequest The introspection request `introspectIssuedToken` reads (ADR-0141). Each parameter appears once.
+type IntrospectionRequest struct {
+	ClientAssertion     string                                  `json:"client_assertion"`
+	ClientAssertionType IntrospectionRequestClientAssertionType `json:"client_assertion_type"`
+
+	// ClientId The calling service's GRN, `grn:root/iam/service/<audience>`.
+	ClientId string `json:"client_id"`
+
+	// Token The compact JWT garam issued.
+	Token string `json:"token"`
+
+	// TokenTypeHint Ignored.
+	TokenTypeHint *string `json:"token_type_hint,omitempty"`
+}
+
+// IntrospectionRequestClientAssertionType defines model for IntrospectionRequest.ClientAssertionType.
+type IntrospectionRequestClientAssertionType string
+
 // MachineToken defines model for MachineToken.
 type MachineToken struct {
 	// Audience The hosted operator the token is minted for, where one was asked for.
@@ -984,6 +1033,9 @@ type EnrollmentContractError = Error
 // ExecutionContractError defines model for ExecutionContractError.
 type ExecutionContractError = Error
 
+// IntrospectionError RFC 6749's error response (ADR-0102).
+type IntrospectionError = OAuthError
+
 // StandaloneContractError defines model for StandaloneContractError.
 type StandaloneContractError = Error
 
@@ -1107,6 +1159,9 @@ type ForwardTurnEventJSONRequestBody = TurnEvent
 // PostMessageJSONRequestBody defines body for PostMessage for application/json ContentType.
 type PostMessageJSONRequestBody = MessageSubmission
 
+// IntrospectIssuedTokenFormdataRequestBody defines body for IntrospectIssuedToken for application/x-www-form-urlencoded ContentType.
+type IntrospectIssuedTokenFormdataRequestBody = IntrospectionRequest
+
 // ExchangeClientAssertionFormdataRequestBody defines body for ExchangeClientAssertion for application/x-www-form-urlencoded ContentType.
 type ExchangeClientAssertionFormdataRequestBody = ClientAssertionRequest
 
@@ -1181,6 +1236,9 @@ type ServerInterface interface {
 	// GetMessageStatus Read how far a message the caller sent has got.
 	// (GET /messages/{message})
 	GetMessageStatus(w http.ResponseWriter, r *http.Request, messageId MessageId)
+	// IntrospectIssuedToken Ask whether a token garam issued is still active.
+	// (POST /oauth/introspect)
+	IntrospectIssuedToken(w http.ResponseWriter, r *http.Request)
 	// ExchangeClientAssertion Exchange an operator's signed client assertion for a short-lived token.
 	// (POST /oauth/token)
 	ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
@@ -1878,6 +1936,20 @@ func (siw *ServerInterfaceWrapper) GetMessageStatus(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// IntrospectIssuedToken operation middleware
+func (siw *ServerInterfaceWrapper) IntrospectIssuedToken(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IntrospectIssuedToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ExchangeClientAssertion operation middleware
 func (siw *ServerInterfaceWrapper) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request) {
 
@@ -2312,6 +2384,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetIdentity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tokens", wrapper.ExchangeToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/oauth/token", wrapper.ExchangeClientAssertion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/oauth/introspect", wrapper.IntrospectIssuedToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/tokens", wrapper.MintAgentToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/provisioning-state", wrapper.ReportProvisioningState)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/runtime-state", wrapper.ReportRuntimeState)

@@ -616,7 +616,7 @@ Until it is built, no token the listener reads names one.
 
 ## The issuer's endpoints
 
-**Unbuilt.**
+**Built (#1757).**
 [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
 adds four endpoints, served only when a signing key is configured.
 With none, none is registered and nothing else changes.
@@ -971,4 +971,5 @@ document owes an update.
   token that posts to that organization's agents alone; unbuilt
 - [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
   — the issuer's discovery, JWKS, token and introspection endpoints,
-  served only with a signing key; unbuilt
+  served only with a signing key; built for a CLI session's exchange
+  (#1757)

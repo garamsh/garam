@@ -29,6 +29,7 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/agent"
+	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
@@ -64,6 +65,10 @@ type Server struct {
 	// credentialAudit records every credential issued, renewed or
 	// refused (ADR-0114); nil records nothing.
 	credentialAudit CredentialAudit
+	// issuer and callers answer introspection of the tokens garam
+	// signs as an OIDC issuer (ADR-0141); nil answers 404.
+	issuer  *identity.Issuer
+	callers *identity.Callers
 }
 
 // Rechecker reads again, for one decision, what admitted the caller's

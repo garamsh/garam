@@ -113,7 +113,7 @@ func TestServer_ExchangesASupervisorsCredentialForAToken(t *testing.T) {
 
 // TestSpecification_EveryOperationButTheExemptOnesTakesAToken holds the
 // specification to what the listener does (ADR-0118): every operation
-// lists machineToken but the four that authenticate by what else a
+// lists machineToken but the five that authenticate by what else a
 // request carries, and the Bearer alias is listed exactly where
 // machineToken is (ADR-0102). The count of operations read is asserted
 // too, so a file that failed to parse into paths could not pass as one
@@ -130,7 +130,7 @@ func TestSpecification_EveryOperationButTheExemptOnesTakesAToken(t *testing.T) {
 	require.NoError(t, yaml.Unmarshal(raw, &spec))
 
 	exempt := map[string]bool{standaloneEnrollmentRoute: true, tokenExchangeRoute: true,
-		assertionExchangeRoute: true, keySetRoute: true}
+		assertionExchangeRoute: true, keySetRoute: true, introspectionRoute: true}
 	listed, bearer, every := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	operations := 0
 	for path, methods := range spec.Paths {

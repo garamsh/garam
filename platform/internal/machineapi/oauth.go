@@ -88,29 +88,11 @@ func sourceOf(r *http.Request) string {
 }
 
 // clientCredentialsForm reads the request as this profile's form, or
-// answers the refusal its first defect earns. Nothing it refuses for
-// quotes the body: a parse error can carry part of the assertion.
+// answers the refusal its first defect earns.
 func clientCredentialsForm(r *http.Request) (url.Values, *oauthRefusal) {
-	if _, present := r.Header["Authorization"]; present {
-		return nil, &oauthRefusal{machinegen.InvalidRequest,
-			"the exchange is authenticated by its client assertion alone: send no Authorization header"}
-	}
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mediaType != "application/x-www-form-urlencoded" {
-		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body is application/x-www-form-urlencoded"}
-	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxAssertionRequest+1))
-	if err != nil || len(body) > maxAssertionRequest {
-		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body could not be read within its bound"}
-	}
-	form, err := url.ParseQuery(string(body))
-	if err != nil {
-		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body is not a well-formed form"}
-	}
-	for name, values := range form {
-		if len(values) > 1 {
-			return nil, &oauthRefusal{machinegen.InvalidRequest, "parameter " + strconv.Quote(name) + " appears more than once"}
-		}
+	form, refusal := assertionForm(r)
+	if refusal != nil {
+		return nil, refusal
 	}
 	switch grant, ok := form["grant_type"]; {
 	case !ok:
@@ -131,6 +113,35 @@ func clientCredentialsForm(r *http.Request) (url.Values, *oauthRefusal) {
 	for _, name := range []string{"client_id", "client_assertion"} {
 		if form.Get(name) == "" {
 			return nil, &oauthRefusal{machinegen.InvalidRequest, name + " is required"}
+		}
+	}
+	return form, nil
+}
+
+// assertionForm reads the request's body as a form of one value for
+// each parameter, with no Authorization header: what both routes that
+// authenticate by a client assertion read first. Nothing it refuses for
+// quotes the body: a parse error can carry part of the assertion.
+func assertionForm(r *http.Request) (url.Values, *oauthRefusal) {
+	if _, present := r.Header["Authorization"]; present {
+		return nil, &oauthRefusal{machinegen.InvalidRequest,
+			"the exchange is authenticated by its client assertion alone: send no Authorization header"}
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/x-www-form-urlencoded" {
+		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body is application/x-www-form-urlencoded"}
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxAssertionRequest+1))
+	if err != nil || len(body) > maxAssertionRequest {
+		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body could not be read within its bound"}
+	}
+	form, err := url.ParseQuery(string(body))
+	if err != nil {
+		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body is not a well-formed form"}
+	}
+	for name, values := range form {
+		if len(values) > 1 {
+			return nil, &oauthRefusal{machinegen.InvalidRequest, "parameter " + strconv.Quote(name) + " appears more than once"}
 		}
 	}
 	return form, nil

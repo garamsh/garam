@@ -230,6 +230,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/.well-known/openid-configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read garam's issuer metadata.
+         * @description The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
+         */
+        get: operations["getIssuerConfiguration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/jwks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the keys garam's tokens verify with.
+         * @description The JSON Web Key Set of RFC 7517 holding the one public key the issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e` (ADR-0138 item 3). It carries no credential.
+         */
+        get: operations["getIssuerKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange a CLI session's access token for a signed token.
+         * @description RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+         *     The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+         */
+        post: operations["exchangeSessionToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me/sessions": {
         parameters: {
             query?: never;
@@ -1349,13 +1410,77 @@ export interface components {
             /** @description Seconds the refresh token is accepted for. */
             refresh_token_expires_in: number;
         };
+        /** @description The OIDC discovery document of garam as an issuer (ADR-0141). Every URL is the `issuer` followed by the path the operation of this file is served at. */
+        IssuerConfiguration: {
+            /**
+             * @description The configured `GARAM_IDENTITY_ISSUER`, which every token's `iss` equals byte for byte.
+             * @example https://garam.example/api
+             */
+            issuer: string;
+            jwks_uri: string;
+            token_endpoint: string;
+            grant_types_supported: "urn:ietf:params:oauth:grant-type:token-exchange"[];
+            /** @description Empty, because the issuer has no authorization endpoint. */
+            response_types_supported: string[];
+            subject_types_supported: "public"[];
+            /** @description Only `RS256`. */
+            id_token_signing_alg_values_supported: string[];
+            /** @description `none`: the exchange is authenticated by its subject token. */
+            token_endpoint_auth_methods_supported: "none"[];
+        };
+        /** @description RFC 7517's key set holding the issuer's one public key. */
+        IssuerKeySet: {
+            keys: components["schemas"]["IssuerKey"][];
+        };
+        IssuerKey: {
+            /** @enum {string} */
+            kty: "RSA";
+            /** @enum {string} */
+            use: "sig";
+            /** @description Always `RS256`. */
+            alg: string;
+            /** @description The key's RFC 7638 thumbprint, which a token's header names. */
+            kid: string;
+            n: string;
+            e: string;
+        };
+        /** @description RFC 8693's token exchange request (ADR-0141). */
+        TokenExchangeRequest: {
+            /** @enum {string} */
+            grant_type: "urn:ietf:params:oauth:grant-type:token-exchange";
+            /** @description The access token of a live CLI session. */
+            subject_token: string;
+            /** @enum {string} */
+            subject_token_type: "urn:ietf:params:oauth:token-type:access_token";
+            /**
+             * @description The one service the token is for.
+             * @enum {string}
+             */
+            audience: "policy" | "codehub";
+            /**
+             * @description Absent is the same.
+             * @enum {string}
+             */
+            requested_token_type?: "urn:ietf:params:oauth:token-type:jwt";
+        };
+        /** @description RFC 8693's successful response (ADR-0141). */
+        TokenExchangeResponse: {
+            /** @description The compact RS256 JWT. */
+            access_token: string;
+            /** @enum {string} */
+            issued_token_type: "urn:ietf:params:oauth:token-type:access_token";
+            /** @description Always `Bearer`. */
+            token_type: string;
+            /** @description Seconds the token lives: at most 300, and no more than the session has left. */
+            expires_in: number;
+        };
         /** @description RFC 6749's error response, with RFC 8628's codes (ADR-0120). */
         OAuthError: {
             /**
-             * @description `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+             * @description `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; RFC 8628 §3.5's four while a device code is polled; and RFC 8693's `invalid_target` for an `audience` the issuer holds no service by (ADR-0141).
              * @enum {string}
              */
-            error: "invalid_request" | "invalid_client" | "invalid_grant" | "unsupported_grant_type" | "authorization_pending" | "slow_down" | "access_denied" | "expired_token";
+            error: "invalid_request" | "invalid_client" | "invalid_grant" | "invalid_target" | "unsupported_grant_type" | "authorization_pending" | "slow_down" | "access_denied" | "expired_token";
             error_description?: string;
             /** @description With `slow_down`, the seconds to wait between polls from here. */
             interval?: number;
@@ -2470,6 +2595,93 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    getIssuerConfiguration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The issuer's metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuerConfiguration"];
+                };
+            };
+            /** @description The issuer is not configured here. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getIssuerKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The key set. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IssuerKeySet"];
+                };
+            };
+            /** @description The issuer is not configured here. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    exchangeSessionToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["TokenExchangeRequest"];
+            };
+        };
+        responses: {
+            /** @description The signed token. */
+            200: {
+                headers: {
+                    "Cache-Control": components["headers"]["NoStore"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenExchangeResponse"];
+                };
+            };
+            400: components["responses"]["OAuthError"];
+            /** @description The issuer is not configured here. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     listMySessions: {

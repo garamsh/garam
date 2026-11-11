@@ -56,8 +56,9 @@ func (s *Supervisor) runAttached(ctx context.Context) error {
 	return s.superviseAttached(ctx, in)
 }
 
-// superviseAttached writes what the adapter reads into its directory,
-// serves its control on a socket there, and watches the runtime.
+// superviseAttached serves the adapter's control on a socket in its
+// directory, then writes what the adapter reads there, and watches the
+// runtime.
 func (s *Supervisor) superviseAttached(ctx context.Context, in *intent) error {
 	a := s.cfg.Attach
 	serving, root, err := servingMaterial(filepath.Join(s.cfg.Dir, attachDir))
@@ -68,6 +69,13 @@ func (s *Supervisor) superviseAttached(ctx context.Context, in *intent) error {
 	if err != nil {
 		return err
 	}
+	ctl, err := s.serveControl(filepath.Join(a.AdapterDir, socketDir), serving, in)
+	if err != nil {
+		return err
+	}
+	defer ctl.close()
+	// The adapter treats these files as the signal to dial: the
+	// control listens before it is handed any of them.
 	for _, f := range []struct {
 		name string
 		data []byte
@@ -81,11 +89,6 @@ func (s *Supervisor) superviseAttached(ctx context.Context, in *intent) error {
 			return err
 		}
 	}
-	ctl, err := s.serveControl(filepath.Join(a.AdapterDir, socketDir), serving, in)
-	if err != nil {
-		return err
-	}
-	defer ctl.close()
 	slog.Info("runtime attached", slog.String("intent", in.ID))
 	return s.watchAttached(ctx, ctl, in)
 }

@@ -49,12 +49,12 @@ func TestValidate(t *testing.T) {
 		{"identifier holds an asterisk", grn.New("acme", "agent", "bot*"), true},
 		{"organization holds a colon", grn.New("ac:me", "agent", "bot-1"), true},
 		{"organization is uppercase", grn.New("ACME", "agent", "bot-1"), true},
-		{"ancestors are whole pairs", grn.GRN{Organization: "acme", Ancestors: "project/frontend", ServiceType: "repo", Identifier: "api"}, false},
-		{"locator is carried", grn.GRN{Organization: "acme", ServiceType: "repo", Identifier: "api", Locator: "refs/heads/main:cmd/main.go"}, false},
+		{"ancestors are whole pairs", grn.GRN{Organization: "acme", Ancestors: "project/frontend", Service: "codehub", ServiceType: "repo", Identifier: "api"}, false},
+		{"locator is carried", grn.GRN{Organization: "acme", Service: "codehub", ServiceType: "repo", Identifier: "api", Locator: "refs/heads/main:cmd/main.go"}, false},
 
-		{"ancestors hold half a pair", grn.GRN{Organization: "acme", Ancestors: "project", ServiceType: "repo", Identifier: "api"}, true},
-		{"ancestor holds an underscore", grn.GRN{Organization: "acme", Ancestors: "project/team_one", ServiceType: "repo", Identifier: "api"}, true},
-		{"locator holds a hash", grn.GRN{Organization: "acme", ServiceType: "repo", Identifier: "api", Locator: "a#b"}, true},
+		{"ancestors hold half a pair", grn.GRN{Organization: "acme", Ancestors: "project", Service: "codehub", ServiceType: "repo", Identifier: "api"}, true},
+		{"ancestor holds an underscore", grn.GRN{Organization: "acme", Ancestors: "project/team_one", Service: "codehub", ServiceType: "repo", Identifier: "api"}, true},
+		{"locator holds a hash", grn.GRN{Organization: "acme", Service: "codehub", ServiceType: "repo", Identifier: "api", Locator: "a#b"}, true},
 		{"type has no owning service", grn.New("acme", "widget", "x"), true},
 		{"service type holds a slash", grn.New("acme", "agent/x", "bot-1"), true},
 		{"identifier holds a slash", grn.New("acme", "agent", "bot/1"), true},
@@ -84,7 +84,7 @@ func TestValidate(t *testing.T) {
 func TestValidate_KeepsAGRNWholeInAURI(t *testing.T) {
 	accepted := map[string]grn.GRN{
 		"randomHex identifier":   grn.New(grn.RootOwner, "org", "9f2c4b81d0e7a35c"),
-		"nested under a project": {Organization: "acme", Ancestors: "project/frontend", ServiceType: "repo", Identifier: "api"},
+		"nested under a project": {Organization: "acme", Ancestors: "project/frontend", Service: "codehub", ServiceType: "repo", Identifier: "api"},
 		"hyphenated slug":        grn.New("acme", "agent", "bot-1"),
 	}
 	for name, g := range accepted {
@@ -135,6 +135,7 @@ func nameOfLength(t *testing.T, n int) grn.GRN {
 	full := strings.Repeat("a", 64)
 	g := grn.GRN{
 		Organization: "acme",
+		Service:      "iam",
 		Ancestors: strings.Join([]string{full, full, full, full, full, full,
 			strings.Repeat("b", 19), strings.Repeat("c", n-474-19)}, "/"),
 		ServiceType: "user",
@@ -158,8 +159,8 @@ func TestValidate_BoundsTheNameBeforeTheLocator(t *testing.T) {
 }
 
 func TestParse(t *testing.T) {
-	nested := grn.GRN{Organization: "acme", Ancestors: "project/frontend", ServiceType: "repo", Identifier: "api"}
-	located := grn.GRN{Organization: "acme", ServiceType: "repo", Identifier: "api", Locator: "refs/heads/main:cmd/main.go"}
+	nested := grn.GRN{Organization: "acme", Ancestors: "project/frontend", Service: "codehub", ServiceType: "repo", Identifier: "api"}
+	located := grn.GRN{Organization: "acme", Service: "codehub", ServiceType: "repo", Identifier: "api", Locator: "refs/heads/main:cmd/main.go"}
 	tests := []struct {
 		name    string
 		input   string
@@ -170,7 +171,7 @@ func TestParse(t *testing.T) {
 		{"root organization", "grn:root/iam/org/acme", grn.Org("acme"), false},
 		{"nested under a project", "grn:acme/codehub/project/frontend/repo/api", nested, false},
 		{"locator", "grn:acme/codehub/repo/api#refs/heads/main:cmd/main.go", located, false},
-		{"escaped hash in a locator", "grn:acme/codehub/repo/api#a%23b", grn.GRN{Organization: "acme", ServiceType: "repo", Identifier: "api", Locator: "a%23b"}, false},
+		{"escaped hash in a locator", "grn:acme/codehub/repo/api#a%23b", grn.GRN{Organization: "acme", Service: "codehub", ServiceType: "repo", Identifier: "api", Locator: "a%23b"}, false},
 		{"five-segment form", strings.Join([]string{"grn", "garam", "default", "user", "alice"}, ":"), grn.GRN{}, true},
 		{"five-segment form of a nested name", strings.Join([]string{"grn", "acme", "frontend", "repo", "api"}, ":"), grn.GRN{}, true},
 		{"missing prefix", "arn:garam/iam/user/alice", grn.GRN{}, true},
@@ -213,9 +214,55 @@ func TestService_AgreesWithTheCatalogue(t *testing.T) {
 		"artifact": "cowork",
 	}
 	for typ, service := range want {
-		assert.Equal(t, service, grn.New("acme", typ, "x").Service(), typ)
+		assert.Equal(t, service, grn.New("acme", typ, "x").Service, typ)
 	}
-	assert.Empty(t, grn.New("acme", "widget", "x").Service())
+	assert.Empty(t, grn.New("acme", "widget", "x").Service)
+}
+
+// TestNewIn_TwoServicesMayHoldATypeOfOneName reads the service off the
+// segment and not off the type: "repo" is codehub's here and a name
+// under another service is refused only because that service holds no
+// such type.
+func TestNewIn_TwoServicesMayHoldATypeOfOneName(t *testing.T) {
+	g := grn.NewIn("acme", "codehub", "repo", "api")
+	require.NoError(t, g.Validate())
+	assert.Equal(t, "grn:acme/codehub/repo/api", g.String())
+	parsed, err := grn.Parse("grn:acme/codehub/repo/api")
+	require.NoError(t, err)
+	assert.Equal(t, "codehub", parsed.Service)
+	assert.Equal(t, g, parsed)
+
+	_, err = grn.Parse("grn:acme/cowork/repo/api")
+	require.Error(t, err, "cowork holds no repo")
+	_, err = grn.Parse("grn:acme/iam/page/home")
+	require.Error(t, err, "iam holds no page")
+}
+
+// TestValidate_LocatorIsAnRFC3986Fragment holds the locator to the
+// fragment production: pchar, '/' and '?', with '%' only as a whole
+// escape.
+func TestValidate_LocatorIsAnRFC3986Fragment(t *testing.T) {
+	for _, loc := range []string{
+		"refs/heads/main:cmd/main.go", "a%23b", "a%2fB", "x?y=1&z=2",
+		"a@b", "it's", "~._-!$()*+,;=",
+	} {
+		g := grn.NewIn("acme", "codehub", "repo", "api")
+		g.Locator = loc
+		assert.NoError(t, g.Validate(), loc)
+		parsed, err := grn.Parse(g.String())
+		require.NoError(t, err, loc)
+		assert.Equal(t, g, parsed, loc)
+	}
+	for _, loc := range []string{
+		"has space", "a%", "a%2", "a%zz", "a%2g", "tab\there", "é",
+		"a\"b", "a<b", "a\\b", "a[b", "a{b", "a|b", "a^b", "a`b",
+	} {
+		g := grn.NewIn("acme", "codehub", "repo", "api")
+		g.Locator = loc
+		assert.Error(t, g.Validate(), loc)
+		_, err := grn.Parse("grn:acme/codehub/repo/api#" + loc)
+		assert.Error(t, err, loc)
+	}
 }
 
 // TestOrgPattern_ScopesToTheOrganizationByPrefix reads the pattern as

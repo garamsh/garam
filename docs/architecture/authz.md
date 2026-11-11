@@ -428,8 +428,7 @@ those GRNs against attachments without knowing what a group is. Each
 caller also sends `subject_org` — the GRN of the organization the
 subject belongs to — and the engine refuses the call when it is unset
 or does not name the object's organization (ADR-0038). An attachment
-stays inside the policy's org, enforced by the policy server on the
-parsed names, as no schema trigger reads a GRN; a
+stays inside the policy's org, enforced by a schema trigger; a
 root-owned identity such as a user cannot name an org in its GRN, so
 org membership is established by the api server populating `subject_org`
 before asking. An agent names its org in its own GRN, so the

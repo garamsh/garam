@@ -38,34 +38,59 @@ const RootOwner = "root"
 // ServiceTypeOrg is the type of an organization's GRN.
 const ServiceTypeOrg = "org"
 
-// owners is the one place a type's owning service is written. It
-// agrees with grn-model.md §Types by owning service.
-var owners = map[string]string{
-	"user":         "iam",
-	"agent":        "iam",
-	ServiceTypeOrg: "iam",
-	"group":        "iam",
-	"project":      "iam",
-	"operator":     "iam",
-	"supervisor":   "iam",
-	"policy":       "iam",
-	"service":      "iam",
-	"repo":         "codehub",
-	"page":         "cowork",
-	"channel":      "cowork",
-	"task":         "cowork",
-	"artifact":     "cowork",
+// catalogue is the one place the types a service owns are written,
+// keyed by service and then by type. It agrees with grn-model.md
+// §Types by owning service. A type name is a service's own, so two
+// services may each hold one of the same name.
+var catalogue = map[string]map[string]bool{
+	"iam": {
+		"user":         true,
+		"agent":        true,
+		ServiceTypeOrg: true,
+		"group":        true,
+		"project":      true,
+		"operator":     true,
+		"supervisor":   true,
+		"policy":       true,
+		"service":      true,
+	},
+	"codehub": {
+		"repo": true,
+	},
+	"cowork": {
+		"page":     true,
+		"channel":  true,
+		"task":     true,
+		"artifact": true,
+	},
+}
+
+// ownerOf returns the one service whose catalogue holds typ, or the
+// empty string where none does or where more than one does.
+func ownerOf(typ string) string {
+	owner := ""
+	for service, types := range catalogue {
+		if !types[typ] {
+			continue
+		}
+		if owner != "" {
+			return ""
+		}
+		owner = service
+	}
+	return owner
 }
 
 // GRN is a value-type resource identifier. Identity is by value; two
 // GRN structs with equal fields are equal.
 //
-// ServiceType and Identifier are the resource's own, the last type
-// and id pair. Ancestors holds the pairs before it as
-// "type/id[/type/id...]", empty when there are none. The owning
-// service is not a field: it follows from ServiceType.
+// Service is the one service that owns the resource. ServiceType and
+// Identifier are the resource's own, the last type and id pair, and
+// the type is one that service holds. Ancestors holds the pairs before
+// it as "type/id[/type/id...]", empty when there are none.
 type GRN struct {
 	Organization string
+	Service      string
 	Ancestors    string
 	ServiceType  string
 	Identifier   string
@@ -74,10 +99,20 @@ type GRN struct {
 	Locator string
 }
 
-// New constructs a GRN with no ancestors and no locator.
+// New constructs a GRN with no ancestors and no locator for a type
+// that one service holds, and names that service. A type no service
+// holds, or that more than one does, leaves the service empty and the
+// GRN invalid; [NewIn] names the service for such a type.
 func New(organization, serviceType, identifier string) GRN {
+	return NewIn(organization, ownerOf(serviceType), serviceType, identifier)
+}
+
+// NewIn constructs a GRN with no ancestors and no locator under the
+// named service.
+func NewIn(organization, service, serviceType, identifier string) GRN {
 	return GRN{
 		Organization: organization,
+		Service:      service,
 		ServiceType:  serviceType,
 		Identifier:   identifier,
 	}
@@ -97,12 +132,6 @@ func OrgPattern(organization string) string {
 	return prefix + organization + "/*"
 }
 
-// Service returns the service that owns the GRN's type, or the empty
-// string where no service owns it.
-func (g GRN) Service() string {
-	return owners[g.ServiceType]
-}
-
 // String renders the GRN in canonical form.
 func (g GRN) String() string {
 	var b strings.Builder
@@ -120,7 +149,7 @@ func (g GRN) name() string {
 	b.WriteString(prefix)
 	b.WriteString(g.Organization)
 	b.WriteByte('/')
-	b.WriteString(g.Service())
+	b.WriteString(g.Service)
 	b.WriteByte('/')
 	if g.Ancestors != "" {
 		b.WriteString(g.Ancestors)
@@ -141,8 +170,8 @@ func (g GRN) IsZero() bool {
 // segment is a slug (one to segmentMax characters of lowercase
 // letters, digits and '-'), the type has an owning service, the
 // ancestors are whole type and id pairs, the name before '#' is at
-// most nameMax characters, and the locator holds no '#' (grn-model.md
-// §identifier).
+// most nameMax characters, and the locator is an RFC 3986 fragment
+// (ADR-0142 item 5; grn-model.md §identifier).
 //
 // The set is what keeps a GRN whole wherever it is carried. ':' and
 // '/' shift every segment after them, '?' and '#' move the tail of a
@@ -153,7 +182,7 @@ func (g GRN) Validate() error {
 	switch {
 	case !isSlug(g.Organization):
 		return errorx.New(errorx.KindInvalidArgument, "grn: invalid organization")
-	case g.Service() == "":
+	case !catalogue[g.Service][g.ServiceType]:
 		return errorx.New(errorx.KindInvalidArgument, "grn: invalid service type")
 	case !validAncestors(g.Ancestors):
 		return errorx.New(errorx.KindInvalidArgument, "grn: invalid ancestors")
@@ -161,10 +190,35 @@ func (g GRN) Validate() error {
 		return errorx.New(errorx.KindInvalidArgument, "grn: invalid identifier")
 	case len(g.name()) > nameMax:
 		return errorx.New(errorx.KindInvalidArgument, "grn: name too long")
-	case strings.Contains(g.Locator, "#"):
+	case !validFragment(g.Locator):
 		return errorx.New(errorx.KindInvalidArgument, "grn: invalid locator")
 	}
 	return nil
+}
+
+// validFragment reports whether s is an RFC 3986 fragment: pchar, '/'
+// and '?' only, where a '%' begins a whole escape of two hex digits.
+// The empty string is one; '#' is not a fragment character.
+func validFragment(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case strings.IndexByte("-._~!$&'()*+,;=:@/?", c) >= 0:
+		case c == '%':
+			if i+2 >= len(s) || !isHex(s[i+1]) || !isHex(s[i+2]) {
+				return false
+			}
+			i += 2
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func isHex(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
 }
 
 // validAncestors reports whether a is empty or whole type and id
@@ -222,13 +276,11 @@ func Parse(s string) (GRN, error) {
 	n := len(parts)
 	g := GRN{
 		Organization: parts[0],
+		Service:      parts[1],
 		Ancestors:    strings.Join(parts[2:n-2], "/"),
 		ServiceType:  parts[n-2],
 		Identifier:   parts[n-1],
 		Locator:      locator,
-	}
-	if g.Service() != parts[1] {
-		return GRN{}, errMalformed()
 	}
 	if err := g.Validate(); err != nil {
 		return GRN{}, err

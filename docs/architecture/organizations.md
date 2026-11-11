@@ -81,8 +81,7 @@ org-owned GRN names its organization in the organization segment
 (ADR-0001), so the store refuses an add whose member names an
 organization other than the group's or project's, and stores nothing.
 A root-owned GRN — a user's — belongs to no organization and is
-admitted, the line the policy server's attachment check draws
-(ADR-0008).
+admitted, the line the engine's attachment trigger draws (ADR-0008).
 The check reads the two GRNs and no row, so no concurrent write can
 slip past it. A remove is not refused: no such membership can be added
 now, and one stored before the refusal existed stays removable.

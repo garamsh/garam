@@ -28,11 +28,11 @@ garam mints an agent's GRN and never changes it, so which operator runs
 the agent is a relation a reassignment moves rather than part of the
 identity. That GRN must name an agent of the organization that owns it:
 ADR-0014 rests tenancy on its organization segment, so the domain
-refuses a pairing that disagrees rather than trusting its callers; no
-schema check reads a GRN, so the domain is the only place that does. An
+refuses a pairing that disagrees rather than trusting its callers, and
+the schema refuses it again where nothing routes around it. An
 assignment stays inside that organization and names an operator
-(ADR-0015) or the agent's own supervisor (ADR-0082), which the domain
-decides; an operator route compares the operator on the row, so
+(ADR-0015) or the agent's own supervisor (ADR-0082), which the schema
+alone decides; an operator route compares the operator on the row, so
 none reaches a supervisor-held agent. This domain reads no operator
 record of its own and addresses an operator by GRN. Every assignment
 raises the

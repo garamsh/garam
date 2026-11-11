@@ -241,6 +241,52 @@ async fn a_change_at_fault_is_refused_where_it_stands_and_the_rest_are_written()
 }
 
 #[tokio::test]
+async fn a_type_an_id_and_a_parent_list_are_bounded() {
+    let (mut client, reached) = served().await;
+    let org = || Some(named("Org", ACME));
+    let id = |len: usize| format!("grn:acme:{}", "a".repeat(len - "grn:acme:".len()));
+    let at_limit = id(512);
+    let parents = |count: usize| vec![named("Org", ACME); count];
+
+    let answer = apply(
+        &mut client,
+        vec![
+            upsert(named("Team", &at_limit), org(), vec![]),
+            upsert(named("Team", &id(513)), org(), vec![]),
+            upsert(named("Team", ENG), org(), vec![named("Org", &id(513))]),
+            upsert(named("Team", ENG), Some(named("Org", &id(513))), vec![]),
+            upsert(named("Team", ENG), org(), vec![named("Org", &at_limit)]),
+            upsert(
+                named("Team", ENG),
+                org(),
+                vec![named(&"T".repeat(65), ACME)],
+            ),
+            upsert(
+                named("Team", ENG),
+                org(),
+                vec![named(&"T".repeat(64), ACME)],
+            ),
+            upsert(named("Team", ENG), org(), parents(1000)),
+            upsert(named("Team", ENG), org(), parents(1001)),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let refused: Vec<u32> = answer.refusals.iter().map(|r| r.index).collect();
+    assert_eq!(refused, [1, 2, 3, 5, 6, 8]);
+    let too_long = |index: usize| {
+        let refusal = answer.refusals.iter().find(|r| r.index == index as u32);
+        refusal.is_some_and(|r| r.error.contains("too long"))
+    };
+    // A type of 64 bytes is refused by the schema, not for its length.
+    assert!([1, 2, 3, 5].iter().all(|i| too_long(*i)));
+    assert!(!too_long(6));
+    assert_eq!(answer.written, 3);
+    assert_eq!(reached.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test]
 async fn a_batch_past_the_bound_is_refused() {
     let (mut client, reached) = served().await;
 

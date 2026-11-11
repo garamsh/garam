@@ -47,7 +47,11 @@ yet (#1689).
 - **A type the caller does not own refuses the whole
   `ApplyEntityChanges`.** Any other fault refuses that entry, named by
   its index in the response, and the rest are written. A request holds
-  at most 1000 changes.
+  at most 1000 changes, an id holds at most 512 bytes, a type 64 and a
+  change 1000 parents.
+- **Only the type of the entity written is checked** against the
+  caller, not the types of its `org`, `members` and `parents`. Slice 5
+  decides that with the `cowork` row.
 - **The caller's address is `GARAM_POLICY_ADDR`,** unset until the
   platform's delivery exists. `POLICY_ADDR` is where this service
   listens.

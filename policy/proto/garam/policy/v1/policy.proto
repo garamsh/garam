@@ -124,10 +124,12 @@ message EvaluationsResponse {
 
 // EntityRef names an entity of the Cedar schema.
 message EntityRef {
-  // type is an entity type of the Cedar schema, such as `Team`.
+  // type is an entity type of the Cedar schema, such as `Team`, of at
+  // most 64 bytes.
   string type = 1;
   // id is the entity's identifier, its GRN for all but `OrgMembers`,
   // which takes its organization's.
+  // An id is at most 512 bytes.
   string id = 2;
 }
 
@@ -138,6 +140,7 @@ message EntityUpsert {
   EntityRef org = 1;
   // members is required of an `Org`, and names its own `OrgMembers`.
   EntityRef members = 2;
+  // parents holds at most 1000 references.
   repeated EntityRef parents = 3;
 }
 

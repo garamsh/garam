@@ -54,12 +54,18 @@ state at delivery, under one shared sequence.**
    `Project`, `User`, `Agent` and `Operator`, and asks anything, since
    cowork's checks reach the engine through it (ADR-0127 §5). `Policy`
    is no caller's: `grant` writes it, in slice 4. A test fails on a
-   schema type that is neither owned nor stated as no caller's.
+   schema type that is neither owned nor stated as no caller's. Only
+   the type of the entity written is checked against the caller: the
+   types of its `org`, `members` and `parents` are not, so a caller
+   may name a reference of a type it does not own. Slice 5 decides
+   that with the `cowork` row.
 3. **`ApplyEntityChanges`.** A request holds at most 1000 changes. One
    naming a type the caller does not own refuses the call and writes
    nothing, being the caller's mistake. Any other fault refuses its own
    entry, and the rest are written in one transaction, as `Evaluations`
-   answers a question at fault in its own entry. A sequence must be
+   answers a question at fault in its own entry. An id past 512 bytes,
+   a type past 64 and more than 1000 parents are such faults, since
+   the store cannot key them. A sequence must be
    above zero, because zero is what an unset field reads as.
 4. **A question still carries no entity.** ADR-0138 item 7 refused
    `Resource.properties` until a caller could be shown to own a type.

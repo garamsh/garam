@@ -12,6 +12,7 @@ path = "src/main.rs"
 [dependencies]
 axum.workspace = true
 base64.workspace = true
+cedar-policy.workspace = true
 decision = { path = "../decision" }
 entity = { path = "../entity" }
 grant = { path = "../grant" }
@@ -35,7 +36,6 @@ protox.workspace = true
 tonic-prost-build.workspace = true
 
 [dev-dependencies]
-cedar-policy.workspace = true
 rcgen.workspace = true
 rsa.workspace = true
 

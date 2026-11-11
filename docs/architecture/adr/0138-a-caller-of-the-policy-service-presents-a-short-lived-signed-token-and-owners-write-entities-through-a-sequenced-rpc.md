@@ -1,6 +1,8 @@
 # ADR 0138: A caller of the policy service presents a short-lived signed token, and owners write entities through a sequenced RPC
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0140](./0140-owners-feed-the-policy-service-from-a-dirty-set-of-entities-read-at-delivery-and-a-caller-is-a-closed-list-of-services.md)
+> (when the issuer lands)
 > Date: 2026-10-31
 
 Drafted for #1689, which reserves this number and holds the rulings

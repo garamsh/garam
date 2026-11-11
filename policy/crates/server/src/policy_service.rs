@@ -4,12 +4,17 @@ use decision::{
 use serde_json::json;
 use tonic::{Request, Response, Status};
 
+use crate::caller::{Caller, Refusal};
+use crate::entity_changes::parse;
+use crate::entity_sink::EntitySink;
 use crate::proto;
 use crate::proto::policy_service_server::PolicyService;
 use crate::status::{ServiceError, to_status};
 
 /// The most evaluations one request holds: a page, not a table.
 const MAX_EVALUATIONS: usize = 1000;
+/// The most changes one request holds.
+const MAX_CHANGES: usize = 1000;
 
 /// Serves `garam.policy.v1`. Every read goes to storage, as no cache
 /// exists yet, so both `Read` options answer what `READ_CURRENT`
@@ -88,11 +93,64 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
     }
 }
 
+impl<P, E: EntitySink> Service<P, E> {
+    /// Writes a batch. A type the caller does not own refuses all of
+    /// it, being the caller's mistake rather than an entry's, and any
+    /// other fault refuses its own entry.
+    async fn apply_changes(
+        &self,
+        caller: Caller,
+        request: &proto::ApplyEntityChangesRequest,
+    ) -> Result<proto::ApplyEntityChangesResponse, ServiceError> {
+        if request.changes.len() > MAX_CHANGES {
+            return Err(ServiceError::TooManyChanges { max: MAX_CHANGES });
+        }
+        let not_owned = request
+            .changes
+            .iter()
+            .filter_map(|change| change.entity.as_ref())
+            .find(|entity| !caller.owns(&entity.r#type));
+        if let Some(entity) = not_owned {
+            return Err(ServiceError::NotOwned(entity.r#type.clone()));
+        }
+        let mut changes = Vec::with_capacity(request.changes.len());
+        let mut refusals = Vec::new();
+        for (index, change) in request.changes.iter().enumerate() {
+            match parse(&self.engine, change) {
+                Ok(change) => changes.push(change),
+                Err(fault) => {
+                    tracing::info!(error = ?fault, index, "refused a change");
+                    refusals.push(proto::EntityChangeRefusal {
+                        index: count(index),
+                        error: fault.to_string(),
+                    });
+                }
+            }
+        }
+        let applied = self
+            .entities
+            .apply(&changes)
+            .await
+            .map_err(ServiceError::EntityWrite)?;
+        Ok(proto::ApplyEntityChangesResponse {
+            written: count(applied.written),
+            dropped: count(applied.dropped),
+            refusals,
+        })
+    }
+}
+
+/// A count the wire carries. `MAX_CHANGES` keeps it far below the limit
+/// this saturates at.
+fn count(value: usize) -> u32 {
+    u32::try_from(value).unwrap_or(u32::MAX)
+}
+
 #[tonic::async_trait]
 impl<P, E> PolicyService for Service<P, E>
 where
     P: PolicySource + Send + Sync + 'static,
-    E: EntitySource + Send + Sync + 'static,
+    E: EntitySource + EntitySink + Send + Sync + 'static,
 {
     async fn evaluate(
         &self,
@@ -118,6 +176,24 @@ where
             .await
             .map_err(|e| to_status(&e))?;
         Ok(Response::new(answers))
+    }
+
+    async fn apply_entity_changes(
+        &self,
+        request: Request<proto::ApplyEntityChangesRequest>,
+    ) -> Result<Response<proto::ApplyEntityChangesResponse>, Status> {
+        // The interceptor verified the caller, and nothing else sets it.
+        let caller = request
+            .extensions()
+            .get::<Caller>()
+            .copied()
+            .ok_or(ServiceError::Unauthenticated(Refusal::NoToken))
+            .map_err(|e| to_status(&e))?;
+        let applied = self
+            .apply_changes(caller, request.get_ref())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(applied))
     }
 }
 
@@ -153,8 +229,8 @@ impl<'a> Question<'a> {
         let subject = self.subject.ok_or(ServiceError::Missing("subject"))?;
         let action = self.action.ok_or(ServiceError::Missing("action"))?;
         let resource = self.resource.ok_or(ServiceError::Missing("resource"))?;
-        // A caller sends no grounds until it can be shown to own the
-        // type (ADR-0130 §8), which arrives with ApplyEntityChanges.
+        // An owner writes an entity through ApplyEntityChanges, so no
+        // question carries one (ADR-0140).
         if holds_fields(resource.properties.as_ref()) {
             return Err(ServiceError::Grounds("resource properties"));
         }

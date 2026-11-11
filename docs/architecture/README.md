@@ -497,7 +497,8 @@ Responsibility documents:
 ADRs:
 
 - [0001](./adr/0001-grn-segments.md) — GRN segments identify owning
-  resources
+  resources; the five-segment format and the `default` project segment
+  are superseded by 0142
 - [0002](./adr/0002-iam-style-policy-model.md) — IAM-style policy
   documents, native evaluator
 - [0003](./adr/0003-single-cli-topology.md) — single cobra CLI,
@@ -1207,4 +1208,13 @@ ADRs:
   JWKS of ADR-0138's signer; services call the policy service directly,
   each owning a Cedar namespace and feeding its own entities; codehub
   is the worked example; unbuilt; supersedes 0127 in part, on §5, and
-  0140 in part, on §2
+  0140 in part, on §2; the GRN forms of its worked-example answers 4
+  and 5 are superseded by 0142
+- [0142](./adr/0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md)
+  — a GRN is `grn:<org>/<service>/<type>/<id>` with further `type/id`
+  pairs and an optional `#<locator>` the owning service reads, an RFC
+  3986 URI; the platform's types sit under `iam`, an identifier is
+  immutable and never reused, one grammar replaces the five-segment
+  form; unbuilt, `lib/grn/grn.go` still enforces the five-segment
+  form; supersedes 0001 in part, on the format and `default`, and 0141
+  in part, on the GRN forms of answers 4 and 5

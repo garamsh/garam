@@ -1,9 +1,15 @@
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { leaveOnRefusal } from "../socket-close";
+import { server } from "@/testing/setup";
+
+import { leaveOnClose } from "../socket-close";
+
+const ORIGIN = "http://cowork.test";
 
 function stubLocation() {
   const location = {
+    origin: ORIGIN,
     pathname: "/acme/p1",
     search: "?view=board",
     assign: vi.fn(),
@@ -13,28 +19,46 @@ function stubLocation() {
   return location;
 }
 
-describe("leaveOnRefusal", () => {
+/** Answers the tab's question about its session with `respond`. */
+function sessionAnswers(respond: () => Response) {
+  server.use(http.get(`${ORIGIN}/auth/session`, respond));
+}
+
+const SIGN_IN = "/auth/sign-in?next=%2Facme%2Fp1%3Fview%3Dboard";
+
+describe("leaveOnClose", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("sends a signed-out visitor to sign in, carrying the page", () => {
+  it("sends a signed-out visitor to sign in, carrying the page", async () => {
     const location = stubLocation();
-    leaveOnRefusal(4401);
-    expect(location.assign).toHaveBeenCalledWith(
-      "/auth/sign-in?next=%2Facme%2Fp1%3Fview%3Dboard",
-    );
+    await leaveOnClose(4401);
+    expect(location.assign).toHaveBeenCalledWith(SIGN_IN);
     expect(location.reload).not.toHaveBeenCalled();
   });
 
-  it("reloads for a visitor who may no longer see the page", () => {
+  it("reloads for a visitor who may no longer see the page", async () => {
     const location = stubLocation();
-    leaveOnRefusal(4403);
+    await leaveOnClose(4403);
     expect(location.reload).toHaveBeenCalledOnce();
     expect(location.assign).not.toHaveBeenCalled();
   });
 
-  it.each([1000, 1006, 1013])("leaves the page be on close %i", (code) => {
+  it("sends a visitor to sign in when a failed connection hides a refused session", async () => {
     const location = stubLocation();
-    leaveOnRefusal(code);
+    sessionAnswers(() => new HttpResponse(null, { status: 401 }));
+    await leaveOnClose(1006);
+    expect(location.assign).toHaveBeenCalledWith(SIGN_IN);
+  });
+
+  // The control: the same close, with the session standing.
+  it.each([
+    ["the session stands", () => new HttpResponse(null, { status: 204 })],
+    ["the platform fails", () => new HttpResponse(null, { status: 503 })],
+    ["the network fails", () => HttpResponse.error()],
+  ])("leaves the page be on a failed connection when %s", async (_, answer) => {
+    const location = stubLocation();
+    sessionAnswers(answer);
+    await leaveOnClose(1006);
     expect(location.assign).not.toHaveBeenCalled();
     expect(location.reload).not.toHaveBeenCalled();
   });

@@ -1,10 +1,13 @@
 // @vitest-environment node
+import { HttpResponse, http } from "msw";
 import { NextRequest } from "next/server";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GET as redeem } from "@/app/auth/handoff/route";
 import { GET as start } from "@/app/auth/sign-in/route";
 import { HANDOFF_STATE_COOKIE } from "@garam/platform-sdk-ts/handoff";
+import { API_URL } from "@/testing/mocks/handlers";
+import { server } from "@/testing/setup";
 
 // The cookie jar the redemption writes through; it records what was
 // planted and what was deleted.
@@ -39,18 +42,17 @@ function request(path: string, state?: string) {
 }
 
 /** Answers the redemption with `response`, recording what it was sent. */
-function redeems(sent: unknown[], response: Response) {
-  vi.stubGlobal(
-    "fetch",
-    async (url: string, init: { body: string }): Promise<Response> => {
-      sent.push({ url, body: JSON.parse(init.body) });
-      return response;
-    },
+function redeems(sent: unknown[], response: () => Response) {
+  server.use(
+    http.post(`${API_URL}/auth/handoff/redeem`, async ({ request }) => {
+      sent.push({ url: request.url, body: await request.json() });
+      return response();
+    }),
   );
 }
 
 const issued = () =>
-  new Response(null, {
+  new HttpResponse(null, {
     status: 204,
     headers: {
       "set-cookie":
@@ -61,9 +63,6 @@ const issued = () =>
 beforeEach(() => {
   jar.planted.length = 0;
   jar.deleted.length = 0;
-});
-afterEach(() => {
-  vi.unstubAllGlobals();
 });
 
 describe("starting a handoff", () => {
@@ -103,7 +102,7 @@ describe("starting a handoff", () => {
 describe("redeeming a handoff", () => {
   it("plants the session the platform issued and lands on the path", async () => {
     const sent: unknown[] = [];
-    redeems(sent, issued());
+    redeems(sent, issued);
 
     const response = await redeem(
       request("/auth/handoff?code=the-code&next=%2Facme", STATE),
@@ -137,7 +136,7 @@ describe("redeeming a handoff", () => {
   ])(
     "lands on cowork's home for a return path the rule drops: %s",
     async (next) => {
-      redeems([], issued());
+      redeems([], issued);
 
       const response = await redeem(
         request(`/auth/handoff?code=the-code&next=${next}`, STATE),
@@ -153,7 +152,7 @@ describe("redeeming a handoff", () => {
     ["percent-encoded", "%2Facme%2Fa%2520b%3Fq%3D1", "/acme/a%20b?q=1"],
     ["with a fragment", "%2Facme%23%ED%95%9C", "/acme#%ED%95%9C"],
   ])("writes a return path %s as a header holds it", async (_, next, want) => {
-    redeems([], issued());
+    redeems([], issued);
 
     const response = await redeem(
       request(`/auth/handoff?code=the-code&next=${next}`, STATE),
@@ -163,7 +162,7 @@ describe("redeeming a handoff", () => {
   });
 
   it("sends a refused redemption to sign in on the site, carrying cowork", async () => {
-    redeems([], new Response(null, { status: 401 }));
+    redeems([], () => new HttpResponse(null, { status: 401 }));
 
     const response = await redeem(
       request("/auth/handoff?code=spent&next=%2Facme", STATE),
@@ -178,7 +177,7 @@ describe("redeeming a handoff", () => {
 
   it("asks nothing of the platform for a browser holding no state", async () => {
     const sent: unknown[] = [];
-    redeems(sent, issued());
+    redeems(sent, issued);
 
     const response = await redeem(request("/auth/handoff?code=the-code"));
 
@@ -188,7 +187,7 @@ describe("redeeming a handoff", () => {
   });
 
   it("throws a platform failure rather than reading it as a refusal", async () => {
-    redeems([], new Response(null, { status: 503 }));
+    redeems([], () => new HttpResponse(null, { status: 503 }));
 
     await expect(
       redeem(request("/auth/handoff?code=the-code", STATE)),

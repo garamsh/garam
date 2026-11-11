@@ -1,7 +1,9 @@
-import { act, render, screen, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Message } from "@/lib/cowork";
+import { server } from "@/testing/setup";
 
 // An embed reads its artifact through a server action, which a test
 // renders no server for.
@@ -91,6 +93,7 @@ describe("LiveMessages", () => {
   it("sends a visitor the server signed out to sign in", () => {
     vi.stubGlobal("WebSocket", FakeSocket);
     const location = {
+      origin: "http://cowork.test",
       pathname: "/acme/channels/c1",
       search: "",
       assign: vi.fn(),
@@ -113,6 +116,65 @@ describe("LiveMessages", () => {
     expect(location.assign).toHaveBeenCalledWith(
       "/auth/sign-in?next=%2Facme%2Fchannels%2Fc1",
     );
+  });
+
+  describe("after the feed closes without a refusal it can read", () => {
+    function render_(location: { assign: () => void }) {
+      vi.stubGlobal("WebSocket", FakeSocket);
+      vi.stubGlobal("location", {
+        origin: "http://cowork.test",
+        pathname: "/acme/channels/c1",
+        search: "",
+        assign: location.assign,
+        reload: vi.fn(),
+      });
+      render(
+        <LiveMessages
+          org="acme"
+          channel="c1"
+          initial={[]}
+          syncUrl="ws://cowork"
+          names={names}
+          pages={{}}
+        />,
+      );
+    }
+
+    it("sends a visitor whose session the platform refuses to sign in", async () => {
+      const location = { assign: vi.fn() };
+      server.use(
+        http.get(
+          "http://cowork.test/auth/session",
+          () => new HttpResponse(null, { status: 401 }),
+        ),
+      );
+      render_(location);
+
+      act(() => FakeSocket.last.onclose?.({ code: 1006 }));
+
+      await waitFor(() =>
+        expect(location.assign).toHaveBeenCalledWith(
+          "/auth/sign-in?next=%2Facme%2Fchannels%2Fc1",
+        ),
+      );
+    });
+
+    it("keeps a visitor on the page when the network fails", async () => {
+      const location = { assign: vi.fn() };
+      const asked = vi.fn();
+      server.use(
+        http.get("http://cowork.test/auth/session", () => {
+          asked();
+          return HttpResponse.error();
+        }),
+      );
+      render_(location);
+
+      act(() => FakeSocket.last.onclose?.({ code: 1006 }));
+
+      await waitFor(() => expect(asked).toHaveBeenCalledOnce());
+      expect(location.assign).not.toHaveBeenCalled();
+    });
   });
 
   it("appends what arrives, once, and counts a reply on its thread rather than listing it", () => {

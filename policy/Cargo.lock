@@ -2779,7 +2779,7 @@ name = "server"
 version = "0.0.0"
 dependencies = [
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "cedar-policy",
  "decision",
  "entity",

@@ -3,6 +3,7 @@ package machineapi_test
 import (
 	"crypto/tls"
 	"net/http"
+	neturl "net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -76,9 +77,10 @@ func machineRoutes(t *testing.T, values map[string]string) map[string]machineRou
 }
 
 // fillPath replaces each {parameter} in path with what values gives
-// for it, and fails when it gives nothing. A parameter nothing names
-// is a route this test would send somewhere else, and a route sent
-// somewhere else is refused for the wrong reason.
+// for it, escaped as a path segment because a GRN holds '/', and fails
+// when it gives nothing. A parameter nothing names is a route this
+// test would send somewhere else, and a route sent somewhere else is
+// refused for the wrong reason.
 func fillPath(t *testing.T, path string, values map[string]string) string {
 	t.Helper()
 	for {
@@ -91,7 +93,7 @@ func fillPath(t *testing.T, path string, values map[string]string) string {
 		name := path[opened+1 : opened+closed]
 		value, ok := values[name]
 		require.True(t, ok, "the path parameter %q in %q has no value here", name, path)
-		path = path[:opened] + value + path[opened+closed+1:]
+		path = path[:opened] + neturl.PathEscape(value) + path[opened+closed+1:]
 	}
 }
 

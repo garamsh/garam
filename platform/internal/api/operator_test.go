@@ -200,7 +200,7 @@ func TestOperatorRegister_RecordsAndListsTheManager(t *testing.T) {
 	for name, named := range map[string]string{
 		"not a grn":                    "aurora",
 		"another organization's":       operatorGRNOf("globex", "aurora").String(),
-		"not an operator":              grn.New(slug, grn.DefaultProject, "agent", "aurora").String(),
+		"not an operator":              grn.New(slug, "agent", "aurora").String(),
 		"the registration it is about": operatorGRNOf(slug, "self").String(),
 	} {
 		rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"self","manager":"`+named+`"}`, admin)

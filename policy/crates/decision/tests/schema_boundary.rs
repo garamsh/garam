@@ -97,14 +97,14 @@ fn a_team_inside_a_team_is_refused() {
     let org = json!({"org": {"__entity": {"type": "Org", "id": ACME.1}}});
 
     let refused = engine.entities(team(
-        "grn:acme:default:group:nested",
+        "grn:acme/iam/group/nested",
         org.clone(),
-        json!([{"type": "Team", "id": "grn:acme:default:group:outer"}]),
+        json!([{"type": "Team", "id": "grn:acme/iam/group/outer"}]),
     ));
     assert!(matches!(refused, Err(Error::Entities(_))), "{refused:?}");
 
     let control = engine.entities(team(
-        "grn:acme:default:group:flat",
+        "grn:acme/iam/group/flat",
         org,
         json!([{"type": "Org", "id": ACME.1}]),
     ));

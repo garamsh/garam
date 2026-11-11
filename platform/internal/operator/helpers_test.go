@@ -8,11 +8,11 @@ import (
 )
 
 func operatorGRN(org, id string) grn.GRN {
-	return grn.New(org, grn.DefaultProject, operator.ServiceType, id)
+	return grn.New(org, operator.ServiceType, id)
 }
 
 func agentGRN(org, id string) grn.GRN {
-	return grn.New(org, grn.DefaultProject, "agent", id)
+	return grn.New(org, "agent", id)
 }
 
 // clock is a time a test holds still and moves itself.

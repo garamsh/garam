@@ -1384,7 +1384,7 @@ export interface components {
             current: boolean;
         };
         User: {
-            /** @example grn:garam:default:user:117421510527410544321 */
+            /** @example grn:garam/iam/user/117421510527410544321 */
             grn: string;
             nickname: string;
         };
@@ -1424,7 +1424,7 @@ export interface components {
             password: string;
         };
         Organization: {
-            /** @example grn:garam:default:org:acme */
+            /** @example grn:garam/iam/org/acme */
             grn: string;
             name: string;
             /** Format: date-time */
@@ -1437,7 +1437,7 @@ export interface components {
             name?: string;
         };
         Group: {
-            /** @example grn:acme:default:group:eng */
+            /** @example grn:acme/iam/group/eng */
             grn: string;
             name: string;
             orgGrn: string;
@@ -1452,7 +1452,7 @@ export interface components {
             roles?: components["schemas"]["ScopedRoles"];
         };
         Project: {
-            /** @example grn:acme:default:project:frontend */
+            /** @example grn:acme/iam/project/frontend */
             grn: string;
             name: string;
             orgGrn: string;
@@ -1468,7 +1468,7 @@ export interface components {
         };
         /** @description A group or project member, addressed by GRN. */
         MemberRef: {
-            /** @example grn:acme:default:user:alice */
+            /** @example grn:acme/iam/user/alice */
             memberGrn: string;
         };
         /** @enum {string} */
@@ -1604,7 +1604,7 @@ export interface components {
         };
         /** @description One organization's view of a cross-organization consent relation (ADR-0035), from the side the path names: `orgGrn` is the other organization, and each half says whether that side's grant stands. `stands` is both halves at once — the only state under which a message crosses. */
         OrgConsent: {
-            /** @example grn:root:default:org:globex */
+            /** @example grn:root/iam/org/globex */
             orgGrn: string;
             /** @description The path organization's half stands. */
             grantedHere: boolean;
@@ -1679,7 +1679,7 @@ export interface components {
          *             "org:read"
          *           ],
          *           "Resource": [
-         *             "grn:acme:*"
+         *             "grn:acme/*"
          *           ]
          *         }
          *       ]
@@ -1692,7 +1692,7 @@ export interface components {
          */
         PolicyStatus: "draft" | "active";
         Policy: {
-            /** @example grn:acme:default:policy:9f2ac1b40d8e7a35 */
+            /** @example grn:acme/iam/policy/9f2ac1b40d8e7a35 */
             grn: string;
             orgGrn: string;
             name: string;
@@ -1728,14 +1728,14 @@ export interface components {
         };
         PolicyAttachment: {
             policyGrn: string;
-            /** @example grn:acme:default:group:eng */
+            /** @example grn:acme/iam/group/eng */
             subjectGrn: string;
             /** Format: date-time */
             createdAt: string;
         };
         /** @description The user or group the policy applies to. */
         PolicyAttachmentCreate: {
-            /** @example grn:acme:default:group:eng */
+            /** @example grn:acme/iam/group/eng */
             subjectGrn: string;
         };
         /**
@@ -1840,7 +1840,7 @@ export interface components {
         };
         /** @description What holds an agent, at the epoch that binding is on: an operator, or the supervisor of a standalone host (ADR-0082). Every assignment raises the epoch and fences the assignee it replaced. */
         AgentAssignment: {
-            /** @example grn:acme:default:operator:field-one */
+            /** @example grn:acme/iam/operator/field-one */
             assigneeGrn: string;
             epoch: number;
             /**
@@ -1855,7 +1855,7 @@ export interface components {
         };
         /** @description An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent, and `updatedAt` is when a state report last landed — either party's report moves it. */
         Agent: {
-            /** @example grn:acme:default:agent:9f2ac1b40d8e7a35 */
+            /** @example grn:acme/iam/agent/9f2ac1b40d8e7a35 */
             grn: string;
             /** @description What the organization calls the agent (ADR-0119). Absent where it calls it nothing, and a client shows the identifier, the GRN's last segment, instead. */
             name?: string;
@@ -1896,7 +1896,7 @@ export interface components {
         };
         /** @description An operator this organization has registered. The record grants nothing and admits nothing (ADR-0045), and nothing on it is a report from the operator. */
         Operator: {
-            /** @example grn:acme:default:operator:field-one */
+            /** @example grn:acme/iam/operator/field-one */
             grn: string;
             /**
              * @description What the organization calls the operator. It is not unique and not an identity: two operators may share one, and the GRN is what tells them apart. A registration that named none, including every one made before names existed, is called by its identifier.
@@ -1917,7 +1917,7 @@ export interface components {
             controlEndpoint?: string;
             /**
              * @description The GRN of the operator this one is the control service of, absent where this one is a manager or stands alone (ADR-0124). An Operator is a manager and at most one control service, so a list read pairs the two by this field alone. It is set by `registerOperator`, or once by `setOperatorManager` on a record naming none, and it names the identity rather than a live record: it stays after that manager's registration is deleted.
-             * @example grn:acme:default:operator:field-one
+             * @example grn:acme/iam/operator/field-one
              */
             manager?: string;
         };
@@ -1936,7 +1936,7 @@ export interface components {
             privateKeyPem: string;
             /**
              * @description The operator's canonical GRN, which its assertions name as `iss`, `sub` and `client_id`.
-             * @example grn:acme:default:operator:controller
+             * @example grn:acme/iam/operator/controller
              */
             clientId: string;
             /**
@@ -1989,7 +1989,7 @@ export interface components {
             description?: components["schemas"]["OperatorDescription"];
             /**
              * @description Registers this operator as the control service of the operator this GRN names, which must be registered in this organization, must not be a control service itself, and must not have one already; each refusal is a 409 (ADR-0124). It is how a control service joins a manager registered on its own, as every pair made before `controlService` was. Not given with `controlService`.
-             * @example grn:acme:default:operator:field-one
+             * @example grn:acme/iam/operator/field-one
              */
             manager?: string;
             /** @description Registers this operator as a manager together with its control service, which names it, in one transaction (ADR-0124): both are recorded or neither is. The answer is the manager; the control service is the operator under this identifier, and each is issued its own key. Not given with `manager`. */
@@ -2031,7 +2031,7 @@ export interface components {
         OperatorManagerWrite: {
             /**
              * @description The GRN of the cluster manager this operator is the control service of: another operator of this organization.
-             * @example grn:acme:default:operator:field-one
+             * @example grn:acme/iam/operator/field-one
              */
             manager: string;
         };

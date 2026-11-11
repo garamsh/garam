@@ -144,10 +144,10 @@ func TestNewService_RefusesAConfigurationThatDeliversNothing(t *testing.T) {
 // comparison, and the queue is not reached at all when it refuses.
 func TestService_ActsOnlyOnTheQueueTheCallerIsAddressedBy(t *testing.T) {
 	ctx := context.Background()
-	bot, stranger := recipientGRN(), grn.New("acme", grn.DefaultProject, "agent", "other")
+	bot, stranger := recipientGRN(), grn.New("acme", "agent", "other")
 	// A GRN carries its organization, so an agent of another
 	// organization is refused by the same comparison.
-	foreign := grn.New("globex", grn.DefaultProject, "agent", "bot")
+	foreign := grn.New("globex", "agent", "bot")
 
 	tests := []struct {
 		name string
@@ -259,7 +259,7 @@ func TestService_PostsToARecipientNothingKnowsAbout(t *testing.T) {
 	s, err := message.NewService(store, brief())
 	require.NoError(t, err)
 
-	unknown := grn.New("acme", grn.DefaultProject, "agent", "nobodyhaseverseenthisone")
+	unknown := grn.New("acme", "agent", "nobodyhaseverseenthisone")
 	stored, err := s.Post(ctx, senderGRN(), unknown, "key-1", "hello", message.AuthorSender, nil)
 	require.NoError(t, err)
 	assert.Equal(t, unknown, stored.Recipient)

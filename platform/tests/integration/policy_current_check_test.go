@@ -48,7 +48,7 @@ func activateStatement(t *testing.T, s *authzpg.Store, orgGRN grn.GRN, sid strin
 	ctx := context.Background()
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, sid), statementDoc(sid, effect, "project:read", "grn:acme:*"), grnOf("user", "ada"))
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, sid), statementDoc(sid, effect, "project:read", "grn:acme/*"), grnOf("user", "ada"))
 	require.NoError(t, err)
 	_, err = s.SetPolicyStatus(ctx, g, wire.PolicyStatusActive)
 	require.NoError(t, err)

@@ -66,7 +66,7 @@ func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	session := func(id string, role org.Role) (*http.Cookie, grn.GRN) {
-		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+		g := grn.New(grn.RootOwner, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
 		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, role)))
 		token, err := authn.NewToken()
@@ -230,7 +230,7 @@ func TestDelegatedAuthority_EndToEnd(t *testing.T) {
 	assert.Contains(t, got, `"assignment":{"epoch":"`)
 
 	status, got = call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", s.member,
-		`{"audience":"grn:globex:default:operator:hosted","operation":"agent:create","target":"`+s.controller.String()+
+		`{"audience":"grn:globex/iam/operator/hosted","operation":"agent:create","target":"`+s.controller.String()+
 			`","requestId":"req-3","bodySha256":"`+strings.Repeat("c", 64)+`"}`)
 	assert.Equal(t, http.StatusBadRequest, status, "another organization's audience: %s", got)
 
@@ -272,7 +272,7 @@ func TestDelegatedAuthority_RefusesPastAStaleCachedAllow(t *testing.T) {
 	check := &authzv1.CheckRequest{
 		SubjectGrn: s.memberGRN.String(), ObjectGrn: s.acme.String(), Action: "agent:create",
 		Statements: []*authzv1.Statement{{Sid: "member", Effect: authzv1.Effect_EFFECT_ALLOW,
-			Action: []string{"agent:create"}, Resource: []string{s.acme.String(), "grn:acme:*"}}},
+			Action: []string{"agent:create"}, Resource: []string{s.acme.String(), "grn:acme/*"}}},
 		SubjectOrg: s.acme.String(),
 	}
 	client := authzv1.NewAuthzServiceClient(engine)
@@ -317,10 +317,10 @@ func TestDelegatedAuthority_RechecksRolesAndGroups(t *testing.T) {
 		require.NoError(t, authnpg.NewSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
 		return &http.Cookie{Name: "garam_session", Value: token}
 	}
-	admin := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "carol")
+	admin := grn.New(grn.RootOwner, user.ServiceType, "carol")
 	require.NoError(t, users.Create(ctx, user.New(admin, "carol")))
 	require.NoError(t, orgs.AddMember(ctx, org.NewMembership(s.acme, admin, org.RoleAdmin)))
-	direct := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "dave")
+	direct := grn.New(grn.RootOwner, user.ServiceType, "dave")
 	require.NoError(t, users.Create(ctx, user.New(direct, "dave", string(org.RoleAdmin))))
 	require.NoError(t, orgs.AddMember(ctx, org.NewMembership(s.acme, direct, org.RoleMember)))
 

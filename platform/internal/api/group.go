@@ -246,7 +246,7 @@ func (s *Server) RemoveGroupMember(w http.ResponseWriter, r *http.Request, orgSl
 // segment scopes the identifier, so a group of another org is not
 // addressable through that org's paths.
 func groupGRN(orgSlug, groupSlug string) grn.GRN {
-	return grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeGroup, groupSlug)
+	return grn.New(orgSlug, org.ServiceTypeGroup, groupSlug)
 }
 
 func groupToAPI(g *org.Group) apigen.Group {

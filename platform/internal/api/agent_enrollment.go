@@ -124,7 +124,7 @@ func (s *Server) RevokeAgentSupervisor(w http.ResponseWriter, r *http.Request, o
 		writeError(w, err)
 		return
 	}
-	supervisor, err := grn.Parse(grn.New(orgSlug, grn.DefaultProject, agent.ServiceTypeSupervisor, supervisorSlug).String())
+	supervisor, err := grn.Parse(grn.New(orgSlug, agent.ServiceTypeSupervisor, supervisorSlug).String())
 	if err != nil {
 		writeError(w, errorx.Wrap(err, "supervisor", errorx.KindInvalidArgument))
 		return

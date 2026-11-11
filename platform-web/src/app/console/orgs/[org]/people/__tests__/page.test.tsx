@@ -42,7 +42,7 @@ vi.stubGlobal(
 /** The two people the list test acts on, as the page decides them. */
 const ALICE_ROW: MemberRow = {
   kind: "person",
-  grn: "grn:root:default:user:alice",
+  grn: "grn:root/iam/user/alice",
   identifier: "alice",
   name: "Alice",
   href: "/console/orgs/acme/people/alice",
@@ -53,7 +53,7 @@ const ALICE_ROW: MemberRow = {
 };
 const BOB_ROW: MemberRow = {
   ...ALICE_ROW,
-  grn: "grn:root:default:user:bob",
+  grn: "grn:root/iam/user/bob",
   identifier: "bob",
   name: "Bob",
   href: "/console/orgs/acme/people/bob",
@@ -205,7 +205,7 @@ describe("people", () => {
     });
 
     it("names an inviter who left by their identifier", async () => {
-      server.use(pendingOne("grn:root:default:user:gone"));
+      server.use(pendingOne("grn:root/iam/user/gone"));
 
       await renderPeople();
 
@@ -315,8 +315,8 @@ describe("people", () => {
 
     expect(await screen.findByText("Added 2 members")).toBeInTheDocument();
     expect(added).toEqual([
-      "eng grn:root:default:user:alice",
-      "eng grn:root:default:user:bob",
+      "eng grn:root/iam/user/alice",
+      "eng grn:root/iam/user/bob",
     ]);
   });
 

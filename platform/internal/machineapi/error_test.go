@@ -172,7 +172,7 @@ func TestRecoverPanics_AnswersInsteadOfDroppingTheConnection(t *testing.T) {
 // The kind and the message are asserted beside the absence, because a
 // handler writing nothing at all would carry no submitted value either.
 func TestBindingError_AnswersTheErrorTheSpecificationDeclares(t *testing.T) {
-	submitted := `grn:acme:default:agent:"; drop table messages`
+	submitted := `grn:acme/iam/agent/"; drop table messages`
 	recorder := httptest.NewRecorder()
 
 	machineapi.BindingError(recorder,

@@ -33,7 +33,7 @@ const message = (over: Partial<Message>): Message => ({
   id: "m1",
   channel: "c1",
   thread: "",
-  author: "grn:root:default:user:ada",
+  author: "grn:root/iam/user/ada",
   body: "hello",
   mentions: [],
   undeliveredMentions: [],
@@ -45,8 +45,8 @@ const message = (over: Partial<Message>): Message => ({
 });
 
 const names = {
-  "grn:root:default:user:ada": "Ada",
-  "grn:root:default:user:bob": "Bob",
+  "grn:root/iam/user/ada": "Ada",
+  "grn:root/iam/user/bob": "Bob",
 };
 
 describe("MessageItem", () => {
@@ -55,14 +55,11 @@ describe("MessageItem", () => {
       <ul>
         <MessageItem
           org="acme"
-          names={{ ...names, "grn:acme:default:agent:helper": "Helper" }}
+          names={{ ...names, "grn:acme/iam/agent/helper": "Helper" }}
           pages={{ p1: "Spec" }}
           message={message({
-            mentions: [
-              "grn:root:default:user:bob",
-              "grn:acme:default:agent:helper",
-            ],
-            undeliveredMentions: ["grn:acme:default:agent:helper"],
+            mentions: ["grn:root/iam/user/bob", "grn:acme/iam/agent/helper"],
+            undeliveredMentions: ["grn:acme/iam/agent/helper"],
             pages: ["p1"],
           })}
         />

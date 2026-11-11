@@ -119,7 +119,7 @@ describe("agents", () => {
             // No legacy operatorGrn: the assignee says it is an
             // operator.
             assignment: {
-              assigneeGrn: "grn:acme:default:operator:field-one",
+              assigneeGrn: "grn:acme/iam/operator/field-one",
               epoch: 3,
               since: "2026-10-01T00:00:00Z",
             },
@@ -141,7 +141,7 @@ describe("agents", () => {
           {
             ...reportedAgent,
             assignment: {
-              assigneeGrn: "grn:acme:default:supervisor:build-07",
+              assigneeGrn: "grn:acme/iam/supervisor/build-07",
               epoch: 1,
               since: "2026-10-01T00:00:00Z",
             },

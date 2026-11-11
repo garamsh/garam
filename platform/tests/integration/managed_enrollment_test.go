@@ -197,7 +197,7 @@ func (s *executionStack) agentRows(t *testing.T) map[string]int {
 
 func (s *executionStack) removeMember(t *testing.T, id string) {
 	t.Helper()
-	g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+	g := grn.New(grn.RootOwner, user.ServiceType, id)
 	require.NoError(t, orgpg.New(s.pool).RemoveMember(context.Background(), s.acme, g))
 }
 

@@ -11,9 +11,8 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 )
 
-// ServiceType is a task's GRN service type, the kind the platform's
-// permission checks name it by.
-const ServiceType = "cowork-task"
+// ServiceType is a task's GRN type.
+const ServiceType = "task"
 
 // The platform's actions on tasks: on the organization, to list and
 // create them, and on a task, to read and change it.
@@ -59,7 +58,7 @@ type Task struct {
 
 // GRN is the task's resource name under its organization.
 func (t Task) GRN() grn.GRN {
-	return grn.New(t.Org, grn.DefaultProject, ServiceType, t.ID)
+	return grn.New(t.Org, ServiceType, t.ID)
 }
 
 // Comment is one comment on a task.

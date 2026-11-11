@@ -140,7 +140,7 @@ func TestStandaloneListing_IsReadOnAgentRead(t *testing.T) {
 
 	denied := activePolicy(t, policies, s.acme, "no-agent-read",
 		statementDoc("no-agent-read", wire.EffectDeny, org.ActionAgentRead, s.acme.String()))
-	attachPolicy(t, policies, denied, grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "bob"))
+	attachPolicy(t, policies, denied, grn.New(grn.RootOwner, user.ServiceType, "bob"))
 
 	for _, path := range paths {
 		status, body := s.browse(t, http.MethodGet, path, s.member, "")

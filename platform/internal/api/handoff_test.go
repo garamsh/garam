@@ -54,7 +54,7 @@ func TestSessionHandoff_RedeemsOnceForASessionOfItsOwn(t *testing.T) {
 
 	rec = f.do(t, "GET", "/me", "", &http.Cookie{Name: console.Name, Value: console.Value})
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "grn:root:default:user:ada", decodeBody[apigen.User](t, rec).Grn)
+	assert.Equal(t, "grn:root/iam/user/ada", decodeBody[apigen.User](t, rec).Grn)
 
 	rec = f.redeemHandoff(t, code, handoffState)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)

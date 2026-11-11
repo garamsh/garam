@@ -8,7 +8,7 @@ use cedar_policy::{EntityId, EntityTypeName, EntityUid};
 use decision::{Engine, EntityRef, Evaluation, OrgGrn, Role, RoleScope};
 use grant::{Body, Error};
 
-const ACME: &str = "grn:root:default:org:acme";
+const ACME: &str = "grn:root/iam/org/acme";
 
 fn uid(entity_type: &str, id: &str) -> EntityUid {
     EntityUid::from_type_name_and_id(
@@ -26,11 +26,11 @@ fn org() -> EntityUid {
 }
 
 fn user() -> EntityUid {
-    uid("User", "grn:acme:default:user:lee")
+    uid("User", "grn:acme/iam/user/lee")
 }
 
 fn team() -> EntityUid {
-    uid("Team", "grn:acme:default:group:eng")
+    uid("Team", "grn:acme/iam/group/eng")
 }
 
 #[test]
@@ -169,14 +169,14 @@ fn a_link_naming_another_organizations_entity_is_refused() {
         Body::role_link(&engine, &acme(), Role::Member, scope, principal, resource)
     };
 
-    let globex = uid("Org", "grn:root:default:org:globex");
-    let their_team = uid("Team", "grn:globex:default:group:secret");
+    let globex = uid("Org", "grn:root/iam/org/globex");
+    let their_team = uid("Team", "grn:globex/iam/group/secret");
     for refused in [
         link(user(), globex, RoleScope::Organization),
         link(user(), their_team.clone(), RoleScope::TeamOrProject),
         link(their_team, org(), RoleScope::Organization),
         link(
-            uid("Agent", "grn:globex:default:agent:rival"),
+            uid("Agent", "grn:globex/iam/agent/rival"),
             org(),
             RoleScope::Organization,
         ),
@@ -188,7 +188,7 @@ fn a_link_naming_another_organizations_entity_is_refused() {
     }
 
     // A user belongs to no one organization, whatever its GRN names.
-    let elsewhere = uid("User", "grn:globex:default:user:mia");
+    let elsewhere = uid("User", "grn:globex/iam/user/mia");
     let control = link(elsewhere, org(), RoleScope::Organization);
     assert!(control.is_ok(), "{control:?}");
 }
@@ -198,10 +198,10 @@ fn a_guardrail_naming_another_organizations_entity_is_refused() {
     let engine = Engine::load().unwrap();
 
     for source in [
-        r#"forbid (principal, action, resource in Org::"grn:root:default:org:globex");"#,
-        r#"forbid (principal in Team::"grn:globex:default:group:secret", action, resource);"#,
+        r#"forbid (principal, action, resource in Org::"grn:root/iam/org/globex");"#,
+        r#"forbid (principal in Team::"grn:globex/iam/group/secret", action, resource);"#,
         r#"forbid (principal, action, resource)
-           when { principal in Team::"grn:globex:default:group:secret" };"#,
+           when { principal in Team::"grn:globex/iam/group/secret" };"#,
     ] {
         let refused = Body::guardrail(&engine, &acme(), source);
         assert!(
@@ -213,7 +213,7 @@ fn a_guardrail_naming_another_organizations_entity_is_refused() {
     let control = Body::guardrail(
         &engine,
         &acme(),
-        r#"forbid (principal in Team::"grn:acme:default:group:eng", action, resource in Org::"grn:root:default:org:acme");"#,
+        r#"forbid (principal in Team::"grn:acme/iam/group/eng", action, resource in Org::"grn:root/iam/org/acme");"#,
     );
     assert!(control.is_ok(), "{control:?}");
 }

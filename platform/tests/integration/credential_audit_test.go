@@ -165,7 +165,7 @@ func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 
 	denied := activePolicy(t, policies, s.acme, "no-operator-read",
 		statementDoc("no-operator-read", wire.EffectDeny, org.ActionOperatorRead, s.acme.String()))
-	attachPolicy(t, policies, denied, grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "bob"))
+	attachPolicy(t, policies, denied, grn.New(grn.RootOwner, user.ServiceType, "bob"))
 
 	status, body = read(operatorGRN, "")
 	assert.Equal(t, http.StatusForbidden, status, body)
@@ -173,7 +173,7 @@ func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 	assert.Equal(t, http.StatusOK, status, "a supervisor is read on agent:read: %s", body)
 	status, body = read(scopedGRN("globex", operator.ServiceType, "x"), "")
 	assert.Equal(t, http.StatusBadRequest, status, body)
-	status, body = read(grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "ada"), "")
+	status, body = read(grn.New(grn.RootOwner, user.ServiceType, "ada"), "")
 	assert.Equal(t, http.StatusBadRequest, status, body)
 }
 

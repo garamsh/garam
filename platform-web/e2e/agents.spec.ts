@@ -1,6 +1,7 @@
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
 import type { Seed } from "./seed";
+import { formatGrn } from "../src/lib/grn";
 
 test.describe("no garam form", () => {
   test("the new agent page offers no garam form, and garam accepts no definition", async ({
@@ -27,7 +28,12 @@ test.describe("no garam form", () => {
       {
         data: {
           name: "Scout",
-          operatorGrn: `grn:${signedIn.orgSlug}:default:operator:${signedIn.operatorIdentifier}`,
+          operatorGrn: formatGrn(
+            signedIn.orgSlug,
+            "iam",
+            "operator",
+            signedIn.operatorIdentifier,
+          ),
           values: { model: "haiku" },
         },
       },

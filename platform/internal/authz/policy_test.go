@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/lib/errorx"
-	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/authz"
 	"github.com/garamsh/garam/platform/internal/wire"
 )
@@ -17,8 +16,8 @@ func TestParsePolicyDocument_Valid(t *testing.T) {
 	doc, err := authz.ParsePolicyDocument([]byte(`{
 	  "Version": "2026-07-25",
 	  "Statement": [
-	    {"Sid": "AllowOrgRead", "Effect": "Allow", "Action": ["org:read"], "Resource": ["grn:acme:*"]},
-	    {"Sid": "DenyDelete", "Effect": "Deny", "Action": ["org:delete"], "Resource": ["grn:acme:*"]}
+	    {"Sid": "AllowOrgRead", "Effect": "Allow", "Action": ["org:read"], "Resource": ["grn:acme/*"]},
+	    {"Sid": "DenyDelete", "Effect": "Deny", "Action": ["org:delete"], "Resource": ["grn:acme/*"]}
 	  ]
 	}`))
 	require.NoError(t, err)
@@ -53,8 +52,8 @@ func TestParsePolicyDocument_Rejects(t *testing.T) {
 // where none was written fails too.
 func TestParsePolicyDocument_ReMarshalsToWhatWasSubmitted(t *testing.T) {
 	docs := map[string]string{
-		"carrying a condition": `{"Version":"2026-07-25","Statement":[{"Sid":"OfficeOnly","Effect":"Allow","Action":["org:update"],"Resource":["grn:acme:*"],"Condition":{"IpAddress":{"garam:SourceIp":"203.0.113.0/24"}}}]}`,
-		"carrying none":        `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`,
+		"carrying a condition": `{"Version":"2026-07-25","Statement":[{"Sid":"OfficeOnly","Effect":"Allow","Action":["org:update"],"Resource":["grn:acme/*"],"Condition":{"IpAddress":{"garam:SourceIp":"203.0.113.0/24"}}}]}`,
+		"carrying none":        `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme/*"]}]}`,
 	}
 	for name, submitted := range docs {
 		t.Run(name, func(t *testing.T) {
@@ -106,7 +105,7 @@ func TestNewPolicy_StartsAsADraftOnTheFirstVersion(t *testing.T) {
 	g, err := authz.NewPolicyGRN(acme)
 	require.NoError(t, err)
 	assert.Equal(t, "acme", g.Organization)
-	assert.Equal(t, grn.DefaultProject, g.Project)
+	assert.Empty(t, g.Ancestors)
 	assert.Equal(t, authz.ServiceTypePolicy, g.ServiceType)
 
 	p := authz.NewPolicy(g, acme, "read-only")

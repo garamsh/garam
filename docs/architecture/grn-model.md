@@ -6,12 +6,11 @@ Implementation:
 comments are authoritative for constructing, rendering,
 parsing and validating a GRN, and for `GRN` being a value type.
 
-**Decided and not built.** The grammar below is
+The grammar below is
 [ADR-0142](./adr/0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md)'s.
-`lib/grn/grn.go` enforces the five-segment form described under
-§What the code enforces today until the implementation issue lands,
-and every other responsibility document still writes its examples in
-that form.
+`lib/grn/grn.go` parses and renders it, holds the one map from a type
+to its owning service, and refuses the five-segment form of
+[ADR-0001](./adr/0001-grn-segments.md).
 
 ## Contents
 - Format
@@ -19,7 +18,7 @@ that form.
 - Types by owning service
 - identifier
 - Locator
-- What the code enforces today
+- Earlier names
 - Open questions
 
 ## Format
@@ -41,9 +40,9 @@ names the vendor (Garam); no segment repeats it.
 | `id` | unique id within the type | slug, see §identifier |
 | `locator` | a place inside the resource, read by the service | see §Locator |
 
-One grammar: once the implementation lands the five-segment form is
-refused and nothing parses both. A name of this grammar holds one
-colon before `#`, a five-segment name four.
+One grammar: the five-segment form is refused and nothing parses both.
+A name of this grammar holds one colon before `#`, a five-segment name
+four.
 
 Examples:
 
@@ -147,19 +146,17 @@ policy reaches it as a context value. Escaping is RFC 3986's: a `#`
 inside a locator is `%23`. No platform table keys on a locator, and
 none is bounded here.
 
-## What the code enforces today
+`lib/grn/grn.go` parses and renders a locator and nothing else reads
+one yet.
 
-`lib/grn/grn.go` enforces the earlier form, which the implementation
-issue retires:
+## Earlier names
 
-```
-grn:<organization>:<project>:<service_type>:<identifier>
-```
-
-Five colon-separated segments; `project` is `default` when the
-resource is organization-level; each segment follows the character
-rule above at ≤ 64 characters, and `Parse` splits on every colon. The
-earlier names read in the new grammar as follows.
+ADR-0001's form had five colon-separated segments, with `project`
+`default` when the resource was organization-level. No code writes or
+accepts it. A stored row that still holds one keeps its text: no
+migration rewrites a name, and the stores, the policy service and the
+evaluator refuse to parse it. The earlier names read in the new
+grammar as follows.
 
 | Earlier | Decided |
 |---------|---------|
@@ -170,11 +167,12 @@ earlier names read in the new grammar as follows.
 ## Open questions
 
 The per-service manifest and the served registry of types are a later
-ADR. Open in ADR-0142: whether the policy service's caller name
-`platform` follows the service name `iam`; whether an organization is
-better named inside itself than by `root`; the context key a locator
-arrives under; how a wildcard in a policy pattern treats `/` and `#`;
-how an action's `<service_type>:<verb>` name reads once types belong to
-services; how a Cedar entity identifier is derived from a nested name;
-which service owns `doc` and `secret`; and what keeps an identifier
-from being reused.
+ADR. Settled for the implementation: the policy service's caller name
+and the feed's `sub` stay `platform`; an action's name does not
+change; a Cedar entity identifier is the whole name before `#`; a `*`
+in a policy pattern matches as it did, `/` included, so an
+organization's scope is `grn:<org>/*`. Open in ADR-0142: whether an
+organization is better named inside itself than by `root`; the context
+key a locator arrives under; how a wildcard treats `#`; which service
+owns `doc` and `secret`; and what keeps an identifier from being
+reused.

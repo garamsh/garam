@@ -263,7 +263,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	// ADR-0035). The Allow below matches every resource there is and
 	// buys nothing.
 	reachAll := activePolicy(t, policies, orgRootGRN("acme"), "reach-everything",
-		statementDoc("reach-everything", wire.EffectAllow, message.ActionSend, "grn:*:*"))
+		statementDoc("reach-everything", wire.EffectAllow, message.ActionSend, "grn:*/*"))
 	attachPolicy(t, policies, reachAll, senderGRN)
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages",
 		submissionTo(strangerGRN, "key-3"))
@@ -571,7 +571,7 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 		Sid:      "machine-own-org",
 		Effect:   wire.EffectAllow,
 		Action:   []string{message.ActionSend},
-		Resource: []string{"grn:" + recipientGRN.Organization + ":*"},
+		Resource: []string{grn.OrgPattern(recipientGRN.Organization)},
 	}}
 	crossing := machineapi.EvalInput{
 		Subject:    foreignGRN,
@@ -605,7 +605,7 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	// attaches it to nobody, which is what an administrator does by
 	// detaching the last attachment from one they had aimed at a subject.
 	openDoor := activePolicy(t, policies, orgRootGRN("beta"), "everything",
-		statementDoc("everything", wire.EffectAllow, "*", "grn:beta:*"))
+		statementDoc("everything", wire.EffectAllow, "*", "grn:beta/*"))
 
 	// That policy does not reach the foreign subject: the same
 	// question, refused the same way now that beta has written one

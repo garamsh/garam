@@ -52,7 +52,7 @@ func newCheckStack(t *testing.T) *checkStack {
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	session := func(id string, role org.Role) (*http.Cookie, grn.GRN) {
-		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+		g := grn.New(grn.RootOwner, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
 		if role != "" {
 			require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, role)))

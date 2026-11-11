@@ -37,14 +37,14 @@ fn question() -> EvaluateRequest {
     EvaluateRequest {
         subject: Some(Subject {
             r#type: "User".into(),
-            id: "grn:acme:default:user:lee".into(),
+            id: "grn:acme/iam/user/lee".into(),
         }),
         action: Some(Action {
             name: "agent:read".into(),
         }),
         resource: Some(Resource {
             r#type: "Agent".into(),
-            id: "grn:acme:default:agent:bot".into(),
+            id: "grn:acme/iam/agent/bot".into(),
             properties: None,
         }),
         context: None,

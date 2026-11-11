@@ -1,8 +1,6 @@
 # ADR 0142: A GRN names its organization, its service and a path of type and id pairs, with a locator the service reads
 
-> Status: accepted; unbuilt. The grammar is decided and
-> `lib/grn/grn.go` still enforces the five-segment form of ADR-0001
-> until the implementation issue lands
+> Status: accepted; built
 > Date: 2026-11-12
 
 Drafted for #1766, which reserves this number and holds the owner's

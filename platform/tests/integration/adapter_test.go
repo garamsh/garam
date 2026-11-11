@@ -280,13 +280,13 @@ func TestAdapter_CarriesAMessageAndAReplacementFencesTheGenerationBefore(t *test
 
 	first := newRuntimeDouble(t, s.agent, s.epoch, generationOf(1))
 	one := startAdapter(t, s, c, first, files)
-	id := s.postTo(t, `{"sender":"grn:evil:default:agent:1"}`)
+	id := s.postTo(t, `{"sender":"grn:evil/iam/agent/1"}`)
 	require.Eventually(t, func() bool { return len(first.received()) == 1 }, 10*time.Second, 10*time.Millisecond,
 		"the message reaches the runtime")
 	got := first.received()[0]
 	assert.Equal(t, id, got["id"], "garam's message identifier, not the lease")
 	assert.Equal(t, `{"contract":"garam-message.v1","sender":"`+s.peer.String()+
-		`","body":"{\"sender\":\"grn:evil:default:agent:1\"}"}`, got["content"])
+		`","body":"{\"sender\":\"grn:evil/iam/agent/1\"}"}`, got["content"])
 	first.finish(id)
 	require.Eventually(t, func() bool { return s.stateOf(t, id) == "completed" }, 10*time.Second, 20*time.Millisecond,
 		"the turn's end completes the message at garam")

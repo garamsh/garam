@@ -24,6 +24,7 @@ import (
 	blobmemory "github.com/garamsh/garam/cowork/internal/blob/memory"
 	"github.com/garamsh/garam/cowork/internal/cli"
 	"github.com/garamsh/garam/cowork/internal/usercontent"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // migrationsDir is cowork/migrations, found from this file.
@@ -147,11 +148,11 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	switch {
 	case r.URL.Path == "/orgs" && who != "eve":
-		_ = json.NewEncoder(w).Encode([]map[string]string{{"grn": "grn:root:default:org:acme", "name": "Acme"}})
+		_ = json.NewEncoder(w).Encode([]map[string]string{{"grn": "grn:root/iam/org/acme", "name": "Acme"}})
 	case r.URL.Path == "/orgs":
 		_ = json.NewEncoder(w).Encode([]map[string]string{})
 	case r.URL.Path == "/me":
-		_ = json.NewEncoder(w).Encode(map[string]string{"grn": "grn:root:default:user:" + who, "nickname": who})
+		_ = json.NewEncoder(w).Encode(map[string]string{"grn": grn.New(grn.RootOwner, "user", who).String(), "nickname": who})
 	case r.URL.Path == "/orgs/acme/permission-checks" && who != "eve":
 		var body struct {
 			Checks []struct {

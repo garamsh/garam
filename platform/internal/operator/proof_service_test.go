@@ -82,7 +82,7 @@ func newProofFixture() *proofFixture {
 	agent := agentGRN("acme", "bot")
 	return &proofFixture{
 		now:        now,
-		org:        grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme"),
+		org:        grn.New(grn.RootOwner, "org", "acme"),
 		hosted:     operatorGRN("acme", "hosted"),
 		controller: controller,
 		agent:      agent,
@@ -206,14 +206,14 @@ func TestProofService_BindsAnAgentToItsCurrentPlacement(t *testing.T) {
 // controller is the control.
 func TestParseController_AnswersOnlyAnOperatorOfTheCallersOrganization(t *testing.T) {
 	hosted := operatorGRN("acme", "hosted")
-	controller, err := operator.ParseController(hosted, "grn:acme:default:operator:controller")
+	controller, err := operator.ParseController(hosted, "grn:acme/iam/operator/controller")
 	require.NoError(t, err)
 	assert.Equal(t, operatorGRN("acme", "controller"), controller)
 
 	for raw, kind := range map[string]errorx.Kind{
-		"not a grn":                         errorx.KindInvalidArgument,
-		"grn:globex:default:operator:other": errorx.KindNotFound,
-		"grn:acme:default:agent:bot":        errorx.KindNotFound,
+		"not a grn":                     errorx.KindInvalidArgument,
+		"grn:globex/iam/operator/other": errorx.KindNotFound,
+		"grn:acme/iam/agent/bot":        errorx.KindNotFound,
 	} {
 		_, err := operator.ParseController(hosted, raw)
 		assert.Equal(t, kind, errorx.KindOf(err), raw)

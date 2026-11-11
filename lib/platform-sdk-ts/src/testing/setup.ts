@@ -6,7 +6,7 @@ import { afterAll, afterEach, beforeAll, vi } from "vitest";
 export const API_URL = "http://localhost:8080";
 
 /** The user `/me` answers with unless a test overrides it. */
-export const alice = { grn: "grn:root:default:user:alice", nickname: "Alice" };
+export const alice = { grn: "grn:root/iam/user/alice", nickname: "Alice" };
 
 /** The mock backend; a test overrides a route with `server.use`. */
 export const server = setupServer(

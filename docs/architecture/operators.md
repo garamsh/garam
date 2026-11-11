@@ -50,8 +50,8 @@ The identifier is the caller's rather than garam's, which is what makes
 this domain unlike every other org resource. An operator is configured
 with its identifier before it is registered, so a minted identifier
 would name something other than the operator that exists. What the
-domain applies is the GRN segment rule, and the schema applies it again
-where nothing routes around it.
+domain applies is the GRN segment rule; no schema check reads a GRN,
+so the domain is the only place that does.
 
 A record mints nothing. What it does is admit: the machine listener
 reads it on every request, joined to the token the request presents,

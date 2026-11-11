@@ -73,14 +73,14 @@ fn question() -> EvaluateRequest {
     EvaluateRequest {
         subject: Some(Subject {
             r#type: "User".into(),
-            id: "grn:acme:default:user:lee".into(),
+            id: "grn:acme/iam/user/lee".into(),
         }),
         action: Some(Action {
             name: "agent:read".into(),
         }),
         resource: Some(Resource {
             r#type: "Agent".into(),
-            id: "grn:acme:default:agent:bot".into(),
+            id: "grn:acme/iam/agent/bot".into(),
             properties: None,
         }),
         context: None,
@@ -130,8 +130,8 @@ async fn a_verified_token_of_a_service_this_one_does_not_serve_is_refused() {
         "cowork",
         "Platform",
         "platform ",
-        "grn:root:default:service:platform",
-        "grn:acme:default:service:cowork",
+        "grn:root/iam/service/platform",
+        "grn:acme/iam/service/cowork",
     ] {
         let token = signer().sign(&Claims {
             sub: subject.to_owned(),

@@ -140,7 +140,7 @@ func place(t *testing.T, store *memoryStore, operator grn.GRN) *Assignment {
 }
 
 func operatorGRN(org, id string) grn.GRN {
-	return grn.New(org, grn.DefaultProject, ServiceTypeOperator, id)
+	return grn.New(org, ServiceTypeOperator, id)
 }
 
 // TestService_ReportProvisioningStateIsAcceptedFromTheHolderAtTheCurrentEpoch
@@ -177,7 +177,7 @@ func TestService_ReportProvisioningStateIsAcceptedFromTheHolderAtTheCurrentEpoch
 	}{
 		"another operator of the same organization": {sibling, held.Agent, ErrNotAssigned},
 		"an operator of another organization":       {stranger, held.Agent, ErrNotAssigned},
-		"an agent that does not exist":              {holder, grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), ErrNotAssigned},
+		"an agent that does not exist":              {holder, grn.New("acme", ServiceType, "0f0f0f0f0f0f0f0f"), ErrNotAssigned},
 		"the agent reporting on its own pod":        {held.Agent, held.Agent, ErrNotAnOperator},
 	}
 	for name, tt := range refused {
@@ -232,7 +232,7 @@ func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T
 	}{
 		"an agent of the same organization": {sibling.Agent, held.Agent, ErrNotTheAgent},
 		"the operator that holds the agent": {operator, held.Agent, ErrNotTheAgent},
-		"an agent garam has no record of":   {grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), ErrAgentNotFound},
+		"an agent garam has no record of":   {grn.New("acme", ServiceType, "0f0f0f0f0f0f0f0f"), grn.New("acme", ServiceType, "0f0f0f0f0f0f0f0f"), ErrAgentNotFound},
 	}
 	for name, tt := range refused {
 		t.Run(name, func(t *testing.T) {

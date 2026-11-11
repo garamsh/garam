@@ -19,24 +19,24 @@ vi.mock("@/features/orgs/actions", () => ({
 
 const ENDPOINT = "https://control.example.test/garam";
 const BASE = `${ENDPOINT}/v1/orgs/acme`;
-const CONTROLLER = "grn:acme:default:operator:field-one";
-const AGENT = "grn:acme:default:agent:0123456789abcdef";
+const CONTROLLER = "grn:acme/iam/operator/field-one";
+const AGENT = "grn:acme/iam/agent/0123456789abcdef";
 
 function hosted(
   operations: DelegatedOperator["delegation"]["operations"],
 ): DelegatedOperator {
   return {
-    grn: "grn:acme:default:operator:hosted",
+    grn: "grn:acme/iam/operator/hosted",
     identifier: "hosted",
     name: "Hosted",
     endpoint: ENDPOINT,
     delegation: {
       grantId: "grant-1",
-      operatorGrn: "grn:acme:default:operator:hosted",
+      operatorGrn: "grn:acme/iam/operator/hosted",
       controllers: [CONTROLLER],
       operations,
       expiresAt: "2099-01-01T00:00:00Z",
-      grantedBy: "grn:acme:default:user:alice",
+      grantedBy: "grn:acme/iam/user/alice",
       grantedAt: "2026-10-01T00:00:00Z",
     },
     problem: null,
@@ -76,7 +76,7 @@ async function createWith(
   render(
     <NewAgentWizard
       org="acme"
-      orgGrn="grn:root:default:org:acme"
+      orgGrn="grn:root/iam/org/acme"
       start={{ status: "ready", hosted: hosted(operations) }}
       controllers={{ [CONTROLLER]: "Field one" }}
     />,

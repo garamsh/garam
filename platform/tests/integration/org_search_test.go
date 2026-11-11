@@ -66,21 +66,21 @@ type searchSeed func(t *testing.T, s *listStack, id, name string) grn.GRN
 
 func seedNamedGroup(t *testing.T, s *listStack, id, name string) grn.GRN {
 	t.Helper()
-	g := grn.New("acme", grn.DefaultProject, org.ServiceTypeGroup, id)
+	g := grn.New("acme", org.ServiceTypeGroup, id)
 	require.NoError(t, s.orgs.CreateGroup(context.Background(), org.NewGroup(g, name, s.acme)))
 	return g
 }
 
 func seedNamedProject(t *testing.T, s *listStack, id, name string) grn.GRN {
 	t.Helper()
-	g := grn.New("acme", grn.DefaultProject, org.ServiceTypeProject, id)
+	g := grn.New("acme", org.ServiceTypeProject, id)
 	require.NoError(t, s.orgs.CreateProject(context.Background(), org.NewProject(g, name, s.acme, string(org.RoleAdmin))))
 	return g
 }
 
 func seedNamedMember(t *testing.T, s *listStack, id, nickname string) grn.GRN {
 	t.Helper()
-	g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+	g := grn.New(grn.RootOwner, user.ServiceType, id)
 	require.NoError(t, userpg.New(s.pool).Create(context.Background(), user.New(g, nickname)))
 	require.NoError(t, s.orgs.AddMember(context.Background(), org.NewMembership(s.acme, g, org.RoleMember)))
 	return g
@@ -90,7 +90,7 @@ func seedNamedMember(t *testing.T, s *listStack, id, nickname string) grn.GRN {
 // name for an agent, so name is unused.
 func seedAgentAt(t *testing.T, s *listStack, id, _ string) grn.GRN {
 	t.Helper()
-	g := grn.New("acme", grn.DefaultProject, agent.ServiceType, id)
+	g := grn.New("acme", agent.ServiceType, id)
 	a, err := agent.New(g, s.acme)
 	require.NoError(t, err)
 	require.NoError(t, s.agents.Create(context.Background(), a))

@@ -54,7 +54,7 @@ func newDeviceStack(t *testing.T) *deviceStack {
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	sessions := authnpg.NewSessionStore(p)
 	session := func(id string) (*http.Cookie, grn.GRN) {
-		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+		g := grn.New(grn.RootOwner, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
 		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, org.RoleOwner)))
 		token, err := authn.NewToken()

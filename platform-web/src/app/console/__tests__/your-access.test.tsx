@@ -78,7 +78,7 @@ describe("Your access", () => {
           holders: [
             {
               type: "user",
-              grn: "grn:root:default:user:minji",
+              grn: "grn:root/iam/user/minji",
               nickname: "Minji",
             },
           ],

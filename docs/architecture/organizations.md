@@ -10,7 +10,7 @@ engine owns (ADR-0008), not through this list.
 
 **An organization's cowork principal is unbuilt (#1664).**
 [ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
-has the platform write one, `grn:<org>:default:service:cowork`, in the
+has the platform write one, `grn:<org>/iam/service/cowork`, in the
 transaction that creates the organization, and a migration write one
 for each organization that exists. Deleting the organization takes it
 by the cascade below. No member manages it: a server command of the
@@ -81,7 +81,8 @@ org-owned GRN names its organization in the organization segment
 (ADR-0001), so the store refuses an add whose member names an
 organization other than the group's or project's, and stores nothing.
 A root-owned GRN — a user's — belongs to no organization and is
-admitted, the line the engine's attachment trigger draws (ADR-0008).
+admitted, the line the policy server's attachment check draws
+(ADR-0008).
 The check reads the two GRNs and no row, so no concurrent write can
 slip past it. A remove is not refused: no such membership can be added
 now, and one stored before the refusal existed stays removable.

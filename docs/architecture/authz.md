@@ -141,7 +141,7 @@ evaluation reads it. Every other key below is read.
       "Sid": "AllowOrgRead",
       "Effect": "Allow",
       "Action": ["org:read", "project:list"],
-      "Resource": ["grn:acme:*"]
+      "Resource": ["grn:acme/*"]
     }
   ]
 }
@@ -153,7 +153,7 @@ evaluation reads it. Every other key below is read.
   the defining domain (`platform/internal/org`,
   `platform/internal/user`, …). The engine matches strings only.
 - `Resource`: GRN patterns with the same wildcard rules
-  (`grn:acme:*` scopes to an org).
+  (`grn:acme/*` scopes to an org).
 - `Condition`: reserved, as above.
 
 Reserved is not dropped, and neither is anything else. The parse
@@ -201,8 +201,8 @@ the statements that apply to that resource:
 
 | Origin | Action patterns | Resource patterns |
 |--------|-----------------|-------------------|
-| org membership role | `Role.Actions()` | the org GRN and `grn:<org>:*` |
-| subject's direct roles | `org.ActionsFor(user.Roles())` | the org GRN and `grn:<org>:*` |
+| org membership role | `Role.Actions()` | the org GRN and `grn:<org>/*` |
+| subject's direct roles | `org.ActionsFor(user.Roles())` | the org GRN and `grn:<org>/*` |
 | target group's roles, when the subject is a member | `org.ActionsFor(group.Roles())` | the group GRN |
 | target project's roles, when the subject is a member | `org.ActionsFor(project.Roles())` | the project GRN |
 
@@ -428,7 +428,8 @@ those GRNs against attachments without knowing what a group is. Each
 caller also sends `subject_org` — the GRN of the organization the
 subject belongs to — and the engine refuses the call when it is unset
 or does not name the object's organization (ADR-0038). An attachment
-stays inside the policy's org, enforced by a schema trigger; a
+stays inside the policy's org, enforced by the policy server on the
+parsed names, as no schema trigger reads a GRN; a
 root-owned identity such as a user cannot name an org in its GRN, so
 org membership is established by the api server populating `subject_org`
 before asking. An agent names its org in its own GRN, so the

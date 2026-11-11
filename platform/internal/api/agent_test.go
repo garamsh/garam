@@ -33,7 +33,7 @@ func orgGRNOf(slug string) grn.GRN {
 }
 
 func userGRNOf(subject string) grn.GRN {
-	return grn.New("root", "default", user.ServiceType, subject)
+	return grn.New("root", user.ServiceType, subject)
 }
 
 func TestAgentRead_MemberReadsWhereOthersAreRefused(t *testing.T) {
@@ -59,7 +59,7 @@ func TestAgentRead_MemberReadsWhereOthersAreRefused(t *testing.T) {
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(otherSlug), userGRNOf("outsider-sub"), org.RoleMember)))
 
 	held := seedAgent(t, f, slug)
-	operator := grn.New(slug, "default", agent.ServiceTypeOperator, "field-one")
+	operator := grn.New(slug, agent.ServiceTypeOperator, "field-one")
 	_, err := f.agents.Assign(testCtx(t), held, operator)
 	require.NoError(t, err)
 	reassigned, err := f.agents.Assign(testCtx(t), held, operator)
@@ -142,7 +142,7 @@ func TestAgentRead_AssignmentIsAbsentWhileNoOperatorHolds(t *testing.T) {
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("member-sub"), org.RoleMember)))
 
 	held := seedAgent(t, f, slug)
-	_, err := f.agents.Assign(testCtx(t), held, grn.New(slug, "default", agent.ServiceTypeOperator, "field-one"))
+	_, err := f.agents.Assign(testCtx(t), held, grn.New(slug, agent.ServiceTypeOperator, "field-one"))
 	require.NoError(t, err)
 	loose := seedAgent(t, f, slug)
 	elsewhere := seedAgent(t, f, otherSlug)
@@ -193,5 +193,5 @@ func registerOperator(t *testing.T, f *fixture, orgSlug, id string) grn.GRN {
 
 // operatorGRNOf names an operator of the org.
 func operatorGRNOf(orgSlug, id string) grn.GRN {
-	return grn.New(orgSlug, "default", agent.ServiceTypeOperator, id)
+	return grn.New(orgSlug, agent.ServiceTypeOperator, id)
 }

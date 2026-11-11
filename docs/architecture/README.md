@@ -1111,7 +1111,7 @@ ADRs:
   keeping a list
 - [0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
   — each organization has one cowork principal,
-  `grn:<org>:default:service:cowork`, written with the organization;
+  `grn:<org>/iam/service/cowork`, written with the organization;
   cowork exchanges an assertion its one deployment key signs for a
   one-hour machine-listener token that posts only to that
   organization's agents, decided by `message:send`; the deployment
@@ -1215,6 +1215,5 @@ ADRs:
   pairs and an optional `#<locator>` the owning service reads, an RFC
   3986 URI; the platform's types sit under `iam`, an identifier is
   immutable and never reused, one grammar replaces the five-segment
-  form; unbuilt, `lib/grn/grn.go` still enforces the five-segment
   form; supersedes 0001 in part, on the format and `default`, and 0141
   in part, on the GRN forms of answers 4 and 5

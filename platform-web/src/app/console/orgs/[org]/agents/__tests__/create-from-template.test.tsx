@@ -17,21 +17,21 @@ vi.mock("@/features/orgs/actions", () => ({
 }));
 
 const ENDPOINT = "https://control.example.test/garam";
-const FIRST = "grn:acme:default:operator:controller-one";
-const SECOND = "grn:acme:default:operator:controller-two";
+const FIRST = "grn:acme/iam/operator/controller-one";
+const SECOND = "grn:acme/iam/operator/controller-two";
 
 const hosted: DelegatedOperator = {
-  grn: "grn:acme:default:operator:hosted",
+  grn: "grn:acme/iam/operator/hosted",
   identifier: "hosted",
   name: "Hosted",
   endpoint: ENDPOINT,
   delegation: {
     grantId: "grant-1",
-    operatorGrn: "grn:acme:default:operator:hosted",
+    operatorGrn: "grn:acme/iam/operator/hosted",
     controllers: [FIRST, SECOND],
     operations: ["agent:create", "agent-template:read"],
     expiresAt: "2099-01-01T00:00:00Z",
-    grantedBy: "grn:acme:default:user:alice",
+    grantedBy: "grn:acme/iam/user/alice",
     grantedAt: "2026-10-01T00:00:00Z",
   },
   problem: null,
@@ -48,7 +48,7 @@ function renderStep(onCreated: (created: unknown) => void = () => {}) {
   return render(
     <CreateFromTemplate
       org="acme"
-      orgGrn="grn:root:default:org:acme"
+      orgGrn="grn:root/iam/org/acme"
       hosted={hosted}
       controllers={{ [FIRST]: "Controller one" }}
       onCreated={onCreated}
@@ -75,7 +75,7 @@ describe("create from template", () => {
       ]),
       http.post(`${ENDPOINT}/v1/orgs/acme/agents`, () =>
         HttpResponse.json({
-          agent: "grn:acme:default:agent:0123456789abcdef",
+          agent: "grn:acme/iam/agent/0123456789abcdef",
           revision: "1",
           epoch: "1",
         }),
@@ -93,7 +93,7 @@ describe("create from template", () => {
     await vi.waitFor(() =>
       expect(created).toEqual([
         expect.objectContaining({
-          agent: "grn:acme:default:agent:0123456789abcdef",
+          agent: "grn:acme/iam/agent/0123456789abcdef",
           revision: "1",
         }),
       ]),
@@ -152,7 +152,7 @@ describe("create from template", () => {
     render(
       <CreateFromTemplate
         org="acme"
-        orgGrn="grn:root:default:org:acme"
+        orgGrn="grn:root/iam/org/acme"
         hosted={hosted}
         controllers={{ [FIRST]: "Controller one", [SECOND]: "Controller two" }}
         onCreated={() => {}}
@@ -232,7 +232,7 @@ describe("create from template", () => {
     render(
       <CreateFromTemplate
         org="acme"
-        orgGrn="grn:root:default:org:acme"
+        orgGrn="grn:root/iam/org/acme"
         hosted={{
           ...hosted,
           delegation: { ...hosted.delegation, controllers: [] },

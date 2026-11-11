@@ -858,5 +858,5 @@ func TestOrgStore_MembersStayInsideTheirOrg(t *testing.T) {
 // rootUserGRN returns the root-owned GRN of the named user, the shape
 // sign-in mints.
 func rootUserGRN(id string) grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+	return grn.New(grn.RootOwner, user.ServiceType, id)
 }

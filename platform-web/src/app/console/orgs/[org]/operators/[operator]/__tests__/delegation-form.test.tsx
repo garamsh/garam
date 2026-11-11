@@ -12,14 +12,14 @@ import { server } from "@/testing/setup";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const MANAGER = "grn:acme:default:operator:field-manager";
+const MANAGER = "grn:acme/iam/operator/field-manager";
 const delegation: Delegation = {
   grantId: "grant-1",
-  operatorGrn: "grn:acme:default:operator:field-one",
-  controllers: [MANAGER, "grn:acme:default:operator:gone"],
+  operatorGrn: "grn:acme/iam/operator/field-one",
+  controllers: [MANAGER, "grn:acme/iam/operator/gone"],
   operations: ["agent:create", "operator:read"],
   expiresAt: "2026-10-21T00:00:00Z",
-  grantedBy: "grn:root:default:user:alice",
+  grantedBy: "grn:root/iam/user/alice",
   grantedAt: "2026-10-14T00:00:00Z",
 };
 const controllers = [

@@ -188,7 +188,7 @@ func grnOf(serviceType, id string) grn.GRN {
 	if serviceType == "org" {
 		owner = "root"
 	}
-	return grn.New(owner, "default", serviceType, id)
+	return grn.New(owner, serviceType, id)
 }
 
 // stamps is the created/updated pair an aggregate carrying both
@@ -266,7 +266,7 @@ func ptr[T any](v T) *T { return &v }
 // policyDoc builds a one-statement document whose Sid identifies the
 // version it belongs to.
 func policyDoc(sid string, effect wire.Effect) authz.PolicyDocument {
-	return statementDoc(sid, effect, "org:read", "grn:acme:*")
+	return statementDoc(sid, effect, "org:read", "grn:acme/*")
 }
 
 // statementDoc builds a one-statement document over an explicit action
@@ -293,13 +293,13 @@ func newPolicyOrg(t *testing.T, p *pgxpool.Pool) grn.GRN {
 
 // orgRootGRN returns the root-owned GRN of the named organization.
 func orgRootGRN(name string) grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, "org", name)
+	return grn.New(grn.RootOwner, "org", name)
 }
 
 // scopedGRN names a resource owned by an arbitrary org, where grnOf is
 // fixed to "acme".
 func scopedGRN(orgName, serviceType, id string) grn.GRN {
-	return grn.New(orgName, grn.DefaultProject, serviceType, id)
+	return grn.New(orgName, serviceType, id)
 }
 
 // activePolicy creates and activates a policy in orgGRN through the

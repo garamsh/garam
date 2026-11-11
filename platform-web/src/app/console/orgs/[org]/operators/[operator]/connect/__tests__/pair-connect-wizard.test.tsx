@@ -16,8 +16,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 // `revalidatePath` needs a request scope the test does not run in.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const MANAGER = "grn:acme:default:operator:aurora";
-const CONTROL = "grn:acme:default:operator:aurora-control";
+const MANAGER = "grn:acme/iam/operator/aurora";
+const CONTROL = "grn:acme/iam/operator/aurora-control";
 const TOKEN_URL = "https://machine.garam.example/oauth/token";
 const neverUsed: OperatorKey = { ...fieldOneKey, lastExchangedAt: undefined };
 const controlKey: OperatorKey = { ...neverUsed, kid: "control-kid" };
@@ -42,7 +42,7 @@ function recordIssuances(refuse?: string) {
         {
           key: identity === "aurora" ? neverUsed : controlKey,
           privateKeyPem: `-----BEGIN PRIVATE KEY-----\n${identity}\n-----END PRIVATE KEY-----\n`,
-          clientId: `grn:acme:default:operator:${identity}`,
+          clientId: `grn:acme/iam/operator/${identity}`,
           tokenUrl: TOKEN_URL,
         },
         { status: 201 },

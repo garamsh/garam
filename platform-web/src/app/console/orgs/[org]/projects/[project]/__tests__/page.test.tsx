@@ -70,7 +70,7 @@ describe("a project's page", () => {
     expect(
       await screen.findByText("Added 1c3d5e7f90a2b4c6."),
     ).toBeInTheDocument();
-    expect(added).toEqual(["grn:acme:default:agent:1c3d5e7f90a2b4c6"]);
+    expect(added).toEqual(["grn:acme/iam/agent/1c3d5e7f90a2b4c6"]);
   });
 
   it("deletes the project only once its name is typed", async () => {

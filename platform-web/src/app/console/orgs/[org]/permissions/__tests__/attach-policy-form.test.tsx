@@ -15,9 +15,9 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const POLICY = "grn:acme:default:policy:deny-renames";
-const ENGINEERING = "grn:acme:default:group:eng";
-const ALICE = "grn:acme:default:user:alice";
+const POLICY = "grn:acme/iam/policy/deny-renames";
+const ENGINEERING = "grn:acme/iam/group/eng";
+const ALICE = "grn:acme/iam/user/alice";
 
 describe("attach policy form", () => {
   it("keeps the subject chosen when garam refuses the attachment", async () => {

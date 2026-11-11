@@ -24,7 +24,7 @@ describe("acceptInvitation", () => {
     server.use(
       http.post(`${API_URL}/invitations/secret-token/accept`, () =>
         HttpResponse.json({
-          userGrn: "grn:root:default:user:bob",
+          userGrn: "grn:root/iam/user/bob",
           role: "member",
           since: "2026-01-02T03:04:05Z",
         }),

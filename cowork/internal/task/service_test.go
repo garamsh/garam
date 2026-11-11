@@ -68,7 +68,7 @@ func (r readers) Thread(_ context.Context, c platform.Caller, _ string, id strin
 }
 
 func person(name string) platform.Caller {
-	return platform.Caller{GRN: grn.New(grn.RootOwner, grn.DefaultProject, "user", name)}
+	return platform.Caller{GRN: grn.New(grn.RootOwner, "user", name)}
 }
 
 var (
@@ -86,7 +86,7 @@ func newService(deny map[string]bool, hidden map[string]bool) task.Service {
 // a task with no status starts todo.
 func TestCreate_TakesItsFieldsAndStartsTodo(t *testing.T) {
 	s := newService(nil, nil)
-	agent := grn.New("acme", grn.DefaultProject, "agent", "triage")
+	agent := grn.New("acme", "agent", "triage")
 	tk, err := s.Create(ctx, ada, "acme", task.CreateInput{
 		Title: " Ship it ", Assignee: agent, Due: "2026-11-02", Pages: []string{"p1", "p1"}, Messages: []string{"m1"},
 	})
@@ -115,7 +115,7 @@ func TestCreate_RefusesWhatItCannotKeep(t *testing.T) {
 		"no title":   {Title: " "},
 		"status":     {Title: "x", Status: "blocked"},
 		"due":        {Title: "x", Due: "next friday"},
-		"assignee":   {Title: "x", Assignee: grn.New("acme", grn.DefaultProject, "group", "eng")},
+		"assignee":   {Title: "x", Assignee: grn.New("acme", "group", "eng")},
 		"many links": {Title: "x", Pages: many},
 	} {
 		_, err := s.Create(ctx, ada, "acme", in)

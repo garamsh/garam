@@ -86,7 +86,11 @@ func (s *Store) ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*authz.Poli
 // SearchPolicies returns the org's policies whose name or identifier
 // holds n, ordered by GRN.
 func (s *Store) SearchPolicies(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*authz.Policy, error) {
-	rows, err := s.q.SearchPolicies(ctx, db.SearchPoliciesParams{OrgGrn: orgGRN.String(), Pattern: pgxtype.Contains(n.Text())})
+	rows, err := s.q.SearchPolicies(ctx, db.SearchPoliciesParams{
+		OrgGrn:    orgGRN.String(),
+		Pattern:   pgxtype.Contains(n.Text()),
+		IDPattern: grn.New(orgGRN.Identifier, authz.ServiceTypePolicy, pgxtype.Contains(n.Text())).String(),
+	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "search policies", nil, nil)
 	}

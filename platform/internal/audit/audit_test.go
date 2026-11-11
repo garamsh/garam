@@ -14,8 +14,8 @@ import (
 // invariant: an authorized send names the message it stored, and a
 // refused send names none, whatever else they share.
 func TestSend_NamesAMessageExactlyWhenAuthorized(t *testing.T) {
-	sender := grn.New("acme", grn.DefaultProject, "agent", "sender")
-	recipient := grn.New("globex", grn.DefaultProject, "agent", "recipient")
+	sender := grn.New("acme", "agent", "sender")
+	recipient := grn.New("globex", "agent", "recipient")
 	stored := time.Date(2026, time.October, 18, 12, 0, 0, 0, time.UTC)
 
 	authorized := audit.Authorized(sender, recipient, "m-1", stored)

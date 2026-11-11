@@ -220,7 +220,7 @@ func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN, details Detail
 // segment builds the same one, so a segment either route refuses is
 // refused by both.
 func GRNOf(orgGRN grn.GRN, identifier string) (grn.GRN, error) {
-	g := grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceType, identifier)
+	g := grn.New(orgGRN.Identifier, ServiceType, identifier)
 	if err := g.Validate(); err != nil {
 		return grn.GRN{}, errorx.Wrap(err, "operator: identifier", errorx.KindInvalidArgument)
 	}

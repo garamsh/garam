@@ -285,13 +285,13 @@ func permissionTarget(orgSlug string, check apigen.PermissionCheck) (grn.GRN, er
 	case kindPolicy:
 		g = policyGRN(orgSlug, id)
 	case kindCoworkPage:
-		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkPage, id)
+		g = grn.New(orgSlug, org.ServiceTypeCoworkPage, id)
 	case kindCoworkChannel:
-		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkChannel, id)
+		g = grn.New(orgSlug, org.ServiceTypeCoworkChannel, id)
 	case kindCoworkTask:
-		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkTask, id)
+		g = grn.New(orgSlug, org.ServiceTypeCoworkTask, id)
 	case kindCoworkArtifact:
-		g = grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeCoworkArtifact, id)
+		g = grn.New(orgSlug, org.ServiceTypeCoworkArtifact, id)
 	default:
 		return grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "unknown resource type")
 	}

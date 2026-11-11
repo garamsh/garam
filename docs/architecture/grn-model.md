@@ -44,6 +44,11 @@ One grammar: the five-segment form is refused and nothing parses both.
 A name of this grammar holds one colon before `#`, a five-segment name
 four.
 
+A GRN holds `/`, so one written into a single URL path segment is
+percent-encoded as RFC 3986 requires, its `/` as `%2F`. A caller that
+builds such a path escapes the name, and a server matches the escaped
+path, so the segment arrives as the whole name.
+
 Examples:
 
 | Case | Name |

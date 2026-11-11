@@ -1818,7 +1818,9 @@ components:
       name: agent
       in: path
       required: true
-      description: Agent GRN, as its creation or admission answered it.
+      description: >-
+        Agent GRN, as its creation or admission answered it,
+        percent-encoded as one path segment, its `/` as `%2F`.
       x-go-name: AgentGrn
       schema:
         type: string

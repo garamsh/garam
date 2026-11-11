@@ -22,6 +22,11 @@ func newPolicyFeedCommand() *cobra.Command {
 		&cobra.Command{
 			Use:   "start",
 			Short: "Enable the feed and mark every live entity",
+			Long: "Enable the feed and mark every live entity.\n\n" +
+				"It locks the source tables against writes while it runs, " +
+				"so run it at low traffic. A write that Postgres aborts " +
+				"for a deadlock with it is rolled back whole; repeat that " +
+				"write, or run the command again if it was the one aborted.",
 			Args:  cobra.NoArgs,
 			RunE: func(cmd *cobra.Command, _ []string) error {
 				return switchFeed(cmd, func(s policyfeed.Switch) (string, error) {

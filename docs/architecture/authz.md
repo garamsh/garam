@@ -45,8 +45,8 @@ ADR-0140 triggers mark each entity a row change reaches, in a set
 holding one row per entity and no document, and a loop reads each
 entity's state at delivery under one shared sequence. It is off by
 default, so a deployment with no policy service writes no rows and runs
-no loop, and a later one starts by a backfill from the owners' tables, which
-`garam policy-feed start` runs and `stop` undoes. Restoring the
+no loop, and a later one starts by a backfill from the owners' tables,
+which `garam policy-feed start` runs and `stop` undoes. Restoring the
 platform's database rewinds that sequence, so it means rebuilding the
 entity store.
 [ADR-0137](./adr/0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)

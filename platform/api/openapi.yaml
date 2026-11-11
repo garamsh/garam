@@ -36,6 +36,11 @@ info:
     breaking change out of it. The tag garam publishes its images under
     names a build and not this document (ADR-0039).
 tags:
+  - name: issuer
+    description: >-
+      garam as an OIDC issuer: its discovery document, its keys and the
+      exchange of a CLI session for a token a service verifies
+      (ADR-0141).
   - name: auth
     description: Sign-in, sign-out, and the current identity.
   - name: org
@@ -431,6 +436,91 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /.well-known/openid-configuration:
+    get:
+      operationId: getIssuerConfiguration
+      tags: [issuer]
+      summary: Read garam's issuer metadata.
+      description: >-
+        The discovery document of garam as an OIDC issuer (ADR-0141): the
+        `issuer` identity, where its keys are published and where a
+        session is exchanged for a token. It carries no credential. It
+        is served, with the other two operations tagged `issuer`, only
+        where a deployment configured the issuer: a process with no
+        signing key or no `GARAM_IDENTITY_ISSUER` registers none of
+        them, and a request for one answers 404 as any unknown path
+        does.
+      security: []
+      responses:
+        '200':
+          description: The issuer's metadata.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuerConfiguration'
+        '404':
+          description: The issuer is not configured here.
+  /oauth/jwks:
+    get:
+      operationId: getIssuerKeys
+      tags: [issuer]
+      summary: Read the keys garam's tokens verify with.
+      description: >-
+        The JSON Web Key Set of RFC 7517 holding the one public key the
+        issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e`
+        (ADR-0138 item 3). It carries no credential.
+      security: []
+      responses:
+        '200':
+          description: The key set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuerKeySet'
+        '404':
+          description: The issuer is not configured here.
+  /oauth/token:
+    post:
+      operationId: exchangeSessionToken
+      tags: [issuer]
+      summary: Exchange a CLI session's access token for a signed token.
+      description: >-
+        RFC 8693's token exchange (ADR-0141). The `subject_token` is the
+        access token of a live CLI session, named by `subject_token_type`
+        `urn:ietf:params:oauth:token-type:access_token`, and the exchange
+        answers an RS256 JWT for the one service named by `audience`,
+        `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's
+        GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session
+        it was exchanged from. It lives at most 300 seconds and no longer
+        than the session does, and `expires_in` says how long.
+
+        The exchange reads the session by its token, so a refresh token,
+        an ID token, a browser session's cookie and a machine token each
+        answer `invalid_grant`, as does a session revoked or expired. An
+        `audience` outside the list answers `invalid_target`. The
+        credential is the form's `subject_token` alone, and the form
+        takes no `scope`, `resource` or actor token.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenExchangeRequest'
+      responses:
+        '200':
+          description: The signed token.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenExchangeResponse'
+        '400':
+          $ref: '#/components/responses/OAuthError'
+        '404':
+          description: The issuer is not configured here.
   /me/sessions:
     get:
       operationId: listMySessions
@@ -3054,6 +3144,120 @@ components:
         refresh_token_expires_in:
           type: integer
           description: Seconds the refresh token is accepted for.
+    IssuerConfiguration:
+      type: object
+      description: >-
+        The OIDC discovery document of garam as an issuer (ADR-0141).
+        Every URL is the `issuer` followed by the path the operation of
+        this file is served at.
+      required: [issuer, jwks_uri, token_endpoint, grant_types_supported, response_types_supported, subject_types_supported, id_token_signing_alg_values_supported, token_endpoint_auth_methods_supported]
+      properties:
+        issuer:
+          type: string
+          description: >-
+            The configured `GARAM_IDENTITY_ISSUER`, which every token's
+            `iss` equals byte for byte.
+          example: https://garam.example/api
+        jwks_uri:
+          type: string
+        token_endpoint:
+          type: string
+        grant_types_supported:
+          type: array
+          items:
+            type: string
+            enum: ['urn:ietf:params:oauth:grant-type:token-exchange']
+        response_types_supported:
+          type: array
+          description: Empty, because the issuer has no authorization endpoint.
+          items:
+            type: string
+        subject_types_supported:
+          type: array
+          items:
+            type: string
+            enum: [public]
+        id_token_signing_alg_values_supported:
+          type: array
+          description: Only `RS256`.
+          items:
+            type: string
+        token_endpoint_auth_methods_supported:
+          type: array
+          description: '`none`: the exchange is authenticated by its subject token.'
+          items:
+            type: string
+            enum: [none]
+    IssuerKeySet:
+      type: object
+      description: RFC 7517's key set holding the issuer's one public key.
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssuerKey'
+    IssuerKey:
+      type: object
+      required: [kty, use, alg, kid, n, e]
+      properties:
+        kty:
+          type: string
+          enum: [RSA]
+        use:
+          type: string
+          enum: [sig]
+        alg:
+          type: string
+          description: Always `RS256`.
+        kid:
+          type: string
+          description: The key's RFC 7638 thumbprint, which a token's header names.
+        n:
+          type: string
+        e:
+          type: string
+    TokenExchangeRequest:
+      type: object
+      description: RFC 8693's token exchange request (ADR-0141).
+      required: [grant_type, subject_token, subject_token_type, audience]
+      properties:
+        grant_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:grant-type:token-exchange']
+        subject_token:
+          type: string
+          description: The access token of a live CLI session.
+        subject_token_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:token-type:access_token']
+        audience:
+          type: string
+          enum: [policy, codehub]
+          description: The one service the token is for.
+        requested_token_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:token-type:jwt']
+          description: Absent is the same.
+    TokenExchangeResponse:
+      type: object
+      description: RFC 8693's successful response (ADR-0141).
+      required: [access_token, issued_token_type, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: The compact RS256 JWT.
+        issued_token_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:token-type:access_token']
+        token_type:
+          type: string
+          description: Always `Bearer`.
+        expires_in:
+          type: integer
+          description: >-
+            Seconds the token lives: at most 300, and no more than the
+            session has left.
     OAuthError:
       type: object
       description: RFC 6749's error response, with RFC 8628's codes (ADR-0120).
@@ -3061,14 +3265,15 @@ components:
       properties:
         error:
           type: string
-          enum: [invalid_request, invalid_client, invalid_grant, unsupported_grant_type, authorization_pending, slow_down, access_denied, expired_token]
+          enum: [invalid_request, invalid_client, invalid_grant, invalid_target, unsupported_grant_type, authorization_pending, slow_down, access_denied, expired_token]
           description: >-
             `invalid_request` for a missing or malformed parameter;
             `invalid_client` for a `client_id` other than `garam-cli`;
             `invalid_grant` for a device code or refresh token garam
             holds nothing live for; `unsupported_grant_type` for any
-            other grant; and RFC 8628 §3.5's four while a device code is
-            polled.
+            other grant; RFC 8628 §3.5's four while a device code is
+            polled; and RFC 8693's `invalid_target` for an `audience`
+            the issuer holds no service by (ADR-0141).
         error_description:
           type: string
         interval:

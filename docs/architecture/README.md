@@ -1207,7 +1207,9 @@ ADRs:
   introspection endpoint (RFC 7662) beside offline verification by the
   JWKS of ADR-0138's signer; services call the policy service directly,
   each owning a Cedar namespace and feeding its own entities; codehub
-  is the worked example; unbuilt; supersedes 0127 in part, on §5, and
+  is the worked example; built: the issuer, the exchange of a CLI
+  session and introspection (#1757), unbuilt: the exchange of an
+  agent's browser token and a service's direct calls; supersedes 0127 in part, on §5, and
   0140 in part, on §2; the GRN forms of its worked-example answers 4
   and 5 are superseded by 0142
 - [0142](./adr/0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md)

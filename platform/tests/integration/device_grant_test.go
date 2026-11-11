@@ -42,7 +42,7 @@ type deviceStack struct {
 	adaGRN   grn.GRN
 }
 
-func newDeviceStack(t *testing.T) *deviceStack {
+func newDeviceStack(t *testing.T, options ...func(*pgxpool.Pool, *api.Server)) *deviceStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
@@ -70,6 +70,9 @@ func newDeviceStack(t *testing.T) *deviceStack {
 		sessions, nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil,
 		api.Config{SessionTTL: time.Hour}).WithDeviceGrant(authnpg.NewDeviceStore(p))
+	for _, option := range options {
+		option(p, srv)
+	}
 	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError})
 	// The CLI reaches the API behind the console's /api rewrite, so the
 	// server answers there as the deployed one does.

@@ -462,6 +462,81 @@ func (e InvitationPreviewState) Valid() bool {
 	}
 }
 
+// Defines values for IssuerConfigurationGrantTypesSupported.
+const (
+	IssuerConfigurationGrantTypesSupportedUrnIetfParamsOauthGrantTypeTokenExchange IssuerConfigurationGrantTypesSupported = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationGrantTypesSupported enum.
+func (e IssuerConfigurationGrantTypesSupported) Valid() bool {
+	switch e {
+	case IssuerConfigurationGrantTypesSupportedUrnIetfParamsOauthGrantTypeTokenExchange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerConfigurationSubjectTypesSupported.
+const (
+	Public IssuerConfigurationSubjectTypesSupported = "public"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationSubjectTypesSupported enum.
+func (e IssuerConfigurationSubjectTypesSupported) Valid() bool {
+	switch e {
+	case Public:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerConfigurationTokenEndpointAuthMethodsSupported.
+const (
+	None IssuerConfigurationTokenEndpointAuthMethodsSupported = "none"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationTokenEndpointAuthMethodsSupported enum.
+func (e IssuerConfigurationTokenEndpointAuthMethodsSupported) Valid() bool {
+	switch e {
+	case None:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerKeyKty.
+const (
+	RSA IssuerKeyKty = "RSA"
+)
+
+// Valid indicates whether the value is a known member of the IssuerKeyKty enum.
+func (e IssuerKeyKty) Valid() bool {
+	switch e {
+	case RSA:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerKeyUse.
+const (
+	Sig IssuerKeyUse = "sig"
+)
+
+// Valid indicates whether the value is a known member of the IssuerKeyUse enum.
+func (e IssuerKeyUse) Valid() bool {
+	switch e {
+	case Sig:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LoginReturnPathApp.
 const (
 	Console LoginReturnPathApp = "console"
@@ -488,6 +563,7 @@ const (
 	InvalidClient        OAuthErrorError = "invalid_client"
 	InvalidGrant         OAuthErrorError = "invalid_grant"
 	InvalidRequest       OAuthErrorError = "invalid_request"
+	InvalidTarget        OAuthErrorError = "invalid_target"
 	SlowDown             OAuthErrorError = "slow_down"
 	UnsupportedGrantType OAuthErrorError = "unsupported_grant_type"
 )
@@ -506,6 +582,8 @@ func (e OAuthErrorError) Valid() bool {
 	case InvalidGrant:
 		return true
 	case InvalidRequest:
+		return true
+	case InvalidTarget:
 		return true
 	case SlowDown:
 		return true
@@ -771,6 +849,84 @@ const (
 func (e SessionTokenTokenType) Valid() bool {
 	switch e {
 	case Bearer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestAudience.
+const (
+	TokenExchangeRequestAudienceCodehub TokenExchangeRequestAudience = "codehub"
+	TokenExchangeRequestAudiencePolicy  TokenExchangeRequestAudience = "policy"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestAudience enum.
+func (e TokenExchangeRequestAudience) Valid() bool {
+	switch e {
+	case TokenExchangeRequestAudienceCodehub:
+		return true
+	case TokenExchangeRequestAudiencePolicy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestGrantType.
+const (
+	TokenExchangeRequestGrantTypeUrnIetfParamsOauthGrantTypeTokenExchange TokenExchangeRequestGrantType = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestGrantType enum.
+func (e TokenExchangeRequestGrantType) Valid() bool {
+	switch e {
+	case TokenExchangeRequestGrantTypeUrnIetfParamsOauthGrantTypeTokenExchange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestRequestedTokenType.
+const (
+	UrnIetfParamsOauthTokenTypeJwt TokenExchangeRequestRequestedTokenType = "urn:ietf:params:oauth:token-type:jwt"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestRequestedTokenType enum.
+func (e TokenExchangeRequestRequestedTokenType) Valid() bool {
+	switch e {
+	case UrnIetfParamsOauthTokenTypeJwt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestSubjectTokenType.
+const (
+	TokenExchangeRequestSubjectTokenTypeUrnIetfParamsOauthTokenTypeAccessToken TokenExchangeRequestSubjectTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestSubjectTokenType enum.
+func (e TokenExchangeRequestSubjectTokenType) Valid() bool {
+	switch e {
+	case TokenExchangeRequestSubjectTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeResponseIssuedTokenType.
+const (
+	TokenExchangeResponseIssuedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken TokenExchangeResponseIssuedTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeResponseIssuedTokenType enum.
+func (e TokenExchangeResponseIssuedTokenType) Valid() bool {
+	switch e {
+	case TokenExchangeResponseIssuedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
 		return true
 	default:
 		return false
@@ -1206,6 +1362,59 @@ type IssuedOperatorKey struct {
 	TokenUrl string `json:"tokenUrl"`
 }
 
+// IssuerConfiguration The OIDC discovery document of garam as an issuer (ADR-0141). Every URL is the `issuer` followed by the path the operation of this file is served at.
+type IssuerConfiguration struct {
+	GrantTypesSupported []IssuerConfigurationGrantTypesSupported `json:"grant_types_supported"`
+
+	// IdTokenSigningAlgValuesSupported Only `RS256`.
+	IdTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported"`
+
+	// Issuer The configured `GARAM_IDENTITY_ISSUER`, which every token's `iss` equals byte for byte.
+	Issuer  string `json:"issuer"`
+	JwksUri string `json:"jwks_uri"`
+
+	// ResponseTypesSupported Empty, because the issuer has no authorization endpoint.
+	ResponseTypesSupported []string                                   `json:"response_types_supported"`
+	SubjectTypesSupported  []IssuerConfigurationSubjectTypesSupported `json:"subject_types_supported"`
+	TokenEndpoint          string                                     `json:"token_endpoint"`
+
+	// TokenEndpointAuthMethodsSupported `none`: the exchange is authenticated by its subject token.
+	TokenEndpointAuthMethodsSupported []IssuerConfigurationTokenEndpointAuthMethodsSupported `json:"token_endpoint_auth_methods_supported"`
+}
+
+// IssuerConfigurationGrantTypesSupported defines model for IssuerConfiguration.GrantTypesSupported.
+type IssuerConfigurationGrantTypesSupported string
+
+// IssuerConfigurationSubjectTypesSupported defines model for IssuerConfiguration.SubjectTypesSupported.
+type IssuerConfigurationSubjectTypesSupported string
+
+// IssuerConfigurationTokenEndpointAuthMethodsSupported defines model for IssuerConfiguration.TokenEndpointAuthMethodsSupported.
+type IssuerConfigurationTokenEndpointAuthMethodsSupported string
+
+// IssuerKey defines model for IssuerKey.
+type IssuerKey struct {
+	// Alg Always `RS256`.
+	Alg string `json:"alg"`
+	E   string `json:"e"`
+
+	// Kid The key's RFC 7638 thumbprint, which a token's header names.
+	Kid string       `json:"kid"`
+	Kty IssuerKeyKty `json:"kty"`
+	N   string       `json:"n"`
+	Use IssuerKeyUse `json:"use"`
+}
+
+// IssuerKeyKty defines model for IssuerKey.Kty.
+type IssuerKeyKty string
+
+// IssuerKeyUse defines model for IssuerKey.Use.
+type IssuerKeyUse string
+
+// IssuerKeySet RFC 7517's key set holding the issuer's one public key.
+type IssuerKeySet struct {
+	Keys []IssuerKey `json:"keys"`
+}
+
 // LoginReturnPath defines model for LoginReturnPath.
 type LoginReturnPath struct {
 	// App The app the sign-in is for; the console where absent.
@@ -1234,7 +1443,7 @@ type MemberRef struct {
 
 // OAuthError RFC 6749's error response, with RFC 8628's codes (ADR-0120).
 type OAuthError struct {
-	// Error `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+	// Error `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; RFC 8628 §3.5's four while a device code is polled; and RFC 8693's `invalid_target` for an `audience` the issuer holds no service by (ADR-0141).
 	Error            OAuthErrorError `json:"error"`
 	ErrorDescription *string         `json:"error_description,omitempty"`
 
@@ -1242,7 +1451,7 @@ type OAuthError struct {
 	Interval *int `json:"interval,omitempty"`
 }
 
-// OAuthErrorError `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+// OAuthErrorError `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; RFC 8628 §3.5's four while a device code is polled; and RFC 8693's `invalid_target` for an `audience` the issuer holds no service by (ADR-0141).
 type OAuthErrorError string
 
 // OperationAuthority defines model for OperationAuthority.
@@ -1732,6 +1941,48 @@ type SessionToken struct {
 // SessionTokenTokenType defines model for SessionToken.TokenType.
 type SessionTokenTokenType string
 
+// TokenExchangeRequest RFC 8693's token exchange request (ADR-0141).
+type TokenExchangeRequest struct {
+	// Audience The one service the token is for.
+	Audience  TokenExchangeRequestAudience  `json:"audience"`
+	GrantType TokenExchangeRequestGrantType `json:"grant_type"`
+
+	// RequestedTokenType Absent is the same.
+	RequestedTokenType *TokenExchangeRequestRequestedTokenType `json:"requested_token_type,omitempty"`
+
+	// SubjectToken The access token of a live CLI session.
+	SubjectToken     string                               `json:"subject_token"`
+	SubjectTokenType TokenExchangeRequestSubjectTokenType `json:"subject_token_type"`
+}
+
+// TokenExchangeRequestAudience The one service the token is for.
+type TokenExchangeRequestAudience string
+
+// TokenExchangeRequestGrantType defines model for TokenExchangeRequest.GrantType.
+type TokenExchangeRequestGrantType string
+
+// TokenExchangeRequestRequestedTokenType Absent is the same.
+type TokenExchangeRequestRequestedTokenType string
+
+// TokenExchangeRequestSubjectTokenType defines model for TokenExchangeRequest.SubjectTokenType.
+type TokenExchangeRequestSubjectTokenType string
+
+// TokenExchangeResponse RFC 8693's successful response (ADR-0141).
+type TokenExchangeResponse struct {
+	// AccessToken The compact RS256 JWT.
+	AccessToken string `json:"access_token"`
+
+	// ExpiresIn Seconds the token lives: at most 300, and no more than the session has left.
+	ExpiresIn       int                                  `json:"expires_in"`
+	IssuedTokenType TokenExchangeResponseIssuedTokenType `json:"issued_token_type"`
+
+	// TokenType Always `Bearer`.
+	TokenType string `json:"token_type"`
+}
+
+// TokenExchangeResponseIssuedTokenType defines model for TokenExchangeResponse.IssuedTokenType.
+type TokenExchangeResponseIssuedTokenType string
+
 // User defines model for User.
 type User struct {
 	Grn      string `json:"grn"`
@@ -1957,6 +2208,9 @@ type LoginPasswordJSONRequestBody = PasswordLogin
 // RegisterPasswordJSONRequestBody defines body for RegisterPassword for application/json ContentType.
 type RegisterPasswordJSONRequestBody = PasswordRegistration
 
+// ExchangeSessionTokenFormdataRequestBody defines body for ExchangeSessionToken for application/x-www-form-urlencoded ContentType.
+type ExchangeSessionTokenFormdataRequestBody = TokenExchangeRequest
+
 // CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
 type CreateOrgJSONRequestBody = OrganizationCreate
 
@@ -2102,6 +2356,13 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+
+	// GetIssuerConfiguration Read garam's issuer metadata.
+	//
+	// The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
+	//
+	// Corresponds with GET /.well-known/openid-configuration (the `GetIssuerConfiguration` operationId).
+	GetIssuerConfiguration(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// OauthCallback Complete the OAuth authorization code flow.
 	//
@@ -2315,6 +2576,33 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /me/sessions/{session} (the `RevokeMySession` operationId).
 	RevokeMySession(ctx context.Context, session string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetIssuerKeys Read the keys garam's tokens verify with.
+	//
+	// The JSON Web Key Set of RFC 7517 holding the one public key the issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e` (ADR-0138 item 3). It carries no credential.
+	//
+	// Corresponds with GET /oauth/jwks (the `GetIssuerKeys` operationId).
+	GetIssuerKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExchangeSessionTokenWithBody Exchange a CLI session's access token for a signed token.
+	//
+	// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+	// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+	ExchangeSessionTokenWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ExchangeSessionTokenWithFormdataBody Exchange a CLI session's access token for a signed token.
+	//
+	// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+	// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type.
+	//
+	// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+	ExchangeSessionTokenWithFormdataBody(ctx context.Context, body ExchangeSessionTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListOrgs List organizations the caller belongs to.
 	//
@@ -3088,6 +3376,23 @@ type ClientInterface interface {
 	SearchOrg(ctx context.Context, org Org, params *SearchOrgParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
+// GetIssuerConfiguration Read garam's issuer metadata.
+//
+// The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
+//
+// Corresponds with GET /.well-known/openid-configuration (the `GetIssuerConfiguration` operationId).
+func (c *Client) GetIssuerConfiguration(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetIssuerConfigurationRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // OauthCallback Complete the OAuth authorization code flow.
 //
 // Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`.
@@ -3541,6 +3846,63 @@ func (c *Client) ListMySessions(ctx context.Context, reqEditors ...RequestEditor
 // Corresponds with DELETE /me/sessions/{session} (the `RevokeMySession` operationId).
 func (c *Client) RevokeMySession(ctx context.Context, session string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRevokeMySessionRequest(c.Server, session)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetIssuerKeys Read the keys garam's tokens verify with.
+//
+// The JSON Web Key Set of RFC 7517 holding the one public key the issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e` (ADR-0138 item 3). It carries no credential.
+//
+// Corresponds with GET /oauth/jwks (the `GetIssuerKeys` operationId).
+func (c *Client) GetIssuerKeys(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetIssuerKeysRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExchangeSessionTokenWithBody Exchange a CLI session's access token for a signed token.
+//
+// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+func (c *Client) ExchangeSessionTokenWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExchangeSessionTokenRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ExchangeSessionTokenWithFormdataBody Exchange a CLI session's access token for a signed token.
+//
+// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type.
+//
+// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+func (c *Client) ExchangeSessionTokenWithFormdataBody(ctx context.Context, body ExchangeSessionTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewExchangeSessionTokenRequestWithFormdataBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5242,6 +5604,33 @@ func (c *Client) SearchOrg(ctx context.Context, org Org, params *SearchOrgParams
 	return c.Client.Do(req)
 }
 
+// NewGetIssuerConfigurationRequest constructs an http.Request for the GetIssuerConfiguration method
+func NewGetIssuerConfigurationRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/.well-known/openid-configuration")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewOauthCallbackRequest constructs an http.Request for the OauthCallback method
 func NewOauthCallbackRequest(server string, provider Provider, params *OauthCallbackParams) (*http.Request, error) {
 	var err error
@@ -5874,6 +6263,73 @@ func NewRevokeMySessionRequest(server string, session string) (*http.Request, er
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewGetIssuerKeysRequest constructs an http.Request for the GetIssuerKeys method
+func NewGetIssuerKeysRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/oauth/jwks")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewExchangeSessionTokenRequestWithFormdataBody calls the generic ExchangeSessionToken builder with application/x-www-form-urlencoded body
+func NewExchangeSessionTokenRequestWithFormdataBody(server string, body ExchangeSessionTokenFormdataRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	bodyStr, err := runtime.MarshalForm(body, nil)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = strings.NewReader(bodyStr.Encode())
+	return NewExchangeSessionTokenRequestWithBody(server, "application/x-www-form-urlencoded", bodyReader)
+}
+
+// NewExchangeSessionTokenRequestWithBody constructs an http.Request for the ExchangeSessionToken method, with any body, and a specified content type
+func NewExchangeSessionTokenRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/oauth/token")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -9403,6 +9859,15 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// GetIssuerConfigurationWithResponse Read garam's issuer metadata.
+	//
+	// The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /.well-known/openid-configuration (the `GetIssuerConfiguration` operationId).
+	GetIssuerConfigurationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetIssuerConfigurationResponse, error)
+
 	// OauthCallbackWithResponse Complete the OAuth authorization code flow.
 	//
 	// Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`.
@@ -9633,6 +10098,35 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /me/sessions/{session} (the `RevokeMySession` operationId).
 	RevokeMySessionWithResponse(ctx context.Context, session string, reqEditors ...RequestEditorFn) (*RevokeMySessionResponse, error)
+
+	// GetIssuerKeysWithResponse Read the keys garam's tokens verify with.
+	//
+	// The JSON Web Key Set of RFC 7517 holding the one public key the issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e` (ADR-0138 item 3). It carries no credential.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /oauth/jwks (the `GetIssuerKeys` operationId).
+	GetIssuerKeysWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetIssuerKeysResponse, error)
+
+	// ExchangeSessionTokenWithBodyWithResponse Exchange a CLI session's access token for a signed token.
+	//
+	// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+	// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+	ExchangeSessionTokenWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExchangeSessionTokenResponse, error)
+
+	// ExchangeSessionTokenWithFormdataBodyWithResponse Exchange a CLI session's access token for a signed token.
+	//
+	// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+	// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+	//
+	// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+	ExchangeSessionTokenWithFormdataBodyWithResponse(ctx context.Context, body ExchangeSessionTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*ExchangeSessionTokenResponse, error)
 
 	// ListOrgsWithResponse List organizations the caller belongs to.
 	//
@@ -10492,6 +10986,47 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/search (the `SearchOrg` operationId).
 	SearchOrgWithResponse(ctx context.Context, org Org, params *SearchOrgParams, reqEditors ...RequestEditorFn) (*SearchOrgResponse, error)
+}
+
+type GetIssuerConfigurationResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *IssuerConfiguration
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetIssuerConfigurationResponse) GetJSON200() *IssuerConfiguration {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetIssuerConfigurationResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetIssuerConfigurationResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetIssuerConfigurationResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetIssuerConfigurationResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 // OauthCallbackResponse302Headers the declared response headers of an HTTP 302 response for OauthCallback
@@ -11402,6 +11937,102 @@ func (r RevokeMySessionResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r RevokeMySessionResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetIssuerKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *IssuerKeySet
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetIssuerKeysResponse) GetJSON200() *IssuerKeySet {
+	return r.JSON200
+}
+
+// GetBody returns the raw response body bytes
+func (r GetIssuerKeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetIssuerKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetIssuerKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetIssuerKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ExchangeSessionTokenResponse200Headers the declared response headers of an HTTP 200 response for ExchangeSessionToken
+type ExchangeSessionTokenResponse200Headers struct {
+	CacheControl *string
+}
+
+type ExchangeSessionTokenResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *TokenExchangeResponse
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *OAuthError
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ExchangeSessionTokenResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ExchangeSessionTokenResponse) GetJSON200() *TokenExchangeResponse {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ExchangeSessionTokenResponse) GetJSON400() *OAuthError {
+	return r.JSON400
+}
+
+// GetBody returns the raw response body bytes
+func (r ExchangeSessionTokenResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ExchangeSessionTokenResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ExchangeSessionTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ExchangeSessionTokenResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -16086,6 +16717,21 @@ func (r SearchOrgResponse) ContentType() string {
 	return ""
 }
 
+// GetIssuerConfigurationWithResponse Read garam's issuer metadata.
+//
+// The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /.well-known/openid-configuration (the `GetIssuerConfiguration` operationId).
+func (c *ClientWithResponses) GetIssuerConfigurationWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetIssuerConfigurationResponse, error) {
+	rsp, err := c.GetIssuerConfiguration(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetIssuerConfigurationResponse(rsp)
+}
+
 // OauthCallbackWithResponse Complete the OAuth authorization code flow.
 //
 // Exchanges the code for tokens, verifies the ID token, upserts the user, creates a session, and sets the `garam_session` cookie. Redirects on success to the console path the login was started with (`POST /auth/login/{provider}`), or to `/console`.
@@ -16465,6 +17111,53 @@ func (c *ClientWithResponses) RevokeMySessionWithResponse(ctx context.Context, s
 		return nil, err
 	}
 	return ParseRevokeMySessionResponse(rsp)
+}
+
+// GetIssuerKeysWithResponse Read the keys garam's tokens verify with.
+//
+// The JSON Web Key Set of RFC 7517 holding the one public key the issuer signs with: `kty`, `use`, `alg`, `kid`, `n` and `e` (ADR-0138 item 3). It carries no credential.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /oauth/jwks (the `GetIssuerKeys` operationId).
+func (c *ClientWithResponses) GetIssuerKeysWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetIssuerKeysResponse, error) {
+	rsp, err := c.GetIssuerKeys(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetIssuerKeysResponse(rsp)
+}
+
+// ExchangeSessionTokenWithBodyWithResponse Exchange a CLI session's access token for a signed token.
+//
+// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+func (c *ClientWithResponses) ExchangeSessionTokenWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ExchangeSessionTokenResponse, error) {
+	rsp, err := c.ExchangeSessionTokenWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExchangeSessionTokenResponse(rsp)
+}
+
+// ExchangeSessionTokenWithFormdataBodyWithResponse Exchange a CLI session's access token for a signed token.
+//
+// RFC 8693's token exchange (ADR-0141). The `subject_token` is the access token of a live CLI session, named by `subject_token_type` `urn:ietf:params:oauth:token-type:access_token`, and the exchange answers an RS256 JWT for the one service named by `audience`, `policy` or `codehub`. The JWT carries `iss`, `sub` (the user's GRN), `aud`, `iat`, `exp`, `jti` and `sid`, the id of the session it was exchanged from. It lives at most 300 seconds and no longer than the session does, and `expires_in` says how long.
+// The exchange reads the session by its token, so a refresh token, an ID token, a browser session's cookie and a machine token each answer `invalid_grant`, as does a session revoked or expired. An `audience` outside the list answers `invalid_target`. The credential is the form's `subject_token` alone, and the form takes no `scope`, `resource` or actor token.
+//
+// Takes a body of the `application/x-www-form-urlencoded` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /oauth/token (the `ExchangeSessionToken` operationId).
+func (c *ClientWithResponses) ExchangeSessionTokenWithFormdataBodyWithResponse(ctx context.Context, body ExchangeSessionTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*ExchangeSessionTokenResponse, error) {
+	rsp, err := c.ExchangeSessionTokenWithFormdataBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseExchangeSessionTokenResponse(rsp)
 }
 
 // ListOrgsWithResponse List organizations the caller belongs to.
@@ -17878,6 +18571,35 @@ func (c *ClientWithResponses) SearchOrgWithResponse(ctx context.Context, org Org
 	return ParseSearchOrgResponse(rsp)
 }
 
+// ParseGetIssuerConfigurationResponse parses an HTTP response from a GetIssuerConfigurationWithResponse call
+func ParseGetIssuerConfigurationResponse(rsp *http.Response) (*GetIssuerConfigurationResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetIssuerConfigurationResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IssuerConfiguration
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	return response, nil
+}
+
 // ParseOauthCallbackResponse parses an HTTP response from a OauthCallbackWithResponse call
 func ParseOauthCallbackResponse(rsp *http.Response) (*OauthCallbackResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -18583,6 +19305,84 @@ func ParseRevokeMySessionResponse(rsp *http.Response) (*RevokeMySessionResponse,
 		}
 		response.JSON404 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetIssuerKeysResponse parses an HTTP response from a GetIssuerKeysWithResponse call
+func ParseGetIssuerKeysResponse(rsp *http.Response) (*GetIssuerKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetIssuerKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IssuerKeySet
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	return response, nil
+}
+
+// ParseExchangeSessionTokenResponse parses an HTTP response from a ExchangeSessionTokenWithResponse call
+func ParseExchangeSessionTokenResponse(rsp *http.Response) (*ExchangeSessionTokenResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ExchangeSessionTokenResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest TokenExchangeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest OAuthError
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case rsp.StatusCode == 404:
+		break // No content-type
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ExchangeSessionTokenResponse200Headers
+		if values := rsp.Header.Values("Cache-Control"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Cache-Control", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.CacheControl = &value
+		}
+		response.Headers200 = &headers
 	}
 
 	return response, nil

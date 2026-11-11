@@ -460,6 +460,81 @@ func (e InvitationPreviewState) Valid() bool {
 	}
 }
 
+// Defines values for IssuerConfigurationGrantTypesSupported.
+const (
+	IssuerConfigurationGrantTypesSupportedUrnIetfParamsOauthGrantTypeTokenExchange IssuerConfigurationGrantTypesSupported = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationGrantTypesSupported enum.
+func (e IssuerConfigurationGrantTypesSupported) Valid() bool {
+	switch e {
+	case IssuerConfigurationGrantTypesSupportedUrnIetfParamsOauthGrantTypeTokenExchange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerConfigurationSubjectTypesSupported.
+const (
+	Public IssuerConfigurationSubjectTypesSupported = "public"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationSubjectTypesSupported enum.
+func (e IssuerConfigurationSubjectTypesSupported) Valid() bool {
+	switch e {
+	case Public:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerConfigurationTokenEndpointAuthMethodsSupported.
+const (
+	None IssuerConfigurationTokenEndpointAuthMethodsSupported = "none"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationTokenEndpointAuthMethodsSupported enum.
+func (e IssuerConfigurationTokenEndpointAuthMethodsSupported) Valid() bool {
+	switch e {
+	case None:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerKeyKty.
+const (
+	RSA IssuerKeyKty = "RSA"
+)
+
+// Valid indicates whether the value is a known member of the IssuerKeyKty enum.
+func (e IssuerKeyKty) Valid() bool {
+	switch e {
+	case RSA:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerKeyUse.
+const (
+	Sig IssuerKeyUse = "sig"
+)
+
+// Valid indicates whether the value is a known member of the IssuerKeyUse enum.
+func (e IssuerKeyUse) Valid() bool {
+	switch e {
+	case Sig:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LoginReturnPathApp.
 const (
 	Console LoginReturnPathApp = "console"
@@ -486,6 +561,7 @@ const (
 	InvalidClient        OAuthErrorError = "invalid_client"
 	InvalidGrant         OAuthErrorError = "invalid_grant"
 	InvalidRequest       OAuthErrorError = "invalid_request"
+	InvalidTarget        OAuthErrorError = "invalid_target"
 	SlowDown             OAuthErrorError = "slow_down"
 	UnsupportedGrantType OAuthErrorError = "unsupported_grant_type"
 )
@@ -504,6 +580,8 @@ func (e OAuthErrorError) Valid() bool {
 	case InvalidGrant:
 		return true
 	case InvalidRequest:
+		return true
+	case InvalidTarget:
 		return true
 	case SlowDown:
 		return true
@@ -769,6 +847,84 @@ const (
 func (e SessionTokenTokenType) Valid() bool {
 	switch e {
 	case Bearer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestAudience.
+const (
+	TokenExchangeRequestAudienceCodehub TokenExchangeRequestAudience = "codehub"
+	TokenExchangeRequestAudiencePolicy  TokenExchangeRequestAudience = "policy"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestAudience enum.
+func (e TokenExchangeRequestAudience) Valid() bool {
+	switch e {
+	case TokenExchangeRequestAudienceCodehub:
+		return true
+	case TokenExchangeRequestAudiencePolicy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestGrantType.
+const (
+	TokenExchangeRequestGrantTypeUrnIetfParamsOauthGrantTypeTokenExchange TokenExchangeRequestGrantType = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestGrantType enum.
+func (e TokenExchangeRequestGrantType) Valid() bool {
+	switch e {
+	case TokenExchangeRequestGrantTypeUrnIetfParamsOauthGrantTypeTokenExchange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestRequestedTokenType.
+const (
+	UrnIetfParamsOauthTokenTypeJwt TokenExchangeRequestRequestedTokenType = "urn:ietf:params:oauth:token-type:jwt"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestRequestedTokenType enum.
+func (e TokenExchangeRequestRequestedTokenType) Valid() bool {
+	switch e {
+	case UrnIetfParamsOauthTokenTypeJwt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestSubjectTokenType.
+const (
+	TokenExchangeRequestSubjectTokenTypeUrnIetfParamsOauthTokenTypeAccessToken TokenExchangeRequestSubjectTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestSubjectTokenType enum.
+func (e TokenExchangeRequestSubjectTokenType) Valid() bool {
+	switch e {
+	case TokenExchangeRequestSubjectTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeResponseIssuedTokenType.
+const (
+	TokenExchangeResponseIssuedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken TokenExchangeResponseIssuedTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeResponseIssuedTokenType enum.
+func (e TokenExchangeResponseIssuedTokenType) Valid() bool {
+	switch e {
+	case TokenExchangeResponseIssuedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
 		return true
 	default:
 		return false
@@ -1204,6 +1360,59 @@ type IssuedOperatorKey struct {
 	TokenUrl string `json:"tokenUrl"`
 }
 
+// IssuerConfiguration The OIDC discovery document of garam as an issuer (ADR-0141). Every URL is the `issuer` followed by the path the operation of this file is served at.
+type IssuerConfiguration struct {
+	GrantTypesSupported []IssuerConfigurationGrantTypesSupported `json:"grant_types_supported"`
+
+	// IdTokenSigningAlgValuesSupported Only `RS256`.
+	IdTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported"`
+
+	// Issuer The configured `GARAM_IDENTITY_ISSUER`, which every token's `iss` equals byte for byte.
+	Issuer  string `json:"issuer"`
+	JwksUri string `json:"jwks_uri"`
+
+	// ResponseTypesSupported Empty, because the issuer has no authorization endpoint.
+	ResponseTypesSupported []string                                   `json:"response_types_supported"`
+	SubjectTypesSupported  []IssuerConfigurationSubjectTypesSupported `json:"subject_types_supported"`
+	TokenEndpoint          string                                     `json:"token_endpoint"`
+
+	// TokenEndpointAuthMethodsSupported `none`: the exchange is authenticated by its subject token.
+	TokenEndpointAuthMethodsSupported []IssuerConfigurationTokenEndpointAuthMethodsSupported `json:"token_endpoint_auth_methods_supported"`
+}
+
+// IssuerConfigurationGrantTypesSupported defines model for IssuerConfiguration.GrantTypesSupported.
+type IssuerConfigurationGrantTypesSupported string
+
+// IssuerConfigurationSubjectTypesSupported defines model for IssuerConfiguration.SubjectTypesSupported.
+type IssuerConfigurationSubjectTypesSupported string
+
+// IssuerConfigurationTokenEndpointAuthMethodsSupported defines model for IssuerConfiguration.TokenEndpointAuthMethodsSupported.
+type IssuerConfigurationTokenEndpointAuthMethodsSupported string
+
+// IssuerKey defines model for IssuerKey.
+type IssuerKey struct {
+	// Alg Always `RS256`.
+	Alg string `json:"alg"`
+	E   string `json:"e"`
+
+	// Kid The key's RFC 7638 thumbprint, which a token's header names.
+	Kid string       `json:"kid"`
+	Kty IssuerKeyKty `json:"kty"`
+	N   string       `json:"n"`
+	Use IssuerKeyUse `json:"use"`
+}
+
+// IssuerKeyKty defines model for IssuerKey.Kty.
+type IssuerKeyKty string
+
+// IssuerKeyUse defines model for IssuerKey.Use.
+type IssuerKeyUse string
+
+// IssuerKeySet RFC 7517's key set holding the issuer's one public key.
+type IssuerKeySet struct {
+	Keys []IssuerKey `json:"keys"`
+}
+
 // LoginReturnPath defines model for LoginReturnPath.
 type LoginReturnPath struct {
 	// App The app the sign-in is for; the console where absent.
@@ -1232,7 +1441,7 @@ type MemberRef struct {
 
 // OAuthError RFC 6749's error response, with RFC 8628's codes (ADR-0120).
 type OAuthError struct {
-	// Error `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+	// Error `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; RFC 8628 §3.5's four while a device code is polled; and RFC 8693's `invalid_target` for an `audience` the issuer holds no service by (ADR-0141).
 	Error            OAuthErrorError `json:"error"`
 	ErrorDescription *string         `json:"error_description,omitempty"`
 
@@ -1240,7 +1449,7 @@ type OAuthError struct {
 	Interval *int `json:"interval,omitempty"`
 }
 
-// OAuthErrorError `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+// OAuthErrorError `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; RFC 8628 §3.5's four while a device code is polled; and RFC 8693's `invalid_target` for an `audience` the issuer holds no service by (ADR-0141).
 type OAuthErrorError string
 
 // OperationAuthority defines model for OperationAuthority.
@@ -1730,6 +1939,48 @@ type SessionToken struct {
 // SessionTokenTokenType defines model for SessionToken.TokenType.
 type SessionTokenTokenType string
 
+// TokenExchangeRequest RFC 8693's token exchange request (ADR-0141).
+type TokenExchangeRequest struct {
+	// Audience The one service the token is for.
+	Audience  TokenExchangeRequestAudience  `json:"audience"`
+	GrantType TokenExchangeRequestGrantType `json:"grant_type"`
+
+	// RequestedTokenType Absent is the same.
+	RequestedTokenType *TokenExchangeRequestRequestedTokenType `json:"requested_token_type,omitempty"`
+
+	// SubjectToken The access token of a live CLI session.
+	SubjectToken     string                               `json:"subject_token"`
+	SubjectTokenType TokenExchangeRequestSubjectTokenType `json:"subject_token_type"`
+}
+
+// TokenExchangeRequestAudience The one service the token is for.
+type TokenExchangeRequestAudience string
+
+// TokenExchangeRequestGrantType defines model for TokenExchangeRequest.GrantType.
+type TokenExchangeRequestGrantType string
+
+// TokenExchangeRequestRequestedTokenType Absent is the same.
+type TokenExchangeRequestRequestedTokenType string
+
+// TokenExchangeRequestSubjectTokenType defines model for TokenExchangeRequest.SubjectTokenType.
+type TokenExchangeRequestSubjectTokenType string
+
+// TokenExchangeResponse RFC 8693's successful response (ADR-0141).
+type TokenExchangeResponse struct {
+	// AccessToken The compact RS256 JWT.
+	AccessToken string `json:"access_token"`
+
+	// ExpiresIn Seconds the token lives: at most 300, and no more than the session has left.
+	ExpiresIn       int                                  `json:"expires_in"`
+	IssuedTokenType TokenExchangeResponseIssuedTokenType `json:"issued_token_type"`
+
+	// TokenType Always `Bearer`.
+	TokenType string `json:"token_type"`
+}
+
+// TokenExchangeResponseIssuedTokenType defines model for TokenExchangeResponse.IssuedTokenType.
+type TokenExchangeResponseIssuedTokenType string
+
 // User defines model for User.
 type User struct {
 	Grn      string `json:"grn"`
@@ -1955,6 +2206,9 @@ type LoginPasswordJSONRequestBody = PasswordLogin
 // RegisterPasswordJSONRequestBody defines body for RegisterPassword for application/json ContentType.
 type RegisterPasswordJSONRequestBody = PasswordRegistration
 
+// ExchangeSessionTokenFormdataRequestBody defines body for ExchangeSessionToken for application/x-www-form-urlencoded ContentType.
+type ExchangeSessionTokenFormdataRequestBody = TokenExchangeRequest
+
 // CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
 type CreateOrgJSONRequestBody = OrganizationCreate
 
@@ -2029,6 +2283,9 @@ type AddProjectMemberJSONRequestBody = MemberRef
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetIssuerConfiguration Read garam's issuer metadata.
+	// (GET /.well-known/openid-configuration)
+	GetIssuerConfiguration(w http.ResponseWriter, r *http.Request)
 	// OauthCallback Complete the OAuth authorization code flow.
 	// (GET /auth/callback/{provider})
 	OauthCallback(w http.ResponseWriter, r *http.Request, provider Provider, params OauthCallbackParams)
@@ -2080,6 +2337,12 @@ type ServerInterface interface {
 	// RevokeMySession Revoke one of the signed-in user's sessions.
 	// (DELETE /me/sessions/{session})
 	RevokeMySession(w http.ResponseWriter, r *http.Request, session string)
+	// GetIssuerKeys Read the keys garam's tokens verify with.
+	// (GET /oauth/jwks)
+	GetIssuerKeys(w http.ResponseWriter, r *http.Request)
+	// ExchangeSessionToken Exchange a CLI session's access token for a signed token.
+	// (POST /oauth/token)
+	ExchangeSessionToken(w http.ResponseWriter, r *http.Request)
 	// ListOrgs List organizations the caller belongs to.
 	// (GET /orgs)
 	ListOrgs(w http.ResponseWriter, r *http.Request, params ListOrgsParams)
@@ -2294,6 +2557,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetIssuerConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) GetIssuerConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIssuerConfiguration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // OauthCallback operation middleware
 func (siw *ServerInterfaceWrapper) OauthCallback(w http.ResponseWriter, r *http.Request) {
@@ -2625,6 +2902,34 @@ func (siw *ServerInterfaceWrapper) RevokeMySession(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeMySession(w, r, session)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetIssuerKeys operation middleware
+func (siw *ServerInterfaceWrapper) GetIssuerKeys(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIssuerKeys(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExchangeSessionToken operation middleware
+func (siw *ServerInterfaceWrapper) ExchangeSessionToken(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExchangeSessionToken(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5474,6 +5779,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/device", wrapper.RequestDeviceCode)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/device/token", wrapper.DeviceToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/device/approval", wrapper.DecideDeviceCode)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/.well-known/openid-configuration", wrapper.GetIssuerConfiguration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/oauth/jwks", wrapper.GetIssuerKeys)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/oauth/token", wrapper.ExchangeSessionToken)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/sessions", wrapper.ListMySessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/sessions/{session}", wrapper.RevokeMySession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.Me)

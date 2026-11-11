@@ -497,6 +497,36 @@ as 403 `signature rejected: issuer` on every message once the adapter's
 `GARAM_ADAPTER_SIGN_MESSAGES` is on, and not as an error at start
 (`adapter.md` §Stable identifiers and the outbox).
 
+## The identity issuer is off until it is named
+
+**`GARAM_IDENTITY_ISSUER` turns garam's OIDC issuer on, and a changed
+value is a different issuer**
+([ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)).
+`serve api` and `serve machine` serve the issuer's four operations only
+when this and the signing key are both set. The key is the one that
+signs the policy feed, `GARAM_POLICY_SIGNING_KEY_FILE`: there is no
+second key and no second signer. The issuer set with no key is logged
+and leaves the issuer off.
+
+The value is an https URL in one spelling: a lowercase host, no empty
+port, the path `/api` and no trailing slash
+(`platform/internal/identity/issuer.go`, `ParseIssuer`), because a
+verifier compares it byte for byte against the `iss` of every token. It
+is the address the browser listener answers at, since the discovery
+document and the key set are fetched from it, and it is never
+`GARAM_MACHINE_ISSUER`: `serve` refuses to start where the two are
+equal, so that a token of one never verifies as the other.
+
+**`GARAM_IDENTITY_SERVICE_KEYS_FILE` names who may introspect.** It is a
+JSON object from each audience, `policy` or `codehub`, to the JSON Web
+Key Set holding the public keys that service signs its client
+assertions with. `serve machine` serves `/oauth/introspect` only where
+it is set, and each service reads only the tokens issued for its own
+audience. The file holds no secret, so it needs no owner-only mode. The
+introspection URL an assertion names as its `aud` is
+`GARAM_MACHINE_TOKEN_URL` with its `/oauth/token` replaced by
+`/oauth/introspect`.
+
 ## The migrate job
 
 `migrate` applies all pending migrations and exits

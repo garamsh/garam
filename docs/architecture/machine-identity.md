@@ -305,11 +305,23 @@ listener.
 
 ## The issuer
 
-**Unbuilt.**
+**Built for a CLI session (#1757).**
 [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
 makes garam an OIDC and OAuth issuer, so a service that garam does
-not deploy can learn who is calling. Today a session is a server-side
-row only garam reads, and no endpoint turns one into anything else.
+not deploy can learn who is calling. A session stays a server-side row
+only garam reads, and the exchange is what turns one into anything
+else.
+
+- **What is built.** Only a CLI session's access token is accepted as
+  the subject: an agent's browser token (§Browser tokens) is unbuilt,
+  and a browser session's cookie is refused as any session that is not
+  a CLI's. A service authenticates at introspection from the public
+  keys `GARAM_IDENTITY_SERVICE_KEYS_FILE` names, for want of the
+  deployment key and service principal of cowork's principal; each
+  assertion's jti is spent once in the memory of the process that
+  admitted it, so a replay reaching another replica is not refused.
+  Introspection has no per-source bound. The signing key is the policy
+  feed's `GARAM_POLICY_SIGNING_KEY_FILE`.
 
 - **An exchange, not a new credential.** A CLI session's access token
   or an agent's browser token (§Browser tokens) is presented as an RFC

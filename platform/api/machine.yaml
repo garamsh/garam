@@ -315,6 +315,60 @@ paths:
           $ref: '#/components/responses/OAuthError'
         '503':
           $ref: '#/components/responses/OAuthError'
+  /oauth/introspect:
+    post:
+      operationId: introspectIssuedToken
+      tags: [identity]
+      summary: Ask whether a token garam issued is still active.
+      description: >-
+        RFC 7662's introspection of a token garam signed as an OIDC
+        issuer (ADR-0141), asked by the service the token is for. The
+        caller authenticates by `private_key_jwt`, as
+        `exchangeClientAssertion` does: `client_id` is the service's
+        GRN, `grn:root/iam/service/<audience>`, and `client_assertion`
+        an assertion its key signed with `aud` equal to this
+        operation's URL, under the same profile and spent once. The
+        request carries no `Authorization` header. It is served only
+        where a deployment configured the issuer: otherwise it answers
+        404 as an unknown path does.
+
+        The form carries `token`, the compact JWT, and optionally
+        `token_type_hint`, which is ignored. A service may introspect
+        only a token whose `aud` is its own audience: another
+        audience's token, a token that does not verify, one past its
+        `exp`, and one whose session row is gone all answer
+        `{"active": false}`, which says nothing about which of those it
+        was. Only a token that verifies, is the caller's and whose
+        session `sid` names a live row answers `active` true with its
+        claims. A caller that does not authenticate is
+        `invalid_client`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IntrospectionRequest'
+      responses:
+        '200':
+          description: Whether the token is active, with its claims where it is.
+          headers:
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Pragma:
+              $ref: '#/components/headers/NoCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Introspection'
+        '400':
+          $ref: '#/components/responses/IntrospectionError'
+        '404':
+          description: The issuer is not configured on this listener.
+        '500':
+          $ref: '#/components/responses/IntrospectionError'
+        '503':
+          $ref: '#/components/responses/IntrospectionError'
   /agents/{agent}/tokens:
     post:
       operationId: mintAgentToken
@@ -1952,6 +2006,52 @@ components:
           type: integer
           description: Seconds the token is accepted for, 3600.
           example: 3600
+    IntrospectionRequest:
+      type: object
+      description: >-
+        The introspection request `introspectIssuedToken` reads
+        (ADR-0141). Each parameter appears once.
+      required: [token, client_id, client_assertion_type, client_assertion]
+      properties:
+        token:
+          type: string
+          description: The compact JWT garam issued.
+        token_type_hint:
+          type: string
+          description: Ignored.
+        client_id:
+          type: string
+          description: The calling service's GRN, `grn:root/iam/service/<audience>`.
+        client_assertion_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:client-assertion-type:jwt-bearer']
+        client_assertion:
+          type: string
+    Introspection:
+      type: object
+      description: >-
+        RFC 7662's introspection response. `active` false carries no
+        other member.
+      required: [active]
+      properties:
+        active:
+          type: boolean
+        iss:
+          type: string
+        sub:
+          type: string
+          description: The user's GRN.
+        aud:
+          type: string
+        iat:
+          type: integer
+        exp:
+          type: integer
+        jti:
+          type: string
+        sid:
+          type: string
+          description: The id of the session row the token was exchanged from.
     OAuthError:
       type: object
       description: RFC 6749's error response (ADR-0102).
@@ -2767,6 +2867,12 @@ components:
       headers:
         Garam-Contract-Version:
           $ref: '#/components/headers/AssertionContractVersion'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OAuthError'
+    IntrospectionError:
+      description: RFC 6749's error response of the introspection.
       content:
         application/json:
           schema:

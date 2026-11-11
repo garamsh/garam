@@ -20,8 +20,10 @@ import (
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	auditpg "github.com/garamsh/garam/platform/internal/audit/postgres"
+	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 	"github.com/garamsh/garam/platform/internal/ca"
 	"github.com/garamsh/garam/platform/internal/health"
+	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/keyfile"
 	"github.com/garamsh/garam/platform/internal/machine"
 	machinepg "github.com/garamsh/garam/platform/internal/machine/postgres"
@@ -98,6 +100,15 @@ func serveMachine(cmd *cobra.Command) error {
 		return errorx.Wrap(err, string(envMachineTokenURL))
 	}
 
+	idIssuer, err := identityIssuer(authnpg.NewSessionStore(pool), obs.logger)
+	if err != nil {
+		return err
+	}
+	idCallers, err := identityCallers(tokenURL)
+	if err != nil {
+		return err
+	}
+
 	// Whom an agent may send to is decided by the policy engine, which
 	// runs as a process of its own and is reached over gRPC (ADR-0003).
 	conn, err := dialAuthz()
@@ -118,6 +129,8 @@ func serveMachine(cmd *cobra.Command) error {
 		Delivery:           message.Config{},
 		AgentTokenLifetime: tokenLifetime,
 		TokenURL:           tokenURL,
+		Identity:           idIssuer,
+		IdentityCallers:    idCallers,
 		Engine:             conn,
 		Logger:             obs.logger,
 		Metrics:            obs.registry,
@@ -182,6 +195,11 @@ type MachineConfig struct {
 	// as its audience, which operator.ParseTokenEndpoint read
 	// (ADR-0102). Empty serves no assertion exchange.
 	TokenURL string
+	// Identity and IdentityCallers answer introspection of the tokens
+	// garam signs as an OIDC issuer, to the services IdentityCallers
+	// authenticates (ADR-0141). Either nil serves none.
+	Identity        *identity.Issuer
+	IdentityCallers *identity.Callers
 	// Metrics is where the count of requests by how they authenticated
 	// is registered (ADR-0100). Nil registers it nowhere.
 	Metrics prometheus.Registerer
@@ -275,7 +293,8 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			newExecutionService(pool, cfg.Engine, authority, cfg.Now),
 			newSupervisorService(pool, cfg.Engine, cfg.ServerRoot, cfg.Now),
 			newAdmissionService(pool, authority, cfg.Now), keyring).
-			WithCredentialAudit(auditpg.NewCredentialStore(pool)),
+			WithCredentialAudit(auditpg.NewCredentialStore(pool)).
+			WithIdentity(cfg.Identity, cfg.IdentityCallers),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.RecoverPanics,
 				obs.logMachineRequests, countMachineRequests(requests), countTokenExchanges(exchanges), recordIssuances(evidence)},

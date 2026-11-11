@@ -36,7 +36,8 @@ type Key struct {
 	kid     string
 }
 
-// Claims are the registered claims a token carries. Each is required.
+// Claims are the claims a token carries. Issuer, Subject, Audience,
+// IssuedAt and Lifetime are required.
 type Claims struct {
 	Issuer   string
 	Subject  string
@@ -45,6 +46,11 @@ type Claims struct {
 	// Lifetime is how long the token lives from IssuedAt: at least a
 	// second and at most MaxLifetime.
 	Lifetime time.Duration
+	// JTI names this token, and SessionID the session or token row it
+	// was exchanged from (ADR-0141 item 5). Each is carried only where
+	// set, so a token that names no session carries neither.
+	JTI       string
+	SessionID string
 }
 
 // payload is the token's JSON body. aud is a string, never an array.
@@ -54,6 +60,9 @@ type payload struct {
 	Audience string `json:"aud"`
 	IssuedAt int64  `json:"iat"`
 	Expires  int64  `json:"exp"`
+	JTI      string `json:"jti,omitempty"`
+	// SessionID is the `sid` claim.
+	SessionID string `json:"sid,omitempty"`
 }
 
 // LoadKey reads the PEM key file at path, which only its owner may
@@ -136,11 +145,13 @@ func (k *Key) Sign(c Claims) (string, error) {
 	}
 	issued := c.IssuedAt.Unix()
 	body, err := json.Marshal(payload{
-		Issuer:   c.Issuer,
-		Subject:  c.Subject,
-		Audience: c.Audience,
-		IssuedAt: issued,
-		Expires:  issued + int64(c.Lifetime/time.Second),
+		Issuer:    c.Issuer,
+		Subject:   c.Subject,
+		Audience:  c.Audience,
+		IssuedAt:  issued,
+		Expires:   issued + int64(c.Lifetime/time.Second),
+		JTI:       c.JTI,
+		SessionID: c.SessionID,
 	})
 	if err != nil {
 		return "", errorx.Wrap(err, "signer: encode claims", errorx.KindInternal)
@@ -161,4 +172,42 @@ func (k *Key) Sign(c Claims) (string, error) {
 		return "", errorx.Wrap(err, "signer: serialize", errorx.KindInternal)
 	}
 	return token, nil
+}
+
+// Verify returns the claims of a token this key signed, refusing one
+// whose signature, algorithm, header or dates do not hold at now. A
+// token that has expired, or that was issued after now, is refused: it
+// is the caller that decides whether the session behind it still lives.
+func (k *Key) Verify(token string, now time.Time) (Claims, error) {
+	invalid := errorx.New(errorx.KindUnauthenticated, "signer: token does not verify")
+	parsed, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256})
+	if err != nil || len(parsed.Signatures) != 1 {
+		return Claims{}, invalid
+	}
+	header := parsed.Signatures[0].Header
+	if header.KeyID != k.kid || header.ExtraHeaders[jose.HeaderType] != "JWT" {
+		return Claims{}, invalid
+	}
+	body, err := parsed.Verify(&k.private.PublicKey)
+	if err != nil {
+		return Claims{}, invalid
+	}
+	var p payload
+	if err := json.Unmarshal(body, &p); err != nil {
+		return Claims{}, invalid
+	}
+	issued, expires := time.Unix(p.IssuedAt, 0), time.Unix(p.Expires, 0)
+	if p.Issuer == "" || p.Subject == "" || p.Audience == "" ||
+		!expires.After(issued) || issued.After(now) || !expires.After(now) {
+		return Claims{}, invalid
+	}
+	return Claims{
+		Issuer:    p.Issuer,
+		Subject:   p.Subject,
+		Audience:  p.Audience,
+		IssuedAt:  issued,
+		Lifetime:  expires.Sub(issued),
+		JTI:       p.JTI,
+		SessionID: p.SessionID,
+	}, nil
 }

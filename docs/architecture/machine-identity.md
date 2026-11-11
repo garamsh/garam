@@ -524,9 +524,13 @@ caller is still the one allowed to act.
 ## codehub's principal
 
 **Unbuilt.** codehub, a service garam does not deploy, acts in an
-organization as `grn:<org>:default:service:codehub`, the form cowork's
-principal takes (§cowork's principal). It reaches the policy service as
-a direct caller owning a `Codehub` namespace
+organization as `grn:<org>/iam/service/codehub`, the form cowork's
+principal takes under the grammar
+[ADR-0142](./adr/0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md)
+decided (§cowork's principal states it in the earlier five-segment
+form, which `lib/grn/grn.go` still enforces). The repositories it
+stores are `grn:<org>/codehub/repo/<id>`. It reaches the policy
+service as a direct caller owning a `Codehub` namespace
 ([ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)).
 Its row is built when codehub calls: the closed list of services holds
 no entry before a caller proves it.

@@ -3,6 +3,8 @@
 
 mod caller;
 mod config;
+mod entity_changes;
+mod entity_sink;
 mod policy_service;
 mod probes;
 mod status;
@@ -22,6 +24,7 @@ use tonic::transport::{Identity, Server, ServerTlsConfig};
 
 pub use caller::{Caller, KeysError, Refusal, Verifier};
 pub use config::{Config, ConfigError, database_url};
+pub use entity_sink::EntitySink;
 pub use policy_service::Service;
 pub use probes::{ProbeError, probe};
 pub use tls::{TlsError, load_identity};
@@ -88,7 +91,7 @@ pub fn authenticated<P, E>(
 ) -> InterceptedService<PolicyServiceServer<Service<P, E>>, Verifier>
 where
     P: PolicySource + Send + Sync + 'static,
-    E: EntitySource + Send + Sync + 'static,
+    E: EntitySource + EntitySink + Send + Sync + 'static,
 {
     PolicyServiceServer::with_interceptor(service, verifier)
 }

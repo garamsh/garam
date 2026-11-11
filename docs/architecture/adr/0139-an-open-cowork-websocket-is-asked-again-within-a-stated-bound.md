@@ -103,3 +103,16 @@ b957e78197a96a2c6bb15ebe6308331c4979370e.
 - A stolen session is reported as used through an open socket during a
   platform outage, which would call for a ceiling on decision 5.
 - A person reports losing an edit to the `1013` close.
+
+## Errata
+
+- 2026-11-11 — §Consequences' last bullet, "such a visitor learns on
+  their next request", was true when written and is false since
+  #1753. A cowork-web tab whose socket closes with any code but 4401
+  and 4403 now asks its own route, `/auth/session`, which asks the
+  platform's `/me` with the visitor's cookie, and goes to sign in on
+  a 401. A network failure, a platform error or a standing session
+  leaves the page as it was. A page asks at most once every 30
+  seconds, whatever the number of failed reconnects, so a cowork
+  outage costs the platform at most 2 requests a minute per open
+  tab, the budget of decision 1. The decision stands.

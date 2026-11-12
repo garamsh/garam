@@ -74,13 +74,15 @@ func NewPrincipals(cfg PrincipalsConfig) *Principals {
 }
 
 // Authenticate returns the principal clientID proved itself as on
-// route, or [operator.ErrClientInvalid]. source is the peer's address,
-// which the per-source bound counts before anything else is read, and
-// past it the answer is an [*operator.Exceeded]. A bad signature, a
-// service with no key, a wrong identity, audience or time, a principal
-// that does not exist and a replayed assertion are one refusal. Keys
-// that cannot be read are [ErrPrincipalsOff]'s kind, unavailable, and
-// not a bad client.
+// route, [operator.ErrClientInvalid], or [ErrOrganizationUnknown].
+// source is the peer's address, which the per-source bound counts
+// before anything else is read, and past it the answer is an
+// [*operator.Exceeded]. A bad signature, a service with no key, a wrong
+// identity, audience or time, a principal gone from an organization
+// that exists and a replayed assertion are one refusal. A principal of
+// an organization that is not held is told apart only once the
+// signature verified (see [Admitter]). Keys that cannot be read are
+// [ErrPrincipalsOff]'s kind, unavailable, and not a bad client.
 func (p *Principals) Authenticate(ctx context.Context, route Route, source, clientID, assertion string) (Principal, error) {
 	if err := p.perSource[route].Check(source); err != nil {
 		return Principal{}, err

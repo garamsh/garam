@@ -41,21 +41,23 @@ const issuerURL = "https://garam.test/api"
 // browser listener and a machine listener beside it that authenticates
 // service principals, as `serve api` and `serve machine` wire them
 // (ADR-0141, ADR-0129). The keys are generated here. The organization
-// "globex" holds a principal of cowork, which is first-party, and of
-// policy, an audience no first-party service is yet, built through the
-// org store's seam so that introspection has a caller to be tested
-// with.
+// "globex" holds a principal of cowork and of codehub, which are
+// first-party, and of policy, an audience no first-party service is
+// yet, built through the org store's seam so that introspection has a
+// caller to be tested with.
 type issuerStack struct {
 	*deviceStack
-	key      *signer.Key
-	issuer   *identity.Issuer
-	keys     identity.ServiceKeys
-	machine  string
-	policy   *rsa.PrivateKey
-	cowork   *rsa.PrivateKey
-	globex   string
-	policyID grn.GRN
-	coworkID grn.GRN
+	key       *signer.Key
+	issuer    *identity.Issuer
+	keys      identity.ServiceKeys
+	machine   string
+	policy    *rsa.PrivateKey
+	cowork    *rsa.PrivateKey
+	codehub   *rsa.PrivateKey
+	globex    string
+	policyID  grn.GRN
+	coworkID  grn.GRN
+	codehubID grn.GRN
 }
 
 func newIssuerStack(t *testing.T) *issuerStack {
@@ -74,15 +76,17 @@ func newIssuerStack(t *testing.T) *issuerStack {
 		require.NoError(t, err)
 		srv.WithIdentity(s.issuer)
 	})
-	require.NoError(t, orgpg.New(s.pool).WithServices(identity.AudiencePolicy, identity.ServiceCowork).
+	require.NoError(t, orgpg.New(s.pool).WithServices(identity.AudiencePolicy, identity.ServiceCowork, identity.ServiceCodehub).
 		CreateOrg(t.Context(), org.NewOrganization(orgRootGRN(s.globex), s.globex)))
 	s.policyID = identity.PrincipalGRN(s.globex, identity.AudiencePolicy)
 	s.coworkID = identity.PrincipalGRN(s.globex, identity.ServiceCowork)
+	s.codehubID = identity.PrincipalGRN(s.globex, identity.ServiceCodehub)
 
-	s.policy, s.cowork = serviceKey(t), serviceKey(t)
+	s.policy, s.cowork, s.codehub = serviceKey(t), serviceKey(t), serviceKey(t)
 	s.keys = identity.ServiceKeys{
 		identity.AudiencePolicy: {publicKey(t, s.policy)},
 		identity.ServiceCowork:  {publicKey(t, s.cowork)},
+		identity.ServiceCodehub: {publicKey(t, s.codehub)},
 	}
 	s.machine = s.machineListener(t, s.issuer)
 	return s

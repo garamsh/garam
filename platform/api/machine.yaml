@@ -279,7 +279,16 @@ paths:
         A bad signature, a key that is unknown, withdrawn or past its
         rollover, a wrong identity, audience or time, and a replay are
         one refusal, `invalid_client` with 400, which says nothing
-        about which registrations or keys exist. A token is refused
+        about which registrations or keys exist. One case is told
+        apart: an assertion of a service principal that is signed by a
+        key configured for its service and is timely, whose
+        `client_id` names an organization garam holds none of, answers
+        400 `unauthorized_client`, so a service that serves many
+        organizations tells a refusal of one request from a key that
+        is wrong. It is given only after the signature verified, so a
+        caller without the service's key learns of no organization.
+        A principal gone from an organization that exists is not this
+        case and stays `invalid_client`. A token is refused
         from the next request once its key is withdrawn. A process
         answers at most 60 exchanges per client address, counted before
         anything is read, and 10 verified ones per `client_id`, each per
@@ -2072,13 +2081,17 @@ components:
       properties:
         error:
           type: string
-          enum: [invalid_request, invalid_client, unsupported_grant_type, invalid_scope, temporarily_unavailable, server_error]
+          enum: [invalid_request, invalid_client, unauthorized_client, unsupported_grant_type, invalid_scope, temporarily_unavailable, server_error]
           description: >-
             `invalid_request` for a malformed or repeated parameter, a
             `Authorization` header, or an audience
             that is not another operator of the organization;
             `invalid_client` for an assertion that authenticates no
-            operator; `unsupported_grant_type` for a grant other than
+            operator or service principal; `unauthorized_client` for
+            an assertion of a service principal that authenticated,
+            signed by a key of its service and otherwise valid, whose
+            `client_id` names an organization garam does not hold;
+            `unsupported_grant_type` for a grant other than
             `client_credentials`; `invalid_scope` for any `scope`;
             `temporarily_unavailable` with 429 or 503; `server_error`
             with 500.

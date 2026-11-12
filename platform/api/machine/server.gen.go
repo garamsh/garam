@@ -270,6 +270,7 @@ const (
 	InvalidScope           OAuthErrorError = "invalid_scope"
 	ServerError            OAuthErrorError = "server_error"
 	TemporarilyUnavailable OAuthErrorError = "temporarily_unavailable"
+	UnauthorizedClient     OAuthErrorError = "unauthorized_client"
 	UnsupportedGrantType   OAuthErrorError = "unsupported_grant_type"
 )
 
@@ -285,6 +286,8 @@ func (e OAuthErrorError) Valid() bool {
 	case ServerError:
 		return true
 	case TemporarilyUnavailable:
+		return true
+	case UnauthorizedClient:
 		return true
 	case UnsupportedGrantType:
 		return true

@@ -102,7 +102,8 @@ func TestServicePrincipal_ExchangeRefusesWhatIsNotTheServicesLivePrincipal(t *te
 		"the organization's deletion removes its principals")
 	status, body = ask(s.machine, "", identity.AudiencePolicy)
 	assert.Equal(t, http.StatusBadRequest, status, "the organization is deleted: "+body)
-	assert.Equal(t, machinegen.InvalidClient, machineRefusal(t, body))
+	assert.Equal(t, machinegen.UnauthorizedClient, machineRefusal(t, body),
+		"a live assertion for an organization garam no longer holds")
 }
 
 // TestServicePrincipal_IntrospectionAdmitsTheAudiencesOwnPrincipalOnce
@@ -145,12 +146,13 @@ func TestServicePrincipal_IntrospectionAdmitsTheAudiencesOwnPrincipalOnce(t *tes
 
 // TestServicePrincipal_CreateOrgWritesTheFirstPartyPrincipals holds
 // that an organization made by the store as production builds it
-// carries cowork's principal and no other.
+// carries the principals of cowork and of codehub and no other.
 func TestServicePrincipal_CreateOrgWritesTheFirstPartyPrincipals(t *testing.T) {
 	s := newIssuerStack(t)
 	assert.Equal(t, 1, countRows(t, s.pool, "SELECT count(*) FROM service_principals WHERE grn = 'grn:acme/iam/service/cowork'"))
-	assert.Equal(t, 1, countRows(t, s.pool, "SELECT count(*) FROM service_principals WHERE grn LIKE 'grn:acme/%'"),
-		"acme was made by the store as production builds it, so cowork's is its only principal")
-	assert.Equal(t, 2, countRows(t, s.pool, "SELECT count(*) FROM service_principals WHERE grn LIKE 'grn:globex/%'"),
-		"globex was made through the seam with two services")
+	assert.Equal(t, 1, countRows(t, s.pool, "SELECT count(*) FROM service_principals WHERE grn = 'grn:acme/iam/service/codehub'"))
+	assert.Equal(t, 2, countRows(t, s.pool, "SELECT count(*) FROM service_principals WHERE grn LIKE 'grn:acme/%'"),
+		"acme was made by the store as production builds it, so cowork's and codehub's are its only principals")
+	assert.Equal(t, 3, countRows(t, s.pool, "SELECT count(*) FROM service_principals WHERE grn LIKE 'grn:globex/%'"),
+		"globex was made through the seam with three services")
 }

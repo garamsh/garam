@@ -29,7 +29,7 @@ fn ask(who: Named) -> Evaluation<'static> {
             entity_type: who.0,
             id: who.1,
         },
-        action: "iam:agent-watch",
+        action: "iam:agent.watch",
         resource: EntityRef {
             entity_type: BOT.0,
             id: BOT.1,
@@ -171,4 +171,28 @@ async fn a_permit_version_is_made_effective_only_under_a_right(pool: PgPool) {
 
     // Deleting only narrows, so it asks for nothing.
     store.delete(&org, PERMIT).await.unwrap();
+}
+
+/// `check_org` runs before the store reaches Postgres, so a pool that
+/// connects to nothing shows it: were the check absent, the call would
+/// fail on the connection and not with `Error::PermitRight`.
+#[tokio::test]
+async fn a_right_made_on_one_organization_is_refused_by_anothers_permit_calls() {
+    let world = World::new();
+    let right = world.owner_right().await;
+    let pool = PgPool::connect_lazy("postgres://nobody@127.0.0.1:1/none").unwrap();
+    let store = PolicyStore::new(pool);
+    let globex = OrgGrn::new(GLOBEX);
+    let policy = "grn:globex/iam/policy/watch-bot";
+
+    let rolled_back = store.roll_back_permit(&globex, policy, 1, &right).await;
+    assert!(
+        matches!(rolled_back, Err(Error::PermitRight)),
+        "{rolled_back:?}"
+    );
+    let activated = store.activate_permit(&globex, policy, &right).await;
+    assert!(
+        matches!(activated, Err(Error::PermitRight)),
+        "{activated:?}"
+    );
 }

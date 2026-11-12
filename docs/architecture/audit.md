@@ -55,7 +55,7 @@ credential events are read through `listCredentialEvents`
   or certificate, and a refusal names its error kind and not its text.
 - **A credential event is read on its subject's read.**
   `listCredentialEvents` answers one subject's events on
-  `iam:operator-read` or `iam:agent-read`, which that subject's own
+  `iam:operator.read` or `iam:agent.read`, which that subject's own
   reads already take; no action names audit.
 
 ## An agent acting on the browser-facing listener
@@ -66,7 +66,7 @@ lets an agent call the browser-facing listener as itself, and decides
 that every record of it names the agent's GRN and never a person's:
 
 - **Its token's mint is a credential event of its own kind**, beside
-  `agent_token`, with the agent as subject and read on `iam:agent-read`
+  `agent_token`, with the agent as subject and read on `iam:agent.read`
   like the agent's other events.
 - **Every event the browser-facing listener writes names the
   authenticated principal as its actor**, so an agent's act is never

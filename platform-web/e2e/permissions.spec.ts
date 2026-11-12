@@ -124,7 +124,7 @@ test.describe("permissions", () => {
       JSON.stringify({
         Version: "2026-07-25",
         Statement: [
-          { Effect: "Maybe", Action: ["iam:project-delete"], Resource: ["*"] },
+          { Effect: "Maybe", Action: ["iam:project.delete"], Resource: ["*"] },
         ],
       }),
     );
@@ -163,7 +163,7 @@ test.describe("permissions", () => {
         Statement: [
           {
             Effect: "Deny",
-            Action: ["iam:project-update"],
+            Action: ["iam:project.update"],
             Resource: [`grn:${signedIn.orgSlug}/iam/project/*`],
           },
         ],
@@ -276,7 +276,7 @@ test.describe("permissions", () => {
         Statement: [
           {
             Effect: "Allow",
-            Action: ["iam:org-read"],
+            Action: ["iam:org.read"],
             Resource: [`grn:${signedIn.orgSlug}/*`],
           },
         ],
@@ -336,7 +336,7 @@ test.describe("permissions", () => {
       page.request,
       signedIn,
       "Deny project deletion",
-      denyDocument(signedIn.orgSlug, ["iam:project-delete"]),
+      denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
     );
     await attachToTeamAndActivate(page.request, signedIn, policy);
     const second = await page.request.post(
@@ -403,7 +403,7 @@ test.describe("permissions", () => {
       page.request,
       signedIn,
       "Deny project deletion",
-      denyDocument(signedIn.orgSlug, ["iam:project-delete"]),
+      denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
     );
     await attachToTeamAndActivate(page.request, signedIn, policy);
     await page.goto(policyUrl(signedIn, policy));
@@ -420,7 +420,7 @@ test.describe("permissions", () => {
     );
     await page
       .getByRole("textbox", { name: "Statement 1 action 2" })
-      .fill("iam:project-update");
+      .fill("iam:project.update");
     await expect(page.getByText("Edited, not published")).toBeVisible();
 
     await publish.click();
@@ -431,7 +431,7 @@ test.describe("permissions", () => {
       `It applies at once. Applies to ${signedIn.groupName} (Team).`,
     );
     await expect(dialog.getByRole("figure")).toContainText(
-      'Added: "iam:project-update"',
+      'Added: "iam:project.update"',
     );
     await dialog
       .getByRole("button", { name: "Publish v2", exact: true })
@@ -516,7 +516,7 @@ test.describe("permissions accessibility", () => {
         page.request,
         signedIn,
         name,
-        denyDocument(signedIn.orgSlug, ["iam:project-delete"]),
+        denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
       );
     }
     await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions`);
@@ -545,7 +545,7 @@ test.describe("permissions accessibility", () => {
       request,
       signedIn,
       "Deny project deletion",
-      denyDocument(signedIn.orgSlug, ["iam:project-delete"]),
+      denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
     );
     await attachToTeamAndActivate(request, signedIn, policy);
     const saved = await request.post(
@@ -553,7 +553,7 @@ test.describe("permissions accessibility", () => {
       {
         data: {
           document: JSON.parse(
-            denyDocument(signedIn.orgSlug, ["iam:project-update"]),
+            denyDocument(signedIn.orgSlug, ["iam:project.update"]),
           ),
         },
       },
@@ -654,8 +654,8 @@ test.describe("permissions accessibility", () => {
           .getByRole("button", { name: /^Compare/ })
           .click();
         const diff = page.getByRole("dialog").getByRole("figure");
-        await expect(diff).toContainText('Added: "iam:project-update"');
-        await expect(diff).toContainText('Removed: "iam:project-delete"');
+        await expect(diff).toContainText('Added: "iam:project.update"');
+        await expect(diff).toContainText('Removed: "iam:project.delete"');
       },
       include: ['[role="dialog"]'],
     },

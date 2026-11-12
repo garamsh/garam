@@ -60,7 +60,7 @@ export function NewAgentWizard({
   const [created, setCreated] = useState<CreatedAgent | null>(null);
   const verifies =
     start.status === "ready" &&
-    controlReach(start.hosted, "iam:agent-execution-read").status === "ready";
+    controlReach(start.hosted, "iam:agent.execution-read").status === "ready";
   const wizardSteps = steps(verifies);
   const current =
     start.status === "blocked"

@@ -387,7 +387,7 @@ export async function seedMember(seed: Seed): Promise<SeededUser> {
 
 /**
  * Adds a member of the seeded organization whom an active policy denies
- * `iam:operator-read`, and answers that member's session token. Policies
+ * `iam:operator.read`, and answers that member's session token. Policies
  * are seeded rather than written through the console because the
  * subject is a second identity; the change notification the policy
  * table raises reaches the engine as a console write would.
@@ -415,7 +415,7 @@ export async function seedMemberDeniedOperatorRead(
       {
         Sid: "DenyOperatorRead",
         Effect: "Deny",
-        Action: ["iam:operator-read"],
+        Action: ["iam:operator.read"],
         Resource: [orgGrn, `grn:${seed.orgSlug}/*`],
       },
     ],

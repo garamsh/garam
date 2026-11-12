@@ -16,13 +16,13 @@ export interface paths {
         };
         /**
          * List the pages of an organization the caller may read.
-         * @description Requires `cowork:page-read` on the organization. A page the caller may not read is left out, and so is every page beneath it.
+         * @description Requires `cowork:page.read` on the organization. A page the caller may not read is left out, and so is every page beneath it.
          */
         get: operations["listPages"];
         put?: never;
         /**
          * Create a page after its last sibling.
-         * @description Requires `cowork:page-write` on the organization, and on the parent where one is named.
+         * @description Requires `cowork:page.write` on the organization, and on the parent where one is named.
          */
         post: operations["createPage"];
         delete?: never;
@@ -42,20 +42,20 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** Read a page. Requires `cowork:page-read` on it. */
+        /** Read a page. Requires `cowork:page.read` on it. */
         get: operations["getPage"];
         put?: never;
         post?: never;
         /**
          * Delete a page and every page beneath it.
-         * @description Requires `cowork:page-write` on the page.
+         * @description Requires `cowork:page.write` on the page.
          */
         delete: operations["deletePage"];
         options?: never;
         head?: never;
         /**
          * Rename or move a page.
-         * @description Requires `cowork:page-write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
+         * @description Requires `cowork:page.write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
          */
         patch: operations["updatePage"];
         trace?: never;
@@ -72,13 +72,13 @@ export interface paths {
         };
         /**
          * List the channels the caller may read.
-         * @description Requires `cowork:channel-read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
+         * @description Requires `cowork:channel.read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
          */
         get: operations["listChannels"];
         put?: never;
         /**
          * Create a channel or start a direct message.
-         * @description Requires `cowork:channel-post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
+         * @description Requires `cowork:channel.post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
          */
         post: operations["createChannel"];
         delete?: never;
@@ -123,7 +123,7 @@ export interface paths {
         put?: never;
         /**
          * Add a participant to a private channel.
-         * @description Requires `cowork:channel-post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
+         * @description Requires `cowork:channel.post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
          */
         post: operations["addChannelMember"];
         delete?: never;
@@ -172,7 +172,7 @@ export interface paths {
         put?: never;
         /**
          * Post a message, or reply in a thread.
-         * @description Requires `cowork:channel-post` on the channel, and `cowork:page-read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
+         * @description Requires `cowork:channel.post` on the channel, and `cowork:page.read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
          */
         post: operations["postMessage"];
         delete?: never;
@@ -238,7 +238,7 @@ export interface paths {
         };
         /**
          * Read the messages that link a page, newest first.
-         * @description Requires `cowork:page-read` on the page, and answers only messages in channels the caller may read.
+         * @description Requires `cowork:page.read` on the page, and answers only messages in channels the caller may read.
          */
         get: operations["listPageMessages"];
         put?: never;
@@ -540,7 +540,7 @@ export interface components {
             thread?: string;
             mentions?: string[];
             pages?: string[];
-            /** @description Artifacts to embed; each needs `cowork:artifact-read` of the author. */
+            /** @description Artifacts to embed; each needs `cowork:artifact.read` of the author. */
             artifacts?: string[];
         };
         Error: {

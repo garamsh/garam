@@ -73,11 +73,11 @@ func evalInputWith(effect wire.Effect) api.EvalInput {
 	return api.EvalInput{
 		Subject: grn.New("root", "user", "alice"),
 		Object:  grn.New("root", "org", "acme"),
-		Action:  "iam:org-update",
+		Action:  "iam:org.update",
 		Statements: []api.Statement{{
 			Sid:      "org-role-owner",
 			Effect:   effect,
-			Action:   []string{"iam:org-*"},
+			Action:   []string{"iam:org.*"},
 			Resource: []string{"grn:root/iam/org/acme"},
 		}},
 	}

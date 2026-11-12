@@ -12,28 +12,28 @@ namespace Cowork {
   @grn("artifact") @caller("none")
   entity Artifact in [Iam::Org] { org: Iam::Org };
 
-  action "page-read", "page-write"
+  action "page.read", "page.write"
     in [Iam::Action::"role-owner", Iam::Action::"role-admin",
         Iam::Action::"role-member"]
     appliesTo {
       principal: [Iam::User, Iam::Agent],
       resource: [Iam::Org, Page]
     };
-  action "channel-read", "channel-post"
+  action "channel.read", "channel.post"
     in [Iam::Action::"role-owner", Iam::Action::"role-admin",
         Iam::Action::"role-member"]
     appliesTo {
       principal: [Iam::User, Iam::Agent],
       resource: [Iam::Org, Channel]
     };
-  action "task-read", "task-write"
+  action "task.read", "task.write"
     in [Iam::Action::"role-owner", Iam::Action::"role-admin",
         Iam::Action::"role-member"]
     appliesTo {
       principal: [Iam::User, Iam::Agent],
       resource: [Iam::Org, Task]
     };
-  action "artifact-read", "artifact-write"
+  action "artifact.read", "artifact.write"
     in [Iam::Action::"role-owner", Iam::Action::"role-admin",
         Iam::Action::"role-member"]
     appliesTo {

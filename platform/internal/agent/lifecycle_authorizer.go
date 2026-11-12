@@ -14,9 +14,9 @@ type LifecycleOperation string
 const (
 	// OperationActivate admits, replaces, deactivates or inspects an
 	// agent's execution.
-	OperationActivate LifecycleOperation = "iam:agent-activate"
+	OperationActivate LifecycleOperation = "iam:agent.activate"
 	// OperationRecover replaces an agent's credential lineage.
-	OperationRecover LifecycleOperation = "iam:agent-recover"
+	OperationRecover LifecycleOperation = "iam:agent.recover"
 )
 
 // Grant is the authority an authorized lifecycle act rests on, as the
@@ -33,7 +33,7 @@ type Grant struct {
 // for this call. A hosted operator needs its registration, a live
 // grant covering op for assignee, and persisted policy in which an
 // explicit Deny wins. A supervisor needs its current registration for
-// this agent, to be the assignee itself, op to be iam:agent-activate,
+// this agent, to be the assignee itself, op to be iam:agent.activate,
 // and the same policy (ADR-0082).
 // A refusal is KindPermissionDenied; authority it could not read is
 // KindUnavailable, and refuses as well.

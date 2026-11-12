@@ -105,9 +105,9 @@ function currentStep() {
 describe("new agent wizard", () => {
   it("verifies the created agent by reading its execution back where the grant allows", async () => {
     const read = await createWith([
-      "iam:agent-create",
-      "iam:agent-template-read",
-      "iam:agent-execution-read",
+      "iam:agent.create",
+      "iam:agent-template.read",
+      "iam:agent.execution-read",
     ]);
 
     expect(currentStep()).toHaveTextContent("Verify");
@@ -117,8 +117,8 @@ describe("new agent wizard", () => {
 
   it("names the last step for what it shows where the grant cannot read the agent back", async () => {
     const read = await createWith([
-      "iam:agent-create",
-      "iam:agent-template-read",
+      "iam:agent.create",
+      "iam:agent-template.read",
     ]);
 
     expect(currentStep()).toHaveTextContent("Created");

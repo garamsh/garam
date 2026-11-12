@@ -16,15 +16,15 @@ func TestParsePolicyDocument_Valid(t *testing.T) {
 	doc, err := authz.ParsePolicyDocument([]byte(`{
 	  "Version": "2026-07-25",
 	  "Statement": [
-	    {"Sid": "AllowOrgRead", "Effect": "Allow", "Action": ["iam:org-read"], "Resource": ["grn:acme/*"]},
-	    {"Sid": "DenyDelete", "Effect": "Deny", "Action": ["iam:org-delete"], "Resource": ["grn:acme/*"]}
+	    {"Sid": "AllowOrgRead", "Effect": "Allow", "Action": ["iam:org.read"], "Resource": ["grn:acme/*"]},
+	    {"Sid": "DenyDelete", "Effect": "Deny", "Action": ["iam:org.delete"], "Resource": ["grn:acme/*"]}
 	  ]
 	}`))
 	require.NoError(t, err)
 	assert.Equal(t, "2026-07-25", doc.Version)
 	require.Len(t, doc.Statement, 2)
 	assert.Equal(t, wire.EffectAllow, doc.Statement[0].Effect)
-	assert.Equal(t, []string{"iam:org-delete"}, doc.Statement[1].Action)
+	assert.Equal(t, []string{"iam:org.delete"}, doc.Statement[1].Action)
 }
 
 func TestParsePolicyDocument_Rejects(t *testing.T) {
@@ -52,8 +52,8 @@ func TestParsePolicyDocument_Rejects(t *testing.T) {
 // where none was written fails too.
 func TestParsePolicyDocument_ReMarshalsToWhatWasSubmitted(t *testing.T) {
 	docs := map[string]string{
-		"carrying a condition": `{"Version":"2026-07-25","Statement":[{"Sid":"OfficeOnly","Effect":"Allow","Action":["iam:org-update"],"Resource":["grn:acme/*"],"Condition":{"IpAddress":{"garam:SourceIp":"203.0.113.0/24"}}}]}`,
-		"carrying none":        `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["iam:org-read"],"Resource":["grn:acme/*"]}]}`,
+		"carrying a condition": `{"Version":"2026-07-25","Statement":[{"Sid":"OfficeOnly","Effect":"Allow","Action":["iam:org.update"],"Resource":["grn:acme/*"],"Condition":{"IpAddress":{"garam:SourceIp":"203.0.113.0/24"}}}]}`,
+		"carrying none":        `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["iam:org.read"],"Resource":["grn:acme/*"]}]}`,
 	}
 	for name, submitted := range docs {
 		t.Run(name, func(t *testing.T) {

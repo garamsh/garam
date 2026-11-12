@@ -25,7 +25,7 @@ async fn only_the_owner_holds_the_right_to_write_a_permit() {
         );
     }
 
-    // The administrator holds `policy-*`, so it is the action's own
+    // The administrator holds `policy.*`, so it is the action's own
     // place outside that group that refuses it.
     let evaluation = |action| Evaluation {
         subject: EntityRef {
@@ -40,8 +40,8 @@ async fn only_the_owner_holds_the_right_to_write_a_permit() {
         context: json!({}),
     };
     for (action, outcome) in [
-        ("iam:policy-update", Outcome::Allow),
-        ("iam:policy-permit", Outcome::Deny),
+        ("iam:policy.update", Outcome::Allow),
+        ("iam:permit.write", Outcome::Deny),
     ] {
         let decision = world
             .engine
@@ -58,7 +58,7 @@ async fn a_permit_names_what_a_manifest_declares_inside_the_organization() {
     let right = world.owner_right().await;
     let permit = |source: &str| Body::permit(&world.engine, &right, source);
     let on = |scope: &str| {
-        format!(r#"permit (principal, action == Iam::Action::"group-read", resource{scope});"#)
+        format!(r#"permit (principal, action == Iam::Action::"group.read", resource{scope});"#)
     };
 
     let inside = [
@@ -93,7 +93,7 @@ async fn a_permit_with_no_entity_in_its_resource_scope_is_refused() {
     let right = world.owner_right().await;
     let permit = |scope: &str| {
         let source =
-            format!(r#"permit (principal, action == Iam::Action::"group-read", {scope});"#);
+            format!(r#"permit (principal, action == Iam::Action::"group.read", {scope});"#);
         Body::permit(&world.engine, &right, &source)
     };
 
@@ -125,7 +125,7 @@ async fn a_permit_a_manifest_does_not_declare_is_refused() {
 
     for refused in [
         permit("no-such", "Iam::Org"),
-        permit("org-read", "Iam::Nope"),
+        permit("org.read", "Iam::Nope"),
     ] {
         assert!(
             matches!(refused, Err(Error::Refused(decision::Error::Validation(_)))),
@@ -133,7 +133,7 @@ async fn a_permit_a_manifest_does_not_declare_is_refused() {
         );
     }
 
-    let control = permit("org-read", "Iam::Org");
+    let control = permit("org.read", "Iam::Org");
     assert!(control.is_ok(), "{control:?}");
 }
 
@@ -201,7 +201,7 @@ async fn the_decision_and_the_refusal_a_report_prints() {
             entity_type: who.0,
             id: who.1,
         },
-        action: "iam:agent-watch",
+        action: "iam:agent.watch",
         resource: EntityRef {
             entity_type: BOT.0,
             id: BOT.1,
@@ -226,7 +226,7 @@ async fn the_decision_and_the_refusal_a_report_prints() {
     assert_eq!(outside.outcome, Outcome::Deny);
 
     let foreign = format!(
-        r#"permit (principal, action == Iam::Action::"org-read", resource in Iam::Org::"{GLOBEX}");"#
+        r#"permit (principal, action == Iam::Action::"org.read", resource in Iam::Org::"{GLOBEX}");"#
     );
     let refused = Body::permit(&permitted.engine, &right, &foreign).unwrap_err();
     println!("a write in another organization: {refused}");
@@ -235,12 +235,12 @@ async fn the_decision_and_the_refusal_a_report_prints() {
 
 const ADMIN_MAY_PERMIT: &str = r#"permit (
     principal == Iam::User::"grn:acme/iam/user/kim",
-    action == Iam::Action::"policy-permit",
+    action == Iam::Action::"permit.write",
     resource == Iam::Org::"grn:root/iam/org/acme"
 );"#;
 const NO_ONE_PERMITS: &str = r#"forbid (
     principal,
-    action == Iam::Action::"policy-permit",
+    action == Iam::Action::"permit.write",
     resource == Iam::Org::"grn:root/iam/org/acme"
 );"#;
 
@@ -256,7 +256,7 @@ async fn no_permit_confers_the_right_and_a_guardrail_still_takes_it_away() {
             entity_type: ADMIN.0,
             id: ADMIN.1,
         },
-        action: "iam:policy-permit",
+        action: "iam:permit.write",
         resource: EntityRef {
             entity_type: ORG.0,
             id: ORG.1,

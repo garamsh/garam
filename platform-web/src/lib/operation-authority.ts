@@ -30,12 +30,12 @@ export const EMPTY_BODY_SHA256 =
 
 /** The operations the console hands a control service. */
 export type ControlOperation =
-  | "iam:agent-create"
-  | "iam:agent-template-read"
-  | "iam:agent-template-publish"
-  | "iam:execution-profile-read"
-  | "iam:agent-execution-read"
-  | "iam:operator-read";
+  | "iam:agent.create"
+  | "iam:agent-template.read"
+  | "iam:agent-template.publish"
+  | "iam:execution-profile.read"
+  | "iam:agent.execution-read"
+  | "iam:operator.read";
 
 /** What a mint needs, as the Server Action takes it. */
 export type MintInput = {
@@ -96,7 +96,7 @@ const RefusalKindParser = z.object({
 
 /** Whether an operation's authority binds its request target. */
 function bindsRequestTarget(operation: ControlOperation): boolean {
-  return operation !== "iam:agent-create";
+  return operation !== "iam:agent.create";
 }
 
 /** One call to a control service, described before anything is minted. */

@@ -187,13 +187,13 @@ func TestDelegatedAuthority_EndToEnd(t *testing.T) {
 	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
 
-	body := `{"requestId":"m-1","controllers":["` + s.controller.String() + `"],"operations":["iam:agent-create"],"expiresAt":"` +
+	body := `{"requestId":"m-1","controllers":["` + s.controller.String() + `"],"operations":["iam:agent.create"],"expiresAt":"` +
 		time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`
 	status, got := call(t, http.DefaultClient, http.MethodPut, s.delegationPath(), s.member, body)
 	assert.Equal(t, http.StatusForbidden, status, "a member does not delegate: %s", got)
-	d := s.grant(t, "g-1", nil, "iam:agent-create", "iam:agent-configure")
+	d := s.grant(t, "g-1", nil, "iam:agent.create", "iam:agent.configure")
 
-	status, got = s.mint(t, s.member, "iam:agent-create", s.controller.String(), "req-1")
+	status, got = s.mint(t, s.member, "iam:agent.create", s.controller.String(), "req-1")
 	require.Equal(t, http.StatusCreated, status, got)
 	minted := authorityOf(t, got)
 	assert.Equal(t, d.GrantId, minted.GrantId)
@@ -214,9 +214,9 @@ func TestDelegatedAuthority_EndToEnd(t *testing.T) {
 	assert.Equal(t, http.StatusOK, status)
 
 	agentGRN := s.provisionAgent(t)
-	status, got = s.mint(t, s.member, "iam:agent-configure", agentGRN, "req-2")
+	status, got = s.mint(t, s.member, "iam:agent.configure", agentGRN, "req-2")
 	assert.Equal(t, http.StatusForbidden, status, "a member does not configure: %s", got)
-	status, got = s.mint(t, s.owner, "iam:agent-configure", agentGRN, "req-2")
+	status, got = s.mint(t, s.owner, "iam:agent.configure", agentGRN, "req-2")
 	require.Equal(t, http.StatusCreated, status, got)
 	configure := authorityOf(t, got)
 
@@ -230,7 +230,7 @@ func TestDelegatedAuthority_EndToEnd(t *testing.T) {
 	assert.Contains(t, got, `"assignment":{"epoch":"`)
 
 	status, got = call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", s.member,
-		`{"audience":"grn:globex/iam/operator/hosted","operation":"iam:agent-create","target":"`+s.controller.String()+
+		`{"audience":"grn:globex/iam/operator/hosted","operation":"iam:agent.create","target":"`+s.controller.String()+
 			`","requestId":"req-3","bodySha256":"`+strings.Repeat("c", 64)+`"}`)
 	assert.Equal(t, http.StatusBadRequest, status, "another organization's audience: %s", got)
 
@@ -264,15 +264,15 @@ func TestDelegatedAuthority_RefusesPastAStaleCachedAllow(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
-	s.grant(t, "g-1", nil, "iam:agent-create")
-	status, got := s.mint(t, s.member, "iam:agent-create", s.controller.String(), "req-1")
+	s.grant(t, "g-1", nil, "iam:agent.create")
+	status, got := s.mint(t, s.member, "iam:agent.create", s.controller.String(), "req-1")
 	require.Equal(t, http.StatusCreated, status, got)
 	minted := authorityOf(t, got)
 
 	check := &authzv1.CheckRequest{
-		SubjectGrn: s.memberGRN.String(), ObjectGrn: s.acme.String(), Action: "iam:agent-create",
+		SubjectGrn: s.memberGRN.String(), ObjectGrn: s.acme.String(), Action: "iam:agent.create",
 		Statements: []*authzv1.Statement{{Sid: "member", Effect: authzv1.Effect_EFFECT_ALLOW,
-			Action: []string{"iam:agent-create"}, Resource: []string{s.acme.String(), "grn:acme/*"}}},
+			Action: []string{"iam:agent.create"}, Resource: []string{s.acme.String(), "grn:acme/*"}}},
 		SubjectOrg: s.acme.String(),
 	}
 	client := authzv1.NewAuthzServiceClient(engine)
@@ -283,14 +283,14 @@ func TestDelegatedAuthority_RefusesPastAStaleCachedAllow(t *testing.T) {
 	// Another process's write: it drops its own cache, not the engine's.
 	store := authzpg.New(p)
 	activePolicy(t, authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store)), s.acme, "deny-create",
-		statementDoc("deny-create", wire.EffectDeny, "iam:agent-create", s.acme.String()))
+		statementDoc("deny-create", wire.EffectDeny, "iam:agent.create", s.acme.String()))
 	stale, err := client.Check(ctx, check)
 	require.NoError(t, err)
 	require.True(t, stale.GetAllowed(), "the control: the ordinary check still answers its cached allow")
 
 	status, _ = s.introspect(t, s.hostedTLS, minted.Authority)
 	assert.Equal(t, http.StatusForbidden, status)
-	status, _ = s.mint(t, s.member, "iam:agent-create", s.controller.String(), "req-1")
+	status, _ = s.mint(t, s.member, "iam:agent.create", s.controller.String(), "req-1")
 	assert.Equal(t, http.StatusForbidden, status)
 }
 
@@ -308,7 +308,7 @@ func TestDelegatedAuthority_RechecksRolesAndGroups(t *testing.T) {
 	s := newAuthorityStack(t, engine, p)
 	orgs := orgpg.New(p)
 	users := userpg.New(p)
-	s.grant(t, "g-1", nil, "iam:agent-create", "iam:agent-configure")
+	s.grant(t, "g-1", nil, "iam:agent.create", "iam:agent.configure")
 	agentGRN := s.provisionAgent(t)
 
 	cookieFor := func(g grn.GRN) *http.Cookie {
@@ -329,11 +329,11 @@ func TestDelegatedAuthority_RechecksRolesAndGroups(t *testing.T) {
 		require.Equal(t, http.StatusCreated, status, got)
 		return authorityOf(t, got).Authority
 	}
-	byAdmin := minted(cookieFor(admin), "iam:agent-configure", agentGRN, "admin-1")
-	byDirect := minted(cookieFor(direct), "iam:agent-configure", agentGRN, "direct-1")
-	byMember := minted(s.member, "iam:agent-create", s.controller.String(), "member-1")
-	ownerConfigure := minted(s.owner, "iam:agent-configure", agentGRN, "owner-1")
-	ownerCreate := minted(s.owner, "iam:agent-create", s.controller.String(), "owner-2")
+	byAdmin := minted(cookieFor(admin), "iam:agent.configure", agentGRN, "admin-1")
+	byDirect := minted(cookieFor(direct), "iam:agent.configure", agentGRN, "direct-1")
+	byMember := minted(s.member, "iam:agent.create", s.controller.String(), "member-1")
+	ownerConfigure := minted(s.owner, "iam:agent.configure", agentGRN, "owner-1")
+	ownerCreate := minted(s.owner, "iam:agent.create", s.controller.String(), "owner-2")
 	for _, a := range []string{byAdmin, byDirect, byMember, ownerConfigure, ownerCreate} {
 		status, got := s.introspect(t, s.hostedTLS, a)
 		require.Equal(t, http.StatusOK, status, got)
@@ -354,7 +354,7 @@ func TestDelegatedAuthority_RechecksRolesAndGroups(t *testing.T) {
 	require.NoError(t, orgs.CreateGroup(ctx, org.NewGroup(team, "batch", s.acme)))
 	require.NoError(t, orgs.AddGroupMember(ctx, team, s.memberGRN))
 	denied := activePolicy(t, policies, s.acme, "deny-batch-create",
-		statementDoc("deny-batch-create", wire.EffectDeny, "iam:agent-create", s.acme.String()))
+		statementDoc("deny-batch-create", wire.EffectDeny, "iam:agent.create", s.acme.String()))
 	attachPolicy(t, policies, denied, team)
 	status, _ = s.introspect(t, s.hostedTLS, byMember)
 	assert.Equal(t, http.StatusForbidden, status, "a Deny attached to the member's group")
@@ -391,7 +391,7 @@ func TestDelegatedAuthority_AnEngineWithoutCheckCurrentRefuses(t *testing.T) {
 	t.Cleanup(func() { _ = engine.Close() })
 	s := newAuthorityStack(t, engine, p)
 
-	body := `{"requestId":"g-1","controllers":["` + s.controller.String() + `"],"operations":["iam:agent-create"],"expiresAt":"` +
+	body := `{"requestId":"g-1","controllers":["` + s.controller.String() + `"],"operations":["iam:agent.create"],"expiresAt":"` +
 		time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`
 	status, got := call(t, http.DefaultClient, http.MethodPut, s.delegationPath(), s.owner, body)
 	assert.Equal(t, http.StatusServiceUnavailable, status, got)

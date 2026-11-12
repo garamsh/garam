@@ -130,8 +130,8 @@ func TestCredentialAudit_RecordsASupervisorsCredentialAndItsAgentsTokens(t *test
 
 // TestCredentialAudit_IsReadOnTheSubjectsRead lists an operator's and a
 // supervisor's events as the member, then attaches a Deny of
-// iam:operator-read to the member: the operator's events are refused
-// and the supervisor's, read on iam:agent-read, still answered — so
+// iam:operator.read to the member: the operator's events are refused
+// and the supervisor's, read on iam:agent.read, still answered — so
 // what refuses the first is the subject's own read and not a gate on
 // the route. A subject of another organization, and a user, are refused
 // with 400; the paging is the shared limit and offset.
@@ -170,7 +170,7 @@ func TestCredentialAudit_IsReadOnTheSubjectsRead(t *testing.T) {
 	status, body = read(operatorGRN, "")
 	assert.Equal(t, http.StatusForbidden, status, body)
 	status, body = read(c.supervisor, "")
-	assert.Equal(t, http.StatusOK, status, "a supervisor is read on iam:agent-read: %s", body)
+	assert.Equal(t, http.StatusOK, status, "a supervisor is read on iam:agent.read: %s", body)
 	status, body = read(scopedGRN("globex", operator.ServiceType, "x"), "")
 	assert.Equal(t, http.StatusBadRequest, status, body)
 	status, body = read(grn.New(grn.RootOwner, user.ServiceType, "ada"), "")

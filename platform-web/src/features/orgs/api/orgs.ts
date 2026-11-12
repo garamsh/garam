@@ -333,7 +333,7 @@ export function lookupOrgMembers(
 
 /**
  * The invitations of an organization that can still be accepted. A
- * caller without `iam:org-invite` is refused them, and that refusal is
+ * caller without `iam:org.invite` is refused them, and that refusal is
  * returned rather than answered with not-found.
  */
 export function lookupPendingInvitations(
@@ -459,7 +459,7 @@ export function listAgents(org: string): Promise<OrgRead<Agent[]>> {
 /**
  * The cross-organization consent relations an organization is a side
  * of, for a page that also reads the organization: reading them needs
- * `iam:consent-read`, which not every member holds, so a refusal is
+ * `iam:consent.read`, which not every member holds, so a refusal is
  * returned rather than answered with not-found.
  */
 export function lookupOrgConsents(

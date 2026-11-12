@@ -63,20 +63,20 @@ func TestStatementMatches_Wildcards(t *testing.T) {
 		value   string
 		want    bool
 	}{
-		{"star alone matches anything", "*", "iam:org-read", true},
+		{"star alone matches anything", "*", "iam:org.read", true},
 		{"star alone matches the empty value", "*", "", true},
-		{"trailing star matches the rest", "iam:org-*", "iam:org-member-list", true},
-		{"trailing star matches an empty rest", "iam:org-*", "iam:org-", true},
-		{"trailing star does not cross its literal prefix", "iam:org-*", "iam:group-read", false},
-		{"leading star matches a suffix", "*-read", "iam:project-read", true},
+		{"trailing star matches the rest", "iam:org.*", "iam:org.member-list", true},
+		{"trailing star matches an empty rest", "iam:org.*", "iam:org.", true},
+		{"trailing star does not cross its literal prefix", "iam:org.*", "iam:group.read", false},
+		{"leading star matches a suffix", "*.read", "iam:project.read", true},
 		{"question matches exactly one byte", "or?", "org", true},
 		{"question does not match zero bytes", "or?", "or", false},
 		{"question does not match two bytes", "or?", "orgs", false},
 		{"interior star backtracks to a later match", "a*bc", "abxbc", true},
 		{"interior star fails when no offset works", "a*bc", "abxbd", false},
 		{"two interior stars both backtrack", "a*b*c", "axxbyyc", true},
-		{"star does not excuse a missing literal tail", "iam:org-*-list", "iam:org-member", false},
-		{"empty pattern matches only the empty value", "", "iam:org-read", false},
+		{"star does not excuse a missing literal tail", "iam:org.*-list", "iam:org.member", false},
+		{"empty pattern matches only the empty value", "", "iam:org.read", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -93,12 +93,12 @@ func TestStatementMatches_Wildcards(t *testing.T) {
 // are the conjunction and not a statement that matches nothing.
 func TestStatementMatches_RequiresBothActionAndResource(t *testing.T) {
 	st := authz.Statement{
-		Action:   []string{"iam:org-read", "iam:org-update"},
+		Action:   []string{"iam:org.read", "iam:org.update"},
 		Resource: []string{"grn:root/iam/org/acme", "grn:acme/*"},
 	}
-	assert.True(t, st.Matches("iam:org-read", "grn:root/iam/org/acme"), "first entry of each list")
-	assert.True(t, st.Matches("iam:org-update", "grn:acme/iam/project/web"), "last entry of each list")
-	assert.False(t, st.Matches("iam:org-delete", "grn:root/iam/org/acme"), "action matches no entry")
-	assert.False(t, st.Matches("iam:org-read", "grn:globex/iam/org/other"), "resource matches no entry")
-	assert.False(t, authz.Statement{}.Matches("iam:org-read", "grn:root/iam/org/acme"), "no patterns at all")
+	assert.True(t, st.Matches("iam:org.read", "grn:root/iam/org/acme"), "first entry of each list")
+	assert.True(t, st.Matches("iam:org.update", "grn:acme/iam/project/web"), "last entry of each list")
+	assert.False(t, st.Matches("iam:org.delete", "grn:root/iam/org/acme"), "action matches no entry")
+	assert.False(t, st.Matches("iam:org.read", "grn:globex/iam/org/other"), "resource matches no entry")
+	assert.False(t, authz.Statement{}.Matches("iam:org.read", "grn:root/iam/org/acme"), "no patterns at all")
 }

@@ -46,7 +46,7 @@ func TestCheckPermissions_AllowsAMemberCoworkPages(t *testing.T) {
 // is. The member asking the same pairs is the control.
 func TestCheckPermissions_RefusesANonMemberCoworkPages(t *testing.T) {
 	s := newCheckStack(t)
-	body := `{"checks":[{"action":"cowork:page-read","resource":{"type":"cowork-page","id":"p-1"}}]}`
+	body := `{"checks":[{"action":"cowork:page.read","resource":{"type":"cowork-page","id":"p-1"}}]}`
 
 	memberStatus, got := s.send(t, http.MethodPost, "/orgs/acme/permission-checks", s.member, body)
 	require.Equal(t, http.StatusOK, memberStatus, got)

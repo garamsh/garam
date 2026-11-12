@@ -25,11 +25,11 @@ pub enum Error {
     /// Its resource scope is a type alone, which every organization has.
     #[error("the permit's resource scope is `is {0}` alone, which any organization holds")]
     PermitResourceByType(String),
-    /// `iam:policy-permit` could not be evaluated for the writer.
-    #[error("iam:policy-permit could not be evaluated")]
+    /// `iam:permit.write` could not be evaluated for the writer.
+    #[error("iam:permit.write could not be evaluated")]
     PermitEvaluation(#[source] decision::Error),
-    /// The engine denied the writer `iam:policy-permit`.
-    #[error("{writer} may not write a permit: iam:policy-permit is denied")]
+    /// The engine denied the writer `iam:permit.write`.
+    #[error("{writer} may not write a permit: iam:permit.write is denied")]
     PermitDenied {
         /// The writer's GRN.
         writer: String,

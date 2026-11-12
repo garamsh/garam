@@ -142,7 +142,7 @@ func newAuthorityToken() (string, error) {
 
 // Operation authority sentinels.
 var (
-	ErrOperationNotMintable = errorx.New(errorx.KindInvalidArgument, "iam:agent-activate cannot be handed to an operator")
+	ErrOperationNotMintable = errorx.New(errorx.KindInvalidArgument, "iam:agent.activate cannot be handed to an operator")
 	// ErrRequestTargetRequired refuses a read or a publication minted
 	// without the request target it must bind.
 	ErrRequestTargetRequired = errorx.New(errorx.KindInvalidArgument, "this operation binds a request_target")

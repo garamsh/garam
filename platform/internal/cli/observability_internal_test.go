@@ -801,7 +801,7 @@ func TestLogRPCs_CarriesTheCauseTheEngineWithheld(t *testing.T) {
 					SubjectGrn: testSubject,
 					ObjectGrn:  object.String(),
 					SubjectOrg: object.String(),
-					Action:     "iam:org-read",
+					Action:     "iam:org.read",
 				},
 				&grpc.UnaryServerInfo{FullMethod: "/garam.authz.v1.AuthzService/Check"},
 				func(ctx context.Context, req any) (any, error) {

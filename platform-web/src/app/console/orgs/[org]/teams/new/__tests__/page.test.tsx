@@ -36,7 +36,7 @@ describe("new team page", () => {
   it("says a caller the server denies cannot create a team instead of a form", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:group-create" ? "deny" : "allow",
+        action === "iam:group.create" ? "deny" : "allow",
       ),
     );
 

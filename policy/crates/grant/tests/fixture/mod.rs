@@ -30,7 +30,7 @@ pub const GLOBEX_MEMBERS: Named = ("Iam::OrgMembers", GLOBEX);
 
 pub const WATCH_BOT: &str = r#"permit (
     principal,
-    action == Iam::Action::"agent-watch",
+    action == Iam::Action::"agent.watch",
     resource == Iam::Agent::"grn:acme/iam/agent/bot"
 );"#;
 

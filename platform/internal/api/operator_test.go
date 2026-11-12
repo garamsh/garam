@@ -271,7 +271,7 @@ func fieldsOf(t *testing.T, object map[string]json.RawMessage) []string {
 // register is not thereby permitted to stop an operator.
 //
 // The registrar is that control. It is permitted
-// `iam:operator-register` and refused here, and its own registration is
+// `iam:operator.register` and refused here, and its own registration is
 // answered, so what refuses its delete is the action rather than the
 // membership or the session. The outsider and the signed-out caller
 // isolate the other two halves the same way.
@@ -418,7 +418,7 @@ func TestOperatorGet_AnswersOneOperatorOfThisOrg(t *testing.T) {
 // TestOperatorUpdate_AdminUpdatesWhereOthersAreRefused holds the update
 // to an action of its own (ADR-0074). The registrar is permitted both
 // actions that register and delete and is refused here, so what
-// refuses it is the missing `iam:operator-update` and not the
+// refuses it is the missing `iam:operator.update` and not the
 // membership; the outsider holds that action in another org, so what
 // refuses it is the org. The admin's update is the control for both,
 // and the signed-out call beside it isolates the session.

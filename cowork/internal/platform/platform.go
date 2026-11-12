@@ -14,11 +14,11 @@ import (
 // The cowork actions the platform answers for (ADR-0127). Each is
 // asked on the organization, for its page tree, or on one page.
 const (
-	ActionPageRead  = "cowork:page-read"
-	ActionPageWrite = "cowork:page-write"
+	ActionPageRead  = "cowork:page.read"
+	ActionPageWrite = "cowork:page.write"
 	// ActionArtifactRead is asked of an artifact a message embeds, as
 	// the artifact package asks it of one it shows.
-	ActionArtifactRead = "cowork:artifact-read"
+	ActionArtifactRead = "cowork:artifact.read"
 )
 
 // Credential is what a caller presented, passed on as presented: the

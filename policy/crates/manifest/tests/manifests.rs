@@ -12,6 +12,13 @@ fn cowork_with(from: &str, to: &str) -> Manifests {
     Manifests::from_sources(&[IAM, &COWORK.replacen(from, to, 1)]).unwrap()
 }
 
+/// The shipped manifests with one line of the platform's changed, by
+/// the same rule as [`cowork_with`].
+fn iam_with(from: &str, to: &str) -> Manifests {
+    assert!(IAM.contains(from), "iam no longer holds {from:?}");
+    Manifests::from_sources(&[&IAM.replacen(from, to, 1), COWORK]).unwrap()
+}
+
 #[test]
 fn the_shipped_manifests_break_no_rule() {
     let manifests = Manifests::load().unwrap();
@@ -50,14 +57,73 @@ fn a_type_without_a_caller_is_named() {
 
 #[test]
 fn an_action_that_is_not_type_verb_is_named() {
+    // A bare verb, the hyphen form ADR-0143 wrote, a second dot, and a
+    // role group with no name.
+    for refused in ["read", "page-read", "page.read.all", "role-"] {
+        let manifests = cowork_with(
+            r#"action "page.read", "page.write""#,
+            &format!(r#"action "{refused}", "page.write""#),
+        );
+
+        let problems = manifests.problems();
+        assert_eq!(problems.len(), 1, "{refused}: {problems:?}");
+        assert!(
+            problems[0].contains(&format!("{refused:?}")),
+            "{refused}: {problems:?}"
+        );
+    }
+    // Control: the accepted forms, with a role group. The shipped
+    // `<type>.*` groups are the control for the group form.
     let manifests = cowork_with(
-        r#"action "page-read", "page-write""#,
-        r#"action "read", "page-write""#,
+        r#"action "page.read", "page.write""#,
+        r#"action "page.read", "page.write", "role-viewer""#,
+    );
+    assert_eq!(manifests.problems(), Vec::<String>::new());
+}
+
+#[test]
+fn a_type_group_missing_one_of_its_types_actions_is_named() {
+    let manifests = iam_with(
+        r#"action "org.delete" in ["org.*"]"#,
+        r#"action "org.delete""#,
     );
 
-    let problems = manifests.problems();
-    assert_eq!(problems.len(), 1, "{problems:?}");
-    assert!(problems[0].contains(r#""read""#), "{problems:?}");
+    assert_eq!(
+        manifests.problems(),
+        ["iam:org.*: iam:org.delete is not in its group"]
+    );
+}
+
+#[test]
+fn a_type_group_holding_an_action_of_another_type_is_named() {
+    let manifests = iam_with(
+        "  action \"agent.watch\"\n",
+        "  action \"agent.watch\" in [\"org.*\"]\n",
+    );
+
+    assert_eq!(
+        manifests.problems(),
+        ["iam:org.*: holds iam:agent.watch, which is not of type org"]
+    );
+}
+
+#[test]
+fn a_group_is_no_wider_than_its_type_even_where_a_prefix_would_match() {
+    // `agent-template.read` is not of type `agent`, whatever a prefix
+    // match on `agent` says, so `agent.*` may not hold it.
+    let manifests = iam_with(
+        r#"action "agent-template.read", "execution-profile.read""#,
+        r#"action "agent.*";
+  action "agent-template.read", "execution-profile.read""#,
+    );
+    assert!(
+        manifests
+            .problems()
+            .iter()
+            .all(|p| !p.contains("agent-template.read")),
+        "{:?}",
+        manifests.problems()
+    );
 }
 
 #[test]
@@ -92,16 +158,23 @@ fn an_action_is_its_service_and_its_name_and_nothing_else() {
     let manifests = Manifests::load().unwrap();
 
     assert_eq!(
-        manifests.action("iam:org-read").unwrap().to_string(),
-        r#"Iam::Action::"org-read""#
+        manifests.action("iam:org.read").unwrap().to_string(),
+        r#"Iam::Action::"org.read""#
     );
     assert_eq!(
-        manifests.action("cowork:page-read").unwrap().to_string(),
-        r#"Cowork::Action::"page-read""#
+        manifests.action("cowork:page.read").unwrap().to_string(),
+        r#"Cowork::Action::"page.read""#
     );
-    // Controls: no service, the unqualified form of a declared name, a
-    // service no manifest declares, and a name its service lacks.
-    for refused in ["org-read", "org:read", "billing:org-read", "iam:no-such"] {
+    // Controls: no service, the unqualified form of a declared name, the
+    // hyphen and old colon forms, a service no manifest declares, and
+    // a name its service lacks.
+    for refused in [
+        "org.read",
+        "org:read",
+        "iam:org-read",
+        "billing:org.read",
+        "iam:no-such",
+    ] {
         assert!(manifests.action(refused).is_err(), "{refused} resolved");
     }
 }
@@ -131,11 +204,11 @@ fn what_an_action_applies_to_is_read_and_a_group_applies_to_nothing() {
     let read = iam
         .actions
         .iter()
-        .find(|a| a.name == "iam:org-read")
+        .find(|a| a.name == "iam:org.read")
         .unwrap();
     let applies = read.applies_to.as_ref().unwrap();
     assert!(applies.resources.contains(&"Iam::Org".to_owned()));
-    assert!(read.parents.contains(&"iam:org-*".to_owned()));
+    assert!(read.parents.contains(&"iam:org.*".to_owned()));
     let group = iam
         .actions
         .iter()

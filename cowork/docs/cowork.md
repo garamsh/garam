@@ -96,8 +96,8 @@ agents.
 - `me`: who presented a credential. cowork passes the platform's
   session cookie or a CLI session's bearer as presented, and reads a
   bearer alone where there is one.
-- `checkPermissions`, as that same caller: `cowork:page-read` and
-  `cowork:page-write`, on the organization for its page tree and on a
+- `checkPermissions`, as that same caller: `cowork:page.read` and
+  `cowork:page.write`, on the organization for its page tree and on a
   `cowork-page` for one page. Every role grants both (#1663).
 - cowork answers 503 whenever the platform cannot be reached, and
   decides nothing alone.
@@ -125,12 +125,12 @@ agents.
     cowork decides nothing alone, so the connection stands as last
     decided, the failure is logged and the next re-check asks again.
     The bound runs again once the platform answers.
-- `checkPermissions` for messaging: `cowork:channel-read` and
-  `cowork:channel-post` on the organization and on a
+- `checkPermissions` for messaging: `cowork:channel.read` and
+  `cowork:channel.post` on the organization and on a
   `cowork-channel` (ADR-0128).
-- `checkPermissions` for tasks: `cowork:task-read` and
-  `cowork:task-write` on the organization and on a `cowork-task`; for
-  artifacts, `cowork:artifact-read` and `cowork:artifact-write` on the
+- `checkPermissions` for tasks: `cowork:task.read` and
+  `cowork:task.write` on the organization and on a `cowork-task`; for
+  artifacts, `cowork:artifact.read` and `cowork:artifact.write` on the
   organization and on a `cowork-artifact`.
 - Not yet: `postMessage` to an agent's queue, under the
   organization's cowork principal (§Delivery to agents), and an agent
@@ -145,7 +145,7 @@ agents.
   any WebSocket. A browser may open it only from cowork's own host or
   a host `COWORK_WEB_ORIGINS` names, because the session cookie rides
   along.
-- **Writes** are `cowork:page-write` on the page, asked at the upgrade
+- **Writes** are `cowork:page.write` on the page, asked at the upgrade
   and at each re-check (§What it asks of the platform). A connection
   without it reads live and is answered y-websocket's permission-denied
   message for any edit, which is neither kept nor relayed. An answer
@@ -218,7 +218,7 @@ mentions and delivers none.
 
 - **A task** has a title, a description, a status (`todo`, `doing`,
   `done`), an assignee, a person's or an agent's GRN, and a due date.
-  Each change is the caller's `cowork:task-write` on the task, and a
+  Each change is the caller's `cowork:task.write` on the task, and a
   comment is the same act.
 - **Links.** A task links pages and messages its writer may read: a
   page as `getPage` reads it, a message as reading its thread does.
@@ -253,7 +253,7 @@ mentions and delivers none.
     the key). The version may stand, and a version without its bytes
     is lost, where a stray blob only costs storage.
 - **Where HTML is served** (ADR-0127 §8). Never from cowork's own
-  origin. `viewArtifact` asks `cowork:artifact-read` as the viewer and
+  origin. `viewArtifact` asks `cowork:artifact.read` as the viewer and
   answers an address on the user-content origin, signed for that
   version and good for ten minutes. The second listener `serve` starts
   there serves that version and nothing else. The web app loads it in
@@ -284,24 +284,24 @@ mentions and delivers none.
   | Tool | What it does | Asks |
   |---|---|---|
   | `list_workspaces` | the organizations the caller belongs to | `listOrgs` |
-  | `list_pages` | the page tree the caller may read | `cowork:page-read` |
-  | `search` | page titles and messages | `cowork:page-read`, `cowork:channel-read` |
-  | `read_page` | a page as Markdown and as numbered blocks | `cowork:page-read` |
-  | `create_page` | a page, with its blocks | `cowork:page-write` |
-  | `update_page` | a new title, and edits to blocks by index | `cowork:page-write` |
-  | `list_channels` | the channels and direct messages the caller may read | `cowork:channel-read` |
-  | `read_messages` | a channel's messages | `cowork:channel-read` |
-  | `post_message` | a message or a reply | `cowork:channel-post` |
-  | `list_tasks` | tasks by status, assignee (`me` for the caller) or link | `cowork:task-read` |
-  | `read_task` | a task and its comments | `cowork:task-read` |
-  | `create_task` | a task, assigned and linked | `cowork:task-write` |
-  | `update_task` | changes to a task, with a comment | `cowork:task-write` |
-  | `comment_task` | a comment | `cowork:task-write` |
+  | `list_pages` | the page tree the caller may read | `cowork:page.read` |
+  | `search` | page titles and messages | `cowork:page.read`, `cowork:channel.read` |
+  | `read_page` | a page as Markdown and as numbered blocks | `cowork:page.read` |
+  | `create_page` | a page, with its blocks | `cowork:page.write` |
+  | `update_page` | a new title, and edits to blocks by index | `cowork:page.write` |
+  | `list_channels` | the channels and direct messages the caller may read | `cowork:channel.read` |
+  | `read_messages` | a channel's messages | `cowork:channel.read` |
+  | `post_message` | a message or a reply | `cowork:channel.post` |
+  | `list_tasks` | tasks by status, assignee (`me` for the caller) or link | `cowork:task.read` |
+  | `read_task` | a task and its comments | `cowork:task.read` |
+  | `create_task` | a task, assigned and linked | `cowork:task.write` |
+  | `update_task` | changes to a task, with a comment | `cowork:task.write` |
+  | `comment_task` | a comment | `cowork:task.write` |
 
-  | `list_artifacts` | the artifacts the caller may read | `cowork:artifact-read` |
-  | `read_artifact` | a version: an html one's source, a document's Markdown | `cowork:artifact-read` |
-  | `create_artifact` | an html page, or a page frozen as a document | `cowork:artifact-write` |
-  | `update_artifact` | the next version | `cowork:artifact-write` |
+  | `list_artifacts` | the artifacts the caller may read | `cowork:artifact.read` |
+  | `read_artifact` | a version: an html one's source, a document's Markdown | `cowork:artifact.read` |
+  | `create_artifact` | an html page, or a page frozen as a document | `cowork:artifact.write` |
+  | `update_artifact` | the next version | `cowork:artifact.write` |
 
   Every tool but `list_workspaces` takes the workspace as `org`.
 - **Each asks what the HTTP API asks**, through the same services, so

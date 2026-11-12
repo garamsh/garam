@@ -244,7 +244,7 @@ type MessageList struct {
 
 // MessagePost defines model for MessagePost.
 type MessagePost struct {
-	// Artifacts Artifacts to embed; each needs `cowork:artifact-read` of the author.
+	// Artifacts Artifacts to embed; each needs `cowork:artifact.read` of the author.
 	Artifacts *[]string `json:"artifacts,omitempty"`
 	Body      string    `json:"body"`
 	Mentions  *[]string `json:"mentions,omitempty"`
@@ -510,7 +510,7 @@ type ServerInterface interface {
 	// DeletePage Delete a page and every page beneath it.
 	// (DELETE /orgs/{org}/pages/{page})
 	DeletePage(w http.ResponseWriter, r *http.Request, org OrgPath, page PagePath)
-	// GetPage Read a page. Requires `cowork:page-read` on it.
+	// GetPage Read a page. Requires `cowork:page.read` on it.
 	// (GET /orgs/{org}/pages/{page})
 	GetPage(w http.ResponseWriter, r *http.Request, org OrgPath, page PagePath)
 	// UpdatePage Rename or move a page.

@@ -187,9 +187,10 @@ grammar as follows.
 
 The per-service manifest is built and the served registry of types is
 decided and unbuilt, in ADR-0143, which also settles how an action
-reads once types belong to services: `<service>:<type>-<verb>`, so an
-action's name does change. Left open there: a service an organization
-defines, and a served registry of locator shapes. Settled for the
+reads once types belong to services: `<service>:<type>.<verb>`
+(ADR-0145, which replaced ADR-0143's hyphen), so an action's name does
+change. Left open there: a service an organization defines, and a
+served registry of locator shapes. Settled for the
 implementation: the policy service's caller name and the feed's `sub`
 stay `platform`; a Cedar entity identifier is the whole name before
 `#`; a `*` in a policy pattern matches as it did, `/` included, so an

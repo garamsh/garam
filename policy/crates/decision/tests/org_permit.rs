@@ -12,21 +12,21 @@ use decision::{
 };
 use fixture::*;
 
-const WATCH: &str = "agent-watch";
+const WATCH: &str = "agent.watch";
 const PERMIT_ID: &str = "grn:acme/iam/policy/lee-watches-bot";
 const LEE_WATCHES_BOT: &str = r#"permit (
     principal == Iam::User::"grn:acme/iam/user/lee",
-    action == Iam::Action::"agent-watch",
+    action == Iam::Action::"agent.watch",
     resource == Iam::Agent::"grn:acme/iam/agent/bot"
 );"#;
 const ANYONE_WATCHES_ACME: &str = r#"permit (
     principal,
-    action == Iam::Action::"agent-watch",
+    action == Iam::Action::"agent.watch",
     resource in Iam::Org::"grn:root/iam/org/acme"
 );"#;
 const NO_ONE_WATCHES_BOT: &str = r#"forbid (
     principal,
-    action == Iam::Action::"agent-watch",
+    action == Iam::Action::"agent.watch",
     resource == Iam::Agent::"grn:acme/iam/agent/bot"
 );"#;
 
@@ -47,7 +47,7 @@ fn a_permit_allows_what_it_names_and_the_reasons_name_it_by_its_id() {
     assert_eq!(allowed.outcome, Outcome::Allow);
     assert_eq!(allowed.reasons, named(PERMIT_ID));
 
-    // No role holds `agent-watch`, so what allowed it is the permit.
+    // No role holds `agent.watch`, so what allowed it is the permit.
     let without = world.compose(&[], &[]);
     let denied = world.ask(&without, LEE, &action(), BOT);
     assert_eq!(denied.outcome, Outcome::Deny);

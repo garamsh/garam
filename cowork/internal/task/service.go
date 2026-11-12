@@ -8,10 +8,10 @@ import (
 
 // Service is the record of work as a caller acts on it. Every method
 // asks the platform before it reads or writes: listing needs
-// cowork:task-read on the organization and on each task listed,
-// creating cowork:task-write on the organization, reading a task or
-// its comments cowork:task-read on it, and changing or commenting on
-// it cowork:task-write on it. Linking a page or a message needs the
+// cowork:task.read on the organization and on each task listed,
+// creating cowork:task.write on the organization, reading a task or
+// its comments cowork:task.read on it, and changing or commenting on
+// it cowork:task.write on it. Linking a page or a message needs the
 // caller to read it.
 type Service interface {
 	Create(ctx context.Context, caller platform.Caller, org string, in CreateInput) (Task, error)

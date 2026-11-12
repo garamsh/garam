@@ -12,7 +12,7 @@ yet (#1689).
   namespace and `@grn` and `@caller` on each entity type. Together they
   are the entity types, actions and attributes a decision can name, and
   a type or an action is named by its qualified form,
-  `Iam::Org` and `iam:org-read`. `make -C policy gen` writes
+  `Iam::Org` and `iam:org.read`. `make -C policy gen` writes
   `lib/grn/catalogue_gen.go` from them, and `make -C policy check-gen`
   fails, naming what disagrees, when the committed catalogue is stale,
   a manifest breaks a rule every manifest holds, an `@caller` is
@@ -59,12 +59,18 @@ yet (#1689).
   cowork as a caller, and `Iam::Policy`, `Iam::Supervisor` and
   `Iam::Service`.
 - **An entity type and an action are written qualified.** A type is
-  `Iam::Org`, and an action `iam:org-read`, which is
-  `Iam::Action::"org-read"`. The unqualified form is refused. The
-  platform's feed sends `Iam::` types from the migration that qualified
-  the outbox, but the platform's role table and its calls still write
-  `<type>:<verb>`, so nothing it asks of this service yet names an
-  action this service accepts (ADR-0143 item 4, not built).
+  `Iam::Org`, and an action `iam:org.read`, which is
+  `Iam::Action::"org.read"`. The unqualified form is refused. An
+  action id is `<type>.<verb>`, and a `<type>.*` group holds exactly
+  that type's actions, so `iam:agent.*` does not reach
+  `iam:agent-template.read` (ADR-0145). The platform's role table and
+  its calls write the dot form, the names the manifests declare
+  (ADR-0143 item 4, ADR-0145).
+- **An organization's `permit` is written by an owner and scoped to
+  its organization.** Writing one is `iam:permit.write`, held by the
+  `owner` role alone. A `PermitRight` is the allow of that evaluation
+  for one organization and one writer, and a store given one made on
+  another organization refuses it (ADR-0144 item 7, ADR-0145 item 4).
 - **A type the caller does not own refuses the whole
   `ApplyEntityChanges`.** Any other fault refuses that entry, named by
   its index in the response, and the rest are written. A request holds

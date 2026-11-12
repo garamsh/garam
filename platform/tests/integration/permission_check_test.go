@@ -137,7 +137,7 @@ func checkedDecisions(t *testing.T, url string, cookie *http.Cookie, checks ...a
 // TestCheckPermissions_AnswersAsEnforcementDecides asks the engine for
 // an owner and a member and holds each answer against what the same
 // caller is answered when it makes the request. Listing consents is
-// the request: owners hold `iam:consent-*` and members nothing of it.
+// the request: owners hold `iam:consent.*` and members nothing of it.
 // The owner's allow is the control for the member's deny, so what
 // denies the member is the role rather than an operation that refuses
 // all.
@@ -172,8 +172,8 @@ func TestCheckPermissions_ReadsAttachedPolicies(t *testing.T) {
 }
 
 // TestCheckPermissions_DeniesAnUndefinedAction asks the owner, whose
-// role allows `iam:org-*`, about a name that pattern matches and
-// nothing defines. The defined `iam:org-delete` matches the same
+// role allows `iam:org.*`, about a name that pattern matches and
+// nothing defines. The defined `iam:org.delete` matches the same
 // pattern and is the control.
 func TestCheckPermissions_DeniesAnUndefinedAction(t *testing.T) {
 	s := newCheckStack(t)
@@ -190,7 +190,7 @@ func TestCheckPermissions_AsksAtMostFifty(t *testing.T) {
 			Checks: make([]apigen.PermissionCheck, n),
 		})
 		require.NoError(t, err)
-		return strings.ReplaceAll(string(raw), `"action":""`, `"action":"iam:org-read"`)
+		return strings.ReplaceAll(string(raw), `"action":""`, `"action":"iam:org.read"`)
 	}
 
 	status, body := s.send(t, http.MethodPost, "/orgs/acme/permission-checks", s.member, pairs(50))
@@ -202,7 +202,7 @@ func TestCheckPermissions_AsksAtMostFifty(t *testing.T) {
 // TestCheckPermissions_LeavesGrantActionsUnknown asks the owner, whose
 // role allows it, about an action a delegation grant decides: it is
 // unknown, because enforcement also reads the grant, which this
-// operation does not. iam:operator-register, which Check alone decides,
+// operation does not. iam:operator.register, which Check alone decides,
 // is the control.
 func TestCheckPermissions_LeavesGrantActionsUnknown(t *testing.T) {
 	s := newCheckStack(t)
@@ -212,7 +212,7 @@ func TestCheckPermissions_LeavesGrantActionsUnknown(t *testing.T) {
 }
 
 // TestCheckPermissions_AnswersDelegationAsItsWritesDecide holds the
-// iam:operator-delegate answer beside the three writes it describes,
+// iam:operator.delegate answer beside the three writes it describes,
 // over the authority service both serve commands compose. A member's
 // role does not hold it, so the check answers deny and writing the
 // grant, withdrawing it and setting the control endpoint are each
@@ -223,7 +223,7 @@ func TestCheckPermissions_AnswersDelegationAsItsWritesDecide(t *testing.T) {
 	_, engine := policyEngine(t, p)
 	s := newAuthorityStack(t, engine, p)
 	endpointPath := s.browser + "/orgs/acme/operators/hosted/control-endpoint"
-	grantBody := `{"requestId":"m-1","controllers":["` + s.controller.String() + `"],"operations":["iam:agent-create"],"expiresAt":"` +
+	grantBody := `{"requestId":"m-1","controllers":["` + s.controller.String() + `"],"operations":["iam:agent.create"],"expiresAt":"` +
 		time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`
 
 	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny},
@@ -247,7 +247,7 @@ func TestCheckPermissions_AnswersDelegationAsItsWritesDecide(t *testing.T) {
 }
 
 // TestCheckPermissions_AnswersDelegationOnOperatorDelegateAlone holds
-// that what the check and the writes ask for is iam:operator-delegate
+// that what the check and the writes ask for is iam:operator.delegate
 // itself. A policy allows the member that action and nothing else: the
 // check turns from deny to allow and the member sets the endpoint.
 // The answer before the attachment is the control.
@@ -271,7 +271,7 @@ func TestCheckPermissions_AnswersDelegationOnOperatorDelegateAlone(t *testing.T)
 
 // TestCheckPermissions_AsksAnAgentActionOnTheAgentNamed holds that an
 // agent-targeted action is asked on the agent the pair names, as its
-// mint decides it. A policy allows the member iam:agent-configure on
+// mint decides it. A policy allows the member iam:agent.configure on
 // one agent alone: that agent is answered unknown and minted, and
 // another agent of the same controller, the control, is answered deny
 // and refused.
@@ -302,10 +302,10 @@ func TestCheckPermissions_AsksAnAgentActionOnTheAgentNamed(t *testing.T) {
 // TestCheckPermissions_DeniesAGrantActionItsMintDenies holds the check
 // beside the mint it describes, over the authority service both serve
 // commands compose and a grant covering both operations. A member's
-// role does not hold iam:agent-template-publish, so the check answers
+// role does not hold iam:agent-template.publish, so the check answers
 // deny and the mint refuses. The owner's is the control: the check
 // answers unknown, since it reads no grant, and the mint, which reads
-// one, succeeds. iam:agent-create, which a member's role holds, is the
+// one, succeeds. iam:agent.create, which a member's role holds, is the
 // control for the member: unknown, and minted.
 func TestCheckPermissions_DeniesAGrantActionItsMintDenies(t *testing.T) {
 	p := pool(t)
@@ -314,7 +314,7 @@ func TestCheckPermissions_DeniesAGrantActionItsMintDenies(t *testing.T) {
 	s.grant(t, "g-1", nil, org.ActionAgentTemplatePublish, org.ActionAgentCreate)
 	publish := func(cookie *http.Cookie, requestID string) int {
 		status, _ := call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", cookie,
-			`{"audience":"`+s.hosted.String()+`","operation":"iam:agent-template-publish","target":"`+s.acme.String()+
+			`{"audience":"`+s.hosted.String()+`","operation":"iam:agent-template.publish","target":"`+s.acme.String()+
 				`","requestId":"`+requestID+`","bodySha256":"`+strings.Repeat("c", 64)+
 				`","requestTarget":"/agent-templates/web/versions"}`)
 		return status

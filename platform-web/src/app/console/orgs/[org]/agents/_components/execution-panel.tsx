@@ -21,7 +21,7 @@ import { useControlRead } from "./use-control-read";
  * the revision its controller rendered, and what the running agent
  * reported. Effective configuration is only ever the runtime's report;
  * the panel never infers it from the other two. Reading it needs
- * `iam:agent-execution-read`, which reading the agent does not grant.
+ * `iam:agent.execution-read`, which reading the agent does not grant.
  */
 export function ExecutionPanel({
   org,
@@ -32,10 +32,10 @@ export function ExecutionPanel({
   agentGrn: string;
   hosted: HostedOperator | null;
 }) {
-  const blocker = controlBlocker(hosted, "iam:agent-execution-read");
+  const blocker = controlBlocker(hosted, "iam:agent.execution-read");
   const execution = useControlRead(
     org,
-    "iam:agent-execution-read",
+    "iam:agent.execution-read",
     hosted !== null && blocker === null
       ? {
           endpoint: hosted.endpoint,
@@ -62,7 +62,7 @@ export function ExecutionPanel({
     return (
       <ControlNotice
         operatorsHref={orgHref(org, "operators")}
-        reason={controlFailureCopy(execution, "iam:agent-execution-read")}
+        reason={controlFailureCopy(execution, "iam:agent.execution-read")}
         fix={NO_FIX}
       />
     );

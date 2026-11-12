@@ -32,9 +32,9 @@ var (
 	// nothing about another organization's operators.
 	ErrControllerNotFound = errorx.New(errorx.KindNotFound, "controller not found")
 	// ErrControllerNotDelegated refuses a controller the caller's
-	// current grant does not cover for iam:agent-activate.
+	// current grant does not cover for iam:agent.activate.
 	ErrControllerNotDelegated = errorx.New(errorx.KindPermissionDenied,
-		"the delegation does not cover iam:agent-activate for this controller")
+		"the delegation does not cover iam:agent.activate for this controller")
 	// ErrAgentNotFound is one answer for an agent that is not an agent
 	// of the caller's organization or is assigned nowhere.
 	ErrAgentNotFound = errorx.New(errorx.KindNotFound, "agent not found")

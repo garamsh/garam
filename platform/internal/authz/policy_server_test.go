@@ -16,7 +16,7 @@ import (
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
-const validDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"s1","Effect":"Allow","Action":["iam:org-read"],"Resource":["grn:acme/*"]}]}`
+const validDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"s1","Effect":"Allow","Action":["iam:org.read"],"Resource":["grn:acme/*"]}]}`
 
 // newPolicyServer serves the policy lifecycle over store, with the
 // cache its writes invalidate.

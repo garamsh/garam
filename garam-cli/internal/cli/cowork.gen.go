@@ -28,7 +28,7 @@ var coworkOperations = []apiOperation{
 	},
 	{
 		ID: "getPage", Method: "GET", Path: "/orgs/{org}/pages/{page}",
-		Words: []string{"cowork", "pages"}, Verb: "get", Short: "Read a page. Requires `cowork:page-read` on it.",
+		Words: []string{"cowork", "pages"}, Verb: "get", Short: "Read a page. Requires `cowork:page.read` on it.",
 		Args: []string{"page"}, FromOrg: true,
 		Columns: []string{"id", "grn", "org", "parent", "title", "position", "createdBy", "createdAt", "updatedAt"},
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
@@ -134,7 +134,7 @@ var coworkOperations = []apiOperation{
 			{Name: "thread", In: "body", Kind: "string", Required: false, Help: "The message to reply to."},
 			{Name: "mentions", In: "body", Kind: "strings", Required: false, Help: ""},
 			{Name: "pages", In: "body", Kind: "strings", Required: false, Help: ""},
-			{Name: "artifacts", In: "body", Kind: "strings", Required: false, Help: "Artifacts to embed; each needs `cowork:artifact-read` of the author."},
+			{Name: "artifacts", In: "body", Kind: "strings", Required: false, Help: "Artifacts to embed; each needs `cowork:artifact.read` of the author."},
 		},
 		BodyType: "application/json",
 		Columns:  []string{"id", "channel", "thread", "author", "body", "createdAt", "replies"},

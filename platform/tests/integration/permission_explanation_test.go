@@ -135,7 +135,7 @@ func grns(holders []apigen.PermissionHolder) []string {
 }
 
 // TestExplainPermission_NamesTheRoleThatAllows explains
-// iam:operator-register to the owner, whose org role allows it, and to
+// iam:operator.register to the owner, whose org role allows it, and to
 // a member, whose role does not: the owner's answer names the org role,
 // and the member's is a deny no statement decided. Each decision is the
 // one checkPermissions answers the same caller, so the explanation is
@@ -162,7 +162,7 @@ func TestExplainPermission_NamesTheRoleThatAllows(t *testing.T) {
 }
 
 // TestExplainPermission_NamesTheDenyAndThePathItReached attaches a Deny
-// of iam:operator-register to eng, a group the owner belongs to: the
+// of iam:operator.register to eng, a group the owner belongs to: the
 // owner, who may read the policy, is answered deny by that statement,
 // naming the policy and eng as the path. The owner's role still allows
 // it and is not named, since the Deny is what decided. The answer
@@ -191,7 +191,7 @@ func TestExplainPermission_NamesTheDenyAndThePathItReached(t *testing.T) {
 }
 
 // TestExplainPermission_HidesAPolicyTheCallerCannotRead attaches an
-// Allow of iam:consent-read, which no member role holds, to a member
+// Allow of iam:consent.read, which no member role holds, to a member
 // and to the owner. The member is allowed by it and may not read
 // policies, so the statement is answered as an unreadable policy and
 // nothing of it — sid or policy — appears in the answer. The owner, who
@@ -231,10 +231,10 @@ func TestExplainPermission_HidesAPolicyTheCallerCannotRead(t *testing.T) {
 
 // TestExplainPermission_LeavesOperationDecidedActionsToTheOperation
 // explains to the owner the actions checkPermissions puts to more than
-// the engine's Check — one a delegation grant decides, iam:agent-enroll
-// and iam:operator-delegate, each decided by the check its writes run —
+// the engine's Check — one a delegation grant decides, iam:agent.enroll
+// and iam:operator.delegate, each decided by the check its writes run —
 // and one garam does not define. Each carries checkPermissions'
-// decision and no statement. iam:operator-register, which Check alone
+// decision and no statement. iam:operator.register, which Check alone
 // decides, is the control: it is explained by statements.
 func TestExplainPermission_LeavesOperationDecidedActionsToTheOperation(t *testing.T) {
 	s := newExplainStack(t)
@@ -269,7 +269,7 @@ func TestExplainPermission_RefusesAHalfNamedResource(t *testing.T) {
 }
 
 // TestListPermissionHolders_ListsWhomTheEngineAllows asks a member who
-// holds iam:consent-read on acme, two candidates a page. The owner
+// holds iam:consent.read on acme, two candidates a page. The owner
 // holds it by role; the agent by an Allow attached to it; bob and
 // carol, whose member role does not hold it, are the control on both
 // pages. The first page asks ada and bob and points at the second,
@@ -296,7 +296,7 @@ func TestListPermissionHolders_ListsWhomTheEngineAllows(t *testing.T) {
 }
 
 // TestListPermissionHolders_ListsAgentsOnlyToWhoMayReadThem denies
-// iam:agent-read to bob: the agent holding iam:consent-read is listed
+// iam:agent.read to bob: the agent holding iam:consent.read is listed
 // to carol, the control, and not to bob, so what leaves it out is bob's
 // read.
 func TestListPermissionHolders_ListsAgentsOnlyToWhoMayReadThem(t *testing.T) {
@@ -318,7 +318,7 @@ func TestListPermissionHolders_ListsAgentsOnlyToWhoMayReadThem(t *testing.T) {
 
 // TestListPermissionHolders_Refusals holds each refusal beside the
 // request that differs from it in the one thing refused: a caller
-// denied iam:org-member-list beside one holding it, an action decided
+// denied iam:org.member-list beside one holding it, an action decided
 // at its operation beside one Check decides, and a page past fifty
 // beside a page of fifty.
 func TestListPermissionHolders_Refusals(t *testing.T) {

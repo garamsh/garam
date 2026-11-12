@@ -121,8 +121,8 @@ func TestSocket_LosingReadClosesBothSockets(t *testing.T) {
 	adaLive := s.listen(t, "ada", general.ID)
 	bobPage, bobChannel := s.openPage(t, "bob", pageID), s.openChannel(t, "bob", general.ID)
 
-	s.platform.denyCheck("bob cowork:page-read@" + pageID)
-	s.platform.denyCheck("bob cowork:channel-read@" + general.ID)
+	s.platform.denyCheck("bob cowork:page.read@" + pageID)
+	s.platform.denyCheck("bob cowork:channel.read@" + general.ID)
 
 	assert.Equal(t, closeNoAccess, bobPage.closeCode(t))
 	assert.Equal(t, closeNoAccess, bobChannel.closeCode(t))
@@ -142,7 +142,7 @@ func TestSocket_WriteAccessFollowsTheRecheck(t *testing.T) {
 	ada.connect()
 	writable := s.openPage(t, "bob", pageID)
 
-	s.platform.denyCheck("bob cowork:page-write@" + pageID)
+	s.platform.denyCheck("bob cowork:page.write@" + pageID)
 	require.Equal(t, websocket.StatusTryAgainLater, writable.closeCode(t))
 	bob := newEditor(t, s, "bob", pageID)
 	bob.connect()
@@ -151,7 +151,7 @@ func TestSocket_WriteAccessFollowsTheRecheck(t *testing.T) {
 	assert.Empty(t, ada.text(), "the refused edit was not relayed")
 
 	readOnly := s.openPage(t, "bob", pageID)
-	s.platform.allowCheck("bob cowork:page-write@" + pageID)
+	s.platform.allowCheck("bob cowork:page.write@" + pageID)
 	require.Equal(t, websocket.StatusTryAgainLater, readOnly.closeCode(t))
 	bob.disconnect()
 	again := newEditor(t, s, "bob", pageID)

@@ -72,7 +72,7 @@ Both are what the organization says about the operator and neither is
 an identity: a name is not unique, one left out of a registration is
 the identifier, and the update writes those two columns and nothing
 keyed on the GRN, so its keys and their tokens stand as they were. It
-is authorized on `iam:operator-update`, which grants nothing and
+is authorized on `iam:operator.update`, which grants nothing and
 withdraws nothing. The
 bounds are `platform/api/openapi.yaml` §OperatorName and
 §OperatorDescription, which is authoritative for them, and 000025 holds
@@ -86,7 +86,7 @@ organization's own paths: it registers, reads and renames one, links
 a control service to its cluster manager once (`setOperatorManager`,
 ADR-0124), and deletes one, which the console reaches on the
 operator's own page (ADR-0074). Deleting is authorized on
-`iam:operator-delete` rather than on the action that registers, because
+`iam:operator.delete` rather than on the action that registers, because
 registering grants nothing and this withdraws what an operator runs on
 (ADR-0070). The record is read on the machine listener too, through
 the seams that admit a token, which are the one place either listener
@@ -107,7 +107,7 @@ among them, to these terms.
 - **A control service may join a cluster manager registered alone.**
   It can be registered with `manager`, or an existing record naming no
   manager can be linked once (`Store.SetManager`), authorized on
-  `iam:operator-register`. After that the link never moves.
+  `iam:operator.register`. After that the link never moves.
 - **Both paths refuse the same things.** `operator.ParseManager`
   refuses, as a 400, a value that is not another record of the
   organization. The store refuses each of the following as a 409, in
@@ -165,9 +165,9 @@ ADR-0068).
   An Operator has two, its manager and its control service
   (§An Operator's two identities), and each is issued its own key.
 - **The first key of an operator that has never been issued one is
-  `iam:operator-register`, as registering it was; any other is
-  `iam:operator-reissue`.** A withdrawn key still counts, so re-keying
-  after a revocation is `iam:operator-reissue`'s: the PM's review of
+  `iam:operator.register`, as registering it was; any other is
+  `iam:operator.reissue`.** A withdrawn key still counts, so re-keying
+  after a revocation is `iam:operator.reissue`'s: the PM's review of
   #1360 held that any key change on an existing operator is, as
   ADR-0102 §Operator identity and custody says. The store refuses a
   first issuance under the registration's row lock, in the transaction
@@ -262,7 +262,7 @@ overwriting what moved it. Ended grants are kept, because their request
 identifiers are what refuse a replay; deleting the organization or the
 hosted operator removes them and everything minted under them, and
 deleting a controller removes it from every grant. Granting and
-withdrawing are `iam:operator-delegate`, which owner and admin hold.
+withdrawing are `iam:operator.delegate`, which owner and admin hold.
 
 **An operation authority is a short opaque token over a durable
 reference.** Minting reads the member's authority from current state
@@ -271,40 +271,40 @@ current grant, the caller's request identifier and the digest of the
 exact body the Operator will receive; garam never sees that body. It
 answers the token once, stores only its hash, and lets it live five
 minutes or until the grant expires. Creation targets the controller
-and is decided on `iam:agent-create` against the organization, and its
+and is decided on `iam:agent.create` against the organization, and its
 reference is what creates a managed agent and may start its first
 generation
 ([agents.md](./agents.md) §Separated execution); configuration
-targets the agent, is decided on `iam:agent-configure` against it, and
+targets the agent, is decided on `iam:agent.configure` against it, and
 records where the agent runs now.
-Recovery targets the agent, is decided on `iam:agent-recover` against
+Recovery targets the agent, is decided on `iam:agent.recover` against
 it, and records where the agent runs now; the recovery it authorizes is
 answered once, and a second recovery under it is refused
 ([agents.md](./agents.md) §Separated execution). Replacement
-targets the agent, is decided on `iam:agent-replace` against it, records
+targets the agent, is decided on `iam:agent.replace` against it, records
 where the agent runs now and binds the controller a managed
 replacement moves it to; the grant must cover both controllers at the
 mint and at every read, and the reference stays current at the
 assignment the replacement writes
 ([ADR-0107](./adr/0107-a-managed-replacement-is-authorized-by-an-agent-replace-reference-naming-the-agent-its-assignment-and-the-controller-it-moves-to.md)).
-Every role holds `iam:agent-create`; only owner and admin hold
-`iam:agent-configure`, `iam:agent-recover` and `iam:agent-replace`,
+Every role holds `iam:agent.create`; only owner and admin hold
+`iam:agent.configure`, `iam:agent.recover` and `iam:agent.replace`,
 because execution settings choose what runs on a host, a recovery fences
 every token the agent held, and a replacement
 moves the agent to another controller and fences its lineage.
-`iam:agent-activate` is a grant operation only, bounding the hosted
+`iam:agent.activate` is a grant operation only, bounding the hosted
 operator's own lifecycle authority; no member mints it.
 
 **A read or a template publication is its own operation, bound to
 its exact request target** (#1170). Reading published templates is
-`iam:agent-template-read` and reading published execution profiles
-`iam:execution-profile-read`; both target the organization, name no
+`iam:agent-template.read` and reading published execution profiles
+`iam:execution-profile.read`; both target the organization, name no
 controller and are held by every role. Publishing the next immutable
-template version is `iam:agent-template-publish`, also on the
+template version is `iam:agent-template.publish`, also on the
 organization, held by owner and admin. Reading an agent's pending,
-rendered and runtime-reported execution is `iam:agent-execution-read`,
+rendered and runtime-reported execution is `iam:agent.execution-read`,
 which targets the agent, records where it runs now as configuration
-does, and is held by owner and admin; `iam:agent-read` stays identity
+does, and is held by owner and admin; `iam:agent.read` stays identity
 access and grants none of it. Each is minted only under a grant that
 lists it, so a create or configure grant authorizes no read, and a
 policy may delegate any of them to someone else while an explicit
@@ -321,8 +321,8 @@ and no operation here grants it. The role defaults are the one
 authoritative for which role holds what.
 
 **Reading what the Operator reports about the organization's
-operators is `iam:operator-read`** (#1374, #1047). The operation is
-delegable and mintable like `iam:agent-template-read`, targets the
+operators is `iam:operator.read`** (#1374, #1047). The operation is
+delegable and mintable like `iam:agent-template.read`, targets the
 organization, names no controller, binds the exact request target and
 is held by every role, because it is the action that lists the
 operators garam holds. The status belongs to the control service
@@ -345,14 +345,14 @@ authority, and only the delegating act moves it.** Each operator may
 carry one `https` base URL with a host, an optional port and path
 prefix, and no credentials, query, fragment, dot segment or trailing
 slash. Setting and clearing
-it are `iam:operator-delegate`, decided from current state as a grant
+it are `iam:operator.delegate`, decided from current state as a grant
 is, and on routes of their own; changing an operator's name or
 description does not reach it. An authority names its audience by
 GRN, so moving the endpoint moves no audience of one already minted.
 Allowed browser origins, CORS and what the control service answers are
 the Operator's (`garamsh/garam-agent-operator#220`).
 
-**Recovery from the console is unbuilt.** The `iam:agent-recover`
+**Recovery from the console is unbuilt.** The `iam:agent.recover`
 handoff garam mints is built, and so is the Operator route an
 administrator finalizes a prepared recovery through
 (`garamsh/garam-agent-operator`
@@ -406,12 +406,12 @@ on the request:
 - the forwarded token is live, names the controller and names the
   caller as its audience, and the controller is still registered, which
   the token's read against the registration already decides;
-- the caller's current grant covers `iam:agent-activate` for that
+- the caller's current grant covers `iam:agent.activate` for that
   controller;
 - a named agent belongs to the organization and is currently assigned
   to that controller, and the proof carries the assignment's epoch;
 - current policy for the caller and the groups it belongs to now,
-  beside an Allow of `iam:agent-activate` that the grant contributes —
+  beside an Allow of `iam:agent.activate` that the grant contributes —
   on the organization for a session, on the agent for that agent's
   lifecycle — does not deny it, and an explicit Deny wins.
 

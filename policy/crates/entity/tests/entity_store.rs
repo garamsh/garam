@@ -95,7 +95,7 @@ fn message(from: Named, to: Named) -> Evaluation<'static> {
             entity_type: from.0,
             id: from.1,
         },
-        action: "iam:message-send",
+        action: "iam:message.send",
         resource: EntityRef {
             entity_type: to.0,
             id: to.1,

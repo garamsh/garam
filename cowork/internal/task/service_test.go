@@ -129,7 +129,7 @@ func TestCreate_RefusesWhatItCannotKeep(t *testing.T) {
 // refuses a writer the platform denies, and a link to a page or a
 // message the writer may not read.
 func TestCreate_AsksTheOrganizationAndLinksOnlyWhatTheWriterReads(t *testing.T) {
-	s := newService(map[string]bool{"bob cowork:task-write": true}, map[string]bool{"ada secret": true, "ada dm": true})
+	s := newService(map[string]bool{"bob cowork:task.write": true}, map[string]bool{"ada secret": true, "ada dm": true})
 	_, err := s.Create(ctx, bob, "acme", task.CreateInput{Title: "x"})
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied))
 
@@ -151,7 +151,7 @@ func TestList_LeavesOutWhatThePlatformDeniesAndFilters(t *testing.T) {
 	require.NoError(t, err)
 	two, err := s.Create(ctx, ada, "acme", task.CreateInput{Title: "two", Status: doing, Messages: []string{"m1"}})
 	require.NoError(t, err)
-	deny["bob cowork:task-read@"+two.ID] = true
+	deny["bob cowork:task.read@"+two.ID] = true
 
 	titles := func(c platform.Caller, f task.Filter) []string {
 		ts, err := s.List(ctx, c, "acme", f)
@@ -195,7 +195,7 @@ func TestUpdate_ChangesWhatItSetsAndAsksTheTask(t *testing.T) {
 	_, err = s.Update(ctx, bob, "acme", tk.ID, task.UpdateInput{Pages: &more})
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "a link bob may not read")
 
-	deny["bob cowork:task-write@"+tk.ID] = true
+	deny["bob cowork:task.write@"+tk.ID] = true
 	todo := task.StatusTodo
 	_, err = s.Update(ctx, bob, "acme", tk.ID, task.UpdateInput{Status: &todo})
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied))
@@ -220,10 +220,10 @@ func TestComments_AreWrittenByWritersAndReadByReaders(t *testing.T) {
 	require.Len(t, cs, 1)
 	assert.Equal(t, bob.GRN, cs[0].Author)
 
-	deny["ada cowork:task-read@"+tk.ID] = true
+	deny["ada cowork:task.read@"+tk.ID] = true
 	_, err = s.Comments(ctx, ada, "acme", tk.ID)
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied))
-	deny["bob cowork:task-write@"+tk.ID] = true
+	deny["bob cowork:task.write@"+tk.ID] = true
 	_, err = s.Comment(ctx, bob, "acme", tk.ID, "again")
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied))
 }

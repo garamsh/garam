@@ -67,7 +67,7 @@ test.describe("hosts", () => {
     await expect(pending).toContainText("Waiting for the host");
     await expect(supervisor).toContainText("Active");
 
-    // The permission check answers iam:agent-enroll from the check
+    // The permission check answers iam:agent.enroll from the check
     // every approval, withdrawal and revoke runs, which denies a
     // member.
     const writes: string[] = [];

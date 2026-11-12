@@ -20,7 +20,7 @@ const ServiceType = "artifact"
 // and create them, and on an artifact, to read it and save versions.
 const (
 	ActionRead  = platform.ActionArtifactRead
-	ActionWrite = "cowork:artifact-write"
+	ActionWrite = "cowork:artifact.write"
 )
 
 // Kind is what an artifact's versions hold.

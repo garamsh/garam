@@ -22,7 +22,7 @@ const MAX_GUARDRAIL_NESTING: usize = 12;
 /// serializes nor deserializes outside this crate, so the store is
 /// given nothing the schema has not admitted. [`Body::permit`] takes a
 /// [`PermitRight`], which only an allowed evaluation of
-/// `iam:policy-permit` makes, so no permit exists that nobody asked for.
+/// `iam:permit.write` makes, so no permit exists that nobody asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Body(pub(crate) Stored);
 

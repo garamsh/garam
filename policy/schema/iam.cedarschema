@@ -47,73 +47,80 @@ namespace Iam {
   // a role by naming the group as its parent (ADR-0143 item 5).
   action "role-owner", "role-admin", "role-member";
 
-  // Each `<type>-*` group is the wildcard Role.Actions names, spelled
-  // `iam:<type>-*`. Agent, operator and cowork actions are named one at
-  // a time and have none, so a later action is granted when it is
+  // Each `<type>.*` group is the wildcard Role.Actions names, spelled
+  // `iam:<type>.*`, and holds every action of that type and no other
+  // (ADR-0145 item 2). Agent, operator and cowork actions are named one
+  // at a time and have none, so a later action is granted when it is
   // decided.
-  action "org-*" in ["role-owner"];
-  action "group-*", "project-*", "policy-*", "consent-*"
+  action "org.*" in ["role-owner"];
+  action "group.*", "project.*", "policy.*", "consent.*"
     in ["role-owner", "role-admin"];
 
-  action "org-read", "org-member-list"
-    in ["org-*", "role-admin", "role-member"]
+  action "org.read", "org.member-list"
+    in ["org.*", "role-admin", "role-member"]
     appliesTo { principal: [User, Agent], resource: [Org] };
-  action "org-update", "org-invite" in ["org-*", "role-admin"]
+  action "org.update", "org.invite" in ["org.*", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org] };
-  action "org-delete" in ["org-*"]
+  action "org.delete" in ["org.*"]
     appliesTo { principal: [User, Agent], resource: [Org] };
 
-  action "group-read", "group-member-list" in ["group-*", "role-member"]
+  action "group.read", "group.member-list" in ["group.*", "role-member"]
     appliesTo { principal: [User, Agent], resource: [Org, Team] };
-  action "group-create", "group-update", "group-delete",
-    "group-member-add", "group-member-remove" in ["group-*"]
+  action "group.create", "group.update", "group.delete",
+    "group.member-add", "group.member-remove" in ["group.*"]
     appliesTo { principal: [User, Agent], resource: [Org, Team] };
 
-  action "project-read", "project-member-list"
-    in ["project-*", "role-member"]
+  action "project.read", "project.member-list"
+    in ["project.*", "role-member"]
     appliesTo { principal: [User, Agent], resource: [Org, Project] };
-  action "project-create", "project-update", "project-delete",
-    "project-member-add", "project-member-remove" in ["project-*"]
+  action "project.create", "project.update", "project.delete",
+    "project.member-add", "project.member-remove" in ["project.*"]
     appliesTo { principal: [User, Agent], resource: [Org, Project] };
 
-  action "policy-create", "policy-read", "policy-update",
-    "policy-attach", "policy-detach", "policy-delete" in ["policy-*"]
+  action "policy.create", "policy.read", "policy.update",
+    "policy.attach", "policy.detach", "policy.delete" in ["policy.*"]
     appliesTo { principal: [User, Agent], resource: [Org, Policy] };
 
   // Writing a `permit` is held by `role-owner` and by no group a lesser
-  // role holds, so it sits outside `policy-*` (ADR-0144 item 7).
-  action "policy-permit" in ["role-owner"]
+  // role holds: its type is `permit`, so `policy.*` does not name it
+  // (ADR-0145 item 4).
+  action "permit.write" in ["role-owner"]
     appliesTo { principal: [User, Agent], resource: [Org, Policy] };
 
-  action "consent-read", "consent-grant", "consent-withdraw"
-    in ["consent-*"]
+  action "consent.read", "consent.grant", "consent.withdraw"
+    in ["consent.*"]
     appliesTo { principal: [User, Agent], resource: [Org] };
 
-  action "operator-read" in ["role-owner", "role-admin", "role-member"]
+  action "operator.read" in ["role-owner", "role-admin", "role-member"]
     appliesTo { principal: [User, Agent], resource: [Org, Operator] };
-  action "operator-register", "operator-update", "operator-delete",
-    "operator-reissue", "operator-delegate"
+  action "operator.register", "operator.update", "operator.delete",
+    "operator.reissue", "operator.delegate"
     in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org, Operator] };
 
-  action "agent-read", "agent-rename", "agent-create"
+  action "agent.read", "agent.rename", "agent.create"
     in ["role-owner", "role-admin", "role-member"]
     appliesTo { principal: [User, Agent], resource: [Org, Agent] };
-  action "agent-configure", "agent-recover", "agent-enroll",
-    "agent-replace", "agent-execution-read"
+  action "agent.configure", "agent.recover", "agent.enroll",
+    "agent.replace", "agent.execution-read"
     in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org, Agent] };
 
   // No role holds it: a grant carries it or nothing does (ADR-0022).
-  action "agent-watch"
+  action "agent.watch"
     appliesTo { principal: [User, Agent], resource: [Org, Agent] };
 
-  action "agent-template-read", "execution-profile-read"
+  // Activating an agent is a delegated operation the platform writes
+  // (ADR-0078). No role holds it, as with `agent.watch`.
+  action "agent.activate"
+    appliesTo { principal: [User, Agent], resource: [Org, Agent] };
+
+  action "agent-template.read", "execution-profile.read"
     in ["role-owner", "role-admin", "role-member"]
     appliesTo { principal: [User, Agent], resource: [Org] };
-  action "agent-template-publish" in ["role-owner", "role-admin"]
+  action "agent-template.publish" in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org] };
 
-  action "message-send"
+  action "message.send"
     appliesTo { principal: [Agent], resource: [Agent] };
 }

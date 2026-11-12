@@ -156,7 +156,7 @@ describe("the sections the shell leaves out", () => {
         requests += 1;
       }),
       answerPermissionChecks((action) =>
-        action === "iam:policy-read" || action === "iam:consent-read"
+        action === "iam:policy.read" || action === "iam:consent.read"
           ? "deny"
           : "allow",
       ),

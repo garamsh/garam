@@ -239,11 +239,11 @@ func (s *tokenStack) lineageOf(t *testing.T, g grn.GRN) string {
 	return lineage
 }
 
-// mintRecovery asks, as the owner, for an iam:agent-recover handoff of
+// mintRecovery asks, as the owner, for an iam:agent.recover handoff of
 // g to the hosted control service, bound to digest.
 func (s *tokenStack) mintRecovery(t *testing.T, g grn.GRN, digest, requestID string) (int, string) {
 	t.Helper()
-	body := `{"audience":"` + s.hosted.String() + `","operation":"iam:agent-recover","target":"` + g.String() +
+	body := `{"audience":"` + s.hosted.String() + `","operation":"iam:agent.recover","target":"` + g.String() +
 		`","requestId":"` + requestID + `","bodySha256":"` + digest + `"}`
 	return call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", s.owner, body)
 }

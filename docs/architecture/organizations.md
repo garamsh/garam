@@ -70,7 +70,7 @@ and its username stays taken.
 one**
 ([ADR-0136](./adr/0136-a-pending-invitation-is-listed-by-an-id-that-admits-no-one-and-revoking-deletes-it.md)).
 The token is a bearer secret, so `listInvitations` answers each
-invitation neither spent nor expired by its `id`, on `iam:org-invite`,
+invitation neither spent nor expired by its `id`, on `iam:org.invite`,
 the action that issues it. Revoking deletes the row, matching only an
 unspent one of the organization in the path, so a token answers as
 unknown afterwards and a revocation and a use never both take effect.
@@ -136,7 +136,7 @@ outside garam, so each agent action a role grants is granted by name and
 a later one is a decision rather than an increment, and an operator's
 three are named the same way — a wildcard would have granted deleting an
 operator before anybody decided it (ADR-0045, ADR-0070).
-`iam:agent-watch` is granted by no role at all, which is that reason
+`iam:agent.watch` is granted by no role at all, which is that reason
 carried further — ADR-0022 separates watching from reading so an
 organization may withhold it, and a role naming it would settle that for
 every organization instead. The authz evaluator decides. Groups and

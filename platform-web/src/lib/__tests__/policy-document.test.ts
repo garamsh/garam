@@ -65,7 +65,7 @@ describe("readStatement and writeStatement", () => {
   it("keeps keys it does not edit, Condition among them", () => {
     const statement = {
       Effect: "Deny",
-      Action: ["iam:project-delete"],
+      Action: ["iam:project.delete"],
       Resource: ["*"],
       Condition: { a: 1 },
     };
@@ -73,7 +73,7 @@ describe("readStatement and writeStatement", () => {
     expect(readStatement(statement)).toEqual({
       sid: "",
       effect: "Deny",
-      actions: ["iam:project-delete"],
+      actions: ["iam:project.delete"],
       resources: ["*"],
       conditioned: true,
     });
@@ -81,12 +81,12 @@ describe("readStatement and writeStatement", () => {
       writeStatement(statement, {
         sid: "",
         effect: "Allow",
-        actions: ["iam:project-read"],
+        actions: ["iam:project.read"],
         resources: ["*"],
       }),
     ).toEqual({
       Effect: "Allow",
-      Action: ["iam:project-read"],
+      Action: ["iam:project.read"],
       Resource: ["*"],
       Condition: { a: 1 },
     });
@@ -98,7 +98,7 @@ describe("readStatement and writeStatement", () => {
     expect(
       readStatement({
         Effect: "Deny",
-        Action: "iam:project-delete",
+        Action: "iam:project.delete",
         Resource: [],
       }),
     ).toBeNull();
@@ -109,18 +109,18 @@ describe("readStatement and writeStatement", () => {
     expect(
       readStatement({
         Effect: "Deny",
-        Action: ["iam:project-delete"],
+        Action: ["iam:project.delete"],
         Resource: [],
       }),
     ).not.toBeNull();
   });
 
   it("reads keys as the engine does, without regard to case, and writes over them", () => {
-    const statement = { effect: "Deny", action: ["iam:project-delete"] };
+    const statement = { effect: "Deny", action: ["iam:project.delete"] };
 
     expect(readStatement(statement)).toMatchObject({
       effect: "Deny",
-      actions: ["iam:project-delete"],
+      actions: ["iam:project.delete"],
     });
     // An edit writes under the key already there, adding no second
     // spelling the engine would read as a duplicate.
@@ -128,12 +128,12 @@ describe("readStatement and writeStatement", () => {
       writeStatement(statement, {
         sid: "",
         effect: "Allow",
-        actions: ["iam:project-read"],
+        actions: ["iam:project.read"],
         resources: ["*"],
       }),
     ).toEqual({
       effect: "Allow",
-      action: ["iam:project-read"],
+      action: ["iam:project.read"],
       Resource: ["*"],
     });
     expect(statementsOf({ statement: [1] })).toEqual([1]);

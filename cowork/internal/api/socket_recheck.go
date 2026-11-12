@@ -24,7 +24,7 @@ const (
 	closeNoAccess  websocket.StatusCode = 4403
 )
 
-// errWritableChanged ends a sync connection whose cowork:page-write
+// errWritableChanged ends a sync connection whose cowork:page.write
 // answer moved. The client reconnects, and the upgrade decides again.
 var errWritableChanged = errorx.New(errorx.KindFailedPrecondition, "api: the connection's write access changed")
 

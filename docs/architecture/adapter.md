@@ -113,7 +113,7 @@ it.
   (§Activation and runtime status). Re-arming asks the authority again,
   and the answer decides: the rewrite activates nothing and clears no
   fence. While a definite refusal stands, that costs one request per
-  refresh. After `iam:agent-recover`, garam has ended the activation, so
+  refresh. After `iam:agent.recover`, garam has ended the activation, so
   the same generation and placement are refused again as ended, and the
   agent resumes on the next generation or placement its assignee
   starts.

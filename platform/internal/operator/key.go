@@ -51,10 +51,10 @@ var (
 	// ErrOperatorWasKeyed refuses issuing a first key to an operator
 	// that has been issued one, live or withdrawn. Any key change on
 	// such an operator, a re-key after a revocation included, is
-	// iam:operator-reissue and not the registration's authority
+	// iam:operator.reissue and not the registration's authority
 	// (ADR-0102).
 	ErrOperatorWasKeyed = errorx.New(errorx.KindPermissionDenied,
-		"the operator has been issued a key: issuing another is iam:operator-reissue")
+		"the operator has been issued a key: issuing another is iam:operator.reissue")
 	// ErrKeyInvalid refuses a stored key that cannot verify: not an
 	// RSA public key of a supported size, or not the recorded
 	// algorithm. The schema and issuance admit no such row, so it is

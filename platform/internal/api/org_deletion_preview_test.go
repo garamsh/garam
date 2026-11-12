@@ -174,9 +174,9 @@ func TestGetOrgDeletionPreview_MissingOrgIsNotZero(t *testing.T) {
 // would under-report what the deletion destroys, which is the failure
 // this operation exists to prevent.
 //
-// The caller here is permitted `iam:org-delete` and nothing else. The
+// The caller here is permitted `iam:org.delete` and nothing else. The
 // control is the agents route in the same test: it needs
-// `iam:agent-read`, this caller is refused it, and the preview still
+// `iam:agent.read`, this caller is refused it, and the preview still
 // counts the agents. Without that refusal the non-zero count would be
 // consistent with the permission simply having been granted.
 //
@@ -188,7 +188,7 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 	slug := createOrg(t, f, owner, "acme")
 	orgGRN := orgGRNOf(slug)
 	ownerGRN := userGRNOf("owner-sub")
-	// Only the delete. No iam:agent-read, no iam:operator-read, no consent
+	// Only the delete. No iam:agent.read, no iam:operator.read, no consent
 	// read.
 	f.permit(permission{ownerGRN, org.ActionOrgDelete})
 
@@ -205,7 +205,7 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 	// The control: this caller may not list agents.
 	rec := f.do(t, "GET", "/orgs/"+slug+"/agents", "", owner)
 	require.Equal(t, http.StatusForbidden, rec.Code,
-		"the caller must genuinely lack iam:agent-read for the count below to prove anything")
+		"the caller must genuinely lack iam:agent.read for the count below to prove anything")
 
 	f.policies.EXPECT().ListPolicies(mock.Anything, orgGRN).Return(nil, nil).Once()
 	rec = f.do(t, "GET", "/orgs/"+slug+"/deletion-preview", "", owner)
@@ -214,7 +214,7 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 
 	// Counted although the caller may not list them: the delete takes
 	// them regardless, so the preview names them regardless.
-	assert.Equal(t, 1, body.Counts.Agents, "agents are counted without iam:agent-read")
+	assert.Equal(t, 1, body.Counts.Agents, "agents are counted without iam:agent.read")
 	assert.Equal(t, 1, body.Counts.Operators)
 	assert.Equal(t, 1, body.Counts.Consents)
 

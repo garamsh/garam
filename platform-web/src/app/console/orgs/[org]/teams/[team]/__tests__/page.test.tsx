@@ -390,8 +390,8 @@ describe("team page", () => {
 
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:group-member-add" ||
-        action === "iam:group-member-remove"
+        action === "iam:group.member-add" ||
+        action === "iam:group.member-remove"
           ? "deny"
           : "allow",
       ),
@@ -415,7 +415,7 @@ describe("team page", () => {
   it("drops the Settings tab when the server denies renaming and deleting", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:group-update" || action === "iam:group-delete"
+        action === "iam:group.update" || action === "iam:group.delete"
           ? "deny"
           : "allow",
       ),
@@ -481,10 +481,10 @@ describe("team page", () => {
       {
         // In the order Your access lists them, which shares the check.
         checks: [
-          { action: "iam:group-update", resource: group },
-          { action: "iam:group-member-add", resource: group },
-          { action: "iam:group-member-remove", resource: group },
-          { action: "iam:group-delete", resource: group },
+          { action: "iam:group.update", resource: group },
+          { action: "iam:group.member-add", resource: group },
+          { action: "iam:group.member-remove", resource: group },
+          { action: "iam:group.delete", resource: group },
         ],
       },
     ]);
@@ -492,7 +492,7 @@ describe("team page", () => {
   it("hides the rename alone when only renaming is denied", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:group-update" ? "deny" : "allow",
+        action === "iam:group.update" ? "deny" : "allow",
       ),
     );
     const user = userEvent.setup();
@@ -510,7 +510,7 @@ describe("team page", () => {
   it("hides the delete alone when only deleting is denied", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:group-delete" ? "deny" : "allow",
+        action === "iam:group.delete" ? "deny" : "allow",
       ),
     );
     const user = userEvent.setup();

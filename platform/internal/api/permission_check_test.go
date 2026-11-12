@@ -53,7 +53,7 @@ func TestCheckPermissions_AnswersEachPairInOrder(t *testing.T) {
 
 // TestCheckPermissions_DeniesAnActionGaramDoesNotDefine holds that a
 // name no operation checks is answered false even where the engine
-// would allow it, as a role's `iam:org-*` would. The engine here allows
+// would allow it, as a role's `iam:org.*` would. The engine here allows
 // both names; the defined one is the control, answered true, so what
 // denies the other is the vocabulary rather than the engine.
 func TestCheckPermissions_DeniesAnActionGaramDoesNotDefine(t *testing.T) {
@@ -255,12 +255,12 @@ func TestCheckPermissions_RefusesAMalformedResource(t *testing.T) {
 	f.permit()
 	path := "/orgs/" + slug + "/permission-checks"
 
-	rec := f.do(t, "POST", path, `{"checks":[{"action":"iam:group-read","resource":{"type":"group","id":"eng"}}]}`, owner)
+	rec := f.do(t, "POST", path, `{"checks":[{"action":"iam:group.read","resource":{"type":"group","id":"eng"}}]}`, owner)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	for _, body := range []string{
-		`{"checks":[{"action":"iam:group-read","resource":{"type":"team","id":"eng"}}]}`,
-		`{"checks":[{"action":"iam:group-read","resource":{"type":"group","id":"*"}}]}`,
+		`{"checks":[{"action":"iam:group.read","resource":{"type":"team","id":"eng"}}]}`,
+		`{"checks":[{"action":"iam:group.read","resource":{"type":"group","id":"*"}}]}`,
 	} {
 		rec = f.do(t, "POST", path, body, owner)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, body)
@@ -306,12 +306,12 @@ func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
 	require.Len(t, results, 2)
-	assert.Equal(t, apigen.DecisionUnknown, results[0].Decision, "a delegation grant decides iam:agent-create")
-	assert.Equal(t, apigen.DecisionAllow, results[1].Decision, "Check alone decides iam:operator-register")
+	assert.Equal(t, apigen.DecisionUnknown, results[0].Decision, "a delegation grant decides iam:agent.create")
+	assert.Equal(t, apigen.DecisionAllow, results[1].Decision, "Check alone decides iam:operator.register")
 }
 
 // TestCheckPermissions_AnswersAgentEnrollAsItsWritesDecide holds that
-// iam:agent-enroll is put to the check every approval, withdrawal and
+// iam:agent.enroll is put to the check every approval, withdrawal and
 // revoke runs, with the caller, the organization and the object the
 // pair names. That check allows the organization and refuses the
 // agent here, so the two answers differ by the object alone; a check
@@ -391,7 +391,7 @@ func TestCheckPermissions_AsksAGrantActionAsItsMintDoes(t *testing.T) {
 }
 
 // TestCheckPermissions_AsksDelegationAsItsWritesDo holds that
-// iam:operator-delegate is put to the check every write of a delegation
+// iam:operator.delegate is put to the check every write of a delegation
 // runs, with the caller and the organization, and answered by it: a
 // deny answers deny, an allow answers allow, and a check that cannot
 // decide fails the request. Each answer is the control for the others.
@@ -464,11 +464,11 @@ func TestCheckPermissions_RefusesAPairNoOperationChecks(t *testing.T) {
 
 	rec = f.do(t, "POST", path, checksBody(t, apigen.PermissionCheck{Action: org.ActionOperatorRegister, Resource: eng}), owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "iam:operator-register is not checked on a resource of type group")
+	assert.Contains(t, rec.Body.String(), "iam:operator.register is not checked on a resource of type group")
 
 	rec = f.do(t, "POST", path, checksBody(t, apigen.PermissionCheck{Action: org.ActionGroupUpdate}), owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "iam:group-update is not checked on the organization")
+	assert.Contains(t, rec.Body.String(), "iam:group.update is not checked on the organization")
 }
 
 // TestCheckPermissions_EveryActionPairsWithSomething asks every action
@@ -576,10 +576,10 @@ func TestCheckPermissions_AMissingResourceAnswersAsADeniedOne(t *testing.T) {
 }
 
 // TestCheckPermissions_DecidesOperatorReadByCheck pins
-// iam:operator-read as an action Check decides, though a console may
+// iam:operator.read as an action Check decides, though a console may
 // also hand a hosted operator an authority for it (#1374): garam's own
 // operator reads are enforced by Check alone, as
-// iam:agent-template-read's are, and a mint the grant does not cover is
+// iam:agent-template.read's are, and a mint the grant does not cover is
 // refused at the mint. The engine allowing the read and then refusing
 // it are both answered as decided.
 func TestCheckPermissions_DecidesOperatorReadByCheck(t *testing.T) {

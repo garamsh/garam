@@ -3,6 +3,6 @@
 // (ADR-0024). Tenant isolation holds the organization boundary.
 permit (
   principal is Iam::Agent,
-  action == Iam::Action::"message-send",
+  action == Iam::Action::"message.send",
   resource is Iam::Agent
 );

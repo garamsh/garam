@@ -138,7 +138,7 @@ fn a_guardrail_the_schema_does_not_admit_is_refused() {
     let control = Body::guardrail(
         &engine,
         &acme(),
-        r#"forbid (principal is Iam::Agent, action == Iam::Action::"message-send", resource is Iam::Agent)
+        r#"forbid (principal is Iam::Agent, action == Iam::Action::"message.send", resource is Iam::Agent)
            when { principal.org != resource.org };"#,
     );
     assert!(control.is_ok(), "{control:?}");
@@ -316,7 +316,7 @@ fn decide_on(source: &str) {
                 entity_type: "Iam::User",
                 id: "u",
             },
-            action: "iam:org-read",
+            action: "iam:org.read",
             resource: EntityRef {
                 entity_type: "Iam::Org",
                 id: ACME,

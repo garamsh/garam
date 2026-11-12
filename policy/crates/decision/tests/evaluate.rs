@@ -78,7 +78,7 @@ async fn a_decision_composes_the_policies_of_the_resources_organization() {
         .evaluate(
             &acme_grants_lee(),
             &directory,
-            &evaluation(LEE, "iam:agent-read", BOT),
+            &evaluation(LEE, "iam:agent.read", BOT),
         )
         .await
         .unwrap();
@@ -92,7 +92,7 @@ async fn a_decision_composes_the_policies_of_the_resources_organization() {
         .evaluate(
             &acme_grants_lee(),
             &elsewhere,
-            &evaluation(LEE, "iam:agent-read", BOT),
+            &evaluation(LEE, "iam:agent.read", BOT),
         )
         .await
         .unwrap();
@@ -109,7 +109,7 @@ async fn a_resource_the_store_does_not_hold_is_denied_with_no_policy_read() {
         .evaluate(
             &Unreadable,
             &directory,
-            &evaluation(LEE, "iam:agent-read", BOT),
+            &evaluation(LEE, "iam:agent.read", BOT),
         )
         .await
         .unwrap();
@@ -129,7 +129,7 @@ async fn a_store_that_cannot_be_read_fails_the_call_rather_than_answering() {
         .evaluate(
             &Unreadable,
             &directory,
-            &evaluation(LEE, "iam:agent-read", BOT),
+            &evaluation(LEE, "iam:agent.read", BOT),
         )
         .await;
     assert!(
@@ -141,7 +141,7 @@ async fn a_store_that_cannot_be_read_fails_the_call_rather_than_answering() {
         .evaluate(
             &acme_grants_lee(),
             &Unreadable,
-            &evaluation(LEE, "iam:agent-read", BOT),
+            &evaluation(LEE, "iam:agent.read", BOT),
         )
         .await;
     assert!(

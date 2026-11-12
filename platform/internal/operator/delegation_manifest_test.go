@@ -10,10 +10,10 @@ import (
 )
 
 // TestParseOperation_NamesActionsTheManifestsDeclare holds each
-// operation a member can hand an operator to an action grn.Actions
-// holds, with an undeclared name as the control. `iam:agent-activate`
-// bounds the hosted operator's own lifecycle authority, no member mints
-// it and no manifest declares it, so it is not among them.
+// operation a grant may carry to an action grn.Actions holds, with an
+// undeclared name as the control. `iam:agent.activate` bounds the
+// hosted operator's own lifecycle authority and no member mints it
+// (ADR-0145 declares it), so it is among them.
 func TestParseOperation_NamesActionsTheManifestsDeclare(t *testing.T) {
 	declared := map[string]bool{}
 	for _, a := range grn.Actions() {
@@ -21,7 +21,8 @@ func TestParseOperation_NamesActionsTheManifestsDeclare(t *testing.T) {
 	}
 
 	for _, o := range []operator.Operation{
-		operator.OperationAgentCreate, operator.OperationAgentConfigure, operator.OperationAgentRecover,
+		operator.OperationAgentCreate, operator.OperationAgentConfigure, operator.OperationAgentActivate,
+		operator.OperationAgentRecover,
 		operator.OperationTemplateRead, operator.OperationTemplatePublish, operator.OperationProfileRead,
 		operator.OperationExecutionRead, operator.OperationOperatorRead, operator.OperationAgentReplace,
 	} {
@@ -29,5 +30,5 @@ func TestParseOperation_NamesActionsTheManifestsDeclare(t *testing.T) {
 		assert.NoError(t, err, string(o))
 		assert.True(t, declared[string(o)], string(o))
 	}
-	assert.False(t, declared["iam:agent-no-such-verb"])
+	assert.False(t, declared["iam:agent.no-such-verb"])
 }

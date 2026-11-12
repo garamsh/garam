@@ -177,7 +177,7 @@ export function PublishTemplateForm({
         requestId,
         org,
         audience: hosted.grn,
-        operation: "iam:agent-template-publish",
+        operation: "iam:agent-template.publish",
         target: orgGrn,
         parser: PublishedParser,
       },
@@ -187,7 +187,7 @@ export function PublishTemplateForm({
     if (result.status === "ok") {
       onPublished(result.data);
     } else {
-      setRefusal(controlFailureCopy(result, "iam:agent-template-publish"));
+      setRefusal(controlFailureCopy(result, "iam:agent-template.publish"));
     }
   }
 

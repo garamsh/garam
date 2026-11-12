@@ -109,8 +109,8 @@ func TestIdentify_PresentsTheCallersCredential(t *testing.T) {
 // is asked as a cowork-page resource and the tree as no resource.
 func TestAllowed_AnswersEachCheckInOrder(t *testing.T) {
 	f := &fakePlatform{allowed: map[string]bool{
-		"cowork:page-write@cowork-page/p-1": true,
-		"cowork:page-read":                  true,
+		"cowork:page.write@cowork-page/p-1": true,
+		"cowork:page.read":                  true,
 	}}
 	c := newClient(t, f)
 	caller, err := c.Identify(context.Background(), platform.Credential{Session: "ada"})
@@ -133,7 +133,7 @@ func TestAllowed_AnswersEachCheckInOrder(t *testing.T) {
 // rather than reading a missing answer as allow. The member's answer
 // in acme is the control.
 func TestAllowed_KeepsThePlatformsRefusals(t *testing.T) {
-	f := &fakePlatform{allowed: map[string]bool{"cowork:page-read": true}}
+	f := &fakePlatform{allowed: map[string]bool{"cowork:page.read": true}}
 	c := newClient(t, f)
 	caller := platform.Caller{Credential: platform.Credential{Session: "ada"}}
 	read := []platform.Check{{Action: platform.ActionPageRead}}
@@ -165,7 +165,7 @@ func TestOrganizations_AnswersTheCallersByIdentifier(t *testing.T) {
 // TestRequire_RefusesWhenAnyCheckIsDenied holds that one denied check
 // refuses the whole, and all allowed passes.
 func TestRequire_RefusesWhenAnyCheckIsDenied(t *testing.T) {
-	f := &fakePlatform{allowed: map[string]bool{"cowork:page-read": true}}
+	f := &fakePlatform{allowed: map[string]bool{"cowork:page.read": true}}
 	c := newClient(t, f)
 	caller := platform.Caller{Credential: platform.Credential{Session: "ada"}}
 

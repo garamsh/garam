@@ -12,7 +12,7 @@ import (
 )
 
 // TestRecoverAuthority_IsHandedOverOnlyUnderAGrantListingIt holds that
-// iam:agent-recover is delegated like iam:agent-configure: a grant must
+// iam:agent.recover is delegated like iam:agent.configure: a grant must
 // name it, the handoff binds where the agent runs, and a move of the
 // agent revokes it. The grant listing all four operations and the
 // stored authority are what migration 000029 widens 000028's checks
@@ -23,7 +23,7 @@ func TestRecoverAuthority_IsHandedOverOnlyUnderAGrantListingIt(t *testing.T) {
 	g := f.grant(t)
 
 	_, err := f.mint(operator.OperationAgentRecover, f.agent, "rec-1")
-	require.ErrorIs(t, err, operator.ErrNotDelegated, "a grant without iam:agent-recover")
+	require.ErrorIs(t, err, operator.ErrNotDelegated, "a grant without iam:agent.recover")
 
 	_, _, err = f.write("grant-2", grantRef(g.ID), f.terms(t, []grn.GRN{f.controller},
 		operator.OperationAgentCreate, operator.OperationAgentConfigure,

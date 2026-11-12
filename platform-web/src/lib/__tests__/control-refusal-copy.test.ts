@@ -13,7 +13,7 @@ import type { ControlOperation } from "@/lib/operation-authority";
 function refused(
   status: number,
   kind: string | null,
-  operation: ControlOperation = "iam:agent-template-read",
+  operation: ControlOperation = "iam:agent-template.read",
 ) {
   return controlFailureCopy(
     { status: "refused", refusal: { source: "control", status, kind } },
@@ -37,20 +37,20 @@ describe("controlFailureCopy", () => {
     const sentence = refused(
       400,
       "embedding_required",
-      "iam:agent-template-publish",
+      "iam:agent-template.publish",
     );
 
     expect(sentence).toMatch(/needs an embeddings endpoint/);
     // The control: the same status with no kind reads another sentence.
-    expect(refused(400, null, "iam:agent-template-publish")).not.toBe(sentence);
+    expect(refused(400, null, "iam:agent-template.publish")).not.toBe(sentence);
   });
 
   it("lets the operation that asked supply the sentence for a kind", () => {
-    const create = refused(400, "embedding_required", "iam:agent-create");
+    const create = refused(400, "embedding_required", "iam:agent.create");
 
     expect(create).toMatch(/^This template version names a model/);
     expect(create).not.toBe(
-      refused(400, "embedding_required", "iam:agent-template-publish"),
+      refused(400, "embedding_required", "iam:agent-template.publish"),
     );
   });
 
@@ -75,12 +75,12 @@ describe("controlFailureCopy", () => {
       CONTROL_UNAVAILABLE,
     );
     expect(
-      controlFailureCopy({ status: "unavailable" }, "iam:agent-execution-read"),
+      controlFailureCopy({ status: "unavailable" }, "iam:agent.execution-read"),
     ).toBe(CONTROL_UNAVAILABLE);
     expect(
       controlFailureCopy(
         { status: "refused", refusal: { source: "unreadable" } },
-        "iam:agent-execution-read",
+        "iam:agent.execution-read",
       ),
     ).toBe(CONTROL_UNREADABLE);
   });
@@ -92,7 +92,7 @@ describe("controlFailureCopy", () => {
           status: "refused",
           refusal: { source: "mint", sentence: "You don't have permission." },
         },
-        "iam:agent-create",
+        "iam:agent.create",
       ),
     ).toBe("You don't have permission.");
   });

@@ -19,9 +19,9 @@ import (
 )
 
 // keyFixture is an organization with one registered operator, an admin
-// holding iam:operator-register and iam:operator-reissue, a registrar
-// holding iam:operator-register alone and a reader holding
-// iam:operator-read.
+// holding iam:operator.register and iam:operator.reissue, a registrar
+// holding iam:operator.register alone and a reader holding
+// iam:operator.read.
 type keyFixture struct {
 	*fixture
 	slug                     string
@@ -103,9 +103,9 @@ func TestIssueOperatorKey_AnswersThePEMOnceWithItsIdentityAndTokenURL(t *testing
 }
 
 // TestIssueOperatorKey_TheRegistrationsAuthorityIssuesTheFirstKeyAlone
-// holds the PM's decision for #1356: iam:operator-register issues a
+// holds the PM's decision for #1356: iam:operator.register issues a
 // first key to an operator holding no live one, whatever rotation it
-// asks for, and is refused once a live key exists; iam:operator-reissue
+// asks for, and is refused once a live key exists; iam:operator.reissue
 // is the control, issuing the planned successor the registrar could
 // not.
 func TestIssueOperatorKey_TheRegistrationsAuthorityIssuesTheFirstKeyAlone(t *testing.T) {
@@ -117,14 +117,14 @@ func TestIssueOperatorKey_TheRegistrationsAuthorityIssuesTheFirstKeyAlone(t *tes
 		"a registrar issues under first, not the rotation it asked")
 
 	rec = k.issue(t, "controller", "planned", k.registrar)
-	assert.Equal(t, http.StatusForbidden, rec.Code, "a live key puts the next issuance under iam:operator-reissue")
+	assert.Equal(t, http.StatusForbidden, rec.Code, "a live key puts the next issuance under iam:operator.reissue")
 
 	rec = k.issue(t, "controller", "planned", k.admin)
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 	assert.Equal(t, operator.KeyRotationPlanned, k.operators.issuances[len(k.operators.issuances)-1])
 
 	rec = k.issue(t, "control", "planned", k.reader)
-	assert.Equal(t, http.StatusForbidden, rec.Code, "iam:operator-read issues nothing")
+	assert.Equal(t, http.StatusForbidden, rec.Code, "iam:operator.read issues nothing")
 }
 
 // TestIssueOperatorKey_IssuesNothingWithoutATokenURL is the PM's
@@ -171,7 +171,7 @@ func TestIssueOperatorKey_IsBoundedPerOperator(t *testing.T) {
 }
 
 // TestRevokeOperatorKey_WithdrawsUnderTheReissueAuthority holds the
-// withdrawal (ADR-0102): iam:operator-reissue withdraws a key, which
+// withdrawal (ADR-0102): iam:operator.reissue withdraws a key, which
 // lists as revoked; the registrar is refused; an unknown fingerprint is
 // 404.
 func TestRevokeOperatorKey_WithdrawsUnderTheReissueAuthority(t *testing.T) {
@@ -193,8 +193,8 @@ func TestRevokeOperatorKey_WithdrawsUnderTheReissueAuthority(t *testing.T) {
 // TestIssueOperatorKey_RegisterCannotReKeyAfterARevocation is the PM's
 // review of #1360, blocking item 1: once an operator has been issued a
 // key, withdrawing it leaves no first issuance for
-// iam:operator-register to make, so the registrar is refused where
-// iam:operator-reissue, the control, issues the replacement.
+// iam:operator.register to make, so the registrar is refused where
+// iam:operator.reissue, the control, issues the replacement.
 func TestIssueOperatorKey_RegisterCannotReKeyAfterARevocation(t *testing.T) {
 	k := newKeyFixture(t, api.Config{SessionTTL: time.Hour, TokenURL: fixtureTokenURL})
 	rec := k.issue(t, "controller", "planned", k.registrar)
@@ -204,9 +204,9 @@ func TestIssueOperatorKey_RegisterCannotReKeyAfterARevocation(t *testing.T) {
 		k.do(t, "DELETE", "/orgs/"+k.slug+"/operators/controller/keys/"+kid, "", k.admin).Code)
 
 	rec = k.issue(t, "controller", "immediate", k.registrar)
-	assert.Equal(t, http.StatusForbidden, rec.Code, "a revoked key still makes the next issuance iam:operator-reissue")
+	assert.Equal(t, http.StatusForbidden, rec.Code, "a revoked key still makes the next issuance iam:operator.reissue")
 	assert.NotContains(t, rec.Body.String(), "PRIVATE KEY")
 
 	rec = k.issue(t, "controller", "immediate", k.admin)
-	assert.Equal(t, http.StatusCreated, rec.Code, "the control: iam:operator-reissue re-keys: %s", rec.Body.String())
+	assert.Equal(t, http.StatusCreated, rec.Code, "the control: iam:operator.reissue re-keys: %s", rec.Body.String())
 }

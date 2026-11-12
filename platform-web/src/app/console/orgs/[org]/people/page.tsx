@@ -88,7 +88,7 @@ export default async function PeoplePage({ params, searchParams }: Params) {
     getOrg(org),
     lookupOrgMembers(org),
     readMemberChoices(org, query.team, {
-      invite: { action: "iam:org-invite" },
+      invite: { action: "iam:org.invite" },
     }),
   ]);
 

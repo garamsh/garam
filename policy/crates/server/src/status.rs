@@ -18,6 +18,9 @@ pub(crate) enum ServiceError {
     /// A write to an entity type another service owns (ADR-0130 §8).
     #[error("this caller does not own {0}")]
     NotOwned(String),
+    /// A scoped caller reaching beyond its service or organization.
+    #[error("{0} is outside what this caller may reach")]
+    OutOfScope(&'static str),
     /// A batch past the bound.
     #[error("a request holds at most {max} evaluations")]
     TooManyEvaluations {
@@ -60,7 +63,7 @@ pub(crate) fn to_status(error: &ServiceError) -> Status {
             tracing::info!(error = ?error, "refused a service this one does not serve");
             Status::permission_denied("this service does not serve the caller")
         }
-        ServiceError::NotOwned(_) => {
+        ServiceError::NotOwned(_) | ServiceError::OutOfScope(_) => {
             tracing::info!(error = ?error, "refused a write");
             Status::permission_denied(error.to_string())
         }

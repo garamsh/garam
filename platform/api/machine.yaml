@@ -262,7 +262,10 @@ paths:
         A `client_id` that is a service principal's GRN,
         `grn:<org>/iam/service/<name>`, takes the principal route
         (ADR-0129): the assertion is signed by a key of that service,
-        its `aud` is this URL, and the request names `audience`
+        its `aud` is the issuer identifier alone (RFC 10070 §4, `typ`
+        `client-authentication+jwt` or `JWT`) or this URL (`typ`
+        `JWT`, the form to be withdrawn), never both and never
+        another, and the request names `audience`
         `policy`, the only audience answered; any other is
         `invalid_request` before the assertion is read. The answer is
         garam's OIDC issuer's JWT (ADR-0141) for the principal, `aud`
@@ -347,8 +350,9 @@ paths:
         `exchangeClientAssertion` does: `client_id` is the
         service principal's GRN, `grn:<org>/iam/service/<audience>`, live
         in the organization, and `client_assertion` an assertion its
-        service's key signed with `aud` equal to this
-        operation's URL, under the same profile and spent once. The
+        service's key signed with `aud` equal to this operation's URL
+        or to the issuer identifier alone, as the exchange takes
+        them, under the same profile and spent once. The
         request carries no `Authorization` header. It is served only
         where a deployment configured the issuer: otherwise it answers
         404 as an unknown path does.

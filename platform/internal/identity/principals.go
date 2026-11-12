@@ -34,6 +34,10 @@ type PrincipalsConfig struct {
 	// assertion names as its audience on each route.
 	ExchangeEndpoint   string
 	IntrospectEndpoint string
+	// Issuer is the issuer identifier (GARAM_IDENTITY_ISSUER), the
+	// audience RFC 10070 §4 gives an assertion for any endpoint of the
+	// issuer; empty accepts none. The endpoint form is to be withdrawn.
+	Issuer string
 	// Admitter holds the principal's record and the jtis spent.
 	Admitter Admitter
 	// Now supplies the time the per-source bound counts in; zero takes
@@ -52,6 +56,7 @@ type PrincipalsConfig struct {
 type Principals struct {
 	keys      KeySource
 	endpoints map[Route]string
+	issuer    string
 	admitter  Admitter
 	perSource map[Route]*operator.Limiter
 }
@@ -67,6 +72,7 @@ func NewPrincipals(cfg PrincipalsConfig) *Principals {
 	}
 	return &Principals{
 		keys:      cfg.Keys,
+		issuer:    cfg.Issuer,
 		endpoints: map[Route]string{RouteExchange: cfg.ExchangeEndpoint, RouteIntrospect: cfg.IntrospectEndpoint},
 		admitter:  cfg.Admitter,
 		perSource: map[Route]*operator.Limiter{RouteExchange: limiter(), RouteIntrospect: limiter()},
@@ -95,7 +101,7 @@ func (p *Principals) Authenticate(ctx context.Context, route Route, source, clie
 	if !ok {
 		return Principal{}, operator.ErrClientInvalid
 	}
-	parsed, err := operator.ParseClientAssertion(assertion)
+	parsed, err := operator.ParseServiceAssertion(assertion)
 	if err != nil {
 		return Principal{}, operator.ErrClientInvalid
 	}
@@ -104,7 +110,7 @@ func (p *Principals) Authenticate(ctx context.Context, route Route, source, clie
 			continue
 		}
 		key.Operator = principal.GRN
-		verified, err := parsed.Verify(key, principal.GRN, p.endpoints[route])
+		verified, err := parsed.VerifyService(key, principal.GRN, p.endpoints[route], p.issuer)
 		if err != nil {
 			return Principal{}, operator.ErrClientInvalid
 		}

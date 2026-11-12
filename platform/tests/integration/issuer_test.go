@@ -119,6 +119,7 @@ func (s *issuerStack) machineListener(t *testing.T, issuer *identity.Issuer) str
 		Keys:               identity.FixedKeys(s.keys),
 		ExchangeEndpoint:   listener.URL + "/oauth/token",
 		IntrospectEndpoint: listener.URL + "/oauth/introspect",
+		Issuer:             issuerURL,
 		Admitter:           identitypg.New(s.pool),
 	})
 	handler = machinegen.HandlerWithOptions(
@@ -171,10 +172,17 @@ func bodyOf(dump string) string {
 // URL named by to, with the jti given or a fresh one.
 func principalAssertion(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, to, jti string) string {
 	t.Helper()
+	return principalAssertionAs(t, private, principal, "JWT", to, jti)
+}
+
+// principalAssertionAs signs the assertion under header typ, naming aud
+// as given: a string, or a list for an assertion naming two audiences.
+func principalAssertionAs(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, typ string, aud any, jti string) string {
+	t.Helper()
 	kid, err := operator.Thumbprint(&private.PublicKey)
 	require.NoError(t, err)
 	signing, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: private},
-		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", kid))
+		(&jose.SignerOptions{}).WithType(jose.ContentType(typ)).WithHeader("kid", kid))
 	require.NoError(t, err)
 	if jti == "" {
 		raw := make([]byte, 32)
@@ -184,7 +192,7 @@ func principalAssertion(t *testing.T, private *rsa.PrivateKey, principal grn.GRN
 	}
 	client := principal.String()
 	payload, err := json.Marshal(map[string]any{
-		"iss": client, "sub": client, "aud": to,
+		"iss": client, "sub": client, "aud": aud,
 		"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(), "jti": jti,
 	})
 	require.NoError(t, err)

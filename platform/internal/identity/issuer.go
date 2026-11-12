@@ -141,6 +141,9 @@ type discoveryDocument struct {
 }
 
 // Discovery is the discovery document, ready to serve.
+// Identifier is the issuer identifier, GARAM_IDENTITY_ISSUER.
+func (i *Issuer) Identifier() string { return i.issuer }
+
 func (i *Issuer) Discovery() []byte { return i.discovery }
 
 // JWKS is the key set, ready to serve.

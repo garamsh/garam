@@ -403,6 +403,20 @@ every machine operation it reaches, so cowork reaches no queue.
   cites this bullet for the accepted algorithm, which is the
   operator exchange's (§Asymmetric Operator exchange), and for every
   service's keys alike.
+- **Two assertion forms, one to be withdrawn (#1811).** For a
+  service principal, `aud` is exactly one of two strings. The
+  issuer identifier (`GARAM_IDENTITY_ISSUER`) as its only value is
+  RFC 10070 §4's form, accepted with `typ`
+  `client-authentication+jwt` or `JWT`, since the RFC advises
+  against rejecting an untyped assertion. The URL of the route it
+  is for, the token endpoint or introspection, is the form of
+  ADR-0102, accepted with `typ` `JWT` as before and **to be
+  withdrawn** once every caller sends the issuer form. An `aud`
+  naming both, a list, any other string, or the URL form under the
+  new `typ` is refused as a bad client. The operator exchange takes
+  neither: its `typ` is `JWT` and its `aud` the token endpoint, as
+  before. Where the issuer is not configured the issuer form
+  accepts nothing.
 - **The exchange is `exchangeClientAssertion`** under
   `machine-token.v2`, with the organization's principal GRN as
   `client_id`, `iss` and `sub`, and the key found by `kid` among the

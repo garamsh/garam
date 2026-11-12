@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +18,14 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
+)
+
+// The `typ` values of an assertion's protected header. An operator's
+// is TypeJWT alone. A service principal's may also be TypeClientAuth,
+// the type RFC 10070 §4 gives a client authentication assertion.
+const (
+	TypeJWT        = "JWT"
+	TypeClientAuth = "client-authentication+jwt"
 )
 
 // AssertionContractVersion is the contract the private_key_jwt
@@ -144,6 +153,7 @@ var allowedHeader = map[string]bool{"alg": true, "kid": true, "typ": true}
 type ClientAssertion struct {
 	signed  *jose.JSONWebSignature
 	kid     string
+	typ     string
 	payload []byte
 }
 
@@ -152,6 +162,18 @@ type ClientAssertion struct {
 // kid and typ JWT and nothing else, and a JSON object payload, none of
 // whose objects repeats a member. Anything else is ErrClientInvalid.
 func ParseClientAssertion(compact string) (*ClientAssertion, error) {
+	return parseAssertion(compact, TypeJWT)
+}
+
+// ParseServiceAssertion reads compact as [ParseClientAssertion] does,
+// for a service principal: its typ is JWT or client-authentication+jwt
+// (RFC 10070 §4). Which audience goes with which typ is
+// [ClientAssertion.VerifyService]'s to decide.
+func ParseServiceAssertion(compact string) (*ClientAssertion, error) {
+	return parseAssertion(compact, TypeJWT, TypeClientAuth)
+}
+
+func parseAssertion(compact string, types ...string) (*ClientAssertion, error) {
 	if len(compact) > MaxAssertionLength || !compactJWT.MatchString(compact) {
 		return nil, ErrClientInvalid
 	}
@@ -172,7 +194,8 @@ func ParseClientAssertion(compact string) (*ClientAssertion, error) {
 			return nil, ErrClientInvalid
 		}
 	}
-	if stringMember(header, "alg") != KeyAlgorithm || stringMember(header, "typ") != "JWT" {
+	typ := stringMember(header, "typ")
+	if stringMember(header, "alg") != KeyAlgorithm || !slices.Contains(types, typ) {
 		return nil, ErrClientInvalid
 	}
 	kid := stringMember(header, "kid")
@@ -183,7 +206,7 @@ func ParseClientAssertion(compact string) (*ClientAssertion, error) {
 	if err != nil {
 		return nil, ErrClientInvalid
 	}
-	return &ClientAssertion{signed: signed, kid: kid, payload: payload}, nil
+	return &ClientAssertion{signed: signed, kid: kid, typ: typ, payload: payload}, nil
 }
 
 // KID returns the key the assertion claims to be signed by. It selects
@@ -212,6 +235,29 @@ type VerifiedAssertion struct {
 // MaxAssertionLifetime apart, an nbf no later than exp, and a bounded
 // base64url jti. Anything else is ErrClientInvalid.
 func (a *ClientAssertion) Verify(key Key, client grn.GRN, endpoint string) (VerifiedAssertion, error) {
+	if endpoint == "" {
+		return VerifiedAssertion{}, ErrClientInvalid
+	}
+	return a.verify(key, client, func(aud, typ string) bool {
+		return aud == endpoint && typ == TypeJWT
+	})
+}
+
+// VerifyService verifies as [ClientAssertion.Verify] does for a service
+// principal, with one more audience accepted: issuer, garam's issuer
+// identifier (GARAM_IDENTITY_ISSUER), as the only value of aud, under
+// either typ (RFC 10070 §4). The endpoint form stays, under typ JWT as
+// before, and is to be withdrawn. An aud naming both, any other
+// audience, and an aud that is not one string are refused, as is the
+// endpoint under the other typ. An empty issuer or endpoint accepts
+// nothing for its form.
+func (a *ClientAssertion) VerifyService(key Key, client grn.GRN, endpoint, issuer string) (VerifiedAssertion, error) {
+	return a.verify(key, client, func(aud, typ string) bool {
+		return (endpoint != "" && aud == endpoint && typ == TypeJWT) || (issuer != "" && aud == issuer)
+	})
+}
+
+func (a *ClientAssertion) verify(key Key, client grn.GRN, audience func(aud, typ string) bool) (VerifiedAssertion, error) {
 	if key.Operator != client || key.KID != a.kid || key.Algorithm != KeyAlgorithm {
 		return VerifiedAssertion{}, ErrClientInvalid
 	}
@@ -230,7 +276,7 @@ func (a *ClientAssertion) Verify(key Key, client grn.GRN, endpoint string) (Veri
 	if stringMember(claims, "iss") != identity || stringMember(claims, "sub") != identity {
 		return VerifiedAssertion{}, ErrClientInvalid
 	}
-	if endpoint == "" || stringMember(claims, "aud") != endpoint {
+	if !audience(stringMember(claims, "aud"), a.typ) {
 		return VerifiedAssertion{}, ErrClientInvalid
 	}
 	iat, okIat := dateMember(claims, "iat")

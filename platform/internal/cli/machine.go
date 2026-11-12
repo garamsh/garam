@@ -285,6 +285,10 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// introspection, each by an assertion naming that endpoint's URL.
 	var principals *identity.Principals
 	if cfg.ServiceKeys != nil {
+		issuerID := ""
+		if cfg.Identity != nil {
+			issuerID = cfg.Identity.Identifier()
+		}
 		introspect, err := introspectionURL(cfg.TokenURL)
 		if err != nil {
 			return nil, err
@@ -293,6 +297,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			Keys:               cfg.ServiceKeys,
 			ExchangeEndpoint:   cfg.TokenURL,
 			IntrospectEndpoint: introspect,
+			Issuer:             issuerID,
 			Admitter:           identitypg.New(pool),
 			Now:                cfg.Now,
 		})

@@ -7,7 +7,10 @@ either party it decided between. Implemented by
 
 **Send events and machine credential events are the events built.**
 Decision and change events, which this domain was planned for, are
-unbuilt. Send events are read by the deployment's database holder
+unbuilt in the platform's database, and
+[ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)
+decides them as the policy service's record (§The policy service's
+record). Send events are read by the deployment's database holder
 alone
 ([ADR-0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md));
 credential events are read through `listCredentialEvents`
@@ -87,6 +90,43 @@ cowork principal, so each organization's record stays its own:
 - **The principal's token issuances and refusals** are credential
   events with the principal as subject, in its organization.
 
+## The policy service's record
+
+**Unbuilt.**
+[ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)
+decides it. Today the policy service keeps nothing of a decision, and
+a stored policy version names its writer and holds no time or outcome
+of its own. The platform's database holds none of it, and
+`platform/internal/audit` is not where it goes:
+
+- **Kept by the policy service, in its own database,** because every
+  decision passes it, cowork's included.
+- **Every write of a policy** (created, version added, activated,
+  rolled back, removed) is recorded in the transaction of the write and
+  kept as long as its organization exists.
+- **Every denial** is recorded and removed 90 days after its last
+  occurrence. An allowed decision is not recorded, and neither is a
+  denied probe: a question a caller states it asked to decide what to
+  show, as in filtering a list. A question that does not say is an
+  attempt and is recorded.
+- **A record belongs to the organization of the resource decided on**
+  and goes with it. A denial for an organization the service does not
+  hold is not recorded.
+- **A record holds** when, the subject's GRN and the calling service,
+  the action, the resource, the outcome and the ids of the policies in
+  the reasons. It holds no policy text beyond an id and a version, no
+  request context and no token.
+- **Recording a denial does not decide it.** The answer stands when
+  the record cannot be written, and the failure is logged and counted.
+- **A caller denying in a loop is bounded.** Identical denials in an
+  hour are one record with a count, an organization holds at most
+  10,000 live denial records, and past that a per-day overflow record
+  counts the denials not stored.
+- **Read by an organization's owners and administrators** on
+  `iam:audit.read`, which the `Iam` manifest does not declare yet,
+  through a read on the policy service's contract that the platform
+  calls. A member and another organization's owner do not read it.
+
 ## Rationale
 
 [ADR-0106](./adr/0106-every-message-send-is-recorded-as-an-audit-event-in-the-transaction-of-its-outcome-and-garam-stays-the-only-route.md)
@@ -94,11 +134,19 @@ records why garam stays the route every message takes rather than
 handing delivery to the agents, why the event shares its outcome's
 transaction and is the one write a domain makes in another's, and why
 the record is kept until its tenant goes rather than for a window.
+ADR-0148 records why decisions and policy changes are the policy
+service's record and not the platform's, and why denials are kept for
+a window and bounded where a send's record is not.
 
 ## Open questions
 
-- **How decision and change events are recorded.** Whether they share
-  a table, a writer's shape, or neither, is decided when the first one
-  is built; until then this binds nothing.
+- **How the platform's decision and change events are recorded.**
+  What ADR-0148 records is the policy service's. A decision or change
+  the platform makes outside the policy service has no event, and
+  whether it shares a table or a writer's shape with send events is
+  decided when the first one is built; until then this binds nothing.
+- **How the policy service's record is removed with its organization.**
+  ADR-0148 states the rule and leaves the mechanism to the
+  implementation.
 - **Who reads send events through garam.** No route serves them, and
   no action names permission to read them.

@@ -1271,9 +1271,10 @@ ADRs:
   link the platform writes from its memberships through the outbox; a
   request that changes an entity, a membership or a policy waits for
   the policy service to decide with it; an inventory gives every
-  present capability its place, one without a place carried to the
-  owner; not yet built; supersedes 0140 in part, on the feed's
-  "off by default" and its entities alone
+  present capability its form, a hosted operator's delegation a fed
+  attribute of its entity that a system policy per operation reads, and
+  a `permit` written by an owner alone; not yet built; supersedes 0140
+  in part, on the feed's "off by default" and its entities alone
 - [0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
   — a message between two agents of two organizations is tenant
   isolation's one exception, where each organization's `consents`
@@ -1281,3 +1282,14 @@ ADRs:
   guardrails are read for it and a withdrawal denies the next send;
   not yet built; supersedes 0035 in part, on the send-path
   precondition, and 0024 in part, on the refusal before the engine
+- [0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)
+  — the policy service records every write of a policy, kept as long as
+  its organization exists, and every denial, removed 90 days after it
+  was last made, in its own database and for the organization of the
+  resource; an allowed decision and a denied probe, a question a
+  caller states it asked to decide what to show, are not recorded;
+  identical denials in
+  an hour collapse into one record with a count and an organization
+  holds at most 10,000 live denial records, with a per-day overflow
+  record beyond; an organization's owners and administrators read them
+  on `iam:audit.read`; not built; supersedes nothing

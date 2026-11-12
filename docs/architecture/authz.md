@@ -157,16 +157,24 @@ service alone; nothing below it is yet true of the platform.
   membership, as the caller `platform` and with no writer, and the
   outbox carries it, so a rebuild rewrites it.
 - **A writer reads its own write.** A request that changes an entity, a
-  membership or a policy waits, up to a bound of a few seconds, until
+  membership or a policy waits, up to a bound of 5 seconds, until
   the outbox marks it wrote are applied, and is answered as
   unavailable if they are not.
 - **Every present capability has a place.** The ADR's inventory gives
   each origin of a statement and each surface that reads a decision
-  its form. One has none and is carried to the owner: a hosted
-  operator's delegation, which the evaluator is handed as a per-call
-  Allow.
+  its form. A hosted operator's delegation, handed to the evaluator
+  as a per-call Allow today, becomes an attribute of the operator's
+  entity that a system policy per delegable operation reads. Only an
+  owner writes a `permit`, so an administrator keeps assigning the
+  roles it holds and writing guardrails and no longer writes an
+  `Allow`.
 - **cowork asks the service alone,** and its path through
   `checkPermissions` goes.
+- Every denial and every write of a policy is recorded by the policy
+  service for the organization of the resource, and an organization's
+  owners and administrators read it on `iam:audit.read`
+  ([ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)).
+  Not built.
 
 [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md) makes a
 message between two agents of two consenting organizations tenant

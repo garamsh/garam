@@ -71,8 +71,10 @@ no revision holds for it.
    evaluates the writer's action on the organization, read current,
    before it stores, so no caller's mistake stores what its writer
    could not write. Storing or making effective a `permit` asks for
-   ADR-0144's right. The narrow form, and what is left open, are
-   under §Security below.
+   ADR-0144's right. A write and a refused write are recorded as
+   [ADR-0148](./0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)
+   has them. The narrow form, and what is left open, are under
+   §Security below.
 4. **A member's role is a role link the platform writes from its
    memberships and removes when one ends,** as the caller `platform`
    and with no writer: the membership is the platform's fact, already
@@ -87,8 +89,7 @@ no revision holds for it.
    §Reading one's own write below.
 6. **Each present capability has a place in the model.** The
    inventory below is that list; every row is read off the code at
-   the revision above or off [authz.md](../authz.md). One row has no
-   place and is carried to the owner, not dropped.
+   the revision above or off [authz.md](../authz.md).
 7. **The console's editor.** A role assignment is a form. A guardrail
    and a `permit` are Cedar text, validated against the manifests
    before they are stored, with the registry's types and actions
@@ -114,15 +115,15 @@ one ADR-0140's loop delivers.
 | 4 | A project's roles | same files | the same scoped link on the project's entity |
 | 5 | Identity-derived statement of an agent | `platform/internal/machineapi`; §Statement collection, identity-derived | a system policy per action an agent holds on its own organization (`agent-message-send.cedar` exists); the rest are added to the system tier by the implementation |
 | 6 | Identity-derived statement of an operator or a supervisor | none found: nothing at the revision builds one and hands it to the evaluator (search below) | nothing to carry; a future one is a system policy |
-| 7 | A policy attached to a user, an agent, a group or the organization | `policy_attachments`; §Policy attachment | removed, ADR-0117; an organization's equivalent is a guardrail or a `permit` it writes (item 3), and none is converted |
+| 7 | A policy attached to a user, an agent, a group or the organization | `policy_attachments`; §Policy attachment | removed, ADR-0117; an organization's equivalent is a guardrail it writes or a `permit` an owner writes (item 3), and none is converted; an administrator no longer writes an `Allow` |
 | 8 | Versions, activation, roll-back and removal of a policy | `policy_versions`; §Policy persistence | the service's store through item 3's RPCs |
 | 9 | Refusing to detach an active policy's last attachment (ADR-0031) | the attachment code | removed with attachments; a policy is effective by activation and a link by deletion |
-| 10 | A watch grant, `iam:agent.watch`, and an activate grant, `iam:agent.activate`, held by no role | an attached policy; `platform/internal/api/watch.go` | a `permit` of the organization on the agent (ADR-0144), written under `iam:permit.write` |
+| 10 | A watch grant, `iam:agent.watch`, and an activate grant, `iam:agent.activate`, held by no role | an attached policy; `platform/internal/api/watch.go` | a `permit` of the organization on the agent (ADR-0144), written under `iam:permit.write`, so granting either becomes an owner's act |
 | 11 | Tenant check of the subject's organization | `subject_org` on the call (ADR-0038) | the system policy `tenant-isolation.cedar`; the field goes with the evaluator |
 | 12 | The decision read past the cache, `CheckCurrent` | `platform/internal/authz` | `Evaluate` with `Read` set to `READ_CURRENT` |
 | 13 | Cross-organization consent on a send | `platform/internal/api/consent.go`, the send path | a fed attribute on the organization and one exception in tenant isolation (ADR-0147) |
 | 14 | A user actor's half of a delegated operation | `platform/internal/operator/authority_service.go` | `Evaluate` with `READ_CURRENT` for the user, whose roles are links |
-| 15 | A hosted operator's half of a delegated operation | `audienceAuthorization` in `platform/internal/cli/controller_proof.go` | no place found; carried in the pull request that introduces this ADR |
+| 15 | A hosted operator's half of a delegated operation | `audienceAuthorization` in `platform/internal/cli/controller_proof.go` | a fed fact, no grant on the call: see §A hosted operator's delegation |
 | 16 | cowork's principal in `checkPermissions` | §cowork's principal | removed; cowork asks the service (item 8) |
 | 17 | Explanation of a decision | `platform/internal/api/permission_explanation.go`; §Explain | an RPC of the service naming the policies that decided, the system tier's among them, named at the implementation |
 | 18 | `checkPermissions` | `platform/internal/api/permission_check.go` | `Evaluations`, bounded as today |
@@ -144,24 +145,30 @@ statement for an operator or a supervisor; the `supervisor` the
 search of `platform/internal` also finds is the process supervisor of
 `garam serve`, not a principal.
 
-### No place found
+### A hosted operator's delegation
 
-Row 15. A hosted operator's current authority is asked of the
-evaluator with one `Allow` of exactly the action on the object,
-supplied by the platform on each call, which a Deny attached to the
-operator or to a group of it overrides. The policy service has no
-form for it: a caller supplying a grant is what ADR-0130 §8 and
-ADR-0138 item 7 refuse, and `Iam::Operator` is not a principal of
-`iam:` actions. The pull request names three ways to carry it and
-asks the owner to choose; this ADR does not.
+Row 15 is a fact the platform feeds. The operator's entity carries the
+operations its current grant holds. The system tier gains one policy
+per delegable operation that permits an operator of the resource's
+organization holding that operation, and an organization's guardrails
+forbid as they do today. The platform still refuses an ended or
+expired grant before it asks, since the grant's state is its own, and
+nothing is supplied on the call. The manifest (`Iam::Operator` as a
+principal of those actions, and the attribute) and the feed change
+with the implementation, which this ADR does not do.
 
 ### Reading one's own write
 
 An entity or a membership change commits its outbox mark with the
 change. After the commit the writer wakes the delivery loop and waits
-until the marks it wrote are no longer in the table, up to a bound of
-a few seconds; the loop deletes a mark only after the service has
-applied it. At the bound the request is answered as unavailable with
+until the marks it wrote are no longer in the table, up to a bound of 5
+seconds; the loop deletes a mark only after the service has applied it.
+The bound rests on the loop in `platform/internal/policyfeed`: it polls
+every second and a pass is one call, so a healthy delivery lands within
+about 2 seconds; a failing pass doubles the wait from the poll, to 2
+seconds and then 4, so a service that keeps failing passes the bound,
+which is the case the answer is for. An implementation does not choose
+its own bound. At the bound the request is answered as unavailable with
 the fact that the change is stored and not yet applied, which a retry
 may read. A request waiting on another replica's loop waits on the
 table, and the wake is an optimization that the polling does not need.
@@ -188,6 +195,10 @@ table, and the wake is an optimization that the polling does not need.
   only for a role link of the three org roles or a scoped role
   template, from a membership. A body of any other kind with no
   writer is refused, and any other caller naming none is refused.
+- **Only an owner writes a `permit`,** as ADR-0144 item 7 has it:
+  `iam:permit.write` is held by `role-owner` alone. A role other than
+  the owner writing one, bounded by what it holds, stays open as
+  ADR-0144 lists it.
 - **A write the service refuses stores nothing.** The check and the
   store are one step, so a refused write leaves no stored version.
 - **The console never relays a body unvalidated.** The service
@@ -208,6 +219,11 @@ table, and the wake is an optimization that the polling does not need.
 - **A membership change costs a wait.** Item 5 buys that a console
   user is not told a role was changed while the next request is still
   denied.
+- **An administrator loses writing an `Allow`.** Against today, where
+  an administrator attaches a policy holding an `Allow`, it keeps
+  assigning the roles it holds and writing guardrails and no longer
+  writes a `permit`. Granting `iam:agent.watch` and
+  `iam:agent.activate`, which no role holds, becomes an owner's act.
 - **The outbox carries links.** ADR-0140's mark kind gains the role
   link, delivered with the entities under the same sequence; the
   backfill, `garam policy-feed start`, writes links as well.
@@ -242,6 +258,15 @@ table, and the wake is an optimization that the polling does not need.
   organization's `Explain` could not show the link that granted, and a
   role of a team or a project, which a link scopes to a resource, would
   need an attribute for each.
+- **The platform writing a `permit` as itself for a delegation.** The
+  service would store a grant with no writer outside the membership
+  case, which is the write with no writer §Security keeps to role
+  links; it would also put a platform-held right where ADR-0144 gave
+  the right to an owner.
+- **The platform deciding the delegation and asking only for
+  guardrails.** A second decision outside the service that no guardrail
+  can see and `Explain` cannot name, the form ADR-0147 rejects for
+  consent.
 - **A `min_sequence` read option for item 5.** The sequence is taken
   at delivery, so a writer cannot know the one that will carry its
   change.

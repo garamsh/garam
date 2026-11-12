@@ -1,6 +1,6 @@
 module github.com/garamsh/garam/lib/platform-sdk-go
 
-go 1.27.2
+go 1.27.4
 
 require github.com/oapi-codegen/runtime v1.8.0
 

@@ -1,6 +1,8 @@
 # ADR 0134: An image lives at its publishing repository, and its tag says what a build is
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0150](./0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)
+> (§Decision 5, on the site baking the address)
 > Date: 2026-10-31
 
 Drafted for #1716, which reserves this number. The direction is the

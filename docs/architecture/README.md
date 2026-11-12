@@ -1162,7 +1162,8 @@ ADRs:
   `garam/server`, `garam/console`, `garam/site`, `garam/cowork` and
   `garam/cowork-web`, and the test image moves to `garam/test` once
   garamsh/aurora#711 creates it; supersedes 0097, 0093's repository URI
-  and 0039's names and image count
+  and 0039's names and image count; superseded in part by 0150
+  (§Decision 5, on the site baking the address)
 - [0135](./adr/0135-the-site-hands-a-sign-in-to-a-fixed-list-of-apps-and-cowork-shares-one-host-split-by-path.md)
   — the site hands a sign-in to a fixed list of apps, the console and
   cowork, named by identifier and never by origin; a return path is a

@@ -125,6 +125,22 @@ permission, since they answer what the manifests declare and read no
 entity. **Not built:** item 7's proofs for a new service; and codehub's
 manifest, so `repo` is in no catalogue.
 
+**codehub as a service is decided, and not built.**
+[ADR-0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
+decides a `Codehub` manifest with the entity type `Codehub::Repo`
+(`grn:<org>/codehub/repo/<id>`, codehub's immutable id) and the actions
+`codehub:repo.read`, held by members too, `repo.write`, `repo.create`
+and `runner.administer`, held by owners and administrators, and
+`org.use` on an organization in place of `create_organisation`. A path
+is asked as the exact UTF-8 context key `path` and is no entity.
+codehub's repositories are fed through an outbox with a sequence per
+entity, and a runner is an `Iam::Agent` that codehub registers and that
+holds no role by default. The HTTP binding accepts the type `grn` and
+resolves the Cedar type from the manifests' `@grn`. No manifest,
+`Caller` variant, declared context or HTTP binding for it exists: the
+policy service refuses a `context` field and a resource's properties
+today, and `codehub` stays outside the caller list.
+
 **The platform's outbox, its delivery and its signer are built.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set
 holding one row per entity and no document, and a loop reads each

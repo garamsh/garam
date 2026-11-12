@@ -234,7 +234,7 @@ func TestNewIn_ATypeBelongsToTheServiceThatDeclaresIt(t *testing.T) {
 
 	_, err = grn.Parse("grn:acme/iam/page/home")
 	require.Error(t, err, "iam holds no page")
-	_, err = grn.Parse("grn:acme/cowork/page/home")
+	_, err = grn.Parse("grn:acme/codehub/repo/api")
 	require.Error(t, err, "no manifest declares codehub")
 }
 

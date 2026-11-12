@@ -36,6 +36,32 @@ pub(crate) enum ServiceError {
         /// The bound.
         max: usize,
     },
+    /// The service was given no store to write policies to.
+    #[error("this service writes no policies")]
+    WritesUnavailable,
+    /// A write or read that names no writer, past a role link's write
+    /// from a membership.
+    #[error("a writer is required: only a role link's write from a membership has none")]
+    NoWriter,
+    /// The engine denied the writer the action on the organization.
+    #[error("{writer} is denied {action} on the organization")]
+    WriterDenied {
+        /// The writer's GRN.
+        writer: String,
+        /// The action asked.
+        action: &'static str,
+    },
+    /// A writer links only a role it holds.
+    #[error("{writer} does not hold the role {role:?}")]
+    RoleNotHeld {
+        /// The writer's GRN.
+        writer: String,
+        /// The role the link names.
+        role: decision::Role,
+    },
+    /// The policy store refused or failed.
+    #[error(transparent)]
+    Policy(#[from] grant::Error),
     /// The entity store failed.
     #[error(transparent)]
     EntityWrite(entity::Error),
@@ -65,6 +91,17 @@ pub(crate) fn to_status(error: &ServiceError) -> Status {
         ServiceError::Unauthenticated(Refusal::UnknownService) => {
             tracing::info!(error = ?error, "refused a service this one does not serve");
             Status::permission_denied("this service does not serve the caller")
+        }
+        ServiceError::WritesUnavailable => {
+            tracing::error!(error = ?error, "a write reached a service with no store");
+            Status::unavailable("this service writes no policies")
+        }
+        ServiceError::Policy(inner) => policy_status(error, inner),
+        ServiceError::NoWriter
+        | ServiceError::WriterDenied { .. }
+        | ServiceError::RoleNotHeld { .. } => {
+            tracing::info!(error = ?error, "refused a writer");
+            Status::permission_denied(error.to_string())
         }
         ServiceError::NotOwned(_) | ServiceError::OutOfScope(_) => {
             tracing::info!(error = ?error, "refused a write");
@@ -101,6 +138,46 @@ pub(crate) fn to_status(error: &ServiceError) -> Status {
         ) => {
             tracing::error!(error = ?error, "a decision could not be composed");
             Status::internal("the policy service could not decide")
+        }
+    }
+}
+
+/// What a refusal or failure of the policy store is on the wire: the
+/// writer's mistakes are the platform's error kinds, and what a status
+/// withholds the log carries.
+fn policy_status(error: &ServiceError, inner: &grant::Error) -> Status {
+    use grant::Error as G;
+    match inner {
+        G::PermitDenied { .. } | G::PermitRight | G::PermitNeedsRight(_) => {
+            tracing::info!(error = ?error, "refused a permit");
+            Status::permission_denied(error.to_string())
+        }
+        G::NotFound(_) | G::NoSuchVersion { .. } => {
+            tracing::info!(error = ?error, "named no policy");
+            Status::not_found(error.to_string())
+        }
+        G::AlreadyExists(_) => {
+            tracing::info!(error = ?error, "named a policy twice");
+            Status::already_exists(error.to_string())
+        }
+        G::GuardrailSyntax(_)
+        | G::GuardrailPermits
+        | G::GuardrailTooDeep
+        | G::PermitSyntax(_)
+        | G::PermitForbids
+        | G::PermitTooDeep
+        | G::PermitResourceUnscoped
+        | G::PermitResourceByType(_)
+        | G::ForeignEntity(_)
+        | G::ForeignPolicy(_)
+        | G::KindChange(_)
+        | G::Refused(_) => {
+            tracing::info!(error = ?error, "refused a policy");
+            Status::invalid_argument(error.to_string())
+        }
+        G::PermitEvaluation(_) | G::StoredBody { .. } | G::Store(_) => {
+            tracing::error!(error = ?error, "a policy could not be written or read");
+            Status::unavailable("the policy service could not read or write its policies")
         }
     }
 }

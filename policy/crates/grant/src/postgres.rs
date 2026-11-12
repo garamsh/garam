@@ -2,9 +2,23 @@ use decision::{Cause, OrgGrn, OrgPolicies, PolicySource};
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
-use crate::body::{Body, Stored, StoredPolicy};
+use crate::body::{Body, BodyKind, Stored, StoredPolicy};
 use crate::error::Error;
 use crate::permit_right::PermitRight;
+
+/// The summary query with a trailing clause, as one static string.
+macro_rules! summary_sql {
+    ($tail:literal) => {
+        concat!(
+            "SELECT policies.grn, policies.name, policies.status,
+        policies.default_version, first.body->>'kind' AS kind
+     FROM policies
+     JOIN policy_versions first
+       ON first.policy_grn = policies.grn AND first.version = 1 ",
+            $tail
+        )
+    };
+}
 
 /// Whether a policy decides anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +53,21 @@ pub struct Version {
     pub body: Body,
     /// Who wrote it.
     pub created_by: String,
+}
+
+/// A policy without its versions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Summary {
+    /// The policy's GRN.
+    pub grn: String,
+    /// Its name.
+    pub name: String,
+    /// Whether it decides.
+    pub status: Status,
+    /// The version that decides once it is active.
+    pub default_version: i32,
+    /// What its versions say.
+    pub kind: BodyKind,
 }
 
 /// The policies in the service's own database.
@@ -103,6 +132,17 @@ impl PolicyStore {
             .await
             .map_err(Error::Store)?
             .ok_or_else(|| Error::NotFound(grn.to_owned()))?;
+        let first: String = sqlx::query_scalar(
+            "SELECT body->>'kind' FROM policy_versions
+             WHERE policy_grn = $1 AND version = 1",
+        )
+        .bind(grn)
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(Error::Store)?;
+        if first != body.kind().tag() {
+            return Err(Error::KindChange(grn.to_owned()));
+        }
         let version: i32 = sqlx::query_scalar(
             "SELECT max(version) + 1 FROM policy_versions WHERE policy_grn = $1",
         )
@@ -248,6 +288,30 @@ impl PolicyStore {
         Ok(())
     }
 
+    /// One policy of the organization, without its versions.
+    pub async fn get(&self, org: &OrgGrn, grn: &str) -> Result<Summary, Error> {
+        owned(org, grn)?;
+        let row = sqlx::query(summary_sql!("WHERE policies.grn = $1"))
+            .bind(grn)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Error::Store)?
+            .ok_or_else(|| Error::NotFound(grn.to_owned()))?;
+        summary(&row)
+    }
+
+    /// The organization's policies, by GRN.
+    pub async fn list(&self, org: &OrgGrn) -> Result<Vec<Summary>, Error> {
+        let rows = sqlx::query(summary_sql!(
+            "WHERE policies.org_grn = $1 ORDER BY policies.grn"
+        ))
+        .bind(org.as_str())
+        .fetch_all(&self.pool)
+        .await
+        .map_err(Error::Store)?;
+        rows.iter().map(summary).collect()
+    }
+
     /// Every stored version, oldest first.
     pub async fn versions(&self, org: &OrgGrn, grn: &str) -> Result<Vec<Version>, Error> {
         owned(org, grn)?;
@@ -303,6 +367,27 @@ impl PolicySource for PolicyStore {
     async fn active(&self, org: &OrgGrn) -> Result<OrgPolicies, Cause> {
         self.active_policies(org).await.map_err(Cause::from)
     }
+}
+
+fn summary(row: &sqlx::postgres::PgRow) -> Result<Summary, Error> {
+    let grn: String = row.try_get("grn").map_err(Error::Store)?;
+    let status: String = row.try_get("status").map_err(Error::Store)?;
+    let kind: String = row.try_get("kind").map_err(Error::Store)?;
+    let unknown = |what: &str| Error::StoredBody {
+        policy: grn.clone(),
+        source: format!("unknown {what}").into(),
+    };
+    Ok(Summary {
+        name: row.try_get("name").map_err(Error::Store)?,
+        status: match status.as_str() {
+            "draft" => Status::Draft,
+            "active" => Status::Active,
+            _ => return Err(unknown("status")),
+        },
+        default_version: row.try_get("default_version").map_err(Error::Store)?,
+        kind: BodyKind::from_tag(&kind).ok_or_else(|| unknown("kind"))?,
+        grn: grn.clone(),
+    })
 }
 
 /// Refuses a GRN that is not `grn:<org>/iam/policy/<id>` under this

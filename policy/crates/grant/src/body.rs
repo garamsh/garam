@@ -145,6 +145,41 @@ impl Body {
         }))
     }
 
+    /// What kind of policy this version is.
+    pub fn kind(&self) -> BodyKind {
+        match &self.0 {
+            Stored::RoleLink { .. } => BodyKind::RoleLink,
+            Stored::Guardrail { .. } => BodyKind::Guardrail,
+            Stored::Permit { .. } => BodyKind::Permit,
+        }
+    }
+
+    /// What this version says, for a reader.
+    pub fn content(&self) -> Content {
+        match &self.0 {
+            Stored::RoleLink {
+                role,
+                scope,
+                principal,
+                resource,
+            } => Content::RoleLink {
+                role: match role {
+                    StoredRole::Owner => Role::Owner,
+                    StoredRole::Admin => Role::Admin,
+                    StoredRole::Member => Role::Member,
+                },
+                scope: match scope {
+                    StoredScope::Organization => RoleScope::Organization,
+                    StoredScope::TeamOrProject => RoleScope::TeamOrProject,
+                },
+                principal: (principal.r#type.clone(), principal.id.clone()),
+                resource: (resource.r#type.clone(), resource.id.clone()),
+            },
+            Stored::Guardrail { source } => Content::Guardrail(source.clone()),
+            Stored::Permit { source, .. } => Content::Permit(source.clone()),
+        }
+    }
+
     /// Refuses a permit stored under another organization or by
     /// another writer than the right it was made with.
     pub(crate) fn check_right(&self, org: &OrgGrn, writer: &str) -> Result<(), Error> {
@@ -199,6 +234,56 @@ impl Body {
             }
         }
     }
+}
+
+/// What a policy's versions are all of: a version never changes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BodyKind {
+    /// A role assignment.
+    RoleLink,
+    /// A `forbid`.
+    Guardrail,
+    /// A `permit`.
+    Permit,
+}
+
+impl BodyKind {
+    /// The tag a stored body carries.
+    pub(crate) fn tag(self) -> &'static str {
+        match self {
+            Self::RoleLink => "role_link",
+            Self::Guardrail => "guardrail",
+            Self::Permit => "permit",
+        }
+    }
+
+    /// The kind a stored tag names.
+    pub(crate) fn from_tag(tag: &str) -> Option<Self> {
+        [Self::RoleLink, Self::Guardrail, Self::Permit]
+            .into_iter()
+            .find(|kind| kind.tag() == tag)
+    }
+}
+
+/// What a version says, as a reader sees it. An entity is its type
+/// name and its id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Content {
+    /// A role assignment.
+    RoleLink {
+        /// The role granted.
+        role: Role,
+        /// The template set it is drawn from.
+        scope: RoleScope,
+        /// Who holds it.
+        principal: (String, String),
+        /// What it is held on.
+        resource: (String, String),
+    },
+    /// The text of a `forbid`.
+    Guardrail(String),
+    /// The text of a `permit`.
+    Permit(String),
 }
 
 /// A stored version as a decision composes it.

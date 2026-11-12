@@ -298,6 +298,39 @@ async fn the_tier_alone_allows_only_an_agents_sending_and_an_operators_operation
     println!("analysis: {proved} proofs");
 }
 
+/// No `permit` of an organization widens an operator (ADR-0146): with
+/// the widest `permit` composed, on every request an `Iam::Operator`
+/// makes, what the set allows is what the tier alone allows. The
+/// control: on the requests of other principals the same `permit` does
+/// widen, so the proof is not an empty one.
+#[tokio::test]
+#[ignore = "needs cvc5: make -C policy suites"]
+async fn no_organization_permit_widens_an_operator() {
+    let world = World::new();
+    let schema = world.engine.schema();
+    let tier = composed(&world, &[]);
+    let open = composed(&world, &[policy("grn:acme/iam/policy/open", EVERYTHING)]);
+    let mut solver = compiler();
+    let (mut operators, mut widened) = (0, 0);
+    for request in every_request(schema) {
+        let narrow = compiled(&open, &request, schema);
+        let wide = compiled(&tier, &request, schema);
+        let held = solver.check_implies_opt(&narrow, &wide).await.unwrap();
+        if request.principal().to_string() == "Iam::Operator" {
+            assert!(held, "an organization permit widens {request:?}");
+            operators += 1;
+        } else if !held {
+            widened += 1;
+        }
+    }
+    assert!(operators > 0, "the schema admits no operator request");
+    assert!(
+        widened > 0,
+        "the open permit widened no request: no control"
+    );
+    println!("analysis: {operators} operator requests, {widened} widened");
+}
+
 /// `agent.watch` is carried by a grant or by nothing (ADR-0022): no
 /// role's link reaches it.
 #[tokio::test]

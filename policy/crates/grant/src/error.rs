@@ -57,6 +57,9 @@ pub enum Error {
     /// A policy already has this GRN.
     #[error("policy {0} already exists")]
     AlreadyExists(String),
+    /// A policy keeps the kind its first version has.
+    #[error("policy {0} holds another kind of body")]
+    KindChange(String),
     /// The policy holds no such version.
     #[error("policy {policy} holds no version {version}")]
     NoSuchVersion {

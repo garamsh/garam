@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use cedar_policy::{
-    Authorizer, Context, Entities, EntityId, EntityTypeName, EntityUid, EvalResult, Policy,
+    Authorizer, Context, Effect, Entities, EntityId, EntityTypeName, EntityUid, EvalResult, Policy,
     PolicyId, PolicySet, Request, Schema, ValidationMode, Validator,
 };
 use manifest::Manifests;
@@ -12,6 +12,30 @@ use crate::error::Error;
 use crate::policy_source::{OrgGrn, OrgPolicies, PolicySource};
 use crate::role_link::RoleLink;
 use crate::system_tier;
+
+/// An organization's `permit` as the composed set holds it: it adds
+/// `unless { principal is Iam::Operator }`, so no `permit` reaches an
+/// operator and an operator's reach is its delegation alone (ADR-0146
+/// §A hosted operator's delegation). A `forbid` stays as written, and
+/// the policy keeps its id, so a decision's reasons still name it.
+fn without_operators(policy: &Policy) -> Result<Policy, Error> {
+    if policy.effect() != Effect::Permit {
+        return Ok(policy.clone());
+    }
+    let fault = |source: Box<dyn std::error::Error + Send + Sync>| Error::Composition {
+        policy: policy.id().to_string(),
+        source,
+    };
+    // Text, not the JSON form: a long condition nests deeply there and
+    // its conversion recurses past a worker thread's stack.
+    let text = policy.to_string();
+    let body = text
+        .trim_end()
+        .strip_suffix(';')
+        .ok_or_else(|| fault("the policy does not end in `;`".into()))?;
+    let guarded = format!("{body}\nunless {{ principal is Iam::Operator }};");
+    Policy::parse(Some(policy.id().clone()), guarded).map_err(|error| fault(error.into()))
+}
 
 /// The action that sends, the one a send across organizations is
 /// asked as (ADR-0147).
@@ -120,12 +144,11 @@ impl Engine {
                 })?;
         }
         for policy in own {
-            policies
-                .add(policy.clone())
-                .map_err(|error| Error::Composition {
-                    policy: policy.id().to_string(),
-                    source: error.into(),
-                })?;
+            let guarded = without_operators(policy)?;
+            policies.add(guarded).map_err(|error| Error::Composition {
+                policy: policy.id().to_string(),
+                source: error.into(),
+            })?;
         }
         Ok(Policies(policies))
     }

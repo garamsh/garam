@@ -30,8 +30,9 @@ yet (#1689).
 - `crates/decision/` — decides a request against the system tier, an
   organization's policies and the entities they read, and declares the
   ports it reads them through.
-- `crates/grant/` — role assignments and guardrails: schema-validated
-  writes and append-only versions.
+- `crates/grant/` — role links, guardrails and `permit`s:
+  schema-validated writes, append-only versions, and the reads of a
+  policy and of an organization's policies.
 - `crates/entity/` — the containment and membership decisions read, and
   the sequenced write owners reach it by.
 - `crates/access-report/` — the policies naming a subject or a resource.
@@ -88,6 +89,13 @@ yet (#1689).
   `iam:agent-template.read` (ADR-0145). The platform's role table and
   its calls write the dot form, the names the manifests declare
   (ADR-0143 item 4, ADR-0145).
+- **The platform alone writes a policy, over gRPC.** `CreatePolicy`,
+  `AppendPolicyVersion`, `ActivatePolicy`, `RollBackPolicy`,
+  `DeletePolicy`, `GetPolicy` and `ListPolicies` refuse a scoped caller whole. A request names its
+  writer, and the service evaluates the writer's action on the
+  organization before it stores. A writer links only a role it holds.
+  With no writer, only a role link written or removed from a
+  membership is accepted. A `permit` never reaches an operator.
 - **An organization's `permit` is written by an owner and scoped to
   its organization.** Writing one is `iam:permit.write`, held by the
   `owner` role alone. A `PermitRight` is the allow of that evaluation

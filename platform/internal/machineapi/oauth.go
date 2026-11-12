@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
@@ -52,6 +53,10 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 		writeOAuthError(w, &oauthRefusal{machinegen.InvalidRequest, "client_id is not a GRN"})
 		return
 	}
+	if identity.IsPrincipalClient(form.Get("client_id")) {
+		s.exchangePrincipal(w, r, form)
+		return
+	}
 	var audience *grn.GRN
 	if raw, ok := form["audience"]; ok {
 		g, err := grn.Parse(raw[0])
@@ -71,6 +76,41 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 		AccessToken: token.Value,
 		TokenType:   machinegen.Bearer,
 		ExpiresIn:   int(operator.TokenTTL.Seconds()),
+	})
+}
+
+// exchangePrincipal answers a service principal's assertion with the
+// issuer's token for the policy service (ADR-0129 item 3, ADR-0141
+// item 12). The audience is checked before the assertion is read, so a
+// request refused for it spends no jti, and it is the policy service's
+// name and not a GRN, unlike an operator's. It writes no credential
+// event: a principal's credential is a key the deployment holds, and
+// reading its use belongs to the revocation work.
+func (s *Server) exchangePrincipal(w http.ResponseWriter, r *http.Request, form url.Values) {
+	if s.issuer == nil || s.principals == nil {
+		writeOAuthError(w, identity.ErrPrincipalsOff)
+		return
+	}
+	if audience, ok := form["audience"]; !ok || audience[0] != identity.AudiencePolicy {
+		writeOAuthError(w, &oauthRefusal{machinegen.InvalidRequest,
+			"audience is " + identity.AudiencePolicy + " for a service principal"})
+		return
+	}
+	principal, err := s.principals.Authenticate(r.Context(), identity.RouteExchange,
+		sourceOf(r), form.Get("client_id"), form.Get("client_assertion"))
+	if err != nil {
+		writeOAuthError(w, err)
+		return
+	}
+	issued, err := s.issuer.IssueCaller(principal.GRN)
+	if err != nil {
+		writeOAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, machinegen.OAuthToken{
+		AccessToken: issued.Token,
+		TokenType:   machinegen.Bearer,
+		ExpiresIn:   issued.ExpiresIn,
 	})
 }
 

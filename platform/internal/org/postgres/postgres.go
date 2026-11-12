@@ -8,6 +8,7 @@ import (
 
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
+	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/org"
 	"github.com/garamsh/garam/platform/internal/org/postgres/db"
 	"github.com/garamsh/garam/platform/internal/pgxerr"
@@ -20,6 +21,9 @@ import (
 type Store struct {
 	pool *pgxpool.Pool
 	q    *db.Queries
+	// services are the first-party services a new Organization is
+	// given a service principal for (ADR-0129 item 1).
+	services []string
 }
 
 // Compile-time check that Store satisfies org.Store.
@@ -27,7 +31,15 @@ var _ org.Store = (*Store)(nil)
 
 // New constructs a Postgres-backed org.Store.
 func New(pool *pgxpool.Pool) *Store {
-	return &Store{pool: pool, q: db.New(pool)}
+	return &Store{pool: pool, q: db.New(pool), services: identity.FirstParty()}
+}
+
+// WithServices returns a store that gives each new Organization a
+// service principal for the services named instead of the closed
+// first-party list. It exists for a test to create a principal of a
+// service that is not on that list yet; production code takes New's.
+func (s *Store) WithServices(services ...string) *Store {
+	return &Store{pool: s.pool, q: s.q, services: strs(services)}
 }
 
 func parseGRNs(ss []string, op string) ([]grn.GRN, error) {

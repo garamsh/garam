@@ -654,8 +654,13 @@ With none, none is registered and nothing else changes.
   browser-facing listener. The subject token is the whole credential
   ([machine-identity.md](./machine-identity.md) §The issuer).
 - **Introspection** is `/oauth/introspect` on the machine listener,
-  admitting a first-party service by its `private_key_jwt` assertion
+  admitting a first-party service's principal
+  (`grn:<org>/iam/service/<name>`) by its `private_key_jwt` assertion
   and answering for tokens of that service's audience alone.
+- **A principal's token** is asked of the machine listener's
+  `/oauth/token` with its principal's GRN as `client_id` and `audience`
+  `policy`, and answered the issuer's JWT for the policy service
+  ([machine-identity.md](./machine-identity.md) §cowork's principal).
 
 ## What a specification is authoritative for
 

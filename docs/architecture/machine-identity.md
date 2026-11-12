@@ -315,13 +315,18 @@ else.
 - **What is built.** Only a CLI session's access token is accepted as
   the subject: an agent's browser token (§Browser tokens) is unbuilt,
   and a browser session's cookie is refused as any session that is not
-  a CLI's. A service authenticates at introspection from the public
-  keys `GARAM_IDENTITY_SERVICE_KEYS_FILE` names, for want of the
-  deployment key and service principal of cowork's principal; each
-  assertion's jti is spent once in the memory of the process that
-  admitted it, so a replay reaching another replica is not refused.
-  Introspection has no per-source bound. The signing key is the policy
-  feed's `GARAM_POLICY_SIGNING_KEY_FILE`.
+  a CLI's. A first-party service's principal
+  (`grn:<org>/iam/service/<name>`, one per organization, written and
+  removed with it) authenticates at introspection and at the exchange
+  from the public keys `GARAM_IDENTITY_SERVICE_KEYS_FILE` names, read
+  on every authentication, by an assertion whose jti is spent in the
+  database, so a replay reaching another replica is refused. Each
+  route bounds a
+  source by the operator exchange's constants, in a limiter of its own
+  in each process. No first-party service is an audience today, so
+  introspection has no caller a deployment can configure yet. The
+  signing key is the policy feed's `GARAM_POLICY_SIGNING_KEY_FILE`,
+  held by the machine listener too.
 
 - **An exchange, not a new credential.** A CLI session's access token
   or an agent's browser token (§Browser tokens) is presented as an RFC
@@ -364,11 +369,14 @@ Where its endpoints are served is
 
 ## cowork's principal
 
-**Unbuilt (#1664).**
+**Partly built (#1758); the rest is unbuilt (#1664).**
 [ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
 adds a fourth kind of machine caller beside an operator, an agent and
-a supervisor. Today no service principal exists and cowork reaches no
-queue.
+a supervisor. Built: the record, written with the organization and by
+migration `000073` for each that existed, and an exchange that answers
+a principal the issuer's token for the policy service (§The issuer).
+Unbuilt: the hour-long machine token, its revocation and re-issue, and
+every machine operation it reaches, so cowork reaches no queue.
 
 - **One per organization.** `grn:<org>/iam/service/cowork`, a
   record the platform writes with the organization and a migration
@@ -378,13 +386,18 @@ queue.
   private half in an owner-only file. The listener is configured with
   the public JWKs of each first-party service, read per exchange, at
   most two per service for a rotation; nothing on either listener
-  issues or withdraws them.
+  issues or withdraws them. Built: the file is re-read and re-parsed
+  on every authentication, so removing a compromised key takes no
+  restart, and a file that is gone or no longer parses refuses every
+  principal as unavailable (503), not as a bad client.
 - **The exchange is `exchangeClientAssertion`** under
   `machine-token.v2`, with the organization's principal GRN as
   `client_id`, `iss` and `sub`, and the key found by `kid` among the
   service's configured keys (§Asymmetric Operator exchange holds the
-  rest of the profile). The token lives one hour and carries its own
-  prefix.
+  rest of the profile). Built for the request naming `audience`
+  `policy`, answered the issuer's JWT of at most 300 seconds; any
+  other audience is refused. The hour-long token with its own prefix
+  is unbuilt.
 - **Read on every request** joined to the principal's record and its
   incarnation, with the key still configured, so a revocation, a
   removed key or the organization's deletion refuses it from the next

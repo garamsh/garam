@@ -8,8 +8,9 @@
 > other service are decided and not built;
 > superseded in part by
 > [ADR-0142](./0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md)
-> (the GRN forms of worked-example answers 4 and 5)
-> and by [ADR-0143](./0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
+> (the GRN forms of worked-example answers 4 and 5), by
+> [ADR-0149](./0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
+> (worked-example answers 4 and 5, decided in full) and by [ADR-0143](./0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
 > (§5 and §13, how the list of services is held and that an ADR adds
 > one)
 > Date: 2026-11-11

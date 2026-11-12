@@ -1,0 +1,12 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
+# The Go client of the platform's machine API, generated from
+# platform/api/machine.yaml with the types it answers. Its own package,
+# apart from platformsdk: both specifications name operations and
+# schemas alike, and one package would hold the collision.
+package: machine
+output: machine/client.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  skip-prune: true

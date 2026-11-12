@@ -193,7 +193,8 @@ func TestRegistry_NeedsASessionAndNothingMore(t *testing.T) {
 // headers and body of each operation, served over a real listener by
 // the handler `serve api` mounts. It needs no store: run it with
 //
-//	go test -v -run TestRegistry_PrintsEachOperationAsServed ./internal/api/
+//	go test -v -run TestRegistry_PrintsEachOperationAsServed \
+//		./internal/api/
 //
 // from platform/, since the suite runs without -v and a passing test's
 // log is not shown.

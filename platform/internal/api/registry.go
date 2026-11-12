@@ -70,7 +70,8 @@ func registry() apigen.Registry {
 }
 
 // describe reads one name through lib/grn. A name no manifest declares
-// is answered as unknown; a string that is no GRN is the caller's error.
+// is answered as unknown; a string that is no GRN is the caller's
+// error.
 func describe(name string) (apigen.GrnDescription, error) {
 	g, err := grn.Parse(name)
 	if errors.Is(err, grn.ErrUndeclared) {

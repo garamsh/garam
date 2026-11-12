@@ -111,7 +111,7 @@ tags:
     description: >-
       How the hosted Operator control service creates a managed agent
       (ADR-0077, ADR-0078). Creation is authorized by a member's
-      `agent:create` reference alone and registers the identity, its
+      `iam:agent-create` reference alone and registers the identity, its
       first assignment, an execution fenced from birth and the
       agent's first credential lineage in one transaction, and a retry
       under the same request identifier answers what the first request
@@ -125,8 +125,8 @@ tags:
       starts the agent fenced with no active generation and creates no
       workload, and a retry under the same request identifier answers
       what the first request did. Only `managed` placement admits
-      today, a new agent under an `agent:create` reference and a
-      replacement under an `agent:replace` one (ADR-0107). Every refusal the contract names carries `reason` in its
+      today, a new agent under an `iam:agent-create` reference and a
+      replacement under an `iam:agent-replace` one (ADR-0107). Every refusal the contract names carries `reason` in its
       Error body.
   - name: standalone
     description: >-
@@ -1108,9 +1108,9 @@ paths:
         token is still live and its registration is still held; the
         forwarded token is live, names `controller` and names the caller
         as its audience, and the controller is still registered; the
-        caller's current grant covers `agent:activate` for that
+        caller's current grant covers `iam:agent-activate` for that
         controller; and current policy for the caller and its current
-        groups, beside an Allow of `agent:activate` on the organization
+        groups, beside an Allow of `iam:agent-activate` on the organization
         (or, with `agent`, on that agent) that the grant contributes,
         does not deny it. With `agent`, the agent must currently be
         assigned to `controller`, and the answer carries that
@@ -1169,7 +1169,7 @@ paths:
         proven the placement and that the previous writer stopped
         before it calls. Per request, garam reads the caller's
         registration, its current grant, which must cover
-        `agent:activate` for the agent's current assignee, and current
+        `iam:agent-activate` for the agent's current assignee, and current
         policy on the agent, where an explicit Deny wins. The caller
         presents its own token and forwards `token`: the agent's token
         its assignee minted to be shown to the caller, or, where the
@@ -1191,19 +1191,19 @@ paths:
 
 
         `operationRef` is null for the revision the runtime last
-        reported as effective, and is a durable `agent:configure`
+        reported as effective, and is a durable `iam:agent-configure`
         reference for a pending revision. garam rechecks that reference
         as current and requires it to bind this caller, this agent and
         its current assignment. Whether one is needed is the caller's to
         decide: garam keeps no revision. The one exception is an agent
         `createManagedAgent` made: until an activation of it has
         succeeded, a null `operationRef` is 403, and the reference is
-        either such an `agent:configure` reference or the
-        `agent:create` reference of that agent's own creation, while it
-        is still assigned where that creation put it. An `agent:create`
+        either such an `iam:agent-configure` reference or the
+        `iam:agent-create` reference of that agent's own creation, while it
+        is still assigned where that creation put it. An `iam:agent-create`
         reference is accepted for that first activation alone, with a
         null `replacesActivationId`, and for its identical retry; any
-        other `agent:create` reference is 403.
+        other `iam:agent-create` reference is 403.
 
 
         The same `requestId` with the same request answers the same
@@ -1353,8 +1353,8 @@ paths:
       description: >-
         For an agent whose credential is lost or compromised. The
         agent keeps its GRN and everything bound to it. Authorized as
-        `activateAgent` is, with `agent:recover` in place of
-        `agent:activate`, and with an `agent:recover` handoff an
+        `activateAgent` is, with `iam:agent-recover` in place of
+        `iam:agent-activate`, and with an `iam:agent-recover` handoff an
         administrator minted for exactly this request body: the handoff
         must bind this caller, this agent and its current assignment,
         and the SHA-256 of the received body must equal its digest, or
@@ -1412,16 +1412,16 @@ paths:
       security:
         - machineToken: []
         - machineBearer: []
-      summary: Create an agent assigned to a controller, under a member's agent:create reference.
+      summary: Create an agent assigned to a controller, under a member's iam:agent-create reference.
       description: >-
         The caller is the hosted Operator control service, the
         reference's audience. Before anything is created or an earlier
         creation answered, garam rechecks `operationRef` from current
-        state: it must be an `agent:create` reference handed to this
+        state: it must be an `iam:agent-create` reference handed to this
         caller in its own organization, its grant must still cover
-        `agent:create` for `controller`, the controller must still be
+        `iam:agent-create` for `controller`, the controller must still be
         registered, and the member it was minted for must still hold
-        `agent:create`. The reference must bind this `controller` and
+        `iam:agent-create`. The reference must bind this `controller` and
         this `requestId`. No lifecycle authority is read: creating an
         inactive identity is not activating one.
 
@@ -1495,7 +1495,7 @@ paths:
         `approveAgentEnrollment` together with the `requestId` this body
         carries. An unknown, withdrawn or expired secret, and one of
         another organization's approval, are one 401. The approving
-        administrator's `agent:enroll` is read again from current state
+        administrator's `iam:agent-enroll` is read again from current state
         on every call: denied is 403, and authority garam cannot read as
         current is 503.
 
@@ -1589,8 +1589,8 @@ paths:
         is the hosted Operator control service and presents its own
         token. It binds one approval to its
         organization, `requestId`, `placement`, `assignee` and the
-        member's `agent:create` reference, rechecked from current state
-        as `createManagedAgent` rechecks it: an `agent:create`
+        member's `iam:agent-create` reference, rechecked from current state
+        as `createManagedAgent` rechecks it: an `iam:agent-create`
         reference handed to this caller in its own organization, minted
         under this `requestId` for this `assignee`. Nothing is admitted
         and no agent exists yet.
@@ -1609,12 +1609,12 @@ paths:
 
         A body naming `replaces` binds a replacement, which moves
         `replaces.agent` to `assignee` under its GRN (ADR-0107). Its
-        `operationRef` is an owner's or administrator's `agent:replace`
+        `operationRef` is an owner's or administrator's `iam:agent-replace`
         reference instead, handed to this caller in its own
         organization and minted under this `requestId` for
         `replaces.agent`, at `replaces.expectedAssignee` and
         `replaces.expectedEpoch`, with `assignee` as its destination;
-        the caller's current grant covers `agent:replace` for both
+        the caller's current grant covers `iam:agent-replace` for both
         controllers. One minted for another agent, assignment,
         destination or request identifier is 409 with reason
         `binding_conflict`, and one the agent has moved away from is
@@ -1625,7 +1625,7 @@ paths:
         whatever else the body says. The name is the one this contract
         shipped with, and the refusal is permanent: `agent-enrollment.v1`
         never admits direct placement. A direct agent's authority is an
-        administrator's `agent:enroll` approval and a supervisor
+        administrator's `iam:agent-enroll` approval and a supervisor
         registered for that one agent, never an operator (ADR-0111). The
         browser surface's `approveAgentEnrollment` with
         `placement: direct` is that approval, and the host spends it
@@ -2384,7 +2384,7 @@ components:
           type: string
         operation:
           type: string
-          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, operator:read, agent:replace]
+          enum: [iam:agent-create, iam:agent-configure, iam:agent-recover, iam:agent-template-read, iam:agent-template-publish, iam:execution-profile-read, iam:agent-execution-read, iam:operator-read, iam:agent-replace]
           description: >-
             Each operation is served on one route with one fixed HTTP
             method. A release that does not know an operation refuses
@@ -2392,19 +2392,19 @@ components:
         targetGrn:
           type: string
           description: >-
-            The controller for `agent:create`; the agent for
-            `agent:configure`, `agent:recover`,
-            `agent:execution-read` and `agent:replace`; the
+            The controller for `iam:agent-create`; the agent for
+            `iam:agent-configure`, `iam:agent-recover`,
+            `iam:agent-execution-read` and `iam:agent-replace`; the
             organization
             for
-            `agent-template:read`, `agent-template:publish`,
-            `execution-profile:read` and `operator:read`.
+            `iam:agent-template-read`, `iam:agent-template-publish`,
+            `iam:execution-profile-read` and `iam:operator-read`.
         assignment:
           $ref: '#/components/schemas/BoundAssignment'
         destinationGrn:
           type: string
           description: >-
-            Present for `agent:replace` alone: the controller the
+            Present for `iam:agent-replace` alone: the controller the
             replacement moves the agent to, which
             `admitAgentEnrollment` compares with the binding's assignee
             (ADR-0107).
@@ -2416,9 +2416,9 @@ components:
           type: string
           maxLength: 2048
           description: >-
-            Present for `agent-template:read`, `agent-template:publish`,
-            `execution-profile:read`, `agent:execution-read` and
-            `operator:read`, absent for every other operation. It is
+            Present for `iam:agent-template-read`, `iam:agent-template-publish`,
+            `iam:execution-profile-read`, `iam:agent-execution-read` and
+            `iam:operator-read`, absent for every other operation. It is
             the exact origin-form
             request target the console sent: the escaped path and the
             raw query, with no scheme or authority, including any path
@@ -2435,8 +2435,8 @@ components:
       required: [operatorGrn, epoch]
       description: >-
         Where the agent ran when an operation on it was authorized.
-        Present for `agent:configure`, `agent:recover`,
-        `agent:execution-read` and `agent:replace` only.
+        Present for `iam:agent-configure`, `iam:agent-recover`,
+        `iam:agent-execution-read` and `iam:agent-replace` only.
       properties:
         operatorGrn:
           type: string
@@ -2503,8 +2503,8 @@ components:
         operationRef:
           type: [string, 'null']
           description: >-
-            A durable `agent:configure` reference for a pending
-            revision, or a managed agent's own `agent:create` reference
+            A durable `iam:agent-configure` reference for a pending
+            revision, or a managed agent's own `iam:agent-create` reference
             for its first activation; null otherwise.
         token:
           type: string
@@ -2623,8 +2623,8 @@ components:
         operationRef:
           type: string
           description: >-
-            The member's durable `agent:create` reference, or for a
-            replacement its `agent:replace` reference.
+            The member's durable `iam:agent-create` reference, or for a
+            replacement its `iam:agent-replace` reference.
         replaces:
           $ref: '#/components/schemas/AgentEnrollmentReplacement'
         name:
@@ -2708,10 +2708,10 @@ components:
         requestId:
           type: string
           pattern: '^[A-Za-z0-9._~-]{1,128}$'
-          description: The request identifier the member's `agent:create` reference was minted under.
+          description: The request identifier the member's `iam:agent-create` reference was minted under.
         operationRef:
           type: string
-          description: The member's durable `agent:create` reference.
+          description: The member's durable `iam:agent-create` reference.
         name:
           type: string
           minLength: 1

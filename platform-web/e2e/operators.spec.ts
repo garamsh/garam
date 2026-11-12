@@ -432,7 +432,7 @@ test.describe("operators", () => {
     signedIn,
     baseURL,
   }) => {
-    await seedHostedOperator(signedIn, ENDPOINT, ["operator:read"]);
+    await seedHostedOperator(signedIn, ENDPOINT, ["iam:operator-read"]);
     const digest = `sha256:${"ab".repeat(32)}`;
     const received = await stubReports(page, new URL(baseURL!).origin, {
       status: 200,
@@ -506,7 +506,7 @@ test.describe("operators", () => {
         read.authorization!.slice("Garam-Operation ".length),
       );
       expect(recorded).toMatchObject({
-        operation: "operator:read",
+        operation: "iam:operator-read",
         actorGrn: signedIn.userGrn,
         audienceGrn: formatGrn(signedIn.orgSlug, "iam", "operator", "hosted"),
         targetGrn: `grn:root/iam/org/${signedIn.orgSlug}`,
@@ -520,7 +520,7 @@ test.describe("operators", () => {
     signedIn,
     baseURL,
   }) => {
-    await seedHostedOperator(signedIn, ENDPOINT, ["operator:read"]);
+    await seedHostedOperator(signedIn, ENDPOINT, ["iam:operator-read"]);
     await stubReports(page, new URL(baseURL!).origin, "unreachable");
     const unanswered = page.getByText(
       "Hosted control's control service did not answer, so what it reports of the operators it serves was not checked.",

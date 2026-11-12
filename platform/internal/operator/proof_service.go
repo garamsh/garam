@@ -20,10 +20,10 @@ import (
 // refuses as unavailable rather than answering from anything older.
 type ProofService interface {
 	// Prove answers the proof when the audience's current grant covers
-	// agent:activate for controller, a named agent is currently assigned
-	// to controller, and current policy does not deny agent:activate on
-	// the organization, or on the agent where one is named. controller
-	// is one ParseController answered for audience.
+	// iam:agent-activate for controller, a named agent is currently
+	// assigned to controller, and current policy does not deny
+	// iam:agent-activate on the organization, or on the agent where one is
+	// named. controller is one ParseController answered for audience.
 	Prove(ctx context.Context, audience, controller grn.GRN, agent *grn.GRN) (*ControllerProof, error)
 }
 

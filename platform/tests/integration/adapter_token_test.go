@@ -374,7 +374,7 @@ func TestAdapterTokenMode_AFencedAdapterKeepsItsTwoAudiencesApart(t *testing.T) 
 }
 
 // TestAdapterTokenMode_ARecoveryIsResumedByTheNextGeneration is
-// agent:recover reaching a running token-mode adapter. The recovery
+// iam:agent-recover reaching a running token-mode adapter. The recovery
 // refuses the replaced lineage's garam token and ends the activation.
 // Writing the new lineage's tokens over both files makes the adapter
 // ask again, and garam refuses the same request as ended: a rewritten

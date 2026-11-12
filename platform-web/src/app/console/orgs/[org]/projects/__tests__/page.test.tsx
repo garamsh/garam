@@ -80,7 +80,7 @@ describe("projects section", () => {
   it("leaves the create action out when the server denies it, and keeps the list", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "project:create" ? "deny" : "allow",
+        action === "iam:project-create" ? "deny" : "allow",
       ),
     );
 

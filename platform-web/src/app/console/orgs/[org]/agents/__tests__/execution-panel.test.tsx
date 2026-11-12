@@ -29,7 +29,7 @@ const hosted: DelegatedOperator = {
     grantId: "grant-1",
     operatorGrn: "grn:acme/iam/operator/hosted",
     controllers: [],
-    operations: ["agent:execution-read"],
+    operations: ["iam:agent-execution-read"],
     expiresAt: "2099-01-01T00:00:00Z",
     grantedBy: "grn:acme/iam/user/alice",
     grantedAt: "2026-10-01T00:00:00Z",

@@ -36,7 +36,7 @@ export function CreatePolicyForm({ org }: { org: string }) {
       Statement: [
         {
           Effect: "Deny",
-          Action: ["project:update"],
+          Action: ["iam:project-update"],
           Resource: [projectsPattern(org)],
         },
       ],

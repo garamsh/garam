@@ -51,7 +51,7 @@ list stays closed and static.
 **Two further decisions are taken, both partly built.** The policy
 service loads `policy/schema/iam.cedarschema` and
 `policy/schema/cowork.cedarschema` as one schema, and the platform's
-role table and console still write `<type>:<verb>`. An organization
+role table and console write `iam:<type>-<verb>`. An organization
 writes role links, `forbid` guardrails and `permit` policies, the last
 only in the policy service: nothing sends one yet.
 
@@ -65,9 +65,10 @@ only in the policy service: nothing sends one yet.
   from the manifests; the issuer's audience list and the closed list of
   callers are checked against them; and which caller writes which type
   is read from the annotations. An action is `<service>:<type>-<verb>`
-  and every action moves: `org:delete` becomes `iam:org-delete`, which
-  is `Iam::Action::"org-delete"`, in the evaluator, the roles, the
-  console and the system tier. A role is the `Iam` namespace's, and a
+  and every action moves: the platform's `<type>:<verb>` became
+  `iam:<type>-<verb>`, so `iam:org-delete` is
+  `Iam::Action::"org-delete"`, in the evaluator, the roles, the console
+  and the system tier. A role is the `Iam` namespace's, and a
   service's action joins one by naming its group in its own manifest.
   The platform is to serve a read-only registry of services, types and
   actions, answered from the manifests. Adding a service is one pull
@@ -101,18 +102,21 @@ only in the policy service: nothing sends one yet.
   and a check of an entity literal in a `permit`'s principal scope or
   condition.
 
-**Built of ADR-0143** (items 1, 2, 3 and 5): the two manifests, the
+**Built of ADR-0143** (items 1, 2, 3, 4 and 5): the two manifests, the
 `manifest` crate that reads them, `lib/grn`'s generated catalogue, the
 `make -C policy check-gen` that holds the catalogue, the audience list
 and the caller list to the manifests, the types a caller may write read
 from `@caller`, qualified types and `<service>:<type>-<verb>` actions
 on the wire with the unqualified form refused, the `Iam` roles, and
 `iam:policy-permit` declared in `role-owner` alone. The platform's
-outbox sends `Iam::` types under migration 000070. **Not built:** item
-4, the platform's role table, `role.go` and the console still write
-`<type>:<verb>`, so no platform check names an action the service now
-accepts; item 6, the registry; item 7's proofs for a new service;
-codehub's manifest, so `repo` is in no catalogue.
+outbox sends `Iam::` types under migration 000070. Item 4 renamed the
+platform's own actions, in `role.go`, the evaluator, the console, the
+CLI and the SDKs, and migration 000071 rewrote the operations stored in
+delegation grants and authorities; no stored policy document was
+converted, and `platform/internal/org/action_manifest_test.go` holds
+the platform's names to `grn.Actions()`. **Not built:** item 6, the
+registry; item 7's proofs for a new service; and codehub's manifest, so
+`repo` is in no catalogue.
 
 **The platform's outbox, its delivery and its signer are built.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set
@@ -206,7 +210,7 @@ evaluation reads it. Every other key below is read.
     {
       "Sid": "AllowOrgRead",
       "Effect": "Allow",
-      "Action": ["org:read", "project:list"],
+      "Action": ["iam:org-read", "iam:project-list"],
       "Resource": ["grn:acme/*"]
     }
   ]
@@ -215,7 +219,7 @@ evaluation reads it. Every other key below is read.
 
 - `Effect`: `Allow` | `Deny`.
 - `Action`: `<service_type>:<verb>` strings; `*` and `?` wildcards may
-  appear anywhere and repeat (`org:*`, `*`). Constants are owned by
+  appear anywhere and repeat (`iam:org-*`, `*`). Constants are owned by
   the defining domain (`platform/internal/org`,
   `platform/internal/user`, …). The engine matches strings only.
 - `Resource`: GRN patterns with the same wildcard rules
@@ -296,7 +300,7 @@ same slot
 
 | Origin | Action patterns | Resource patterns |
 |--------|-----------------|-------------------|
-| the caller's own GRN | `message:send` | `grn:<caller org>:*` |
+| the caller's own GRN | `iam:message-send` | `grn:<caller org>:*` |
 
 That is why an agent nobody has written a policy for goes on sending
 inside its organization. A policy narrows it with a Deny, as a Deny
@@ -396,14 +400,14 @@ never imports the engine and never parses a document: a document that
 does not parse comes back as `invalid_argument` and leaves as 400.
 
 Policy management is authorized like any other action. The
-`policy:create`, `policy:read`, `policy:update`, `policy:attach`,
-`policy:detach` and `policy:delete` constants live in
-`platform/internal/org`, because the api server enforces them and may
-not import the engine that stores policies. `owner` and `admin` grant
-`policy:*`; `member` grants none, so reading a policy is an admin
-action. The addressed policy's GRN is the object of the check, and its
-organization segment is the org in the path, so a policy of another org
-is not addressable.
+`iam:policy-create`, `iam:policy-read`, `iam:policy-update`,
+`iam:policy-attach`, `iam:policy-detach` and `iam:policy-delete`
+constants live in `platform/internal/org`, because the api server
+enforces them and may not import the engine that stores policies.
+`owner` and `admin` grant `iam:policy-*`; `member` grants none, so
+reading a policy is an admin action. The addressed policy's GRN is the
+object of the check, and its organization segment is the org in the
+path, so a policy of another org is not addressable.
 
 The console calls these operations and no others
 ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)),
@@ -552,11 +556,12 @@ policy service itself, under a caller token from
 `exchangeClientAssertion` with `audience` `policy` and `sub` its
 principal, and not through the platform. That route is unbuilt.
 
-- **Decided as a machine sender.** Its `postMessage` asks `message:send`
-  with its GRN as subject and the recipient as object, on the
-  identity-derived Allow over its own organization (§Identity-derived
-  statements). A policy attached to it applies, so a Deny narrows
-  which agents cowork may deliver to; an Allow widens nothing.
+- **Decided as a machine sender.** Its `postMessage` asks
+  `iam:message-send` with its GRN as subject and the recipient as
+  object, on the identity-derived Allow over its own organization
+  (§Identity-derived statements). A policy attached to it applies, so a
+  Deny narrows which agents cowork may deliver to; an Allow widens
+  nothing.
 - **A floor before the engine.** A recipient that is not an agent of
   its organization is refused, and no consent relation carries it
   across. Its token reaches no other operation.

@@ -75,7 +75,7 @@ function approvalWhen(listing: AgentEnrollmentListing): ApprovalRow["when"] {
  * the approvals that stood them up. A host is approved from what
  * `garam standalone prepare` printed on it; an unspent approval is
  * withdrawn and an active supervisor revoked, each after a dialog
- * saying what ends. Where the server denies `agent:enroll`, each of the
+ * saying what ends. Where the server denies `iam:agent-enroll`, each of the
  * three stays on the page, inactive, with the reason (ADR-0113). A list
  * garam refused is said, never shown as empty.
  */
@@ -85,7 +85,7 @@ export default async function HostsPage({ params }: Params) {
     getOrg(org),
     lookupAgentEnrollments(org),
     lookupAgentSupervisors(org),
-    checkPermissions(org, { enroll: { action: "agent:enroll" } }),
+    checkPermissions(org, { enroll: { action: "iam:agent-enroll" } }),
   ]);
 
   const denied = may.get("enroll") === "denied" ? DENIED : null;

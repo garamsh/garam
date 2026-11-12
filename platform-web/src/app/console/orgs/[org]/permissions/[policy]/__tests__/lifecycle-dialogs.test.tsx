@@ -286,7 +286,7 @@ describe("delete policy dialog", () => {
     server.use(
       http.delete(DENY, () =>
         HttpResponse.json(
-          { kind: "permission_denied", message: "denied: policy:delete" },
+          { kind: "permission_denied", message: "denied: iam:policy-delete" },
           { status: 403 },
         ),
       ),

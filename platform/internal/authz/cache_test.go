@@ -23,7 +23,7 @@ func policyDocument(sid string, effect wire.Effect) authz.PolicyDocument {
 		Statement: []authz.Statement{{
 			Sid:      sid,
 			Effect:   effect,
-			Action:   []string{"org:read"},
+			Action:   []string{"iam:org-read"},
 			Resource: []string{"grn:acme/*"},
 		}},
 	}

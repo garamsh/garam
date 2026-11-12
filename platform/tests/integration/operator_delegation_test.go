@@ -491,7 +491,7 @@ func TestIntrospect_AnswersItsAudienceOnly(t *testing.T) {
 
 // TestMint_RefusesWhatTheGrantDoesNotCover holds the delegation's
 // bound: a controller outside it, an operation outside it, a cross
-// organization audience, and agent:activate, which no member mints.
+// organization audience, and iam:agent-activate, which no member mints.
 func TestMint_RefusesWhatTheGrantDoesNotCover(t *testing.T) {
 	f := newDelegationFixture(t)
 	f.grant(t)

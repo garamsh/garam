@@ -519,7 +519,7 @@ func TestOperatorKey_AnAssertionOutsideItsTimeBoundsSpendsNothing(t *testing.T) 
 // PM's review of #1360, blocking item 1, against real Postgres: a
 // withdrawn key still refuses KeyRotationFirst, the issuance the
 // registration's authority reaches, so re-keying after a revocation is
-// operator:reissue's. An immediate rotation, which that authority
+// iam:operator-reissue's. An immediate rotation, which that authority
 // issues, is the control; an operator never keyed takes a first key.
 func TestOperatorKey_AFirstIssuanceIsRefusedOnceAnyKeyWasIssued(t *testing.T) {
 	ctx := context.Background()
@@ -541,7 +541,7 @@ func TestOperatorKey_AFirstIssuanceIsRefusedOnceAnyKeyWasIssued(t *testing.T) {
 		"the refused issuance wrote nothing")
 
 	_, err = store.IssueKey(ctx, next, operator.KeyRotationImmediate)
-	assert.NoError(t, err, "the control: operator:reissue's rotation re-keys")
+	assert.NoError(t, err, "the control: iam:operator-reissue's rotation re-keys")
 	issueKey(t, store, fresh, operator.KeyRotationFirst)
 }
 

@@ -71,33 +71,34 @@ garam's retired templates and the browser's `operatorGrn`
   rather than minted, since the operator is configured with it before
   it is registered. A name and description beside it are
   the organization's words about the record and not its identity
-  (ADR-0074). Registering is granted by `operator:register`, reading by
-  `operator:read`, renaming and describing by `operator:update`,
-  replacing or withdrawing a key by `operator:reissue` and deleting by
-  `operator:delete`, each named action by action for the reason the
-  agent actions are — re-keying and deleting separately from
-  registering, because each withdraws what an operator runs on.
+  (ADR-0074). Registering is granted by `iam:operator-register`, reading
+  by `iam:operator-read`, renaming and describing by
+  `iam:operator-update`, replacing or withdrawing a key by
+  `iam:operator-reissue` and deleting by `iam:operator-delete`, each
+  named action by action for the reason the agent actions are —
+  re-keying and deleting separately from registering, because each
+  withdraws what an operator runs on.
 - An organization **delegating** bounded execution authority to a
   hosted operator, under `/orgs/{org}/operators/{operator}/delegation`,
   and a member handing it one request-bound operation under
   `/orgs/{org}/operation-authorities`, which the operator reads back on
   the machine listener (ADR-0078), where it also proves a controller's
   current authority before each lifecycle decision, creates a managed
-  agent under a member's `agent:create` reference (ADR-0077), and
+  agent under a member's `iam:agent-create` reference (ADR-0077), and
   activates, inspects,
   deactivates and recovers an agent's execution. A grant is
   immutable and a replacement or withdrawal is final for what was
   minted under it; every mint, read back and proof is decided from
-  current state. Delegating is `operator:delegate`, creating
-  `agent:create`, configuring `agent:configure`, recovering
-  `agent:recover` and moving one to another controller `agent:replace`
-  (ADR-0107). Reading the operator's published templates and
-  profiles, publishing a template version and reading an agent's
-  execution are each an operation of their own, bound to the exact
-  request target, and the console sends every one only to the control
-  endpoint an administrator registered under `operator:delegate`
-  (#1170); [operators.md](./operators.md) §Delegated operation authority
-  holds the rest.
+  current state. Delegating is `iam:operator-delegate`, creating
+  `iam:agent-create`, configuring `iam:agent-configure`, recovering
+  `iam:agent-recover` and moving one to another controller
+  `iam:agent-replace` (ADR-0107). Reading the operator's published
+  templates and profiles, publishing a template version and reading an
+  agent's execution are each an operation of their own, bound to the
+  exact request target, and the console sends every one only to the
+  control endpoint an administrator registered under
+  `iam:operator-delegate` (#1170); [operators.md](./operators.md)
+  §Delegated operation authority holds the rest.
 - An administrator **approving a standalone host** for one agent,
   under `/orgs/{org}/agent-enrollments`, by the hash of the host's
   bootstrap secret and the placement its supervisor runs the agent
@@ -110,7 +111,7 @@ garam's retired templates and the browser's `operatorGrn`
   with, and activates that one agent on the execution routes with
   (ADR-0100).
   No operator, grant or hosted service is involved. Approving,
-  withdrawing and revoking are `agent:enroll`;
+  withdrawing and revoking are `iam:agent-enroll`;
   [agents.md](./agents.md) §Standalone hosts holds the rest, and what
   supervises the host's runtime is `garam standalone run`
   (ADR-0085), and its joint acceptance with garam and Sherlock is

@@ -112,7 +112,7 @@ func checkRequest(statements ...*authzv1.Statement) *authzv1.CheckRequest {
 	return &authzv1.CheckRequest{
 		SubjectGrn: "grn:root/iam/user/alice",
 		ObjectGrn:  "grn:root/iam/org/acme",
-		Action:     "org:update",
+		Action:     "iam:org-update",
 		Statements: statements,
 		// alice is the request fixture's member of acme; without this
 		// the scope check refuses the call before any statement runs.
@@ -130,19 +130,19 @@ func TestGRPCServer_Check(t *testing.T) {
 	}{
 		{
 			"matching allow",
-			[]*authzv1.Statement{allowStatement("s1", []string{"org:*"}, []string{"grn:root/iam/org/*"})},
+			[]*authzv1.Statement{allowStatement("s1", []string{"iam:org-*"}, []string{"grn:root/iam/org/*"})},
 			true,
 		},
 		{
 			"default deny",
-			[]*authzv1.Statement{allowStatement("s1", []string{"org:read"}, []string{"grn:root/iam/org/*"})},
+			[]*authzv1.Statement{allowStatement("s1", []string{"iam:org-read"}, []string{"grn:root/iam/org/*"})},
 			false,
 		},
 		{
 			"explicit deny wins",
 			[]*authzv1.Statement{
-				allowStatement("s1", []string{"org:*"}, []string{"grn:root/iam/org/*"}),
-				{Sid: "s2", Effect: authzv1.Effect_EFFECT_DENY, Action: []string{"org:update"}, Resource: []string{"grn:root/iam/org/acme"}},
+				allowStatement("s1", []string{"iam:org-*"}, []string{"grn:root/iam/org/*"}),
+				{Sid: "s2", Effect: authzv1.Effect_EFFECT_DENY, Action: []string{"iam:org-update"}, Resource: []string{"grn:root/iam/org/acme"}},
 			},
 			false,
 		},
@@ -183,7 +183,7 @@ func TestGRPCServer_CheckInvalidInput(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			req := checkRequest(allowStatement("s1", []string{"org:*"}, []string{"grn:root/iam/org/*"}))
+			req := checkRequest(allowStatement("s1", []string{"iam:org-*"}, []string{"grn:root/iam/org/*"}))
 			c.mutate(req)
 			_, err := client.Check(context.Background(), req)
 			assert.Equal(t, c.want, status.Code(err))
@@ -197,11 +197,11 @@ func TestGRPCServer_Explain(t *testing.T) {
 	resp, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
 		SubjectGrn: "grn:root/iam/user/alice",
 		ObjectGrn:  "grn:root/iam/org/acme",
-		Action:     "org:delete",
+		Action:     "iam:org-delete",
 		Statements: []*authzv1.Statement{
-			allowStatement("allow-all", []string{"org:*"}, []string{"grn:root/iam/org/*"}),
-			allowStatement("wrong-action", []string{"org:read"}, []string{"grn:root/iam/org/*"}),
-			{Sid: "deny-delete", Effect: authzv1.Effect_EFFECT_DENY, Action: []string{"org:delete"}, Resource: []string{"grn:root/iam/org/acme"}},
+			allowStatement("allow-all", []string{"iam:org-*"}, []string{"grn:root/iam/org/*"}),
+			allowStatement("wrong-action", []string{"iam:org-read"}, []string{"grn:root/iam/org/*"}),
+			{Sid: "deny-delete", Effect: authzv1.Effect_EFFECT_DENY, Action: []string{"iam:org-delete"}, Resource: []string{"grn:root/iam/org/acme"}},
 		},
 		SubjectOrg: "grn:root/iam/org/acme",
 	})
@@ -229,10 +229,10 @@ func TestGRPCServer_Explain(t *testing.T) {
 	allowOnly, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
 		SubjectGrn: "grn:root/iam/user/alice",
 		ObjectGrn:  "grn:root/iam/org/acme",
-		Action:     "org:delete",
+		Action:     "iam:org-delete",
 		Statements: []*authzv1.Statement{
-			allowStatement("allow-all", []string{"org:*"}, []string{"grn:root/iam/org/*"}),
-			{Sid: "deny-other-org", Effect: authzv1.Effect_EFFECT_DENY, Action: []string{"org:delete"}, Resource: []string{"grn:root/iam/org/globex"}},
+			allowStatement("allow-all", []string{"iam:org-*"}, []string{"grn:root/iam/org/*"}),
+			{Sid: "deny-other-org", Effect: authzv1.Effect_EFFECT_DENY, Action: []string{"iam:org-delete"}, Resource: []string{"grn:root/iam/org/globex"}},
 		},
 		SubjectOrg: "grn:root/iam/org/acme",
 	})
@@ -253,13 +253,13 @@ func TestGRPCServer_ExplainAllowsWhatOnlyAnAllowMatches(t *testing.T) {
 	resp, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
 		SubjectGrn: "grn:root/iam/user/alice",
 		ObjectGrn:  "grn:root/iam/org/acme",
-		Action:     "org:delete",
+		Action:     "iam:org-delete",
 		Statements: []*authzv1.Statement{
-			allowStatement("allow-delete", []string{"org:delete"}, []string{"grn:root/iam/org/acme"}),
+			allowStatement("allow-delete", []string{"iam:org-delete"}, []string{"grn:root/iam/org/acme"}),
 			// The control: a statement that matches nothing, so what
 			// admits the call is the allow above rather than an engine
 			// that admits whatever it is handed.
-			allowStatement("wrong-action", []string{"org:read"}, []string{"grn:root/iam/org/acme"}),
+			allowStatement("wrong-action", []string{"iam:org-read"}, []string{"grn:root/iam/org/acme"}),
 		},
 		SubjectOrg: "grn:root/iam/org/acme",
 	})
@@ -286,16 +286,16 @@ func TestGRPCServer_CheckPersistedPolicies(t *testing.T) {
 	allowUpdate := authz.Statement{
 		Sid:      "persisted-allow",
 		Effect:   wire.EffectAllow,
-		Action:   []string{"org:update"},
+		Action:   []string{"iam:org-update"},
 		Resource: []string{"grn:root/iam/org/acme", "grn:acme/*"},
 	}
 	denyUpdate := authz.Statement{
 		Sid:      "persisted-deny",
 		Effect:   wire.EffectDeny,
-		Action:   []string{"org:update"},
+		Action:   []string{"iam:org-update"},
 		Resource: []string{"grn:root/iam/org/acme", "grn:acme/*"},
 	}
-	callerAllow := allowStatement("org-role-owner", []string{"org:*"}, []string{"grn:root/iam/org/acme", "grn:acme/*"})
+	callerAllow := allowStatement("org-role-owner", []string{"iam:org-*"}, []string{"grn:root/iam/org/acme", "grn:acme/*"})
 
 	cases := []struct {
 		name      string
@@ -356,16 +356,16 @@ func TestGRPCServer_CheckAttachedPolicies(t *testing.T) {
 	allowUpdate := authz.Statement{
 		Sid:      "attached-allow",
 		Effect:   wire.EffectAllow,
-		Action:   []string{"org:update"},
+		Action:   []string{"iam:org-update"},
 		Resource: []string{"grn:root/iam/org/acme"},
 	}
 	denyUpdate := authz.Statement{
 		Sid:      "attached-deny",
 		Effect:   wire.EffectDeny,
-		Action:   []string{"org:update"},
+		Action:   []string{"iam:org-update"},
 		Resource: []string{"grn:root/iam/org/acme"},
 	}
-	callerAllow := allowStatement("org-role-owner", []string{"org:*"}, []string{"grn:root/iam/org/acme"})
+	callerAllow := allowStatement("org-role-owner", []string{"iam:org-*"}, []string{"grn:root/iam/org/acme"})
 
 	cases := []struct {
 		name     string
@@ -398,15 +398,15 @@ func TestGRPCServer_ExplainTracesPersistedStatements(t *testing.T) {
 	client := newAuthzClient(t, staticPolicies{orgGRN("acme"): {{
 		Sid:      "persisted-deny",
 		Effect:   wire.EffectDeny,
-		Action:   []string{"org:update"},
+		Action:   []string{"iam:org-update"},
 		Resource: []string{"grn:root/iam/org/acme"},
 	}}})
 
 	resp, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
 		SubjectGrn: "grn:root/iam/user/alice",
 		ObjectGrn:  "grn:root/iam/org/acme",
-		Action:     "org:update",
-		Statements: []*authzv1.Statement{allowStatement("org-role-owner", []string{"org:*"}, []string{"grn:root/iam/org/acme"})},
+		Action:     "iam:org-update",
+		Statements: []*authzv1.Statement{allowStatement("org-role-owner", []string{"iam:org-*"}, []string{"grn:root/iam/org/acme"})},
 		SubjectOrg: "grn:root/iam/org/acme",
 	})
 	require.NoError(t, err)
@@ -437,8 +437,8 @@ func TestGRPCServer_ExplainNamesThePolicyAndThePathItReached(t *testing.T) {
 	resp, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
 		SubjectGrn:    alice.String(),
 		ObjectGrn:     acme.String(),
-		Action:        "org:read",
-		Statements:    []*authzv1.Statement{allowStatement("org-role-member", []string{"org:read"}, []string{acme.String()})},
+		Action:        "iam:org-read",
+		Statements:    []*authzv1.Statement{allowStatement("org-role-member", []string{"iam:org-read"}, []string{acme.String()})},
 		SubjectGroups: []string{eng.String()},
 		SubjectOrg:    acme.String(),
 	})
@@ -500,7 +500,7 @@ func TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset(t *testing.T) {
 		_, err := client.Check(context.Background(), &authzv1.CheckRequest{
 			SubjectGrn: subject,
 			ObjectGrn:  object,
-			Action:     "project:read",
+			Action:     "iam:project-read",
 		})
 		require.Error(t, err)
 		assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -511,7 +511,7 @@ func TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset(t *testing.T) {
 		_, err := client.Check(context.Background(), &authzv1.CheckRequest{
 			SubjectGrn: subject,
 			ObjectGrn:  object,
-			Action:     "project:read",
+			Action:     "iam:project-read",
 			// The subject was established as belonging to acme, not
 			// globex: the engine still refuses the cross-org call.
 			SubjectOrg: acme.String(),
@@ -525,7 +525,7 @@ func TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset(t *testing.T) {
 		resp, err := client.Check(context.Background(), &authzv1.CheckRequest{
 			SubjectGrn: "grn:root/iam/user/globex-admin",
 			ObjectGrn:  object,
-			Action:     "project:read",
+			Action:     "iam:project-read",
 			SubjectOrg: globex.String(),
 		})
 		require.NoError(t, err)
@@ -554,7 +554,7 @@ func TestGRPCServer_RefusesFromAPolicyDeletedDuringAFill(t *testing.T) {
 		Statement: []authz.Statement{{
 			Sid:      "deleted-allow",
 			Effect:   wire.EffectAllow,
-			Action:   []string{"org:update"},
+			Action:   []string{"iam:org-update"},
 			Resource: []string{"grn:root/iam/org/acme"},
 		}},
 	}}
@@ -607,16 +607,16 @@ func TestGRPCServer_CheckCurrentDecidesAsCheckDoes(t *testing.T) {
 	allowUpdate := authz.Statement{
 		Sid:      "persisted-allow",
 		Effect:   wire.EffectAllow,
-		Action:   []string{"org:update"},
+		Action:   []string{"iam:org-update"},
 		Resource: []string{"grn:root/iam/org/acme"},
 	}
 	denyUpdate := authz.Statement{
 		Sid:      "persisted-deny",
 		Effect:   wire.EffectDeny,
-		Action:   []string{"org:update"},
+		Action:   []string{"iam:org-update"},
 		Resource: []string{"grn:root/iam/org/acme"},
 	}
-	callerAllow := allowStatement("org-role-owner", []string{"org:*"}, []string{"grn:root/iam/org/acme"})
+	callerAllow := allowStatement("org-role-owner", []string{"iam:org-*"}, []string{"grn:root/iam/org/acme"})
 
 	cases := []struct {
 		name     string
@@ -667,7 +667,7 @@ func TestGRPCServer_CheckCurrentDecidesAsCheckDoes(t *testing.T) {
 func TestGRPCServer_CheckCurrentDecidesFromStorage(t *testing.T) {
 	acme := orgGRN("acme")
 	update := func(sid string, effect wire.Effect) authz.Statement {
-		return authz.Statement{Sid: sid, Effect: effect, Action: []string{"org:update"}, Resource: []string{"grn:root/iam/org/acme"}}
+		return authz.Statement{Sid: sid, Effect: effect, Action: []string{"iam:org-update"}, Resource: []string{"grn:root/iam/org/acme"}}
 	}
 	client := newAuthzClient(t, staleCache{
 		cached:  staticPolicies{acme: {update("allow", wire.EffectAllow)}},
@@ -688,7 +688,7 @@ func TestGRPCServer_CheckCurrentDecidesFromStorage(t *testing.T) {
 // the error and no decision.
 func TestGRPCServer_CheckCurrentRefusesWhenStorageFails(t *testing.T) {
 	acme := orgGRN("acme")
-	allow := authz.Statement{Sid: "allow", Effect: wire.EffectAllow, Action: []string{"org:update"}, Resource: []string{"grn:root/iam/org/acme"}}
+	allow := authz.Statement{Sid: "allow", Effect: wire.EffectAllow, Action: []string{"iam:org-update"}, Resource: []string{"grn:root/iam/org/acme"}}
 	client := newAuthzClient(t, staleCache{
 		cached:     staticPolicies{acme: {allow}},
 		currentErr: errorx.New(errorx.KindUnavailable, "database unreachable"),
@@ -750,12 +750,12 @@ func (p countingPolicies) Statements(ctx context.Context, orgGRN grn.GRN, subjec
 	return p.staticPolicies.Statements(ctx, orgGRN, subjects)
 }
 
-// batchRequest asks group:read for alice, a member of acme, over
+// batchRequest asks iam:group-read for alice, a member of acme, over
 // objects, with shared holding for every one of them.
 func batchRequest(shared []*authzv1.Statement, objects ...*authzv1.CheckBatchObject) *authzv1.CheckBatchRequest {
 	return &authzv1.CheckBatchRequest{
 		SubjectGrn: "grn:root/iam/user/alice",
-		Action:     "group:read",
+		Action:     "iam:group-read",
 		Statements: shared,
 		SubjectOrg: "grn:root/iam/org/acme",
 		Objects:    objects,
@@ -774,14 +774,14 @@ func TestGRPCServer_CheckBatchDecidesEachObjectAsCheckDoes(t *testing.T) {
 	denyHidden := authz.Statement{
 		Sid:      "deny-hidden",
 		Effect:   wire.EffectDeny,
-		Action:   []string{"group:read"},
+		Action:   []string{"iam:group-read"},
 		Resource: []string{"grn:acme/iam/group/hidden"},
 	}
 	reads := 0
 	client := newAuthzClient(t, countingPolicies{staticPolicies{acme: {denyHidden}}, &reads})
 
-	shared := []*authzv1.Statement{allowStatement("org-role-member", []string{"group:read"}, []string{"grn:acme/iam/group/eng", "grn:acme/iam/group/hidden"})}
-	ownOps := []*authzv1.Statement{allowStatement("group-role-ops", []string{"group:read"}, []string{"grn:acme/iam/group/ops"})}
+	shared := []*authzv1.Statement{allowStatement("org-role-member", []string{"iam:group-read"}, []string{"grn:acme/iam/group/eng", "grn:acme/iam/group/hidden"})}
+	ownOps := []*authzv1.Statement{allowStatement("group-role-ops", []string{"iam:group-read"}, []string{"grn:acme/iam/group/ops"})}
 	objects := []*authzv1.CheckBatchObject{
 		{ObjectGrn: "grn:acme/iam/group/eng"},
 		{ObjectGrn: "grn:acme/iam/group/hidden"},
@@ -797,7 +797,7 @@ func TestGRPCServer_CheckBatchDecidesEachObjectAsCheckDoes(t *testing.T) {
 		one, err := client.Check(context.Background(), &authzv1.CheckRequest{
 			SubjectGrn: "grn:root/iam/user/alice",
 			ObjectGrn:  o.GetObjectGrn(),
-			Action:     "group:read",
+			Action:     "iam:group-read",
 			Statements: append(append([]*authzv1.Statement{}, shared...), o.GetStatements()...),
 			SubjectOrg: "grn:root/iam/org/acme",
 		})

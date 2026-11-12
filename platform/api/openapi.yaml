@@ -739,9 +739,9 @@ paths:
 
 
         Some actions are decided by more than that `Check`.
-        `agent:create`, `agent:configure`, `agent:recover`,
-        `agent:replace`, `agent-template:publish`,
-        `execution-profile:read` and `agent:execution-read` are minted
+        `iam:agent-create`, `iam:agent-configure`, `iam:agent-recover`,
+        `iam:agent-replace`, `iam:agent-template-publish`,
+        `iam:execution-profile-read` and `iam:agent-execution-read` are minted
         through `mintOperationAuthority`, which reads a delegation grant
         to the operator (ADR-0078), holds the operation against it, and
         decides the caller's authority last. Each is put to that last
@@ -750,11 +750,11 @@ paths:
         Where it denies, the answer is `deny`, and the mint would
         refuse. Where it allows, the answer is `unknown`: this operation
         reads no grant, so the grant is left to decide.
-        `operator:delegate` is put to the check
+        `iam:operator-delegate` is put to the check
         `writeOperatorDelegation`, `endOperatorDelegation`,
         `setOperatorControlEndpoint` and `clearOperatorControlEndpoint`
         run, on the same current policy, and that check is all of their
-        authority, so it is answered `allow` or `deny`. `agent:enroll`
+        authority, so it is answered `allow` or `deny`. `iam:agent-enroll`
         is put to the check `approveAgentEnrollment`,
         `withdrawAgentEnrollment` and `revokeAgentSupervisor` run, on
         the same current policy, on the organization for a new host and
@@ -825,7 +825,7 @@ paths:
 
 
         A policy statement is named only where the caller holds
-        `policy:read` on that policy, the check `getPolicy` makes.
+        `iam:policy-read` on that policy, the check `getPolicy` makes.
         Every other one is answered once, as `unreadable-policy`, with
         its effect and nothing else: no policy, statement or path.
 
@@ -864,7 +864,7 @@ paths:
     get:
       operationId: listPermissionHolders
       tags: [org]
-      summary: List the members and agents the engine allows one action. Requires `org:member-list`.
+      summary: List the members and agents the engine allows one action. Requires `iam:org-member-list`.
       description: >-
         Answers which principals of the organization the policy engine
         allows `action` on the resource, each asked as enforcement asks
@@ -874,9 +874,9 @@ paths:
         role, with its groups and the policies reaching it.
 
 
-        It requires `org:member-list` on the organization, the check
+        It requires `iam:org-member-list` on the organization, the check
         `listOrgMembers` makes, since the answer names members. Agents
-        are asked only where the caller also holds `agent:read` on the
+        are asked only where the caller also holds `iam:agent-read` on the
         organization, the check `listAgents` makes; otherwise none is
         listed.
 
@@ -937,9 +937,9 @@ paths:
 
 
         Each kind is authorized as its list is: people on
-        `org:member-list`, as `listOrgMembers` is; agents on
-        `agent:read`, teams on `group:read`, policies on `policy:read`
-        and projects on `project:read`, each on the organization. A kind
+        `iam:org-member-list`, as `listOrgMembers` is; agents on
+        `iam:agent-read`, teams on `iam:group-read`, policies on `iam:policy-read`
+        and projects on `iam:project-read`, each on the organization. A kind
         the caller may not list is left out of the answer. Agents,
         teams, policies and projects then leave out each object whose
         own read the caller is denied, as their lists do (ADR-0115).
@@ -1035,13 +1035,13 @@ paths:
       tags: [org]
       summary: List an organization's groups. Requires the `member` role.
       description: >-
-        Authorized on `group:read` on the organization. With `member=me`
+        Authorized on `iam:group-read` on the organization. With `member=me`
         it answers only the groups the signed-in caller belongs to, in
         the same order and paged the same way, so a caller learns its
         own teams in one request rather than one per group. The filter
         names the caller alone: who else belongs to a group is
         `listGroupMembers`', which is authorized per group.
-        Leaves out each group whose own `group:read` the caller is denied. The
+        Leaves out each group whose own `iam:group-read` the caller is denied. The
         page is filtered as read: `limit` and `offset` count stored
         entries, so a page can hold fewer than `limit` with more after
         it, and only an empty page is the end.
@@ -1250,8 +1250,8 @@ paths:
       tags: [org]
       summary: List an organization's projects. Requires the `member` role.
       description: >-
-        Authorized on `project:read` on the organization. Leaves out each
-        project whose own `project:read` the caller is denied. The page is
+        Authorized on `iam:project-read` on the organization. Leaves out each
+        project whose own `iam:project-read` the caller is denied. The page is
         filtered as read: `limit` and `offset` count stored entries, so
         a page can hold fewer than `limit` with more after it, and only
         an empty page is the end.
@@ -1425,8 +1425,8 @@ paths:
       tags: [agent]
       summary: List an organization's agents. Requires the `member` role.
       description: >-
-        Authorized on `agent:read` on the organization. Leaves out each
-        agent whose own `agent:read` the caller is denied. The page is
+        Authorized on `iam:agent-read` on the organization. Leaves out each
+        agent whose own `iam:agent-read` the caller is denied. The page is
         filtered as read: `limit` and `offset` count stored entries, so
         a page can hold fewer than `limit` with more after it, and only
         an empty page is the end.
@@ -1475,13 +1475,13 @@ paths:
     patch:
       operationId: renameAgent
       tags: [agent]
-      summary: Rename an agent. Requires `agent:rename`.
+      summary: Rename an agent. Requires `iam:agent-rename`.
       description: >-
         Sets what the organization calls the agent, or clears it with
         `null`, and nothing else (ADR-0119). Its GRN, assignment,
         lineage and tokens stand as they were, and no operator is told:
         a name is not configuration. It is authorized on the agent's own
-        GRN, so a policy denying `agent:rename` on that agent refuses
+        GRN, so a policy denying `iam:agent-rename` on that agent refuses
         it (ADR-0115).
       parameters:
         - $ref: '#/components/parameters/org'
@@ -1511,11 +1511,11 @@ paths:
     get:
       operationId: watchAgent
       tags: [agent]
-      summary: Watch an agent work. Requires the `agent:watch` action.
+      summary: Watch an agent work. Requires the `iam:agent-watch` action.
       description: >-
         What the agent is saying now, as server-sent events, for as long
         as the caller holds the response open (ADR-0022). Watching is
-        granted separately from reading: `agent:read` says an agent
+        granted separately from reading: `iam:agent-read` says an agent
         exists and reports the states two parties report about it, and
         this exposes the content of its work, so a caller holding only
         the read is refused here.
@@ -1554,7 +1554,7 @@ paths:
     get:
       operationId: listAgentEnrollments
       tags: [agent]
-      summary: List the organization's standalone approvals. Requires `agent:read`.
+      summary: List the organization's standalone approvals. Requires `iam:agent-read`.
       description: >-
         Lists every approval the organization holds, oldest first:
         pending, spent, withdrawn and expired, for standalone and direct
@@ -1569,7 +1569,7 @@ paths:
         certificate and no credential.
 
 
-        Authorization is `agent:read` on the organization, decided from
+        Authorization is `iam:agent-read` on the organization, decided from
         current membership, roles, groups and persisted policies, as the
         writes beside it are decided; an explicit Deny wins. Paged by
         `limit` and `offset` like every other list.
@@ -1595,7 +1595,7 @@ paths:
     post:
       operationId: approveAgentEnrollment
       tags: [agent]
-      summary: Approve a standalone host's enrollment. Requires current `agent:enroll`.
+      summary: Approve a standalone host's enrollment. Requires current `iam:agent-enroll`.
       description: >-
         Approves what a standalone host prepared before asking: the
         SHA-256 of a bootstrap secret it keeps and the request
@@ -1649,7 +1649,7 @@ paths:
     delete:
       operationId: withdrawAgentEnrollment
       tags: [agent]
-      summary: Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+      summary: Withdraw an unspent standalone approval. Requires current `iam:agent-enroll`.
       description: >-
         Withdraws an approval no host has spent. Spending it afterwards
         is refused as an unknown bootstrap would be, and a withdrawal
@@ -1684,7 +1684,7 @@ paths:
     get:
       operationId: listAgentSupervisors
       tags: [agent]
-      summary: List the organization's standalone supervisors. Requires `agent:read`.
+      summary: List the organization's standalone supervisors. Requires `iam:agent-read`.
       description: >-
         Lists every supervisor registration the organization holds,
         oldest first: `active` while current, `revoked` once ended by
@@ -1719,7 +1719,7 @@ paths:
     delete:
       operationId: revokeAgentSupervisor
       tags: [agent]
-      summary: Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+      summary: Revoke a standalone host's supervisor. Requires current `iam:agent-enroll`.
       description: >-
         Ends the supervisor's registration, the agent's current
         activation and every unspent approval for that agent, in one
@@ -1780,9 +1780,9 @@ paths:
         credential was reached, is the member's and not the subject's.
 
 
-        It is authorized on the subject's own read: `operator:read` on
-        the organization for an operator, `agent:read` on the agent for
-        an agent, and `agent:read` on the organization for a supervisor.
+        It is authorized on the subject's own read: `iam:operator-read` on
+        the organization for an operator, `iam:agent-read` on the agent for
+        an agent, and `iam:agent-read` on the organization for a supervisor.
         A subject of another organization, or of any other kind, is
         refused with 400.
       parameters:
@@ -1920,7 +1920,7 @@ paths:
         are not fields here and do not move: its keys stand as they
         were.
 
-        It is authorized on an action of its own, `operator:update`,
+        It is authorized on an action of its own, `iam:operator-update`,
         rather than on the one that registers or the one that deletes,
         because it grants nothing and withdraws nothing.
       parameters:
@@ -2021,9 +2021,9 @@ paths:
 
         It is the one route that issues a key; registering issues none.
         The first key of an operator that has never been issued one is
-        authorized by `operator:register`, as registering it was. Any
+        authorized by `iam:operator-register`, as registering it was. Any
         other — beside or in place of a live key, or after every key was
-        withdrawn — is `operator:reissue`, and a caller holding only the
+        withdrawn — is `iam:operator-reissue`, and a caller holding only the
         first finds an operator that was ever keyed refused with 403.
 
         `rotation` says how the key stands beside the ones the operator
@@ -2081,7 +2081,7 @@ paths:
     delete:
       operationId: revokeOperatorKey
       tags: [operator]
-      summary: Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+      summary: Withdraw an operator's key and every token exchanged under it. Requires `iam:operator-reissue`.
       description: >-
         Withdraws the key (ADR-0102). **It stops verifying assertions,
         and every token exchanged under it stops authenticating, at the
@@ -2108,7 +2108,7 @@ paths:
     put:
       operationId: writeOperatorDelegation
       tags: [operator]
-      summary: Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+      summary: Grant or replace a hosted operator's delegation. Requires current `iam:operator-delegate`.
       description: >-
         Grants the hosted operator bounded authority over this
         organization's controllers (ADR-0078). A grant never changes:
@@ -2193,7 +2193,7 @@ paths:
     delete:
       operationId: endOperatorDelegation
       tags: [operator]
-      summary: Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+      summary: Withdraw a hosted operator's delegation. Requires current `iam:operator-delegate`.
       description: >-
         Ends the grant named in the body, and only that one. Every
         operation authority minted under it is refused from the next
@@ -2229,7 +2229,7 @@ paths:
     put:
       operationId: setOperatorManager
       tags: [operator]
-      summary: Link a control service to its cluster manager, once. Requires `operator:register`.
+      summary: Link a control service to its cluster manager, once. Requires `iam:operator-register`.
       description: >-
         Records this operator as the control service of the operator
         `manager` names, on a record that names no manager yet
@@ -2272,7 +2272,7 @@ paths:
     put:
       operationId: setOperatorControlEndpoint
       tags: [operator]
-      summary: Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+      summary: Register where a hosted operator's control service answers the console. Requires current `iam:operator-delegate`.
       description: >-
         Sets the one base URL the console sends this operator's
         operation authorities to. It is an absolute `https` URL of at
@@ -2315,7 +2315,7 @@ paths:
     delete:
       operationId: clearOperatorControlEndpoint
       tags: [operator]
-      summary: Clear a hosted operator's control endpoint. Requires current `operator:delegate`.
+      summary: Clear a hosted operator's control endpoint. Requires current `iam:operator-delegate`.
       description: >-
         The console then reaches no control service for this operator.
         Clearing one already clear answers the same.
@@ -2356,22 +2356,22 @@ paths:
         is first.
 
 
-        `agent:create` targets the controller that will run the agent
-        and is authorized on the organization; `agent:configure` and
-        `agent:recover` target the agent, are authorized on it, and
-        bind where it runs now. `agent:recover` authorizes one exact
+        `iam:agent-create` targets the controller that will run the agent
+        and is authorized on the organization; `iam:agent-configure` and
+        `iam:agent-recover` target the agent, are authorized on it, and
+        bind where it runs now. `iam:agent-recover` authorizes one exact
         credential recovery, whose request body `bodySha256` digests
-        (ADR-0078). `agent:replace` targets the agent, is authorized on
+        (ADR-0078). `iam:agent-replace` targets the agent, is authorized on
         it, binds where it runs now and binds `destination`, the
         controller a replacement under `agent-enrollment.v1` moves it to
-        (ADR-0107). `agent-template:read`, `agent-template:publish`,
-        `execution-profile:read` and `operator:read` target this
-        organization and are authorized on it; `operator:read` reads
+        (ADR-0107). `iam:agent-template-read`, `iam:agent-template-publish`,
+        `iam:execution-profile-read` and `iam:operator-read` target this
+        organization and are authorized on it; `iam:operator-read` reads
         what the Operator reports for every operator of it (#1374).
-        `agent:execution-read` targets the agent, is
+        `iam:agent-execution-read` targets the agent, is
         authorized on it and binds where it runs now. The audience's
         current grant must cover the operation and, where it names one,
-        the controller; for `agent:replace`, both the controller the
+        the controller; for `iam:agent-replace`, both the controller the
         agent is on and `destination`.
 
 
@@ -2451,8 +2451,8 @@ paths:
       tags: [policy]
       summary: List an organization's policies. Requires the `admin` role.
       description: >-
-        Authorized on `policy:read` on the organization. Leaves out each
-        policy whose own `policy:read` the caller is denied.
+        Authorized on `iam:policy-read` on the organization. Leaves out each
+        policy whose own `iam:policy-read` the caller is denied.
       parameters:
         - $ref: '#/components/parameters/org'
       responses:
@@ -2561,7 +2561,7 @@ paths:
         attachments, so it contributes to no check from then on. An
         attached policy is deleted as readily as an unattached one:
         nothing is left that could apply to the whole organization.
-        Authorized on `policy:delete`.
+        Authorized on `iam:policy-delete`.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/policy'
@@ -2775,7 +2775,7 @@ paths:
     get:
       operationId: listInvitations
       tags: [org]
-      summary: List the invitations that can still be accepted. Requires `org:invite`.
+      summary: List the invitations that can still be accepted. Requires `iam:org-invite`.
       description: >-
         Answers each invitation neither spent nor expired, newest
         first, by its `id`. A token is a bearer secret and no answer
@@ -2835,7 +2835,7 @@ paths:
     delete:
       operationId: revokeInvitation
       tags: [org]
-      summary: Revoke an invitation no one has used. Requires `org:invite`.
+      summary: Revoke an invitation no one has used. Requires `iam:org-invite`.
       description: >-
         Deletes the invitation, so its token is answered 404 from then
         on, as a token that never existed is, by `getInvitation`,
@@ -3027,7 +3027,7 @@ components:
       description: The action asked about.
       schema:
         type: string
-        example: policy:update
+        example: iam:policy-update
     permissionResourceType:
       name: resourceType
       in: query
@@ -3554,7 +3554,7 @@ components:
       properties:
         action:
           type: string
-          example: operator:register
+          example: iam:operator-register
         resource:
           $ref: '#/components/schemas/PermissionResource'
     PermissionResource:
@@ -3924,7 +3924,7 @@ components:
         Statement:
           - Sid: AllowOrgRead
             Effect: Allow
-            Action: [org:read]
+            Action: [iam:org-read]
             Resource: ['grn:acme/*']
     PolicyStatus:
       type: string
@@ -4602,12 +4602,12 @@ components:
           format: date-time
     DelegatedOperation:
       type: string
-      enum: [agent:create, agent:configure, agent:activate, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, operator:read, agent:replace]
+      enum: [iam:agent-create, iam:agent-configure, iam:agent-activate, iam:agent-recover, iam:agent-template-read, iam:agent-template-publish, iam:execution-profile-read, iam:agent-execution-read, iam:operator-read, iam:agent-replace]
       description: >-
-        `agent:activate` bounds the hosted operator's own lifecycle
-        authority; no user mints it. `agent-template:read`,
-        `agent-template:publish`, `execution-profile:read` and
-        `operator:read` act on what the Operator holds for the
+        `iam:agent-activate` bounds the hosted operator's own lifecycle
+        authority; no user mints it. `iam:agent-template-read`,
+        `iam:agent-template-publish`, `iam:execution-profile-read` and
+        `iam:operator-read` act on what the Operator holds for the
         organization and name no controller, so a grant covers them
         whatever controllers it lists.
     RequestId:
@@ -4622,15 +4622,15 @@ components:
           description: GRN of the hosted operator that will act.
         operation:
           type: string
-          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, operator:read, agent:replace]
+          enum: [iam:agent-create, iam:agent-configure, iam:agent-recover, iam:agent-template-read, iam:agent-template-publish, iam:execution-profile-read, iam:agent-execution-read, iam:operator-read, iam:agent-replace]
         target:
           type: string
           description: >-
-            Controller GRN for `agent:create`; agent GRN for
-            `agent:configure`, `agent:recover`, `agent:execution-read`
-            and `agent:replace`; this organization's GRN for
-            `agent-template:read`, `agent-template:publish`,
-            `execution-profile:read` and `operator:read`.
+            Controller GRN for `iam:agent-create`; agent GRN for
+            `iam:agent-configure`, `iam:agent-recover`, `iam:agent-execution-read`
+            and `iam:agent-replace`; this organization's GRN for
+            `iam:agent-template-read`, `iam:agent-template-publish`,
+            `iam:execution-profile-read` and `iam:operator-read`.
         requestId:
           $ref: '#/components/schemas/RequestId'
         bodySha256:
@@ -4644,9 +4644,9 @@ components:
           minLength: 1
           maxLength: 2048
           description: >-
-            Required for `agent-template:read`, `agent-template:publish`,
-            `execution-profile:read`, `agent:execution-read` and
-            `operator:read`, and refused with 400 for every other
+            Required for `iam:agent-template-read`, `iam:agent-template-publish`,
+            `iam:execution-profile-read`, `iam:agent-execution-read` and
+            `iam:operator-read`, and refused with 400 for every other
             operation. The exact origin-form request target the route
             will receive: the escaped path and raw query, with no scheme
             or authority and no empty, `.` or `..` path segment, taken
@@ -4655,7 +4655,7 @@ components:
         destination:
           type: string
           description: >-
-            Required for `agent:replace` and refused with 400 for every
+            Required for `iam:agent-replace` and refused with 400 for every
             other operation: the GRN of the controller of this
             organization the replacement moves the agent to (ADR-0107).
     OperationAuthority:

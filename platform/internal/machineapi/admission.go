@@ -29,8 +29,8 @@ var admissionReasons = []struct {
 }
 
 // PrepareAgentEnrollment records the hosted control service's approval
-// of one admission under a member's agent:create reference, or a
-// replacement under an agent:replace one, the first stage of
+// of one admission under a member's iam:agent-create reference, or a
+// replacement under an iam:agent-replace one, the first stage of
 // agent-enrollment.v1 (ADR-0102, ADR-0107).
 func (s *Server) PrepareAgentEnrollment(w http.ResponseWriter, r *http.Request, params machinegen.PrepareAgentEnrollmentParams) {
 	r, cancel := lifecycleBudget(r)

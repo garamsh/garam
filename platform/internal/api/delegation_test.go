@@ -38,7 +38,7 @@ func (f *fixture) doVersioned(t *testing.T, method, path, version, body string, 
 
 func grantBody(controller grn.GRN, expiresAt time.Time) string {
 	return `{"requestId":"grant-1","controllers":["` + controller.String() +
-		`"],"operations":["agent:create"],"expiresAt":"` + expiresAt.Format(time.RFC3339) + `"}`
+		`"],"operations":["iam:agent-create"],"expiresAt":"` + expiresAt.Format(time.RFC3339) + `"}`
 }
 
 // TestDelegation_RefusesAMissingOrUnsupportedVersion holds that every
@@ -110,7 +110,7 @@ func TestWriteOperatorDelegation_RefusesOverbroadTermsBeforeTheService(t *testin
 		"another org's controller": grantBody(operatorGRNOf("globex", "controller"), soon),
 		"itself as controller":     grantBody(operatorGRNOf("acme", "hosted"), soon),
 		"past thirty days":         grantBody(operatorGRNOf("acme", "controller"), time.Now().Add(31*24*time.Hour)),
-		"unknown operation":        strings.Replace(grantBody(operatorGRNOf("acme", "controller"), soon), "agent:create", "agent:delete", 1),
+		"unknown operation":        strings.Replace(grantBody(operatorGRNOf("acme", "controller"), soon), "iam:agent-create", "iam:agent-delete", 1),
 	} {
 		rec := f.doVersioned(t, "PUT", "/orgs/acme/operators/hosted/delegation", operator.ContractVersion, body, cookie)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, name)
@@ -124,7 +124,7 @@ func TestMintOperationAuthority_AnswersTheMintedAuthority(t *testing.T) {
 	f := newFixture(t)
 	cookie := f.sessionCookieFor(t, "member-sub", "Member")
 	digest := strings.Repeat("ab", 32)
-	body := `{"audience":"` + operatorGRNOf("acme", "hosted").String() + `","operation":"agent:create","target":"` +
+	body := `{"audience":"` + operatorGRNOf("acme", "hosted").String() + `","operation":"iam:agent-create","target":"` +
 		operatorGRNOf("acme", "controller").String() + `","requestId":"req-1","bodySha256":"` + digest + `"}`
 
 	rec := f.doVersioned(t, "POST", "/orgs/acme/operation-authorities", operator.ContractVersion,
@@ -147,7 +147,7 @@ func TestMintOperationAuthority_AnswersTheMintedAuthority(t *testing.T) {
 // contract names for the service's refusals, and that a failure to
 // decide answers 503 naming no cause.
 func TestMintOperationAuthority_MapsRefusals(t *testing.T) {
-	body := `{"audience":"` + operatorGRNOf("acme", "hosted").String() + `","operation":"agent:configure","target":"` +
+	body := `{"audience":"` + operatorGRNOf("acme", "hosted").String() + `","operation":"iam:agent-configure","target":"` +
 		grn.New("acme", "agent", "a1").String() + `","requestId":"req-1","bodySha256":"` + strings.Repeat("0", 64) + `"}`
 	cases := []struct {
 		err    error
@@ -171,7 +171,7 @@ func TestMintOperationAuthority_MapsRefusals(t *testing.T) {
 
 // TestGetOperatorDelegation_IsAMemberRead holds that reading the grant
 // is authorized as other reads are, and that a caller denied
-// operator:read never reaches the service.
+// iam:operator-read never reaches the service.
 func TestGetOperatorDelegation_IsAMemberRead(t *testing.T) {
 	f := newFixture(t)
 	cookie := f.sessionCookieFor(t, "member-sub", "Member")

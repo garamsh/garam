@@ -16,7 +16,7 @@ import (
 // accepts it, so each refusal below is its rule's and not a parser
 // that refuses everything.
 func TestParsePolicyDocument_NamesTheRuleAndThePlace(t *testing.T) {
-	const valid = `{"Version":"2026-07-25","Statement":[{"Sid":"a","Effect":"Allow","Action":["org:read"],"Resource":["*"]}]}`
+	const valid = `{"Version":"2026-07-25","Statement":[{"Sid":"a","Effect":"Allow","Action":["iam:org-read"],"Resource":["*"]}]}`
 	_, err := authz.ParsePolicyDocument([]byte(valid))
 	require.NoError(t, err, "the control: a document every rule accepts")
 

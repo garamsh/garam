@@ -310,37 +310,37 @@ func (e OAuthTokenTokenType) Valid() bool {
 
 // Defines values for OperationBindingOperation.
 const (
-	AgentConfigure       OperationBindingOperation = "agent:configure"
-	AgentCreate          OperationBindingOperation = "agent:create"
-	AgentExecutionRead   OperationBindingOperation = "agent:execution-read"
-	AgentRecover         OperationBindingOperation = "agent:recover"
-	AgentReplace         OperationBindingOperation = "agent:replace"
-	AgentTemplatePublish OperationBindingOperation = "agent-template:publish"
-	AgentTemplateRead    OperationBindingOperation = "agent-template:read"
-	ExecutionProfileRead OperationBindingOperation = "execution-profile:read"
-	OperatorRead         OperationBindingOperation = "operator:read"
+	IamAgentConfigure       OperationBindingOperation = "iam:agent-configure"
+	IamAgentCreate          OperationBindingOperation = "iam:agent-create"
+	IamAgentExecutionRead   OperationBindingOperation = "iam:agent-execution-read"
+	IamAgentRecover         OperationBindingOperation = "iam:agent-recover"
+	IamAgentReplace         OperationBindingOperation = "iam:agent-replace"
+	IamAgentTemplatePublish OperationBindingOperation = "iam:agent-template-publish"
+	IamAgentTemplateRead    OperationBindingOperation = "iam:agent-template-read"
+	IamExecutionProfileRead OperationBindingOperation = "iam:execution-profile-read"
+	IamOperatorRead         OperationBindingOperation = "iam:operator-read"
 )
 
 // Valid indicates whether the value is a known member of the OperationBindingOperation enum.
 func (e OperationBindingOperation) Valid() bool {
 	switch e {
-	case AgentConfigure:
+	case IamAgentConfigure:
 		return true
-	case AgentCreate:
+	case IamAgentCreate:
 		return true
-	case AgentExecutionRead:
+	case IamAgentExecutionRead:
 		return true
-	case AgentRecover:
+	case IamAgentRecover:
 		return true
-	case AgentReplace:
+	case IamAgentReplace:
 		return true
-	case AgentTemplatePublish:
+	case IamAgentTemplatePublish:
 		return true
-	case AgentTemplateRead:
+	case IamAgentTemplateRead:
 		return true
-	case ExecutionProfileRead:
+	case IamExecutionProfileRead:
 		return true
-	case OperatorRead:
+	case IamOperatorRead:
 		return true
 	default:
 		return false
@@ -437,7 +437,7 @@ type ActivationRequest struct {
 	// Generation The runtime's start nonce for this process.
 	Generation string `json:"generation"`
 
-	// OperationRef A durable `agent:configure` reference for a pending revision, or a managed agent's own `agent:create` reference for its first activation; null otherwise.
+	// OperationRef A durable `iam:agent-configure` reference for a pending revision, or a managed agent's own `iam:agent-create` reference for its first activation; null otherwise.
 	OperationRef *string `json:"operationRef"`
 
 	// ReplacesActivationId The agent's most recent activation, null only before the first.
@@ -502,7 +502,7 @@ type AgentEnrollmentBinding struct {
 	// Name What the organization calls the new agent, trimmed, 1 to 100 characters (ADR-0119). Optional; it is part of what a retry repeats, so a retry asking for another name is a conflict. A replacement keeps the agent's name and carries none.
 	Name *string `json:"name,omitempty"`
 
-	// OperationRef The member's durable `agent:create` reference, or for a replacement its `agent:replace` reference.
+	// OperationRef The member's durable `iam:agent-create` reference, or for a replacement its `iam:agent-replace` reference.
 	OperationRef string `json:"operationRef"`
 
 	// Placement Where the runtime runs: `managed`, provisioned by the Operator, or `direct`, running independently of it, which is refused until #1355 decides its writer proof.
@@ -552,7 +552,7 @@ type AuthorityIntrospection struct {
 	Authority string `json:"authority"`
 }
 
-// BoundAssignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace` only.
+// BoundAssignment Where the agent ran when an operation on it was authorized. Present for `iam:agent-configure`, `iam:agent-recover`, `iam:agent-execution-read` and `iam:agent-replace` only.
 type BoundAssignment struct {
 	// Epoch Opaque.
 	Epoch       string `json:"epoch"`
@@ -740,10 +740,10 @@ type ManagedAgentRequest struct {
 	// Name What the organization calls the new agent, trimmed, 1 to 100 characters (ADR-0119). Optional; it is part of what a retry repeats, so a retry asking for another name is a conflict.
 	Name *string `json:"name,omitempty"`
 
-	// OperationRef The member's durable `agent:create` reference.
+	// OperationRef The member's durable `iam:agent-create` reference.
 	OperationRef string `json:"operationRef"`
 
-	// RequestId The request identifier the member's `agent:create` reference was minted under.
+	// RequestId The request identifier the member's `iam:agent-create` reference was minted under.
 	RequestId string `json:"requestId"`
 }
 
@@ -849,12 +849,12 @@ type OperationBinding struct {
 	// ActorGrn The user the operation is performed for.
 	ActorGrn string `json:"actorGrn"`
 
-	// Assignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace` only.
+	// Assignment Where the agent ran when an operation on it was authorized. Present for `iam:agent-configure`, `iam:agent-recover`, `iam:agent-execution-read` and `iam:agent-replace` only.
 	Assignment  *BoundAssignment `json:"assignment,omitempty"`
 	AudienceGrn string           `json:"audienceGrn"`
 	BodySha256  string           `json:"bodySha256"`
 
-	// DestinationGrn Present for `agent:replace` alone: the controller the replacement moves the agent to, which `admitAgentEnrollment` compares with the binding's assignee (ADR-0107).
+	// DestinationGrn Present for `iam:agent-replace` alone: the controller the replacement moves the agent to, which `admitAgentEnrollment` compares with the binding's assignee (ADR-0107).
 	DestinationGrn *string `json:"destinationGrn,omitempty"`
 
 	// ExpiresAt When the presented authority stops being usable. Absent on a reference check.
@@ -867,10 +867,10 @@ type OperationBinding struct {
 	OrgGrn       string                    `json:"orgGrn"`
 	RequestId    string                    `json:"requestId"`
 
-	// RequestTarget Present for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `operator:read`, absent for every other operation. It is the exact origin-form request target the console sent: the escaped path and the raw query, with no scheme or authority, including any path prefix of the registered control endpoint. Compare it, before decoding, routing or reading any data, with the target the request arrived with, byte for byte; the empty body's digest does not tell one read from another.
+	// RequestTarget Present for `iam:agent-template-read`, `iam:agent-template-publish`, `iam:execution-profile-read`, `iam:agent-execution-read` and `iam:operator-read`, absent for every other operation. It is the exact origin-form request target the console sent: the escaped path and the raw query, with no scheme or authority, including any path prefix of the registered control endpoint. Compare it, before decoding, routing or reading any data, with the target the request arrived with, byte for byte; the empty body's digest does not tell one read from another.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// TargetGrn The controller for `agent:create`; the agent for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace`; the organization for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
+	// TargetGrn The controller for `iam:agent-create`; the agent for `iam:agent-configure`, `iam:agent-recover`, `iam:agent-execution-read` and `iam:agent-replace`; the organization for `iam:agent-template-read`, `iam:agent-template-publish`, `iam:execution-profile-read` and `iam:operator-read`.
 	TargetGrn string `json:"targetGrn"`
 }
 
@@ -1251,7 +1251,7 @@ type ServerInterface interface {
 	// IntrospectController Prove a controller's current authority, and an agent's placement on it, for one decision.
 	// (POST /operators/{controller}/introspection)
 	IntrospectController(w http.ResponseWriter, r *http.Request, controllerGrn ControllerGrn, params IntrospectControllerParams)
-	// CreateManagedAgent Create an agent assigned to a controller, under a member's agent:create reference.
+	// CreateManagedAgent Create an agent assigned to a controller, under a member's iam:agent-create reference.
 	// (POST /operators/{controller}/managed-agents)
 	CreateManagedAgent(w http.ResponseWriter, r *http.Request, controllerGrn ControllerGrn, params CreateManagedAgentParams)
 	// PostOutboxMessage Post a durable reply under the creation instant its outbox entry holds.

@@ -237,40 +237,40 @@ func (e CredentialEventOutcome) Valid() bool {
 
 // Defines values for DelegatedOperation.
 const (
-	DelegatedOperationAgentActivate        DelegatedOperation = "agent:activate"
-	DelegatedOperationAgentConfigure       DelegatedOperation = "agent:configure"
-	DelegatedOperationAgentCreate          DelegatedOperation = "agent:create"
-	DelegatedOperationAgentExecutionRead   DelegatedOperation = "agent:execution-read"
-	DelegatedOperationAgentRecover         DelegatedOperation = "agent:recover"
-	DelegatedOperationAgentReplace         DelegatedOperation = "agent:replace"
-	DelegatedOperationAgentTemplatePublish DelegatedOperation = "agent-template:publish"
-	DelegatedOperationAgentTemplateRead    DelegatedOperation = "agent-template:read"
-	DelegatedOperationExecutionProfileRead DelegatedOperation = "execution-profile:read"
-	DelegatedOperationOperatorRead         DelegatedOperation = "operator:read"
+	DelegatedOperationIamAgentActivate        DelegatedOperation = "iam:agent-activate"
+	DelegatedOperationIamAgentConfigure       DelegatedOperation = "iam:agent-configure"
+	DelegatedOperationIamAgentCreate          DelegatedOperation = "iam:agent-create"
+	DelegatedOperationIamAgentExecutionRead   DelegatedOperation = "iam:agent-execution-read"
+	DelegatedOperationIamAgentRecover         DelegatedOperation = "iam:agent-recover"
+	DelegatedOperationIamAgentReplace         DelegatedOperation = "iam:agent-replace"
+	DelegatedOperationIamAgentTemplatePublish DelegatedOperation = "iam:agent-template-publish"
+	DelegatedOperationIamAgentTemplateRead    DelegatedOperation = "iam:agent-template-read"
+	DelegatedOperationIamExecutionProfileRead DelegatedOperation = "iam:execution-profile-read"
+	DelegatedOperationIamOperatorRead         DelegatedOperation = "iam:operator-read"
 )
 
 // Valid indicates whether the value is a known member of the DelegatedOperation enum.
 func (e DelegatedOperation) Valid() bool {
 	switch e {
-	case DelegatedOperationAgentActivate:
+	case DelegatedOperationIamAgentActivate:
 		return true
-	case DelegatedOperationAgentConfigure:
+	case DelegatedOperationIamAgentConfigure:
 		return true
-	case DelegatedOperationAgentCreate:
+	case DelegatedOperationIamAgentCreate:
 		return true
-	case DelegatedOperationAgentExecutionRead:
+	case DelegatedOperationIamAgentExecutionRead:
 		return true
-	case DelegatedOperationAgentRecover:
+	case DelegatedOperationIamAgentRecover:
 		return true
-	case DelegatedOperationAgentReplace:
+	case DelegatedOperationIamAgentReplace:
 		return true
-	case DelegatedOperationAgentTemplatePublish:
+	case DelegatedOperationIamAgentTemplatePublish:
 		return true
-	case DelegatedOperationAgentTemplateRead:
+	case DelegatedOperationIamAgentTemplateRead:
 		return true
-	case DelegatedOperationExecutionProfileRead:
+	case DelegatedOperationIamExecutionProfileRead:
 		return true
-	case DelegatedOperationOperatorRead:
+	case DelegatedOperationIamOperatorRead:
 		return true
 	default:
 		return false
@@ -594,37 +594,37 @@ func (e OAuthErrorError) Valid() bool {
 
 // Defines values for OperationAuthorityRequestOperation.
 const (
-	OperationAuthorityRequestOperationAgentConfigure       OperationAuthorityRequestOperation = "agent:configure"
-	OperationAuthorityRequestOperationAgentCreate          OperationAuthorityRequestOperation = "agent:create"
-	OperationAuthorityRequestOperationAgentExecutionRead   OperationAuthorityRequestOperation = "agent:execution-read"
-	OperationAuthorityRequestOperationAgentRecover         OperationAuthorityRequestOperation = "agent:recover"
-	OperationAuthorityRequestOperationAgentReplace         OperationAuthorityRequestOperation = "agent:replace"
-	OperationAuthorityRequestOperationAgentTemplatePublish OperationAuthorityRequestOperation = "agent-template:publish"
-	OperationAuthorityRequestOperationAgentTemplateRead    OperationAuthorityRequestOperation = "agent-template:read"
-	OperationAuthorityRequestOperationExecutionProfileRead OperationAuthorityRequestOperation = "execution-profile:read"
-	OperationAuthorityRequestOperationOperatorRead         OperationAuthorityRequestOperation = "operator:read"
+	OperationAuthorityRequestOperationIamAgentConfigure       OperationAuthorityRequestOperation = "iam:agent-configure"
+	OperationAuthorityRequestOperationIamAgentCreate          OperationAuthorityRequestOperation = "iam:agent-create"
+	OperationAuthorityRequestOperationIamAgentExecutionRead   OperationAuthorityRequestOperation = "iam:agent-execution-read"
+	OperationAuthorityRequestOperationIamAgentRecover         OperationAuthorityRequestOperation = "iam:agent-recover"
+	OperationAuthorityRequestOperationIamAgentReplace         OperationAuthorityRequestOperation = "iam:agent-replace"
+	OperationAuthorityRequestOperationIamAgentTemplatePublish OperationAuthorityRequestOperation = "iam:agent-template-publish"
+	OperationAuthorityRequestOperationIamAgentTemplateRead    OperationAuthorityRequestOperation = "iam:agent-template-read"
+	OperationAuthorityRequestOperationIamExecutionProfileRead OperationAuthorityRequestOperation = "iam:execution-profile-read"
+	OperationAuthorityRequestOperationIamOperatorRead         OperationAuthorityRequestOperation = "iam:operator-read"
 )
 
 // Valid indicates whether the value is a known member of the OperationAuthorityRequestOperation enum.
 func (e OperationAuthorityRequestOperation) Valid() bool {
 	switch e {
-	case OperationAuthorityRequestOperationAgentConfigure:
+	case OperationAuthorityRequestOperationIamAgentConfigure:
 		return true
-	case OperationAuthorityRequestOperationAgentCreate:
+	case OperationAuthorityRequestOperationIamAgentCreate:
 		return true
-	case OperationAuthorityRequestOperationAgentExecutionRead:
+	case OperationAuthorityRequestOperationIamAgentExecutionRead:
 		return true
-	case OperationAuthorityRequestOperationAgentRecover:
+	case OperationAuthorityRequestOperationIamAgentRecover:
 		return true
-	case OperationAuthorityRequestOperationAgentReplace:
+	case OperationAuthorityRequestOperationIamAgentReplace:
 		return true
-	case OperationAuthorityRequestOperationAgentTemplatePublish:
+	case OperationAuthorityRequestOperationIamAgentTemplatePublish:
 		return true
-	case OperationAuthorityRequestOperationAgentTemplateRead:
+	case OperationAuthorityRequestOperationIamAgentTemplateRead:
 		return true
-	case OperationAuthorityRequestOperationExecutionProfileRead:
+	case OperationAuthorityRequestOperationIamExecutionProfileRead:
 		return true
-	case OperationAuthorityRequestOperationOperatorRead:
+	case OperationAuthorityRequestOperationIamOperatorRead:
 		return true
 	default:
 		return false
@@ -1127,7 +1127,7 @@ type CredentialEventCredential string
 // CredentialEventOutcome defines model for CredentialEvent.Outcome.
 type CredentialEventOutcome string
 
-// DelegatedOperation `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it. `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
+// DelegatedOperation `iam:agent-activate` bounds the hosted operator's own lifecycle authority; no user mints it. `iam:agent-template-read`, `iam:agent-template-publish`, `iam:execution-profile-read` and `iam:operator-read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
 type DelegatedOperation string
 
 // Delegation defines model for Delegation.
@@ -1471,15 +1471,15 @@ type OperationAuthorityRequest struct {
 	// BodySha256 Lowercase hexadecimal SHA-256 of the exact request body the Operator receives; for a GET, that of the empty body.
 	BodySha256 string `json:"bodySha256"`
 
-	// Destination Required for `agent:replace` and refused with 400 for every other operation: the GRN of the controller of this organization the replacement moves the agent to (ADR-0107).
+	// Destination Required for `iam:agent-replace` and refused with 400 for every other operation: the GRN of the controller of this organization the replacement moves the agent to (ADR-0107).
 	Destination *string                            `json:"destination,omitempty"`
 	Operation   OperationAuthorityRequestOperation `json:"operation"`
 	RequestId   RequestId                          `json:"requestId"`
 
-	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `operator:read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing.
+	// RequestTarget Required for `iam:agent-template-read`, `iam:agent-template-publish`, `iam:execution-profile-read`, `iam:agent-execution-read` and `iam:operator-read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
+	// Target Controller GRN for `iam:agent-create`; agent GRN for `iam:agent-configure`, `iam:agent-recover`, `iam:agent-execution-read` and `iam:agent-replace`; this organization's GRN for `iam:agent-template-read`, `iam:agent-template-publish`, `iam:execution-profile-read` and `iam:operator-read`.
 	Target string `json:"target"`
 }
 
@@ -2358,19 +2358,19 @@ type ServerInterface interface {
 	// UpdateOrg Update an organization. Requires the `admin` role.
 	// (PATCH /orgs/{org})
 	UpdateOrg(w http.ResponseWriter, r *http.Request, org Org)
-	// ListAgentEnrollments List the organization's standalone approvals. Requires `agent:read`.
+	// ListAgentEnrollments List the organization's standalone approvals. Requires `iam:agent-read`.
 	// (GET /orgs/{org}/agent-enrollments)
 	ListAgentEnrollments(w http.ResponseWriter, r *http.Request, org Org, params ListAgentEnrollmentsParams)
-	// ApproveAgentEnrollment Approve a standalone host's enrollment. Requires current `agent:enroll`.
+	// ApproveAgentEnrollment Approve a standalone host's enrollment. Requires current `iam:agent-enroll`.
 	// (POST /orgs/{org}/agent-enrollments)
 	ApproveAgentEnrollment(w http.ResponseWriter, r *http.Request, org Org)
-	// WithdrawAgentEnrollment Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+	// WithdrawAgentEnrollment Withdraw an unspent standalone approval. Requires current `iam:agent-enroll`.
 	// (DELETE /orgs/{org}/agent-enrollments/{enrollment})
 	WithdrawAgentEnrollment(w http.ResponseWriter, r *http.Request, org Org, enrollmentID openapi_types.UUID)
-	// ListAgentSupervisors List the organization's standalone supervisors. Requires `agent:read`.
+	// ListAgentSupervisors List the organization's standalone supervisors. Requires `iam:agent-read`.
 	// (GET /orgs/{org}/agent-supervisors)
 	ListAgentSupervisors(w http.ResponseWriter, r *http.Request, org Org, params ListAgentSupervisorsParams)
-	// RevokeAgentSupervisor Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+	// RevokeAgentSupervisor Revoke a standalone host's supervisor. Requires current `iam:agent-enroll`.
 	// (DELETE /orgs/{org}/agent-supervisors/{supervisor})
 	RevokeAgentSupervisor(w http.ResponseWriter, r *http.Request, org Org, supervisorSlug string)
 	// ListAgents List an organization's agents. Requires the `member` role.
@@ -2379,10 +2379,10 @@ type ServerInterface interface {
 	// GetAgent Get an agent. Requires the `member` role.
 	// (GET /orgs/{org}/agents/{agent})
 	GetAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
-	// RenameAgent Rename an agent. Requires `agent:rename`.
+	// RenameAgent Rename an agent. Requires `iam:agent-rename`.
 	// (PATCH /orgs/{org}/agents/{agent})
 	RenameAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
-	// WatchAgent Watch an agent work. Requires the `agent:watch` action.
+	// WatchAgent Watch an agent work. Requires the `iam:agent-watch` action.
 	// (GET /orgs/{org}/agents/{agent}/watch)
 	WatchAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
@@ -2424,13 +2424,13 @@ type ServerInterface interface {
 	// RemoveGroupMember Remove a member from a group. Requires the `admin` role.
 	// (DELETE /orgs/{org}/groups/{group}/members/{member})
 	RemoveGroupMember(w http.ResponseWriter, r *http.Request, org Org, groupSlug GroupSlug, memberGrn MemberGrn)
-	// ListInvitations List the invitations that can still be accepted. Requires `org:invite`.
+	// ListInvitations List the invitations that can still be accepted. Requires `iam:org-invite`.
 	// (GET /orgs/{org}/invitations)
 	ListInvitations(w http.ResponseWriter, r *http.Request, org Org, params ListInvitationsParams)
 	// CreateInvitation Create an invitation. Requires the `admin` role.
 	// (POST /orgs/{org}/invitations)
 	CreateInvitation(w http.ResponseWriter, r *http.Request, org Org)
-	// RevokeInvitation Revoke an invitation no one has used. Requires `org:invite`.
+	// RevokeInvitation Revoke an invitation no one has used. Requires `iam:org-invite`.
 	// (DELETE /orgs/{org}/invitations/{invitation})
 	RevokeInvitation(w http.ResponseWriter, r *http.Request, org Org, invitationID openapi_types.UUID)
 	// ListOrgMembers List members of an organization. Requires the `member` role.
@@ -2454,19 +2454,19 @@ type ServerInterface interface {
 	// UpdateOperator Rename or describe an operator. Requires the `admin` role.
 	// (PATCH /orgs/{org}/operators/{operator})
 	UpdateOperator(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
-	// ClearOperatorControlEndpoint Clear a hosted operator's control endpoint. Requires current `operator:delegate`.
+	// ClearOperatorControlEndpoint Clear a hosted operator's control endpoint. Requires current `iam:operator-delegate`.
 	// (DELETE /orgs/{org}/operators/{operator}/control-endpoint)
 	ClearOperatorControlEndpoint(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params ClearOperatorControlEndpointParams)
-	// SetOperatorControlEndpoint Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+	// SetOperatorControlEndpoint Register where a hosted operator's control service answers the console. Requires current `iam:operator-delegate`.
 	// (PUT /orgs/{org}/operators/{operator}/control-endpoint)
 	SetOperatorControlEndpoint(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params SetOperatorControlEndpointParams)
-	// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+	// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `iam:operator-delegate`.
 	// (DELETE /orgs/{org}/operators/{operator}/delegation)
 	EndOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params EndOperatorDelegationParams)
 	// GetOperatorDelegation Read a hosted operator's current delegation. Requires the `member` role.
 	// (GET /orgs/{org}/operators/{operator}/delegation)
 	GetOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params GetOperatorDelegationParams)
-	// WriteOperatorDelegation Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+	// WriteOperatorDelegation Grant or replace a hosted operator's delegation. Requires current `iam:operator-delegate`.
 	// (PUT /orgs/{org}/operators/{operator}/delegation)
 	WriteOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params WriteOperatorDelegationParams)
 	// ListOperatorKeys List the keys an operator was issued, with where each stands.
@@ -2475,10 +2475,10 @@ type ServerInterface interface {
 	// IssueOperatorKey Issue a registered operator a private key, shown once.
 	// (POST /orgs/{org}/operators/{operator}/keys)
 	IssueOperatorKey(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
-	// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+	// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `iam:operator-reissue`.
 	// (DELETE /orgs/{org}/operators/{operator}/keys/{kid})
 	RevokeOperatorKey(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, keyID KeyID)
-	// SetOperatorManager Link a control service to its cluster manager, once. Requires `operator:register`.
+	// SetOperatorManager Link a control service to its cluster manager, once. Requires `iam:operator-register`.
 	// (PUT /orgs/{org}/operators/{operator}/manager)
 	SetOperatorManager(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
 	// CheckPermissions Ask whether the signed-in caller may take each of a list of actions. Requires membership.
@@ -2487,7 +2487,7 @@ type ServerInterface interface {
 	// ExplainPermission Explain why the signed-in caller may or may not take one action. Requires membership.
 	// (GET /orgs/{org}/permission-explanation)
 	ExplainPermission(w http.ResponseWriter, r *http.Request, org Org, params ExplainPermissionParams)
-	// ListPermissionHolders List the members and agents the engine allows one action. Requires `org:member-list`.
+	// ListPermissionHolders List the members and agents the engine allows one action. Requires `iam:org-member-list`.
 	// (GET /orgs/{org}/permission-holders)
 	ListPermissionHolders(w http.ResponseWriter, r *http.Request, org Org, params ListPermissionHoldersParams)
 	// ListPolicies List an organization's policies. Requires the `admin` role.

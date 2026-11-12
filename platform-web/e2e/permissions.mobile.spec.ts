@@ -16,7 +16,7 @@ async function seedPolicy(request: APIRequestContext, signedIn: Seed) {
         Statement: [
           {
             Effect: "Deny",
-            Action: ["project:delete"],
+            Action: ["iam:project-delete"],
             Resource: [`grn:${signedIn.orgSlug}/*`],
           },
         ],

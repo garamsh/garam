@@ -235,20 +235,21 @@ registration
 ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)).
 
 **`getOperator` and `updateOperator` read one operator and change
-its name and description**, on `operator:read` and `operator:update`
+its name and description**, on `iam:operator-read` and
+`iam:operator-update`
 ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)).
-The identifier is the path's and not a field, so the update moves no
-key or token.
+The identifier is the path's and not a field, so the update moves no key
+or token.
 
 **`getAgent` and `listAgents` answer the generation garam last
-activated for each agent**, on `agent:read`, beside the assignment that
-holds it; [agents.md](./agents.md) §Separated execution states what the
-field does and does not say.
+activated for each agent**, on `iam:agent-read`, beside the assignment
+that holds it; [agents.md](./agents.md) §Separated execution states what
+the field does and does not say.
 
 **No operation serves an agent definition or names an agent**: garam
 holds neither ([ADR-0118](./adr/0118-every-legacy-path-goes-now-with-nothing-migrated-and-the-certificate-path-goes-with-them.md)).
 **No operation serves a template of garam's own**: they are gone
-([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)). `agent-template:read` authorizes reading the templates the
+([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)). `iam:agent-template-read` authorizes reading the templates the
 control service publishes, on the organization.
 
 **`deleteOperator` is on the same listener and is the one operation
@@ -256,7 +257,7 @@ here that stops a machine identity.** It removes the organization's
 record, which the machine listener reads on every request, so the
 operator's token is refused from its next request
 ([ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)).
-It is authorized on `operator:delete` rather than on the action the
+It is authorized on `iam:operator-delete` rather than on the action the
 other two take, because registering grants nothing and this withdraws
 what an operator runs on. It answers 204. No operation on
 `platform/api/machine.yaml` deletes an operator: an operator does not
@@ -267,7 +268,7 @@ listeners** (ADR-0078). The browser-facing listener grants, reads and
 withdraws a hosted operator's delegation, sets and clears its control
 endpoint, and mints a member's request-bound authority — for a read
 or a template publication, bound to the exact request target as well
-as the body (#1170), including `operator:read` for what the Operator
+as the body (#1170), including `iam:operator-read` for what the Operator
 reports about the organization's operators (#1374); the machine
 listener answers that authority
 and its durable reference to the operator it names and no other, and
@@ -298,10 +299,10 @@ answer that cannot be decided from current state is the listener's
 **Standalone enrollment is a versioned contract on both listeners**
 (ADR-0082). `approveAgentEnrollment`, `withdrawAgentEnrollment` and
 `revokeAgentSupervisor` on the browser-facing listener are each
-decided on `agent:enroll` from current state and carry no contract
+decided on `iam:agent-enroll` from current state and carry no contract
 version, as an operator's registration does not, and
 `listAgentEnrollments` and `listAgentSupervisors` beside them are
-decided on `agent:read` the same way and answer no secret, hash, key
+decided on `iam:agent-read` the same way and answer no secret, hash, key
 fingerprint, certificate or credential; on the machine
 listener `enrollStandaloneAgent` requires and answers
 `Garam-Contract-Version: standalone-enrollment.v2`, and an approval
@@ -413,20 +414,21 @@ and not in the same place on every surface.
 - **A read describing a write is decided on that write's action.**
   `getOrgDeletionPreview` answers what deleting an organization would
   destroy — a count per resource kind, and whether the organization
-  holds a certificate authority — and is decided on `org:delete`
-  rather than `org:read`. It reads and changes nothing, so `org:read`
-  would be the shape to reach for; what that would publish is the size
-  of an organization to every member who cannot delete it. Authorizing
-  the description as the act keeps the two answers together: a caller
-  who may not perform the delete is told nothing about it. No role
-  gained an action for this, because the owner already holds `org:*`
-  ([authz.md](./authz.md) §Statement collection).
+  holds a certificate authority — and is decided on `iam:org-delete`
+  rather than `iam:org-read`. It reads and changes nothing, so
+  `iam:org-read` would be the shape to reach for; what that would
+  publish is the size of an organization to every member who cannot
+  delete it. Authorizing the description as the act keeps the two
+  answers together: a caller who may not perform the delete is told
+  nothing about it. No role gained an action for this, because the owner
+  already holds `iam:org-*` ([authz.md](./authz.md) §Statement
+  collection).
 - **A machine identity's credential events are read on its own
   read.** `listCredentialEvents` answers what garam issued, renewed and
   refused of one operator's, agent's or supervisor's credentials,
-  newest first and paged like any list, on `operator:read` on the
-  organization for an operator, `agent:read` on the agent for an agent
-  and `agent:read` on the organization for a supervisor
+  newest first and paged like any list, on `iam:operator-read` on the
+  organization for an operator, `iam:agent-read` on the agent for an
+  agent and `iam:agent-read` on the organization for a supervisor
   ([ADR-0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)).
   No event carries a key, token, credential or certificate
   ([machine-identity.md](./machine-identity.md) §Credential events).
@@ -449,7 +451,7 @@ and not in the same place on every surface.
 - **A caller's own teams are one filtered list.** `listGroups` with
   `member=me` answers only the groups the signed-in caller belongs to,
   ordered, paged and filtered as the unfiltered list is, and authorized
-  on the same `group:read` on the organization. The filter names the
+  on the same `iam:group-read` on the organization. The filter names the
   caller and nobody else, because who else belongs to a group is
   `listGroupMembers`', which is decided per group.
 - **A name search answers each kind as its list would.** `searchOrg`
@@ -492,10 +494,10 @@ and not in the same place on every surface.
     calls `Explain`, so no answer says why. A missing group or project
     answers as a denied one, so the answer tells no one what exists.
   - **deny or unknown** for an action a mint decides together with a
-    delegation grant: `agent:create`, `agent:configure`,
-    `agent:recover`, `agent:replace`,
-    `agent-template:publish`,
-    `execution-profile:read` and `agent:execution-read`
+    delegation grant: `iam:agent-create`, `iam:agent-configure`,
+    `iam:agent-recover`, `iam:agent-replace`,
+    `iam:agent-template-publish`,
+    `iam:execution-profile-read` and `iam:agent-execution-read`
     ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
     The pair is put to the check the mint runs, through the one
     function both call
@@ -503,13 +505,13 @@ and not in the same place on every surface.
     `AuthorizeOperation`). A deny there is the mint's refusal, so it is
     answered deny. An allow leaves the grant, which `checkPermissions`
     does not read, so it is answered unknown.
-  - **allow or deny** for `operator:delegate`. It is put to the check
-    every write of a delegation and of a control endpoint runs, through
-    the one function they all call
+  - **allow or deny** for `iam:operator-delegate`. It is put to the
+    check every write of a delegation and of a control endpoint runs,
+    through the one function they all call
     (`platform/internal/operator/authority_service.go`,
     `AuthorizeDelegation`), and that check is all of their authority.
-  - **allow or deny** for `agent:enroll`. It is put to the check every
-    approval, withdrawal and revoke of a standalone host runs, on
+  - **allow or deny** for `iam:agent-enroll`. It is put to the check
+    every approval, withdrawal and revoke of a standalone host runs, on
     current policy past the engine's cache, through the one function
     they all call (`platform/internal/agent/standalone_service.go`,
     `AuthorizeEnroll`), and that check is all of their authority. A new
@@ -519,8 +521,8 @@ and not in the same place on every surface.
   So `unknown` is answered exactly where a delegation grant is left to
   decide, and nowhere else.
   - **deny** for an action garam does not define, because a role's
-    wildcard such as `org:*` would otherwise allow a name no operation
-    checks.
+    wildcard such as `iam:org-*` would otherwise allow a name no
+    operation checks.
 
   A defined action paired with a resource kind none of its operations
   address is refused with 400 naming the pair, and one pair the engine
@@ -538,30 +540,30 @@ and not in the same place on every surface.
   project's roles, or a policy applying org-wide, attached to them or
   attached to a group they belong to.
   - **A policy the caller cannot read is not described.** A policy
-    statement is named only where the caller holds `policy:read` on
+    statement is named only where the caller holds `iam:policy-read` on
     that policy, the check `getPolicy` makes; every other one is
     answered once as an unreadable policy with its effect alone, which
     the decision already gives.
   - **An action decided past `Check` is explained no further than its
-    decision**: the mint-decided actions, `operator:delegate` and
-    `agent:enroll` answer `checkPermissions`' decision with no
+    decision**: the mint-decided actions, `iam:operator-delegate` and
+    `iam:agent-enroll` answer `checkPermissions`' decision with no
     statement, since their operation is what decides. An action garam
     does not define is answered deny as such.
-- **Who holds an action is a list read on `org:member-list`.**
+- **Who holds an action is a list read on `iam:org-member-list`.**
   `listPermissionHolders` puts one pair to the engine's `Check` for
   each member and agent of the organization, each asked as enforcement
   asks it: a member with its role-derived statements and groups, an
   agent, which holds no role, with its groups alone. It is authorized
-  on `org:member-list`, the action `listOrgMembers` is, because the
+  on `iam:org-member-list`, the action `listOrgMembers` is, because the
   answer names members; agents are asked only where the caller also
-  holds `agent:read`. A page asks at most fifty candidates — members,
-  then agents, each in GRN order — and answers those the engine allows
-  with the offset of the next page, so one request costs the engine
-  what one `checkPermissions` request does. Its `limit` is therefore
-  its own and not the one other lists share: 1 to 50, 50 when absent,
-  and 0 refused rather than read as no limit. An action decided past
-  `Check` is refused with 400, since the engine is not what decides who
-  holds it.
+  holds `iam:agent-read`. A page asks at most fifty candidates —
+  members, then agents, each in GRN order — and answers those the engine
+  allows with the offset of the next page, so one request costs the
+  engine what one `checkPermissions` request does. Its `limit` is
+  therefore its own and not the one other lists share: 1 to 50, 50 when
+  absent, and 0 refused rather than read as no limit. An action decided
+  past `Check` is refused with 400, since the engine is not what decides
+  who holds it.
 
 One of ADR-0036's decisions is a commitment rather than a rule deciding
 anything today: **no surface serves a secret's value**, garam's
@@ -611,7 +613,7 @@ Until it is built, no token the listener reads names one.
   organization, `getMessageStatus` for a message it sent and
   `getIdentity`. Every other operation on this listener refuses it,
   and it takes no browser audience.
-- **What decides the rest** is `message:send`, as for any sender
+- **What decides the rest** is `iam:message-send`, as for any sender
   ([authz.md](./authz.md) §cowork's principal).
 
 ## The issuer's endpoints
@@ -957,7 +959,7 @@ document owes an update.
 - [ADR-0119](./adr/0119-a-managed-agent-carries-a-display-name-on-its-own-record-set-at-creation-and-renamed-on-agent-rename.md)
   — a managed agent carries a name on its own record, set at creation
   on both machine routes and renamed on the browser surface under
-  `agent:rename`, authorized on the agent itself
+  `iam:agent-rename`, authorized on the agent itself
 - [ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)
   — the CLI signs in by the device grant, and the browser API accepts
   its session as a bearer wherever it accepts the cookie

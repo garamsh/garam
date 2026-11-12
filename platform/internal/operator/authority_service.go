@@ -13,7 +13,7 @@ import (
 
 // actionDelegate is the action granting and withdrawing a delegation
 // needs. internal/org owns it; see Operation for why it is repeated.
-const actionDelegate = "operator:delegate"
+const actionDelegate = "iam:operator-delegate"
 
 // agentServiceType is the GRN service type of an agent, which a
 // configuration change targets. internal/agent owns it.
@@ -31,17 +31,17 @@ const agentServiceType = "agent"
 // refuses.
 type AuthorityService interface {
 	// WriteGrant creates or replaces the hosted operator's grant for an
-	// actor currently holding operator:delegate; see GrantStore.WriteGrant
-	// for replay and staleness.
+	// actor currently holding iam:operator-delegate; see
+	// GrantStore.WriteGrant for replay and staleness.
 	WriteGrant(ctx context.Context, w GrantWrite) (*Grant, bool, error)
 	// EndGrant withdraws the named grant for an actor currently holding
-	// operator:delegate; see GrantStore.EndGrant for a retry.
+	// iam:operator-delegate; see GrantStore.EndGrant for a retry.
 	EndGrant(ctx context.Context, actor, org, operator grn.GRN, id GrantID) error
 	// CurrentGrant answers the hosted operator's current grant.
 	CurrentGrant(ctx context.Context, org, operator grn.GRN) (*Grant, error)
 	// SetControlEndpoint registers where the hosted operator's control
 	// service answers the console, nil clearing it, for an actor
-	// currently holding operator:delegate. It answers the operator as
+	// currently holding iam:operator-delegate. It answers the operator as
 	// stored.
 	SetControlEndpoint(ctx context.Context, actor, org, operator grn.GRN, endpoint *ControlEndpoint) (*Operator, error)
 	// Mint hands the audience one operation on the actor's behalf.
@@ -53,7 +53,7 @@ type AuthorityService interface {
 	// allow leaves the grant to decide the rest.
 	AuthorizeOperation(ctx context.Context, actor, org, object grn.GRN, op Operation) error
 	// AuthorizeDelegation decides whether the actor currently holds
-	// operator:delegate on the organization. WriteGrant, EndGrant and
+	// iam:operator-delegate on the organization. WriteGrant, EndGrant and
 	// SetControlEndpoint ask exactly this, and it is the whole of their
 	// authority.
 	AuthorizeDelegation(ctx context.Context, actor, org grn.GRN) error

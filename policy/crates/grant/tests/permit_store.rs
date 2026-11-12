@@ -49,7 +49,7 @@ async fn a_stored_permit_allows_by_its_id_and_never_past_the_organization(pool: 
 
     store.create(draft(body, &org, OWNER.1)).await.unwrap();
     assert!(store.active(&org).await.unwrap().permits.is_empty());
-    store.activate(&org, PERMIT).await.unwrap();
+    store.activate_permit(&org, PERMIT, &right).await.unwrap();
     assert_eq!(store.active(&org).await.unwrap().permits.len(), 1);
 
     let entities = World {

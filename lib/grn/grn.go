@@ -32,6 +32,11 @@ const (
 	nameMax = 512
 )
 
+// ErrUndeclared is what [Parse] and [Validate] answer for a name whose
+// service or last type no manifest declares, apart from the errors for
+// a string that is no GRN. It is read with errors.Is.
+var ErrUndeclared = errorx.New(errorx.KindInvalidArgument, "grn: invalid service type")
+
 // RootOwner owns root-level resources such as organizations. It may
 // not be used as a real organization identifier (ADR-0001).
 const RootOwner = "root"
@@ -200,6 +205,16 @@ func (g GRN) name() string {
 	return b.String()
 }
 
+// Parent returns the name of the GRN with its last type and id pair
+// removed and its locator dropped, and the empty string where the name
+// holds one pair and so has no parent in the name (ADR-0142 item 3).
+func (g GRN) Parent() string {
+	if g.Ancestors == "" {
+		return ""
+	}
+	return prefix + g.Organization + "/" + g.Service + "/" + g.Ancestors
+}
+
 // IsZero reports whether the GRN is the zero value.
 func (g GRN) IsZero() bool {
 	return g == GRN{}
@@ -222,7 +237,7 @@ func (g GRN) Validate() error {
 	case !isSlug(g.Organization):
 		return errorx.New(errorx.KindInvalidArgument, "grn: invalid organization")
 	case !catalogue[g.Service][g.ServiceType]:
-		return errorx.New(errorx.KindInvalidArgument, "grn: invalid service type")
+		return ErrUndeclared
 	case !validAncestors(g.Ancestors):
 		return errorx.New(errorx.KindInvalidArgument, "grn: invalid ancestors")
 	case !isSlug(g.Identifier):

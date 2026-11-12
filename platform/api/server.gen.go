@@ -1281,6 +1281,31 @@ type FoundObject struct {
 	Name *string `json:"name,omitempty"`
 }
 
+// GrnDescription defines model for GrnDescription.
+type GrnDescription struct {
+	// Actions The names of the actions whose resource types name `entityType`, sorted. `getRegistry` says what each applies to.
+	Actions *[]string `json:"actions,omitempty"`
+
+	// EntityType The qualified entity type the name is written as.
+	EntityType *string `json:"entityType,omitempty"`
+
+	// Grn The name as asked, locator included.
+	Grn string `json:"grn"`
+
+	// Known False where the name's service or type is declared by no manifest. Every property below is absent then.
+	Known bool `json:"known"`
+
+	// Locator The place inside the resource, as written after `#`.
+	Locator *string `json:"locator,omitempty"`
+
+	// Parent The name with its last type and id pair removed. Absent for a name of one pair.
+	Parent  *string `json:"parent,omitempty"`
+	Service *string `json:"service,omitempty"`
+
+	// Type The name's last type segment.
+	Type *string `json:"type,omitempty"`
+}
+
 // Group defines model for Group.
 type Group struct {
 	Grn    string `json:"grn"`
@@ -1874,6 +1899,47 @@ type ProjectPatch struct {
 	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
+// Registry defines model for Registry.
+type Registry struct {
+	Services []RegistryService `json:"services"`
+}
+
+// RegistryAction defines model for RegistryAction.
+type RegistryAction struct {
+	// Name The action as it is written on the wire, `<service>:<type>.<verb>`.
+	Name string `json:"name"`
+
+	// Principals The qualified types that may take the action.
+	Principals []string `json:"principals"`
+
+	// Resources The qualified types the action applies to.
+	Resources []string `json:"resources"`
+}
+
+// RegistryService defines model for RegistryService.
+type RegistryService struct {
+	// Actions The service's actions, sorted by `name`.
+	Actions []RegistryAction `json:"actions"`
+
+	// Name The service's one name, the `service` segment of its GRNs.
+	Name string `json:"name"`
+
+	// Types The entity types a GRN of this service names, sorted by `name`.
+	Types []RegistryType `json:"types"`
+}
+
+// RegistryType defines model for RegistryType.
+type RegistryType struct {
+	// EntityType The qualified entity type the name is written as.
+	EntityType string `json:"entityType"`
+
+	// Name The `type` segment of a GRN of this type.
+	Name string `json:"name"`
+
+	// Parents The qualified types an entity of this type may be a member of.
+	Parents []string `json:"parents"`
+}
+
 // RequestId defines model for RequestId.
 type RequestId = string
 
@@ -2180,6 +2246,12 @@ type SearchOrgParams struct {
 
 	// Limit How many objects of each kind to answer, from 1 to 20; 5 when absent.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DescribeGrnParams defines parameters for DescribeGrn.
+type DescribeGrnParams struct {
+	// Grn The name to describe.
+	Grn string `form:"grn" json:"grn"`
 }
 
 // RequestDeviceCodeFormdataRequestBody defines body for RequestDeviceCode for application/x-www-form-urlencoded ContentType.
@@ -2547,6 +2619,12 @@ type ServerInterface interface {
 	// SearchOrg Find an organization's people, agents, teams, policies and projects by name. Requires the `member` role.
 	// (GET /orgs/{org}/search)
 	SearchOrg(w http.ResponseWriter, r *http.Request, org Org, params SearchOrgParams)
+	// GetRegistry List the services, their types and their actions. Requires a signed-in caller.
+	// (GET /registry)
+	GetRegistry(w http.ResponseWriter, r *http.Request)
+	// DescribeGrn Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+	// (GET /registry/grn)
+	DescribeGrn(w http.ResponseWriter, r *http.Request, params DescribeGrnParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -5647,6 +5725,53 @@ func (siw *ServerInterfaceWrapper) SearchOrg(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetRegistry operation middleware
+func (siw *ServerInterfaceWrapper) GetRegistry(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRegistry(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DescribeGrn operation middleware
+func (siw *ServerInterfaceWrapper) DescribeGrn(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DescribeGrnParams
+
+	// ------------- Required query parameter "grn" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "grn", r.URL.Query(), &params.Grn, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "grn"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "grn", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DescribeGrn(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -5785,6 +5910,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/sessions", wrapper.ListMySessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/sessions/{session}", wrapper.RevokeMySession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.Me)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/registry", wrapper.GetRegistry)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/registry/grn", wrapper.DescribeGrn)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs", wrapper.ListOrgs)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrg)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}", wrapper.DeleteOrg)

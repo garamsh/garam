@@ -73,8 +73,9 @@ only in the policy service: nothing sends one yet.
   and the system tier, and a type's group `iam:<type>.*` holds that
   type's actions and no other's. A role is the `Iam` namespace's, and a
   service's action joins one by naming its group in its own manifest.
-  The platform is to serve a read-only registry of services, types and
-  actions, answered from the manifests. Adding a service is one pull
+  The platform serves a read-only registry of services, types and
+  actions, answered from the catalogue generated from the manifests.
+  Adding a service is one pull
   request adding one manifest, with the proofs the ADR lists.
 - **An organization may write `permit` policies**
   ([ADR-0144](./adr/0144-an-organization-may-write-permit-policies-over-resources-inside-itself.md)).
@@ -118,9 +119,11 @@ CLI and the SDKs, and migrations 000071 and 000072 rewrote the
 operations stored in delegation grants and authorities, the second to
 the dot form of ADR-0145; no stored policy document was converted, and
 `platform/internal/org/action_manifest_test.go` holds the platform's
-names to `grn.Actions()`. **Not built:** item 6, the
-registry; item 7's proofs for a new service; and codehub's manifest, so
-`repo` is in no catalogue.
+names to `grn.Actions()`. Item 6, the registry, is built (#1788):
+`getRegistry` and `describeGrn` ask for a signed-in caller and no
+permission, since they answer what the manifests declare and read no
+entity. **Not built:** item 7's proofs for a new service; and codehub's
+manifest, so `repo` is in no catalogue.
 
 **The platform's outbox, its delivery and its signer are built.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set

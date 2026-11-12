@@ -43,6 +43,10 @@ tags:
       (ADR-0141).
   - name: auth
     description: Sign-in, sign-out, and the current identity.
+  - name: registry
+    description: >-
+      What the service manifests declare: the services, their types and
+      their actions, and what a GRN is (ADR-0143).
   - name: org
     description: >-
       Organizations, memberships, invitations, and the groups and
@@ -575,6 +579,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Error'
+  /registry:
+    get:
+      operationId: getRegistry
+      tags: [registry]
+      summary: List the services, their types and their actions. Requires a signed-in caller.
+      description: >-
+        What the service manifests declare (ADR-0143): each service,
+        the entity types a GRN of it names, with each type's parent
+        types, and each action of it with the types it applies to. It
+        answers from the manifests the platform was built with and
+        reads no organization, so it holds nothing of one and asks the
+        caller for no permission beyond a session.
+      responses:
+        '200':
+          description: The services the manifests declare, sorted by name.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Registry'
+        '401':
+          $ref: '#/components/responses/Error'
+  /registry/grn:
+    get:
+      operationId: describeGrn
+      tags: [registry]
+      summary: Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+      description: >-
+        Says what a name is, and never whether the thing it names
+        exists or whether the caller may act on it: it reads no entity
+        and no organization. A name of a declared service and type
+        answers `known` true with its service, its type, the entity type
+        it is written as, its parent (the name with its last type and id
+        pair removed, absent for a name of one pair), its locator where
+        it has one, and the actions whose resource types name its entity
+        type. A name whose service or type no manifest declares
+        answers `known` false and nothing else: it is a well-formed name
+        the registry has no declaration for, and not an error. A string
+        that is no GRN is refused with 400. The name is a query
+        parameter because a GRN holds `/`.
+      parameters:
+        - name: grn
+          in: query
+          required: true
+          description: The name to describe.
+          schema:
+            type: string
+            example: grn:acme/cowork/project/frontend/channel/general
+      responses:
+        '200':
+          description: What the name is, or that no manifest declares it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrnDescription'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
   /orgs:
@@ -3323,6 +3385,107 @@ components:
           example: grn:garam/iam/user/117421510527410544321
         nickname:
           type: string
+    Registry:
+      type: object
+      required: [services]
+      properties:
+        services:
+          type: array
+          items:
+            $ref: '#/components/schemas/RegistryService'
+    RegistryService:
+      type: object
+      required: [name, types, actions]
+      properties:
+        name:
+          type: string
+          description: The service's one name, the `service` segment of its GRNs.
+          example: cowork
+        types:
+          type: array
+          description: The entity types a GRN of this service names, sorted by `name`.
+          items:
+            $ref: '#/components/schemas/RegistryType'
+        actions:
+          type: array
+          description: The service's actions, sorted by `name`.
+          items:
+            $ref: '#/components/schemas/RegistryAction'
+    RegistryType:
+      type: object
+      required: [name, entityType, parents]
+      properties:
+        name:
+          type: string
+          description: The `type` segment of a GRN of this type.
+          example: channel
+        entityType:
+          type: string
+          description: The qualified entity type the name is written as.
+          example: Cowork::Channel
+        parents:
+          type: array
+          description: The qualified types an entity of this type may be a member of.
+          items:
+            type: string
+    RegistryAction:
+      type: object
+      required: [name, principals, resources]
+      properties:
+        name:
+          type: string
+          description: The action as it is written on the wire, `<service>:<type>.<verb>`.
+          example: cowork:channel.post
+        principals:
+          type: array
+          description: The qualified types that may take the action.
+          items:
+            type: string
+        resources:
+          type: array
+          description: The qualified types the action applies to.
+          items:
+            type: string
+    GrnDescription:
+      type: object
+      required: [grn, known]
+      properties:
+        grn:
+          type: string
+          description: The name as asked, locator included.
+        known:
+          type: boolean
+          description: >-
+            False where the name's service or type is declared by no
+            manifest. Every property below is absent then.
+        service:
+          type: string
+          example: cowork
+        type:
+          type: string
+          description: The name's last type segment.
+          example: channel
+        entityType:
+          type: string
+          description: The qualified entity type the name is written as.
+          example: Cowork::Channel
+        parent:
+          type: string
+          description: >-
+            The name with its last type and id pair removed. Absent for
+            a name of one pair.
+          example: grn:acme/cowork/project/frontend
+        locator:
+          type: string
+          description: The place inside the resource, as written after `#`.
+        actions:
+          type: array
+          description: >-
+            The names of the actions whose resource types name
+            `entityType`, sorted. `getRegistry` says what each applies
+            to.
+          items:
+            type: string
     PasswordLogin:
       type: object
       required: [username, password]

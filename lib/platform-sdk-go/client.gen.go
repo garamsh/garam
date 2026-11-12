@@ -1283,6 +1283,31 @@ type FoundObject struct {
 	Name *string `json:"name,omitempty"`
 }
 
+// GrnDescription defines model for GrnDescription.
+type GrnDescription struct {
+	// Actions The names of the actions whose resource types name `entityType`, sorted. `getRegistry` says what each applies to.
+	Actions *[]string `json:"actions,omitempty"`
+
+	// EntityType The qualified entity type the name is written as.
+	EntityType *string `json:"entityType,omitempty"`
+
+	// Grn The name as asked, locator included.
+	Grn string `json:"grn"`
+
+	// Known False where the name's service or type is declared by no manifest. Every property below is absent then.
+	Known bool `json:"known"`
+
+	// Locator The place inside the resource, as written after `#`.
+	Locator *string `json:"locator,omitempty"`
+
+	// Parent The name with its last type and id pair removed. Absent for a name of one pair.
+	Parent  *string `json:"parent,omitempty"`
+	Service *string `json:"service,omitempty"`
+
+	// Type The name's last type segment.
+	Type *string `json:"type,omitempty"`
+}
+
 // Group defines model for Group.
 type Group struct {
 	Grn    string `json:"grn"`
@@ -1876,6 +1901,47 @@ type ProjectPatch struct {
 	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
+// Registry defines model for Registry.
+type Registry struct {
+	Services []RegistryService `json:"services"`
+}
+
+// RegistryAction defines model for RegistryAction.
+type RegistryAction struct {
+	// Name The action as it is written on the wire, `<service>:<type>.<verb>`.
+	Name string `json:"name"`
+
+	// Principals The qualified types that may take the action.
+	Principals []string `json:"principals"`
+
+	// Resources The qualified types the action applies to.
+	Resources []string `json:"resources"`
+}
+
+// RegistryService defines model for RegistryService.
+type RegistryService struct {
+	// Actions The service's actions, sorted by `name`.
+	Actions []RegistryAction `json:"actions"`
+
+	// Name The service's one name, the `service` segment of its GRNs.
+	Name string `json:"name"`
+
+	// Types The entity types a GRN of this service names, sorted by `name`.
+	Types []RegistryType `json:"types"`
+}
+
+// RegistryType defines model for RegistryType.
+type RegistryType struct {
+	// EntityType The qualified entity type the name is written as.
+	EntityType string `json:"entityType"`
+
+	// Name The `type` segment of a GRN of this type.
+	Name string `json:"name"`
+
+	// Parents The qualified types an entity of this type may be a member of.
+	Parents []string `json:"parents"`
+}
+
 // RequestId defines model for RequestId.
 type RequestId = string
 
@@ -2182,6 +2248,12 @@ type SearchOrgParams struct {
 
 	// Limit How many objects of each kind to answer, from 1 to 20; 5 when absent.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DescribeGrnParams defines parameters for DescribeGrn.
+type DescribeGrnParams struct {
+	// Grn The name to describe.
+	Grn string `form:"grn" json:"grn"`
 }
 
 // RequestDeviceCodeFormdataRequestBody defines body for RequestDeviceCode for application/x-www-form-urlencoded ContentType.
@@ -3374,6 +3446,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/search (the `SearchOrg` operationId).
 	SearchOrg(ctx context.Context, org Org, params *SearchOrgParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRegistry List the services, their types and their actions. Requires a signed-in caller.
+	//
+	// What the service manifests declare (ADR-0143): each service, the entity types a GRN of it names, with each type's parent types, and each action of it with the types it applies to. It answers from the manifests the platform was built with and reads no organization, so it holds nothing of one and asks the caller for no permission beyond a session.
+	//
+	// Corresponds with GET /registry (the `GetRegistry` operationId).
+	GetRegistry(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DescribeGrn Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+	//
+	// Says what a name is, and never whether the thing it names exists or whether the caller may act on it: it reads no entity and no organization. A name of a declared service and type answers `known` true with its service, its type, the entity type it is written as, its parent (the name with its last type and id pair removed, absent for a name of one pair), its locator where it has one, and the actions whose resource types name its entity type. A name whose service or type no manifest declares answers `known` false and nothing else: it is a well-formed name the registry has no declaration for, and not an error. A string that is no GRN is refused with 400. The name is a query parameter because a GRN holds `/`.
+	//
+	// Corresponds with GET /registry/grn (the `DescribeGrn` operationId).
+	DescribeGrn(ctx context.Context, params *DescribeGrnParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // GetIssuerConfiguration Read garam's issuer metadata.
@@ -5594,6 +5680,40 @@ func (c *Client) RemoveProjectMember(ctx context.Context, org Org, projectSlug P
 // Corresponds with GET /orgs/{org}/search (the `SearchOrg` operationId).
 func (c *Client) SearchOrg(ctx context.Context, org Org, params *SearchOrgParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewSearchOrgRequest(c.Server, org, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetRegistry List the services, their types and their actions. Requires a signed-in caller.
+//
+// What the service manifests declare (ADR-0143): each service, the entity types a GRN of it names, with each type's parent types, and each action of it with the types it applies to. It answers from the manifests the platform was built with and reads no organization, so it holds nothing of one and asks the caller for no permission beyond a session.
+//
+// Corresponds with GET /registry (the `GetRegistry` operationId).
+func (c *Client) GetRegistry(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRegistryRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DescribeGrn Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+//
+// Says what a name is, and never whether the thing it names exists or whether the caller may act on it: it reads no entity and no organization. A name of a declared service and type answers `known` true with its service, its type, the entity type it is written as, its parent (the name with its last type and id pair removed, absent for a name of one pair), its locator where it has one, and the actions whose resource types name its entity type. A name whose service or type no manifest declares answers `known` false and nothing else: it is a well-formed name the registry has no declaration for, and not an error. A string that is no GRN is refused with 400. The name is a query parameter because a GRN holds `/`.
+//
+// Corresponds with GET /registry/grn (the `DescribeGrn` operationId).
+func (c *Client) DescribeGrn(ctx context.Context, params *DescribeGrnParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDescribeGrnRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9815,6 +9935,83 @@ func NewSearchOrgRequest(server string, org Org, params *SearchOrgParams) (*http
 	return req, nil
 }
 
+// NewGetRegistryRequest constructs an http.Request for the GetRegistry method
+func NewGetRegistryRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/registry")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDescribeGrnRequest constructs an http.Request for the DescribeGrn method
+func NewDescribeGrnRequest(server string, params *DescribeGrnParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/registry/grn")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "grn", params.Grn, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -10986,6 +11183,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/search (the `SearchOrg` operationId).
 	SearchOrgWithResponse(ctx context.Context, org Org, params *SearchOrgParams, reqEditors ...RequestEditorFn) (*SearchOrgResponse, error)
+
+	// GetRegistryWithResponse List the services, their types and their actions. Requires a signed-in caller.
+	//
+	// What the service manifests declare (ADR-0143): each service, the entity types a GRN of it names, with each type's parent types, and each action of it with the types it applies to. It answers from the manifests the platform was built with and reads no organization, so it holds nothing of one and asks the caller for no permission beyond a session.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /registry (the `GetRegistry` operationId).
+	GetRegistryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRegistryResponse, error)
+
+	// DescribeGrnWithResponse Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+	//
+	// Says what a name is, and never whether the thing it names exists or whether the caller may act on it: it reads no entity and no organization. A name of a declared service and type answers `known` true with its service, its type, the entity type it is written as, its parent (the name with its last type and id pair removed, absent for a name of one pair), its locator where it has one, and the actions whose resource types name its entity type. A name whose service or type no manifest declares answers `known` false and nothing else: it is a well-formed name the registry has no declaration for, and not an error. A string that is no GRN is refused with 400. The name is a query parameter because a GRN holds `/`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /registry/grn (the `DescribeGrn` operationId).
+	DescribeGrnWithResponse(ctx context.Context, params *DescribeGrnParams, reqEditors ...RequestEditorFn) (*DescribeGrnResponse, error)
 }
 
 type GetIssuerConfigurationResponse struct {
@@ -16717,6 +16932,109 @@ func (r SearchOrgResponse) ContentType() string {
 	return ""
 }
 
+type GetRegistryResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Registry
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRegistryResponse) GetJSON200() *Registry {
+	return r.JSON200
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetRegistryResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRegistryResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRegistryResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRegistryResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRegistryResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DescribeGrnResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *GrnDescription
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *Error
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DescribeGrnResponse) GetJSON200() *GrnDescription {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DescribeGrnResponse) GetJSON400() *Error {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DescribeGrnResponse) GetJSON401() *Error {
+	return r.JSON401
+}
+
+// GetBody returns the raw response body bytes
+func (r DescribeGrnResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DescribeGrnResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DescribeGrnResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DescribeGrnResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetIssuerConfigurationWithResponse Read garam's issuer metadata.
 //
 // The discovery document of garam as an OIDC issuer (ADR-0141): the `issuer` identity, where its keys are published and where a session is exchanged for a token. It carries no credential. It is served, with the other two operations tagged `issuer`, only where a deployment configured the issuer: a process with no signing key or no `GARAM_IDENTITY_ISSUER` registers none of them, and a request for one answers 404 as any unknown path does.
@@ -18569,6 +18887,36 @@ func (c *ClientWithResponses) SearchOrgWithResponse(ctx context.Context, org Org
 		return nil, err
 	}
 	return ParseSearchOrgResponse(rsp)
+}
+
+// GetRegistryWithResponse List the services, their types and their actions. Requires a signed-in caller.
+//
+// What the service manifests declare (ADR-0143): each service, the entity types a GRN of it names, with each type's parent types, and each action of it with the types it applies to. It answers from the manifests the platform was built with and reads no organization, so it holds nothing of one and asks the caller for no permission beyond a session.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /registry (the `GetRegistry` operationId).
+func (c *ClientWithResponses) GetRegistryWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRegistryResponse, error) {
+	rsp, err := c.GetRegistry(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRegistryResponse(rsp)
+}
+
+// DescribeGrnWithResponse Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+//
+// Says what a name is, and never whether the thing it names exists or whether the caller may act on it: it reads no entity and no organization. A name of a declared service and type answers `known` true with its service, its type, the entity type it is written as, its parent (the name with its last type and id pair removed, absent for a name of one pair), its locator where it has one, and the actions whose resource types name its entity type. A name whose service or type no manifest declares answers `known` false and nothing else: it is a well-formed name the registry has no declaration for, and not an error. A string that is no GRN is refused with 400. The name is a query parameter because a GRN holds `/`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /registry/grn (the `DescribeGrn` operationId).
+func (c *ClientWithResponses) DescribeGrnWithResponse(ctx context.Context, params *DescribeGrnParams, reqEditors ...RequestEditorFn) (*DescribeGrnResponse, error) {
+	rsp, err := c.DescribeGrn(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDescribeGrnResponse(rsp)
 }
 
 // ParseGetIssuerConfigurationResponse parses an HTTP response from a GetIssuerConfigurationWithResponse call
@@ -23211,6 +23559,79 @@ func ParseSearchOrgResponse(rsp *http.Response) (*SearchOrgResponse, error) {
 			return nil, err
 		}
 		response.JSON403 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRegistryResponse parses an HTTP response from a GetRegistryWithResponse call
+func ParseGetRegistryResponse(rsp *http.Response) (*GetRegistryResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRegistryResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Registry
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDescribeGrnResponse parses an HTTP response from a DescribeGrnWithResponse call
+func ParseDescribeGrnResponse(rsp *http.Response) (*DescribeGrnResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DescribeGrnResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest GrnDescription
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	}
 

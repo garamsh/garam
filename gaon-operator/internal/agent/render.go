@@ -6,25 +6,26 @@ import (
 
 	"github.com/garamsh/gaon/lib/api"
 
+	"github.com/garamsh/garam/gaon-operator/internal/guest"
 	"github.com/garamsh/garam/lib/errorx"
 )
 
 // The guest's user, as the standalone runner's (agents.md §The host's
 // runner), and where the guest finds what the operator gives it.
 const (
-	guestUID         = 65532
-	credentialsDir   = "/run/garam/"
-	memoryMountPath  = "/var/lib/garam/memory"
-	workspaceMount   = "/workspace"
+	guestUID         = guest.UID
+	credentialsDir   = guest.CredentialsDir
+	memoryMountPath  = guest.MemoryDir
+	workspaceMount   = guest.WorkspaceDir
 	supervisorPort   = "supervisor"
-	supervisorNumber = 8088
+	supervisorNumber = guest.ReadyPort
 	fileMode         = 0o400
 )
 
 // The Secret keys the operator adds to the agent's credentials.
 const (
-	KeyGaramRoot   = "garam-root.pem"
-	KeyControlRoot = "control-root.pem"
+	KeyGaramRoot   = guest.GaramRootFile
+	KeyControlRoot = guest.ControlRootFile
 )
 
 // secretFor returns the Secret of d: the credentials, and the two trust

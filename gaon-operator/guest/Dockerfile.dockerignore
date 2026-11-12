@@ -1,0 +1,7 @@
+# Build context for gaon-operator/guest/Dockerfile: the repository root,
+# of which the build reads only these folders.
+*
+!gaon-operator
+!lib/errorx
+!lib/grn
+!lib/platform-sdk-go

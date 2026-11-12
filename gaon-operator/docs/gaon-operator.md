@@ -7,11 +7,12 @@ How it sits among garam's operators is
 [operators.md](../../docs/architecture/operators.md) §The gaon operator.
 
 **Built: the reconciler (#1834), garam's and the control service's wire
-clients, and the binary that composes them (#1839).**
+clients, the binary that composes them (#1839), and the guest
+supervisor and composed guest image (#1846).**
 `cmd/gaon-operator` exchanges its assertion with a key garam issued,
 reads the control service's feed as its registered manager and
-reconciles into gaon. The guest image, the release's image and the
-deployment are not built (§What is not built).
+reconciles into gaon. The release's image and the deployment are not
+built (§What is not built).
 
 ## Contents
 - What is built
@@ -120,9 +121,62 @@ key and gaon's client key; the operator stops at start naming the path
 and never the contents. The trust roots are certificates and are read
 plainly.
 
+### The guest supervisor and image
+
+`cmd/gaon-guest` is the entrypoint of the composed guest image
+(ADR-0151 §3). `internal/guest` holds it, and the constants the
+operator's MicroVM spec and the supervisor both name (user 65532, the
+credential, memory and workspace paths, port 8088), so each is written
+once.
+
+- **Order.** `Run` starts the runtime, the workspace and the adapter in
+  that order, opens the readiness port 8088 only once all three are
+  started, and on SIGTERM or the first program's exit sends SIGTERM to
+  each still-running program in start order, waiting for each before
+  the next. This is what garam's standalone runner does. ADR-0151's
+  wording, "drained in the reverse order ... with the adapter last",
+  contradicts itself, since the reverse of the start order ends with
+  the runtime; the supervisor follows the runner, so the adapter is
+  last.
+- **Settings.** The environment names `GUEST_AGENT_GRN` (a canonical
+  agent GRN), `GUEST_ASSIGNMENT_EPOCH` (a canonical decimal),
+  `GUEST_MACHINE_URL`, `GUEST_CONTROL_URL` and optionally
+  `GUEST_RUNTIME_CONFIG`. A program gets only `PATH`, `SSL_CERT_FILE`
+  and `SHERLOCK_TOOLS_DIR` from it, plus what its command needs.
+- **The image** (`guest/Dockerfile`) is the workspace image with the
+  runtime's tools and CA bundle, garam's binary and `gaon-guest` copied
+  in. The three source images are pinned by digest as `ARG`s and
+  recorded as `sh.garam.guest.*-image` labels. The build stops if the
+  runtime image's `/sherlock` and the workspace image's differ. The
+  pins are 0.10.0 of the two sherlock images and 0.7.0 of garam's
+  server; `platform/Makefile` pins sherlock 0.9.0, so these digests are
+  pinned nowhere else in the repository.
+- **Running it.** `make -C gaon-operator guest-run` builds the image
+  and starts it as one container, one command, user 65532, with the
+  credentials as 0400 files; it checks the start order, the readiness
+  port and the SIGTERM drain. It needs Docker, a registry login and
+  openssl and is not part of `ci`.
+
+The cost of one user and one filesystem: the workspace's Exec children
+run as 65532, the account that owns the runtime's memory store, outbox
+and credentials, which agents.md's isolation for the standalone runner
+does not allow. Under Docker's default seccomp the workspace logs that
+its network-namespace probe fails and every shell Exec will fail; what
+gaon's guest kernel admits is not known.
+
+Open in the guest: the supervisor does not reap orphaned Exec children
+that reparent to it; the model credential and runtime configuration
+have no delivery path beyond `GUEST_RUNTIME_CONFIG`; `render.go` still
+renders no command, arguments or environment, so no MicroVM carries the
+`GUEST_*` settings yet; and the token files are mapped as
+`placement-token` to the adapter's placement token, `agent-token` to
+its agent token and `control-token` to its control token, but no
+operator renders `control-token`, and machineapi describes
+`placement-token` as audience the control service, which adapter.md
+gives to the control token. The adapter reports the missing file.
+
 ## What is not built
 
-- The guest supervisor and the composed guest image.
 - The image `garam/gaon-operator` and its deployment, and the
   `NetworkPolicy`.
 - Renewing an agent's token by restarting its MicroVM.
@@ -140,6 +194,13 @@ compare-and-swap on `resourceVersion`, the API's validation and
 label-selector lists. It does not prove: RBAC selector rules, garbage
 collection, the Node authorizer, a get refused for lack of labels,
 `bindingEpoch` as gaon writes it, or watches.
+
+The supervisor's tests start helper processes and prove the start
+order, the readiness port opening after all three start, the drain
+order with a wait for each, the drain after one program exits early,
+and the settings each program receives. They do not prove the adapter's
+calls to garam, which need an admitted agent, an Exec under the guest
+kernel, or gaon's MicroVM start.
 
 ## Rationale
 

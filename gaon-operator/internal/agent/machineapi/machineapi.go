@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/garamsh/garam/gaon-operator/internal/agent"
+	"github.com/garamsh/garam/gaon-operator/internal/guest"
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/lib/platform-sdk-go/machine"
@@ -18,9 +19,9 @@ import (
 // Secret keys of the two tokens an agent holds.
 const (
 	// KeyAgentToken is the token garam accepts, for the agent's adapter.
-	KeyAgentToken = "agent-token"
+	KeyAgentToken = guest.AgentTokenFile
 	// KeyPlacementToken is the token only the control service accepts.
-	KeyPlacementToken = "placement-token"
+	KeyPlacementToken = guest.PlacementTokenFile
 )
 
 // tokenContract is the contract version mintAgentToken is called under.

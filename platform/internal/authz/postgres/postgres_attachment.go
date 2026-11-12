@@ -13,8 +13,8 @@ import (
 	"github.com/garamsh/garam/platform/internal/wire"
 )
 
-// AttachPolicy binds the policy to a subject. The schema rejects an
-// attachment that leaves the policy's org.
+// AttachPolicy binds the policy to a subject. That the subject is of
+// the policy's org is checked before this call, in the policy server.
 func (s *Store) AttachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) (*authz.PolicyAttachment, error) {
 	row, err := s.q.AttachPolicy(ctx, db.AttachPolicyParams{
 		PolicyGrn:  policyGRN.String(),

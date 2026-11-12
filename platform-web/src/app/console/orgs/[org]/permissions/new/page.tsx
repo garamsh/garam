@@ -19,7 +19,7 @@ type Params = { params: Promise<{ org: string }> };
 export default async function NewPolicyPage({ params }: Params) {
   const { org } = await params;
   const permissions = await checkPermissions(org, {
-    create: { action: "policy:create" },
+    create: { action: "iam:policy.create" },
   });
   return (
     <SettingsPage

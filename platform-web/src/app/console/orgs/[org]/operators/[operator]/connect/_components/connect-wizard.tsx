@@ -151,7 +151,7 @@ export function ConnectWizard({
   /** Why the operator or its keys were not read, if they were not. */
   problem: "unreachable" | "forbidden" | null;
   initialStep: Exclude<ConnectStep, "register">;
-  /** garam lets the caller issue a replacement (`operator:reissue`). */
+  /** garam lets the caller issue a replacement (`iam:operator.reissue`). */
   canReplace: boolean;
   /**
    * The identity is a control service, whose record names its manager

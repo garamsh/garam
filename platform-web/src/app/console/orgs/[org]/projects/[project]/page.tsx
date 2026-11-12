@@ -58,22 +58,22 @@ export default async function ProjectPage({ params }: Params) {
     {
       key: "rename",
       label: "Rename it",
-      check: { action: "project:update", resource: scope },
+      check: { action: "iam:project.update", resource: scope },
     },
     {
       key: "add",
       label: "Add members",
-      check: { action: "project:member-add", resource: scope },
+      check: { action: "iam:project.member-add", resource: scope },
     },
     {
       key: "remove",
       label: "Remove members",
-      check: { action: "project:member-remove", resource: scope },
+      check: { action: "iam:project.member-remove", resource: scope },
     },
     {
       key: "delete",
       label: "Delete it",
-      check: { action: "project:delete", resource: scope },
+      check: { action: "iam:project.delete", resource: scope },
     },
   ]);
   const [organization, read, members, people, agents, readings] =

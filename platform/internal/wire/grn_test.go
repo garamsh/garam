@@ -12,9 +12,9 @@ import (
 func TestGRNsToProto(t *testing.T) {
 	assert.Empty(t, wire.GRNsToProto(nil))
 	assert.Equal(t,
-		[]string{"grn:root:default:user:alice", "grn:acme:default:group:eng"},
+		[]string{"grn:root/iam/user/alice", "grn:acme/iam/group/eng"},
 		wire.GRNsToProto([]grn.GRN{
-			grn.New("root", "default", "user", "alice"),
-			grn.New("acme", "default", "group", "eng"),
+			grn.New("root", "user", "alice"),
+			grn.New("acme", "group", "eng"),
 		}))
 }

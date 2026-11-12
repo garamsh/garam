@@ -137,7 +137,7 @@ func (c *tokenControlStandIn) activate(w http.ResponseWriter, r *http.Request) {
 // operator's own token, forwarding token.
 func (c *tokenControlStandIn) forward(requestID string, g agent.Generation, replaces, ref *string, token string) (int, []byte, error) {
 	body := tokenActivationBody(requestID, g, replaces, ref, token)
-	req, err := http.NewRequest(http.MethodPost, c.stack.machine+"/agents/"+c.agent.String()+"/activations", bytes.NewReader([]byte(body)))
+	req, err := http.NewRequest(http.MethodPost, c.stack.machine+"/agents/"+pathEscape(c.agent.String())+"/activations", bytes.NewReader([]byte(body)))
 	if err != nil {
 		return 0, nil, err
 	}
@@ -374,7 +374,7 @@ func TestAdapterTokenMode_AFencedAdapterKeepsItsTwoAudiencesApart(t *testing.T) 
 }
 
 // TestAdapterTokenMode_ARecoveryIsResumedByTheNextGeneration is
-// agent:recover reaching a running token-mode adapter. The recovery
+// iam:agent.recover reaching a running token-mode adapter. The recovery
 // refuses the replaced lineage's garam token and ends the activation.
 // Writing the new lineage's tokens over both files makes the adapter
 // ask again, and garam refuses the same request as ended: a rewritten
@@ -395,7 +395,7 @@ func TestAdapterTokenMode_ARecoveryIsResumedByTheNextGeneration(t *testing.T) {
 	digest := sha256Hex(body)
 	status, minted := s.mintRecovery(t, m.agent, digest, "h-rec-1")
 	require.Equal(t, http.StatusCreated, status, minted)
-	got := s.v2(t, http.MethodPost, "/agents/"+m.agent.String()+"/credential-recovery",
+	got := s.v2(t, http.MethodPost, "/agents/"+pathEscape(m.agent.String())+"/credential-recovery",
 		agent.TokenExecutionContractVersion, s.hostedToken, authorityOf(t, minted).Authority, body)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 

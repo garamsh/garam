@@ -20,7 +20,7 @@ type Params = { params: Promise<{ org: string }> };
 export default async function NewTeamPage({ params }: Params) {
   const { org } = await params;
   const permissions = await checkPermissions(org, {
-    create: { action: "group:create" },
+    create: { action: "iam:group.create" },
   });
 
   return (

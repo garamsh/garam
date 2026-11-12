@@ -3,6 +3,7 @@ package api_test
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"testing"
 	"time"
 
@@ -19,13 +20,13 @@ import (
 	"github.com/garamsh/garam/platform/internal/wire"
 )
 
-const policyDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`
+const policyDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["iam:org.read"],"Resource":["grn:acme/*"]}]}`
 
 // policyFixture stubs the PolicyManager seam with the policy the
 // handlers address, and returns its GRN.
 func policyFixture(orgSlug string) (grn.GRN, *api.Policy) {
 	orgGRN := grn.Org(orgSlug)
-	g := grn.New(orgSlug, "default", "policy", "9f2ac1b40d8e7a35")
+	g := grn.New(orgSlug, "policy", "9f2ac1b40d8e7a35")
 	at := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
 	return g, &api.Policy{
 		GRN:            g,
@@ -52,7 +53,7 @@ func TestPolicyFlow_AdminManagesLifecycle(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 
 	perms := make([]permission, 0, len(policyActions))
 	for _, a := range policyActions {
@@ -61,7 +62,7 @@ func TestPolicyFlow_AdminManagesLifecycle(t *testing.T) {
 	f.permit(perms...)
 
 	g, p := policyFixture(slug)
-	subject := grn.New(slug, "default", org.ServiceTypeGroup, "eng")
+	subject := grn.New(slug, org.ServiceTypeGroup, "eng")
 	version := &api.PolicyVersion{
 		PolicyGRN: g,
 		Version:   2,
@@ -123,7 +124,7 @@ func TestPolicyFlow_AdminManagesLifecycle(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Len(t, decodeBody[[]apigen.PolicyAttachment](t, rec), 1)
 
-	rec = f.do(t, "DELETE", policyPath+"/attachments/"+subject.String(), "", owner)
+	rec = f.do(t, "DELETE", policyPath+"/attachments/"+url.PathEscape(subject.String()), "", owner)
 	assert.Equal(t, http.StatusNoContent, rec.Code)
 
 	rec = f.do(t, "DELETE", policyPath, "", owner)
@@ -136,8 +137,8 @@ func TestPolicies_MemberIsDenied(t *testing.T) {
 	slug := createOrg(t, f, owner, "acme")
 	orgGRN := grn.Org(slug)
 
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
-	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
+	memberGRN := grn.New("root", user.ServiceType, "member-sub")
 	member := f.sessionCookieFor(t, "member-sub", "Member")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 	// The member role grants no policy action.
@@ -165,8 +166,8 @@ func TestPolicies_MemberIsDenied(t *testing.T) {
 		{"DELETE", policyPath, ""},
 		{"POST", policyPath + "/rollback", `{"version":1}`},
 		{"GET", policyPath + "/attachments", ""},
-		{"POST", policyPath + "/attachments", `{"subjectGrn":"grn:acme:default:group:eng"}`},
-		{"DELETE", policyPath + "/attachments/grn:acme:default:group:eng", ""},
+		{"POST", policyPath + "/attachments", `{"subjectGrn":"grn:acme/iam/group/eng"}`},
+		{"DELETE", policyPath + "/attachments/grn:acme%2Fiam%2Fgroup%2Feng", ""},
 	} {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
 			rec := f.do(t, tc.method, tc.path, tc.body, member)
@@ -186,7 +187,7 @@ func TestPolicies_RequireOrgMembership(t *testing.T) {
 	slug := createOrg(t, f, owner, "acme")
 	outsider := f.sessionCookieFor(t, "outsider-sub", "Outsider")
 	orgGRN := grn.Org(slug)
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyRead})
 	f.policies.EXPECT().ListPolicies(mock.Anything, orgGRN).Return(nil, nil)
 
@@ -210,7 +211,7 @@ func TestCreatePolicy_RejectsIncompleteBody(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyCreate})
 	_, p := policyFixture(slug)
 	f.policies.EXPECT().
@@ -237,7 +238,7 @@ func TestCreatePolicy_RejectsDocumentTheEngineRefuses(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyCreate})
 
 	f.policies.EXPECT().
@@ -258,14 +259,14 @@ func TestAttachPolicy_RejectsMalformedSubject(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(
 		permission{ownerGRN, org.ActionPolicyAttach},
 		permission{ownerGRN, org.ActionPolicyDetach},
 	)
 
 	g, p := policyFixture(slug)
-	subject := grn.New(slug, "default", org.ServiceTypeGroup, "eng")
+	subject := grn.New(slug, org.ServiceTypeGroup, "eng")
 	policyPath := "/orgs/" + slug + "/policies/" + g.Identifier
 	f.policies.EXPECT().AttachPolicy(mock.Anything, g, subject).
 		Return(&api.PolicyAttachment{PolicyGRN: g, SubjectGRN: subject, CreatedAt: p.CreatedAt}, nil).Once()
@@ -273,7 +274,7 @@ func TestAttachPolicy_RejectsMalformedSubject(t *testing.T) {
 
 	rec := f.do(t, "POST", policyPath+"/attachments", `{"subjectGrn":"`+subject.String()+`"}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	rec = f.do(t, "DELETE", policyPath+"/attachments/"+subject.String(), "", owner)
+	rec = f.do(t, "DELETE", policyPath+"/attachments/"+url.PathEscape(subject.String()), "", owner)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 
 	rec = f.do(t, "POST", policyPath+"/attachments", `{"subjectGrn":"eng"}`, owner)
@@ -292,7 +293,7 @@ func TestPolicy_NotFoundFromEngine(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyUpdate})
 
 	g, p := policyFixture(slug)
@@ -321,7 +322,7 @@ func TestRollbackPolicy_RefusesAVersionTheEngineCannotHold(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyUpdate})
 
 	g, p := policyFixture(slug)

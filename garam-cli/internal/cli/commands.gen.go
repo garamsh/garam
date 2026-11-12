@@ -17,6 +17,28 @@ var _ = uuid.Parse
 // platform/api/openapi.yaml the CLI derives a command for.
 var apiOperations = []apiOperation{
 	{
+		ID: "getRegistry", Method: "GET", Path: "/registry",
+		Words: []string{"registry"}, Verb: "list", Short: "List the services, their types and their actions. Requires a signed-in caller.",
+		Args: []string(nil), FromOrg: false,
+		Columns: []string{"name"},
+		Rows:    "services",
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewGetRegistryRequest(server)
+		},
+	},
+	{
+		ID: "describeGrn", Method: "GET", Path: "/registry/grn",
+		Words: []string{"registry"}, Verb: "describe", Short: "Describe a GRN's service, type, parent and actions. Requires a signed-in caller.",
+		Args: []string(nil), FromOrg: false,
+		Fields: []apiField{
+			{Name: "grn", In: "query", Kind: "string", Required: true, Help: "The name to describe."},
+		},
+		Columns: []string{"grn", "known", "service", "type", "entityType", "parent", "locator"},
+		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
+			return sdk.NewDescribeGrnRequest(server, nil)
+		},
+	},
+	{
 		ID: "listOrgs", Method: "GET", Path: "/orgs",
 		Words: []string{"orgs"}, Verb: "list", Short: "List organizations the caller belongs to.",
 		Args: []string(nil), FromOrg: false,
@@ -348,7 +370,7 @@ var apiOperations = []apiOperation{
 	},
 	{
 		ID: "revokeOperatorKey", Method: "DELETE", Path: "/orgs/{org}/operators/{operator}/keys/{kid}",
-		Words: []string{"operators", "keys"}, Verb: "revoke", Short: "Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.",
+		Words: []string{"operators", "keys"}, Verb: "revoke", Short: "Withdraw an operator's key and every token exchanged under it. Requires `iam:operator.reissue`.",
 		Args: []string{"operator", "kid"}, FromOrg: true,
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
 			return sdk.NewRevokeOperatorKeyRequest(server, path[0], path[1], path[2])
@@ -366,7 +388,7 @@ var apiOperations = []apiOperation{
 	},
 	{
 		ID: "writeOperatorDelegation", Method: "PUT", Path: "/orgs/{org}/operators/{operator}/delegation",
-		Words: []string{"operators", "delegation"}, Verb: "write", Short: "Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.",
+		Words: []string{"operators", "delegation"}, Verb: "write", Short: "Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.",
 		Args: []string{"operator"}, FromOrg: true,
 		Fields: []apiField{
 			{Name: "requestId", In: "body", Kind: "string", Required: true, Help: ""},
@@ -384,7 +406,7 @@ var apiOperations = []apiOperation{
 	},
 	{
 		ID: "endOperatorDelegation", Method: "DELETE", Path: "/orgs/{org}/operators/{operator}/delegation",
-		Words: []string{"operators", "delegation"}, Verb: "end", Short: "Withdraw a hosted operator's delegation. Requires current `operator:delegate`.",
+		Words: []string{"operators", "delegation"}, Verb: "end", Short: "Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.",
 		Args: []string{"operator"}, FromOrg: true,
 		Fields: []apiField{
 			{Name: "grantId", In: "body", Kind: "string", Required: true, Help: "The grant to end, as the caller read it."},
@@ -397,7 +419,7 @@ var apiOperations = []apiOperation{
 	},
 	{
 		ID: "setOperatorManager", Method: "PUT", Path: "/orgs/{org}/operators/{operator}/manager",
-		Words: []string{"operators", "manager"}, Verb: "set", Short: "Link a control service to its cluster manager, once. Requires `operator:register`.",
+		Words: []string{"operators", "manager"}, Verb: "set", Short: "Link a control service to its cluster manager, once. Requires `iam:operator.register`.",
 		Args: []string{"operator"}, FromOrg: true,
 		Fields: []apiField{
 			{Name: "manager", In: "body", Kind: "string", Required: true, Help: "The GRN of the cluster manager this operator is the control service of: another operator of this organization."},
@@ -410,7 +432,7 @@ var apiOperations = []apiOperation{
 	},
 	{
 		ID: "setOperatorControlEndpoint", Method: "PUT", Path: "/orgs/{org}/operators/{operator}/control-endpoint",
-		Words: []string{"operators", "control-endpoint"}, Verb: "set", Short: "Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.",
+		Words: []string{"operators", "control-endpoint"}, Verb: "set", Short: "Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.",
 		Args: []string{"operator"}, FromOrg: true,
 		Fields: []apiField{
 			{Name: "url", In: "body", Kind: "string", Required: true, Help: ""},
@@ -424,7 +446,7 @@ var apiOperations = []apiOperation{
 	},
 	{
 		ID: "clearOperatorControlEndpoint", Method: "DELETE", Path: "/orgs/{org}/operators/{operator}/control-endpoint",
-		Words: []string{"operators", "control-endpoint"}, Verb: "clear", Short: "Clear a hosted operator's control endpoint. Requires current `operator:delegate`.",
+		Words: []string{"operators", "control-endpoint"}, Verb: "clear", Short: "Clear a hosted operator's control endpoint. Requires current `iam:operator.delegate`.",
 		Args: []string{"operator"}, FromOrg: true,
 		Headers: map[string]string{"Garam-Contract-Version": "operation-authority.v1"},
 		Columns: []string{"grn", "name", "description", "orgGrn", "registeredBy", "createdAt", "controlEndpoint", "manager"},
@@ -434,7 +456,7 @@ var apiOperations = []apiOperation{
 	},
 	{
 		ID: "listInvitations", Method: "GET", Path: "/orgs/{org}/invitations",
-		Words: []string{"invitations"}, Verb: "list", Short: "List the invitations that can still be accepted. Requires `org:invite`.",
+		Words: []string{"invitations"}, Verb: "list", Short: "List the invitations that can still be accepted. Requires `iam:org.invite`.",
 		Args: []string(nil), FromOrg: true,
 		Fields: []apiField{
 			{Name: "limit", In: "query", Kind: "integer", Required: false, Help: "Maximum entries to return; 0 means no limit."},
@@ -462,7 +484,7 @@ var apiOperations = []apiOperation{
 	},
 	{
 		ID: "revokeInvitation", Method: "DELETE", Path: "/orgs/{org}/invitations/{invitation}",
-		Words: []string{"invitations"}, Verb: "revoke", Short: "Revoke an invitation no one has used. Requires `org:invite`.",
+		Words: []string{"invitations"}, Verb: "revoke", Short: "Revoke an invitation no one has used. Requires `iam:org.invite`.",
 		Args: []string{"invitation"}, FromOrg: true,
 		build: func(server string, path []string, contentType string, body io.Reader) (*http.Request, error) {
 			p1, err := uuid.Parse(path[1])

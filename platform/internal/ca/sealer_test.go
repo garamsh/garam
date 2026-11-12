@@ -22,7 +22,7 @@ import (
 const keyIDPrefix = 8
 
 // acmeRow is the row a sealed value belongs to, as [ca.Sealer] takes it.
-var acmeRow = []byte("grn:root:default:org:acme")
+var acmeRow = []byte("grn:root/iam/org/acme")
 
 func randomKey(t *testing.T) []byte {
 	t.Helper()
@@ -196,7 +196,7 @@ func TestAESGCMSealer_OpenRejectsAnotherBinding(t *testing.T) {
 	sealed, err := sealer.Seal(ctx, acmeRow, []byte("a private key"))
 	require.NoError(t, err)
 
-	_, err = sealer.Open(ctx, []byte("grn:root:default:org:other"), sealed)
+	_, err = sealer.Open(ctx, []byte("grn:root/iam/org/other"), sealed)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindDataLoss))
 

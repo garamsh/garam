@@ -11,6 +11,7 @@ import (
 	apigen "github.com/garamsh/garam/platform/api"
 	"github.com/garamsh/garam/platform/internal/agent"
 	"github.com/garamsh/garam/platform/internal/authn"
+	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/operator"
 	"github.com/garamsh/garam/platform/internal/org"
@@ -60,6 +61,9 @@ type Server struct {
 	// devices keeps device sign-ins (ADR-0120); nil answers the device
 	// grant unavailable.
 	devices authn.DeviceStore
+	// issuer is garam as an OIDC issuer (ADR-0141); nil registers none
+	// of its three operations, which then answer as an unknown path.
+	issuer *identity.Issuer
 }
 
 // Compile-time check that Server satisfies the generated interface.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strconv"
@@ -139,7 +140,7 @@ embedding:
 	assert.Equal(t, http.StatusForbidden, status, "garam refuses the old token: %s", body)
 	assert.JSONEq(t, `{"kind":"permission_denied","message":"execution token is not current"}`, body)
 	claim := func(token string) (int, refusal) {
-		status, raw := h.call(h.agentClient(), "/agents/"+agentGRN+"/claims", "", "Garam-Execution "+token, nil)
+		status, raw := h.call(h.agentClient(), "/agents/"+url.PathEscape(agentGRN)+"/claims", "", "Garam-Execution "+token, nil)
 		var r refusal
 		_ = json.Unmarshal(raw, &r)
 		return status, r

@@ -20,6 +20,7 @@ func (s *Store) CreateOrg(ctx context.Context, o *org.Organization) error {
 		Name:      o.Name,
 		CreatedAt: pgxtype.Timestamptz(o.CreatedAt),
 		UpdatedAt: pgxtype.Timestamptz(o.UpdatedAt),
+		Services:  s.services,
 	})
 	return pgxerr.Classify(err, "create org", nil, nil)
 }

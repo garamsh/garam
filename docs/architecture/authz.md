@@ -48,6 +48,83 @@ ADR-0141 supersedes in part its §2: the platform no longer asks for
 cowork's checks, since cowork asks the policy service itself, and the
 list stays closed and static.
 
+**Two further decisions are taken, both partly built.** The policy
+service loads `policy/schema/iam.cedarschema` and
+`policy/schema/cowork.cedarschema` as one schema, and the platform's
+role table and console write `iam:<type>.<verb>`. An organization
+writes role links, `forbid` guardrails and `permit` policies, the last
+only in the policy service: nothing sends one yet.
+
+- **A service is declared by one manifest**
+  ([ADR-0143](./adr/0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)).
+  It is the service's Cedar schema file,
+  `policy/schema/<service>.cedarschema`, declaring one namespace, `Iam`
+  or `Cowork`, with annotations for the service's name, an entity
+  type's GRN type and the caller that writes it. The GRN catalogue
+  ([grn-model.md](./grn-model.md) §Types by owning service) is generated
+  from the manifests; the issuer's audience list and the closed list of
+  callers are checked against them; and which caller writes which type
+  is read from the annotations. An action is `<service>:<type>.<verb>`
+  ([ADR-0145](./adr/0145-an-action-is-a-type-and-a-verb-joined-by-a-dot.md),
+  which replaced ADR-0143's hyphen, so a name parses one way) and every
+  action moves: the platform's `<type>:<verb>` became
+  `iam:<type>.<verb>`, so `iam:org.delete` is
+  `Iam::Action::"org.delete"`, in the evaluator, the roles, the console
+  and the system tier, and a type's group `iam:<type>.*` holds that
+  type's actions and no other's. A role is the `Iam` namespace's, and a
+  service's action joins one by naming its group in its own manifest.
+  The platform serves a read-only registry of services, types and
+  actions, answered from the catalogue generated from the manifests.
+  Adding a service is one pull
+  request adding one manifest, with the proofs the ADR lists.
+- **An organization may write `permit` policies**
+  ([ADR-0144](./adr/0144-an-organization-may-write-permit-policies-over-resources-inside-itself.md)).
+  Its resource scope is inside the organization and the write refuses
+  one that is not; tenant isolation stays above it; it names only what
+  the manifests declare, and `Explain` names it as any policy. It still
+  cannot touch the system tier or permit across organizations. Writing
+  one is the action `iam:permit.write`, held by `role-owner` alone and
+  outside `iam:policy.*`, which whatever serves the write asks for
+  first; another role writing one, bounded by what it holds, is open.
+  The console's editor and the platform's switch are #1689 slice 4.
+  Built (#1780): `grant::Body::permit` takes a `PermitRight`, which
+  only an allowed evaluation of `iam:permit.write` for the writer on
+  the organization's `Org` makes, so a `permit` is stored only through
+  a path that asked; the right's organization and writer are written
+  into the stored body and the store refuses a mismatch. The right
+  comes from the owner role alone: it is asked with the organization's
+  `permit`s left out, so no `permit` confers it and a guardrail can
+  still take it away. Making a stored `permit` version effective,
+  `activate` or `roll_back` to it, takes a `PermitRight` too. The write
+  admits `resource == E`, `resource in E` and `resource is T in E`,
+  where `E` is an entity of the organization or its `Org`, and refuses
+  `resource` alone, `resource is T` alone and an `E` of another
+  organization. The principal scope is not read. A `when` or `unless`
+  is bounded as a guardrail's is. A decision composes the
+  organization's `permit` policies beside its guardrails, and
+  `access-report` lists one by its id. Not built: an RPC to write one,
+  and a check of an entity literal in a `permit`'s principal scope or
+  condition.
+
+**Built of ADR-0143** (items 1, 2, 3, 4 and 5): the two manifests, the
+`manifest` crate that reads them, `lib/grn`'s generated catalogue, the
+`make -C policy check-gen` that holds the catalogue, the audience list
+and the caller list to the manifests, the types a caller may write read
+from `@caller`, qualified types and `<service>:<type>.<verb>` actions
+on the wire with the unqualified form refused, the `Iam` roles, and
+`iam:permit.write` declared in `role-owner` alone. The platform's
+outbox sends `Iam::` types under migration 000070. Item 4 renamed the
+platform's own actions, in `role.go`, the evaluator, the console, the
+CLI and the SDKs, and migrations 000071 and 000072 rewrote the
+operations stored in delegation grants and authorities, the second to
+the dot form of ADR-0145; no stored policy document was converted, and
+`platform/internal/org/action_manifest_test.go` holds the platform's
+names to `grn.Actions()`. Item 6, the registry, is built (#1788):
+`getRegistry` and `describeGrn` ask for a signed-in caller and no
+permission, since they answer what the manifests declare and read no
+entity. **Not built:** item 7's proofs for a new service; and codehub's
+manifest, so `repo` is in no catalogue.
+
 **The platform's outbox, its delivery and its signer are built.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set
 holding one row per entity and no document, and a loop reads each
@@ -119,7 +196,7 @@ makes any evaluation error a deny.
 
 | Today | Under ADR-0130 |
 |-------|----------------|
-| IAM-style documents, matched by `platform/internal/authz` | Cedar policies, evaluated by the `cedar-policy` crate and validated against `policy/schema/garam.cedarschema` |
+| IAM-style documents, matched by `platform/internal/authz` | Cedar policies, evaluated by the `cedar-policy` crate and validated against the manifests under `policy/schema/` |
 | `CheckRequest` carries collected statements, `subject_groups` and `subject_org` | `Evaluate(subject, action, resource, context)` in AuthZEN's shape; the service reads memberships and ancestors itself |
 | Roles are org data the api server turns into statements | A role is a system-tier template, one set for an organization and one for a team or project, and an assignment is a policy linking it |
 | A policy attaches to a user, an agent or a group | A grant names its principal; a guardrail is a `forbid` |
@@ -140,8 +217,8 @@ evaluation reads it. Every other key below is read.
     {
       "Sid": "AllowOrgRead",
       "Effect": "Allow",
-      "Action": ["org:read", "project:list"],
-      "Resource": ["grn:acme:*"]
+      "Action": ["iam:org.read", "iam:project.read"],
+      "Resource": ["grn:acme/*"]
     }
   ]
 }
@@ -149,11 +226,11 @@ evaluation reads it. Every other key below is read.
 
 - `Effect`: `Allow` | `Deny`.
 - `Action`: `<service_type>:<verb>` strings; `*` and `?` wildcards may
-  appear anywhere and repeat (`org:*`, `*`). Constants are owned by
+  appear anywhere and repeat (`iam:org.*`, `*`). Constants are owned by
   the defining domain (`platform/internal/org`,
   `platform/internal/user`, …). The engine matches strings only.
 - `Resource`: GRN patterns with the same wildcard rules
-  (`grn:acme:*` scopes to an org).
+  (`grn:acme/*` scopes to an org).
 - `Condition`: reserved, as above.
 
 Reserved is not dropped, and neither is anything else. The parse
@@ -201,8 +278,8 @@ the statements that apply to that resource:
 
 | Origin | Action patterns | Resource patterns |
 |--------|-----------------|-------------------|
-| org membership role | `Role.Actions()` | the org GRN and `grn:<org>:*` |
-| subject's direct roles | `org.ActionsFor(user.Roles())` | the org GRN and `grn:<org>:*` |
+| org membership role | `Role.Actions()` | the org GRN and `grn:<org>/*` |
+| subject's direct roles | `org.ActionsFor(user.Roles())` | the org GRN and `grn:<org>/*` |
 | target group's roles, when the subject is a member | `org.ActionsFor(group.Roles())` | the group GRN |
 | target project's roles, when the subject is a member | `org.ActionsFor(project.Roles())` | the project GRN |
 
@@ -230,7 +307,7 @@ same slot
 
 | Origin | Action patterns | Resource patterns |
 |--------|-----------------|-------------------|
-| the caller's own GRN | `message:send` | `grn:<caller org>:*` |
+| the caller's own GRN | `iam:message.send` | `grn:<caller org>:*` |
 
 That is why an agent nobody has written a policy for goes on sending
 inside its organization. A policy narrows it with a Deny, as a Deny
@@ -330,14 +407,14 @@ never imports the engine and never parses a document: a document that
 does not parse comes back as `invalid_argument` and leaves as 400.
 
 Policy management is authorized like any other action. The
-`policy:create`, `policy:read`, `policy:update`, `policy:attach`,
-`policy:detach` and `policy:delete` constants live in
-`platform/internal/org`, because the api server enforces them and may
-not import the engine that stores policies. `owner` and `admin` grant
-`policy:*`; `member` grants none, so reading a policy is an admin
-action. The addressed policy's GRN is the object of the check, and its
-organization segment is the org in the path, so a policy of another org
-is not addressable.
+`iam:policy.create`, `iam:policy.read`, `iam:policy.update`,
+`iam:policy.attach`, `iam:policy.detach` and `iam:policy.delete`
+constants live in `platform/internal/org`, because the api server
+enforces them and may not import the engine that stores policies.
+`owner` and `admin` grant `iam:policy.*`; `member` grants none, so
+reading a policy is an admin action. The addressed policy's GRN is the
+object of the check, and its organization segment is the org in the
+path, so a policy of another org is not addressable.
 
 The console calls these operations and no others
 ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)),
@@ -475,22 +552,31 @@ decision and every matched statement was the same for both
 
 ## cowork's principal
 
-**Unbuilt (#1664).**
+**Built in cowork (#1758); the principal's issue is unbuilt
+(#1664).**
 [ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
 gives each organization a cowork principal on the machine listener
 ([machine-identity.md](./machine-identity.md) §cowork's principal).
-No such subject reaches the engine today.
+No such subject reaches the engine today from the platform's path.
 [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
-supersedes in part ADR-0127 §5: when slice 5 is built cowork asks the
-policy service itself, under a caller token from
-`exchangeClientAssertion` with `audience` `policy` and `sub` its
-principal, and not through the platform. That route is unbuilt.
+supersedes in part ADR-0127 §5: cowork asks the policy service
+itself, under a caller token from `exchangeClientAssertion` with
+`audience` `policy` and `sub` its principal, and not through the
+platform. cowork builds that route (#1758) behind four settings
+(`COWORK_POLICY_ADDR`, `COWORK_POLICY_CA_FILE`,
+`COWORK_MACHINE_TOKEN_URL`, `COWORK_DEPLOYMENT_KEY_FILE`): where they
+are set it asks one `Evaluations` per batch under the token of the
+organization asked about, and feeds its channels, pages, tasks and
+artifacts through an outbox, one organization at a time under that
+organization's token; where none is set it asks the platform as
+before. The platform's path goes with #1784.
 
-- **Decided as a machine sender.** Its `postMessage` asks `message:send`
-  with its GRN as subject and the recipient as object, on the
-  identity-derived Allow over its own organization (§Identity-derived
-  statements). A policy attached to it applies, so a Deny narrows
-  which agents cowork may deliver to; an Allow widens nothing.
+- **Decided as a machine sender.** Its `postMessage` asks
+  `iam:message.send` with its GRN as subject and the recipient as
+  object, on the identity-derived Allow over its own organization
+  (§Identity-derived statements). A policy attached to it applies, so a
+  Deny narrows which agents cowork may deliver to; an Allow widens
+  nothing.
 - **A floor before the engine.** A recipient that is not an agent of
   its organization is refused, and no consent relation carries it
   across. Its token reaches no other operation.

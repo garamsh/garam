@@ -153,7 +153,7 @@ func (f *fixture) do(t *testing.T, method, path, body string, cookies ...*http.C
 // sessionCookieFor seeds a signed-in user and returns its cookie.
 func (f *fixture) sessionCookieFor(t *testing.T, subject, nickname string) *http.Cookie {
 	t.Helper()
-	g := grn.New("root", "default", user.ServiceType, subject)
+	g := grn.New("root", user.ServiceType, subject)
 	require.NoError(t, f.users.Create(testCtx(t), user.New(g, nickname)))
 	token, err := authn.NewToken()
 	require.NoError(t, err)
@@ -540,7 +540,7 @@ func TestLoginCallbackMeLogout_RoundTrip(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	me := decodeBody[apigen.User](t, rec)
 	assert.Equal(t, "Ada", me.Nickname)
-	assert.Equal(t, "grn:root:default:user:123", me.Grn)
+	assert.Equal(t, "grn:root/iam/user/123", me.Grn)
 
 	// Logout revokes the session.
 	rec = f.do(t, "POST", "/auth/logout", "", session)
@@ -568,7 +568,7 @@ func TestPrincipal_RecordedOnlyWhenAuthenticated(t *testing.T) {
 		signIn bool
 		want   string
 	}{
-		{name: "signed in", signIn: true, want: "grn:root:default:user:ada"},
+		{name: "signed in", signIn: true, want: "grn:root/iam/user/ada"},
 		{name: "anonymous"},
 	}
 	for _, tt := range tests {
@@ -643,7 +643,7 @@ func TestOrgUpdate_RefusesANameThatIsEmpty(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgUpdate})
+	f.permit(permission{grn.New("root", user.ServiceType, "owner-sub"), org.ActionOrgUpdate})
 
 	rec := f.do(t, "PATCH", "/orgs/"+slug, `{"name":""}`, owner)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
@@ -660,8 +660,8 @@ func TestOrgFlow_RoleEnforcement(t *testing.T) {
 	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
 
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
-	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
+	memberGRN := grn.New("root", user.ServiceType, "member-sub")
 	f.permit(
 		permission{ownerGRN, org.ActionOrgRead},
 		permission{ownerGRN, org.ActionOrgUpdate},
@@ -711,8 +711,8 @@ func TestListOrgMembers_Nicknames(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
-	adaGRN := grn.New("root", "default", user.ServiceType, "ada-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
+	adaGRN := grn.New("root", user.ServiceType, "ada-sub")
 	f.sessionCookieFor(t, "ada-sub", "Ada")
 	orgGRN := grn.Org(slug)
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, adaGRN, org.RoleMember)))
@@ -784,9 +784,9 @@ func TestInvitationFlow_Lifecycle(t *testing.T) {
 	// Members cannot invite; owners (admin+) can.
 	member := f.sessionCookieFor(t, "member-sub", "Member")
 	orgGRN := grn.Org(slug)
-	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
+	memberGRN := grn.New("root", user.ServiceType, "member-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
-	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgInvite})
+	f.permit(permission{grn.New("root", user.ServiceType, "owner-sub"), org.ActionOrgInvite})
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/invitations", `{"role":"member"}`, member)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
@@ -802,7 +802,7 @@ func TestInvitationFlow_Lifecycle(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	m := decodeBody[apigen.Member](t, rec)
 	assert.Equal(t, apigen.RoleMember, m.Role)
-	assert.Equal(t, "grn:root:default:user:invitee-sub", m.UserGrn)
+	assert.Equal(t, "grn:root/iam/user/invitee-sub", m.UserGrn)
 	require.NotNil(t, m.Nickname)
 	assert.Equal(t, "Invitee", *m.Nickname)
 
@@ -819,7 +819,7 @@ func TestCreateInvitation_DefaultsExpiry(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgInvite})
+	f.permit(permission{grn.New("root", user.ServiceType, "owner-sub"), org.ActionOrgInvite})
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/invitations", `{"role":"member"}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
@@ -832,7 +832,7 @@ func TestAcceptInvitation_Expired(t *testing.T) {
 	invitee := f.sessionCookieFor(t, "invitee-sub", "Invitee")
 
 	orgGRN := grn.Org("acme")
-	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	creator := grn.New("root", user.ServiceType, "owner-sub")
 	expired := org.NewInvitation("expired-tok", orgGRN, org.RoleMember, creator, time.Now().Add(-time.Hour))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), expired))
 

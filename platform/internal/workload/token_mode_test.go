@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -122,7 +123,7 @@ func TestActivate_TokenModeAcceptsTheGenerationsControlTokenAlone(t *testing.T) 
 	client := h.clientOf(adapter)
 	post := func(contract, token string) int {
 		req, err := http.NewRequest(http.MethodPost,
-			"https://supervisor/v1/agents/"+testAgent.String()+"/activations", strings.NewReader(body))
+			"https://supervisor/v1/agents/"+url.PathEscape(testAgent.String())+"/activations", strings.NewReader(body))
 		require.NoError(t, err)
 		req.Header.Set("Garam-Contract-Version", contract)
 		req.Header.Set("Garam-Placement", placement)

@@ -43,7 +43,7 @@ func (s *assertionService) ExchangeAssertion(_ context.Context, source string, c
 		ExpiresAt: time.Now().Add(operator.TokenTTL)}, nil
 }
 
-var assertingClient = grn.New("acme", grn.DefaultProject, operator.ServiceType, "controller")
+var assertingClient = grn.New("acme", operator.ServiceType, "controller")
 
 // validForm is a well-formed client credentials request.
 func validForm() url.Values {
@@ -92,7 +92,7 @@ func TestExchangeClientAssertion_AnswersRFC6749sTokenForm(t *testing.T) {
 	operators := &assertionService{}
 	base, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, assertingClient)
 	form := validForm()
-	form.Set("audience", "grn:acme:default:operator:control")
+	form.Set("audience", "grn:acme/iam/operator/control")
 
 	resp, body := exchangeForm(t, anonymous(t), base, form.Encode(), nil)
 	require.Equal(t, http.StatusOK, resp.StatusCode, body)
@@ -110,7 +110,7 @@ func TestExchangeClientAssertion_AnswersRFC6749sTokenForm(t *testing.T) {
 	assert.Equal(t, assertingClient, operators.calls[0].client)
 	assert.Equal(t, "a.compact.jwt", operators.calls[0].assertion)
 	require.NotNil(t, operators.calls[0].audience)
-	assert.Equal(t, "grn:acme:default:operator:control", operators.calls[0].audience.String())
+	assert.Equal(t, "grn:acme/iam/operator/control", operators.calls[0].audience.String())
 }
 
 // TestExchangeClientAssertion_RefusesAFormOutsideTheProfile holds each

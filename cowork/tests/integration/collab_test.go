@@ -156,7 +156,7 @@ func TestSync_CompactsTheLogAndLosesNothing(t *testing.T) {
 func TestSync_RefusesEditsFromACallerWhoMayOnlyRead(t *testing.T) {
 	s := newStack(t)
 	pageID := s.createPage(t, "locked")
-	s.platform.denyCheck("bob cowork:page-write@" + pageID)
+	s.platform.denyCheck("bob cowork:page.write@" + pageID)
 	ada, bob := newEditor(t, s, "ada", pageID), newEditor(t, s, "bob", pageID)
 	ada.connect()
 	bob.connect()

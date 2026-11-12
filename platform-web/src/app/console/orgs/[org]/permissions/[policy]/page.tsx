@@ -106,7 +106,7 @@ export default async function PolicyPage({ params }: Params) {
       key: "update",
       label: "Edit it",
       check: {
-        action: "policy:update",
+        action: "iam:policy.update",
         resource,
       },
     },
@@ -114,7 +114,7 @@ export default async function PolicyPage({ params }: Params) {
       key: "attach",
       label: "Attach it",
       check: {
-        action: "policy:attach",
+        action: "iam:policy.attach",
         resource,
       },
     },
@@ -122,7 +122,7 @@ export default async function PolicyPage({ params }: Params) {
       key: "detach",
       label: "Detach it",
       check: {
-        action: "policy:detach",
+        action: "iam:policy.detach",
         resource,
       },
     },
@@ -130,7 +130,7 @@ export default async function PolicyPage({ params }: Params) {
       key: "delete",
       label: "Delete it",
       check: {
-        action: "policy:delete",
+        action: "iam:policy.delete",
         resource,
       },
     },

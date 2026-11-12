@@ -11,9 +11,8 @@ import (
 	"github.com/garamsh/garam/lib/grn"
 )
 
-// ServiceType is a page's GRN service type, the kind the platform's
-// permission checks name it by (ADR-0127).
-const ServiceType = "cowork-page"
+// ServiceType is a page's GRN type (ADR-0127).
+const ServiceType = "page"
 
 // Page is one page of an organization's tree. Every field is one the
 // store writes and reads back, so they are exported and the store
@@ -35,7 +34,7 @@ type Page struct {
 
 // GRN is the page's resource name under its organization (ADR-0001).
 func (p Page) GRN() grn.GRN {
-	return grn.New(p.Org, grn.DefaultProject, ServiceType, p.ID)
+	return grn.New(p.Org, ServiceType, p.ID)
 }
 
 // CreateInput is a new page: its title, and the page it goes under,

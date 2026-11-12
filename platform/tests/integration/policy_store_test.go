@@ -76,9 +76,9 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 
 	_, err = s.SetPolicyDefaultVersion(ctx, g, 99)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
-	_, err = s.GetPolicy(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"))
+	_, err = s.GetPolicy(ctx, grn.New("acme", authz.ServiceTypePolicy, "missing"))
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
-	_, err = s.AddPolicyVersion(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"), policyDoc("x", wire.EffectAllow), author)
+	_, err = s.AddPolicyVersion(ctx, grn.New("acme", authz.ServiceTypePolicy, "missing"), policyDoc("x", wire.EffectAllow), author)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 }
 
@@ -97,7 +97,7 @@ func TestPolicyService_DeleteRoundTrip(t *testing.T) {
 		created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
 			OrgGrn:    orgGRN.String(),
 			Name:      name,
-			Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`,
+			Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["iam:org.read"],"Resource":["grn:acme/*"]}]}`,
 			CreatedBy: grnOf("user", "ada").String(),
 		})
 		require.NoError(t, err)
@@ -211,8 +211,8 @@ func TestPolicyVersions_StoreAndReturnTheSubmittedDocument(t *testing.T) {
 	orgGRN := newPolicyOrg(t, p)
 
 	const (
-		conditioned   = `{"Version":"2026-07-25","Statement":[{"Sid":"OfficeOnly","Effect":"Allow","Action":["org:update"],"Resource":["grn:acme:*"],"Condition":{"IpAddress":{"garam:SourceIp":"203.0.113.0/24"}}}]}`
-		unconditioned = `{"Version":"2026-07-25","Statement":[{"Sid":"Anywhere","Effect":"Allow","Action":["org:update"],"Resource":["grn:acme:*"]}]}`
+		conditioned   = `{"Version":"2026-07-25","Statement":[{"Sid":"OfficeOnly","Effect":"Allow","Action":["iam:org.update"],"Resource":["grn:acme/*"],"Condition":{"IpAddress":{"garam:SourceIp":"203.0.113.0/24"}}}]}`
+		unconditioned = `{"Version":"2026-07-25","Statement":[{"Sid":"Anywhere","Effect":"Allow","Action":["iam:org.update"],"Resource":["grn:acme/*"]}]}`
 	)
 
 	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
@@ -328,7 +328,7 @@ func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
 		OrgGrn:    orgGRN.String(),
 		Name:      "read-only",
-		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`,
+		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["iam:org.read"],"Resource":["grn:acme/*"]}]}`,
 		CreatedBy: ada.String(),
 	})
 	require.NoError(t, err)
@@ -380,7 +380,7 @@ func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	// for the refusal after it.
 	engine := authz.NewGRPCServer(cache)
 	check := &authzv1.CheckRequest{
-		SubjectGrn: bob.String(), ObjectGrn: grnOf("project", "web").String(), Action: "org:read",
+		SubjectGrn: bob.String(), ObjectGrn: grnOf("project", "web").String(), Action: "iam:org.read",
 		SubjectGroups: []string{eng.String()}, SubjectOrg: orgGRN.String(),
 	}
 	before, err := engine.Check(ctx, check)
@@ -410,14 +410,14 @@ func TestPolicyAttachment_StaysInsideItsOrg(t *testing.T) {
 	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
 
-	_, err = s.AttachPolicy(ctx, g, grn.New("other", "default", "group", "eng"))
+	_, err = s.AttachPolicy(ctx, g, grn.New("other", "group", "eng"))
 	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition))
 
 	// A root-owned identity exists above every org and is admitted.
-	_, err = s.AttachPolicy(ctx, g, grn.New(grn.RootOwner, "default", "user", "ada"))
+	_, err = s.AttachPolicy(ctx, g, grn.New(grn.RootOwner, "user", "ada"))
 	require.NoError(t, err)
 
-	_, err = s.AttachPolicy(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"), grnOf("user", "ada"))
+	_, err = s.AttachPolicy(ctx, grn.New("acme", authz.ServiceTypePolicy, "missing"), grnOf("user", "ada"))
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 }
 
@@ -437,8 +437,8 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 		Statement: []authz.Statement{{
 			Sid:      "deny-read",
 			Effect:   wire.EffectDeny,
-			Action:   []string{"project:read"},
-			Resource: []string{"grn:acme:*"},
+			Action:   []string{"iam:project.read"},
+			Resource: []string{"grn:acme/*"},
 		}},
 	}
 	g, err := authz.NewPolicyGRN(orgGRN)
@@ -453,12 +453,12 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 	req := &authzv1.CheckRequest{
 		SubjectGrn: ada.String(),
 		ObjectGrn:  grnOf("project", "web").String(),
-		Action:     "project:read",
+		Action:     "iam:project.read",
 		Statements: []*authzv1.Statement{{
 			Sid:      "org-role-owner",
 			Effect:   authzv1.Effect_EFFECT_ALLOW,
-			Action:   []string{"project:*"},
-			Resource: []string{"grn:acme:*"},
+			Action:   []string{"iam:project.*"},
+			Resource: []string{"grn:acme/*"},
 		}},
 		// ada is a member of acme: the api server populates subject_org
 		// the same way the engine now requires (ADR-0038).
@@ -493,7 +493,7 @@ func TestPolicyAttachment_ADenyDoesNotWidenOnDetach(t *testing.T) {
 	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
 		OrgGrn:    orgGRN.String(),
 		Name:      "no-read",
-		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"deny-read","Effect":"Deny","Action":["project:read"],"Resource":["grn:acme:*"]}]}`,
+		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"deny-read","Effect":"Deny","Action":["iam:project.read"],"Resource":["grn:acme/*"]}]}`,
 		CreatedBy: ada.String(),
 	})
 	require.NoError(t, err)

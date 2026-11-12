@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => router }));
 // `revalidatePath` needs a request scope the test does not run in.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-const CLIENT_ID = "grn:acme:default:operator:field-one";
+const CLIENT_ID = "grn:acme/iam/operator/field-one";
 const TOKEN_URL = "https://machine.garam.example/oauth/token";
 const PEM = "-----BEGIN PRIVATE KEY-----\nMIIEvQ\n-----END PRIVATE KEY-----\n";
 const neverUsed: OperatorKey = { ...fieldOneKey, lastExchangedAt: undefined };
@@ -240,7 +240,7 @@ describe("connect wizard", () => {
   it("keeps the replacement open with garam's refusal, and stays on issuing", async () => {
     answerIssuance(() =>
       HttpResponse.json(
-        { kind: "permission_denied", message: "denied: operator:reissue" },
+        { kind: "permission_denied", message: "denied: iam:operator.reissue" },
         { status: 403 },
       ),
     );

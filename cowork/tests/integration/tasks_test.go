@@ -107,8 +107,8 @@ func TestTasks_ThePlatformDecidesEachOne(t *testing.T) {
 	s := newStack(t)
 	open := s.createTask(t, "ada", `{"title":"open"}`)
 	hidden := s.createTask(t, "ada", `{"title":"hidden"}`)
-	s.platform.denyCheck("carol cowork:task-read@" + hidden.ID)
-	s.platform.denyCheck("carol cowork:task-write@" + open.ID)
+	s.platform.denyCheck("carol cowork:task.read@" + hidden.ID)
+	s.platform.denyCheck("carol cowork:task.write@" + open.ID)
 
 	listed := s.tasks(t, "carol", "")
 	require.Len(t, listed, 1)
@@ -131,7 +131,7 @@ func TestMCP_AnAgentWorksATask(t *testing.T) {
 	s := newStack(t)
 	tk := s.createTask(t, "ada", `{"title":"Triage the inbox","assignee":"`+userGRN("bob")+`"}`)
 	locked := s.createTask(t, "ada", `{"title":"Locked"}`)
-	s.platform.denyCheck("bob cowork:task-write@" + locked.ID)
+	s.platform.denyCheck("bob cowork:task.write@" + locked.ID)
 	bob := s.agent(t, "bob")
 
 	var mine struct {

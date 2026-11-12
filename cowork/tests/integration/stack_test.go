@@ -24,6 +24,7 @@ import (
 	blobmemory "github.com/garamsh/garam/cowork/internal/blob/memory"
 	"github.com/garamsh/garam/cowork/internal/cli"
 	"github.com/garamsh/garam/cowork/internal/usercontent"
+	"github.com/garamsh/garam/lib/grn"
 )
 
 // migrationsDir is cowork/migrations, found from this file.
@@ -50,6 +51,9 @@ func pool(t *testing.T) *pgxpool.Pool {
 	require.NoError(t, err)
 	t.Cleanup(p.Close)
 	_, err = p.Exec(context.Background(), "TRUNCATE pages, channels, tasks, artifacts CASCADE")
+	require.NoError(t, err)
+	// The policy feed starts off and empty, as a migrated database has it.
+	_, err = p.Exec(context.Background(), "TRUNCATE policy_outbox; UPDATE policy_feed SET enabled = false")
 	require.NoError(t, err)
 	return p
 }
@@ -147,11 +151,11 @@ func (f *fakePlatform) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	switch {
 	case r.URL.Path == "/orgs" && who != "eve":
-		_ = json.NewEncoder(w).Encode([]map[string]string{{"grn": "grn:root:default:org:acme", "name": "Acme"}})
+		_ = json.NewEncoder(w).Encode([]map[string]string{{"grn": "grn:root/iam/org/acme", "name": "Acme"}})
 	case r.URL.Path == "/orgs":
 		_ = json.NewEncoder(w).Encode([]map[string]string{})
 	case r.URL.Path == "/me":
-		_ = json.NewEncoder(w).Encode(map[string]string{"grn": "grn:root:default:user:" + who, "nickname": who})
+		_ = json.NewEncoder(w).Encode(map[string]string{"grn": grn.New(grn.RootOwner, "user", who).String(), "nickname": who})
 	case r.URL.Path == "/orgs/acme/permission-checks" && who != "eve":
 		var body struct {
 			Checks []struct {

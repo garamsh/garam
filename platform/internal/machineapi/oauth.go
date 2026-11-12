@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/lib/errorx"
 	"github.com/garamsh/garam/lib/grn"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
+	"github.com/garamsh/garam/platform/internal/identity"
 	"github.com/garamsh/garam/platform/internal/machine"
 	"github.com/garamsh/garam/platform/internal/operator"
 )
@@ -52,6 +53,10 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 		writeOAuthError(w, &oauthRefusal{machinegen.InvalidRequest, "client_id is not a GRN"})
 		return
 	}
+	if identity.IsPrincipalClient(form.Get("client_id")) {
+		s.exchangePrincipal(w, r, form)
+		return
+	}
 	var audience *grn.GRN
 	if raw, ok := form["audience"]; ok {
 		g, err := grn.Parse(raw[0])
@@ -74,6 +79,41 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+// exchangePrincipal answers a service principal's assertion with the
+// issuer's token for the policy service (ADR-0129 item 3, ADR-0141
+// item 12). The audience is checked before the assertion is read, so a
+// request refused for it spends no jti, and it is the policy service's
+// name and not a GRN, unlike an operator's. It writes no credential
+// event: a principal's credential is a key the deployment holds, and
+// reading its use belongs to the revocation work.
+func (s *Server) exchangePrincipal(w http.ResponseWriter, r *http.Request, form url.Values) {
+	if s.issuer == nil || s.principals == nil {
+		writeOAuthError(w, identity.ErrPrincipalsOff)
+		return
+	}
+	if audience, ok := form["audience"]; !ok || audience[0] != identity.AudiencePolicy {
+		writeOAuthError(w, &oauthRefusal{machinegen.InvalidRequest,
+			"audience is " + identity.AudiencePolicy + " for a service principal"})
+		return
+	}
+	principal, err := s.principals.Authenticate(r.Context(), identity.RouteExchange,
+		sourceOf(r), form.Get("client_id"), form.Get("client_assertion"))
+	if err != nil {
+		writeOAuthError(w, err)
+		return
+	}
+	issued, err := s.issuer.IssueCaller(principal.GRN)
+	if err != nil {
+		writeOAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, machinegen.OAuthToken{
+		AccessToken: issued.Token,
+		TokenType:   machinegen.Bearer,
+		ExpiresIn:   issued.ExpiresIn,
+	})
+}
+
 // sourceOf answers the address the request's connection came from,
 // which bounds how many unverified assertions one address may send.
 // The listener terminates TLS itself, so the peer is the client and
@@ -88,29 +128,11 @@ func sourceOf(r *http.Request) string {
 }
 
 // clientCredentialsForm reads the request as this profile's form, or
-// answers the refusal its first defect earns. Nothing it refuses for
-// quotes the body: a parse error can carry part of the assertion.
+// answers the refusal its first defect earns.
 func clientCredentialsForm(r *http.Request) (url.Values, *oauthRefusal) {
-	if _, present := r.Header["Authorization"]; present {
-		return nil, &oauthRefusal{machinegen.InvalidRequest,
-			"the exchange is authenticated by its client assertion alone: send no Authorization header"}
-	}
-	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if err != nil || mediaType != "application/x-www-form-urlencoded" {
-		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body is application/x-www-form-urlencoded"}
-	}
-	body, err := io.ReadAll(io.LimitReader(r.Body, maxAssertionRequest+1))
-	if err != nil || len(body) > maxAssertionRequest {
-		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body could not be read within its bound"}
-	}
-	form, err := url.ParseQuery(string(body))
-	if err != nil {
-		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body is not a well-formed form"}
-	}
-	for name, values := range form {
-		if len(values) > 1 {
-			return nil, &oauthRefusal{machinegen.InvalidRequest, "parameter " + strconv.Quote(name) + " appears more than once"}
-		}
+	form, refusal := assertionForm(r)
+	if refusal != nil {
+		return nil, refusal
 	}
 	switch grant, ok := form["grant_type"]; {
 	case !ok:
@@ -131,6 +153,35 @@ func clientCredentialsForm(r *http.Request) (url.Values, *oauthRefusal) {
 	for _, name := range []string{"client_id", "client_assertion"} {
 		if form.Get(name) == "" {
 			return nil, &oauthRefusal{machinegen.InvalidRequest, name + " is required"}
+		}
+	}
+	return form, nil
+}
+
+// assertionForm reads the request's body as a form of one value for
+// each parameter, with no Authorization header: what both routes that
+// authenticate by a client assertion read first. Nothing it refuses for
+// quotes the body: a parse error can carry part of the assertion.
+func assertionForm(r *http.Request) (url.Values, *oauthRefusal) {
+	if _, present := r.Header["Authorization"]; present {
+		return nil, &oauthRefusal{machinegen.InvalidRequest,
+			"the exchange is authenticated by its client assertion alone: send no Authorization header"}
+	}
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || mediaType != "application/x-www-form-urlencoded" {
+		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body is application/x-www-form-urlencoded"}
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxAssertionRequest+1))
+	if err != nil || len(body) > maxAssertionRequest {
+		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body could not be read within its bound"}
+	}
+	form, err := url.ParseQuery(string(body))
+	if err != nil {
+		return nil, &oauthRefusal{machinegen.InvalidRequest, "the body is not a well-formed form"}
+	}
+	for name, values := range form {
+		if len(values) > 1 {
+			return nil, &oauthRefusal{machinegen.InvalidRequest, "parameter " + strconv.Quote(name) + " appears more than once"}
 		}
 	}
 	return form, nil

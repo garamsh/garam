@@ -1,6 +1,16 @@
+-- Writes the organization and one service principal for each name in
+-- services, in one statement, so an organization never exists without
+-- them (ADR-0129 item 1). A principal's GRN is built from the
+-- organization's: grn:<org id>/iam/service/<name>.
 -- name: CreateOrg :exec
-INSERT INTO orgs (grn, name, created_at, updated_at)
-VALUES ($1, $2, $3, $4);
+WITH created AS (
+    INSERT INTO orgs (grn, name, created_at, updated_at)
+    VALUES (sqlc.arg('grn'), sqlc.arg('name'), sqlc.arg('created_at'), sqlc.arg('updated_at'))
+    RETURNING grn
+)
+INSERT INTO service_principals (grn, org_grn, created_at)
+SELECT 'grn:' || grn_id(created.grn) || '/iam/service/' || s.name, created.grn, sqlc.arg('created_at')
+FROM created, unnest(sqlc.arg('services')::text[]) AS s (name);
 
 -- name: GetOrg :one
 SELECT * FROM orgs WHERE grn = $1;
@@ -53,12 +63,13 @@ WHERE org_grn = sqlc.arg('org_grn')
 ORDER BY grn
 LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 
--- SearchGroups answers the org's groups whose name or identifier (the
--- GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+-- SearchGroups answers the org's groups whose name matches pattern or
+-- whose GRN matches id_pattern, case aside, ordered by GRN. id_pattern
+-- is a LIKE pattern over the whole GRN that lib/grn builds.
 -- name: SearchGroups :many
 SELECT * FROM groups
 WHERE org_grn = sqlc.arg('org_grn')
-  AND (name ILIKE sqlc.arg('pattern') OR split_part(grn, ':', 5) ILIKE sqlc.arg('pattern'))
+  AND (name ILIKE sqlc.arg('pattern') OR grn ILIKE sqlc.arg('id_pattern'))
 ORDER BY grn;
 
 -- name: UpdateGroup :one
@@ -115,7 +126,7 @@ LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 -- name: SearchProjects :many
 SELECT * FROM projects
 WHERE org_grn = sqlc.arg('org_grn')
-  AND (name ILIKE sqlc.arg('pattern') OR split_part(grn, ':', 5) ILIKE sqlc.arg('pattern'))
+  AND (name ILIKE sqlc.arg('pattern') OR grn ILIKE sqlc.arg('id_pattern'))
 ORDER BY grn;
 
 -- name: UpdateProject :one

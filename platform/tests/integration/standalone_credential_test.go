@@ -81,15 +81,15 @@ func TestStandaloneCredential_ASupervisorRunsItsAgentOnTokensAlone(t *testing.T)
 	status, _ = s.supervisorExchange(t, c.credential, `{"audience":"`+s.hosted.String()+`"}`)
 	assert.Equal(t, http.StatusBadRequest, status, "a supervisor's token names no audience")
 
-	shown := s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens", operator.TokenContractVersion, token, "",
+	shown := s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens", operator.TokenContractVersion, token, "",
 		`{"audience":"`+s.hosted.String()+`"}`)
 	assert.Equal(t, http.StatusBadRequest, shown.status, "a supervisor mints for garam alone: %s", shown.body)
-	minted := s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens", operator.TokenContractVersion, token, "", `{}`)
+	minted := s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens", operator.TokenContractVersion, token, "", `{}`)
 	require.Equal(t, http.StatusCreated, minted.status, "the supervisor mints its agent's token: %s", minted.body)
 	var own machinegen.AgentToken
 	require.NoError(t, json.Unmarshal([]byte(minted.body), &own))
 
-	got := s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/activations", agent.TokenExecutionContractVersion, token, "",
+	got := s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/activations", agent.TokenExecutionContractVersion, token, "",
 		tokenActivationBody("first", generation(1), nil, nil, own.Token))
 	require.Equal(t, http.StatusCreated, got.status, "the first activation rests on the approval: %s", got.body)
 	activation := activationOf(t, got)
@@ -106,7 +106,7 @@ func TestStandaloneCredential_ASupervisorRunsItsAgentOnTokensAlone(t *testing.T)
 // supervisor of the token it forwards.
 func (s *tokenStack) supervisorStanding(t *testing.T, g grn.GRN, supervisorToken, forwarded string) machinegen.ExecutionIntrospection {
 	t.Helper()
-	got := s.v2(t, http.MethodPost, "/agents/"+g.String()+"/execution/introspection", agent.TokenExecutionContractVersion,
+	got := s.v2(t, http.MethodPost, "/agents/"+pathEscape(g.String())+"/execution/introspection", agent.TokenExecutionContractVersion,
 		supervisorToken, "", `{"token":"`+forwarded+`"}`)
 	require.Equal(t, http.StatusOK, got.status, got.body)
 	var in machinegen.ExecutionIntrospection
@@ -213,7 +213,7 @@ func TestStandaloneCredential_ASupervisorReachesItsOwnAgentAlone(t *testing.T) {
 	theirs, theirToken := s.enrolledSupervisor(t)
 
 	mint := func(g grn.GRN) reply {
-		return s.v2(t, http.MethodPost, "/agents/"+g.String()+"/tokens", operator.TokenContractVersion, token, "", `{}`)
+		return s.v2(t, http.MethodPost, "/agents/"+pathEscape(g.String())+"/tokens", operator.TokenContractVersion, token, "", `{}`)
 	}
 	assert.Equal(t, http.StatusForbidden, mint(theirs.agent).status, "another supervisor's agent")
 	own := mint(mine.agent)
@@ -221,12 +221,12 @@ func TestStandaloneCredential_ASupervisorReachesItsOwnAgentAlone(t *testing.T) {
 	var minted machinegen.AgentToken
 	require.NoError(t, json.Unmarshal([]byte(own.body), &minted))
 
-	got := s.v2(t, http.MethodPost, "/agents/"+theirs.agent.String()+"/tokens", operator.TokenContractVersion, theirToken, "", `{}`)
+	got := s.v2(t, http.MethodPost, "/agents/"+pathEscape(theirs.agent.String())+"/tokens", operator.TokenContractVersion, theirToken, "", `{}`)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var theirMinted machinegen.AgentToken
 	require.NoError(t, json.Unmarshal([]byte(got.body), &theirMinted))
 	activate := func(g grn.GRN, forwarded string) reply {
-		return s.v2(t, http.MethodPost, "/agents/"+g.String()+"/activations", agent.TokenExecutionContractVersion, token, "",
+		return s.v2(t, http.MethodPost, "/agents/"+pathEscape(g.String())+"/activations", agent.TokenExecutionContractVersion, token, "",
 			tokenActivationBody("first", generation(1), nil, nil, forwarded))
 	}
 	assert.Equal(t, http.StatusForbidden, activate(theirs.agent, theirMinted.Token).status,
@@ -328,7 +328,7 @@ func (s *tokenStack) supervisorActivates(t *testing.T, c credentialed, body stri
 	t.Helper()
 	status, token := s.supervisorExchange(t, c.credential, `{}`)
 	require.Equal(t, http.StatusCreated, status)
-	minted := s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens", operator.TokenContractVersion, token, "", `{}`)
+	minted := s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens", operator.TokenContractVersion, token, "", `{}`)
 	require.Equal(t, http.StatusCreated, minted.status, minted.body)
 	var own machinegen.AgentToken
 	require.NoError(t, json.Unmarshal([]byte(minted.body), &own))
@@ -337,6 +337,6 @@ func (s *tokenStack) supervisorActivates(t *testing.T, c credentialed, body stri
 	fields["token"] = own.Token
 	raw, err := json.Marshal(fields)
 	require.NoError(t, err)
-	return s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/activations", agent.TokenExecutionContractVersion, token, "",
+	return s.v2(t, http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/activations", agent.TokenExecutionContractVersion, token, "",
 		string(raw))
 }

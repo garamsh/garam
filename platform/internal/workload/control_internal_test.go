@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -34,7 +35,7 @@ func (fixedTokens) Current(context.Context) (string, error) { return "", nil }
 // constant-time comparison alone would accept them. A well-formed
 // token matching the record is the control.
 func TestCaller_RefusesAControlTokenThatIsNotOneBeforeComparing(t *testing.T) {
-	agent := grn.New("acme", grn.DefaultProject, "agent", "0a1b2c3d4e5f6071")
+	agent := grn.New("acme", "agent", "0a1b2c3d4e5f6071")
 	s := &Supervisor{cfg: Config{Tokens: fixedTokens{}, Desired: Desired{Agent: agent}}}
 	wellFormed := controlTokenPrefix + strings.Repeat("a", 64)
 	for name, c := range map[string]struct {
@@ -46,7 +47,7 @@ func TestCaller_RefusesAControlTokenThatIsNotOneBeforeComparing(t *testing.T) {
 		"the control: a well-formed token that matches": {wellFormed, wellFormed, http.StatusOK},
 	} {
 		t.Run(name, func(t *testing.T) {
-			r := httptest.NewRequest(http.MethodPost, "/v1/agents/"+agent.String()+"/activations", nil)
+			r := httptest.NewRequest(http.MethodPost, "/v1/agents/"+url.PathEscape(agent.String())+"/activations", nil)
 			r.SetPathValue("agent", agent.String())
 			r.Header.Set("Authorization", "Garam-Token "+c.presented)
 			w := httptest.NewRecorder()

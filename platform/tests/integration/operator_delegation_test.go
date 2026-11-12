@@ -105,7 +105,7 @@ func newDelegationFixture(t *testing.T) *delegationFixture {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, orgpg.New(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	actor := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "ada")
+	actor := grn.New(grn.RootOwner, user.ServiceType, "ada")
 	require.NoError(t, userpg.New(p).Create(ctx, user.New(actor, "Ada")))
 	store := operatorpg.New(p)
 	hosted := register(t, store, "hosted")
@@ -235,7 +235,7 @@ func TestGrantWrite_ReplayBindsTheWholeWrite(t *testing.T) {
 	require.ErrorIs(t, err, operator.ErrGrantRequestConflict, "another expected grant")
 	_, _, err = f.service.WriteGrant(ctx, operator.GrantWrite{
 		Org: f.org, Operator: f.hosted, RequestID: "grant-2", Expected: grantRef(first.ID),
-		Terms: terms, Actor: grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "grace"),
+		Terms: terms, Actor: grn.New(grn.RootOwner, user.ServiceType, "grace"),
 	})
 	require.ErrorIs(t, err, operator.ErrGrantRequestConflict, "another actor")
 
@@ -491,7 +491,7 @@ func TestIntrospect_AnswersItsAudienceOnly(t *testing.T) {
 
 // TestMint_RefusesWhatTheGrantDoesNotCover holds the delegation's
 // bound: a controller outside it, an operation outside it, a cross
-// organization audience, and agent:activate, which no member mints.
+// organization audience, and iam:agent.activate, which no member mints.
 func TestMint_RefusesWhatTheGrantDoesNotCover(t *testing.T) {
 	f := newDelegationFixture(t)
 	f.grant(t)
@@ -599,7 +599,7 @@ func TestReference_ActorDeletionKeepsTheReplayRecord(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, countRows(t, f.pool, `SELECT count(*) FROM operation_authorities WHERE ref = $1`, string(minted.Ref)))
 
-	grace := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "grace")
+	grace := grn.New(grn.RootOwner, user.ServiceType, "grace")
 	require.NoError(t, userpg.New(f.pool).Create(ctx, user.New(grace, "Grace")))
 	_, err = f.service.Mint(ctx, operator.MintRequest{
 		Actor: grace, Org: f.org, Audience: f.hosted, Operation: operator.OperationAgentCreate,

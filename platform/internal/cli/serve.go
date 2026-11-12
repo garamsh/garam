@@ -113,6 +113,11 @@ func serveAPI(cmd *cobra.Command) error {
 		}
 	}()
 
+	sessions := authnpg.NewSessionStore(pool)
+	issuer, err := identityIssuer(sessions, obs.logger)
+	if err != nil {
+		return err
+	}
 	srv := api.NewServer(
 		userpg.New(pool),
 		orgpg.New(pool),
@@ -120,7 +125,7 @@ func serveAPI(cmd *cobra.Command) error {
 		operatorpg.New(pool),
 		messagepg.New(pool),
 		watches,
-		authnpg.NewSessionStore(pool),
+		sessions,
 		authnpg.NewOAuthStateStore(pool),
 		authnpg.NewPasswordCredentialStore(pool),
 		authnpg.NewPasswordAttemptStore(pool),
@@ -136,7 +141,8 @@ func serveAPI(cmd *cobra.Command) error {
 			TokenURL:     tokenURL,
 		},
 	).WithCredentialAudit(auditpg.NewCredentialStore(pool)).
-		WithDeviceGrant(authnpg.NewDeviceStore(pool))
+		WithDeviceGrant(authnpg.NewDeviceStore(pool)).
+		WithIdentity(issuer)
 
 	stopDelivery, err := startPolicyDelivery(ctx, pool, obs.logger)
 	if err != nil {

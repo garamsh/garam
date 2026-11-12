@@ -26,17 +26,17 @@ vi.mock("@/features/orgs/actions", () => ({
 const ENDPOINT = "https://control.example.test/garam";
 
 const hosted: DelegatedOperator = {
-  grn: "grn:acme:default:operator:hosted",
+  grn: "grn:acme/iam/operator/hosted",
   identifier: "hosted",
   name: "Hosted",
   endpoint: ENDPOINT,
   delegation: {
     grantId: "grant-1",
-    operatorGrn: "grn:acme:default:operator:hosted",
+    operatorGrn: "grn:acme/iam/operator/hosted",
     controllers: [],
-    operations: ["agent-template:publish"],
+    operations: ["iam:agent-template.publish"],
     expiresAt: "2099-01-01T00:00:00Z",
-    grantedBy: "grn:acme:default:user:alice",
+    grantedBy: "grn:acme/iam/user/alice",
     grantedAt: "2026-10-01T00:00:00Z",
   },
   problem: null,
@@ -48,7 +48,7 @@ function Form() {
   return (
     <PublishTemplateForm
       org="acme"
-      orgGrn="grn:root:default:org:acme"
+      orgGrn="grn:root/iam/org/acme"
       hosted={hosted}
       values={values}
       onValuesChange={setValues}

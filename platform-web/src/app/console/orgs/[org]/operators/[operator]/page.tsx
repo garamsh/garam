@@ -90,7 +90,7 @@ function Unavailable({ children }: { children: React.ReactNode }) {
  * none. garam never dials an operator (ADR-0012), so a key's last
  * sign-in is garam's one sign of it; the images it runs and its last
  * contact are the hosted operator's control service's to report
- * (#1047), read in the browser under `operator:read`.
+ * (#1047), read in the browser under `iam:operator.read`.
  *
  * The page asks the server once which of its actions the caller may
  * take, and leaves out only what it is told is denied (ADR-0103).
@@ -105,29 +105,33 @@ export default async function OperatorPage({ params, searchParams }: Params) {
     {
       key: "readReports",
       label: "Read its reports",
-      check: { action: "operator:read" },
+      check: { action: "iam:operator.read" },
     },
     {
       key: "update",
       label: "Rename it",
-      check: { action: "operator:update" },
+      check: { action: "iam:operator.update" },
     },
     {
       key: "register",
       label: "Issue its first key",
-      check: { action: "operator:register" },
+      check: { action: "iam:operator.register" },
     },
     {
       key: "reissue",
       label: "Re-issue its keys",
-      check: { action: "operator:reissue" },
+      check: { action: "iam:operator.reissue" },
     },
     {
       key: "delegate",
       label: "Delegate to it",
-      check: { action: "operator:delegate" },
+      check: { action: "iam:operator.delegate" },
     },
-    { key: "delete", label: "Delete it", check: { action: "operator:delete" } },
+    {
+      key: "delete",
+      label: "Delete it",
+      check: { action: "iam:operator.delete" },
+    },
   ]);
   const [
     organization,

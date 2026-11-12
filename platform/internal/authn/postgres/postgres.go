@@ -58,6 +58,22 @@ func (s *SessionStore) Get(ctx context.Context, token string) (*authn.Session, e
 	return rowToSession(row)
 }
 
+// GetByID answers the live session whose row id is id, or
+// ErrSessionNotFound where there is none: an id that does not parse,
+// a row revoked, a row expired. The issuer's introspection reads
+// whether a token's session still lives by it (ADR-0141).
+func (s *SessionStore) GetByID(ctx context.Context, id string) (*authn.Session, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return nil, authn.ErrSessionNotFound
+	}
+	row, err := s.q.GetSessionByID(ctx, pgtype.UUID{Bytes: parsed, Valid: true})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "get session by id", authn.ErrSessionNotFound, nil)
+	}
+	return rowToSession(row)
+}
+
 // rowToSession converts a stored session. A user GRN that no longer
 // parses is the database's fault, hence internal.
 func rowToSession(row db.Session) (*authn.Session, error) {

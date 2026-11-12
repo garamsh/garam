@@ -16,8 +16,8 @@ import (
 // attachmentRow is a stored attachment row that parses.
 func attachmentRow() db.PolicyAttachment {
 	return db.PolicyAttachment{
-		PolicyGrn:  "grn:acme:default:policy:9f2ac1b40d8e7a35",
-		SubjectGrn: "grn:acme:default:group:eng",
+		PolicyGrn:  "grn:acme/iam/policy/9f2ac1b40d8e7a35",
+		SubjectGrn: "grn:acme/iam/group/eng",
 		CreatedAt:  pgtype.Timestamptz{Valid: true},
 	}
 }
@@ -25,9 +25,9 @@ func attachmentRow() db.PolicyAttachment {
 // activePolicyRow is a stored active-policy row that parses.
 func activePolicyRow() db.ActivePoliciesRow {
 	return db.ActivePoliciesRow{
-		Grn:         "grn:acme:default:policy:9f2ac1b40d8e7a35",
+		Grn:         "grn:acme/iam/policy/9f2ac1b40d8e7a35",
 		Document:    policyVersionRow().Document,
-		SubjectGrns: []string{"grn:acme:default:group:eng"},
+		SubjectGrns: []string{"grn:acme/iam/group/eng"},
 	}
 }
 

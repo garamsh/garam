@@ -42,8 +42,8 @@ export default async function NewAgentPage({ params }: Params) {
     getOrg(org),
     listHostedOperators(org),
     checkPermissions(org, {
-      create: { action: "agent:create" },
-      publish: { action: "agent-template:publish" },
+      create: { action: "iam:agent.create" },
+      publish: { action: "iam:agent-template.publish" },
     }),
   ]);
 
@@ -65,16 +65,16 @@ export default async function NewAgentPage({ params }: Params) {
       : hosted.status !== "ok"
         ? { status: "blocked", block: { reason: hosted.reason, fix: NO_FIX } }
         : controlReach(
-            hostedFor(hosted.data, "agent:create"),
-            "agent:create",
-            "agent-template:read",
+            hostedFor(hosted.data, "iam:agent.create"),
+            "iam:agent.create",
+            "iam:agent-template.read",
           );
 
   // The wizard already says why no control service is reachable, so
   // the templates show only where one can be read.
   const templates =
     hosted.status === "ok"
-      ? hostedFor(hosted.data, "agent-template:read")
+      ? hostedFor(hosted.data, "iam:agent-template.read")
       : null;
 
   return (

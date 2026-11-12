@@ -40,6 +40,12 @@ DELETE FROM sessions WHERE id = (
 -- name: GetSession :one
 SELECT * FROM sessions WHERE token_hash = $1 AND expires_at > now();
 
+-- A token the issuer signed names the session it was exchanged from by
+-- id, and introspection asks whether that row is still live
+-- (ADR-0141).
+-- name: GetSessionByID :one
+SELECT * FROM sessions WHERE id = $1 AND expires_at > now();
+
 -- Signing out ends the sign-in, on whichever host it is asked on.
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = (

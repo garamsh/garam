@@ -67,8 +67,9 @@ test.describe("hosts", () => {
     await expect(pending).toContainText("Waiting for the host");
     await expect(supervisor).toContainText("Active");
 
-    // The permission check answers agent:enroll from the check every
-    // approval, withdrawal and revoke runs, which denies a member.
+    // The permission check answers iam:agent.enroll from the check
+    // every approval, withdrawal and revoke runs, which denies a
+    // member.
     const writes: string[] = [];
     page.on("request", (request) => {
       if (request.method() !== "GET") writes.push(request.url());

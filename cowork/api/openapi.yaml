@@ -10,7 +10,7 @@ info:
     `garam_session` cookie, or a CLI session's bearer (ADR-0120).
     cowork passes it to the platform as presented, asks who it
     belongs to, and asks the platform's `checkPermissions` before every
-    read and write: `cowork:page-read` and `cowork:page-write`, on the
+    read and write: `cowork:page.read` and `cowork:page.write`, on the
     organization for its page tree and on a page for that page. A
     caller the platform does not accept is answered 401, one it denies
     403, and every operation answers 503 when the platform cannot be
@@ -21,10 +21,10 @@ info:
     protocol, which OpenAPI does not describe. Its upgrade is answered
     as `getPage` is answered, and edits on it are refused, with
     y-websocket's permission-denied message, to a caller without
-    `cowork:page-write` on the page.
+    `cowork:page.write` on the page.
 
     Channels are messaging (ADR-0128). Reading one needs
-    `cowork:channel-read` on it, and posting `cowork:channel-post`; a
+    `cowork:channel.read` on it, and posting `cowork:channel.post`; a
     private channel or a direct message also needs the caller on its
     participant list, which only narrows what the platform allows. A
     channel's messages arrive live over a WebSocket at
@@ -33,14 +33,14 @@ info:
     upgrade is answered as `getChannel` is answered.
 
     Tasks are the record of work. Listing and creating them needs
-    `cowork:task-read` and `cowork:task-write` on the organization,
+    `cowork:task.read` and `cowork:task.write` on the organization,
     and reading or changing one, its comments included, the same on
     the task. A task links only pages and messages its writer may
     read.
 
     Artifacts are HTML pages and documents, each a sequence of
     immutable versions. Listing and creating them needs
-    `cowork:artifact-read` and `cowork:artifact-write` on the
+    `cowork:artifact.read` and `cowork:artifact.write` on the
     organization, and reading one or saving a version the same on the
     artifact. An HTML version is never served from cowork's own origin:
     `viewArtifact` answers a short-lived address on the user-content
@@ -56,7 +56,7 @@ paths:
       tags: [pages]
       summary: List the pages of an organization the caller may read.
       description: >-
-        Requires `cowork:page-read` on the organization. A page the
+        Requires `cowork:page.read` on the organization. A page the
         caller may not read is left out, and so is every page beneath
         it.
       responses:
@@ -75,7 +75,7 @@ paths:
       tags: [pages]
       summary: Create a page after its last sibling.
       description: >-
-        Requires `cowork:page-write` on the organization, and on the
+        Requires `cowork:page.write` on the organization, and on the
         parent where one is named.
       requestBody:
         required: true
@@ -109,7 +109,7 @@ paths:
     get:
       operationId: getPage
       tags: [pages]
-      summary: Read a page. Requires `cowork:page-read` on it.
+      summary: Read a page. Requires `cowork:page.read` on it.
       responses:
         '200':
           description: The page.
@@ -128,7 +128,7 @@ paths:
       tags: [pages]
       summary: Rename or move a page.
       description: >-
-        Requires `cowork:page-write` on the page, and on the parent it
+        Requires `cowork:page.write` on the page, and on the parent it
         moves under. A field left out is left as it is. `parent` set to
         an empty string moves the page to the top of the tree, and
         `position` places it among its new siblings, moving those from
@@ -161,7 +161,7 @@ paths:
       operationId: deletePage
       tags: [pages]
       summary: Delete a page and every page beneath it.
-      description: Requires `cowork:page-write` on the page.
+      description: Requires `cowork:page.write` on the page.
       responses:
         '204':
           description: Deleted.
@@ -179,7 +179,7 @@ paths:
       tags: [channels]
       summary: List the channels the caller may read.
       description: >-
-        Requires `cowork:channel-read` on the organization. Answers the
+        Requires `cowork:channel.read` on the organization. Answers the
         public channels and those whose participant list holds the
         caller, less any the platform denies the caller reading.
       responses:
@@ -198,7 +198,7 @@ paths:
       tags: [channels]
       summary: Create a channel or start a direct message.
       description: >-
-        Requires `cowork:channel-post` on the organization. A public or
+        Requires `cowork:channel.post` on the organization. A public or
         private channel takes a name the organization has no other
         channel by, 409 otherwise. A private channel's list starts with
         its creator and `members`; a direct message takes no name and
@@ -254,7 +254,7 @@ paths:
       tags: [channels]
       summary: Add a participant to a private channel.
       description: >-
-        Requires `cowork:channel-post` on the channel and a place on its
+        Requires `cowork:channel.post` on the channel and a place on its
         list. A public channel keeps no list and a direct message's is
         fixed, and either is answered 409.
       requestBody:
@@ -330,8 +330,8 @@ paths:
       tags: [messages]
       summary: Post a message, or reply in a thread.
       description: >-
-        Requires `cowork:channel-post` on the channel, and
-        `cowork:page-read` on every page it links: a message shows a
+        Requires `cowork:channel.post` on the channel, and
+        `cowork:page.read` on every page it links: a message shows a
         linked page's title, so it links only what its author may read.
         A reply to a reply joins the first message's thread. An agent
         it mentions is answered in `undeliveredMentions` until cowork
@@ -414,7 +414,7 @@ paths:
       tags: [messages]
       summary: Read the messages that link a page, newest first.
       description: >-
-        Requires `cowork:page-read` on the page, and answers only
+        Requires `cowork:page.read` on the page, and answers only
         messages in channels the caller may read.
       responses:
         '200':
@@ -824,7 +824,7 @@ components:
         grn:
           type: string
           description: The name the platform's permission checks know the page by.
-          example: grn:acme:default:cowork-page:k3v7q2m9x4ab
+          example: grn:acme/cowork/page/k3v7q2m9x4ab
         org:
           type: string
         parent:
@@ -882,7 +882,7 @@ components:
         grn:
           type: string
           description: The name the platform's permission checks know the channel by.
-          example: grn:acme:default:cowork-channel:k3v7q2m9x4ab
+          example: grn:acme/cowork/channel/k3v7q2m9x4ab
         org:
           type: string
         kind:
@@ -1004,7 +1004,7 @@ components:
             type: string
         artifacts:
           type: array
-          description: Artifacts to embed; each needs `cowork:artifact-read` of the author.
+          description: Artifacts to embed; each needs `cowork:artifact.read` of the author.
           maxItems: 10
           items:
             type: string
@@ -1029,7 +1029,7 @@ components:
         grn:
           type: string
           description: The name the platform's permission checks know the task by.
-          example: grn:acme:default:cowork-task:k3v7q2m9x4ab
+          example: grn:acme/cowork/task/k3v7q2m9x4ab
         org:
           type: string
         title:
@@ -1156,7 +1156,7 @@ components:
           type: string
         grn:
           type: string
-          example: grn:acme:default:cowork-artifact:k3v7q2m9x4ab
+          example: grn:acme/cowork/artifact/k3v7q2m9x4ab
         org:
           type: string
         kind:

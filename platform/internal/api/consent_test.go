@@ -31,7 +31,7 @@ func TestConsents_AdminManagesTheRelation(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	perms := make([]permission, 0, len(consentActions))
 	for _, a := range consentActions {
 		perms = append(perms, permission{ownerGRN, a})
@@ -95,8 +95,8 @@ func TestConsents_MemberIsDenied(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	orgGRN := orgGRNForTest(slug)
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
-	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
+	memberGRN := grn.New("root", user.ServiceType, "member-sub")
 	member := f.sessionCookieFor(t, "member-sub", "Member")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 	// The owner holds the grant action and the member holds nothing.
@@ -129,7 +129,7 @@ func TestConsents_RequireOrgMembership(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	outsider := f.sessionCookieFor(t, "outsider-sub", "Outsider")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionConsentRead})
 
 	path := "/orgs/" + slug + "/consents"
@@ -154,7 +154,7 @@ func TestConsents_RefusesAnOrgThatIsNotThereOrIsItself(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionConsentGrant})
 
 	otherGRN := orgGRNForTest("globex")
@@ -184,7 +184,7 @@ func TestConsents_WithdrawRefusesTheOrgItself(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionConsentWithdraw})
 
 	otherGRN := orgGRNForTest("globex")
@@ -213,7 +213,7 @@ func TestConsents_WithdrawRefusesAnOrgThatIsNotThere(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionConsentWithdraw})
 
 	otherGRN := orgGRNForTest("globex")

@@ -237,40 +237,40 @@ func (e CredentialEventOutcome) Valid() bool {
 
 // Defines values for DelegatedOperation.
 const (
-	DelegatedOperationAgentActivate        DelegatedOperation = "agent:activate"
-	DelegatedOperationAgentConfigure       DelegatedOperation = "agent:configure"
-	DelegatedOperationAgentCreate          DelegatedOperation = "agent:create"
-	DelegatedOperationAgentExecutionRead   DelegatedOperation = "agent:execution-read"
-	DelegatedOperationAgentRecover         DelegatedOperation = "agent:recover"
-	DelegatedOperationAgentReplace         DelegatedOperation = "agent:replace"
-	DelegatedOperationAgentTemplatePublish DelegatedOperation = "agent-template:publish"
-	DelegatedOperationAgentTemplateRead    DelegatedOperation = "agent-template:read"
-	DelegatedOperationExecutionProfileRead DelegatedOperation = "execution-profile:read"
-	DelegatedOperationOperatorRead         DelegatedOperation = "operator:read"
+	DelegatedOperationIamAgentActivate        DelegatedOperation = "iam:agent.activate"
+	DelegatedOperationIamAgentConfigure       DelegatedOperation = "iam:agent.configure"
+	DelegatedOperationIamAgentCreate          DelegatedOperation = "iam:agent.create"
+	DelegatedOperationIamAgentExecutionRead   DelegatedOperation = "iam:agent.execution-read"
+	DelegatedOperationIamAgentRecover         DelegatedOperation = "iam:agent.recover"
+	DelegatedOperationIamAgentReplace         DelegatedOperation = "iam:agent.replace"
+	DelegatedOperationIamAgentTemplatePublish DelegatedOperation = "iam:agent-template.publish"
+	DelegatedOperationIamAgentTemplateRead    DelegatedOperation = "iam:agent-template.read"
+	DelegatedOperationIamExecutionProfileRead DelegatedOperation = "iam:execution-profile.read"
+	DelegatedOperationIamOperatorRead         DelegatedOperation = "iam:operator.read"
 )
 
 // Valid indicates whether the value is a known member of the DelegatedOperation enum.
 func (e DelegatedOperation) Valid() bool {
 	switch e {
-	case DelegatedOperationAgentActivate:
+	case DelegatedOperationIamAgentActivate:
 		return true
-	case DelegatedOperationAgentConfigure:
+	case DelegatedOperationIamAgentConfigure:
 		return true
-	case DelegatedOperationAgentCreate:
+	case DelegatedOperationIamAgentCreate:
 		return true
-	case DelegatedOperationAgentExecutionRead:
+	case DelegatedOperationIamAgentExecutionRead:
 		return true
-	case DelegatedOperationAgentRecover:
+	case DelegatedOperationIamAgentRecover:
 		return true
-	case DelegatedOperationAgentReplace:
+	case DelegatedOperationIamAgentReplace:
 		return true
-	case DelegatedOperationAgentTemplatePublish:
+	case DelegatedOperationIamAgentTemplatePublish:
 		return true
-	case DelegatedOperationAgentTemplateRead:
+	case DelegatedOperationIamAgentTemplateRead:
 		return true
-	case DelegatedOperationExecutionProfileRead:
+	case DelegatedOperationIamExecutionProfileRead:
 		return true
-	case DelegatedOperationOperatorRead:
+	case DelegatedOperationIamOperatorRead:
 		return true
 	default:
 		return false
@@ -460,6 +460,81 @@ func (e InvitationPreviewState) Valid() bool {
 	}
 }
 
+// Defines values for IssuerConfigurationGrantTypesSupported.
+const (
+	IssuerConfigurationGrantTypesSupportedUrnIetfParamsOauthGrantTypeTokenExchange IssuerConfigurationGrantTypesSupported = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationGrantTypesSupported enum.
+func (e IssuerConfigurationGrantTypesSupported) Valid() bool {
+	switch e {
+	case IssuerConfigurationGrantTypesSupportedUrnIetfParamsOauthGrantTypeTokenExchange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerConfigurationSubjectTypesSupported.
+const (
+	Public IssuerConfigurationSubjectTypesSupported = "public"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationSubjectTypesSupported enum.
+func (e IssuerConfigurationSubjectTypesSupported) Valid() bool {
+	switch e {
+	case Public:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerConfigurationTokenEndpointAuthMethodsSupported.
+const (
+	None IssuerConfigurationTokenEndpointAuthMethodsSupported = "none"
+)
+
+// Valid indicates whether the value is a known member of the IssuerConfigurationTokenEndpointAuthMethodsSupported enum.
+func (e IssuerConfigurationTokenEndpointAuthMethodsSupported) Valid() bool {
+	switch e {
+	case None:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerKeyKty.
+const (
+	RSA IssuerKeyKty = "RSA"
+)
+
+// Valid indicates whether the value is a known member of the IssuerKeyKty enum.
+func (e IssuerKeyKty) Valid() bool {
+	switch e {
+	case RSA:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuerKeyUse.
+const (
+	Sig IssuerKeyUse = "sig"
+)
+
+// Valid indicates whether the value is a known member of the IssuerKeyUse enum.
+func (e IssuerKeyUse) Valid() bool {
+	switch e {
+	case Sig:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LoginReturnPathApp.
 const (
 	Console LoginReturnPathApp = "console"
@@ -486,6 +561,7 @@ const (
 	InvalidClient        OAuthErrorError = "invalid_client"
 	InvalidGrant         OAuthErrorError = "invalid_grant"
 	InvalidRequest       OAuthErrorError = "invalid_request"
+	InvalidTarget        OAuthErrorError = "invalid_target"
 	SlowDown             OAuthErrorError = "slow_down"
 	UnsupportedGrantType OAuthErrorError = "unsupported_grant_type"
 )
@@ -505,6 +581,8 @@ func (e OAuthErrorError) Valid() bool {
 		return true
 	case InvalidRequest:
 		return true
+	case InvalidTarget:
+		return true
 	case SlowDown:
 		return true
 	case UnsupportedGrantType:
@@ -516,37 +594,37 @@ func (e OAuthErrorError) Valid() bool {
 
 // Defines values for OperationAuthorityRequestOperation.
 const (
-	OperationAuthorityRequestOperationAgentConfigure       OperationAuthorityRequestOperation = "agent:configure"
-	OperationAuthorityRequestOperationAgentCreate          OperationAuthorityRequestOperation = "agent:create"
-	OperationAuthorityRequestOperationAgentExecutionRead   OperationAuthorityRequestOperation = "agent:execution-read"
-	OperationAuthorityRequestOperationAgentRecover         OperationAuthorityRequestOperation = "agent:recover"
-	OperationAuthorityRequestOperationAgentReplace         OperationAuthorityRequestOperation = "agent:replace"
-	OperationAuthorityRequestOperationAgentTemplatePublish OperationAuthorityRequestOperation = "agent-template:publish"
-	OperationAuthorityRequestOperationAgentTemplateRead    OperationAuthorityRequestOperation = "agent-template:read"
-	OperationAuthorityRequestOperationExecutionProfileRead OperationAuthorityRequestOperation = "execution-profile:read"
-	OperationAuthorityRequestOperationOperatorRead         OperationAuthorityRequestOperation = "operator:read"
+	OperationAuthorityRequestOperationIamAgentConfigure       OperationAuthorityRequestOperation = "iam:agent.configure"
+	OperationAuthorityRequestOperationIamAgentCreate          OperationAuthorityRequestOperation = "iam:agent.create"
+	OperationAuthorityRequestOperationIamAgentExecutionRead   OperationAuthorityRequestOperation = "iam:agent.execution-read"
+	OperationAuthorityRequestOperationIamAgentRecover         OperationAuthorityRequestOperation = "iam:agent.recover"
+	OperationAuthorityRequestOperationIamAgentReplace         OperationAuthorityRequestOperation = "iam:agent.replace"
+	OperationAuthorityRequestOperationIamAgentTemplatePublish OperationAuthorityRequestOperation = "iam:agent-template.publish"
+	OperationAuthorityRequestOperationIamAgentTemplateRead    OperationAuthorityRequestOperation = "iam:agent-template.read"
+	OperationAuthorityRequestOperationIamExecutionProfileRead OperationAuthorityRequestOperation = "iam:execution-profile.read"
+	OperationAuthorityRequestOperationIamOperatorRead         OperationAuthorityRequestOperation = "iam:operator.read"
 )
 
 // Valid indicates whether the value is a known member of the OperationAuthorityRequestOperation enum.
 func (e OperationAuthorityRequestOperation) Valid() bool {
 	switch e {
-	case OperationAuthorityRequestOperationAgentConfigure:
+	case OperationAuthorityRequestOperationIamAgentConfigure:
 		return true
-	case OperationAuthorityRequestOperationAgentCreate:
+	case OperationAuthorityRequestOperationIamAgentCreate:
 		return true
-	case OperationAuthorityRequestOperationAgentExecutionRead:
+	case OperationAuthorityRequestOperationIamAgentExecutionRead:
 		return true
-	case OperationAuthorityRequestOperationAgentRecover:
+	case OperationAuthorityRequestOperationIamAgentRecover:
 		return true
-	case OperationAuthorityRequestOperationAgentReplace:
+	case OperationAuthorityRequestOperationIamAgentReplace:
 		return true
-	case OperationAuthorityRequestOperationAgentTemplatePublish:
+	case OperationAuthorityRequestOperationIamAgentTemplatePublish:
 		return true
-	case OperationAuthorityRequestOperationAgentTemplateRead:
+	case OperationAuthorityRequestOperationIamAgentTemplateRead:
 		return true
-	case OperationAuthorityRequestOperationExecutionProfileRead:
+	case OperationAuthorityRequestOperationIamExecutionProfileRead:
 		return true
-	case OperationAuthorityRequestOperationOperatorRead:
+	case OperationAuthorityRequestOperationIamOperatorRead:
 		return true
 	default:
 		return false
@@ -775,6 +853,84 @@ func (e SessionTokenTokenType) Valid() bool {
 	}
 }
 
+// Defines values for TokenExchangeRequestAudience.
+const (
+	TokenExchangeRequestAudienceCodehub TokenExchangeRequestAudience = "codehub"
+	TokenExchangeRequestAudiencePolicy  TokenExchangeRequestAudience = "policy"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestAudience enum.
+func (e TokenExchangeRequestAudience) Valid() bool {
+	switch e {
+	case TokenExchangeRequestAudienceCodehub:
+		return true
+	case TokenExchangeRequestAudiencePolicy:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestGrantType.
+const (
+	TokenExchangeRequestGrantTypeUrnIetfParamsOauthGrantTypeTokenExchange TokenExchangeRequestGrantType = "urn:ietf:params:oauth:grant-type:token-exchange"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestGrantType enum.
+func (e TokenExchangeRequestGrantType) Valid() bool {
+	switch e {
+	case TokenExchangeRequestGrantTypeUrnIetfParamsOauthGrantTypeTokenExchange:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestRequestedTokenType.
+const (
+	UrnIetfParamsOauthTokenTypeJwt TokenExchangeRequestRequestedTokenType = "urn:ietf:params:oauth:token-type:jwt"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestRequestedTokenType enum.
+func (e TokenExchangeRequestRequestedTokenType) Valid() bool {
+	switch e {
+	case UrnIetfParamsOauthTokenTypeJwt:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeRequestSubjectTokenType.
+const (
+	TokenExchangeRequestSubjectTokenTypeUrnIetfParamsOauthTokenTypeAccessToken TokenExchangeRequestSubjectTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeRequestSubjectTokenType enum.
+func (e TokenExchangeRequestSubjectTokenType) Valid() bool {
+	switch e {
+	case TokenExchangeRequestSubjectTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TokenExchangeResponseIssuedTokenType.
+const (
+	TokenExchangeResponseIssuedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken TokenExchangeResponseIssuedTokenType = "urn:ietf:params:oauth:token-type:access_token"
+)
+
+// Valid indicates whether the value is a known member of the TokenExchangeResponseIssuedTokenType enum.
+func (e TokenExchangeResponseIssuedTokenType) Valid() bool {
+	switch e {
+	case TokenExchangeResponseIssuedTokenTypeUrnIetfParamsOauthTokenTypeAccessToken:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListGroupsParamsMember.
 const (
 	GroupMemberMe ListGroupsParamsMember = "me"
@@ -971,7 +1127,7 @@ type CredentialEventCredential string
 // CredentialEventOutcome defines model for CredentialEvent.Outcome.
 type CredentialEventOutcome string
 
-// DelegatedOperation `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it. `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
+// DelegatedOperation `iam:agent.activate` bounds the hosted operator's own lifecycle authority; no user mints it. `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
 type DelegatedOperation string
 
 // Delegation defines model for Delegation.
@@ -1125,6 +1281,31 @@ type FoundObject struct {
 	Name *string `json:"name,omitempty"`
 }
 
+// GrnDescription defines model for GrnDescription.
+type GrnDescription struct {
+	// Actions The names of the actions whose resource types name `entityType`, sorted. `getRegistry` says what each applies to.
+	Actions *[]string `json:"actions,omitempty"`
+
+	// EntityType The qualified entity type the name is written as.
+	EntityType *string `json:"entityType,omitempty"`
+
+	// Grn The name as asked, locator included.
+	Grn string `json:"grn"`
+
+	// Known False where the name's service or type is declared by no manifest. Every property below is absent then.
+	Known bool `json:"known"`
+
+	// Locator The place inside the resource, as written after `#`.
+	Locator *string `json:"locator,omitempty"`
+
+	// Parent The name with its last type and id pair removed. Absent for a name of one pair.
+	Parent  *string `json:"parent,omitempty"`
+	Service *string `json:"service,omitempty"`
+
+	// Type The name's last type segment.
+	Type *string `json:"type,omitempty"`
+}
+
 // Group defines model for Group.
 type Group struct {
 	Grn    string `json:"grn"`
@@ -1204,6 +1385,59 @@ type IssuedOperatorKey struct {
 	TokenUrl string `json:"tokenUrl"`
 }
 
+// IssuerConfiguration The OIDC discovery document of garam as an issuer (ADR-0141). Every URL is the `issuer` followed by the path the operation of this file is served at.
+type IssuerConfiguration struct {
+	GrantTypesSupported []IssuerConfigurationGrantTypesSupported `json:"grant_types_supported"`
+
+	// IdTokenSigningAlgValuesSupported Only `RS256`.
+	IdTokenSigningAlgValuesSupported []string `json:"id_token_signing_alg_values_supported"`
+
+	// Issuer The configured `GARAM_IDENTITY_ISSUER`, which every token's `iss` equals byte for byte.
+	Issuer  string `json:"issuer"`
+	JwksUri string `json:"jwks_uri"`
+
+	// ResponseTypesSupported Empty, because the issuer has no authorization endpoint.
+	ResponseTypesSupported []string                                   `json:"response_types_supported"`
+	SubjectTypesSupported  []IssuerConfigurationSubjectTypesSupported `json:"subject_types_supported"`
+	TokenEndpoint          string                                     `json:"token_endpoint"`
+
+	// TokenEndpointAuthMethodsSupported `none`: the exchange is authenticated by its subject token.
+	TokenEndpointAuthMethodsSupported []IssuerConfigurationTokenEndpointAuthMethodsSupported `json:"token_endpoint_auth_methods_supported"`
+}
+
+// IssuerConfigurationGrantTypesSupported defines model for IssuerConfiguration.GrantTypesSupported.
+type IssuerConfigurationGrantTypesSupported string
+
+// IssuerConfigurationSubjectTypesSupported defines model for IssuerConfiguration.SubjectTypesSupported.
+type IssuerConfigurationSubjectTypesSupported string
+
+// IssuerConfigurationTokenEndpointAuthMethodsSupported defines model for IssuerConfiguration.TokenEndpointAuthMethodsSupported.
+type IssuerConfigurationTokenEndpointAuthMethodsSupported string
+
+// IssuerKey defines model for IssuerKey.
+type IssuerKey struct {
+	// Alg Always `RS256`.
+	Alg string `json:"alg"`
+	E   string `json:"e"`
+
+	// Kid The key's RFC 7638 thumbprint, which a token's header names.
+	Kid string       `json:"kid"`
+	Kty IssuerKeyKty `json:"kty"`
+	N   string       `json:"n"`
+	Use IssuerKeyUse `json:"use"`
+}
+
+// IssuerKeyKty defines model for IssuerKey.Kty.
+type IssuerKeyKty string
+
+// IssuerKeyUse defines model for IssuerKey.Use.
+type IssuerKeyUse string
+
+// IssuerKeySet RFC 7517's key set holding the issuer's one public key.
+type IssuerKeySet struct {
+	Keys []IssuerKey `json:"keys"`
+}
+
 // LoginReturnPath defines model for LoginReturnPath.
 type LoginReturnPath struct {
 	// App The app the sign-in is for; the console where absent.
@@ -1232,7 +1466,7 @@ type MemberRef struct {
 
 // OAuthError RFC 6749's error response, with RFC 8628's codes (ADR-0120).
 type OAuthError struct {
-	// Error `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+	// Error `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; RFC 8628 §3.5's four while a device code is polled; and RFC 8693's `invalid_target` for an `audience` the issuer holds no service by (ADR-0141).
 	Error            OAuthErrorError `json:"error"`
 	ErrorDescription *string         `json:"error_description,omitempty"`
 
@@ -1240,7 +1474,7 @@ type OAuthError struct {
 	Interval *int `json:"interval,omitempty"`
 }
 
-// OAuthErrorError `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; and RFC 8628 §3.5's four while a device code is polled.
+// OAuthErrorError `invalid_request` for a missing or malformed parameter; `invalid_client` for a `client_id` other than `garam-cli`; `invalid_grant` for a device code or refresh token garam holds nothing live for; `unsupported_grant_type` for any other grant; RFC 8628 §3.5's four while a device code is polled; and RFC 8693's `invalid_target` for an `audience` the issuer holds no service by (ADR-0141).
 type OAuthErrorError string
 
 // OperationAuthority defines model for OperationAuthority.
@@ -1262,15 +1496,15 @@ type OperationAuthorityRequest struct {
 	// BodySha256 Lowercase hexadecimal SHA-256 of the exact request body the Operator receives; for a GET, that of the empty body.
 	BodySha256 string `json:"bodySha256"`
 
-	// Destination Required for `agent:replace` and refused with 400 for every other operation: the GRN of the controller of this organization the replacement moves the agent to (ADR-0107).
+	// Destination Required for `iam:agent.replace` and refused with 400 for every other operation: the GRN of the controller of this organization the replacement moves the agent to (ADR-0107).
 	Destination *string                            `json:"destination,omitempty"`
 	Operation   OperationAuthorityRequestOperation `json:"operation"`
 	RequestId   RequestId                          `json:"requestId"`
 
-	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `operator:read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing.
+	// RequestTarget Required for `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read`, `iam:agent.execution-read` and `iam:operator.read`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:replace`; this organization's GRN for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `operator:read`.
+	// Target Controller GRN for `iam:agent.create`; agent GRN for `iam:agent.configure`, `iam:agent.recover`, `iam:agent.execution-read` and `iam:agent.replace`; this organization's GRN for `iam:agent-template.read`, `iam:agent-template.publish`, `iam:execution-profile.read` and `iam:operator.read`.
 	Target string `json:"target"`
 }
 
@@ -1665,6 +1899,47 @@ type ProjectPatch struct {
 	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
+// Registry defines model for Registry.
+type Registry struct {
+	Services []RegistryService `json:"services"`
+}
+
+// RegistryAction defines model for RegistryAction.
+type RegistryAction struct {
+	// Name The action as it is written on the wire, `<service>:<type>.<verb>`.
+	Name string `json:"name"`
+
+	// Principals The qualified types that may take the action.
+	Principals []string `json:"principals"`
+
+	// Resources The qualified types the action applies to.
+	Resources []string `json:"resources"`
+}
+
+// RegistryService defines model for RegistryService.
+type RegistryService struct {
+	// Actions The service's actions, sorted by `name`.
+	Actions []RegistryAction `json:"actions"`
+
+	// Name The service's one name, the `service` segment of its GRNs.
+	Name string `json:"name"`
+
+	// Types The entity types a GRN of this service names, sorted by `name`.
+	Types []RegistryType `json:"types"`
+}
+
+// RegistryType defines model for RegistryType.
+type RegistryType struct {
+	// EntityType The qualified entity type the name is written as.
+	EntityType string `json:"entityType"`
+
+	// Name The `type` segment of a GRN of this type.
+	Name string `json:"name"`
+
+	// Parents The qualified types an entity of this type may be a member of.
+	Parents []string `json:"parents"`
+}
+
 // RequestId defines model for RequestId.
 type RequestId = string
 
@@ -1729,6 +2004,48 @@ type SessionToken struct {
 
 // SessionTokenTokenType defines model for SessionToken.TokenType.
 type SessionTokenTokenType string
+
+// TokenExchangeRequest RFC 8693's token exchange request (ADR-0141).
+type TokenExchangeRequest struct {
+	// Audience The one service the token is for.
+	Audience  TokenExchangeRequestAudience  `json:"audience"`
+	GrantType TokenExchangeRequestGrantType `json:"grant_type"`
+
+	// RequestedTokenType Absent is the same.
+	RequestedTokenType *TokenExchangeRequestRequestedTokenType `json:"requested_token_type,omitempty"`
+
+	// SubjectToken The access token of a live CLI session.
+	SubjectToken     string                               `json:"subject_token"`
+	SubjectTokenType TokenExchangeRequestSubjectTokenType `json:"subject_token_type"`
+}
+
+// TokenExchangeRequestAudience The one service the token is for.
+type TokenExchangeRequestAudience string
+
+// TokenExchangeRequestGrantType defines model for TokenExchangeRequest.GrantType.
+type TokenExchangeRequestGrantType string
+
+// TokenExchangeRequestRequestedTokenType Absent is the same.
+type TokenExchangeRequestRequestedTokenType string
+
+// TokenExchangeRequestSubjectTokenType defines model for TokenExchangeRequest.SubjectTokenType.
+type TokenExchangeRequestSubjectTokenType string
+
+// TokenExchangeResponse RFC 8693's successful response (ADR-0141).
+type TokenExchangeResponse struct {
+	// AccessToken The compact RS256 JWT.
+	AccessToken string `json:"access_token"`
+
+	// ExpiresIn Seconds the token lives: at most 300, and no more than the session has left.
+	ExpiresIn       int                                  `json:"expires_in"`
+	IssuedTokenType TokenExchangeResponseIssuedTokenType `json:"issued_token_type"`
+
+	// TokenType Always `Bearer`.
+	TokenType string `json:"token_type"`
+}
+
+// TokenExchangeResponseIssuedTokenType defines model for TokenExchangeResponse.IssuedTokenType.
+type TokenExchangeResponseIssuedTokenType string
 
 // User defines model for User.
 type User struct {
@@ -1931,6 +2248,12 @@ type SearchOrgParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// DescribeGrnParams defines parameters for DescribeGrn.
+type DescribeGrnParams struct {
+	// Grn The name to describe.
+	Grn string `form:"grn" json:"grn"`
+}
+
 // RequestDeviceCodeFormdataRequestBody defines body for RequestDeviceCode for application/x-www-form-urlencoded ContentType.
 type RequestDeviceCodeFormdataRequestBody = DeviceCodeRequest
 
@@ -1954,6 +2277,9 @@ type LoginPasswordJSONRequestBody = PasswordLogin
 
 // RegisterPasswordJSONRequestBody defines body for RegisterPassword for application/json ContentType.
 type RegisterPasswordJSONRequestBody = PasswordRegistration
+
+// ExchangeSessionTokenFormdataRequestBody defines body for ExchangeSessionToken for application/x-www-form-urlencoded ContentType.
+type ExchangeSessionTokenFormdataRequestBody = TokenExchangeRequest
 
 // CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
 type CreateOrgJSONRequestBody = OrganizationCreate
@@ -2029,6 +2355,9 @@ type AddProjectMemberJSONRequestBody = MemberRef
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// GetIssuerConfiguration Read garam's issuer metadata.
+	// (GET /.well-known/openid-configuration)
+	GetIssuerConfiguration(w http.ResponseWriter, r *http.Request)
 	// OauthCallback Complete the OAuth authorization code flow.
 	// (GET /auth/callback/{provider})
 	OauthCallback(w http.ResponseWriter, r *http.Request, provider Provider, params OauthCallbackParams)
@@ -2080,6 +2409,12 @@ type ServerInterface interface {
 	// RevokeMySession Revoke one of the signed-in user's sessions.
 	// (DELETE /me/sessions/{session})
 	RevokeMySession(w http.ResponseWriter, r *http.Request, session string)
+	// GetIssuerKeys Read the keys garam's tokens verify with.
+	// (GET /oauth/jwks)
+	GetIssuerKeys(w http.ResponseWriter, r *http.Request)
+	// ExchangeSessionToken Exchange a CLI session's access token for a signed token.
+	// (POST /oauth/token)
+	ExchangeSessionToken(w http.ResponseWriter, r *http.Request)
 	// ListOrgs List organizations the caller belongs to.
 	// (GET /orgs)
 	ListOrgs(w http.ResponseWriter, r *http.Request, params ListOrgsParams)
@@ -2095,19 +2430,19 @@ type ServerInterface interface {
 	// UpdateOrg Update an organization. Requires the `admin` role.
 	// (PATCH /orgs/{org})
 	UpdateOrg(w http.ResponseWriter, r *http.Request, org Org)
-	// ListAgentEnrollments List the organization's standalone approvals. Requires `agent:read`.
+	// ListAgentEnrollments List the organization's standalone approvals. Requires `iam:agent.read`.
 	// (GET /orgs/{org}/agent-enrollments)
 	ListAgentEnrollments(w http.ResponseWriter, r *http.Request, org Org, params ListAgentEnrollmentsParams)
-	// ApproveAgentEnrollment Approve a standalone host's enrollment. Requires current `agent:enroll`.
+	// ApproveAgentEnrollment Approve a standalone host's enrollment. Requires current `iam:agent.enroll`.
 	// (POST /orgs/{org}/agent-enrollments)
 	ApproveAgentEnrollment(w http.ResponseWriter, r *http.Request, org Org)
-	// WithdrawAgentEnrollment Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+	// WithdrawAgentEnrollment Withdraw an unspent standalone approval. Requires current `iam:agent.enroll`.
 	// (DELETE /orgs/{org}/agent-enrollments/{enrollment})
 	WithdrawAgentEnrollment(w http.ResponseWriter, r *http.Request, org Org, enrollmentID openapi_types.UUID)
-	// ListAgentSupervisors List the organization's standalone supervisors. Requires `agent:read`.
+	// ListAgentSupervisors List the organization's standalone supervisors. Requires `iam:agent.read`.
 	// (GET /orgs/{org}/agent-supervisors)
 	ListAgentSupervisors(w http.ResponseWriter, r *http.Request, org Org, params ListAgentSupervisorsParams)
-	// RevokeAgentSupervisor Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+	// RevokeAgentSupervisor Revoke a standalone host's supervisor. Requires current `iam:agent.enroll`.
 	// (DELETE /orgs/{org}/agent-supervisors/{supervisor})
 	RevokeAgentSupervisor(w http.ResponseWriter, r *http.Request, org Org, supervisorSlug string)
 	// ListAgents List an organization's agents. Requires the `member` role.
@@ -2116,10 +2451,10 @@ type ServerInterface interface {
 	// GetAgent Get an agent. Requires the `member` role.
 	// (GET /orgs/{org}/agents/{agent})
 	GetAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
-	// RenameAgent Rename an agent. Requires `agent:rename`.
+	// RenameAgent Rename an agent. Requires `iam:agent.rename`.
 	// (PATCH /orgs/{org}/agents/{agent})
 	RenameAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
-	// WatchAgent Watch an agent work. Requires the `agent:watch` action.
+	// WatchAgent Watch an agent work. Requires the `iam:agent.watch` action.
 	// (GET /orgs/{org}/agents/{agent}/watch)
 	WatchAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
 	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
@@ -2161,13 +2496,13 @@ type ServerInterface interface {
 	// RemoveGroupMember Remove a member from a group. Requires the `admin` role.
 	// (DELETE /orgs/{org}/groups/{group}/members/{member})
 	RemoveGroupMember(w http.ResponseWriter, r *http.Request, org Org, groupSlug GroupSlug, memberGrn MemberGrn)
-	// ListInvitations List the invitations that can still be accepted. Requires `org:invite`.
+	// ListInvitations List the invitations that can still be accepted. Requires `iam:org.invite`.
 	// (GET /orgs/{org}/invitations)
 	ListInvitations(w http.ResponseWriter, r *http.Request, org Org, params ListInvitationsParams)
 	// CreateInvitation Create an invitation. Requires the `admin` role.
 	// (POST /orgs/{org}/invitations)
 	CreateInvitation(w http.ResponseWriter, r *http.Request, org Org)
-	// RevokeInvitation Revoke an invitation no one has used. Requires `org:invite`.
+	// RevokeInvitation Revoke an invitation no one has used. Requires `iam:org.invite`.
 	// (DELETE /orgs/{org}/invitations/{invitation})
 	RevokeInvitation(w http.ResponseWriter, r *http.Request, org Org, invitationID openapi_types.UUID)
 	// ListOrgMembers List members of an organization. Requires the `member` role.
@@ -2191,19 +2526,19 @@ type ServerInterface interface {
 	// UpdateOperator Rename or describe an operator. Requires the `admin` role.
 	// (PATCH /orgs/{org}/operators/{operator})
 	UpdateOperator(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
-	// ClearOperatorControlEndpoint Clear a hosted operator's control endpoint. Requires current `operator:delegate`.
+	// ClearOperatorControlEndpoint Clear a hosted operator's control endpoint. Requires current `iam:operator.delegate`.
 	// (DELETE /orgs/{org}/operators/{operator}/control-endpoint)
 	ClearOperatorControlEndpoint(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params ClearOperatorControlEndpointParams)
-	// SetOperatorControlEndpoint Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
+	// SetOperatorControlEndpoint Register where a hosted operator's control service answers the console. Requires current `iam:operator.delegate`.
 	// (PUT /orgs/{org}/operators/{operator}/control-endpoint)
 	SetOperatorControlEndpoint(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params SetOperatorControlEndpointParams)
-	// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+	// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `iam:operator.delegate`.
 	// (DELETE /orgs/{org}/operators/{operator}/delegation)
 	EndOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params EndOperatorDelegationParams)
 	// GetOperatorDelegation Read a hosted operator's current delegation. Requires the `member` role.
 	// (GET /orgs/{org}/operators/{operator}/delegation)
 	GetOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params GetOperatorDelegationParams)
-	// WriteOperatorDelegation Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+	// WriteOperatorDelegation Grant or replace a hosted operator's delegation. Requires current `iam:operator.delegate`.
 	// (PUT /orgs/{org}/operators/{operator}/delegation)
 	WriteOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params WriteOperatorDelegationParams)
 	// ListOperatorKeys List the keys an operator was issued, with where each stands.
@@ -2212,10 +2547,10 @@ type ServerInterface interface {
 	// IssueOperatorKey Issue a registered operator a private key, shown once.
 	// (POST /orgs/{org}/operators/{operator}/keys)
 	IssueOperatorKey(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
-	// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `operator:reissue`.
+	// RevokeOperatorKey Withdraw an operator's key and every token exchanged under it. Requires `iam:operator.reissue`.
 	// (DELETE /orgs/{org}/operators/{operator}/keys/{kid})
 	RevokeOperatorKey(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, keyID KeyID)
-	// SetOperatorManager Link a control service to its cluster manager, once. Requires `operator:register`.
+	// SetOperatorManager Link a control service to its cluster manager, once. Requires `iam:operator.register`.
 	// (PUT /orgs/{org}/operators/{operator}/manager)
 	SetOperatorManager(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
 	// CheckPermissions Ask whether the signed-in caller may take each of a list of actions. Requires membership.
@@ -2224,7 +2559,7 @@ type ServerInterface interface {
 	// ExplainPermission Explain why the signed-in caller may or may not take one action. Requires membership.
 	// (GET /orgs/{org}/permission-explanation)
 	ExplainPermission(w http.ResponseWriter, r *http.Request, org Org, params ExplainPermissionParams)
-	// ListPermissionHolders List the members and agents the engine allows one action. Requires `org:member-list`.
+	// ListPermissionHolders List the members and agents the engine allows one action. Requires `iam:org.member-list`.
 	// (GET /orgs/{org}/permission-holders)
 	ListPermissionHolders(w http.ResponseWriter, r *http.Request, org Org, params ListPermissionHoldersParams)
 	// ListPolicies List an organization's policies. Requires the `admin` role.
@@ -2284,6 +2619,12 @@ type ServerInterface interface {
 	// SearchOrg Find an organization's people, agents, teams, policies and projects by name. Requires the `member` role.
 	// (GET /orgs/{org}/search)
 	SearchOrg(w http.ResponseWriter, r *http.Request, org Org, params SearchOrgParams)
+	// GetRegistry List the services, their types and their actions. Requires a signed-in caller.
+	// (GET /registry)
+	GetRegistry(w http.ResponseWriter, r *http.Request)
+	// DescribeGrn Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+	// (GET /registry/grn)
+	DescribeGrn(w http.ResponseWriter, r *http.Request, params DescribeGrnParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -2294,6 +2635,20 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// GetIssuerConfiguration operation middleware
+func (siw *ServerInterfaceWrapper) GetIssuerConfiguration(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIssuerConfiguration(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // OauthCallback operation middleware
 func (siw *ServerInterfaceWrapper) OauthCallback(w http.ResponseWriter, r *http.Request) {
@@ -2625,6 +2980,34 @@ func (siw *ServerInterfaceWrapper) RevokeMySession(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeMySession(w, r, session)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetIssuerKeys operation middleware
+func (siw *ServerInterfaceWrapper) GetIssuerKeys(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIssuerKeys(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ExchangeSessionToken operation middleware
+func (siw *ServerInterfaceWrapper) ExchangeSessionToken(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExchangeSessionToken(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5342,6 +5725,53 @@ func (siw *ServerInterfaceWrapper) SearchOrg(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetRegistry operation middleware
+func (siw *ServerInterfaceWrapper) GetRegistry(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRegistry(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DescribeGrn operation middleware
+func (siw *ServerInterfaceWrapper) DescribeGrn(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DescribeGrnParams
+
+	// ------------- Required query parameter "grn" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "grn", r.URL.Query(), &params.Grn, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "grn"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "grn", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DescribeGrn(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -5474,9 +5904,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/device", wrapper.RequestDeviceCode)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/device/token", wrapper.DeviceToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/device/approval", wrapper.DecideDeviceCode)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/.well-known/openid-configuration", wrapper.GetIssuerConfiguration)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/oauth/jwks", wrapper.GetIssuerKeys)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/oauth/token", wrapper.ExchangeSessionToken)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/sessions", wrapper.ListMySessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/sessions/{session}", wrapper.RevokeMySession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.Me)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/registry", wrapper.GetRegistry)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/registry/grn", wrapper.DescribeGrn)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs", wrapper.ListOrgs)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrg)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}", wrapper.DeleteOrg)

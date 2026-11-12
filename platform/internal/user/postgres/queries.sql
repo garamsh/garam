@@ -10,13 +10,14 @@ SELECT * FROM users
 WHERE grn = ANY(sqlc.arg('grns')::text[])
 ORDER BY grn;
 
--- SearchUsersByGRNs answers the users among grns whose nickname or
--- identifier (the GRN's fifth segment) matches pattern, case aside,
--- ordered by GRN.
+-- SearchUsersByGRNs answers the users among grns whose nickname
+-- matches pattern or whose GRN matches id_pattern, case aside, ordered
+-- by GRN. id_pattern is a LIKE pattern over the whole GRN that lib/grn
+-- builds.
 -- name: SearchUsersByGRNs :many
 SELECT * FROM users
 WHERE grn = ANY(sqlc.arg('grns')::text[])
-  AND (nickname ILIKE sqlc.arg('pattern') OR split_part(grn, ':', 5) ILIKE sqlc.arg('pattern'))
+  AND (nickname ILIKE sqlc.arg('pattern') OR grn ILIKE sqlc.arg('id_pattern'))
 ORDER BY grn;
 
 -- name: UpdateUser :one

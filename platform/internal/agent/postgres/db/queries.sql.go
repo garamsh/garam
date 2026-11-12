@@ -1946,19 +1946,22 @@ func (q *Queries) ResolveSupervisorToken(ctx context.Context, tokenHash string) 
 const searchAgentsByOrg = `-- name: SearchAgentsByOrg :many
 SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, name FROM agents
 WHERE org_grn = $1
-  AND (split_part(grn, ':', 5) ILIKE $2 OR name ILIKE $2)
+  AND (grn ILIKE $2 OR name ILIKE $3::text)
 ORDER BY grn
 `
 
 type SearchAgentsByOrgParams struct {
-	OrgGrn  string
-	Pattern string
+	OrgGrn    string
+	IDPattern string
+	Pattern   string
 }
 
-// SearchAgentsByOrg answers the org's agents whose identifier (the
-// GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+// SearchAgentsByOrg answers the org's agents whose name matches
+// pattern, or whose GRN matches id_pattern, case aside, ordered by GRN.
+// id_pattern is a LIKE pattern over the whole GRN that lib/grn builds,
+// so that no SQL reads a GRN's segments.
 func (q *Queries) SearchAgentsByOrg(ctx context.Context, arg SearchAgentsByOrgParams) ([]Agent, error) {
-	rows, err := q.db.Query(ctx, searchAgentsByOrg, arg.OrgGrn, arg.Pattern)
+	rows, err := q.db.Query(ctx, searchAgentsByOrg, arg.OrgGrn, arg.IDPattern, arg.Pattern)
 	if err != nil {
 		return nil, err
 	}
@@ -2003,17 +2006,17 @@ func (q *Queries) ShareAgentLineage(ctx context.Context, agentGrn string) (pgtyp
 
 const shareAssignment = `-- name: ShareAssignment :one
 SELECT a.assignee_grn, a.epoch,
-       (split_part(a.assignee_grn, ':', 4) <> 'supervisor' OR EXISTS (
+       EXISTS (
            SELECT 1 FROM agent_supervisors s
            WHERE s.grn = a.assignee_grn AND s.agent_grn = a.agent_grn AND s.ended_at IS NULL
-       ))::boolean AS assignee_registered
+       )::boolean AS supervisor_registered
 FROM agent_assignments a WHERE a.agent_grn = $1 FOR SHARE OF a
 `
 
 type ShareAssignmentRow struct {
-	AssigneeGrn        string
-	Epoch              int32
-	AssigneeRegistered bool
+	AssigneeGrn          string
+	Epoch                int32
+	SupervisorRegistered bool
 }
 
 // ShareAssignment is taken after LockExecution, never before: the lock
@@ -2021,10 +2024,13 @@ type ShareAssignmentRow struct {
 // assignee is registered only while its registration is current, which
 // a revocation or a replacement ends under the same execution lock
 // (ADR-0082); an operator's record is read on the listener instead.
+// supervisor_registered says whether the assignee holds a current
+// registration; whether the assignee is a supervisor, and so whether
+// that is required, is the caller's to say from its GRN.
 func (q *Queries) ShareAssignment(ctx context.Context, agentGrn string) (ShareAssignmentRow, error) {
 	row := q.db.QueryRow(ctx, shareAssignment, agentGrn)
 	var i ShareAssignmentRow
-	err := row.Scan(&i.AssigneeGrn, &i.Epoch, &i.AssigneeRegistered)
+	err := row.Scan(&i.AssigneeGrn, &i.Epoch, &i.SupervisorRegistered)
 	return i, err
 }
 

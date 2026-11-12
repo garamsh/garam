@@ -497,6 +497,68 @@ as 403 `signature rejected: issuer` on every message once the adapter's
 `GARAM_ADAPTER_SIGN_MESSAGES` is on, and not as an error at start
 (`adapter.md` §Stable identifiers and the outbox).
 
+## The identity issuer is off until it is named
+
+**`GARAM_IDENTITY_ISSUER` turns garam's OIDC issuer on, and a changed
+value is a different issuer**
+([ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)).
+`serve api` and `serve machine` serve the issuer's four operations only
+when this and the signing key are both set. The key is the one that
+signs the policy feed, `GARAM_POLICY_SIGNING_KEY_FILE`: there is no
+second key and no second signer. The issuer set with no key is logged
+and leaves the issuer off.
+
+The value is an https URL in one spelling: a lowercase host, no empty
+port, the path `/api` and no trailing slash
+(`platform/internal/identity/issuer.go`, `ParseIssuer`), because a
+verifier compares it byte for byte against the `iss` of every token. It
+is the address the browser listener answers at, since the discovery
+document and the key set are fetched from it, and it is never
+`GARAM_MACHINE_ISSUER`: `serve` refuses to start where the two are
+equal, so that a token of one never verifies as the other.
+
+**One issuer, so one `iss`.** The policy service trusts one issuer
+([ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)),
+so the feed's tokens carry `GARAM_POLICY_TOKEN_ISSUER` and the
+issuer's carry `GARAM_IDENTITY_ISSUER`, and both set and different is
+refused at start, before the signing key is read. Set only one, or set
+both to the same value.
+
+**`GARAM_IDENTITY_SERVICE_KEYS_FILE` is the keys of the first-party
+services.** It is a JSON object from a service name, `cowork` today,
+to the JSON Web Key Set holding the public keys that service signs its
+client assertions with: RSA keys, at most two per service so that one
+can be replaced beside another, and a name off the closed list in code
+refuses the file. The `kid` is each key's RFC 7638 thumbprint. The
+file holds no secret, so it needs no owner-only mode. It is read and
+parsed at start, which refuses a file that does not parse, and again on
+every authentication, so a change takes no restart and removing a
+compromised key refuses it from the next request. A file that is gone
+or no longer parses refuses every principal as unavailable, 503
+`temporarily_unavailable`, and not as a bad client. There is no other
+setting and the earlier meaning, a map from audience, is gone.
+
+Each service has one principal per organization,
+`grn:<org>/iam/service/<name>`, written with the organization and
+removed with it. A principal asks `serve machine`'s `/oauth/token`
+for `policy` with an assertion its service's key signs, and is
+answered the issuer's token for it of at most 300 seconds. The
+introspection URL an assertion names as its `aud` is
+`GARAM_MACHINE_TOKEN_URL` with its `/oauth/token` replaced by
+`/oauth/introspect`. A principal introspects only tokens of the
+audience equal to its service's name, and no first-party service is an
+audience today, so introspection has no caller a deployment can
+configure yet. Each assertion is spent in the database, so a second
+replica refuses what the first admitted.
+
+**The machine listener keeps the private signing key.** The exchange
+signs the principal's token in `serve machine`, so the process that
+answers `/oauth/token` holds `GARAM_POLICY_SIGNING_KEY_FILE` as the
+process that serves the issuer does. The key is the one the policy
+feed already signs with, and a deployment that does not want it on
+that listener leaves the issuer unset there: the principal exchange
+then answers 503.
+
 ## The migrate job
 
 `migrate` applies all pending migrations and exits

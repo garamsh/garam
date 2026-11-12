@@ -31,7 +31,7 @@ describe("asking whether the session stands", () => {
     server.use(
       http.get(`${API_URL}/me`, ({ request }) => {
         sent.push(request.headers.get("cookie"));
-        return HttpResponse.json({ grn: "grn:root:default:user:ada" });
+        return HttpResponse.json({ grn: "grn:root/iam/user/ada" });
       }),
     );
 

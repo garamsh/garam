@@ -70,7 +70,7 @@ describe("a project's page", () => {
     expect(
       await screen.findByText("Added 1c3d5e7f90a2b4c6."),
     ).toBeInTheDocument();
-    expect(added).toEqual(["grn:acme:default:agent:1c3d5e7f90a2b4c6"]);
+    expect(added).toEqual(["grn:acme/iam/agent/1c3d5e7f90a2b4c6"]);
   });
 
   it("deletes the project only once its name is typed", async () => {
@@ -102,7 +102,7 @@ describe("a project's page", () => {
   it("leaves out the writes the server denies, and keeps them in Your access", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "project:delete" || action === "project:member-add"
+        action === "iam:project.delete" || action === "iam:project.member-add"
           ? "deny"
           : "allow",
       ),

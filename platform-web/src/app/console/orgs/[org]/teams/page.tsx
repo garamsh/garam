@@ -33,7 +33,7 @@ export default async function TeamsPage({ params }: Params) {
   const [organization, teams, permissions] = await Promise.all([
     getOrg(org),
     lookupGroups(org),
-    checkPermissions(org, { create: { action: "group:create" } }),
+    checkPermissions(org, { create: { action: "iam:group.create" } }),
   ]);
 
   const create = permissions.get("create") !== "denied" && (

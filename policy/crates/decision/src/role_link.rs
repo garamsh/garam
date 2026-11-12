@@ -66,7 +66,10 @@ impl RoleLink {
     /// only `OrgMembers` may state (ADR-0137).
     pub(crate) fn check_scope(&self) -> Result<(), Error> {
         let principal = self.principal.type_name().to_string();
-        if !matches!(principal.as_str(), "User" | "Agent" | "Team" | "Project") {
+        if !matches!(
+            principal.as_str(),
+            "Iam::User" | "Iam::Agent" | "Iam::Team" | "Iam::Project"
+        ) {
             return Err(Error::RoleLinkPrincipal {
                 link: self.id.to_string(),
                 principal,
@@ -74,10 +77,10 @@ impl RoleLink {
         }
         let resource = self.resource.type_name().to_string();
         let (scope, fits) = match self.scope {
-            RoleScope::Organization => ("organization", resource == "Org"),
+            RoleScope::Organization => ("organization", resource == "Iam::Org"),
             RoleScope::TeamOrProject => (
                 "team or project",
-                resource == "Team" || resource == "Project",
+                resource == "Iam::Team" || resource == "Iam::Project",
             ),
         };
         if fits {

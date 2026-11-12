@@ -9,14 +9,14 @@ type DelegatedOperation = components["schemas"]["DelegatedOperation"];
  * operation has its words here and the console spells none twice.
  */
 export const DELEGATED_OPERATION_LABEL: Record<DelegatedOperation, string> = {
-  "agent:create": "Create agents from published templates",
-  "agent:configure": "Configure an agent's execution",
-  "agent:activate": "Activate an agent's runtime generation",
-  "agent:recover": "Recover an agent's credential",
-  "agent-template:read": "Read published templates",
-  "agent-template:publish": "Publish template versions",
-  "execution-profile:read": "Read execution profiles",
-  "agent:execution-read": "Read an agent's execution",
-  "operator:read": "Read operator status",
-  "agent:replace": "Move an agent to another controller",
+  "iam:agent.create": "Create agents from published templates",
+  "iam:agent.configure": "Configure an agent's execution",
+  "iam:agent.activate": "Activate an agent's runtime generation",
+  "iam:agent.recover": "Recover an agent's credential",
+  "iam:agent-template.read": "Read published templates",
+  "iam:agent-template.publish": "Publish template versions",
+  "iam:execution-profile.read": "Read execution profiles",
+  "iam:agent.execution-read": "Read an agent's execution",
+  "iam:operator.read": "Read operator status",
+  "iam:agent.replace": "Move an agent to another controller",
 };

@@ -19,7 +19,7 @@ import (
 // group creates a group of acme holding members and answers its GRN.
 func (s *explainStack) group(t *testing.T, slug string, members ...grn.GRN) grn.GRN {
 	t.Helper()
-	g := grn.New("acme", grn.DefaultProject, org.ServiceTypeGroup, slug)
+	g := grn.New("acme", org.ServiceTypeGroup, slug)
 	require.NoError(t, s.orgs.CreateGroup(context.Background(), org.NewGroup(g, slug, s.acme)))
 	for _, m := range members {
 		require.NoError(t, s.orgs.AddGroupMember(context.Background(), g, m))
@@ -76,10 +76,10 @@ func TestListGroups_MemberMePages(t *testing.T) {
 	assert.Equal(t, []string{qa.String()}, s.groupsListed(t, s.ada, page))
 }
 
-// TestListGroups_MemberMeIsReadOnGroupRead denies group:read to bob:
-// member=me refuses him as the unfiltered list does. His answer before
-// the Deny is the control, and the owner's after it shows the Deny
-// reached bob alone. A member value other than me is refused.
+// TestListGroups_MemberMeIsReadOnGroupRead denies iam:group.read to
+// bob: member=me refuses him as the unfiltered list does. His answer
+// before the Deny is the control, and the owner's after it shows the
+// Deny reached bob alone. A member value other than me is refused.
 func TestListGroups_MemberMeIsReadOnGroupRead(t *testing.T) {
 	s := newExplainStack(t)
 	require.Equal(t, []string{s.eng.String()}, s.groupsListed(t, s.bob, mine), "control, before the Deny")

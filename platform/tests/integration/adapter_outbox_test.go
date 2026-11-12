@@ -88,7 +88,7 @@ func TestAdapterOutbox_ForwardsARepliesUnderDurableDeliveryAndRemovesItOnItsAckn
 	assert.Equal(t, 1, s.keyRows(t, "entry-lost"), "and no second message is stored for it")
 	assert.Equal(t, 1, s.keyRows(t, "entry-reply"))
 
-	got := s.send(t, s.peerTLS, http.MethodPost, "/agents/"+s.peer.String()+"/claims", "", "", "")
+	got := s.send(t, s.peerTLS, http.MethodPost, "/agents/"+pathEscape(s.peer.String())+"/claims", "", "", "")
 	require.Equal(t, http.StatusOK, got.status, got.body)
 	var claim machinegen.Claim
 	require.NoError(t, json.Unmarshal([]byte(got.body), &claim))

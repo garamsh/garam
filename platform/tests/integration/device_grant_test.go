@@ -42,7 +42,7 @@ type deviceStack struct {
 	adaGRN   grn.GRN
 }
 
-func newDeviceStack(t *testing.T) *deviceStack {
+func newDeviceStack(t *testing.T, options ...func(*pgxpool.Pool, *api.Server)) *deviceStack {
 	t.Helper()
 	ctx := context.Background()
 	p := pool(t)
@@ -54,7 +54,7 @@ func newDeviceStack(t *testing.T) *deviceStack {
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	sessions := authnpg.NewSessionStore(p)
 	session := func(id string) (*http.Cookie, grn.GRN) {
-		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+		g := grn.New(grn.RootOwner, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
 		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, org.RoleOwner)))
 		token, err := authn.NewToken()
@@ -70,6 +70,9 @@ func newDeviceStack(t *testing.T) *deviceStack {
 		sessions, nil, nil, nil, nil,
 		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil,
 		api.Config{SessionTTL: time.Hour}).WithDeviceGrant(authnpg.NewDeviceStore(p))
+	for _, option := range options {
+		option(p, srv)
+	}
 	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError})
 	// The CLI reaches the API behind the console's /api rewrite, so the
 	// server answers there as the deployed one does.

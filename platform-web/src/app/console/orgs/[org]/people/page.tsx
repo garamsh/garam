@@ -87,7 +87,9 @@ export default async function PeoplePage({ params, searchParams }: Params) {
   const [organization, people, choices] = await Promise.all([
     getOrg(org),
     lookupOrgMembers(org),
-    readMemberChoices(org, query.team, { invite: { action: "org:invite" } }),
+    readMemberChoices(org, query.team, {
+      invite: { action: "iam:org.invite" },
+    }),
   ]);
 
   const invite =

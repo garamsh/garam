@@ -98,12 +98,12 @@ func TestRun_LogsEachRefusal(t *testing.T) {
 	_, logs := run(t, []step{{result: policyfeed.Result{
 		Marks: 2,
 		Refused: []policyfeed.Refusal{
-			{Entity: policyfeed.Entity{Type: "Team", ID: "grn:garam:iam:team:t1"}, Reason: "too many parents"},
+			{Entity: policyfeed.Entity{Type: "Iam::Team", ID: "grn:acme/iam/group/t1"}, Reason: "too many parents"},
 		},
 	}}}, policyfeed.Config{Poll: time.Millisecond, MaxBackoff: time.Millisecond})
 
 	assert.Contains(t, logs, "level=ERROR")
-	assert.Contains(t, logs, "grn:garam:iam:team:t1")
+	assert.Contains(t, logs, "grn:acme/iam/group/t1")
 	assert.Contains(t, logs, "too many parents")
 }
 

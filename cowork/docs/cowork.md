@@ -96,11 +96,24 @@ agents.
 - `me`: who presented a credential. cowork passes the platform's
   session cookie or a CLI session's bearer as presented, and reads a
   bearer alone where there is one.
-- `checkPermissions`, as that same caller: `cowork:page-read` and
-  `cowork:page-write`, on the organization for its page tree and on a
+- `checkPermissions`, as that same caller: `cowork:page.read` and
+  `cowork:page.write`, on the organization for its page tree and on a
   `cowork-page` for one page. Every role grants both (#1663).
 - cowork answers 503 whenever the platform cannot be reached, and
   decides nothing alone.
+- **Where the policy service is configured**, `checkPermissions` is
+  asked of it instead, as that same caller, in one `Evaluations` call
+  under cowork's own caller token for the organization
+  ([ADR-0141](../../docs/architecture/adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
+  §12). `me` and the organization list stay with the platform. The
+  policy service has no membership question for cowork, so cowork
+  reads it off the decisions: a caller is no member when a decision's
+  reasons name the `tenant-isolation` policy, and a denial for any
+  other reason, a guardrail's among them, is that check's own `false`.
+  A batch that would otherwise be empty carries one
+  `cowork:page.read` on the organization to be judged the same way.
+  With none of the four settings below set, cowork asks the platform
+  as above.
 - **The session.** A person signs in on the site and cowork-web is
   handed a session of its own on its host, by ADR-0131's one-time code
   ([sign-in.md](../../docs/architecture/sign-in.md)). The cookie is
@@ -125,12 +138,12 @@ agents.
     cowork decides nothing alone, so the connection stands as last
     decided, the failure is logged and the next re-check asks again.
     The bound runs again once the platform answers.
-- `checkPermissions` for messaging: `cowork:channel-read` and
-  `cowork:channel-post` on the organization and on a
+- `checkPermissions` for messaging: `cowork:channel.read` and
+  `cowork:channel.post` on the organization and on a
   `cowork-channel` (ADR-0128).
-- `checkPermissions` for tasks: `cowork:task-read` and
-  `cowork:task-write` on the organization and on a `cowork-task`; for
-  artifacts, `cowork:artifact-read` and `cowork:artifact-write` on the
+- `checkPermissions` for tasks: `cowork:task.read` and
+  `cowork:task.write` on the organization and on a `cowork-task`; for
+  artifacts, `cowork:artifact.read` and `cowork:artifact.write` on the
   organization and on a `cowork-artifact`.
 - Not yet: `postMessage` to an agent's queue, under the
   organization's cowork principal (§Delivery to agents), and an agent
@@ -145,7 +158,7 @@ agents.
   any WebSocket. A browser may open it only from cowork's own host or
   a host `COWORK_WEB_ORIGINS` names, because the session cookie rides
   along.
-- **Writes** are `cowork:page-write` on the page, asked at the upgrade
+- **Writes** are `cowork:page.write` on the page, asked at the upgrade
   and at each re-check (§What it asks of the platform). A connection
   without it reads live and is answered y-websocket's permission-denied
   message for any edit, which is neither kept nor relayed. An answer
@@ -196,7 +209,7 @@ decides how cowork reaches an agent's queue. Today it keeps the
 mentions and delivers none.
 
 - **One principal per organization**,
-  `grn:<org>:default:service:cowork`, written by the platform with the
+  `grn:<org>/iam/service/cowork`, written by the platform with the
   organization. cowork derives it and installs nothing.
 - **One deployment key.** cowork keeps its private half in an
   owner-only file and signs an assertion naming the organization's
@@ -218,7 +231,7 @@ mentions and delivers none.
 
 - **A task** has a title, a description, a status (`todo`, `doing`,
   `done`), an assignee, a person's or an agent's GRN, and a due date.
-  Each change is the caller's `cowork:task-write` on the task, and a
+  Each change is the caller's `cowork:task.write` on the task, and a
   comment is the same act.
 - **Links.** A task links pages and messages its writer may read: a
   page as `getPage` reads it, a message as reading its thread does.
@@ -253,7 +266,7 @@ mentions and delivers none.
     the key). The version may stand, and a version without its bytes
     is lost, where a stray blob only costs storage.
 - **Where HTML is served** (ADR-0127 §8). Never from cowork's own
-  origin. `viewArtifact` asks `cowork:artifact-read` as the viewer and
+  origin. `viewArtifact` asks `cowork:artifact.read` as the viewer and
   answers an address on the user-content origin, signed for that
   version and good for ten minutes. The second listener `serve` starts
   there serves that version and nothing else. The web app loads it in
@@ -284,24 +297,24 @@ mentions and delivers none.
   | Tool | What it does | Asks |
   |---|---|---|
   | `list_workspaces` | the organizations the caller belongs to | `listOrgs` |
-  | `list_pages` | the page tree the caller may read | `cowork:page-read` |
-  | `search` | page titles and messages | `cowork:page-read`, `cowork:channel-read` |
-  | `read_page` | a page as Markdown and as numbered blocks | `cowork:page-read` |
-  | `create_page` | a page, with its blocks | `cowork:page-write` |
-  | `update_page` | a new title, and edits to blocks by index | `cowork:page-write` |
-  | `list_channels` | the channels and direct messages the caller may read | `cowork:channel-read` |
-  | `read_messages` | a channel's messages | `cowork:channel-read` |
-  | `post_message` | a message or a reply | `cowork:channel-post` |
-  | `list_tasks` | tasks by status, assignee (`me` for the caller) or link | `cowork:task-read` |
-  | `read_task` | a task and its comments | `cowork:task-read` |
-  | `create_task` | a task, assigned and linked | `cowork:task-write` |
-  | `update_task` | changes to a task, with a comment | `cowork:task-write` |
-  | `comment_task` | a comment | `cowork:task-write` |
+  | `list_pages` | the page tree the caller may read | `cowork:page.read` |
+  | `search` | page titles and messages | `cowork:page.read`, `cowork:channel.read` |
+  | `read_page` | a page as Markdown and as numbered blocks | `cowork:page.read` |
+  | `create_page` | a page, with its blocks | `cowork:page.write` |
+  | `update_page` | a new title, and edits to blocks by index | `cowork:page.write` |
+  | `list_channels` | the channels and direct messages the caller may read | `cowork:channel.read` |
+  | `read_messages` | a channel's messages | `cowork:channel.read` |
+  | `post_message` | a message or a reply | `cowork:channel.post` |
+  | `list_tasks` | tasks by status, assignee (`me` for the caller) or link | `cowork:task.read` |
+  | `read_task` | a task and its comments | `cowork:task.read` |
+  | `create_task` | a task, assigned and linked | `cowork:task.write` |
+  | `update_task` | changes to a task, with a comment | `cowork:task.write` |
+  | `comment_task` | a comment | `cowork:task.write` |
 
-  | `list_artifacts` | the artifacts the caller may read | `cowork:artifact-read` |
-  | `read_artifact` | a version: an html one's source, a document's Markdown | `cowork:artifact-read` |
-  | `create_artifact` | an html page, or a page frozen as a document | `cowork:artifact-write` |
-  | `update_artifact` | the next version | `cowork:artifact-write` |
+  | `list_artifacts` | the artifacts the caller may read | `cowork:artifact.read` |
+  | `read_artifact` | a version: an html one's source, a document's Markdown | `cowork:artifact.read` |
+  | `create_artifact` | an html page, or a page frozen as a document | `cowork:artifact.write` |
+  | `update_artifact` | the next version | `cowork:artifact.write` |
 
   Every tool but `list_workspaces` takes the workspace as `org`.
 - **Each asks what the HTTP API asks**, through the same services, so
@@ -374,6 +387,22 @@ orgs use <org>` or tell the AI which one `list_workspaces` answers.
 | `COWORK_USERCONTENT_ORIGIN` | the user-content origin as browsers reach it; unset views no HTML artifact |
 | `COWORK_USERCONTENT_ADDR` | where that origin listens, default `:8092` |
 | `COWORK_USERCONTENT_SECRET` | the key its addresses are signed with, at least 32 bytes; the same on every instance |
+| `COWORK_POLICY_ADDR` | the policy service's gRPC address; with the next three it moves `checkPermissions` to that service, and set alone it refuses to start |
+| `COWORK_POLICY_CA_FILE` | the PEM file of the CA that signs the service's certificate and the token endpoint's, beside the system roots |
+| `COWORK_MACHINE_TOKEN_URL` | the platform's machine token endpoint, where cowork's caller token is fetched for each organization |
+| `COWORK_DEPLOYMENT_KEY_FILE` | cowork's deployment key, an owner-only PEM file read at each token exchange |
+
+The policy service also holds cowork's channels, pages, tasks and
+artifacts as entities, fed from an outbox in cowork's database
+([ADR-0140](../../docs/architecture/adr/0140-owners-feed-the-policy-service-from-a-dirty-set-of-entities-read-at-delivery-and-a-caller-is-a-closed-list-of-services.md)).
+The feed is off until `cowork policy-feed start` marks every entity
+and `cowork policy-feed stop` ends it. `serve` delivers it, one
+organization at a time under that organization's token, once the four
+settings are set. Each organization's run is sent and its marks
+dropped on their own, so an organization whose send fails keeps its
+marks and the others' are delivered in the same pass; the failing
+organization is logged once as it starts failing and once as it
+recovers.
 
 Swapping the store is configuration alone. RustFS, as the deployment
 runs it:

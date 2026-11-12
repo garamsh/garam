@@ -20,8 +20,11 @@ import (
 	"github.com/garamsh/garam/platform/internal/agent"
 	agentpg "github.com/garamsh/garam/platform/internal/agent/postgres"
 	auditpg "github.com/garamsh/garam/platform/internal/audit/postgres"
+	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 	"github.com/garamsh/garam/platform/internal/ca"
 	"github.com/garamsh/garam/platform/internal/health"
+	"github.com/garamsh/garam/platform/internal/identity"
+	identitypg "github.com/garamsh/garam/platform/internal/identity/postgres"
 	"github.com/garamsh/garam/platform/internal/keyfile"
 	"github.com/garamsh/garam/platform/internal/machine"
 	machinepg "github.com/garamsh/garam/platform/internal/machine/postgres"
@@ -98,6 +101,15 @@ func serveMachine(cmd *cobra.Command) error {
 		return errorx.Wrap(err, string(envMachineTokenURL))
 	}
 
+	idIssuer, err := identityIssuer(authnpg.NewSessionStore(pool), obs.logger)
+	if err != nil {
+		return err
+	}
+	idKeys, err := identityServiceKeys()
+	if err != nil {
+		return err
+	}
+
 	// Whom an agent may send to is decided by the policy engine, which
 	// runs as a process of its own and is reached over gRPC (ADR-0003).
 	conn, err := dialAuthz()
@@ -118,6 +130,8 @@ func serveMachine(cmd *cobra.Command) error {
 		Delivery:           message.Config{},
 		AgentTokenLifetime: tokenLifetime,
 		TokenURL:           tokenURL,
+		Identity:           idIssuer,
+		ServiceKeys:        idKeys,
 		Engine:             conn,
 		Logger:             obs.logger,
 		Metrics:            obs.registry,
@@ -182,6 +196,15 @@ type MachineConfig struct {
 	// as its audience, which operator.ParseTokenEndpoint read
 	// (ADR-0102). Empty serves no assertion exchange.
 	TokenURL string
+	// Identity is the OIDC issuer (ADR-0141), and ServiceKeys are each
+	// first-party service's public keys. The listener answers a service
+	// principal that proves itself by one of them (ADR-0129): it
+	// exchanges for the issuer's token for the policy service, and
+	// introspects the tokens of the audience its service's name is.
+	// Identity nil serves neither, and ServiceKeys nil authenticates no
+	// principal. ServiceKeys is asked on every authentication.
+	Identity    *identity.Issuer
+	ServiceKeys identity.KeySource
 	// Metrics is where the count of requests by how they authenticated
 	// is registered (ADR-0100). Nil registers it nowhere.
 	Metrics prometheus.Registerer
@@ -258,6 +281,23 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// routes what they issued (ADR-0109).
 	evidence := machine.NewEvidence(machinepg.New(pool), evidenceWindow, cfg.Now)
 
+	// A service principal proves itself at the token endpoint and at
+	// introspection, each by an assertion naming that endpoint's URL.
+	var principals *identity.Principals
+	if cfg.ServiceKeys != nil {
+		introspect, err := introspectionURL(cfg.TokenURL)
+		if err != nil {
+			return nil, err
+		}
+		principals = identity.NewPrincipals(identity.PrincipalsConfig{
+			Keys:               cfg.ServiceKeys,
+			ExchangeEndpoint:   cfg.TokenURL,
+			IntrospectEndpoint: introspect,
+			Admitter:           identitypg.New(pool),
+			Now:                cfg.Now,
+		})
+	}
+
 	// The generated router matches before the middleware runs, so the
 	// log line can name the route rather than the path. The last
 	// middleware listed is the outermost, so recovery runs inside the
@@ -275,7 +315,8 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			newExecutionService(pool, cfg.Engine, authority, cfg.Now),
 			newSupervisorService(pool, cfg.Engine, cfg.ServerRoot, cfg.Now),
 			newAdmissionService(pool, authority, cfg.Now), keyring).
-			WithCredentialAudit(auditpg.NewCredentialStore(pool)),
+			WithCredentialAudit(auditpg.NewCredentialStore(pool)).
+			WithIdentity(cfg.Identity, principals),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.RecoverPanics,
 				obs.logMachineRequests, countMachineRequests(requests), countTokenExchanges(exchanges), recordIssuances(evidence)},

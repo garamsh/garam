@@ -111,11 +111,15 @@ the MicroVM, until gaon replaces a file in a running MicroVM
 (`garamsh/gaon#162`).
 
 Built: the reconciler that renders an agent into its Secret, Volumes and
-MicroVM and reports what it observes, against interfaces for the machine
-listener and the control service's feed
+MicroVM and reports what it observes; garam's side over the generated
+machine client (the `private_key_jwt` exchange as an operator,
+`mintAgentToken`, `reportProvisioningState`); the control service's feed
+with its cursor and long poll and the status report; and the binary that
+composes them, with a reconcile loop, a bounded backoff and a health
+listener
 ([gaon-operator.md](../../gaon-operator/docs/gaon-operator.md)).
-Unbuilt: the wire clients of both, so the binary refuses to start and
-calls no listener yet.
+Unbuilt: the guest supervisor and composed image, the release's image,
+the `NetworkPolicy` and the token restart.
 
 ## An Operator's two identities
 

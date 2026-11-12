@@ -275,8 +275,9 @@ listed with the reason.
 - **The readiness probe** is the supervisor's own listener on a named
   port (`MicroVMPort`, `…:lib/api/microvm_port.go`): ready means the
   three programs run, and says nothing of whether the agent works,
-  which is what `ready` means in `ProvisioningState`. `terminationGracePeriodSeconds` is the drain's
-  bound, to be set from the same value the control service renders.
+  which is what `ready` means in `ProvisioningState`.
+  `terminationGracePeriodSeconds` is the drain's bound, to be set from
+  the same value the control service renders.
 - **How the credential reaches it.** The operator mints the agent's
   tokens as its assignee (`mintAgentToken`), writes them to a `Secret`
   it labels, and creates the MicroVM naming that `Secret`. The only
@@ -588,8 +589,9 @@ is shown it is one those sources name.
   retires the administrator-issued certificate. Issue: #161
   (`garamsh/gaon#164`, item 3).
 - RBAC rules limited by label selector, which codehub's PM made a
-  condition (a comment on #117, #118's scope). Served is not verified.
-  Issue: to be filed.
+  condition. gaon's answer gives the operator create and update on
+  `secrets`, "which can be limited by a label selector (#118)"
+  (`garamsh/gaon#125`, item 11). Served is not verified. Issue: #118.
 - The Node authorizer's read of a Secret a MicroVM references and the
   MicroVM ADR with named ports. Documented, not verified. Issue: #124.
 - `lastExit`'s end time. The code and time are in `lib/api` already.

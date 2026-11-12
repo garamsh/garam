@@ -103,7 +103,12 @@ cluster. It is registered as a pair, its own cluster manager and a
 control service whose registration names it, and it reports
 provisioning state from what it observes of the MicroVM.
 `garamsh/garam-agent-operator` stays the Kubernetes operator; this one
-is not a port of it.
+is not a port of it. To gaon it authenticates with its
+ServiceAccount token once gaon serves one (`garamsh/gaon#161`), and
+with an administrator-issued certificate until then. It renews an
+agent's token by writing it to the MicroVM's `Secret` and restarting
+the MicroVM, until gaon replaces a file in a running MicroVM
+(`garamsh/gaon#162`).
 
 ## An Operator's two identities
 

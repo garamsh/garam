@@ -94,7 +94,7 @@ reads it to decide whether a caller is admitted.
 
 ## The gaon operator
 
-Unbuilt, and decided by [ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md): a second operator, in this
+Decided by [ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md): a second operator, in this
 repository, that runs each managed agent as one MicroVM on a gaon
 cluster. It is an operator in this document's sense, so everything
 above and below holds for it: it holds a garam-issued key, exchanges an
@@ -109,6 +109,13 @@ with an administrator-issued certificate until then. It renews an
 agent's token by writing it to the MicroVM's `Secret` and restarting
 the MicroVM, until gaon replaces a file in a running MicroVM
 (`garamsh/gaon#162`).
+
+Built: the reconciler that renders an agent into its Secret, Volumes and
+MicroVM and reports what it observes, against interfaces for the machine
+listener and the control service's feed
+([gaon-operator.md](../../gaon-operator/docs/gaon-operator.md)).
+Unbuilt: the wire clients of both, so the binary refuses to start and
+calls no listener yet.
 
 ## An Operator's two identities
 

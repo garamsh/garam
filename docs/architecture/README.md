@@ -1125,7 +1125,7 @@ ADRs:
   membership from an entity store its owners feed; not yet built;
   supersedes 0002, 0003, 0007, 0008, 0025 and 0038 in part; tenant
   isolation's form and the role templates' scopes are superseded by
-  0137
+  0137, §3's one schema file by 0143 and §4's last clause by 0144
 - [0131](./adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md)
   — the session cookie stays host-only to each app; a person signs in
   on `site-web/`, and another app is handed a session of its own by a
@@ -1199,7 +1199,8 @@ ADRs:
   and read at delivery under one shared sequence; a signer moves to
   slice 3's delivery; built: the policy service's half, the platform's
   outbox and its delivery (#1689);
-  supersedes 0138 in part, on when the issuer lands
+  supersedes 0138 in part, on when the issuer lands; §2's table of who
+  owns a type is superseded by 0143
 - [0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
   — garam is an OIDC and OAuth issuer inside `platform/` that exchanges
   a CLI session or an agent's token (RFC 8693) for a JWT of at most 300
@@ -1211,7 +1212,8 @@ ADRs:
   session and introspection (#1757), unbuilt: the exchange of an
   agent's browser token and a service's direct calls; supersedes 0127 in part, on §5, and
   0140 in part, on §2; the GRN forms of its worked-example answers 4
-  and 5 are superseded by 0142
+  and 5 are superseded by 0142, and §5 and §13, on how the list of
+  services is held, by 0143
 - [0142](./adr/0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md)
   — a GRN is `grn:<org>/<service>/<type>/<id>` with further `type/id`
   pairs and an optional `#<locator>` the owning service reads, an RFC
@@ -1219,3 +1221,25 @@ ADRs:
   immutable and never reused, one grammar replaces the five-segment
   form; supersedes 0001 in part, on the format and `default`, and 0141
   in part, on the GRN forms of answers 4 and 5
+- [0143](./adr/0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
+  — a service is declared by one manifest, its Cedar schema file
+  `policy/schema/<service>.cedarschema` with one namespace (`Iam`,
+  `Cowork`) and annotations for its name, a type's GRN type and the
+  caller that writes it; the GRN catalogue is generated from the
+  manifests, the audience list and the caller list are checked against
+  them, and the caller table is read from them; an action is
+  `<service>:<type>-<verb>` and every action moves, the platform's
+  included; a role is the `Iam` namespace's; the platform serves a
+  read-only registry of services, types and actions; adding a service
+  is one pull request adding one manifest; decided, not built;
+  supersedes 0130 in part, on §3's one schema file, 0140 in part, on
+  §2's table of who owns a type, and 0141 in part, on §5 and §13
+- [0144](./adr/0144-an-organization-may-write-permit-policies-over-resources-inside-itself.md)
+  — an organization may write `permit` policies beside its role links
+  and `forbid` guardrails, each scoped at the write to resources inside
+  the organization, validated against the manifests and named by
+  `Explain`; writing one is the action `iam:policy-permit`, held by
+  `role-owner` alone, and a role other than the owner writing one is
+  open; it still cannot touch the system tier or permit across
+  organizations; decided, not built; supersedes 0130 in part, on §4's
+  last clause

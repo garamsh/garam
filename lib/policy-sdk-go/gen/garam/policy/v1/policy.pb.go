@@ -1512,7 +1512,8 @@ type PolicyVersion struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Version int32                  `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
 	Body    *PolicyBody            `protobuf:"bytes,2,opt,name=body,proto3" json:"body,omitempty"`
-	// created_by is the writer's GRN, or empty for a write with none.
+	// created_by is the writer's GRN, or the calling service's subject
+	// (`platform`) for a write with none.
 	CreatedBy     string `protobuf:"bytes,3,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -103,8 +103,8 @@ only in the policy service: nothing sends one yet.
   is bounded as a guardrail's is. A decision composes the
   organization's `permit` policies beside its guardrails, and
   `access-report` lists one by its id, and a `permit` never reaches an
-  operator: composing rewrites each so that it holds `unless` the
-  principal is an `Iam::Operator`. An RPC writes one (item 3 of
+  operator: a decision for an `Iam::Operator` composes the
+  organization's guardrails and none of its `permit`s. An RPC writes one (item 3 of
   ADR-0146). Not built: a check of an entity literal in a `permit`'s
   principal scope or condition.
 

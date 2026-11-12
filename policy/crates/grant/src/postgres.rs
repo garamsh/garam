@@ -179,7 +179,7 @@ impl PolicyStore {
     /// unless that default is a `permit` version:
     /// [`PolicyStore::activate_permit`] does that under a right.
     pub async fn activate(&self, org: &OrgGrn, grn: &str) -> Result<(), Error> {
-        self.set_active(org, grn, false).await
+        self.set_active(org, grn, false, None).await
     }
 
     /// [`PolicyStore::activate`] for a policy whose default is a
@@ -192,7 +192,7 @@ impl PolicyStore {
         right: &PermitRight,
     ) -> Result<(), Error> {
         right.check_org(org)?;
-        self.set_active(org, grn, true).await
+        self.set_active(org, grn, true, None).await
     }
 
     async fn move_default(
@@ -239,11 +239,43 @@ impl PolicyStore {
         }
     }
 
-    async fn set_active(&self, org: &OrgGrn, grn: &str, permits: bool) -> Result<(), Error> {
+    /// [`PolicyStore::activate`] where the default is still `expected`,
+    /// the version the caller checked, and `DefaultMoved` where it is
+    /// not.
+    pub async fn activate_pinned(
+        &self,
+        org: &OrgGrn,
+        grn: &str,
+        expected: i32,
+    ) -> Result<(), Error> {
+        self.set_active(org, grn, false, Some(expected)).await
+    }
+
+    /// [`PolicyStore::activate_pinned`] for a `permit` default too,
+    /// under the right to write a `permit` on `org`.
+    pub async fn activate_permit_pinned(
+        &self,
+        org: &OrgGrn,
+        grn: &str,
+        expected: i32,
+        right: &PermitRight,
+    ) -> Result<(), Error> {
+        right.check_org(org)?;
+        self.set_active(org, grn, true, Some(expected)).await
+    }
+
+    async fn set_active(
+        &self,
+        org: &OrgGrn,
+        grn: &str,
+        permits: bool,
+        expected: Option<i32>,
+    ) -> Result<(), Error> {
         owned(org, grn)?;
         let updated = sqlx::query(
             "UPDATE policies SET status = 'active', updated_at = now()
              WHERE grn = $1
+               AND ($3::int IS NULL OR default_version = $3)
                AND ($2 OR NOT EXISTS (SELECT 1 FROM policy_versions
                                       WHERE policy_grn = $1
                                         AND version = policies.default_version
@@ -251,14 +283,16 @@ impl PolicyStore {
         )
         .bind(grn)
         .bind(permits)
+        .bind(expected)
         .execute(&self.pool)
         .await
         .map_err(Error::Store)?;
         if updated.rows_affected() > 0 {
             return Ok(());
         }
-        let permit: Option<bool> = sqlx::query_scalar(
-            "SELECT policy_versions.body->>'kind' = 'permit' FROM policies
+        let default: Option<(i32, bool)> = sqlx::query_as(
+            "SELECT policies.default_version,
+                    policy_versions.body->>'kind' = 'permit' FROM policies
              JOIN policy_versions
                ON policy_versions.policy_grn = policies.grn
               AND policy_versions.version = policies.default_version
@@ -268,8 +302,14 @@ impl PolicyStore {
         .fetch_optional(&self.pool)
         .await
         .map_err(Error::Store)?;
-        match permit {
-            Some(true) => Err(Error::PermitNeedsRight(grn.to_owned())),
+        match (default, expected) {
+            (Some((version, _)), Some(expected)) if version != expected => {
+                Err(Error::DefaultMoved {
+                    policy: grn.to_owned(),
+                    expected,
+                })
+            }
+            (Some((_, true)), _) => Err(Error::PermitNeedsRight(grn.to_owned())),
             _ => Err(Error::NotFound(grn.to_owned())),
         }
     }

@@ -322,3 +322,26 @@ async fn a_version_of_another_kind_is_refused_by_the_store(pool: PgPool) {
         "{appended:?}"
     );
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn activation_pins_the_default_the_caller_checked(pool: PgPool) {
+    let store = PolicyStore::new(pool);
+    let org = OrgGrn::new(ACME);
+    store.create(draft(role(Role::Member), &org)).await.unwrap();
+    store
+        .append_version(&org, GRANT, &role(Role::Admin), "grn:acme/iam/user/kim")
+        .await
+        .unwrap();
+    store.roll_back(&org, GRANT, 2).await.unwrap();
+
+    let stale = store.activate_pinned(&org, GRANT, 1).await;
+
+    assert!(
+        matches!(stale, Err(Error::DefaultMoved { expected: 1, .. })),
+        "{stale:?}"
+    );
+    assert!(roles(&active(&store, &org).await).is_empty());
+    store.activate_pinned(&org, GRANT, 2).await.unwrap();
+    assert_eq!(roles(&active(&store, &org).await), [Role::Admin]);
+}

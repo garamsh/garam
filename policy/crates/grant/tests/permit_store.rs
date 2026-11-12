@@ -162,6 +162,18 @@ async fn a_permit_version_is_made_effective_only_under_a_right(pool: PgPool) {
         .await
         .unwrap();
 
+    // Activation pinned to a default that has moved is refused, under
+    // the right as without it.
+    let stale = store.activate_permit_pinned(&org, PERMIT, 2, &right).await;
+    assert!(
+        matches!(stale, Err(Error::DefaultMoved { expected: 2, .. })),
+        "{stale:?}"
+    );
+    store
+        .activate_permit_pinned(&org, PERMIT, 1, &right)
+        .await
+        .unwrap();
+
     // A missing version is still a missing version.
     let missing = store.roll_back(&org, PERMIT, 9).await;
     assert!(

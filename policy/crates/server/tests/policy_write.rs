@@ -510,9 +510,196 @@ async fn an_administrator_may_not_activate_append_roll_back_or_delete_an_owners_
             .await,
         Code::PermissionDenied,
     );
-    // Control: the version of a role it holds is its to move to.
-    service.roll_back(Some(ADA), "kim-owner", 2).await.unwrap();
-    service.activate(Some(ADA), "kim-owner").await.unwrap();
+    // A policy that ever linked an owner is an owner's to change, even
+    // to the member version an administrator holds the role of.
+    refused(
+        service.roll_back(Some(ADA), "kim-owner", 2).await,
+        Code::PermissionDenied,
+    );
+    refused(
+        service
+            .append(Some(ADA), "kim-owner", role_link(Role::Member, KIM))
+            .await,
+        Code::PermissionDenied,
+    );
+    // Control: an owner does the same sequence.
+    service
+        .append(Some(OWEN), "kim-owner", role_link(Role::Member, LEE))
+        .await
+        .unwrap();
+    service.roll_back(Some(OWEN), "kim-owner", 2).await.unwrap();
+    // The default now links a member, but an earlier version linked an
+    // owner: it stays an owner's to change.
+    refused(
+        service.roll_back(Some(ADA), "kim-owner", 1).await,
+        Code::PermissionDenied,
+    );
+    refused(
+        service.activate(Some(ADA), "kim-owner").await,
+        Code::PermissionDenied,
+    );
+    service.activate(Some(OWEN), "kim-owner").await.unwrap();
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn an_administrator_changes_a_link_of_roles_it_holds(pool: PgPool) {
+    seed(&pool).await;
+    let mut service = platform(pool).await;
+    service
+        .create(Some(ADA), "kim-member", role_link(Role::Member, KIM))
+        .await
+        .unwrap();
+    service
+        .append(Some(ADA), "kim-member", role_link(Role::Admin, KIM))
+        .await
+        .unwrap();
+    service.roll_back(Some(ADA), "kim-member", 2).await.unwrap();
+    service.activate(Some(ADA), "kim-member").await.unwrap();
+    service.delete(Some(ADA), "kim-member").await.unwrap();
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn an_administrator_removes_an_owners_permit_as_it_may_forbid_what_it_allows(pool: PgPool) {
+    seed(&pool).await;
+    let mut service = platform(pool).await;
+    service
+        .create(Some(OWEN), "watch", permit(LEE_WATCHES_BOT))
+        .await
+        .unwrap();
+    service.activate(Some(OWEN), "watch").await.unwrap();
+    assert!(service.watches(LEE).await);
+
+    service.delete(Some(ADA), "watch").await.unwrap();
+
+    assert!(!service.watches(LEE).await);
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_permit_with_comments_or_an_unless_of_its_own_is_stored_and_deciding(pool: PgPool) {
+    seed(&pool).await;
+    let mut service = platform(pool).await;
+    let shapes = [
+        format!("{LEE_WATCHES_BOT} // a note"),
+        format!("{LEE_WATCHES_BOT} // a; b;"),
+        format!("// a; b;\n{LEE_WATCHES_BOT}"),
+        LEE_WATCHES_BOT.replace(");", ") unless { false };"),
+    ];
+    for (n, source) in shapes.iter().enumerate() {
+        let slug = format!("shape-{n}");
+        service
+            .create(Some(OWEN), &slug, permit(source))
+            .await
+            .unwrap_or_else(|status| panic!("{source}: {status}"));
+        service.activate(Some(OWEN), &slug).await.unwrap();
+        assert!(service.watches(LEE).await, "{source}");
+        service.delete(Some(OWEN), &slug).await.unwrap();
+        assert!(!service.watches(LEE).await, "{source}");
+    }
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_writer_without_the_read_right_is_told_nothing_of_a_policy(pool: PgPool) {
+    seed(&pool).await;
+    let mut service = platform(pool).await;
+    service
+        .create(Some(OWEN), "watch", permit(LEE_WATCHES_BOT))
+        .await
+        .unwrap();
+    service
+        .create(Some(OWEN), "no-watch", guardrail(NO_ONE_WATCHES_BOT))
+        .await
+        .unwrap();
+    let mut told = Vec::new();
+    for slug in ["watch", "no-watch", "absent"] {
+        for answer in [
+            service
+                .append(Some(LEE), slug, role_link(Role::Member, LEE))
+                .await
+                .map(|_| ()),
+            service
+                .append(Some(LEE), slug, guardrail(NO_ONE_WATCHES_BOT))
+                .await
+                .map(|_| ()),
+            service.activate(Some(LEE), slug).await,
+            service.roll_back(Some(LEE), slug, 1).await,
+            service.delete(Some(LEE), slug).await,
+        ] {
+            let status = answer.unwrap_err();
+            told.push((status.code(), status.message().to_owned()));
+        }
+    }
+    assert!(
+        told.iter().all(|answer| answer.0 == Code::PermissionDenied),
+        "{told:?}"
+    );
+    assert!(told.iter().all(|answer| answer.1 == told[0].1), "{told:?}");
+}
+
+#[sqlx::test(migrator = "MIGRATIONS")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_writer_of_another_organization_changes_no_policy_of_this_one(pool: PgPool) {
+    seed(&pool).await;
+    let mut service = platform(pool).await;
+    service
+        .create(Some(OWEN), "kim-member", role_link(Role::Member, KIM))
+        .await
+        .unwrap();
+    let grn = policy_of("kim-member");
+    let gil = subject(GIL);
+    let (org, writer) = (ACME.to_owned(), gil);
+
+    let append = pb::AppendPolicyVersionRequest {
+        writer: writer.clone(),
+        org: org.clone(),
+        policy: grn.clone(),
+        body: Some(role_link(Role::Member, GIL)),
+    };
+    let request = service.request(append);
+    refused(
+        service.grpc.append_policy_version(request).await,
+        Code::PermissionDenied,
+    );
+    let activate = pb::ActivatePolicyRequest {
+        writer: writer.clone(),
+        org: org.clone(),
+        policy: grn.clone(),
+    };
+    let request = service.request(activate);
+    refused(
+        service.grpc.activate_policy(request).await,
+        Code::PermissionDenied,
+    );
+    let roll_back = pb::RollBackPolicyRequest {
+        writer: writer.clone(),
+        org: org.clone(),
+        policy: grn.clone(),
+        version: 1,
+    };
+    let request = service.request(roll_back);
+    refused(
+        service.grpc.roll_back_policy(request).await,
+        Code::PermissionDenied,
+    );
+    let delete = pb::DeletePolicyRequest {
+        writer,
+        org,
+        policy: grn,
+    };
+    let request = service.request(delete);
+    refused(
+        service.grpc.delete_policy(request).await,
+        Code::PermissionDenied,
+    );
+    assert!(
+        service
+            .get(Some(OWEN), ACME, &policy_of("kim-member"))
+            .await
+            .is_ok()
+    );
 }
 
 #[sqlx::test(migrator = "MIGRATIONS")]

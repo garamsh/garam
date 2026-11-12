@@ -91,11 +91,24 @@ yet (#1689).
   (ADR-0143 item 4, ADR-0145).
 - **The platform alone writes a policy, over gRPC.** `CreatePolicy`,
   `AppendPolicyVersion`, `ActivatePolicy`, `RollBackPolicy`,
-  `DeletePolicy`, `GetPolicy` and `ListPolicies` refuse a scoped caller whole. A request names its
-  writer, and the service evaluates the writer's action on the
-  organization before it stores. A writer links only a role it holds.
+  `DeletePolicy`, `GetPolicy` and `ListPolicies` refuse a scoped
+  caller whole. A request names its writer, and the service evaluates
+  the writer's action on the organization before it stores. A writer
+  changes a role link only where it holds every role any version of it
+  links, so a policy that ever linked an owner is an owner's to
+  change. A writer lacking `iam:policy.read` is refused a write the
+  same way whether or not the policy exists. Activation takes the
+  version the service checked and is refused if the default has moved.
   With no writer, only a role link written or removed from a
-  membership is accepted. A `permit` never reaches an operator.
+  membership is accepted.
+- **A `permit` never reaches an operator.** A decision for an
+  `Iam::Operator` composes the organization's guardrails and none of
+  its `permit`s, whatever a `permit` says.
+- **Removing a `permit` asks `iam:policy.delete`, not
+  `iam:permit.write`.** Removal narrows, and an administrator can
+  already forbid what a `permit` allows with a guardrail.
+- **A write is two steps.** The service evaluates the writer, then
+  stores. A writer whose role ended between them completes one write.
 - **An organization's `permit` is written by an owner and scoped to
   its organization.** Writing one is `iam:permit.write`, held by the
   `owner` role alone. A `PermitRight` is the allow of that evaluation

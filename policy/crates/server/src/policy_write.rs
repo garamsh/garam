@@ -245,11 +245,17 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
         let org = org_of(&request.org)?;
         let writer = request.writer.as_ref();
         let wanted = request.body.as_ref().ok_or(ServiceError::Missing("body"))?;
-        let existing = store.get(&org, &request.policy).await?;
+        let existing = self.lookup(store, &org, writer, &request.policy).await?;
         if kind_of(wanted)? != existing.kind {
             return Err(grant::Error::KindChange(request.policy.clone()).into());
         }
-        let roles = roles_of(wanted)?;
+        // Every role the policy has ever linked, and the one it would.
+        let mut roles = self.roles_in(store, &org, &existing).await?;
+        for role in roles_of(wanted)? {
+            if !roles.contains(&role) {
+                roles.push(role);
+            }
+        }
         let right = self
             .authorize(&org, writer, existing.kind, Step::Append, &roles)
             .await?;
@@ -272,22 +278,26 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
     ) -> Result<proto::ActivatePolicyResponse, ServiceError> {
         let store = self.reachable(principal)?;
         let org = org_of(&request.org)?;
-        let existing = store.get(&org, &request.policy).await?;
-        let roles = self
-            .roles_in(store, &org, &existing, Some(existing.default_version))
-            .await?;
+        let writer = request.writer.as_ref();
+        let existing = self.lookup(store, &org, writer, &request.policy).await?;
+        let roles = self.roles_in(store, &org, &existing).await?;
         let right = self
-            .authorize(
-                &org,
-                request.writer.as_ref(),
-                existing.kind,
-                Step::Activate,
-                &roles,
-            )
+            .authorize(&org, writer, existing.kind, Step::Activate, &roles)
             .await?;
+        // The version the writer was checked for is the one that goes
+        // live: a roll-back in between makes this refuse.
+        let checked = existing.default_version;
         match right {
-            Some(right) => store.activate_permit(&org, &request.policy, &right).await?,
-            None => store.activate(&org, &request.policy).await?,
+            Some(right) => {
+                store
+                    .activate_permit_pinned(&org, &request.policy, checked, &right)
+                    .await?;
+            }
+            None => {
+                store
+                    .activate_pinned(&org, &request.policy, checked)
+                    .await?
+            }
         }
         Ok(proto::ActivatePolicyResponse {})
     }
@@ -299,10 +309,10 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
     ) -> Result<proto::RollBackPolicyResponse, ServiceError> {
         let store = self.reachable(principal)?;
         let org = org_of(&request.org)?;
-        let existing = store.get(&org, &request.policy).await?;
-        let roles = self
-            .roles_in(store, &org, &existing, Some(request.version))
+        let existing = self
+            .lookup(store, &org, request.writer.as_ref(), &request.policy)
             .await?;
+        let roles = self.roles_in(store, &org, &existing).await?;
         let right = self
             .authorize(
                 &org,
@@ -334,9 +344,11 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
     ) -> Result<proto::DeletePolicyResponse, ServiceError> {
         let store = self.reachable(principal)?;
         let org = org_of(&request.org)?;
-        let existing = store.get(&org, &request.policy).await?;
+        let existing = self
+            .lookup(store, &org, request.writer.as_ref(), &request.policy)
+            .await?;
         // Every role any version links, since each one is gone with it.
-        let roles = self.roles_in(store, &org, &existing, None).await?;
+        let roles = self.roles_in(store, &org, &existing).await?;
         self.authorize(
             &org,
             request.writer.as_ref(),
@@ -395,23 +407,36 @@ impl<P: PolicySource + Sync, E: EntitySource> Service<P, E> {
         self.store()
     }
 
-    /// The roles a link policy names: in one version, or in all of
-    /// them. Another kind names none.
+    /// The policy a write names. A writer is read as a reader first, so
+    /// one without `iam:policy.read` is told nothing of whether the
+    /// policy exists or what kind it is. A write with no writer is the
+    /// platform's own and is told what it names.
+    async fn lookup(
+        &self,
+        store: &PolicyStore,
+        org: &OrgGrn,
+        writer: Option<&proto::Subject>,
+        policy: &str,
+    ) -> Result<Summary, ServiceError> {
+        if writer.is_some() {
+            self.authorize_read(org, writer).await?;
+        }
+        Ok(store.get(org, policy).await?)
+    }
+
+    /// Every role any version of a link policy names. Another kind
+    /// names none.
     async fn roles_in(
         &self,
         store: &PolicyStore,
         org: &OrgGrn,
         policy: &Summary,
-        version: Option<i32>,
     ) -> Result<Vec<Role>, ServiceError> {
         if policy.kind != BodyKind::RoleLink {
             return Ok(Vec::new());
         }
         let mut roles = Vec::new();
         for stored in store.versions(org, &policy.grn).await? {
-            if version.is_some_and(|wanted| wanted != stored.version) {
-                continue;
-            }
             if let Content::RoleLink { role, .. } = stored.body.content()
                 && !roles.contains(&role)
             {

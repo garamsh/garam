@@ -19,7 +19,7 @@ use cedar_policy::{
 use cedar_policy_symcc::solver::LocalSolver;
 use cedar_policy_symcc::{CedarSymCompiler, CompiledPolicy, CompiledPolicySet};
 use decision::{Role, RoleScope};
-use fixture::{ACME, BOT, ENG, KIM, LEE, Named, OUTSIDER, World, link, policy, uid};
+use fixture::{ACME, BOT, ENG, KIM, LEE, Named, OPERATOR, OUTSIDER, World, link, policy, uid};
 
 type Compiler = CedarSymCompiler<LocalSolver>;
 
@@ -309,14 +309,24 @@ async fn no_organization_permit_widens_an_operator() {
     let world = World::new();
     let schema = world.engine.schema();
     let tier = composed(&world, &[]);
-    let open = composed(&world, &[policy("grn:acme/iam/policy/open", EVERYTHING)]);
+    let own = [policy("grn:acme/iam/policy/open", EVERYTHING)];
+    // The set a decision composes for each kind of principal: the one
+    // production composes, so the proof reads the code that guards.
+    let for_operator = world.compose_as(OPERATOR, &[], &own).policy_set().clone();
+    let for_user = world.compose_as(KIM, &[], &own).policy_set().clone();
     let mut solver = compiler();
     let (mut operators, mut widened) = (0, 0);
     for request in every_request(schema) {
-        let narrow = compiled(&open, &request, schema);
+        let is_operator = request.principal().to_string() == "Iam::Operator";
+        let open = if is_operator {
+            &for_operator
+        } else {
+            &for_user
+        };
+        let narrow = compiled(open, &request, schema);
         let wide = compiled(&tier, &request, schema);
         let held = solver.check_implies_opt(&narrow, &wide).await.unwrap();
-        if request.principal().to_string() == "Iam::Operator" {
+        if is_operator {
             assert!(held, "an organization permit widens {request:?}");
             operators += 1;
         } else if !held {

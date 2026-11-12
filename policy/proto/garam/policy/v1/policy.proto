@@ -275,7 +275,8 @@ message PolicyBody {
 message PolicyVersion {
   int32 version = 1;
   PolicyBody body = 2;
-  // created_by is the writer's GRN, or empty for a write with none.
+  // created_by is the writer's GRN, or the calling service's subject
+  // (`platform`) for a write with none.
   string created_by = 3;
 }
 

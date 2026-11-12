@@ -156,6 +156,10 @@ fn policy_status(error: &ServiceError, inner: &grant::Error) -> Status {
             tracing::info!(error = ?error, "named no policy");
             Status::not_found(error.to_string())
         }
+        G::DefaultMoved { .. } => {
+            tracing::info!(error = ?error, "the default moved");
+            Status::failed_precondition(error.to_string())
+        }
         G::AlreadyExists(_) => {
             tracing::info!(error = ?error, "named a policy twice");
             Status::already_exists(error.to_string())

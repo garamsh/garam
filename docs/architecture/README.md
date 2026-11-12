@@ -1216,8 +1216,8 @@ ADRs:
   cowork (#1758), unbuilt: the exchange of an agent's browser token
   and the direct calls of every other service; supersedes 0127
   in part, on §5, and 0140 in part, on §2; the GRN forms of its
-  worked-example answers 4 and 5 are superseded by 0142, and §5 and
-  §13, on how the list of services is held, by 0143
+  worked-example answers 4 and 5 are superseded by 0142 and again by
+  0149, and §5 and §13, on how the list of services is held, by 0143
 - [0142](./adr/0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md)
   — a GRN is `grn:<org>/<service>/<type>/<id>` with further `type/id`
   pairs and an optional `#<locator>` the owning service reads, an RFC
@@ -1299,10 +1299,14 @@ ADRs:
   on `iam:audit.read`; not built; supersedes nothing
 - [0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
   — codehub is a service of the policy service: a `Codehub` manifest
-  with the entity `Codehub::Repo` and the actions `repo.read`,
-  `repo.write`, `repo.create` and `runner.administer`, a path sent as
-  the context key `path` and not as an entity, `CreateOrganisation`
-  dropped because an organization is garam's, repositories fed through
-  an outbox with a sequence per repository, and a runner as an
-  `Iam::Agent` codehub registers; proposed, not built; supersedes
-  0141 in part, on its codehub example's answers 4 to 6
+  with the entity `Codehub::Repo`, named `grn:<org>/codehub/repo/<id>`
+  by codehub's immutable id, and the actions `repo.read` (members
+  too), `repo.write`, `repo.create` and `runner.administer` (owners
+  and administrators) and `org.use` on `Iam::Org` in place of
+  `create_organisation`; the HTTP binding accepts the type `grn` and
+  resolves the Cedar type from the manifests' `@grn`; a path sent as
+  the exact UTF-8 context key `path` and not as an entity;
+  `unauthorized_client` for an organization garam does not hold;
+  repositories fed through an outbox with a sequence per entity; a
+  runner as an `Iam::Agent` codehub registers; accepted, not built;
+  supersedes 0141 in part, on its codehub example's answers 4 and 5

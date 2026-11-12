@@ -112,7 +112,7 @@ type's names.
 | `iam` | `supervisor` | runs one agent on a standalone host; garam mints the identifier and registers it for that agent on an administrator's approval (ADR-0082) | `grn:acme/iam/supervisor/0a1b2c3d4e5f6071` |
 | `iam` | `policy` | stored policy document | `grn:acme/iam/policy/a1b2c3d4` |
 | `iam` | `service` | a first-party service acting in one organization, one per organization and service, the identifier the service's name (planned, ADR-0129; codehub's is planned, ADR-0141) | `grn:acme/iam/service/cowork` |
-| `codehub` | `repo` | a repository codehub stores, owned by an organization, or by a project as `project/<id>/repo/<id>` once that step is taken (planned, ADR-0141, ADR-0149 proposes its manifest; in no catalogue until codehub declares one) | `grn:acme/codehub/repo/api-server` |
+| `codehub` | `repo` | a repository codehub stores, owned by an organization, or by a project as `project/<id>/repo/<id>` once that step is taken (planned, ADR-0141, ADR-0149 decides its manifest; in no catalogue until codehub declares one) | `grn:acme/codehub/repo/4821` |
 | not decided | `doc` | permissioned document (planned) | `grn:acme/docs/project/frontend/doc/readme` |
 | not decided | `secret` | reference to a value an external store holds, never the value (planned, ADR-0036) | `grn:acme/iam/secret/model-api-key` |
 
@@ -130,7 +130,8 @@ action with the types it applies to, and held to them by `make -C
 policy check-gen`. A type is therefore added in a manifest, and this
 table describes what they declare. Not built: codehub declares no
 manifest, so `repo` is in no catalogue and `lib/grn` refuses a name of
-`codehub` until it does (#1760). ADR-0149 proposes it, unbuilt.
+`codehub` until it does (#1760). ADR-0149 decides it, unbuilt; the id
+is codehub's immutable one.
 Built (#1788): `GET /registry` answers the services with their types
 and actions, and `GET /registry/grn?grn=<name>` answers a name's
 service, type, entity type, parent, locator and the actions that apply
@@ -175,7 +176,7 @@ inside a locator is `%23`. No platform table keys on a locator, and
 none is bounded here.
 
 `lib/grn/grn.go` parses and renders a locator and nothing else reads
-one yet. ADR-0149 proposes, unbuilt, that codehub sends a path as the
+one yet. ADR-0149 decides, unbuilt, that codehub sends a path as the
 context key `path` and no locator, so a repository's GRN carries none.
 
 ## Earlier names

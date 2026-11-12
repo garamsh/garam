@@ -48,6 +48,43 @@ ADR-0141 supersedes in part its §2: the platform no longer asks for
 cowork's checks, since cowork asks the policy service itself, and the
 list stays closed and static.
 
+**Two further decisions are taken and unbuilt.** Today
+`policy/schema/garam.cedarschema` is one file with no namespace, the
+platform's actions are `<type>:<verb>` and cowork's
+`cowork:<type>-<verb>`, and an organization writes role links and
+`forbid` guardrails and no `permit`.
+
+- **A service is declared by one manifest**
+  ([ADR-0143](./adr/0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)).
+  It is the service's Cedar schema file,
+  `policy/schema/<service>.cedarschema`, declaring one namespace, `Iam`
+  or `Cowork`, with annotations for the service's name, an entity
+  type's GRN type and the caller that writes it. The GRN catalogue
+  ([grn-model.md](./grn-model.md) §Types by owning service) is generated
+  from the manifests; the issuer's audience list and the closed list of
+  callers are checked against them; and which caller writes which type
+  is read from the annotations. An action is `<service>:<type>-<verb>`
+  and every action moves: `org:delete` becomes `iam:org-delete`, which
+  is `Iam::Action::"org-delete"`, in the evaluator, the roles, the
+  console and the system tier. A role is the `Iam` namespace's, and a
+  service's action joins one by naming its group in its own manifest.
+  The platform is to serve a read-only registry of services, types and
+  actions, answered from the manifests. Adding a service is one pull
+  request adding one manifest, with the proofs the ADR lists.
+- **An organization may write `permit` policies**
+  ([ADR-0144](./adr/0144-an-organization-may-write-permit-policies-over-resources-inside-itself.md)).
+  Its resource scope is inside the organization and the write refuses
+  one that is not; tenant isolation stays above it; it names only what
+  the manifests declare, and `Explain` names it as any policy. It still
+  cannot touch the system tier or permit across organizations. Which
+  role may write a `permit` is open in the ADR. The console's editor
+  and the platform's switch are #1689 slice 4.
+
+None of this is built: the schema is one file, the catalogue and the
+audience list are written by hand, no action has its new name, no
+registry is served and the policy service accepts no `permit` from an
+organization.
+
 **The platform's outbox, its delivery and its signer are built.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set
 holding one row per entity and no document, and a loop reads each

@@ -113,6 +113,17 @@ type's names.
 The owner of `doc` and `secret` is not decided, so the service names
 in their examples are illustrative.
 
+**Decided and not built.**
+[ADR-0143](./adr/0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
+makes a service's Cedar schema file its manifest, and a type's GRN
+type its `@grn` annotation there. When it is built the catalogue in
+`lib/grn/grn.go` is generated from the manifests, and this table
+describes what they declare rather than being where a type is added.
+The platform is then to serve, read-only, a GRN's service, type,
+parent and the actions that apply, from the same declarations. Today
+`lib/grn/grn.go` is written by hand, no manifest exists and nothing
+serves that answer.
+
 ## identifier
 
 Lowercase letters, digits, `-`. Length ≤ 64. Slug over UUID. Never
@@ -171,11 +182,14 @@ grammar as follows.
 
 ## Open questions
 
-The per-service manifest and the served registry of types are a later
-ADR. Settled for the implementation: the policy service's caller name
-and the feed's `sub` stay `platform`; an action's name does not
-change; a Cedar entity identifier is the whole name before `#`; a `*`
-in a policy pattern matches as it did, `/` included, so an
+The per-service manifest and the served registry of types are decided
+and unbuilt, in ADR-0143, which also settles how an action reads once
+types belong to services: `<service>:<type>-<verb>`, so an action's
+name does change. Left open there: a service an organization defines,
+and a served registry of locator shapes. Settled for the
+implementation: the policy service's caller name and the feed's `sub`
+stay `platform`; a Cedar entity identifier is the whole name before
+`#`; a `*` in a policy pattern matches as it did, `/` included, so an
 organization's scope is `grn:<org>/*`. Open in ADR-0142: whether an
 organization is better named inside itself than by `root`; the context
 key a locator arrives under; how a wildcard treats `#`; which service

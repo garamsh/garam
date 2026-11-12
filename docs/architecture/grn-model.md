@@ -56,8 +56,8 @@ Examples:
 | a platform type | `grn:acme/iam/user/alice` |
 | an organization | `grn:root/iam/org/acme` |
 | a project-scoped resource | `grn:acme/docs/project/frontend/doc/readme` |
-| a nested resource | `grn:acme/codehub/project/frontend/repo/api-server` |
-| a locator | `grn:acme/codehub/repo/api-server#refs/heads/main:cmd/main.go` |
+| a nested resource | `grn:acme/cowork/project/frontend/channel/general` |
+| a locator | `grn:acme/cowork/page/home#section-2` |
 
 ## Ownership
 
@@ -106,7 +106,7 @@ type's names.
 | `iam` | `supervisor` | runs one agent on a standalone host; garam mints the identifier and registers it for that agent on an administrator's approval (ADR-0082) | `grn:acme/iam/supervisor/0a1b2c3d4e5f6071` |
 | `iam` | `policy` | stored policy document | `grn:acme/iam/policy/a1b2c3d4` |
 | `iam` | `service` | a first-party service acting in one organization, one per organization and service, the identifier the service's name (planned, ADR-0129; codehub's is planned, ADR-0141) | `grn:acme/iam/service/cowork` |
-| `codehub` | `repo` | a repository codehub stores, owned by an organization, or by a project as `project/<id>/repo/<id>` once that step is taken (planned, ADR-0141) | `grn:acme/codehub/repo/api-server` |
+| `codehub` | `repo` | a repository codehub stores, owned by an organization, or by a project as `project/<id>/repo/<id>` once that step is taken (planned, ADR-0141; in no catalogue until codehub declares a manifest) | `grn:acme/codehub/repo/api-server` |
 | not decided | `doc` | permissioned document (planned) | `grn:acme/docs/project/frontend/doc/readme` |
 | not decided | `secret` | reference to a value an external store holds, never the value (planned, ADR-0036) | `grn:acme/iam/secret/model-api-key` |
 
@@ -123,9 +123,9 @@ them with each type's qualified entity type, its parents and each
 action with the types it applies to, and held to them by `make -C
 policy check-gen`. A type is therefore added in a manifest, and this
 table describes what they declare. Not built: codehub declares no
-manifest, so `repo` is held by hand in `lib/grn`'s `pending` until it
-does, and nothing yet serves, read-only, a GRN's service, type, parent
-and the actions that apply.
+manifest, so `repo` is in no catalogue and `lib/grn` refuses a name of
+`codehub` until it does (#1760), and nothing yet serves, read-only, a
+GRN's service, type, parent and the actions that apply.
 
 ## identifier
 

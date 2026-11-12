@@ -13,6 +13,12 @@ const EMBEDDED: [&str; 2] = [
     include_str!("../../../schema/cowork.cedarschema"),
 ];
 
+/// The manifests the service embeds, as source. A manifest in
+/// `policy/schema/` that is not among them is loaded by nothing.
+pub fn embedded() -> &'static [&'static str] {
+    &EMBEDDED
+}
+
 /// The most a segment of a GRN holds (ADR-0142 item 4).
 const SEGMENT_MAX: usize = 64;
 

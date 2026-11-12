@@ -92,8 +92,8 @@ func TestGRNFunctions_AgreeWithLibGRN(t *testing.T) {
 		"grn:acme/iam/user/alice",
 		"grn:acme/iam/agent/9f2ac1b40d8e7a35",
 		"grn:acme/iam/project/frontend",
-		"grn:acme/codehub/project/frontend/repo/api",
-		"grn:acme/codehub/project/frontend/repo/api#refs/heads/main:cmd/main.go",
+		"grn:acme/cowork/project/frontend/channel/general",
+		"grn:acme/cowork/page/home#refs/heads/main:cmd/main.go",
 		"grn:acme/cowork/channel/general",
 	} {
 		g, err := grn.Parse(name)

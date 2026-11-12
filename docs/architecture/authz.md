@@ -93,7 +93,7 @@ outbox sends `Iam::` types under migration 000070. **Not built:** item
 4, the platform's role table, `role.go` and the console still write
 `<type>:<verb>`, so no platform check names an action the service now
 accepts; item 6, the registry; item 7's proofs for a new service;
-codehub's manifest, so `repo` is held in `lib/grn`'s `pending`; and the
+codehub's manifest, so `repo` is in no catalogue; and the
 policy service accepts no `permit` from an organization (ADR-0144).
 
 **The platform's outbox, its delivery and its signer are built.** Under

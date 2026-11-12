@@ -8,12 +8,13 @@
 //! It exits 1, naming each disagreement and writing nothing, when a
 //! manifest breaks a rule every manifest holds, when an `@caller` is
 //! neither `none` nor a [`server::Caller`], or when a `Caller` is named
-//! by no manifest. The schema directory defaults to `schema`.
+//! by no manifest, or when the schema directory holds a manifest the
+//! service does not embed, which nothing would load. The schema directory defaults to `schema`.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use manifest::{Manifests, Writer, render_go};
+use manifest::{Manifests, Writer, embedded, render_go};
 use server::Caller;
 
 fn main() -> ExitCode {
@@ -36,7 +37,21 @@ fn main() -> ExitCode {
 }
 
 fn run(output: &PathBuf, dir: &PathBuf) -> Result<(), Vec<String>> {
-    let sources = read_sources(dir).map_err(|message| vec![message])?;
+    let files = read_sources(dir).map_err(|message| vec![message])?;
+    let unloaded: Vec<String> = files
+        .iter()
+        .filter(|(_, source)| !embedded().contains(&source.as_str()))
+        .map(|(path, _)| {
+            format!(
+                "{}: a manifest the service does not embed; add it to EMBEDDED in crates/manifest/src/manifests.rs",
+                path.display()
+            )
+        })
+        .collect();
+    if !unloaded.is_empty() {
+        return Err(unloaded);
+    }
+    let sources: Vec<String> = files.into_iter().map(|(_, source)| source).collect();
     let sources: Vec<&str> = sources.iter().map(String::as_str).collect();
     let manifests = Manifests::from_sources(&sources).map_err(|error| {
         let mut chain = vec![error.to_string()];
@@ -73,7 +88,7 @@ fn run(output: &PathBuf, dir: &PathBuf) -> Result<(), Vec<String>> {
     Ok(())
 }
 
-fn read_sources(dir: &PathBuf) -> Result<Vec<String>, String> {
+fn read_sources(dir: &PathBuf) -> Result<Vec<(PathBuf, String)>, String> {
     let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
         .map_err(|error| format!("{}: {error}", dir.display()))?
         .filter_map(Result::ok)
@@ -87,7 +102,9 @@ fn read_sources(dir: &PathBuf) -> Result<Vec<String>, String> {
     paths
         .iter()
         .map(|path| {
-            std::fs::read_to_string(path).map_err(|error| format!("{}: {error}", path.display()))
+            std::fs::read_to_string(path)
+                .map(|source| (path.clone(), source))
+                .map_err(|error| format!("{}: {error}", path.display()))
         })
         .collect()
 }

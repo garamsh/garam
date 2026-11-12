@@ -9,16 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// pending is for a service with no manifest. A service that declares
-// one is read from the generated file, so listing it here as well would
-// be a second place its types are written.
-func TestPendingNamesNoServiceAManifestDeclares(t *testing.T) {
-	require.NotEmpty(t, pending)
-	for service := range pending {
-		assert.NotContains(t, Services(), service, "%s declares a manifest; drop it from pending", service)
-	}
-}
-
 func TestEveryDeclaredTypeIsInTheCatalogue(t *testing.T) {
 	for _, service := range Services() {
 		types := Types(service)
@@ -28,8 +18,8 @@ func TestEveryDeclaredTypeIsInTheCatalogue(t *testing.T) {
 			assert.NotEmpty(t, info.Entity, "%s/%s names no entity type", service, name)
 		}
 	}
-	// Control: a pending type is in the catalogue and in no manifest.
-	assert.True(t, catalogue["codehub"]["repo"])
+	// Control: a service no manifest declares owns no type.
+	assert.Empty(t, catalogue["codehub"])
 	assert.Empty(t, Types("codehub"))
 }
 

@@ -11,8 +11,8 @@
 //	grn:acme/iam/user/alice
 //	grn:acme/iam/agent/bot-1
 //	grn:root/iam/org/acme
-//	grn:acme/codehub/project/frontend/repo/api-server
-//	grn:acme/codehub/repo/api#refs/heads/main:cmd/main.go
+//	grn:acme/cowork/project/frontend/channel/general
+//	grn:acme/cowork/page/home#section-2
 package grn
 
 import (
@@ -59,20 +59,12 @@ type ActionInfo struct {
 	Resources  []string
 }
 
-// pending holds the types of a service that declares no manifest yet.
-// The generated catalogue holds every type a manifest declares, so
-// what stays here is codehub's alone, until it declares one
-// (ADR-0143 item 5). A test holds that no service here is one a
-// manifest names.
-var pending = map[string][]string{
-	"codehub": {"repo"},
-}
-
 // catalogue is the one place the types a service owns are read from,
 // keyed by service and then by type: what the manifests declare, which
-// `make -C policy gen` writes into catalogue_gen.go, and what is
-// pending. A type name is a service's own, so two services may each
-// hold one of the same name.
+// `make -C policy gen` writes into catalogue_gen.go. A service no
+// manifest declares owns no type, and a name under it is refused. A
+// type name is a service's own, so two services may each hold one of
+// the same name.
 var catalogue = buildCatalogue()
 
 func buildCatalogue() map[string]map[string]bool {
@@ -80,14 +72,6 @@ func buildCatalogue() map[string]map[string]bool {
 	for service, types := range generatedTypes {
 		built[service] = map[string]bool{}
 		for name := range types {
-			built[service][name] = true
-		}
-	}
-	for service, types := range pending {
-		if built[service] == nil {
-			built[service] = map[string]bool{}
-		}
-		for _, name := range types {
 			built[service][name] = true
 		}
 	}

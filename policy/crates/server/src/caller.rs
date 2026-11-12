@@ -318,6 +318,15 @@ impl Verifier {
         Ok(Self { keys, validation })
     }
 
+    /// Reads the caller off an `authorization` header's value, which
+    /// both transports carry the bearer token in.
+    pub(crate) fn authenticate(&self, authorization: Option<&str>) -> Result<Principal, Refusal> {
+        authorization
+            .and_then(|value| value.strip_prefix("Bearer "))
+            .ok_or(Refusal::NoToken)
+            .and_then(|token| self.verify(token))
+    }
+
     /// Verifies a compact token.
     pub fn verify(&self, token: &str) -> Result<Principal, Refusal> {
         let header = protected_header(token)?;
@@ -378,14 +387,11 @@ fn protected_header(token: &str) -> Result<ProtectedHeader, Refusal> {
 
 impl Interceptor for Verifier {
     fn call(&mut self, mut request: Request<()>) -> Result<Request<()>, Status> {
-        let verified = request
+        let authorization = request
             .metadata()
             .get("authorization")
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.strip_prefix("Bearer "))
-            .ok_or(Refusal::NoToken)
-            .and_then(|token| self.verify(token));
-        match verified {
+            .and_then(|value| value.to_str().ok());
+        match self.authenticate(authorization) {
             Ok(principal) => {
                 request.extensions_mut().insert(principal);
                 Ok(request)

@@ -12,6 +12,9 @@ pub(crate) enum ServiceError {
     /// A question lacks a field neither it nor the request states.
     #[error("{0} is required")]
     Missing(&'static str),
+    /// A body that is not a request of its binding.
+    #[error("the body is not a valid request: {0}")]
+    Malformed(String),
     /// A caller sent grounds a decision reads for itself (ADR-0130 §8).
     #[error("{0} is not accepted")]
     Grounds(&'static str),
@@ -72,6 +75,7 @@ pub(crate) fn to_status(error: &ServiceError) -> Status {
             Status::unauthenticated(error.to_string())
         }
         ServiceError::Missing(_)
+        | ServiceError::Malformed(_)
         | ServiceError::Grounds(_)
         | ServiceError::TooManyEvaluations { .. }
         | ServiceError::TooManyChanges { .. }

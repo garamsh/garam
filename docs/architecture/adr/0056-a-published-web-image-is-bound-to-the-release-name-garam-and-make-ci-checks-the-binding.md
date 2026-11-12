@@ -1,6 +1,7 @@
 # ADR 0056: A published web image is bound to the release name `garam`, and `make ci` checks the binding
 
-> Status: accepted
+> Status: superseded by
+> [ADR-0150](./0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)
 > Date: 2026-09-02
 
 ## Contents

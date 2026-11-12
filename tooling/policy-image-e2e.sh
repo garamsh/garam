@@ -13,8 +13,8 @@
 # cannot differ, and pulled from Google's mirror for the reason
 # deploy/local/Dockerfile states.
 #
-# POLICY_IMAGE names the image, which `make policy-image-e2e` builds
-# unless it is given one.
+# POLICY_IMAGE names the image, which `make policy-image-e2e` takes from
+# image-build unless it is given one.
 set -eu
 
 image=${POLICY_IMAGE:?POLICY_IMAGE names the image to check}

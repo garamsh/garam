@@ -72,9 +72,9 @@ test:
 	pnpm test
 
 # `next build` runs with NODE_ENV=production, where env.ts requires
-# GARAM_API_URL (the `/api/*` rewrite is baked into the build) and
-# GARAM_SITE_URL, which is read again at runtime. Nothing calls either
-# during the build, so a placeholder is enough.
+# GARAM_API_URL and GARAM_SITE_URL, which are read when the process
+# starts. Nothing calls either during the build, so a placeholder is
+# enough.
 build:
 	GARAM_API_URL=http://localhost:8080 GARAM_SITE_URL=http://garam.localhost:3001 pnpm build
 

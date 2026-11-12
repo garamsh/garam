@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds the images a release publishes (ADR-0039), each from what
 # .github/workflows/release.yml says it is built from. That workflow
-# names every context, Dockerfile and baked argument once, and a copy
+# names every context, Dockerfile and build argument once, and a copy
 # here would be the copy that goes stale — a check that stops building
 # what the release builds is the divergence it exists to catch.
 #

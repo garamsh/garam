@@ -307,16 +307,14 @@ on hosted runners.
   guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names
   two files and not three (#899).
 - **Every image a release publishes is built on a pull request.**
-  `images.yml` builds the five from what `release.yml` says each is
+  `images.yml` builds the six from what `release.yml` says each is
   built from, once each, and then checks the console's, the site's,
-  cowork's and cowork-web's. The web one is the image a release used to
-  be able to fail on irreversibly: the server image was pushed before
-  the web image was built, and immutability makes the repair the next
-  version (ADR-0039 §Consequences). `release.yml` builds all five and
+  cowork's, cowork-web's and the policy service's. The web one is the
+  image a release used to be able to fail on irreversibly: the server
+  image was pushed before the web image was built, and immutability
+  makes the repair the next version (ADR-0039 §Consequences). `release.yml` builds all six and
   pushes none until all are built (#945), so what a build failure there
   now costs is the run. Until #850 no image was built by any check.
-  `images.yml` also runs `make policy-image-e2e`, which builds
-  `garam/policy` itself, since no release publishes it yet (#1689).
 - **A pull request's image builds take their layers from the GitHub
   Actions cache and their bases from `mirror.gcr.io`.**
   The `suites` jobs' `make -C <module> stack-up` and `images`'
@@ -342,7 +340,7 @@ on hosted runners.
   hosted runners share. Its `429 toomanyrequests: Data limit exceeded`
   failed both attempts of v0.4.0's release run 39120748198 (#1532).
 - **No run here reaches a deployment, so `main` is not what a caller
-  meets.** `release.yml` publishes five images on a `vX.Y.Z` tag and no
+  meets.** `release.yml` publishes six images on a `vX.Y.Z` tag and no
   other workflow pushes one, so a merge to `main` publishes nothing;
   an operator pushes the test image, from a checkout, to an ECR
   repository no deployment pulls (ADR-0092, ADR-0093);
@@ -593,7 +591,8 @@ ADRs:
   superseded in part by 0071, which lets a person push a development
   build, by 0092 for non-release artifacts, whose test-image registry
   and publishing 0093 supersedes in turn, and by 0134 on the repository
-  names and on two images being all a release publishes
+  names and on two images being all a release publishes, and by 0150 on
+  a published web image being bound to one API URL
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
   certificates rotate without a restart; its client certificates, the
@@ -649,7 +648,8 @@ ADRs:
   nothing
 - [0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)
   — a published web image reaches the api Service a release named
-  `garam` renders, and `make ci` compares the two
+  `garam` renders, and `make ci` compares the two; superseded in full
+  by 0150
 - [0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md)
   — a template edit that changes the render moves the chart version,
   confirming ADR-0042 rather than superseding it, and review is what
@@ -1162,7 +1162,8 @@ ADRs:
   `garam/server`, `garam/console`, `garam/site`, `garam/cowork` and
   `garam/cowork-web`, and the test image moves to `garam/test` once
   garamsh/aurora#711 creates it; supersedes 0097, 0093's repository URI
-  and 0039's names and image count
+  and 0039's names and image count; superseded in part by 0150
+  (§Decision 5, on the site baking the address)
 - [0135](./adr/0135-the-site-hands-a-sign-in-to-a-fixed-list-of-apps-and-cowork-shares-one-host-split-by-path.md)
   — the site hands a sign-in to a fixed list of apps, the console and
   cowork, named by identifier and never by origin; a return path is a
@@ -1311,3 +1312,11 @@ ADRs:
   runner as an `Iam::Agent` codehub registers; accepted, built in the
   policy service (#1815), not in codehub, its outbox or the runner;
   supersedes 0141 in part, on its codehub example's answers 4 and 5
+- [0150](./adr/0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)
+  — a web image reads the API address when it starts: the `/api/*`
+  rewrite is made in each app's `proxy.ts` from `GARAM_API_URL`, no
+  image holds an address and none is bound to a release name, an unset
+  address answers every request with 500, probes included, and
+  `chart-rewrite` is removed; a release publishes six images; supersedes
+  0056 in full, 0039's bound-to-one-API-URL consequence and 0134's
+  site-bakes-the-address sentence

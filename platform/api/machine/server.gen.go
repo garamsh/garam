@@ -826,12 +826,12 @@ type MessageSubmission struct {
 
 // OAuthError RFC 6749's error response (ADR-0102).
 type OAuthError struct {
-	// Error `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+	// Error `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
 	Error            OAuthErrorError `json:"error"`
 	ErrorDescription *string         `json:"error_description,omitempty"`
 }
 
-// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
+// OAuthErrorError `invalid_request` for a malformed or repeated parameter, a `Authorization` header, or an audience that is not another operator of the organization; `invalid_client` for an assertion that authenticates no operator or service principal; `unauthorized_client` for an assertion of a service principal that authenticated, signed by a key of its service and otherwise valid, whose `client_id` names an organization garam does not hold; `unsupported_grant_type` for a grant other than `client_credentials`; `invalid_scope` for any `scope`; `temporarily_unavailable` with 429 or 503; `server_error` with 500.
 type OAuthErrorError string
 
 // OAuthToken RFC 6749's successful token response (ADR-0102).

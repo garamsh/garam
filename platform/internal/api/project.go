@@ -244,7 +244,7 @@ func (s *Server) RemoveProjectMember(w http.ResponseWriter, r *http.Request, org
 // segment scopes the identifier, so a project of another org is not
 // addressable through that org's paths.
 func projectGRN(orgSlug, projectSlug string) grn.GRN {
-	return grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeProject, projectSlug)
+	return grn.New(orgSlug, org.ServiceTypeProject, projectSlug)
 }
 
 func projectToAPI(p *org.Project) apigen.Project {

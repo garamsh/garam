@@ -74,8 +74,8 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 	require.Equal(t, 1, epoch)
 	_, stranger := provisioned(t, url, holder)
 
-	provisioning := url + "/agents/" + agentGRN.String() + "/provisioning-state"
-	runtime := url + "/agents/" + agentGRN.String() + "/runtime-state"
+	provisioning := url + "/agents/" + pathEscape(agentGRN.String()) + "/provisioning-state"
+	runtime := url + "/agents/" + pathEscape(agentGRN.String()) + "/runtime-state"
 
 	// Before either party reports, garam cannot tell this agent from
 	// one that never started.

@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -29,7 +30,7 @@ type liveTokens struct {
 }
 
 var (
-	liveOperator   = grn.New("acme", grn.DefaultProject, operator.ServiceType, "one")
+	liveOperator   = grn.New("acme", operator.ServiceType, "one")
 	liveToken      = operator.TokenPrefix + strings.Repeat("a", 64)
 	audiencedToken = operator.TokenPrefix + strings.Repeat("b", 64)
 )
@@ -39,7 +40,7 @@ func (liveTokens) ResolveToken(_ context.Context, hash string) (operator.TokenHo
 	case operator.HashToken(liveToken):
 		return operator.TokenHolder{Operator: liveOperator, ExpiresAt: time.Now().Add(time.Hour)}, nil
 	case operator.HashToken(audiencedToken):
-		hosted := grn.New("acme", grn.DefaultProject, operator.ServiceType, "control")
+		hosted := grn.New("acme", operator.ServiceType, "control")
 		return operator.TokenHolder{Operator: liveOperator, Audience: &hosted, ExpiresAt: time.Now().Add(time.Hour)}, nil
 	}
 	return operator.TokenHolder{}, operator.ErrTokenInvalid
@@ -50,7 +51,7 @@ func (liveTokens) ResolveToken(_ context.Context, hash string) (operator.TokenHo
 type liveAgentTokens struct{ agent.AccessTokenStore }
 
 var (
-	liveAgent       = grn.New("acme", grn.DefaultProject, agent.ServiceType, "0a1b2c3d4e5f6071")
+	liveAgent       = grn.New("acme", agent.ServiceType, "0a1b2c3d4e5f6071")
 	liveAgentToken  = agent.AccessTokenPrefix + strings.Repeat("d", 64)
 	liveAgentSerial = "t" + strings.Repeat("e", 32)
 )
@@ -104,7 +105,7 @@ func TestCountMachineRequests_CountsEachRequestByHowItAuthenticated(t *testing.T
 	obs := recordingObservability(&out)
 	counter, err := newMachineRequestCounter(obs.registry)
 	require.NoError(t, err)
-	subject := grn.New("acme", grn.DefaultProject, "agent", "bot-1")
+	subject := grn.New("acme", "agent", "bot-1")
 	url, _ := machineListenerAround(t, obs, subject,
 		countMachineRequests(counter)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
@@ -226,9 +227,9 @@ func TestRecordIssuances_NotesEachIssuanceUnderItsPath(t *testing.T) {
 	recorder := &heldSightings{}
 	evidence := machine.NewEvidence(recorder, time.Minute, nil)
 	until := time.Date(2026, 10, 18, 10, 0, 0, 0, time.UTC)
-	operatorGRN := grn.New("acme", grn.DefaultProject, "operator", "manager")
-	supervisorGRN := grn.New("acme", grn.DefaultProject, "supervisor", "host-1")
-	agentGRN := grn.New("acme", grn.DefaultProject, "agent", "bot-1")
+	operatorGRN := grn.New("acme", "operator", "manager")
+	supervisorGRN := grn.New("acme", "supervisor", "host-1")
+	agentGRN := grn.New("acme", "agent", "bot-1")
 	reports := map[string]*machine.Issuance{}
 	answer := func(w http.ResponseWriter, r *http.Request) {
 		if issued := reports[r.Header.Get("X-Case")]; issued != nil {
@@ -258,7 +259,7 @@ func TestRecordIssuances_NotesEachIssuanceUnderItsPath(t *testing.T) {
 	send("supervisor secret", http.MethodPost, "/tokens", supervisorSecret,
 		&machine.Issuance{Subject: supervisorGRN, Until: until})
 	send("assertion", http.MethodPost, "/oauth/token", "", &machine.Issuance{Subject: operatorGRN, Audience: true, Until: until})
-	send("mint", http.MethodPost, "/agents/"+agentGRN.String()+"/tokens", "Garam-Token "+liveToken,
+	send("mint", http.MethodPost, "/agents/"+url.PathEscape(agentGRN.String())+"/tokens", "Garam-Token "+liveToken,
 		&machine.Issuance{Subject: agentGRN, Until: until})
 	send("identity", http.MethodGet, "/identity", "Garam-Token "+liveToken, &machine.Issuance{Subject: agentGRN, Until: until})
 

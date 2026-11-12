@@ -118,8 +118,8 @@ func (s *admissionService) Admit(ctx context.Context, caller grn.GRN, id Approva
 }
 
 // authorizeAdmission reads b's reference fresh for caller and answers
-// it once it authorizes b: an agent:create reference for a new agent,
-// an agent:replace one for a replacement.
+// it once it authorizes b: an iam:agent.create reference for a new
+// agent, an iam:agent.replace one for a replacement.
 func authorizeAdmission(ctx context.Context, operations OperationResolver, caller grn.GRN, b EnrollmentBinding) (*OperationBinding, error) {
 	if b.Replaces == nil {
 		return authorizeCreation(ctx, operations, caller, b.Assignee, b.RequestID, b.OperationRef, ErrApprovalBindingConflict)
@@ -128,13 +128,13 @@ func authorizeAdmission(ctx context.Context, operations OperationResolver, calle
 }
 
 // authorizeReplacement reads b's reference fresh for caller and
-// answers its binding once it is an agent:replace reference handed to
-// caller in its own organization, minted under b's request identifier
-// for the agent b replaces, at the assignment b expects, with b's
-// assignee as its destination (ADR-0107). A reference of another kind,
-// audience or organization is ErrReferenceMismatch; one minted for any
-// other agent, assignment, destination or request identifier is
-// ErrApprovalBindingConflict.
+// answers its binding once it is an iam:agent.replace reference handed
+// to caller in its own organization, minted under b's request
+// identifier for the agent b replaces, at the assignment b expects,
+// with b's assignee as its destination (ADR-0107). A reference of
+// another kind, audience or organization is ErrReferenceMismatch; one
+// minted for any other agent, assignment, destination or request
+// identifier is ErrApprovalBindingConflict.
 func authorizeReplacement(ctx context.Context, operations OperationResolver, caller grn.GRN, b EnrollmentBinding) (*OperationBinding, error) {
 	if err := operates(caller); err != nil {
 		return nil, err
@@ -161,7 +161,7 @@ func authorizeReplacement(ctx context.Context, operations OperationResolver, cal
 }
 
 // authorizeCreation reads ref fresh for caller and answers its binding
-// once it is an agent:create reference handed to caller in its own
+// once it is an iam:agent.create reference handed to caller in its own
 // organization, minted under requestID for assignee. A reference of
 // another kind, audience or organization is ErrReferenceMismatch; one
 // minted for another assignee or request identifier is conflict.

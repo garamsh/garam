@@ -3,6 +3,7 @@ package machineapi_test
 import (
 	"crypto/tls"
 	"net/http"
+	neturl "net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -76,9 +77,10 @@ func machineRoutes(t *testing.T, values map[string]string) map[string]machineRou
 }
 
 // fillPath replaces each {parameter} in path with what values gives
-// for it, and fails when it gives nothing. A parameter nothing names
-// is a route this test would send somewhere else, and a route sent
-// somewhere else is refused for the wrong reason.
+// for it, escaped as a path segment because a GRN holds '/', and fails
+// when it gives nothing. A parameter nothing names is a route this
+// test would send somewhere else, and a route sent somewhere else is
+// refused for the wrong reason.
 func fillPath(t *testing.T, path string, values map[string]string) string {
 	t.Helper()
 	for {
@@ -91,13 +93,13 @@ func fillPath(t *testing.T, path string, values map[string]string) string {
 		name := path[opened+1 : opened+closed]
 		value, ok := values[name]
 		require.True(t, ok, "the path parameter %q in %q has no value here", name, path)
-		path = path[:opened] + value + path[opened+closed+1:]
+		path = path[:opened] + neturl.PathEscape(value) + path[opened+closed+1:]
 	}
 }
 
-// standaloneEnrollmentRoute, the two exchanges and keySetRoute are the
-// operations reached without a token (ADR-0082, ADR-0100,
-// ADR-0101, ADR-0102). They are named here so that what a reader
+// standaloneEnrollmentRoute, the two exchanges, keySetRoute and
+// introspectionRoute are the operations reached without a token
+// (ADR-0082, ADR-0100, ADR-0101, ADR-0102, ADR-0141). They are named here so that what a reader
 // checks is the exemption rather than the routes that are not exempt,
 // which are whatever is left.
 const (
@@ -105,6 +107,7 @@ const (
 	tokenExchangeRoute        = http.MethodPost + " /tokens"
 	assertionExchangeRoute    = http.MethodPost + " /oauth/token"
 	keySetRoute               = http.MethodGet + " /message-signing-keys"
+	introspectionRoute        = http.MethodPost + " /oauth/introspect"
 )
 
 // TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches
@@ -158,6 +161,16 @@ func TestServer_TheExemptRoutesAreTheOnlyOnesAnUnauthenticatedCallerReaches(t *t
 	status, body = send(t, client, assertion.method, url+assertion.path, "")
 	assert.Equal(t, http.StatusBadRequest, status)
 	assert.Contains(t, body, `"error":"invalid_request"`)
+
+	// Introspection authenticates by a client assertion of its own, and
+	// where no issuer is configured, as here, it is not registered: it
+	// answers as a path the listener has no route for (ADR-0141).
+	introspection, ok := routes[introspectionRoute]
+	require.True(t, ok, "the exemption names no operation the specification declares")
+	delete(routes, introspectionRoute)
+	status, body = send(t, client, introspection.method, url+introspection.path, "")
+	assert.Equal(t, http.StatusNotFound, status)
+	assert.Equal(t, "404 page not found\n", body)
 
 	// The key set is public: a verifier anywhere reads it (ADR-0101).
 	keySet, ok := routes[keySetRoute]

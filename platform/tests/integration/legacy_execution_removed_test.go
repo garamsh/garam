@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	legacyAgent = "grn:mig:default:agent:1e9ac1e9ac1e9ac1"
-	fencedAgent = "grn:mig:default:agent:fe1cedfe1cedfe1c"
+var (
+	legacyAgent = formerGRN("mig", "agent", "1e9ac1e9ac1e9ac1")
+	fencedAgent = formerGRN("mig", "agent", "fe1cedfe1cedfe1c")
 )
 
 // beforeLegacyRemoval migrates a schema of its own to 000057, the
@@ -33,11 +33,11 @@ func beforeLegacyRemoval(t *testing.T, p *pgxpool.Pool, schema string) (*migrate
 		_, err := p.Exec(ctx, strings.ReplaceAll(sql, "§", schema+"."), args...)
 		return err
 	}
-	org := "grn:root:default:org:mig"
-	operator := "grn:mig:default:operator:field"
+	org := formerGRN("root", "org", "mig")
+	operator := formerGRN("mig", "operator", "field")
 	require.NoError(t, exec(`INSERT INTO §orgs (grn, name, created_at, updated_at) VALUES ($1, 'mig', now(), now())`, org))
 	require.NoError(t, exec(`INSERT INTO §operators (grn, org_grn, registered_by, created_at, name)
-		VALUES ($1, $2, 'grn:root:default:user:ada', now(), 'field')`, operator, org))
+		VALUES ($1, $2, '`+formerGRN("root", "user", "ada")+`', now(), 'field')`, operator, org))
 	for grn, mode := range map[string]string{legacyAgent: "legacy", fencedAgent: "fenced"} {
 		require.NoError(t, exec(`INSERT INTO §agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
 			VALUES ($1, $2, 'ready', 'connected', now(), now())`, grn, org))
@@ -47,7 +47,7 @@ func beforeLegacyRemoval(t *testing.T, p *pgxpool.Pool, schema string) (*migrate
 	// off for the one this seeds, as a definition written before it.
 	require.NoError(t, exec(`ALTER TABLE §agent_definitions DISABLE TRIGGER agent_definitions_closed`))
 	require.NoError(t, exec(`INSERT INTO §agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name)
-		VALUES ($1, $2, $3, '{}', 'grn:root:default:user:ada', now(), 'Sherlock')`, legacyAgent, org, operator))
+		VALUES ($1, $2, $3, '{}', '`+formerGRN("root", "user", "ada")+`', now(), 'Sherlock')`, legacyAgent, org, operator))
 	require.NoError(t, exec(`ALTER TABLE §agent_definitions ENABLE TRIGGER agent_definitions_closed`))
 	require.NoError(t, exec(`INSERT INTO §messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at)
 		VALUES ('m-1', $1, $2, 'k-1', 'hello', now())`, legacyAgent, fencedAgent))
@@ -96,8 +96,8 @@ func TestMigration000058_RefusesARowOfANonLegacyAgentAndDeletesNothing(t *testin
 			name:   "a definition of a fenced agent",
 			schema: "migrate_000058_definition",
 			row: `INSERT INTO §agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name)
-				VALUES ('` + fencedAgent + `', 'grn:root:default:org:mig', 'grn:mig:default:operator:field', '{}',
-				        'grn:root:default:user:ada', now(), 'Moved')`,
+				VALUES ('` + fencedAgent + `', '` + formerGRN("root", "org", "mig") + `', '` + formerGRN("mig", "operator", "field") + `', '{}',
+				        '` + formerGRN("root", "user", "ada") + `', now(), 'Moved')`,
 			refusal: "agent_definitions names a fenced agent",
 		},
 		{
@@ -106,7 +106,7 @@ func TestMigration000058_RefusesARowOfANonLegacyAgentAndDeletesNothing(t *testin
 			row: `INSERT INTO §agent_cutovers (agent_grn, import_id, stage, frozen_digest, audience_grn, grant_id,
 				                         operation_ref, created_at)
 				VALUES ('` + fencedAgent + `', 'import-1', 'frozen', decode(repeat('ab', 32), 'hex'),
-				        'grn:mig:default:operator:field', 'g-1', 'ref-1', now())`,
+				        '` + formerGRN("mig", "operator", "field") + `', 'g-1', 'ref-1', now())`,
 			refusal: "agent_cutovers holds an attempt of a fenced agent",
 		},
 		{
@@ -114,8 +114,8 @@ func TestMigration000058_RefusesARowOfANonLegacyAgentAndDeletesNothing(t *testin
 			schema: "migrate_000058_grant",
 			row: `INSERT INTO §operator_delegations
 				(id, org_grn, operator_grn, request_id, operations, expires_at, granted_by, granted_at)
-				VALUES ('g-1', 'grn:root:default:org:mig', 'grn:mig:default:operator:field', 'r-1',
-				        ARRAY['agent:cutover'], now() + interval '1 day', 'grn:root:default:user:ada', now())`,
+				VALUES ('g-1', '` + formerGRN("root", "org", "mig") + `', '` + formerGRN("mig", "operator", "field") + `', 'r-1',
+				        ARRAY['agent:cutover'], now() + interval '1 day', '` + formerGRN("root", "user", "ada") + `', now())`,
 			refusal: "operator_delegations holds a grant of agent:cutover alone",
 		},
 	} {

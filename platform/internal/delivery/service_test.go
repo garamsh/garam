@@ -26,11 +26,11 @@ import (
 )
 
 // agentGRN is the GRN garam and the runtime both know the agent by.
-func agentGRN() grn.GRN { return grn.New("acme", grn.DefaultProject, "agent", "0a1b2c3d4e5f6071") }
+func agentGRN() grn.GRN { return grn.New("acme", "agent", "0a1b2c3d4e5f6071") }
 
 // senderGRN is who sent every message the fake queue holds, as garam's
 // claim verified it.
-func senderGRN() grn.GRN { return grn.New("acme", grn.DefaultProject, "agent", "9f8e7d6c5b4a3021") }
+func senderGRN() grn.GRN { return grn.New("acme", "agent", "9f8e7d6c5b4a3021") }
 
 // emptyPollWait is how long the fake garam holds a poll that has
 // nothing to answer with. A long poll is what keeps the loop from
@@ -1124,7 +1124,7 @@ func TestRun_CompletesATurnThatEndedWhileTheStreamWasDown(t *testing.T) {
 // The second message is the control: another message is another
 // source.
 func TestRun_PostsTwoClaimsOfOneMessageAsOneSource(t *testing.T) {
-	queue := newGaramQueue(t, 200*time.Millisecond, `{"sender":"grn:evil:default:agent:1","body":"x"}`+"\né", "second")
+	queue := newGaramQueue(t, 200*time.Millisecond, `{"sender":"grn:evil/iam/agent/1","body":"x"}`+"\né", "second")
 	gateway := newAgentGateway(t)
 	run(t, queue, gateway)
 

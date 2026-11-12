@@ -47,7 +47,7 @@ func TestRealEngine_TheAdapterMountsTheOutboxAlone(t *testing.T) {
 	entry, err := json.Marshal(map[string]any{
 		"id": id, "created_at": time.Now().UTC().Format(time.RFC3339Nano), "agent_id": testAgent.String(),
 		"assignment_epoch": "3", "generation": generation, "in_reply_to": []string{}, "channel": "garam",
-		"target": "grn:acme:default:agent:ffffffffffffffff", "content": "hello",
+		"target": "grn:acme/iam/agent/ffffffffffffffff", "content": "hello",
 	})
 	require.NoError(t, err)
 	h.mustDocker("exec", runtime, h.probe(runtime), "put", "/data/outbox", id+".json", string(entry))

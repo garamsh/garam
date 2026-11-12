@@ -52,7 +52,7 @@ func NewHTTPAuthority(client *http.Client, base string, agent grn.GRN, credentia
 	if root.Scheme != "https" || root.Host == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: control address must be an absolute https URL")
 	}
-	served := root.JoinPath("v1", "agents", agent.String())
+	served := root.JoinPath("v1", "agents", url.PathEscape(agent.String()))
 	return &HTTPAuthority{
 		client:      client,
 		credential:  credential,

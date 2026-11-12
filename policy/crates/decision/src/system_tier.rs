@@ -2,8 +2,6 @@ use cedar_policy::{Policy, PolicyId, PolicySet, Schema, Template, ValidationMode
 
 use crate::error::Error;
 
-pub(crate) const SCHEMA: &str = include_str!("../../../schema/garam.cedarschema");
-
 /// Each file holds one policy, and its stem is that policy's id, which
 /// is what a decision's reasons name.
 const POLICIES: [(&str, &str); 2] = [

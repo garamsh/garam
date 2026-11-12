@@ -11,6 +11,7 @@ import (
 	"encoding/pem"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -187,4 +188,91 @@ func TestLoadKey_ReadsOnlyAnOwnerOnlyFile(t *testing.T) {
 	_, err = signer.LoadKey(path)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+}
+
+func mustSign(t *testing.T, key *signer.Key, c signer.Claims) string {
+	t.Helper()
+	token, err := key.Sign(c)
+	require.NoError(t, err)
+	return token
+}
+
+func TestSign_CarriesTheJTIAndSessionOnlyWhereSet(t *testing.T) {
+	key := newKey(t)
+	c := claims()
+	c.JTI, c.SessionID = "tok-1", "sid-1"
+
+	body := members(t, mustSign(t, key, c), 1)
+	assert.Equal(t, "tok-1", body["jti"])
+	assert.Equal(t, "sid-1", body["sid"])
+	assert.NotContains(t, members(t, mustSign(t, key, claims()), 1), "jti")
+	assert.NotContains(t, members(t, mustSign(t, key, claims()), 1), "sid")
+}
+
+func TestVerify_ReturnsWhatSignSigned(t *testing.T) {
+	key := newKey(t)
+	c := claims()
+	c.JTI, c.SessionID = "tok-1", "sid-1"
+
+	got, err := key.Verify(mustSign(t, key, c), issuedAt.Add(time.Second))
+	require.NoError(t, err)
+	assert.Equal(t, c.Issuer, got.Issuer)
+	assert.Equal(t, c.Subject, got.Subject)
+	assert.Equal(t, c.Audience, got.Audience)
+	assert.True(t, c.IssuedAt.Equal(got.IssuedAt))
+	assert.Equal(t, c.Lifetime, got.Lifetime)
+	assert.Equal(t, "tok-1", got.JTI)
+	assert.Equal(t, "sid-1", got.SessionID)
+}
+
+// TestVerify_RefusesAHeaderOutsideTheProfile: a token this key's own
+// private half signed, with a typ or kid the profile does not name, is
+// refused. The profile's own header is the control.
+func TestVerify_RefusesAHeaderOutsideTheProfile(t *testing.T) {
+	private, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	der, err := x509.MarshalPKCS8PrivateKey(private)
+	require.NoError(t, err)
+	key, err := signer.ParseKey(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+	require.NoError(t, err)
+
+	signed := func(typ, kid string) string {
+		s, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: private},
+			(&jose.SignerOptions{}).WithType(jose.ContentType(typ)).WithHeader("kid", kid))
+		require.NoError(t, err)
+		object, err := s.Sign([]byte(`{"iss":"i","sub":"s","aud":"a","iat":` +
+			strconv.FormatInt(issuedAt.Unix(), 10) + `,"exp":` + strconv.FormatInt(issuedAt.Add(time.Minute).Unix(), 10) + `}`))
+		require.NoError(t, err)
+		compact, err := object.CompactSerialize()
+		require.NoError(t, err)
+		return compact
+	}
+	_, err = key.Verify(signed("JWT", key.ID()), issuedAt)
+	require.NoError(t, err, "control")
+	_, err = key.Verify(signed("at+jwt", key.ID()), issuedAt)
+	assert.Error(t, err, "another typ")
+	_, err = key.Verify(signed("JWT", "other"), issuedAt)
+	assert.Error(t, err, "another kid")
+}
+
+func TestVerify_RefusesWhatThisKeyDidNotSignOrIsOutOfTime(t *testing.T) {
+	key := newKey(t)
+	token := mustSign(t, key, claims())
+	parts := strings.Split(token, ".")
+	forged := parts[0] + "." + base64.RawURLEncoding.EncodeToString(
+		[]byte(`{"iss":"https://garam.test","sub":"root","aud":"policy","iat":1,"exp":9999999999}`)) + "." + parts[2]
+
+	for name, c := range map[string]struct {
+		token string
+		now   time.Time
+	}{
+		"another key's token": {mustSign(t, newKey(t), claims()), issuedAt},
+		"a forged payload":    {forged, issuedAt},
+		"an expired token":    {token, issuedAt.Add(time.Minute)},
+		"a future token":      {token, issuedAt.Add(-time.Second)},
+		"not a token":         {"x.y.z", issuedAt},
+	} {
+		_, err := key.Verify(c.token, c.now)
+		assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated), name)
+	}
 }

@@ -29,7 +29,7 @@ export default async function ProjectsPage({ params }: Params) {
   const [organization, projects, permissions] = await Promise.all([
     getOrg(org),
     lookupProjects(org),
-    checkPermissions(org, { create: { action: "project:create" } }),
+    checkPermissions(org, { create: { action: "iam:project.create" } }),
   ]);
 
   const create =

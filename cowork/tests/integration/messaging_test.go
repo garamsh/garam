@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -33,7 +34,7 @@ type apiMessage struct {
 	Replies             int      `json:"replies"`
 }
 
-func userGRN(who string) string { return "grn:root:default:user:" + who }
+func userGRN(who string) string { return grn.New(grn.RootOwner, "user", who).String() }
 
 func (s *stack) createChannel(t *testing.T, who, body string) apiChannel {
 	t.Helper()
@@ -147,7 +148,7 @@ func TestMessaging_PrivateNarrowsAndTheListGrantsNothing(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, status, body)
 	assert.Equal(t, []string{"secret"}, bodiesOf(s.messages(t, "bob", path)))
 
-	s.platform.denyCheck("bob cowork:channel-read@" + plans.ID)
+	s.platform.denyCheck("bob cowork:channel.read@" + plans.ID)
 	status, _ = s.call(t, "bob", http.MethodGet, path, "")
 	assert.Equal(t, http.StatusForbidden, status, "on the list, denied by the platform")
 	assert.Equal(t, []string{"secret"}, bodiesOf(s.messages(t, "ada", path)), "ada, not denied, still reads")
@@ -213,7 +214,7 @@ func TestMessaging_LinksPagesBothWays(t *testing.T) {
 	pageID := s.createPage(t, "spec")
 	hidden := s.createPage(t, "hidden")
 	c := s.createChannel(t, "ada", `{"kind":"public","name":"general"}`)
-	agent := "grn:acme:default:agent:helper"
+	agent := "grn:acme/iam/agent/helper"
 
 	m := s.post(t, "ada", c.ID, `{"body":"see the spec","pages":["`+pageID+`"],"mentions":["`+userGRN("bob")+`","`+agent+`"]}`)
 	assert.Equal(t, []string{agent}, m.UndeliveredMentions)
@@ -221,7 +222,7 @@ func TestMessaging_LinksPagesBothWays(t *testing.T) {
 	require.Len(t, linking, 1)
 	assert.Equal(t, m.ID, linking[0].ID)
 
-	s.platform.denyCheck("ada cowork:page-read@" + hidden)
+	s.platform.denyCheck("ada cowork:page.read@" + hidden)
 	status, _ := s.call(t, "ada", http.MethodPost, "/orgs/acme/channels/"+c.ID+"/messages", `{"body":"x","pages":["`+hidden+`"]}`)
 	assert.Equal(t, http.StatusForbidden, status)
 }

@@ -50,7 +50,7 @@ func (p *policy) Allowed(_ context.Context, c platform.Caller, org string, check
 }
 
 func person(name string) platform.Caller {
-	return platform.Caller{GRN: grn.New(grn.RootOwner, grn.DefaultProject, "user", name)}
+	return platform.Caller{GRN: grn.New(grn.RootOwner, "user", name)}
 }
 
 var (
@@ -239,7 +239,7 @@ func TestListen_DeliversEveryMessagePosted(t *testing.T) {
 	require.NoError(t, err)
 	defer leave()
 
-	agent := grn.New("acme", grn.DefaultProject, "agent", "helper")
+	agent := grn.New("acme", "agent", "helper")
 	post(t, s, ada, other.ID, channel.PostInput{Body: "elsewhere"})
 	post(t, s, ada, general.ID, channel.PostInput{Body: "@helper look", Mentions: []grn.GRN{bob.GRN, agent}})
 

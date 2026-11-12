@@ -42,7 +42,7 @@ func TestRegisterPassword_ConflictCarriesNoneOfTheDriversText(t *testing.T) {
 		"the control: the first registration lands")
 
 	orgGRN := grn.Org("acme")
-	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	creator := grn.New("root", user.ServiceType, "owner-sub")
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t),
 		org.NewInvitation("second-tok", orgGRN, org.RoleMember, creator, time.Now().UTC().Add(time.Hour))))
 
@@ -71,7 +71,7 @@ func TestDecodeJSON_RefusesABodyThatDoesNotParse(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgUpdate})
+	f.permit(permission{grn.New("root", user.ServiceType, "owner-sub"), org.ActionOrgUpdate})
 
 	rec := f.do(t, "PATCH", "/orgs/"+slug, `{"name":`, owner)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
@@ -111,7 +111,7 @@ func TestDecodeJSON_AnswersABodyPastTheBoundWith413(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgUpdate})
+	f.permit(permission{grn.New("root", user.ServiceType, "owner-sub"), org.ActionOrgUpdate})
 	const bound = 1024
 	handler := http.MaxBytesHandler(f.handler, bound)
 	send := func(body *countingReader) *httptest.ResponseRecorder {
@@ -146,7 +146,7 @@ func TestDecodeJSON_AnswersABodyPastTheBoundWith413(t *testing.T) {
 func TestServer_TellsAnEngineThatIsNotThereFromADecisionThatRefused(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 
 	// The engine answers as it does in every other test until it stops
 	// being there, which is the third call below.

@@ -12,6 +12,7 @@ import {
   listTaskComments,
   type Message,
 } from "@/lib/cowork";
+import { identifierOf } from "@/lib/grn";
 import { listParticipants } from "@/lib/platform";
 
 /** A task: its fields, what it links, and its comments. */
@@ -98,7 +99,7 @@ export default async function TaskView({
             {comments.value.map((c) => (
               <li key={c.id} className="flex flex-col">
                 <span className="text-sm font-semibold">
-                  {names[c.author] ?? c.author.split(":").at(-1)}
+                  {names[c.author] ?? identifierOf(c.author)}
                 </span>
                 <p className="whitespace-pre-wrap">{c.body}</p>
               </li>

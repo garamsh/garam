@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/machineapi"
 	"github.com/garamsh/garam/platform/internal/message"
 	"github.com/garamsh/garam/platform/internal/wire"
@@ -65,7 +66,7 @@ func evalInputWith(effect wire.Effect) machineapi.EvalInput {
 			Sid:      "machine-own-org",
 			Effect:   effect,
 			Action:   []string{message.ActionSend},
-			Resource: []string{"grn:" + sender.Organization + ":*"},
+			Resource: []string{grn.OrgPattern(sender.Organization)},
 		}},
 	}
 }

@@ -247,7 +247,7 @@ type MessageList struct {
 
 // MessagePost defines model for MessagePost.
 type MessagePost struct {
-	// Artifacts Artifacts to embed; each needs `cowork:artifact-read` of the author.
+	// Artifacts Artifacts to embed; each needs `cowork:artifact.read` of the author.
 	Artifacts *[]string `json:"artifacts,omitempty"`
 	Body      string    `json:"body"`
 	Mentions  *[]string `json:"mentions,omitempty"`
@@ -593,14 +593,14 @@ type ClientInterface interface {
 
 	// ListChannels List the channels the caller may read.
 	//
-	// Requires `cowork:channel-read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
+	// Requires `cowork:channel.read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
 	//
 	// Corresponds with GET /orgs/{org}/channels (the `ListChannels` operationId).
 	ListChannels(ctx context.Context, org OrgPath, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateChannelWithBody Create a channel or start a direct message.
 	//
-	// Requires `cowork:channel-post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
+	// Requires `cowork:channel.post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -609,7 +609,7 @@ type ClientInterface interface {
 
 	// CreateChannel Create a channel or start a direct message.
 	//
-	// Requires `cowork:channel-post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
+	// Requires `cowork:channel.post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -623,7 +623,7 @@ type ClientInterface interface {
 
 	// AddChannelMemberWithBody Add a participant to a private channel.
 	//
-	// Requires `cowork:channel-post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
+	// Requires `cowork:channel.post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -632,7 +632,7 @@ type ClientInterface interface {
 
 	// AddChannelMember Add a participant to a private channel.
 	//
-	// Requires `cowork:channel-post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
+	// Requires `cowork:channel.post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -653,7 +653,7 @@ type ClientInterface interface {
 
 	// PostMessageWithBody Post a message, or reply in a thread.
 	//
-	// Requires `cowork:channel-post` on the channel, and `cowork:page-read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
+	// Requires `cowork:channel.post` on the channel, and `cowork:page.read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -662,7 +662,7 @@ type ClientInterface interface {
 
 	// PostMessage Post a message, or reply in a thread.
 	//
-	// Requires `cowork:channel-post` on the channel, and `cowork:page-read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
+	// Requires `cowork:channel.post` on the channel, and `cowork:page.read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -683,14 +683,14 @@ type ClientInterface interface {
 
 	// ListPages List the pages of an organization the caller may read.
 	//
-	// Requires `cowork:page-read` on the organization. A page the caller may not read is left out, and so is every page beneath it.
+	// Requires `cowork:page.read` on the organization. A page the caller may not read is left out, and so is every page beneath it.
 	//
 	// Corresponds with GET /orgs/{org}/pages (the `ListPages` operationId).
 	ListPages(ctx context.Context, org OrgPath, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreatePageWithBody Create a page after its last sibling.
 	//
-	// Requires `cowork:page-write` on the organization, and on the parent where one is named.
+	// Requires `cowork:page.write` on the organization, and on the parent where one is named.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -699,7 +699,7 @@ type ClientInterface interface {
 
 	// CreatePage Create a page after its last sibling.
 	//
-	// Requires `cowork:page-write` on the organization, and on the parent where one is named.
+	// Requires `cowork:page.write` on the organization, and on the parent where one is named.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -708,19 +708,19 @@ type ClientInterface interface {
 
 	// DeletePage Delete a page and every page beneath it.
 	//
-	// Requires `cowork:page-write` on the page.
+	// Requires `cowork:page.write` on the page.
 	//
 	// Corresponds with DELETE /orgs/{org}/pages/{page} (the `DeletePage` operationId).
 	DeletePage(ctx context.Context, org OrgPath, page PagePath, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetPage Read a page. Requires `cowork:page-read` on it.
+	// GetPage Read a page. Requires `cowork:page.read` on it.
 	//
 	// Corresponds with GET /orgs/{org}/pages/{page} (the `GetPage` operationId).
 	GetPage(ctx context.Context, org OrgPath, page PagePath, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// UpdatePageWithBody Rename or move a page.
 	//
-	// Requires `cowork:page-write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
+	// Requires `cowork:page.write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -729,7 +729,7 @@ type ClientInterface interface {
 
 	// UpdatePage Rename or move a page.
 	//
-	// Requires `cowork:page-write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
+	// Requires `cowork:page.write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -738,7 +738,7 @@ type ClientInterface interface {
 
 	// ListPageMessages Read the messages that link a page, newest first.
 	//
-	// Requires `cowork:page-read` on the page, and answers only messages in channels the caller may read.
+	// Requires `cowork:page.read` on the page, and answers only messages in channels the caller may read.
 	//
 	// Corresponds with GET /orgs/{org}/pages/{page}/messages (the `ListPageMessages` operationId).
 	ListPageMessages(ctx context.Context, org OrgPath, page PagePath, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -962,7 +962,7 @@ func (c *Client) ViewArtifact(ctx context.Context, org OrgPath, artifact Artifac
 
 // ListChannels List the channels the caller may read.
 //
-// Requires `cowork:channel-read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
+// Requires `cowork:channel.read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
 //
 // Corresponds with GET /orgs/{org}/channels (the `ListChannels` operationId).
 func (c *Client) ListChannels(ctx context.Context, org OrgPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -979,7 +979,7 @@ func (c *Client) ListChannels(ctx context.Context, org OrgPath, reqEditors ...Re
 
 // CreateChannelWithBody Create a channel or start a direct message.
 //
-// Requires `cowork:channel-post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
+// Requires `cowork:channel.post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
 //
 // Takes any type of body and a specified content type.
 //
@@ -998,7 +998,7 @@ func (c *Client) CreateChannelWithBody(ctx context.Context, org OrgPath, content
 
 // CreateChannel Create a channel or start a direct message.
 //
-// Requires `cowork:channel-post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
+// Requires `cowork:channel.post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -1032,7 +1032,7 @@ func (c *Client) GetChannel(ctx context.Context, org OrgPath, channel ChannelPat
 
 // AddChannelMemberWithBody Add a participant to a private channel.
 //
-// Requires `cowork:channel-post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
+// Requires `cowork:channel.post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
 //
 // Takes any type of body and a specified content type.
 //
@@ -1051,7 +1051,7 @@ func (c *Client) AddChannelMemberWithBody(ctx context.Context, org OrgPath, chan
 
 // AddChannelMember Add a participant to a private channel.
 //
-// Requires `cowork:channel-post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
+// Requires `cowork:channel.post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -1102,7 +1102,7 @@ func (c *Client) ListMessages(ctx context.Context, org OrgPath, channel ChannelP
 
 // PostMessageWithBody Post a message, or reply in a thread.
 //
-// Requires `cowork:channel-post` on the channel, and `cowork:page-read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
+// Requires `cowork:channel.post` on the channel, and `cowork:page.read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
 //
 // Takes any type of body and a specified content type.
 //
@@ -1121,7 +1121,7 @@ func (c *Client) PostMessageWithBody(ctx context.Context, org OrgPath, channel C
 
 // PostMessage Post a message, or reply in a thread.
 //
-// Requires `cowork:channel-post` on the channel, and `cowork:page-read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
+// Requires `cowork:channel.post` on the channel, and `cowork:page.read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
 //
 // Takes a body of the `application/json` content type.
 //
@@ -1172,7 +1172,7 @@ func (c *Client) GetThread(ctx context.Context, org OrgPath, message MessagePath
 
 // ListPages List the pages of an organization the caller may read.
 //
-// Requires `cowork:page-read` on the organization. A page the caller may not read is left out, and so is every page beneath it.
+// Requires `cowork:page.read` on the organization. A page the caller may not read is left out, and so is every page beneath it.
 //
 // Corresponds with GET /orgs/{org}/pages (the `ListPages` operationId).
 func (c *Client) ListPages(ctx context.Context, org OrgPath, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1189,7 +1189,7 @@ func (c *Client) ListPages(ctx context.Context, org OrgPath, reqEditors ...Reque
 
 // CreatePageWithBody Create a page after its last sibling.
 //
-// Requires `cowork:page-write` on the organization, and on the parent where one is named.
+// Requires `cowork:page.write` on the organization, and on the parent where one is named.
 //
 // Takes any type of body and a specified content type.
 //
@@ -1208,7 +1208,7 @@ func (c *Client) CreatePageWithBody(ctx context.Context, org OrgPath, contentTyp
 
 // CreatePage Create a page after its last sibling.
 //
-// Requires `cowork:page-write` on the organization, and on the parent where one is named.
+// Requires `cowork:page.write` on the organization, and on the parent where one is named.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -1227,7 +1227,7 @@ func (c *Client) CreatePage(ctx context.Context, org OrgPath, body CreatePageJSO
 
 // DeletePage Delete a page and every page beneath it.
 //
-// Requires `cowork:page-write` on the page.
+// Requires `cowork:page.write` on the page.
 //
 // Corresponds with DELETE /orgs/{org}/pages/{page} (the `DeletePage` operationId).
 func (c *Client) DeletePage(ctx context.Context, org OrgPath, page PagePath, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1242,7 +1242,7 @@ func (c *Client) DeletePage(ctx context.Context, org OrgPath, page PagePath, req
 	return c.Client.Do(req)
 }
 
-// GetPage Read a page. Requires `cowork:page-read` on it.
+// GetPage Read a page. Requires `cowork:page.read` on it.
 //
 // Corresponds with GET /orgs/{org}/pages/{page} (the `GetPage` operationId).
 func (c *Client) GetPage(ctx context.Context, org OrgPath, page PagePath, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -1259,7 +1259,7 @@ func (c *Client) GetPage(ctx context.Context, org OrgPath, page PagePath, reqEdi
 
 // UpdatePageWithBody Rename or move a page.
 //
-// Requires `cowork:page-write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
+// Requires `cowork:page.write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
 //
 // Takes any type of body and a specified content type.
 //
@@ -1278,7 +1278,7 @@ func (c *Client) UpdatePageWithBody(ctx context.Context, org OrgPath, page PageP
 
 // UpdatePage Rename or move a page.
 //
-// Requires `cowork:page-write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
+// Requires `cowork:page.write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -1297,7 +1297,7 @@ func (c *Client) UpdatePage(ctx context.Context, org OrgPath, page PagePath, bod
 
 // ListPageMessages Read the messages that link a page, newest first.
 //
-// Requires `cowork:page-read` on the page, and answers only messages in channels the caller may read.
+// Requires `cowork:page.read` on the page, and answers only messages in channels the caller may read.
 //
 // Corresponds with GET /orgs/{org}/pages/{page}/messages (the `ListPageMessages` operationId).
 func (c *Client) ListPageMessages(ctx context.Context, org OrgPath, page PagePath, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2966,7 +2966,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListChannelsWithResponse List the channels the caller may read.
 	//
-	// Requires `cowork:channel-read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
+	// Requires `cowork:channel.read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -2975,7 +2975,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateChannelWithBodyWithResponse Create a channel or start a direct message.
 	//
-	// Requires `cowork:channel-post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
+	// Requires `cowork:channel.post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -2984,7 +2984,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreateChannelWithResponse Create a channel or start a direct message.
 	//
-	// Requires `cowork:channel-post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
+	// Requires `cowork:channel.post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3000,7 +3000,7 @@ type ClientWithResponsesInterface interface {
 
 	// AddChannelMemberWithBodyWithResponse Add a participant to a private channel.
 	//
-	// Requires `cowork:channel-post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
+	// Requires `cowork:channel.post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3009,7 +3009,7 @@ type ClientWithResponsesInterface interface {
 
 	// AddChannelMemberWithResponse Add a participant to a private channel.
 	//
-	// Requires `cowork:channel-post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
+	// Requires `cowork:channel.post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3034,7 +3034,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostMessageWithBodyWithResponse Post a message, or reply in a thread.
 	//
-	// Requires `cowork:channel-post` on the channel, and `cowork:page-read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
+	// Requires `cowork:channel.post` on the channel, and `cowork:page.read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3043,7 +3043,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostMessageWithResponse Post a message, or reply in a thread.
 	//
-	// Requires `cowork:channel-post` on the channel, and `cowork:page-read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
+	// Requires `cowork:channel.post` on the channel, and `cowork:page.read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3068,7 +3068,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListPagesWithResponse List the pages of an organization the caller may read.
 	//
-	// Requires `cowork:page-read` on the organization. A page the caller may not read is left out, and so is every page beneath it.
+	// Requires `cowork:page.read` on the organization. A page the caller may not read is left out, and so is every page beneath it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -3077,7 +3077,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreatePageWithBodyWithResponse Create a page after its last sibling.
 	//
-	// Requires `cowork:page-write` on the organization, and on the parent where one is named.
+	// Requires `cowork:page.write` on the organization, and on the parent where one is named.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3086,7 +3086,7 @@ type ClientWithResponsesInterface interface {
 
 	// CreatePageWithResponse Create a page after its last sibling.
 	//
-	// Requires `cowork:page-write` on the organization, and on the parent where one is named.
+	// Requires `cowork:page.write` on the organization, and on the parent where one is named.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3095,14 +3095,14 @@ type ClientWithResponsesInterface interface {
 
 	// DeletePageWithResponse Delete a page and every page beneath it.
 	//
-	// Requires `cowork:page-write` on the page.
+	// Requires `cowork:page.write` on the page.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/pages/{page} (the `DeletePage` operationId).
 	DeletePageWithResponse(ctx context.Context, org OrgPath, page PagePath, reqEditors ...RequestEditorFn) (*DeletePageResponse, error)
 
-	// GetPageWithResponse Read a page. Requires `cowork:page-read` on it.
+	// GetPageWithResponse Read a page. Requires `cowork:page.read` on it.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -3111,7 +3111,7 @@ type ClientWithResponsesInterface interface {
 
 	// UpdatePageWithBodyWithResponse Rename or move a page.
 	//
-	// Requires `cowork:page-write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
+	// Requires `cowork:page.write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3120,7 +3120,7 @@ type ClientWithResponsesInterface interface {
 
 	// UpdatePageWithResponse Rename or move a page.
 	//
-	// Requires `cowork:page-write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
+	// Requires `cowork:page.write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -3129,7 +3129,7 @@ type ClientWithResponsesInterface interface {
 
 	// ListPageMessagesWithResponse Read the messages that link a page, newest first.
 	//
-	// Requires `cowork:page-read` on the page, and answers only messages in channels the caller may read.
+	// Requires `cowork:page.read` on the page, and answers only messages in channels the caller may read.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -5141,7 +5141,7 @@ func (c *ClientWithResponses) ViewArtifactWithResponse(ctx context.Context, org 
 
 // ListChannelsWithResponse List the channels the caller may read.
 //
-// Requires `cowork:channel-read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
+// Requires `cowork:channel.read` on the organization. Answers the public channels and those whose participant list holds the caller, less any the platform denies the caller reading.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -5156,7 +5156,7 @@ func (c *ClientWithResponses) ListChannelsWithResponse(ctx context.Context, org 
 
 // CreateChannelWithBodyWithResponse Create a channel or start a direct message.
 //
-// Requires `cowork:channel-post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
+// Requires `cowork:channel.post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5171,7 +5171,7 @@ func (c *ClientWithResponses) CreateChannelWithBodyWithResponse(ctx context.Cont
 
 // CreateChannelWithResponse Create a channel or start a direct message.
 //
-// Requires `cowork:channel-post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
+// Requires `cowork:channel.post` on the organization. A public or private channel takes a name the organization has no other channel by, 409 otherwise. A private channel's list starts with its creator and `members`; a direct message takes no name and is between its creator and `members`, at least one other.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5199,7 +5199,7 @@ func (c *ClientWithResponses) GetChannelWithResponse(ctx context.Context, org Or
 
 // AddChannelMemberWithBodyWithResponse Add a participant to a private channel.
 //
-// Requires `cowork:channel-post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
+// Requires `cowork:channel.post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5214,7 +5214,7 @@ func (c *ClientWithResponses) AddChannelMemberWithBodyWithResponse(ctx context.C
 
 // AddChannelMemberWithResponse Add a participant to a private channel.
 //
-// Requires `cowork:channel-post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
+// Requires `cowork:channel.post` on the channel and a place on its list. A public channel keeps no list and a direct message's is fixed, and either is answered 409.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5257,7 +5257,7 @@ func (c *ClientWithResponses) ListMessagesWithResponse(ctx context.Context, org 
 
 // PostMessageWithBodyWithResponse Post a message, or reply in a thread.
 //
-// Requires `cowork:channel-post` on the channel, and `cowork:page-read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
+// Requires `cowork:channel.post` on the channel, and `cowork:page.read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5272,7 +5272,7 @@ func (c *ClientWithResponses) PostMessageWithBodyWithResponse(ctx context.Contex
 
 // PostMessageWithResponse Post a message, or reply in a thread.
 //
-// Requires `cowork:channel-post` on the channel, and `cowork:page-read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
+// Requires `cowork:channel.post` on the channel, and `cowork:page.read` on every page it links: a message shows a linked page's title, so it links only what its author may read. A reply to a reply joins the first message's thread. An agent it mentions is answered in `undeliveredMentions` until cowork reaches agents' runtimes (#1664).
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5315,7 +5315,7 @@ func (c *ClientWithResponses) GetThreadWithResponse(ctx context.Context, org Org
 
 // ListPagesWithResponse List the pages of an organization the caller may read.
 //
-// Requires `cowork:page-read` on the organization. A page the caller may not read is left out, and so is every page beneath it.
+// Requires `cowork:page.read` on the organization. A page the caller may not read is left out, and so is every page beneath it.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -5330,7 +5330,7 @@ func (c *ClientWithResponses) ListPagesWithResponse(ctx context.Context, org Org
 
 // CreatePageWithBodyWithResponse Create a page after its last sibling.
 //
-// Requires `cowork:page-write` on the organization, and on the parent where one is named.
+// Requires `cowork:page.write` on the organization, and on the parent where one is named.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5345,7 +5345,7 @@ func (c *ClientWithResponses) CreatePageWithBodyWithResponse(ctx context.Context
 
 // CreatePageWithResponse Create a page after its last sibling.
 //
-// Requires `cowork:page-write` on the organization, and on the parent where one is named.
+// Requires `cowork:page.write` on the organization, and on the parent where one is named.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5360,7 +5360,7 @@ func (c *ClientWithResponses) CreatePageWithResponse(ctx context.Context, org Or
 
 // DeletePageWithResponse Delete a page and every page beneath it.
 //
-// Requires `cowork:page-write` on the page.
+// Requires `cowork:page.write` on the page.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -5373,7 +5373,7 @@ func (c *ClientWithResponses) DeletePageWithResponse(ctx context.Context, org Or
 	return ParseDeletePageResponse(rsp)
 }
 
-// GetPageWithResponse Read a page. Requires `cowork:page-read` on it.
+// GetPageWithResponse Read a page. Requires `cowork:page.read` on it.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -5388,7 +5388,7 @@ func (c *ClientWithResponses) GetPageWithResponse(ctx context.Context, org OrgPa
 
 // UpdatePageWithBodyWithResponse Rename or move a page.
 //
-// Requires `cowork:page-write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
+// Requires `cowork:page.write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5403,7 +5403,7 @@ func (c *ClientWithResponses) UpdatePageWithBodyWithResponse(ctx context.Context
 
 // UpdatePageWithResponse Rename or move a page.
 //
-// Requires `cowork:page-write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
+// Requires `cowork:page.write` on the page, and on the parent it moves under. A field left out is left as it is. `parent` set to an empty string moves the page to the top of the tree, and `position` places it among its new siblings, moving those from that place on down by one. A page cannot go under itself or a page beneath it: that is answered 409.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -5418,7 +5418,7 @@ func (c *ClientWithResponses) UpdatePageWithResponse(ctx context.Context, org Or
 
 // ListPageMessagesWithResponse Read the messages that link a page, newest first.
 //
-// Requires `cowork:page-read` on the page, and answers only messages in channels the caller may read.
+// Requires `cowork:page.read` on the page, and answers only messages in channels the caller may read.
 //
 // Returns a wrapper object for the known response body format(s).
 //

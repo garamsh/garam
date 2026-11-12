@@ -20,6 +20,7 @@ import {
   seedKeyExchange,
   seedMember,
 } from "./seed";
+import { formatGrn } from "../src/lib/grn";
 
 /** Where the seeded hosted operator's control service is registered. */
 const ENDPOINT = "https://control.example.test/garam";
@@ -431,14 +432,19 @@ test.describe("operators", () => {
     signedIn,
     baseURL,
   }) => {
-    await seedHostedOperator(signedIn, ENDPOINT, ["operator:read"]);
+    await seedHostedOperator(signedIn, ENDPOINT, ["iam:operator.read"]);
     const digest = `sha256:${"ab".repeat(32)}`;
     const received = await stubReports(page, new URL(baseURL!).origin, {
       status: 200,
       body: {
         operators: [
           {
-            grn: `grn:${signedIn.orgSlug}:default:operator:${signedIn.operatorIdentifier}`,
+            grn: formatGrn(
+              signedIn.orgSlug,
+              "iam",
+              "operator",
+              signedIn.operatorIdentifier,
+            ),
             images: [
               {
                 name: "manager",
@@ -500,10 +506,10 @@ test.describe("operators", () => {
         read.authorization!.slice("Garam-Operation ".length),
       );
       expect(recorded).toMatchObject({
-        operation: "operator:read",
+        operation: "iam:operator.read",
         actorGrn: signedIn.userGrn,
-        audienceGrn: `grn:${signedIn.orgSlug}:default:operator:hosted`,
-        targetGrn: `grn:root:default:org:${signedIn.orgSlug}`,
+        audienceGrn: formatGrn(signedIn.orgSlug, "iam", "operator", "hosted"),
+        targetGrn: `grn:root/iam/org/${signedIn.orgSlug}`,
         requestTarget: read.path,
       });
     }
@@ -514,7 +520,7 @@ test.describe("operators", () => {
     signedIn,
     baseURL,
   }) => {
-    await seedHostedOperator(signedIn, ENDPOINT, ["operator:read"]);
+    await seedHostedOperator(signedIn, ENDPOINT, ["iam:operator.read"]);
     await stubReports(page, new URL(baseURL!).origin, "unreachable");
     const unanswered = page.getByText(
       "Hosted control's control service did not answer, so what it reports of the operators it serves was not checked.",

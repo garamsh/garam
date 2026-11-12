@@ -34,13 +34,13 @@ const alice: Subject = {
 
 const draft: Policy = {
   ...baselineRead,
-  grn: "grn:acme:default:policy:dddd",
+  grn: "grn:acme/iam/policy/dddd",
   name: "Draft",
   status: "draft",
 };
 const direct: Policy = {
   ...denyDeletes,
-  grn: "grn:acme:default:policy:eeee",
+  grn: "grn:acme/iam/policy/eeee",
   name: "Direct",
 };
 
@@ -211,9 +211,11 @@ describe("describeSubject", () => {
       label: "Engineering",
       lookup: "found",
     });
-    expect(
-      describeSubject("grn:acme:default:group:gone", catalogs),
-    ).toMatchObject({ kind: "team", label: null, lookup: "missing" });
+    expect(describeSubject("grn:acme/iam/group/gone", catalogs)).toMatchObject({
+      kind: "team",
+      label: null,
+      lookup: "missing",
+    });
     expect(
       describeSubject(engineering.grn, {
         ...catalogs,
@@ -263,8 +265,7 @@ describe("agent subjects", () => {
     // The control: with the list read, an agent it does not hold is
     // missing.
     expect(
-      describeSubject("grn:acme:default:agent:0000000000000000", catalogs)
-        .lookup,
+      describeSubject("grn:acme/iam/agent/0000000000000000", catalogs).lookup,
     ).toBe("missing");
   });
 });

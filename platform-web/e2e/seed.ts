@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { Client } from "pg";
+import { formatGrn } from "../src/lib/grn";
 
 /** The rows `seedSignedInOrg` wrote, and the cookie that reaches them. */
 export type Seed = {
@@ -87,7 +88,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
     sessionToken: randomBytes(32).toString("base64url"),
     orgSlug: `e2e-${suffix}`,
     orgName: `E2E Org ${suffix}`,
-    userGrn: `grn:root:default:user:e2e-${suffix}`,
+    userGrn: `grn:root/iam/user/e2e-${suffix}`,
     userSlug: `e2e-${suffix}`,
     nickname: `e2e-user-${suffix}`,
     groupName: "Engineering",
@@ -100,8 +101,8 @@ export async function seedSignedInOrg(): Promise<Seed> {
     partnerOrgSlug: `e2e-partner-${suffix}`,
     partnerOrgName: `E2E Partner ${suffix}`,
   };
-  const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
-  const partnerGrn = `grn:root:default:org:${seed.partnerOrgSlug}`;
+  const orgGrn = `grn:root/iam/org/${seed.orgSlug}`;
+  const partnerGrn = `grn:root/iam/org/${seed.partnerOrgSlug}`;
 
   const client = new Client({ connectionString: DATABASE_URL });
   await client.connect();
@@ -121,13 +122,17 @@ export async function seedSignedInOrg(): Promise<Seed> {
     await client.query(
       `INSERT INTO groups (grn, org_grn, name, created_at, updated_at)
        VALUES ($1, $2, $3, now(), now())`,
-      [`grn:${seed.orgSlug}:default:group:engineering`, orgGrn, seed.groupName],
+      [
+        formatGrn(seed.orgSlug, "iam", "group", "engineering"),
+        orgGrn,
+        seed.groupName,
+      ],
     );
     await client.query(
       `INSERT INTO projects (grn, org_grn, name, created_at, updated_at)
        VALUES ($1, $2, $3, now(), now())`,
       [
-        `grn:${seed.orgSlug}:default:project:frontend`,
+        formatGrn(seed.orgSlug, "iam", "project", "frontend"),
         orgGrn,
         seed.projectName,
       ],
@@ -137,7 +142,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
       `INSERT INTO operators (grn, org_grn, registered_by, created_at, name)
        VALUES ($1, $2, $3, now(), $4)`,
       [
-        `grn:${seed.orgSlug}:default:operator:${seed.operatorIdentifier}`,
+        formatGrn(seed.orgSlug, "iam", "operator", seed.operatorIdentifier),
         orgGrn,
         seed.userGrn,
         seed.operatorName,
@@ -150,7 +155,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
       `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
        VALUES ($1, $2, $3, $4, now(), now())`,
       [
-        `grn:${seed.orgSlug}:default:agent:${seed.agentIdentifier}`,
+        formatGrn(seed.orgSlug, "iam", "agent", seed.agentIdentifier),
         orgGrn,
         seed.agentProvisioningState,
         seed.agentRuntimeState,
@@ -194,7 +199,7 @@ export async function seedSignedInUser(): Promise<SeededUser> {
   const suffix = randomBytes(6).toString("hex");
   const user: SeededUser = {
     sessionToken: randomBytes(32).toString("base64url"),
-    userGrn: `grn:root:default:user:e2e-${suffix}`,
+    userGrn: `grn:root/iam/user/e2e-${suffix}`,
     userSlug: `e2e-${suffix}`,
     nickname: `e2e-user-${suffix}`,
   };
@@ -261,12 +266,17 @@ export async function seedHostedOperator(
 ): Promise<HostedSeed> {
   const hosted: HostedSeed = {
     identifier: "hosted",
-    grn: `grn:${seed.orgSlug}:default:operator:hosted`,
+    grn: formatGrn(seed.orgSlug, "iam", "operator", "hosted"),
     name: "Hosted control",
     endpoint: endpoint ?? "",
   };
-  const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
-  const controller = `grn:${seed.orgSlug}:default:operator:${seed.operatorIdentifier}`;
+  const orgGrn = `grn:root/iam/org/${seed.orgSlug}`;
+  const controller = formatGrn(
+    seed.orgSlug,
+    "iam",
+    "operator",
+    seed.operatorIdentifier,
+  );
   const client = new Client({ connectionString: DATABASE_URL });
   await client.connect();
   try {
@@ -293,7 +303,10 @@ export async function seedHostedOperator(
     await client.query(
       `INSERT INTO agent_assignments (agent_grn, assignee_grn, epoch, created_at, updated_at)
        VALUES ($1, $2, 1, now(), now())`,
-      [`grn:${seed.orgSlug}:default:agent:${seed.agentIdentifier}`, controller],
+      [
+        formatGrn(seed.orgSlug, "iam", "agent", seed.agentIdentifier),
+        controller,
+      ],
     );
     await client.query("COMMIT");
   } catch (error) {
@@ -348,7 +361,7 @@ export async function seedMember(seed: Seed): Promise<SeededUser> {
   const suffix = randomBytes(6).toString("hex");
   const member: SeededUser = {
     sessionToken: randomBytes(32).toString("base64url"),
-    userGrn: `grn:root:default:user:e2e-${suffix}`,
+    userGrn: `grn:root/iam/user/e2e-${suffix}`,
     userSlug: `e2e-${suffix}`,
     nickname: `e2e-member-${suffix}`,
   };
@@ -360,7 +373,7 @@ export async function seedMember(seed: Seed): Promise<SeededUser> {
     await client.query(
       `INSERT INTO org_members (org_grn, user_grn, role, created_at)
        VALUES ($1, $2, 'member', now())`,
-      [`grn:root:default:org:${seed.orgSlug}`, member.userGrn],
+      [`grn:root/iam/org/${seed.orgSlug}`, member.userGrn],
     );
     await client.query("COMMIT");
   } catch (error) {
@@ -374,7 +387,7 @@ export async function seedMember(seed: Seed): Promise<SeededUser> {
 
 /**
  * Adds a member of the seeded organization whom an active policy denies
- * `operator:read`, and answers that member's session token. Policies
+ * `iam:operator.read`, and answers that member's session token. Policies
  * are seeded rather than written through the console because the
  * subject is a second identity; the change notification the policy
  * table raises reaches the engine as a console write would.
@@ -385,20 +398,25 @@ export async function seedMemberDeniedOperatorRead(
   const suffix = randomBytes(6).toString("hex");
   const member: SeededUser = {
     sessionToken: randomBytes(32).toString("base64url"),
-    userGrn: `grn:root:default:user:e2e-${suffix}`,
+    userGrn: `grn:root/iam/user/e2e-${suffix}`,
     userSlug: `e2e-${suffix}`,
     nickname: `e2e-member-${suffix}`,
   };
-  const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
-  const policyGrn = `grn:${seed.orgSlug}:default:policy:deny-operator-read`;
+  const orgGrn = `grn:root/iam/org/${seed.orgSlug}`;
+  const policyGrn = formatGrn(
+    seed.orgSlug,
+    "iam",
+    "policy",
+    "deny-operator-read",
+  );
   const document = {
     Version: "2026-07-25",
     Statement: [
       {
         Sid: "DenyOperatorRead",
         Effect: "Deny",
-        Action: ["operator:read"],
-        Resource: [orgGrn, `grn:${seed.orgSlug}:*`],
+        Action: ["iam:operator.read"],
+        Resource: [orgGrn, `grn:${seed.orgSlug}/*`],
       },
     ],
   };
@@ -453,7 +471,7 @@ export async function seedKeyExchange(
     const result = await client.query(
       `UPDATE operator_keys SET last_exchanged_at = now()
         WHERE id = (SELECT max(id) FROM operator_keys WHERE operator_grn = $1)`,
-      [`grn:${seed.orgSlug}:default:operator:${operatorIdentifier}`],
+      [formatGrn(seed.orgSlug, "iam", "operator", operatorIdentifier)],
     );
     if (result.rowCount !== 1) {
       throw new Error(
@@ -481,9 +499,9 @@ export async function seedHosts(seed: Seed): Promise<SeededHosts> {
     pending: `pending-${suffix}`,
     active: `active-${suffix}`,
   };
-  const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
+  const orgGrn = `grn:root/iam/org/${seed.orgSlug}`;
   const grnOf = (type: string) =>
-    `grn:${seed.orgSlug}:default:${type}:${randomBytes(8).toString("hex")}`;
+    formatGrn(seed.orgSlug, "iam", type, randomBytes(8).toString("hex"));
   const approve = (client: Client, host: string, agentGrn: string) =>
     client.query<{ id: string; supervisor_grn: string }>(
       `INSERT INTO agent_enrollments

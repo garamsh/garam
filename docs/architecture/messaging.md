@@ -233,7 +233,7 @@ has cowork post to agents' queues under its organization's principal
 ([machine-identity.md](./machine-identity.md) §cowork's principal).
 Today no message reaches a queue from cowork.
 
-- **The sender is the principal**, `grn:<org>:default:service:cowork`,
+- **The sender is the principal**, `grn:<org>/iam/service/cowork`,
   as for any caller this domain stores a message under: the row, the
   send event and the signature an agent verifies name it, and garam
   vouches for nothing else.

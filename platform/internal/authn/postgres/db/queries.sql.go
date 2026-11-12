@@ -179,6 +179,31 @@ func (q *Queries) GetSession(ctx context.Context, tokenHash string) (Session, er
 	return i, err
 }
 
+const getSessionByID = `-- name: GetSessionByID :one
+SELECT token_hash, user_grn, created_at, expires_at, id, kind, name, refresh_hash, refresh_expires_at, handed_off_from FROM sessions WHERE id = $1 AND expires_at > now()
+`
+
+// A token the issuer signed names the session it was exchanged from by
+// id, and introspection asks whether that row is still live
+// (ADR-0141).
+func (q *Queries) GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, getSessionByID, id)
+	var i Session
+	err := row.Scan(
+		&i.TokenHash,
+		&i.UserGrn,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.ID,
+		&i.Kind,
+		&i.Name,
+		&i.RefreshHash,
+		&i.RefreshExpiresAt,
+		&i.HandedOffFrom,
+	)
+	return i, err
+}
+
 const issueDeviceAuthorization = `-- name: IssueDeviceAuthorization :execrows
 WITH pruned AS (
     DELETE FROM device_authorizations WHERE expires_at <= now() - interval '1 hour'

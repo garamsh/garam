@@ -160,5 +160,5 @@ func NewGRN(orgGRN grn.GRN) (grn.GRN, error) {
 	if _, err := rand.Read(b); err != nil {
 		return grn.GRN{}, errorx.Wrap(err, "agent id")
 	}
-	return grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceType, hex.EncodeToString(b)), nil
+	return grn.New(orgGRN.Identifier, ServiceType, hex.EncodeToString(b)), nil
 }

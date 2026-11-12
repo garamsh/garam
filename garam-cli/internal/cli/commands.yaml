@@ -16,6 +16,9 @@ exclude:
   issueSessionHandoff: hands a browser's sign-in to another app's host; a bearer is refused (ADR-0131)
   redeemSessionHandoff: the receiving app's server redeems it for a browser (ADR-0131)
   watchAgent: a server-sent event stream the console renders, not an answer a command prints
+  getIssuerConfiguration: the OIDC discovery document a service reads, which the CLI never calls (ADR-0141)
+  getIssuerKeys: the key set a service verifies tokens against, which the CLI never calls (ADR-0141)
+  exchangeSessionToken: a service's call, which presents the session's access token; the CLI holds that token and no command exchanges it (ADR-0141)
 
 # Operations a hand-written command already serves.
 hand:
@@ -44,6 +47,8 @@ names:
   revokeMySession: sessions revoke
   decideDeviceCode: device decide
   listProviders: providers list
+  getRegistry: registry list
+  describeGrn: registry describe
 
 # Header parameters the CLI sends with a fixed value.
 headers:

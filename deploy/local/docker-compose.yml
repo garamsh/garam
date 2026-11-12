@@ -285,6 +285,15 @@ services:
       COWORK_USERCONTENT_ORIGIN: http://localhost:${COWORK_LOCAL_USERCONTENT_PORT:-8092}
       COWORK_USERCONTENT_ADDR: ":8092"
       COWORK_USERCONTENT_SECRET: local-stack-only-usercontent-signing-key
+      # The policy service cowork asks where these four are set, and
+      # the platform where none is. This stack leaves them empty: the
+      # service's CA and cowork's deployment key are files it would
+      # have to mount, and an address without the rest refuses to
+      # start.
+      COWORK_POLICY_ADDR: ${COWORK_LOCAL_POLICY_ADDR:-}
+      COWORK_POLICY_CA_FILE: ${COWORK_LOCAL_POLICY_CA_FILE:-}
+      COWORK_MACHINE_TOKEN_URL: ${COWORK_LOCAL_MACHINE_TOKEN_URL:-}
+      COWORK_DEPLOYMENT_KEY_FILE: ${COWORK_LOCAL_DEPLOYMENT_KEY_FILE:-}
     ports:
       - "${COWORK_LOCAL_USERCONTENT_PORT:-8092}:8092"
     depends_on:

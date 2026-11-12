@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,8 +29,8 @@ func TestGroupFlow_RoleEnforcement(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
-	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
+	memberGRN := grn.New("root", user.ServiceType, "member-sub")
 	f.permit(
 		permission{ownerGRN, org.ActionGroupCreate},
 		permission{ownerGRN, org.ActionGroupRead},
@@ -52,7 +53,7 @@ func TestGroupFlow_RoleEnforcement(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	got := decodeBody[apigen.Group](t, rec)
 	assert.Equal(t, "eng", got.Name)
-	assert.Equal(t, "grn:"+slug+":default:group:"+group, got.Grn)
+	assert.Equal(t, grn.New(slug, "group", group).String(), got.Grn)
 	assert.Equal(t, orgGRN.String(), got.OrgGrn)
 
 	rec = f.do(t, "GET", "/orgs/"+slug+"/groups", "", member)
@@ -79,7 +80,7 @@ func TestGroupMembers_Lifecycle(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(
 		permission{ownerGRN, org.ActionGroupCreate},
 		permission{ownerGRN, org.ActionGroupMemberList},
@@ -87,7 +88,7 @@ func TestGroupMembers_Lifecycle(t *testing.T) {
 		permission{ownerGRN, org.ActionGroupMemberRemove},
 	)
 	group := createGroup(t, f, owner, slug, "eng")
-	ada := grn.New(slug, "default", user.ServiceType, "ada").String()
+	ada := grn.New(slug, user.ServiceType, "ada").String()
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/groups/"+group+"/members", `{"memberGrn":"`+ada+`"}`, owner)
 	require.Equal(t, http.StatusNoContent, rec.Code)
@@ -111,7 +112,7 @@ func TestGroupMembers_Lifecycle(t *testing.T) {
 	rec = f.do(t, "GET", "/orgs/"+slug+"/groups/nope/members", "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 
-	rec = f.do(t, "DELETE", "/orgs/"+slug+"/groups/"+group+"/members/"+ada, "", owner)
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/groups/"+group+"/members/"+url.PathEscape(ada), "", owner)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	rec = f.do(t, "GET", "/orgs/"+slug+"/groups/"+group+"/members", "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -120,7 +121,7 @@ func TestGroupMembers_Lifecycle(t *testing.T) {
 	// The two removals that match nothing, against the one above as
 	// their control: it took a membership away and answered 204, and
 	// neither of these has one to take.
-	rec = f.do(t, "DELETE", "/orgs/"+slug+"/groups/"+group+"/members/"+ada, "", owner)
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/groups/"+group+"/members/"+url.PathEscape(ada), "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "ada is no longer a member")
 	rec = f.do(t, "DELETE", "/orgs/"+slug+"/groups/nope/members/"+ada, "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "the group does not exist")
@@ -135,7 +136,7 @@ func TestGroups_RequireOrgMembership(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
 	slug := createOrg(t, f, owner, "acme")
-	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionGroupRead})
+	f.permit(permission{grn.New("root", user.ServiceType, "owner-sub"), org.ActionGroupRead})
 
 	rec := f.do(t, "GET", "/orgs/"+slug+"/groups", "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -153,7 +154,7 @@ func TestGroupRoles_AssignedOverHTTP(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(
 		permission{ownerGRN, org.ActionGroupCreate},
 		permission{ownerGRN, org.ActionGroupUpdate},
@@ -187,7 +188,7 @@ func TestGroupRoles_RejectUnknownRole(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(
 		permission{ownerGRN, org.ActionGroupCreate},
 		permission{ownerGRN, org.ActionGroupUpdate},

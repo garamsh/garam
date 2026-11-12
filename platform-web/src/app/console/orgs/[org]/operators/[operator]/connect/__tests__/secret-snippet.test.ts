@@ -4,7 +4,7 @@ import { secretSnippet } from "@/app/console/orgs/[org]/operators/[operator]/con
 
 const placement = {
   keyFile: "./field-one.pem",
-  clientId: "grn:acme:default:operator:field-one",
+  clientId: "grn:acme/iam/operator/field-one",
   tokenUrl: "https://machine.garam.example/oauth/token",
 };
 
@@ -15,7 +15,7 @@ describe("the Secret a key is placed in", () => {
         "kubectl create secret generic garam-credential \\",
         "  --namespace garam-agent-operator-system \\",
         "  --from-file=private-key.pem=./field-one.pem \\",
-        "  --from-literal=client-id='grn:acme:default:operator:field-one' \\",
+        "  --from-literal=client-id='grn:acme/iam/operator/field-one' \\",
         "  --from-literal=token-url='https://machine.garam.example/oauth/token' \\",
         "  --from-file=server-root.pem=./garam-server-root.pem \\",
         "  --dry-run=client -o yaml | kubectl apply --server-side --force-conflicts -f -",

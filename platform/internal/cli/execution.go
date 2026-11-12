@@ -53,8 +53,8 @@ func newAdmissionService(pool *pgxpool.Pool, authority operator.AuthorityService
 // holds it by its current grant in the agent's organization, which
 // must cover the operation for the agent's assignee; a supervisor by
 // its current registration for this agent, as that agent's assignee,
-// for agent:activate alone (ADR-0082). For either, current policy on
-// the agent is read too and an explicit Deny wins. The caller's
+// for iam:agent.activate alone (ADR-0082). For either, current policy
+// on the agent is read too and an explicit Deny wins. The caller's
 // registration is rechecked on the listener before this is asked.
 type lifecycleAuthorization struct {
 	grants      operator.GrantStore

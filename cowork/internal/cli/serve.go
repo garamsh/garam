@@ -28,7 +28,10 @@ import (
 	fanoutmemory "github.com/garamsh/garam/cowork/internal/fanout/memory"
 	"github.com/garamsh/garam/cowork/internal/page"
 	pagepg "github.com/garamsh/garam/cowork/internal/page/postgres"
+	"github.com/garamsh/garam/cowork/internal/platform"
 	platformhttp "github.com/garamsh/garam/cowork/internal/platform/http"
+	platformpolicy "github.com/garamsh/garam/cowork/internal/platform/policy"
+	"github.com/garamsh/garam/cowork/internal/policy"
 	"github.com/garamsh/garam/cowork/internal/task"
 	taskpg "github.com/garamsh/garam/cowork/internal/task/postgres"
 	"github.com/garamsh/garam/cowork/internal/usercontent"
@@ -56,12 +59,16 @@ type Config struct {
 	// SocketRecheck is how often an open WebSocket's caller is asked
 	// again; zero is api.SocketRecheck.
 	SocketRecheck time.Duration
+	// PolicyClient, where set, is asked what a caller may do in place
+	// of the platform; Identify and Organizations stay with the
+	// platform (ADR-0141 §12). Nil asks the platform.
+	PolicyClient *policy.Client
 }
 
 // services are cowork's services as one Config wires them, which the
 // API and the user-content origin share.
 type services struct {
-	platform  *platformhttp.Client
+	platform  platform.Platform
 	pages     page.Service
 	collab    collab.Service
 	channels  channel.Service
@@ -70,9 +77,13 @@ type services struct {
 }
 
 func wire(cfg Config, pool *pgxpool.Pool) (services, error) {
-	p, err := platformhttp.New(cfg.PlatformURL)
+	base, err := platformhttp.New(cfg.PlatformURL)
 	if err != nil {
 		return services{}, err
+	}
+	var p platform.Platform = base
+	if cfg.PolicyClient != nil {
+		p = platformpolicy.New(base, cfg.PolicyClient)
 	}
 	engine, err := collabgoja.New()
 	if err != nil {
@@ -175,6 +186,10 @@ func newServeCommand() *cobra.Command {
 			if url == "" || platformURL == "" {
 				return errorx.New(errorx.KindInvalidArgument, envDatabaseURL+" and "+envPlatformURL+" are required")
 			}
+			policyCfg, err := policyConfig()
+			if err != nil {
+				return err
+			}
 			blobs, err := blobStore(ctx)
 			if err != nil {
 				return err
@@ -188,7 +203,18 @@ func newServeCommand() *cobra.Command {
 				return errorx.Wrap(err, "database", errorx.KindInvalidArgument)
 			}
 			defer pool.Close()
-			cfg := Config{PlatformURL: platformURL, WebOrigins: listOf(envOr(envWebOrigins, "")), Blobs: blobs, UserContent: signer}
+			policyAPI, err := policyClient(policyCfg)
+			if err != nil {
+				return err
+			}
+			if policyAPI != nil {
+				defer func() { _ = policyAPI.Close() }()
+			}
+			cfg := Config{
+				PlatformURL: platformURL, WebOrigins: listOf(envOr(envWebOrigins, "")),
+				Blobs: blobs, UserContent: signer, PolicyClient: policyAPI,
+			}
+			runFeed(ctx, pool, policyAPI)
 			handler, err := NewHandler(cfg, pool)
 			if err != nil {
 				return err

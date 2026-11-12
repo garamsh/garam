@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -141,7 +142,7 @@ func (h *host) supervisorClient() *http.Client {
 func (h *host) agentToken() string {
 	h.s.t.Helper()
 	agentGRN, _, _ := h.enrolled()
-	status, raw := h.call(h.supervisorClient(), "/agents/"+agentGRN+"/tokens", operator.TokenContractVersion, "", map[string]string{})
+	status, raw := h.call(h.supervisorClient(), "/agents/"+url.PathEscape(agentGRN)+"/tokens", operator.TokenContractVersion, "", map[string]string{})
 	require.Equal(h.s.t, http.StatusCreated, status, string(raw))
 	var token struct {
 		Token string `json:"token"`
@@ -207,7 +208,7 @@ func (s *stack) newSender() *sender {
 	require.NoError(s.t, err, out)
 	agentGRN, _, epoch := h.enrolled()
 	own := h.agentToken()
-	status, body := h.call(h.supervisorClient(), "/agents/"+agentGRN+"/activations", "execution-fence.v2", "", map[string]any{
+	status, body := h.call(h.supervisorClient(), "/agents/"+url.PathEscape(agentGRN)+"/activations", "execution-fence.v2", "", map[string]any{
 		"requestId": "garam-1180-sender", "epoch": epoch, "generation": hex32(),
 		"replacesActivationId": nil, "operationRef": nil, "token": own,
 	})
@@ -241,7 +242,7 @@ type received struct {
 // it, or answers nil where none arrived within one claim's wait.
 func (p *sender) receive() *received {
 	p.s.t.Helper()
-	status, raw := p.call(p.client, "/agents/"+p.grn+"/claims", "", "Garam-Execution "+p.token, nil)
+	status, raw := p.call(p.client, "/agents/"+url.PathEscape(p.grn)+"/claims", "", "Garam-Execution "+p.token, nil)
 	if status == http.StatusNoContent {
 		return nil
 	}
@@ -255,7 +256,7 @@ func (p *sender) receive() *received {
 		} `json:"message"`
 	}
 	require.NoError(p.s.t, json.Unmarshal(raw, &c))
-	status, raw = p.call(p.client, "/agents/"+p.grn+"/claims/"+c.ID+"/completion", "", "Garam-Execution "+p.token, nil)
+	status, raw = p.call(p.client, "/agents/"+url.PathEscape(p.grn)+"/claims/"+c.ID+"/completion", "", "Garam-Execution "+p.token, nil)
 	require.Contains(p.s.t, []int{http.StatusOK, http.StatusNoContent}, status, string(raw))
 	return &received{ID: c.Message.ID, Sender: c.Message.Sender, Body: c.Message.Body}
 }

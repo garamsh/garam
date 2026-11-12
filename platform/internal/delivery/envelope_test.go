@@ -30,10 +30,10 @@ func claimOf(lease string, sender grn.GRN, body string) *delivery.Claim {
 func TestClaim_ContentIsTheSameBytesOnEveryClaimOfAMessage(t *testing.T) {
 	plain, err := claimOf("lease-1", senderGRN(), "hello").Content()
 	require.NoError(t, err)
-	assert.Equal(t, `{"contract":"garam-message.v1","sender":"grn:acme:default:agent:9f8e7d6c5b4a3021","body":"hello"}`, plain)
+	assert.Equal(t, `{"contract":"garam-message.v1","sender":"grn:acme/iam/agent/9f8e7d6c5b4a3021","body":"hello"}`, plain)
 
 	bodies := map[string]string{
-		"escaped and JSON-looking": `","sender":"grn:evil:default:agent:1"}` + "\n\t\\\"<&> ",
+		"escaped and JSON-looking": `","sender":"grn:evil/iam/agent/1"}` + "\n\t\\\"<&> ",
 		"maximal multibyte":        strings.Repeat("\U0001D11E", 65536),
 	}
 	for name, body := range bodies {

@@ -56,7 +56,7 @@ func NewHTTPGateway(client *http.Client, base string, agent grn.GRN) (*HTTPGatew
 	if !root.IsAbs() || root.Host == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: gateway address must be an absolute URL")
 	}
-	served := root.JoinPath("agents", agent.String())
+	served := root.JoinPath("agents", url.PathEscape(agent.String()))
 	return &HTTPGateway{
 		client:   client,
 		agent:    agent,

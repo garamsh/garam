@@ -239,22 +239,34 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 }
 
 const createOrg = `-- name: CreateOrg :exec
-INSERT INTO orgs (grn, name, created_at, updated_at)
-VALUES ($1, $2, $3, $4)
+WITH created AS (
+    INSERT INTO orgs (grn, name, created_at, updated_at)
+    VALUES ($3, $4, $1, $5)
+    RETURNING grn
+)
+INSERT INTO service_principals (grn, org_grn, created_at)
+SELECT 'grn:' || grn_id(created.grn) || '/iam/service/' || s.name, created.grn, $1
+FROM created, unnest($2::text[]) AS s (name)
 `
 
 type CreateOrgParams struct {
+	CreatedAt pgtype.Timestamptz
+	Services  []string
 	Grn       string
 	Name      string
-	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }
 
+// Writes the organization and one service principal for each name in
+// services, in one statement, so an organization never exists without
+// them (ADR-0129 item 1). A principal's GRN is built from the
+// organization's: grn:<org id>/iam/service/<name>.
 func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) error {
 	_, err := q.db.Exec(ctx, createOrg,
+		arg.CreatedAt,
+		arg.Services,
 		arg.Grn,
 		arg.Name,
-		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
 	return err
@@ -940,19 +952,21 @@ func (q *Queries) RevokeInvitation(ctx context.Context, arg RevokeInvitationPara
 const searchGroups = `-- name: SearchGroups :many
 SELECT grn, org_grn, name, roles, policies, created_at, updated_at FROM groups
 WHERE org_grn = $1
-  AND (name ILIKE $2 OR split_part(grn, ':', 5) ILIKE $2)
+  AND (name ILIKE $2 OR grn ILIKE $3)
 ORDER BY grn
 `
 
 type SearchGroupsParams struct {
-	OrgGrn  string
-	Pattern string
+	OrgGrn    string
+	Pattern   string
+	IDPattern string
 }
 
-// SearchGroups answers the org's groups whose name or identifier (the
-// GRN's fifth segment) matches pattern, case aside, ordered by GRN.
+// SearchGroups answers the org's groups whose name matches pattern or
+// whose GRN matches id_pattern, case aside, ordered by GRN. id_pattern
+// is a LIKE pattern over the whole GRN that lib/grn builds.
 func (q *Queries) SearchGroups(ctx context.Context, arg SearchGroupsParams) ([]Group, error) {
-	rows, err := q.db.Query(ctx, searchGroups, arg.OrgGrn, arg.Pattern)
+	rows, err := q.db.Query(ctx, searchGroups, arg.OrgGrn, arg.Pattern, arg.IDPattern)
 	if err != nil {
 		return nil, err
 	}
@@ -982,19 +996,20 @@ func (q *Queries) SearchGroups(ctx context.Context, arg SearchGroupsParams) ([]G
 const searchProjects = `-- name: SearchProjects :many
 SELECT grn, org_grn, name, roles, policies, created_at, updated_at FROM projects
 WHERE org_grn = $1
-  AND (name ILIKE $2 OR split_part(grn, ':', 5) ILIKE $2)
+  AND (name ILIKE $2 OR grn ILIKE $3)
 ORDER BY grn
 `
 
 type SearchProjectsParams struct {
-	OrgGrn  string
-	Pattern string
+	OrgGrn    string
+	Pattern   string
+	IDPattern string
 }
 
 // SearchProjects answers the org's projects as SearchGroups answers
 // its groups.
 func (q *Queries) SearchProjects(ctx context.Context, arg SearchProjectsParams) ([]Project, error) {
-	rows, err := q.db.Query(ctx, searchProjects, arg.OrgGrn, arg.Pattern)
+	rows, err := q.db.Query(ctx, searchProjects, arg.OrgGrn, arg.Pattern, arg.IDPattern)
 	if err != nil {
 		return nil, err
 	}

@@ -377,20 +377,21 @@ func (q *Queries) LockPolicy(ctx context.Context, grn string) (Policy, error) {
 const searchPolicies = `-- name: SearchPolicies :many
 SELECT grn, org_grn, name, status, default_version, created_at, updated_at FROM policies
 WHERE org_grn = $1
-  AND (name ILIKE $2 OR split_part(grn, ':', 5) ILIKE $2)
+  AND (name ILIKE $2 OR grn ILIKE $3)
 ORDER BY grn
 `
 
 type SearchPoliciesParams struct {
-	OrgGrn  string
-	Pattern string
+	OrgGrn    string
+	Pattern   string
+	IDPattern string
 }
 
-// SearchPolicies answers the org's policies whose name or identifier
-// (the GRN's fifth segment) matches pattern, case aside, ordered by
-// GRN.
+// SearchPolicies answers the org's policies whose name matches
+// pattern or whose GRN matches id_pattern, case aside, ordered by GRN.
+// id_pattern is a LIKE pattern over the whole GRN that lib/grn builds.
 func (q *Queries) SearchPolicies(ctx context.Context, arg SearchPoliciesParams) ([]Policy, error) {
-	rows, err := q.db.Query(ctx, searchPolicies, arg.OrgGrn, arg.Pattern)
+	rows, err := q.db.Query(ctx, searchPolicies, arg.OrgGrn, arg.Pattern, arg.IDPattern)
 	if err != nil {
 		return nil, err
 	}

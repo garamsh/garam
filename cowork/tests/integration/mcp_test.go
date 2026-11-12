@@ -189,8 +189,8 @@ func TestMCP_ARefusalIsAToolErrorAndNoData(t *testing.T) {
 		return p.Markdown == "the launch date\n"
 	})
 
-	s.platform.denyCheck("bob cowork:page-read@" + id)
-	s.platform.denyCheck("carol cowork:page-write@" + id)
+	s.platform.denyCheck("bob cowork:page.read@" + id)
+	s.platform.denyCheck("carol cowork:page.write@" + id)
 
 	bob := s.agent(t, "bob")
 	res := bob.call("read_page", map[string]any{"org": "acme", "page": id})

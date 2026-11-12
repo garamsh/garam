@@ -32,10 +32,10 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 	// 1 group, 2 projects, 3 invitations. Creating the org already
 	// made the owner a member, so members reaches 2 with one more.
 	require.NoError(t, f.orgs.CreateGroup(ctx, org.NewGroup(
-		grn.New("root", "default", org.ServiceTypeGroup, "g1"), "g1", orgGRN)))
+		grn.New("root", org.ServiceTypeGroup, "g1"), "g1", orgGRN)))
 	for _, id := range []string{"p1", "p2"} {
 		require.NoError(t, f.orgs.CreateProject(ctx, org.NewProject(
-			grn.New("root", "default", org.ServiceTypeProject, id), id, orgGRN)))
+			grn.New("root", org.ServiceTypeProject, id), id, orgGRN)))
 	}
 	for _, tok := range []string{"t1", "t2", "t3"} {
 		require.NoError(t, f.orgs.CreateInvitation(ctx, org.NewInvitation(
@@ -174,9 +174,9 @@ func TestGetOrgDeletionPreview_MissingOrgIsNotZero(t *testing.T) {
 // would under-report what the deletion destroys, which is the failure
 // this operation exists to prevent.
 //
-// The caller here is permitted `org:delete` and nothing else. The
+// The caller here is permitted `iam:org.delete` and nothing else. The
 // control is the agents route in the same test: it needs
-// `agent:read`, this caller is refused it, and the preview still
+// `iam:agent.read`, this caller is refused it, and the preview still
 // counts the agents. Without that refusal the non-zero count would be
 // consistent with the permission simply having been granted.
 //
@@ -188,7 +188,8 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 	slug := createOrg(t, f, owner, "acme")
 	orgGRN := orgGRNOf(slug)
 	ownerGRN := userGRNOf("owner-sub")
-	// Only the delete. No agent:read, no operator:read, no consent read.
+	// Only the delete. No iam:agent.read, no iam:operator.read, no consent
+	// read.
 	f.permit(permission{ownerGRN, org.ActionOrgDelete})
 
 	ctx := testCtx(t)
@@ -204,7 +205,7 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 	// The control: this caller may not list agents.
 	rec := f.do(t, "GET", "/orgs/"+slug+"/agents", "", owner)
 	require.Equal(t, http.StatusForbidden, rec.Code,
-		"the caller must genuinely lack agent:read for the count below to prove anything")
+		"the caller must genuinely lack iam:agent.read for the count below to prove anything")
 
 	f.policies.EXPECT().ListPolicies(mock.Anything, orgGRN).Return(nil, nil).Once()
 	rec = f.do(t, "GET", "/orgs/"+slug+"/deletion-preview", "", owner)
@@ -213,7 +214,7 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 
 	// Counted although the caller may not list them: the delete takes
 	// them regardless, so the preview names them regardless.
-	assert.Equal(t, 1, body.Counts.Agents, "agents are counted without agent:read")
+	assert.Equal(t, 1, body.Counts.Agents, "agents are counted without iam:agent.read")
 	assert.Equal(t, 1, body.Counts.Operators)
 	assert.Equal(t, 1, body.Counts.Consents)
 

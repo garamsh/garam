@@ -11,27 +11,27 @@ use serde_json::{Value, json};
 
 pub type Named = (&'static str, &'static str);
 
-pub const ACME: Named = ("Org", "grn:root:default:org:acme");
-pub const GLOBEX: Named = ("Org", "grn:root:default:org:globex");
-pub const ACME_MEMBERS: Named = ("OrgMembers", ACME.1);
-pub const GLOBEX_MEMBERS: Named = ("OrgMembers", GLOBEX.1);
-pub const ENG: Named = ("Team", "grn:acme:default:group:eng");
-pub const WEB: Named = ("Project", "grn:acme:default:project:web");
-pub const API: Named = ("Project", "grn:acme:default:project:api");
+pub const ACME: Named = ("Iam::Org", "grn:root/iam/org/acme");
+pub const GLOBEX: Named = ("Iam::Org", "grn:root/iam/org/globex");
+pub const ACME_MEMBERS: Named = ("Iam::OrgMembers", ACME.1);
+pub const GLOBEX_MEMBERS: Named = ("Iam::OrgMembers", GLOBEX.1);
+pub const ENG: Named = ("Iam::Team", "grn:acme/iam/group/eng");
+pub const WEB: Named = ("Iam::Project", "grn:acme/iam/project/web");
+pub const API: Named = ("Iam::Project", "grn:acme/iam/project/api");
 /// Belongs to acme and to globex.
-pub const KIM: Named = ("User", "grn:acme:default:user:kim");
+pub const KIM: Named = ("Iam::User", "grn:acme/iam/user/kim");
 /// Belongs to acme alone.
-pub const LEE: Named = ("User", "grn:acme:default:user:lee");
+pub const LEE: Named = ("Iam::User", "grn:acme/iam/user/lee");
 /// Belongs to globex alone.
-pub const MIA: Named = ("User", "grn:globex:default:user:mia");
+pub const MIA: Named = ("Iam::User", "grn:globex/iam/user/mia");
 /// In acme's eng team and in no organization.
-pub const OUTSIDER: Named = ("User", "grn:acme:default:user:outsider");
+pub const OUTSIDER: Named = ("Iam::User", "grn:acme/iam/user/outsider");
 /// In acme's web project and in no organization.
-pub const STRANGER: Named = ("User", "grn:acme:default:user:stranger");
+pub const STRANGER: Named = ("Iam::User", "grn:acme/iam/user/stranger");
 /// Acme's agent, in the eng team.
-pub const BOT: Named = ("Agent", "grn:acme:default:agent:bot");
-pub const PEER: Named = ("Agent", "grn:acme:default:agent:peer");
-pub const RIVAL: Named = ("Agent", "grn:globex:default:agent:rival");
+pub const BOT: Named = ("Iam::Agent", "grn:acme/iam/agent/bot");
+pub const PEER: Named = ("Iam::Agent", "grn:acme/iam/agent/peer");
+pub const RIVAL: Named = ("Iam::Agent", "grn:globex/iam/agent/rival");
 
 pub struct World {
     pub engine: Engine,

@@ -60,7 +60,7 @@ func newListStack(t *testing.T) *listStack {
 	acme := orgRootGRN("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	session := func(id string) (*http.Cookie, grn.GRN) {
-		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+		g := grn.New(grn.RootOwner, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
 		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, org.RoleOwner)))
 		token, err := authn.NewToken()
@@ -152,7 +152,7 @@ func listKinds() []listKind {
 		{name: "projects", path: "/orgs/acme/projects", action: org.ActionProjectRead, seed: seedListProject},
 		{name: "agents", path: "/orgs/acme/agents", action: org.ActionAgentRead,
 			seed: func(t *testing.T, s *listStack, _ string) grn.GRN { return seedAgent(t, s.agents, s.acme) }},
-		// A policy is read by its versions, the one read policy:read
+		// A policy is read by its versions, the one read iam:policy.read
 		// gates on the policy itself.
 		{name: "policies", path: "/orgs/acme/policies", action: org.ActionPolicyRead, readSuffix: "/versions",
 			seed: func(t *testing.T, s *listStack, name string) grn.GRN {
@@ -168,7 +168,7 @@ func listKinds() []listKind {
 // lists it for either.
 func seedListGroup(t *testing.T, s *listStack, name string) grn.GRN {
 	t.Helper()
-	g := grn.New("acme", grn.DefaultProject, org.ServiceTypeGroup, name)
+	g := grn.New("acme", org.ServiceTypeGroup, name)
 	require.NoError(t, s.orgs.CreateGroup(context.Background(), org.NewGroup(g, name, s.acme)))
 	for _, m := range []grn.GRN{s.adaGRN, s.danGRN} {
 		require.NoError(t, s.orgs.AddGroupMember(context.Background(), g, m))
@@ -180,7 +180,7 @@ func seedListGroup(t *testing.T, s *listStack, name string) grn.GRN {
 // role, so a project's own statements reach her through it.
 func seedListProject(t *testing.T, s *listStack, name string) grn.GRN {
 	t.Helper()
-	g := grn.New("acme", grn.DefaultProject, org.ServiceTypeProject, name)
+	g := grn.New("acme", org.ServiceTypeProject, name)
 	require.NoError(t, s.orgs.CreateProject(context.Background(), org.NewProject(g, name, s.acme, string(org.RoleAdmin))))
 	require.NoError(t, s.orgs.AddProjectMember(context.Background(), g, s.adaGRN))
 	return g

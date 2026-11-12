@@ -27,15 +27,15 @@ const initialState: DelegationState = { status: "idle" };
  */
 const OPERATIONS: readonly { value: DelegatedOperation; label: string }[] = (
   [
-    "agent:create",
-    "agent:configure",
-    "agent:activate",
-    "agent:recover",
-    "agent-template:read",
-    "agent-template:publish",
-    "execution-profile:read",
-    "agent:execution-read",
-    "operator:read",
+    "iam:agent.create",
+    "iam:agent.configure",
+    "iam:agent.activate",
+    "iam:agent.recover",
+    "iam:agent-template.read",
+    "iam:agent-template.publish",
+    "iam:execution-profile.read",
+    "iam:agent.execution-read",
+    "iam:operator.read",
   ] as const
 ).map((value) => ({ value, label: DELEGATED_OPERATION_LABEL[value] }));
 

@@ -115,8 +115,8 @@ func TestScopedPermissions_Matrix(t *testing.T) {
 
 	slug := createOrg(t, f, owner, "acme")
 	orgGRN := grn.Org(slug)
-	aliceGRN := grn.New("root", "default", user.ServiceType, "alice-sub")
-	bobGRN := grn.New("root", "default", user.ServiceType, "bob-sub")
+	aliceGRN := grn.New("root", user.ServiceType, "alice-sub")
+	bobGRN := grn.New("root", user.ServiceType, "bob-sub")
 	for _, g := range []grn.GRN{aliceGRN, bobGRN} {
 		require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, g, org.RoleMember)))
 	}
@@ -124,18 +124,18 @@ func TestScopedPermissions_Matrix(t *testing.T) {
 	// Alice administers the group "eng" and the project "web"; the
 	// sibling group "ops" and project "app" grant her nothing.
 	for _, name := range []string{"eng", "ops"} {
-		g := grn.New(slug, "default", org.ServiceTypeGroup, name)
+		g := grn.New(slug, org.ServiceTypeGroup, name)
 		require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(g, name, orgGRN, string(org.RoleAdmin))))
 	}
 	for _, name := range []string{"web", "app"} {
-		g := grn.New(slug, "default", org.ServiceTypeProject, name)
+		g := grn.New(slug, org.ServiceTypeProject, name)
 		require.NoError(t, f.orgs.CreateProject(testCtx(t), org.NewProject(g, name, orgGRN, string(org.RoleAdmin))))
 	}
 	require.NoError(t, f.orgs.AddGroupMember(testCtx(t),
-		grn.New(slug, "default", org.ServiceTypeGroup, "eng"), aliceGRN))
+		grn.New(slug, org.ServiceTypeGroup, "eng"), aliceGRN))
 	require.NoError(t, f.orgs.AddProjectMember(testCtx(t),
-		grn.New(slug, "default", org.ServiceTypeProject, "web"), aliceGRN))
-	ada := grn.New(slug, "default", user.ServiceType, "ada")
+		grn.New(slug, org.ServiceTypeProject, "web"), aliceGRN))
+	ada := grn.New(slug, user.ServiceType, "ada")
 
 	rename := `{"name":"renamed"}`
 	cases := []struct {
@@ -175,16 +175,16 @@ func TestScopedPermissions_GroupWithoutRolesGrantsNothing(t *testing.T) {
 	alice := f.sessionCookieFor(t, "alice-sub", "Alice")
 	slug := createOrg(t, f, owner, "acme")
 	orgGRN := grn.Org(slug)
-	aliceGRN := grn.New("root", "default", user.ServiceType, "alice-sub")
+	aliceGRN := grn.New("root", user.ServiceType, "alice-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, aliceGRN, org.RoleMember)))
 
 	// Two groups alice belongs to, differing only in whether the group
 	// carries a role. Reading them together is what separates a group
 	// that grants nothing from a route that grants nothing.
-	eng := grn.New(slug, "default", org.ServiceTypeGroup, "eng")
+	eng := grn.New(slug, org.ServiceTypeGroup, "eng")
 	require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(eng, "eng", orgGRN)))
 	require.NoError(t, f.orgs.AddGroupMember(testCtx(t), eng, aliceGRN))
-	ops := grn.New(slug, "default", org.ServiceTypeGroup, "ops")
+	ops := grn.New(slug, org.ServiceTypeGroup, "ops")
 	require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(ops, "ops", orgGRN, string(org.RoleAdmin))))
 	require.NoError(t, f.orgs.AddGroupMember(testCtx(t), ops, aliceGRN))
 
@@ -211,9 +211,9 @@ func TestScopedPermissions_DirectUserRoles(t *testing.T) {
 
 	slug := createOrg(t, f, owner, "acme")
 	orgGRN := grn.Org(slug)
-	aliceGRN := grn.New("root", "default", user.ServiceType, "alice-sub")
-	bobGRN := grn.New("root", "default", user.ServiceType, "bob-sub")
-	strangerGRN := grn.New("root", "default", user.ServiceType, "stranger-sub")
+	aliceGRN := grn.New("root", user.ServiceType, "alice-sub")
+	bobGRN := grn.New("root", user.ServiceType, "bob-sub")
+	strangerGRN := grn.New("root", user.ServiceType, "stranger-sub")
 	for _, g := range []grn.GRN{aliceGRN, bobGRN} {
 		require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, g, org.RoleMember)))
 	}
@@ -222,7 +222,7 @@ func TestScopedPermissions_DirectUserRoles(t *testing.T) {
 	f.users.grantRoles(strangerGRN, string(org.RoleOwner))
 
 	require.NoError(t, f.orgs.CreateGroup(testCtx(t),
-		org.NewGroup(grn.New(slug, "default", org.ServiceTypeGroup, "eng"), "eng", orgGRN)))
+		org.NewGroup(grn.New(slug, org.ServiceTypeGroup, "eng"), "eng", orgGRN)))
 
 	rename := `{"name":"renamed"}`
 	cases := []struct {
@@ -257,7 +257,7 @@ func TestScopedPermissions_RolesAssignedOverHTTP(t *testing.T) {
 	alice := f.sessionCookieFor(t, "alice-sub", "Alice")
 	slug := createOrg(t, f, owner, "acme")
 	orgGRN := grn.Org(slug)
-	aliceGRN := grn.New("root", "default", user.ServiceType, "alice-sub")
+	aliceGRN := grn.New("root", user.ServiceType, "alice-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, aliceGRN, org.RoleMember)))
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/groups", `{"name":"eng","roles":["admin"]}`, owner)

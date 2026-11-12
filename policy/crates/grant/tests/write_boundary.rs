@@ -8,7 +8,7 @@ use cedar_policy::{EntityId, EntityTypeName, EntityUid};
 use decision::{Engine, EntityRef, Evaluation, OrgGrn, Role, RoleScope};
 use grant::{Body, Error};
 
-const ACME: &str = "grn:root:default:org:acme";
+const ACME: &str = "grn:root/iam/org/acme";
 
 fn uid(entity_type: &str, id: &str) -> EntityUid {
     EntityUid::from_type_name_and_id(
@@ -22,15 +22,15 @@ fn acme() -> OrgGrn {
 }
 
 fn org() -> EntityUid {
-    uid("Org", ACME)
+    uid("Iam::Org", ACME)
 }
 
 fn user() -> EntityUid {
-    uid("User", "grn:acme:default:user:lee")
+    uid("Iam::User", "grn:acme/iam/user/lee")
 }
 
 fn team() -> EntityUid {
-    uid("Team", "grn:acme:default:group:eng")
+    uid("Iam::Team", "grn:acme/iam/group/eng")
 }
 
 #[test]
@@ -118,7 +118,7 @@ fn a_guardrail_the_schema_does_not_admit_is_refused() {
     let refused = Body::guardrail(
         &engine,
         &acme(),
-        r#"forbid (principal, action == Action::"no:such", resource);"#,
+        r#"forbid (principal, action == Iam::Action::"no-such", resource);"#,
     );
     assert!(
         matches!(refused, Err(Error::Refused(decision::Error::Validation(_)))),
@@ -128,7 +128,7 @@ fn a_guardrail_the_schema_does_not_admit_is_refused() {
     let refused = Body::guardrail(
         &engine,
         &acme(),
-        "forbid (principal is User, action, resource) when { principal.org == resource.org };",
+        "forbid (principal is Iam::User, action, resource) when { principal.org == resource.org };",
     );
     assert!(
         matches!(refused, Err(Error::Refused(decision::Error::Validation(_)))),
@@ -138,7 +138,7 @@ fn a_guardrail_the_schema_does_not_admit_is_refused() {
     let control = Body::guardrail(
         &engine,
         &acme(),
-        r#"forbid (principal is Agent, action == Action::"message:send", resource is Agent)
+        r#"forbid (principal is Iam::Agent, action == Iam::Action::"message.send", resource is Iam::Agent)
            when { principal.org != resource.org };"#,
     );
     assert!(control.is_ok(), "{control:?}");
@@ -169,14 +169,14 @@ fn a_link_naming_another_organizations_entity_is_refused() {
         Body::role_link(&engine, &acme(), Role::Member, scope, principal, resource)
     };
 
-    let globex = uid("Org", "grn:root:default:org:globex");
-    let their_team = uid("Team", "grn:globex:default:group:secret");
+    let globex = uid("Iam::Org", "grn:root/iam/org/globex");
+    let their_team = uid("Iam::Team", "grn:globex/iam/group/secret");
     for refused in [
         link(user(), globex, RoleScope::Organization),
         link(user(), their_team.clone(), RoleScope::TeamOrProject),
         link(their_team, org(), RoleScope::Organization),
         link(
-            uid("Agent", "grn:globex:default:agent:rival"),
+            uid("Iam::Agent", "grn:globex/iam/agent/rival"),
             org(),
             RoleScope::Organization,
         ),
@@ -188,7 +188,7 @@ fn a_link_naming_another_organizations_entity_is_refused() {
     }
 
     // A user belongs to no one organization, whatever its GRN names.
-    let elsewhere = uid("User", "grn:globex:default:user:mia");
+    let elsewhere = uid("Iam::User", "grn:globex/iam/user/mia");
     let control = link(elsewhere, org(), RoleScope::Organization);
     assert!(control.is_ok(), "{control:?}");
 }
@@ -198,10 +198,10 @@ fn a_guardrail_naming_another_organizations_entity_is_refused() {
     let engine = Engine::load().unwrap();
 
     for source in [
-        r#"forbid (principal, action, resource in Org::"grn:root:default:org:globex");"#,
-        r#"forbid (principal in Team::"grn:globex:default:group:secret", action, resource);"#,
+        r#"forbid (principal, action, resource in Iam::Org::"grn:root/iam/org/globex");"#,
+        r#"forbid (principal in Iam::Team::"grn:globex/iam/group/secret", action, resource);"#,
         r#"forbid (principal, action, resource)
-           when { principal in Team::"grn:globex:default:group:secret" };"#,
+           when { principal in Iam::Team::"grn:globex/iam/group/secret" };"#,
     ] {
         let refused = Body::guardrail(&engine, &acme(), source);
         assert!(
@@ -213,7 +213,7 @@ fn a_guardrail_naming_another_organizations_entity_is_refused() {
     let control = Body::guardrail(
         &engine,
         &acme(),
-        r#"forbid (principal in Team::"grn:acme:default:group:eng", action, resource in Org::"grn:root:default:org:acme");"#,
+        r#"forbid (principal in Iam::Team::"grn:acme/iam/group/eng", action, resource in Iam::Org::"grn:root/iam/org/acme");"#,
     );
     assert!(control.is_ok(), "{control:?}");
 }
@@ -294,31 +294,31 @@ fn decide_on(source: &str) {
     let composed = engine.compose(&[], &[policy]).unwrap();
     let entities = engine
         .entities(serde_json::json!([
-            {"uid": {"type": "OrgMembers", "id": ACME}, "attrs": {}, "parents": []},
+            {"uid": {"type": "Iam::OrgMembers", "id": ACME}, "attrs": {}, "parents": []},
             {
-                "uid": {"type": "Org", "id": ACME},
+                "uid": {"type": "Iam::Org", "id": ACME},
                 "attrs": {
-                    "org": {"__entity": {"type": "Org", "id": ACME}},
-                    "members": {"__entity": {"type": "OrgMembers", "id": ACME}},
+                    "org": {"__entity": {"type": "Iam::Org", "id": ACME}},
+                    "members": {"__entity": {"type": "Iam::OrgMembers", "id": ACME}},
                 },
                 "parents": [],
             },
             {
-                "uid": {"type": "User", "id": "u"},
+                "uid": {"type": "Iam::User", "id": "u"},
                 "attrs": {},
-                "parents": [{"type": "OrgMembers", "id": ACME}],
+                "parents": [{"type": "Iam::OrgMembers", "id": ACME}],
             },
         ]))
         .unwrap();
     let request = engine
         .request(&Evaluation {
             subject: EntityRef {
-                entity_type: "User",
+                entity_type: "Iam::User",
                 id: "u",
             },
-            action: "org:read",
+            action: "iam:org.read",
             resource: EntityRef {
-                entity_type: "Org",
+                entity_type: "Iam::Org",
                 id: ACME,
             },
             context: serde_json::json!({}),

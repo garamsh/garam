@@ -135,7 +135,7 @@ func (x *Subject) GetId() string {
 // Action is what the subject asks to do.
 type Action struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// name is an action of the Cedar schema, such as `project:read`.
+	// name is an action of the Cedar schema, such as `project.read`.
 	Name          string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

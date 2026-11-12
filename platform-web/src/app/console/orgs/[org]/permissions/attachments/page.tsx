@@ -65,8 +65,8 @@ function policyChecks(
   const checks: Record<string, PermissionCheck> = {};
   for (const policy of policies.slice(0, MAX_PERMISSION_CHECKS / 2)) {
     const resource = { type: "policy", id: slugFromGrn(policy.grn) } as const;
-    checks[`attach ${policy.grn}`] = { action: "policy:attach", resource };
-    checks[`detach ${policy.grn}`] = { action: "policy:detach", resource };
+    checks[`attach ${policy.grn}`] = { action: "iam:policy.attach", resource };
+    checks[`detach ${policy.grn}`] = { action: "iam:policy.detach", resource };
   }
   return checks;
 }

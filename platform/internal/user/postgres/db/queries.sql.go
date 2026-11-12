@@ -103,20 +103,22 @@ func (q *Queries) ListUsersByGRNs(ctx context.Context, grns []string) ([]User, e
 const searchUsersByGRNs = `-- name: SearchUsersByGRNs :many
 SELECT grn, nickname, roles, policies, created_at, updated_at FROM users
 WHERE grn = ANY($1::text[])
-  AND (nickname ILIKE $2 OR split_part(grn, ':', 5) ILIKE $2)
+  AND (nickname ILIKE $2 OR grn ILIKE $3)
 ORDER BY grn
 `
 
 type SearchUsersByGRNsParams struct {
-	Grns    []string
-	Pattern string
+	Grns      []string
+	Pattern   string
+	IDPattern string
 }
 
-// SearchUsersByGRNs answers the users among grns whose nickname or
-// identifier (the GRN's fifth segment) matches pattern, case aside,
-// ordered by GRN.
+// SearchUsersByGRNs answers the users among grns whose nickname
+// matches pattern or whose GRN matches id_pattern, case aside, ordered
+// by GRN. id_pattern is a LIKE pattern over the whole GRN that lib/grn
+// builds.
 func (q *Queries) SearchUsersByGRNs(ctx context.Context, arg SearchUsersByGRNsParams) ([]User, error) {
-	rows, err := q.db.Query(ctx, searchUsersByGRNs, arg.Grns, arg.Pattern)
+	rows, err := q.db.Query(ctx, searchUsersByGRNs, arg.Grns, arg.Pattern, arg.IDPattern)
 	if err != nil {
 		return nil, err
 	}

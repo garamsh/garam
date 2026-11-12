@@ -1,14 +1,42 @@
 # policy — the Rust workspace behind the policy service (ADR-0130). Its
 # verbs are every module's (#1661); `make -C policy ci` is its fast
 # gate, which needs no Docker, and `stack-up suites` the half that does.
-# With nothing generated into the tree, it defines no `gen`.
+# Its `gen` writes the GRN catalogue lib/grn commits, from the
+# manifests under schema/ (ADR-0143 item 2), and `check-gen` is the one
+# command that fails when the manifests and what is committed disagree.
 
 include ../tooling/make/go.mk
 include ../tooling/make/stack.mk
 
-.PHONY: ci format lint test build stack-up suites integration
+.PHONY: ci format lint test build gen check-gen stack-up suites integration
 
-ci: format lint test build
+ci: format lint test build check-gen
+
+# The one reader of the manifests is crates/manifest; the example in
+# crates/server runs its rules and the closed list of callers, and
+# writes the catalogue only when none is broken.
+CATALOGUE = ../lib/grn/catalogue_gen.go
+
+gen:
+	cargo run -q --locked -p server --example manifests -- $(CATALOGUE) schema
+	gofmt -w $(CATALOGUE)
+
+# check-gen fails, naming what disagrees, when a manifest breaks a rule
+# every manifest holds, when an `@caller` is neither `none` nor a
+# `Caller`, when a `Caller` is named by no manifest, when the committed
+# catalogue is not what the manifests generate, and when an audience of
+# the platform names no manifest service and is neither policy nor
+# codehub. The last is a Go test, and `go test` exits 0 on a package
+# where the named test does not exist, so its run is counted.
+check-gen:
+	@test -f '$(CATALOGUE)' || { echo 'check-gen: $(CATALOGUE) is missing — run make -C policy gen'; exit 1; }
+	@$(MAKE) --no-print-directory gen
+	@out="$$(git status --porcelain -- $(CATALOGUE))"; \
+		test -z "$$out" || { echo "check-gen: the committed catalogue is not what the manifests generate — run make -C policy gen and commit:"; echo "$$out"; git diff -- $(CATALOGUE) | head -40; exit 1; }
+	@echo 'check-gen: $(CATALOGUE) is what the manifests generate'
+	@out="$$(cd ../platform && go test ./internal/identity -run TestAudiencesNameAManifestServiceOrAnException -count=1 -v 2>&1)"; \
+		status=$$?; echo "$$out" | grep -v '^$$'; test $$status -eq 0 || { echo 'check-gen: an audience disagrees with the manifests'; exit 1; }; \
+		echo "$$out" | grep -q -- '--- PASS: TestAudiencesNameAManifestServiceOrAnException' || { echo 'check-gen: the audience test did not run'; exit 1; }
 
 # What each verb covers, counted on its own line and failing on zero:
 # cargo given an empty workspace, and buf given no file, exit 0 reading

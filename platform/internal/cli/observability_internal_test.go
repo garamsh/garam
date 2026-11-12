@@ -51,7 +51,7 @@ import (
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
-const testSubject = "grn:acme:default:user:alice"
+const testSubject = "grn:acme/iam/user/alice"
 
 // lines collects the log output of a handler that may run on another
 // goroutine.
@@ -445,14 +445,14 @@ func TestLogRPCs_NamesAMachineSubjectAsOne(t *testing.T) {
 	// Internal: serve authz decides from Postgres and logs to stderr.
 	for _, subject := range []grn.GRN{
 		machineGRN("acme", "bot-1"),
-		grn.New("acme", grn.DefaultProject, agent.ServiceTypeOperator, "op-1"),
+		grn.New("acme", agent.ServiceTypeOperator, "op-1"),
 	} {
 		line := lineForSubject(t, subject)
 		assert.Equal(t, subject.String(), line[fieldMachineID])
 		assert.NotContains(t, line, fieldUserID)
 	}
 
-	person := grn.New("acme", grn.DefaultProject, user.ServiceType, "alice")
+	person := grn.New("acme", user.ServiceType, "alice")
 	personLine := lineForSubject(t, person)
 	assert.Equal(t, person.String(), personLine[fieldUserID])
 	assert.NotContains(t, personLine, fieldMachineID)
@@ -801,7 +801,7 @@ func TestLogRPCs_CarriesTheCauseTheEngineWithheld(t *testing.T) {
 					SubjectGrn: testSubject,
 					ObjectGrn:  object.String(),
 					SubjectOrg: object.String(),
-					Action:     "org:read",
+					Action:     "iam:org.read",
 				},
 				&grpc.UnaryServerInfo{FullMethod: "/garam.authz.v1.AuthzService/Check"},
 				func(ctx context.Context, req any) (any, error) {
@@ -999,7 +999,7 @@ func (s invitationOrgs) GetInvitation(_ context.Context, token string) (*org.Inv
 	switch token {
 	case s.token:
 		return org.NewInvitation(token, grn.Org("acme"),
-			org.RoleMember, grn.New("root", "default", user.ServiceType, "owner"), time.Now().Add(time.Hour)), nil
+			org.RoleMember, grn.New("root", user.ServiceType, "owner"), time.Now().Add(time.Hour)), nil
 	case "unknown-tok-secret":
 		return nil, org.ErrInvitationNotFound
 	}

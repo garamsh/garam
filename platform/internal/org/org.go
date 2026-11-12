@@ -54,15 +54,15 @@ const (
 	// ServiceTypeCoworkPage is a cowork page's (ADR-0127). cowork
 	// mints the identifier and keeps the page; garam builds the GRN
 	// only to answer what may be done to it.
-	ServiceTypeCoworkPage = "cowork-page"
+	ServiceTypeCoworkPage = "page"
 	// ServiceTypeCoworkChannel is a cowork channel's, a direct message
 	// included (ADR-0128), on the same terms.
-	ServiceTypeCoworkChannel = "cowork-channel"
+	ServiceTypeCoworkChannel = "channel"
 	// ServiceTypeCoworkTask is a cowork task's, on the same terms.
-	ServiceTypeCoworkTask = "cowork-task"
+	ServiceTypeCoworkTask = "task"
 	// ServiceTypeCoworkArtifact is a cowork artifact's, on the same
 	// terms.
-	ServiceTypeCoworkArtifact = "cowork-artifact"
+	ServiceTypeCoworkArtifact = "artifact"
 )
 
 // Organization is the top-level tenancy boundary. Every field is one

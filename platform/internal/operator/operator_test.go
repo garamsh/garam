@@ -14,18 +14,18 @@ import (
 )
 
 func acmeGRN() grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme")
+	return grn.New(grn.RootOwner, "org", "acme")
 }
 
 func aliceGRN() grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, "user", "alice")
+	return grn.New(grn.RootOwner, "user", "alice")
 }
 
 func TestNew_BuildsAnOrgLevelOperatorGRN(t *testing.T) {
 	o, err := operator.New(acmeGRN(), "field-one", aliceGRN(), operator.DetailsPatch{})
 	require.NoError(t, err)
 
-	assert.Equal(t, "grn:acme:default:operator:field-one", o.GRN.String())
+	assert.Equal(t, "grn:acme/iam/operator/field-one", o.GRN.String())
 	assert.Equal(t, acmeGRN(), o.Organization)
 	assert.Equal(t, aliceGRN(), o.RegisteredBy)
 	assert.False(t, o.CreatedAt.IsZero())
@@ -190,7 +190,7 @@ func TestServeManager_NamesAnotherOperatorOfTheOrganization(t *testing.T) {
 
 	o, err := operator.New(acmeGRN(), "field-one-control", aliceGRN(), operator.DetailsPatch{})
 	require.NoError(t, err)
-	require.NoError(t, o.ServeManager("grn:acme:default:operator:field-one"))
+	require.NoError(t, o.ServeManager("grn:acme/iam/operator/field-one"))
 	require.NotNil(t, o.Manager)
 	assert.Equal(t, operatorGRN("acme", "field-one"), *o.Manager)
 }

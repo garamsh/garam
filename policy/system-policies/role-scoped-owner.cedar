@@ -2,6 +2,6 @@
 // `resource in` would reach a team's member agents (ADR-0137).
 permit (
   principal in ?principal,
-  action in Action::"role-owner",
+  action in Iam::Action::"role-owner",
   resource == ?resource
 );

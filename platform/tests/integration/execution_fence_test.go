@@ -48,10 +48,10 @@ import (
 // executionStack is both listeners as the serve commands compose them,
 // over one database: acme's owner and member on the browser surface;
 // on the machine surface the hosted control service, whose grant
-// covers agent:activate, agent:recover and agent:configure for the
-// controller, the controller itself, each presenting the token its key
-// was exchanged for, and an agent assigned to the controller in a
-// lineage its tokens are minted in, with no activation yet. A second
+// covers iam:agent.activate, iam:agent.recover and iam:agent.configure
+// for the controller, the controller itself, each presenting the token
+// its key was exchanged for, and an agent assigned to the controller in
+// a lineage its tokens are minted in, with no activation yet. A second
 // agent of the controller, activated and holding its token, posts to
 // the first.
 type executionStack struct {
@@ -105,7 +105,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
 	session := func(id string, role org.Role) *http.Cookie {
-		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+		g := grn.New(grn.RootOwner, user.ServiceType, id)
 		require.NoError(t, users.Create(ctx, user.New(g, id)))
 		require.NoError(t, orgs.AddMember(ctx, org.NewMembership(acme, g, role)))
 		token, err := authn.NewToken()
@@ -143,7 +143,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 	s.controllerToken = exchangeKey(t, s.client, s.machine, s.controller, s.controllerKey, nil)
 	s.hostedTLS = tokenPresenting(t, s.hostedToken)
 	s.controlTLS = tokenPresenting(t, s.controllerToken)
-	s.delegate(t, "agent:activate", "agent:recover", "agent:configure")
+	s.delegate(t, "iam:agent.activate", "iam:agent.recover", "iam:agent.configure")
 
 	// The agent is the controller's, in a lineage of its own and with no
 	// activation yet.
@@ -175,7 +175,7 @@ func (s *executionStack) agentToken(t *testing.T, g grn.GRN, audience *grn.GRN) 
 	if audience != nil {
 		body = `{"audience":"` + audience.String() + `"}`
 	}
-	got := s.send(t, s.controlTLS, http.MethodPost, "/agents/"+g.String()+"/tokens", operator.TokenContractVersion, "", body)
+	got := s.send(t, s.controlTLS, http.MethodPost, "/agents/"+pathEscape(g.String())+"/tokens", operator.TokenContractVersion, "", body)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var minted machinegen.AgentToken
 	require.NoError(t, json.Unmarshal([]byte(got.body), &minted))
@@ -296,7 +296,7 @@ func (s *executionStack) lifecycle(t *testing.T, client *http.Client, path, cred
 }
 
 func (s *executionStack) agentPath(suffix string) string {
-	return "/agents/" + s.agent.String() + suffix
+	return "/agents/" + pathEscape(s.agent.String()) + suffix
 }
 
 func activationBody(t *testing.T, requestID string, epoch int, generation agent.Generation, replaces *string, forwarded string) string {
@@ -353,9 +353,9 @@ func (s *executionStack) deactivate(t *testing.T, id string) reply {
 }
 
 // recovery is a credential recovery prepared as the Operator prepares
-// one: the exact request body, and the owner's agent:recover handoff
-// for that body. Under execution-fence.v2 it signs nothing and carries
-// no certificate request (ADR-0100, ADR-0118).
+// one: the exact request body, and the owner's iam:agent.recover
+// handoff for that body. Under execution-fence.v2 it signs nothing and
+// carries no certificate request (ADR-0100, ADR-0118).
 type recovery struct {
 	body      string
 	authority string
@@ -371,11 +371,11 @@ func (s *executionStack) prepareRecovery(t *testing.T, requestID string) recover
 	return recovery{body: string(raw), authority: authorityOf(t, got).Authority}
 }
 
-// mintHandoff asks for an agent:recover handoff of the agent as the
+// mintHandoff asks for an iam:agent.recover handoff of the agent as the
 // user cookie names, bound to digest.
 func (s *executionStack) mintHandoff(t *testing.T, cookie *http.Cookie, digest, requestID string) (int, string) {
 	t.Helper()
-	body := `{"audience":"` + s.hosted.String() + `","operation":"agent:recover","target":"` + s.agent.String() +
+	body := `{"audience":"` + s.hosted.String() + `","operation":"iam:agent.recover","target":"` + s.agent.String() +
 		`","requestId":"` + requestID + `","bodySha256":"` + digest + `"}`
 	return call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", cookie, body)
 }
@@ -579,13 +579,13 @@ func TestExecutionFence_RecoveryFencesTheOldLineageOnAnOpenConnection(t *testing
 
 	status, got := s.mintHandoff(t, s.member, strings.Repeat("c", 64), "h-member")
 	assert.Equal(t, http.StatusForbidden, status, "a member does not recover: %s", got)
-	// A grant that stops listing agent:recover ends the handoff minted
+	// A grant that stops listing iam:agent.recover ends the handoff minted
 	// under it; one minted under the restored grant recovers.
 	withdrawn := s.prepareRecovery(t, "rec-0")
-	s.delegate(t, "agent:activate")
+	s.delegate(t, "iam:agent.activate")
 	refused := s.recover(t, withdrawn, withdrawn.body)
 	assert.Equal(t, http.StatusForbidden, refused.status, refused.body)
-	s.delegate(t, "agent:activate", "agent:recover", "agent:configure")
+	s.delegate(t, "iam:agent.activate", "iam:agent.recover", "iam:agent.configure")
 	r := s.prepareRecovery(t, "rec-1")
 
 	changed := s.recover(t, r, r.body+" ")
@@ -771,7 +771,7 @@ func TestExecutionFence_EachContractFamilyAnswersItsOwnVersion(t *testing.T) {
 	}{
 		{s.agentPath("/execution/introspection"), string(introspection), agent.TokenExecutionContractVersion, operator.TokenAuthorityContractVersion, http.StatusOK},
 		{"/operation-authorities/introspection", `{"authority":"absent"}`, operator.TokenAuthorityContractVersion, agent.TokenExecutionContractVersion, http.StatusNotFound},
-		{"/operators/" + s.controller.String() + "/managed-agents", `{"requestId":"r-1","operationRef":"absent"}`,
+		{"/operators/" + pathEscape(s.controller.String()) + "/managed-agents", `{"requestId":"r-1","operationRef":"absent"}`,
 			agent.TokenEnrollmentContractVersion, agent.TokenExecutionContractVersion, http.StatusNotFound},
 	}
 	for _, f := range families {

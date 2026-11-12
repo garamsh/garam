@@ -64,7 +64,7 @@ var (
 // may send to another. The constant is declared here because this
 // package defines sending; the engine matches the string only
 // (authz.md §Policy document).
-const ActionSend = "message:send"
+const ActionSend = "iam:message.send"
 
 const (
 	// MaxBodyLength bounds a submission's body, in characters as the

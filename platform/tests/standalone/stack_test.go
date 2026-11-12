@@ -52,6 +52,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/workload"
 	"github.com/garamsh/garam/platform/internal/workload/docker"
 )
@@ -369,8 +370,9 @@ func (s *stack) createOrg(name string) string {
 		GRN string `json:"grn"`
 	}
 	require.NoError(s.t, json.Unmarshal([]byte(body), &o))
-	parts := strings.Split(o.GRN, ":")
-	return parts[len(parts)-1]
+	parsed, err := grn.Parse(o.GRN)
+	require.NoError(s.t, err)
+	return parsed.Identifier
 }
 
 // cli runs the shipped garam binary and answers its combined output.

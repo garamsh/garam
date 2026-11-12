@@ -17,6 +17,7 @@ decision = { path = "../decision" }
 entity = { path = "../entity" }
 grant = { path = "../grant" }
 jsonwebtoken.workspace = true
+manifest = { path = "../manifest" }
 prost.workspace = true
 prost-types.workspace = true
 rustix.workspace = true

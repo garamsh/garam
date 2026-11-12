@@ -9,7 +9,7 @@ export const API_URL = "http://localhost:8080";
 
 /** The signed-in user every test runs as. */
 export const alice: User = {
-  grn: "grn:root:default:user:alice",
+  grn: "grn:root/iam/user/alice",
   nickname: "Alice",
 };
 

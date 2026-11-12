@@ -21,7 +21,7 @@ import {
 
 import { CopyableCode } from "./copyable-code";
 
-/** A hosted operator whose grant carries `operator:read`. */
+/** A hosted operator whose grant carries `iam:operator.read`. */
 export type ReportService = { operator: DelegatedOperator; orgGrn: string };
 
 /**
@@ -78,14 +78,14 @@ function noticeOf({ service, read }: ServiceAnswer): ControlBlock | null {
     reason:
       read.status === "unavailable"
         ? unansweredReason(service)
-        : controlFailureCopy(read, "operator:read"),
+        : controlFailureCopy(read, "iam:operator.read"),
     fix: NO_FIX,
   };
 }
 
 /**
  * Reads what each service holds of the organization's operators, under
- * `operator:read` (#1047), each call under its own authority. A null
+ * `iam:operator.read` (#1047), each call under its own authority. A null
  * source, which a page passes where the server denies the caller the
  * read, asks nothing and answers null.
  */
@@ -113,7 +113,7 @@ export function useOperatorReports(
             requestId: crypto.randomUUID(),
             org,
             audience: service.operator.grn,
-            operation: "operator:read",
+            operation: "iam:operator.read",
             target: service.orgGrn,
             parser: OperatorReportsParser,
           },

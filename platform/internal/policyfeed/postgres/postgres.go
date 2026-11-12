@@ -39,13 +39,13 @@ const lockSources = `LOCK TABLE agents, group_members, groups, operators,
 const backfill = `
 INSERT INTO policy_outbox (entity_type, entity_id)
 SELECT t, id FROM (
-	SELECT 'Org' AS t, grn AS id FROM orgs
-	UNION ALL SELECT 'OrgMembers', grn FROM orgs
-	UNION ALL SELECT 'Team', grn FROM groups
-	UNION ALL SELECT 'Project', grn FROM projects
-	UNION ALL SELECT 'User', grn FROM users
-	UNION ALL SELECT 'Agent', grn FROM agents
-	UNION ALL SELECT 'Operator', grn FROM operators
+	SELECT 'Iam::Org' AS t, grn AS id FROM orgs
+	UNION ALL SELECT 'Iam::OrgMembers', grn FROM orgs
+	UNION ALL SELECT 'Iam::Team', grn FROM groups
+	UNION ALL SELECT 'Iam::Project', grn FROM projects
+	UNION ALL SELECT 'Iam::User', grn FROM users
+	UNION ALL SELECT 'Iam::Agent', grn FROM agents
+	UNION ALL SELECT 'Iam::Operator', grn FROM operators
 ) live
 ON CONFLICT (entity_type, entity_id)
 DO UPDATE SET generation = policy_outbox.generation + 1`

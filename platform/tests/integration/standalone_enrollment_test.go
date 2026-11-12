@@ -137,7 +137,7 @@ func (s *executionStack) enrolled(t *testing.T, _ standaloneHost, got reply) sta
 	epoch, err := strconv.Atoi(e.Epoch)
 	require.NoError(t, err)
 	supervisor := s.supervisorToken(t, c.credential)
-	minted := s.send(t, tokenPresenting(t, supervisor), http.MethodPost, "/agents/"+c.agent.String()+"/tokens",
+	minted := s.send(t, tokenPresenting(t, supervisor), http.MethodPost, "/agents/"+pathEscape(c.agent.String())+"/tokens",
 		operator.TokenContractVersion, "", `{}`)
 	require.Equal(t, http.StatusCreated, minted.status, minted.body)
 	var own machinegen.AgentToken
@@ -182,7 +182,7 @@ func TestStandalone_AnApprovedHostEnrollsWithoutAnOperator(t *testing.T) {
 	operatorsBefore := countRows(t, s.pool, `SELECT count(*) FROM operators`)
 
 	status, body := s.approve(t, s.member, "acme", h.approval(t, time.Now().Add(time.Hour), nil))
-	assert.Equal(t, http.StatusForbidden, status, "a member holds no agent:enroll: %s", body)
+	assert.Equal(t, http.StatusForbidden, status, "a member holds no iam:agent.enroll: %s", body)
 	status, body = s.approve(t, s.owner, "globex", h.approval(t, time.Now().Add(time.Hour), nil))
 	assert.Equal(t, http.StatusForbidden, status, "acme's owner approves nothing in globex: %s", body)
 	status, body = s.approve(t, s.owner, "acme", h.approval(t, time.Now().Add(48*time.Hour), nil))
@@ -300,7 +300,7 @@ func TestStandalone_TheSupervisorActivatesItsOwnAgentAndNothingElse(t *testing.T
 
 // TestStandalone_BootstrapRefusals covers each way an approval stops
 // being spendable, beside the control that spends a sibling: expiry,
-// withdrawal, and the approving administrator losing agent:enroll.
+// withdrawal, and the approving administrator losing iam:agent.enroll.
 func TestStandalone_BootstrapRefusals(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
@@ -330,8 +330,8 @@ func TestStandalone_BootstrapRefusals(t *testing.T) {
 	_, err = s.pool.Exec(ctx, `UPDATE org_members SET role = 'member' WHERE org_grn = $1 AND role = 'owner'`, s.acme.String())
 	require.NoError(t, err)
 	got = s.spend(t, demoted.secret, demoted.enrollment(t))
-	assert.Equal(t, http.StatusForbidden, got.status, "the approver no longer holds agent:enroll: %s", got.body)
-	_, err = s.pool.Exec(ctx, `UPDATE org_members SET role = 'owner' WHERE org_grn = $1 AND user_grn LIKE '%:ada'`, s.acme.String())
+	assert.Equal(t, http.StatusForbidden, got.status, "the approver no longer holds iam:agent.enroll: %s", got.body)
+	_, err = s.pool.Exec(ctx, `UPDATE org_members SET role = 'owner' WHERE org_grn = $1 AND user_grn LIKE '%/ada'`, s.acme.String())
 	require.NoError(t, err)
 
 	// The control: the same approval spends once its approver holds

@@ -21,7 +21,7 @@ func invitedOrg(t *testing.T, f *fixture, token string, expiresAt time.Time) str
 	t.Helper()
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "Acme Robotics")
-	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	creator := grn.New("root", user.ServiceType, "owner-sub")
 	inv := org.NewInvitation(token, orgGRNOf(slug), org.RoleAdmin, creator, expiresAt)
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), inv))
 	return slug
@@ -85,7 +85,7 @@ func TestGetInvitation_AnswersAnUnknownTokenAsAnyNotFound(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, unknown.Code)
 	assert.JSONEq(t, accept.Body.String(), unknown.Body.String())
 
-	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	creator := grn.New("root", user.ServiceType, "owner-sub")
 	orphan := org.NewInvitation("orphan-tok", orgGRNOf("gone"), org.RoleMember, creator, time.Now().Add(time.Hour))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), orphan))
 	gone := f.do(t, "GET", "/invitations/orphan-tok", "")
@@ -102,9 +102,9 @@ func acmeInvitations(t *testing.T, f *fixture) (string, *http.Cookie, *http.Cook
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "Acme Robotics")
 	member := f.sessionCookieFor(t, "member-sub", "Member")
-	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
+	memberGRN := grn.New("root", user.ServiceType, "member-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), memberGRN, org.RoleMember)))
-	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	creator := grn.New("root", user.ServiceType, "owner-sub")
 	inv := org.NewInvitation("pending-tok", orgGRNOf(slug), org.RoleAdmin, creator, time.Now().UTC().Add(time.Hour))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), inv))
 	return slug, owner, member, inv
@@ -116,7 +116,7 @@ func acmeInvitations(t *testing.T, f *fixture) (string, *http.Cookie, *http.Cook
 func TestListInvitations_NamesEachPendingOneAndNeverItsToken(t *testing.T) {
 	f := newFixture(t)
 	slug, owner, _, inv := acmeInvitations(t, f)
-	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	creator := grn.New("root", user.ServiceType, "owner-sub")
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t),
 		org.NewInvitation("lapsed-tok", orgGRNOf(slug), org.RoleMember, creator, time.Now().UTC().Add(-time.Minute))))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t),
@@ -136,7 +136,7 @@ func TestListInvitations_NamesEachPendingOneAndNeverItsToken(t *testing.T) {
 }
 
 // TestInvitationManagement_RefusesAMemberWhomTheRoleGrantsNoInvite asks
-// both operations as a member, who holds no org:invite, and as the
+// both operations as a member, who holds no iam:org.invite, and as the
 // owner, who does, so the refusal is the action's.
 func TestInvitationManagement_RefusesAMemberWhomTheRoleGrantsNoInvite(t *testing.T) {
 	f := newFixture(t)

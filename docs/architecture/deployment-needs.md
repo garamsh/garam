@@ -23,6 +23,7 @@ and is not checked against any later one.
 - garam/cowork-web
 - garam/policy: serve and migrate
 - Public names
+- codehub as a caller
 - Databases
 - Secrets and key material
 - Not established
@@ -119,6 +120,18 @@ Dockerfile under `deploy/local/`.
   Its working directory is `/app/<app>` and the server is Next.js
   `output: "standalone"` (`platform-web/next.config.ts:12`,
   `site-web/next.config.ts:12`, `cowork-web/next.config.ts:11`).
+  The image sets placeholder `*.invalid` values for the address
+  settings at build and the runtime values replace them
+  (`deploy/local/Dockerfile.web:31-34`). The local stack probes it with
+  `wget` against `/readyz`, so the node image carries a shell and
+  `wget` (`deploy/local/docker-compose.yml`, the web services'
+  healthchecks); the Go and Rust images carry neither.
+- The local stack (`deploy/local/docker-compose.yml`) is the one place
+  all six images run together, and it does not cover everything here:
+  it runs no machine listener, sets no `GARAM_POLICY_*` on the api, and
+  leaves cowork's four policy settings empty. What it orders by
+  `depends_on` is its own choice and is stated under each entry's
+  Before start.
 - The Go processes' only probe command is their own:
   `garam probe`, `cowork probe` and `policy probe <url>`, an HTTP GET
   that fails unless the answer is 200
@@ -145,7 +158,7 @@ plaintext HTTP port (`serve.go:51-159`).
 | `GARAM_MACHINE_TOKEN_URL` | no | no assertion exchange; an absolute https URL when set (`platform/internal/operator/assertion.go:118-137`) |
 | `GARAM_POLICY_ADDR` | no | no policy delivery; when set, the three below are required (`policy_delivery.go:127-151`) |
 | `GARAM_POLICY_CA_FILE`, `GARAM_POLICY_SIGNING_KEY_FILE`, `GARAM_POLICY_TOKEN_ISSUER` | with the address | see above; the key is loaded at start (`policy_delivery.go:175`) |
-| `GARAM_IDENTITY_ISSUER` | no | issuer off (`identity.go:26-56`) |
+| `GARAM_IDENTITY_ISSUER` | no | issuer off (`identity.go:26-56`); the chart does not render it (`deploy/charts/garam/README.md:348`) |
 | `GARAM_MACHINE_ISSUER` | no | read here only to refuse an identity issuer equal to it (`identity.go:26-56`) |
 
 - Declarations: `cli.go:200-242`. What each Google, policy and issuer
@@ -247,10 +260,10 @@ owner's states the rule on what may stand in front of it.
 | `GARAM_TRANSIT_CA_FILE`, `GARAM_TRANSIT_TOKEN_FILE`, `GARAM_TRANSIT_SIGNING_KEY` | with the address | refused (`machine.go:437`) |
 | `GARAM_TRANSIT_MOUNT` | no | read with the address (`machine.go:422-446`) |
 | `GARAM_MACHINE_TOKEN_URL` | no | no assertion exchange; with the service-keys file set it must end in `/oauth/token` (`identity.go:92-99`) |
-| `GARAM_IDENTITY_ISSUER` | no | issuer off (`identity.go:26-56`) |
+| `GARAM_IDENTITY_ISSUER` | no | issuer off (`identity.go:26-56`); the chart does not render it (`deploy/charts/garam/README.md:348`) |
 | `GARAM_POLICY_SIGNING_KEY_FILE` | no | issuer and principal exchange off; the exchange answers 503 |
 | `GARAM_POLICY_TOKEN_ISSUER` | no | read only for the equality check (`identity.go:26-56`) |
-| `GARAM_IDENTITY_SERVICE_KEYS_FILE` | no | no first-party service principal (`identity.go:65-86`) |
+| `GARAM_IDENTITY_SERVICE_KEYS_FILE` | no | no first-party service principal (`identity.go:65-86`); the chart does not render it (`deploy/charts/garam/README.md:349`) |
 
 - **Files**, eight, by rule
   (`platform/internal/keyfile/keyfile.go:20-47`; owner-only means no
@@ -276,10 +289,23 @@ owner's states the rule on what may stand in front of it.
 - **Listeners.** `GARAM_MACHINE_ADDR`: HTTPS, which the process
   terminates with the pair above (`ListenAndServeTLS`,
   `machine.go:157`); no client certificate is asked for. Read timeout
-  30s, body bound 1 MiB (`machine.go:347-352`). Callers: agents, and
-  cowork at `/oauth/token`.
+  30s, body bound 1 MiB (`machine.go:347-352`). Callers: agents;
+  cowork and codehub at `/oauth/token`, and codehub at
+  `/oauth/introspect` (§codehub as a caller).
   `GARAM_MACHINE_HEALTH_ADDR`: HTTP, plaintext, `/healthz`, `/readyz`
   (database and authz channel) and `/metrics` (`machine.go:146-155`).
+- **Assertion audience.** A service principal's assertion names as `aud`
+  the endpoint's own URL, with `typ` `JWT`, or `GARAM_IDENTITY_ISSUER`
+  as the only value, with `typ` `client-authentication+jwt` or `JWT`;
+  the URL form is to be withdrawn. An `aud` naming both, a list,
+  another string, or the URL form under the new `typ` is refused as a
+  bad client, and the operator exchange takes the URL form only
+  (`platform/internal/operator/assertion.go:28,169-170,233-256`,
+  [machine-identity.md](./machine-identity.md) §cowork's principal).
+  cowork sends the URL form (`cowork/internal/policy/assertion.go:84`).
+  The introspection URL is derived from the token URL, so the two share
+  one origin (`identity.go:88-99`). An unknown organization answers 400
+  `unauthorized_client`; every other failure is `invalid_client`.
 - **Stop.** The TLS listener through `serveHTTP`, 10s as `serve api`;
   the health listener has no graceful stop (`machine.go:150,157`).
 - **Before start.** `garam migrate` complete; the same absence.
@@ -330,7 +356,10 @@ job.
   segment dropped (`proxy.ts:18-21`), and, in `/console`, the
   backend's `/me` to verify a session (`proxy.ts:24-30`); it sends a
   visitor without a session to the site (`proxy.ts:44-62`).
-- **Before start.** No ordering was read.
+- **Before start.** Nothing is read: the probes read nothing of the api
+  ([ADR-0023](./adr/0023-web-probes.md)). The local stack starts it
+  after the api is healthy (`deploy/local/docker-compose.yml:183-185`),
+  which is that stack's choice.
 - **Stop.** Not established; see §Not established.
 
 ## garam/site
@@ -350,7 +379,9 @@ image shape on port 3000.
 - **Calls.** The api at `GARAM_API_URL` for `/api/*`
   (`proxy.ts:21-26`); it redirects `/console/*` and `/device` to
   `GARAM_CONSOLE_URL` (`proxy.ts:27-29,34`).
-- **Before start.** No ordering was read. **Stop.** Not established.
+- **Before start.** Nothing is read; the local stack starts it after the
+  api is healthy (`deploy/local/docker-compose.yml:209-211`), which is
+  that stack's choice. **Stop.** Not established.
 
 ## garam/cowork: serve and migrate
 
@@ -456,7 +487,10 @@ the MCP tools (`cowork/internal/cli/serve.go:178-261`). Image
   cookie, and the platform's browser API (`GARAM_API_URL`), asking which
   organizations the caller belongs to (`env.ts:9-14`). A visitor
   without a session is sent to the site (`proxy.ts:18-28`).
-- **Before start.** No ordering was read. **Stop.** Not established.
+- **Before start.** Nothing is read: the probes read nothing of cowork.
+  The local stack starts it after cowork is healthy
+  (`deploy/local/docker-compose.yml:409-411`), which is that stack's
+  choice. **Stop.** Not established.
 
 ## garam/policy: serve and migrate
 
@@ -487,9 +521,13 @@ TLS listener (`policy/crates/server/src/lib.rs:106-138`). Commands:
 
 **Listeners, 2.** `POLICY_ADDR`: gRPC and the HTTP binding, one TLS
 listener (rustls with ring), ALPN `h2` and `http/1.1`; there is no
-plaintext path (`lib.rs:106-109,130`, `tls.rs:10-25`). Callers
-named by a setting: garam's `serve api` (`GARAM_POLICY_ADDR`) and
-cowork (`COWORK_POLICY_ADDR`). `POLICY_HEALTH_ADDR`: HTTP, plaintext,
+plaintext path (`lib.rs:106-109,130`, `tls.rs:10-25`). Callers: garam
+as `platform`, and cowork and codehub as scoped callers, each told by
+the token's `sub` (`caller.rs:35-70`); any other `sub` is denied.
+Two are named by a setting: garam's `serve api`
+(`GARAM_POLICY_ADDR`) and cowork (`COWORK_POLICY_ADDR`); codehub is
+named by none and is §codehub as a caller.
+`POLICY_HEALTH_ADDR`: HTTP, plaintext,
 `/healthz` and `/readyz`, a credential riding neither
 (`probes.rs:13-34`).
 
@@ -538,12 +576,81 @@ leave the cluster.
   `COWORK_PLATFORM_URL` on cowork and the web apps' `GARAM_API_URL`; it
   is internal and need not be a public name
   (`cowork/internal/platform/http/http.go:38-45`).
-- Which host the identity issuer's `/api` sits on, the site's or the
-  console's, is not established: both web apps proxy `/api/*` to the api
-  (`site-web/src/proxy.ts:21-26`, `platform-web/src/proxy.ts:41-43`).
-- The policy service's address is internal: `GARAM_POLICY_ADDR` on
-  garam and `COWORK_POLICY_ADDR` on cowork name the same listener, which
-  presents a certificate the two `*_POLICY_CA_FILE` settings trust.
+- The identity issuer's `/api` sits on the site's host or the
+  console's: both web apps proxy `/api/*` to the api
+  (`site-web/src/proxy.ts:21-26`, `platform-web/src/proxy.ts:41-43`),
+  so the choice is the deployment's. garam recommends the site's,
+  because the CLI's default origin is the site's: the CLI signs in at
+  `https://garam.sh` where nothing names another
+  (`garam-cli/internal/session/session.go:16-18`), and
+  [ADR-0131](./adr/0131-the-session-cookie-is-host-only-and-the-site-hands-a-sign-in-to-another-app-by-a-one-time-code.md) puts sign-in at that host. The
+  name stays one for the deployment's life: `GARAM_IDENTITY_ISSUER`
+  is the `iss` of every token the issuer has signed, and the policy
+  service's `POLICY_TOKEN_ISSUER` must equal it.
+- The policy service's address is internal to garam and cowork:
+  `GARAM_POLICY_ADDR` on garam and `COWORK_POLICY_ADDR` on cowork name
+  the same listener, which presents a certificate the two
+  `*_POLICY_CA_FILE` settings trust. codehub is a third caller, and
+  whether its name for that listener is inside the deployment's network
+  is the deployment's; see §codehub as a caller.
+
+## codehub as a caller
+
+codehub is a service garam does not deploy. It acts in an organization
+as `grn:<org>/iam/service/codehub`
+([machine-identity.md](./machine-identity.md) §codehub's principal). It
+may run beside garam or apart from it, so this section states what
+codehub must reach and leaves where it runs to the deployment. codehub
+has three places to reach, each served by a process above:
+
+| What codehub reaches | Served by | Credential codehub brings | Must the name be reachable from outside the deployment's network |
+|---|---|---|---|
+| The policy service's listener, `POLICY_ADDR`: gRPC and the HTTP binding's evaluations and entity feed | `policy serve` | an issuer token for the `policy` audience; any other `sub` than `platform`, `cowork` or `codehub` is denied (`policy/crates/server/src/caller.rs:35-70`) | where codehub runs apart from the deployment's network, yes; where it runs beside it, no |
+| The token endpoint, `/oauth/token`, and introspection, `/oauth/introspect`, on the machine listener | `serve machine` | a `private_key_jwt` assertion signed with codehub's key | the same |
+| The issuer's discovery and JWKS, on the browser-facing listener at `GARAM_IDENTITY_ISSUER` | `serve api` | none; answered without a credential | the same; the issuer's name is a public name already (§Public names) |
+
+- **Policy service.** `POLICY_ADDR` answers codehub as it answers
+  garam and cowork, on one TLS listener with no plaintext path
+  (`policy/README.md` §Callers, §AuthZEN binding;
+  [ADR-0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)).
+  The HTTP routes are `POST /access/v1/evaluation`,
+  `POST /access/v1/evaluations`,
+  `GET /.well-known/authzen-configuration` and
+  `POST /garam/policy/v1/entity-changes`
+  (`policy/crates/server/src/http.rs:26-29`). codehub's `sub` is
+  `grn:<org>/iam/service/codehub`, bound to that organization, which
+  may not be `root`. The certificate the listener presents is the
+  pair named by `POLICY_TLS_CERT_FILE`; codehub must trust it, and
+  where it runs apart the certificate must name the host codehub
+  reaches. The metadata names its endpoints under the host the client
+  reached, and a request naming no host is a 400 (`policy/README.md`
+  §AuthZEN binding). The policy-side support is built at this commit
+  (`policy/schema/codehub.cedarschema`, `policy/README.md:68`);
+  `machine-identity.md` §codehub's principal and the body of ADR-0149
+  still call it unbuilt, and the source is followed here.
+- **Token endpoint and introspection.** codehub asks the machine
+  listener's `/oauth/token` with its principal's GRN as `client_id` and
+  `audience` `policy`, and its assertion's `aud` is the endpoint's own
+  URL or `GARAM_IDENTITY_ISSUER`
+  (`platform/internal/operator/assertion.go:169-170,233-256`). The
+  exchange answers only where `GARAM_IDENTITY_SERVICE_KEYS_FILE` holds
+  a key for the name `codehub`, at most two, RS256; with none, no
+  codehub principal authenticates. Introspection answers for tokens
+  issued for the `codehub` audience and reads a `policy` one as
+  inactive. Both are on the machine listener, whose certificate codehub
+  must trust (`GARAM_MACHINE_SERVER_ROOT_FILE` is the root garam names
+  for it).
+- **Discovery and JWKS.** `<issuer>/.well-known/openid-configuration`
+  and `<issuer>/oauth/jwks` need no credential
+  ([api-surface.md](./api-surface.md) §The issuer's endpoints). They
+  exist only where `GARAM_IDENTITY_ISSUER` and
+  `GARAM_POLICY_SIGNING_KEY_FILE` are both set.
+- **Unbuilt**, per [machine-identity.md](./machine-identity.md)
+  §codehub's principal: codehub's adapter, outbox and runner, an
+  authorization-code flow for codehub, and the chart rendering the
+  issuer's settings (`deploy/charts/garam/README.md:348-349`). A
+  deployment sets `GARAM_IDENTITY_ISSUER` and
+  `GARAM_IDENTITY_SERVICE_KEYS_FILE` itself until the chart does.
 
 ## Databases
 
@@ -636,9 +743,15 @@ that depends on one decides it and records it as decided.
   needs beyond creating and altering its own objects.
 - **Whether the user-content origin is a separate public name**
   beyond the listener and the origin check the source shows, and how it
-  relates to `COWORK_WEB_ORIGINS`.
-- **Who calls the policy service's HTTP binding.** No setting names
-  one.
+  relates to `COWORK_WEB_ORIGINS`. The source reads as a name apart
+  from cowork's host; the documents read for this entry do not say it
+  is required.
+- **Where codehub runs**, beside garam or apart from it, and the
+  address it reaches each of the three places in §codehub as a caller
+  by. codehub is a caller the documents establish; its place is the
+  deployment's. Its adapter, outbox and runner are unbuilt
+  ([machine-identity.md](./machine-identity.md) §codehub's principal),
+  so no setting of codehub's own is read here.
 - **The file mode of the CA files** (`GARAM_POLICY_CA_FILE`,
   `GARAM_TRANSIT_CA_FILE`, `COWORK_POLICY_CA_FILE`): none enforced in
   what was read.

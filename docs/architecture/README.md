@@ -481,8 +481,8 @@ Responsibility documents:
   established
 - [deployment-needs.md](./deployment-needs.md) — what a deployment must
   give each of the six images: settings, files, listeners, probes,
-  stop, order of start, what each calls, the public names and the
-  three databases, and what is not established
+  stop, order of start, what each calls, the public names, what
+  codehub must reach, the three databases, and what is not established
 - [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
   gateway, the keys it holds, how it routes and what it records; not
   yet built

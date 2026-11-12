@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::str::FromStr;
 
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use cedar_policy::{EntityId, EntityTypeName, EntityUid};
+use decision::{EntityRef, OrgGrn};
 use jsonwebtoken::{
     Algorithm, DecodingKey, Validation, decode, decode_header, get_current_timestamp,
 };
-use manifest::Manifests;
+use manifest::{Manifests, is_slug};
 use serde::Deserialize;
 use tonic::service::Interceptor;
 use tonic::{Request, Status};
@@ -24,40 +27,117 @@ const MODULUS_BITS: std::ops::RangeInclusive<usize> = 2048..=4096;
 /// The skew allowed against the issuer's clock, as ADR-0102's.
 const CLOCK_SKEW_SECONDS: u64 = 30;
 
-/// An authenticated service, read from the `sub` of its token. Another
-/// `sub` is refused however well its token verifies, so what a service
-/// may ask is decided here and nowhere else (ADR-0140). Which types it
-/// writes is not decided here: the manifests' `@caller` annotations say
-/// (ADR-0143 item 2).
+/// A service this one serves, as the closed list of callers names it
+/// (ADR-0140). Which types it writes is not decided here: the
+/// manifests' `@caller` annotations say (ADR-0143 item 2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Caller {
     /// The platform, which asks anything and writes the types whose
     /// `@caller` is `platform`.
     Platform,
+    /// cowork, which writes the types whose `@caller` is `cowork` and
+    /// asks of its own service, within one organization.
+    Cowork,
 }
 
 impl Caller {
     /// The closed list of callers, which a check holds the manifests'
     /// `@caller` values to.
-    pub const ALL: [Self; 1] = [Self::Platform];
+    pub const ALL: [Self; 2] = [Self::Platform, Self::Cowork];
 
-    /// The `sub` of this caller's token.
+    /// The name of this caller: the bare `sub` of the platform's token,
+    /// the `<name>` of a scoped caller's service principal, and the
+    /// `@caller` its types carry. A scoped caller's is also the name
+    /// of its service, the prefix of its actions.
     pub const fn subject(self) -> &'static str {
         match self {
             Self::Platform => "platform",
+            Self::Cowork => "cowork",
         }
     }
 
-    fn from_subject(subject: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|caller| caller.subject() == subject)
+    /// Whether the caller acts for one organization, so its token
+    /// names a service principal of that organization.
+    pub const fn scoped(self) -> bool {
+        match self {
+            Self::Platform => false,
+            Self::Cowork => true,
+        }
     }
 
     /// Whether this service writes entities of this qualified type,
     /// as the manifests' `@caller` say (ADR-0130 §8).
     pub fn owns(self, manifests: &Manifests, entity_type: &str) -> bool {
         manifests.owns(self.subject(), entity_type)
+    }
+}
+
+/// An authenticated caller, read from the `sub` of its token. Another
+/// `sub` is refused however well its token verifies, so what a service
+/// may ask is decided here and nowhere else (ADR-0140). A `sub` is
+/// either the bare name of an unscoped caller, `platform`, or a service
+/// principal's GRN, `grn:<org>/iam/service/<name>`, whose name is a
+/// scoped caller's: that caller is then bound to `<org>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Principal {
+    caller: Caller,
+    org: Option<OrgGrn>,
+}
+
+impl Principal {
+    /// The caller.
+    pub const fn caller(&self) -> Caller {
+        self.caller
+    }
+
+    /// The organization a scoped caller is bound to.
+    pub const fn org(&self) -> Option<&OrgGrn> {
+        self.org.as_ref()
+    }
+
+    fn from_subject(subject: &str) -> Option<Self> {
+        if let Some(caller) = Caller::ALL
+            .into_iter()
+            .find(|caller| !caller.scoped() && caller.subject() == subject)
+        {
+            return Some(Self { caller, org: None });
+        }
+        // No reader of the workspace splits a GRN: this one split reads
+        // the organization of a principal's name, and `owns_grn` then
+        // confirms that the name is beneath it.
+        let (slug, rest) = subject.strip_prefix("grn:")?.split_once('/')?;
+        let name = rest.strip_prefix("iam/service/")?;
+        let caller = Caller::ALL
+            .into_iter()
+            .find(|caller| caller.scoped() && caller.subject() == name)?;
+        if slug == "root" || !is_slug(slug) {
+            return None;
+        }
+        let org = OrgGrn::named(slug);
+        org.owns_grn(subject).then_some(Self {
+            caller,
+            org: Some(org),
+        })
+    }
+
+    /// Whether the entity is of the organization this caller is bound
+    /// to, as its GRN names it. An unscoped caller has no such bound.
+    pub fn admits(&self, entity: &EntityUid) -> bool {
+        self.org.as_ref().is_none_or(|org| org.names(entity))
+    }
+
+    /// Whether a question is one this caller may ask: an action of its
+    /// own service about a resource of its organization. An unscoped
+    /// caller asks anything.
+    pub fn asks(&self, action: &str, resource: &EntityRef<'_>) -> bool {
+        let Some(org) = &self.org else { return true };
+        let own_service = action
+            .split_once(':')
+            .is_some_and(|(service, _)| service == self.caller.subject());
+        let of_org = EntityTypeName::from_str(resource.entity_type)
+            .map(|name| EntityUid::from_type_name_and_id(name, EntityId::new(resource.id)))
+            .is_ok_and(|uid| org.names(&uid));
+        own_service && of_org
     }
 }
 
@@ -239,7 +319,7 @@ impl Verifier {
     }
 
     /// Verifies a compact token.
-    pub fn verify(&self, token: &str) -> Result<Caller, Refusal> {
+    pub fn verify(&self, token: &str) -> Result<Principal, Refusal> {
         let header = protected_header(token)?;
         if header.typ != "JWT" {
             return Err(Refusal::Header);
@@ -258,7 +338,7 @@ impl Verifier {
         if claims.sub.is_empty() || claims.nbf.is_some_and(|nbf| nbf > claims.exp) {
             return Err(Refusal::Claims);
         }
-        Caller::from_subject(&claims.sub).ok_or(Refusal::UnknownService)
+        Principal::from_subject(&claims.sub).ok_or(Refusal::UnknownService)
     }
 }
 
@@ -306,8 +386,8 @@ impl Interceptor for Verifier {
             .ok_or(Refusal::NoToken)
             .and_then(|token| self.verify(token));
         match verified {
-            Ok(caller) => {
-                request.extensions_mut().insert(caller);
+            Ok(principal) => {
+                request.extensions_mut().insert(principal);
                 Ok(request)
             }
             Err(refusal) => Err(to_status(&ServiceError::Unauthenticated(refusal))),

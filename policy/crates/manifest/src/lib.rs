@@ -11,5 +11,5 @@ mod service;
 
 pub use catalogue::render_go;
 pub use error::Error;
-pub use manifests::{Manifests, embedded};
+pub use manifests::{Manifests, embedded, is_slug};
 pub use service::{Action, AppliesTo, EntityType, Service, Writer};

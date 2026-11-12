@@ -49,7 +49,7 @@ fn a_grn_segment_that_is_not_a_slug_is_named() {
 
 #[test]
 fn a_type_without_a_caller_is_named() {
-    let manifests = cowork_with(r#"@grn("page") @caller("none")"#, r#"@grn("page")"#);
+    let manifests = cowork_with(r#"@grn("page") @caller("cowork")"#, r#"@grn("page")"#);
 
     let problems = manifests.problems();
     assert_eq!(problems, ["Cowork::Page: no @caller"]);

@@ -20,6 +20,11 @@ impl OrgGrn {
         Self(grn.into())
     }
 
+    /// The organization of this name, `grn:root/iam/org/<slug>`.
+    pub fn named(slug: &str) -> Self {
+        Self(format!("{ORG_PREFIX}{slug}"))
+    }
+
     /// The GRN.
     pub fn as_str(&self) -> &str {
         &self.0

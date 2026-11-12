@@ -1510,9 +1510,9 @@ const pollWindow = 50 * time.Millisecond
 
 // runPolling runs the loop against a garam answering every poll with
 // err, waits until it has polled at least reached times, then watches
-// it for one more window and returns how many polls it made. The retry
-// delay is far longer than the window, so a poll waited on is a poll not
-// repeated.
+// it for one more window and returns how many polls it made. The
+// retry delay is far longer than the window, so a poll waited on is a
+// poll not repeated.
 func runPolling(t *testing.T, answer error, reached int) int {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())

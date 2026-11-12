@@ -119,7 +119,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 // with the same prefix is the control.
 func TestIsAction_RefusesWhatOnlyAWildcardMatches(t *testing.T) {
 	assert.True(t, org.IsAction(org.ActionOrgDelete))
-	for _, name := range []string{"iam:org.*", "iam:org-frobnicate", ""} {
+	for _, name := range []string{"iam:org.*", "iam:org.frobnicate", ""} {
 		assert.False(t, org.IsAction(name), name)
 	}
 }

@@ -27,6 +27,32 @@ service PolicyService {
   // nothing. A change at fault otherwise is refused in the response
   // and the rest are written.
   rpc ApplyEntityChanges(ApplyEntityChangesRequest) returns (ApplyEntityChangesResponse);
+
+  // CreatePolicy stores an organization's policy as a draft holding
+  // version 1 (ADR-0146 item 3). The platform alone calls the write
+  // RPCs, and every one names the writer whose action the service
+  // evaluates on the organization, read current, before it stores.
+  rpc CreatePolicy(CreatePolicyRequest) returns (CreatePolicyResponse);
+
+  // AppendPolicyVersion adds a version of the policy's own kind and
+  // leaves its default where it is.
+  rpc AppendPolicyVersion(AppendPolicyVersionRequest) returns (AppendPolicyVersionResponse);
+
+  // ActivatePolicy makes the policy's default version decide.
+  rpc ActivatePolicy(ActivatePolicyRequest) returns (ActivatePolicyResponse);
+
+  // RollBackPolicy moves the default to a stored version, older or
+  // newer.
+  rpc RollBackPolicy(RollBackPolicyRequest) returns (RollBackPolicyResponse);
+
+  // DeletePolicy removes the policy with its versions.
+  rpc DeletePolicy(DeletePolicyRequest) returns (DeletePolicyResponse);
+
+  // GetPolicy reads one policy with its versions.
+  rpc GetPolicy(GetPolicyRequest) returns (GetPolicyResponse);
+
+  // ListPolicies reads the organization's policies, unpaged.
+  rpc ListPolicies(ListPoliciesRequest) returns (ListPoliciesResponse);
 }
 
 // Subject is who asks. It carries no properties, unlike AuthZEN's: a
@@ -190,4 +216,150 @@ message ApplyEntityChangesResponse {
   // dropped counts the changes at or below the stored sequence.
   uint32 dropped = 2;
   repeated EntityChangeRefusal refusals = 3;
+}
+
+// Role is a role an organization's role link grants.
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_OWNER = 1;
+  ROLE_ADMIN = 2;
+  ROLE_MEMBER = 3;
+}
+
+// RoleScope is the template set a role link is drawn from.
+enum RoleScope {
+  ROLE_SCOPE_UNSPECIFIED = 0;
+  // ROLE_SCOPE_ORGANIZATION links a principal to the organization.
+  ROLE_SCOPE_ORGANIZATION = 1;
+  // ROLE_SCOPE_TEAM_OR_PROJECT links a principal to a team or project.
+  ROLE_SCOPE_TEAM_OR_PROJECT = 2;
+}
+
+// PolicyKind is what a policy says, fixed by its first version.
+enum PolicyKind {
+  POLICY_KIND_UNSPECIFIED = 0;
+  POLICY_KIND_ROLE_LINK = 1;
+  POLICY_KIND_GUARDRAIL = 2;
+  POLICY_KIND_PERMIT = 3;
+}
+
+// PolicyStatus says whether a policy decides anything.
+enum PolicyStatus {
+  POLICY_STATUS_UNSPECIFIED = 0;
+  // POLICY_STATUS_DRAFT is stored and evaluated by nothing.
+  POLICY_STATUS_DRAFT = 1;
+  // POLICY_STATUS_ACTIVE composes the default version into decisions.
+  POLICY_STATUS_ACTIVE = 2;
+}
+
+// RoleLink assigns a role to a principal on a resource.
+message RoleLink {
+  Role role = 1;
+  RoleScope scope = 2;
+  EntityRef principal = 3;
+  EntityRef resource = 4;
+}
+
+// PolicyBody is what one version of a policy says.
+message PolicyBody {
+  oneof body {
+    RoleLink role_link = 1;
+    // guardrail is the text of one Cedar `forbid`.
+    string guardrail = 2;
+    // permit is the text of one Cedar `permit`.
+    string permit = 3;
+  }
+}
+
+// PolicyVersion is one stored version.
+message PolicyVersion {
+  int32 version = 1;
+  PolicyBody body = 2;
+  // created_by is the writer's GRN, or the calling service's subject
+  // (`platform`) for a write with none.
+  string created_by = 3;
+}
+
+// PolicySummary is a policy without its versions.
+message PolicySummary {
+  // policy is the policy's GRN, `grn:<org slug>/iam/policy/<id>`.
+  string policy = 1;
+  string name = 2;
+  PolicyStatus status = 3;
+  int32 default_version = 4;
+  PolicyKind kind = 5;
+}
+
+// CreatePolicyRequest names the writer, the organization and the
+// policy. A writer left unset is accepted for a role link alone, a
+// write from a membership.
+message CreatePolicyRequest {
+  Subject writer = 1;
+  // org is the organization's GRN.
+  string org = 2;
+  string policy = 3;
+  string name = 4;
+  PolicyBody body = 5;
+}
+
+message CreatePolicyResponse {}
+
+message AppendPolicyVersionRequest {
+  Subject writer = 1;
+  string org = 2;
+  string policy = 3;
+  PolicyBody body = 4;
+}
+
+message AppendPolicyVersionResponse {
+  // version is the new version's number.
+  int32 version = 1;
+}
+
+message ActivatePolicyRequest {
+  Subject writer = 1;
+  string org = 2;
+  string policy = 3;
+}
+
+message ActivatePolicyResponse {}
+
+message RollBackPolicyRequest {
+  Subject writer = 1;
+  string org = 2;
+  string policy = 3;
+  int32 version = 4;
+}
+
+message RollBackPolicyResponse {}
+
+message DeletePolicyRequest {
+  Subject writer = 1;
+  string org = 2;
+  string policy = 3;
+}
+
+message DeletePolicyResponse {}
+
+// GetPolicyRequest names the reader, who must hold `iam:policy.read`
+// on the organization.
+message GetPolicyRequest {
+  Subject writer = 1;
+  string org = 2;
+  string policy = 3;
+}
+
+message GetPolicyResponse {
+  PolicySummary policy = 1;
+  // versions are oldest first.
+  repeated PolicyVersion versions = 2;
+}
+
+message ListPoliciesRequest {
+  Subject writer = 1;
+  string org = 2;
+}
+
+message ListPoliciesResponse {
+  repeated PolicySummary policies = 1;
 }

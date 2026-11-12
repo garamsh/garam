@@ -75,6 +75,17 @@ impl World {
             .expect("the policies compose")
     }
 
+    /// The policies composed for `who`, as a decision composes them.
+    pub fn compose_as(&self, who: Named, links: &[RoleLink], own: &[Policy]) -> Policies {
+        let principal = EntityUid::from_type_name_and_id(
+            EntityTypeName::from_str(who.0).expect("a type name"),
+            EntityId::new(who.1),
+        );
+        self.engine
+            .compose_for(&principal, links, own)
+            .expect("the policies compose")
+    }
+
     pub fn ask(&self, policies: &Policies, who: Named, action: &str, what: Named) -> Decision {
         let request = self
             .engine

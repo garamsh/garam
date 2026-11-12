@@ -21,9 +21,10 @@ const MAX_CHANGES: usize = 1000;
 /// promises.
 #[derive(Debug, Clone)]
 pub struct Service<P, E> {
-    engine: Engine,
-    policies: P,
-    entities: E,
+    pub(crate) engine: Engine,
+    pub(crate) policies: P,
+    pub(crate) entities: E,
+    pub(crate) store: Option<grant::PolicyStore>,
 }
 
 impl<P, E> Service<P, E> {
@@ -39,6 +40,7 @@ impl<P, E> Service<P, E> {
             engine,
             policies,
             entities,
+            store: None,
         }
     }
 }
@@ -232,6 +234,83 @@ where
             .await
             .map_err(|e| to_status(&e))?;
         Ok(Response::new(applied))
+    }
+
+    async fn create_policy(
+        &self,
+        request: Request<proto::CreatePolicyRequest>,
+    ) -> Result<Response<proto::CreatePolicyResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
+        let done = Service::create_policy(self, &principal, request.get_ref())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(done))
+    }
+
+    async fn append_policy_version(
+        &self,
+        request: Request<proto::AppendPolicyVersionRequest>,
+    ) -> Result<Response<proto::AppendPolicyVersionResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
+        let done = Service::append_policy_version(self, &principal, request.get_ref())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(done))
+    }
+
+    async fn activate_policy(
+        &self,
+        request: Request<proto::ActivatePolicyRequest>,
+    ) -> Result<Response<proto::ActivatePolicyResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
+        let done = Service::activate_policy(self, &principal, request.get_ref())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(done))
+    }
+
+    async fn roll_back_policy(
+        &self,
+        request: Request<proto::RollBackPolicyRequest>,
+    ) -> Result<Response<proto::RollBackPolicyResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
+        let done = Service::roll_back_policy(self, &principal, request.get_ref())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(done))
+    }
+
+    async fn delete_policy(
+        &self,
+        request: Request<proto::DeletePolicyRequest>,
+    ) -> Result<Response<proto::DeletePolicyResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
+        let done = Service::delete_policy(self, &principal, request.get_ref())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(done))
+    }
+
+    async fn get_policy(
+        &self,
+        request: Request<proto::GetPolicyRequest>,
+    ) -> Result<Response<proto::GetPolicyResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
+        let done = Service::get_policy(self, &principal, request.get_ref())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(done))
+    }
+
+    async fn list_policies(
+        &self,
+        request: Request<proto::ListPoliciesRequest>,
+    ) -> Result<Response<proto::ListPoliciesResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
+        let done = Service::list_policies(self, &principal, request.get_ref())
+            .await
+            .map_err(|e| to_status(&e))?;
+        Ok(Response::new(done))
     }
 }
 

@@ -8,6 +8,7 @@ mod entity_changes;
 mod entity_sink;
 mod http;
 mod policy_service;
+mod policy_write;
 mod probes;
 mod status;
 mod tls;
@@ -118,7 +119,8 @@ pub async fn serve(
         engine.clone(),
         PolicyStore::new(pool.clone()),
         EntityStore::new(pool.clone(), engine),
-    );
+    )
+    .writing_to(PolicyStore::new(pool.clone()));
     let incoming = Incoming::new(listeners.contract, identity.acceptor().map_err(Error::Tls)?);
     // The binding's routes join the contract's beside it: one listener,
     // one TLS, and the same service and verifier behind both.

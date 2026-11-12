@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use cedar_policy::{
-    Authorizer, Context, Entities, EntityId, EntityTypeName, EntityUid, EvalResult, Policy,
+    Authorizer, Context, Effect, Entities, EntityId, EntityTypeName, EntityUid, EvalResult, Policy,
     PolicyId, PolicySet, Request, Schema, ValidationMode, Validator,
 };
 use manifest::Manifests;
@@ -12,6 +12,9 @@ use crate::error::Error;
 use crate::policy_source::{OrgGrn, OrgPolicies, PolicySource};
 use crate::role_link::RoleLink;
 use crate::system_tier;
+
+/// The entity type of a hosted operator.
+const OPERATOR: &str = "Iam::Operator";
 
 /// The action that sends, the one a send across organizations is
 /// asked as (ADR-0147).
@@ -130,6 +133,28 @@ impl Engine {
         Ok(Policies(policies))
     }
 
+    /// Composes for one principal. No organization `permit` reaches an
+    /// `Iam::Operator`: its reach is its delegation alone (ADR-0146
+    /// §A hosted operator's delegation), so its composition holds the
+    /// organization's `forbid`s and no `permit`, whatever the text of a
+    /// `permit` says.
+    pub fn compose_for(
+        &self,
+        principal: &EntityUid,
+        links: &[RoleLink],
+        own: &[Policy],
+    ) -> Result<Policies, Error> {
+        if principal.type_name().to_string() != OPERATOR {
+            return self.compose(links, own);
+        }
+        let forbids: Vec<Policy> = own
+            .iter()
+            .filter(|policy| policy.effect() == Effect::Forbid)
+            .cloned()
+            .collect();
+        self.compose(links, &forbids)
+    }
+
     /// Refuses what the schema does not admit, with the checks a
     /// composition makes. A write runs this before it stores anything.
     pub fn validate(&self, links: &[RoleLink], own: &[Policy]) -> Result<(), Error> {
@@ -189,7 +214,7 @@ impl Engine {
             sender_guardrails.as_slice(),
         ]
         .concat();
-        let composed = self.compose(&org_policies.links, &own)?;
+        let composed = self.compose_for(principal, &org_policies.links, &own)?;
         Ok(self.decide(&request, &composed, &slice.entities))
     }
 

@@ -8,7 +8,7 @@ mod error;
 mod permit_right;
 mod postgres;
 
-pub use body::Body;
+pub use body::{Body, BodyKind, Content};
 pub use error::Error;
 pub use permit_right::PermitRight;
-pub use postgres::{NewPolicy, PolicyStore, Status, Version};
+pub use postgres::{NewPolicy, PolicyStore, Status, Summary, Version};

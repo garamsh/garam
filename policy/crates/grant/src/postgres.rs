@@ -2,9 +2,23 @@ use decision::{Cause, OrgGrn, OrgPolicies, PolicySource};
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
-use crate::body::{Body, Stored, StoredPolicy};
+use crate::body::{Body, BodyKind, Stored, StoredPolicy};
 use crate::error::Error;
 use crate::permit_right::PermitRight;
+
+/// The summary query with a trailing clause, as one static string.
+macro_rules! summary_sql {
+    ($tail:literal) => {
+        concat!(
+            "SELECT policies.grn, policies.name, policies.status,
+        policies.default_version, first.body->>'kind' AS kind
+     FROM policies
+     JOIN policy_versions first
+       ON first.policy_grn = policies.grn AND first.version = 1 ",
+            $tail
+        )
+    };
+}
 
 /// Whether a policy decides anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +53,21 @@ pub struct Version {
     pub body: Body,
     /// Who wrote it.
     pub created_by: String,
+}
+
+/// A policy without its versions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Summary {
+    /// The policy's GRN.
+    pub grn: String,
+    /// Its name.
+    pub name: String,
+    /// Whether it decides.
+    pub status: Status,
+    /// The version that decides once it is active.
+    pub default_version: i32,
+    /// What its versions say.
+    pub kind: BodyKind,
 }
 
 /// The policies in the service's own database.
@@ -103,6 +132,17 @@ impl PolicyStore {
             .await
             .map_err(Error::Store)?
             .ok_or_else(|| Error::NotFound(grn.to_owned()))?;
+        let first: String = sqlx::query_scalar(
+            "SELECT body->>'kind' FROM policy_versions
+             WHERE policy_grn = $1 AND version = 1",
+        )
+        .bind(grn)
+        .fetch_one(&mut *transaction)
+        .await
+        .map_err(Error::Store)?;
+        if first != body.kind().tag() {
+            return Err(Error::KindChange(grn.to_owned()));
+        }
         let version: i32 = sqlx::query_scalar(
             "SELECT max(version) + 1 FROM policy_versions WHERE policy_grn = $1",
         )
@@ -139,7 +179,7 @@ impl PolicyStore {
     /// unless that default is a `permit` version:
     /// [`PolicyStore::activate_permit`] does that under a right.
     pub async fn activate(&self, org: &OrgGrn, grn: &str) -> Result<(), Error> {
-        self.set_active(org, grn, false).await
+        self.set_active(org, grn, false, None).await
     }
 
     /// [`PolicyStore::activate`] for a policy whose default is a
@@ -152,7 +192,7 @@ impl PolicyStore {
         right: &PermitRight,
     ) -> Result<(), Error> {
         right.check_org(org)?;
-        self.set_active(org, grn, true).await
+        self.set_active(org, grn, true, None).await
     }
 
     async fn move_default(
@@ -199,11 +239,43 @@ impl PolicyStore {
         }
     }
 
-    async fn set_active(&self, org: &OrgGrn, grn: &str, permits: bool) -> Result<(), Error> {
+    /// [`PolicyStore::activate`] where the default is still `expected`,
+    /// the version the caller checked, and `DefaultMoved` where it is
+    /// not.
+    pub async fn activate_pinned(
+        &self,
+        org: &OrgGrn,
+        grn: &str,
+        expected: i32,
+    ) -> Result<(), Error> {
+        self.set_active(org, grn, false, Some(expected)).await
+    }
+
+    /// [`PolicyStore::activate_pinned`] for a `permit` default too,
+    /// under the right to write a `permit` on `org`.
+    pub async fn activate_permit_pinned(
+        &self,
+        org: &OrgGrn,
+        grn: &str,
+        expected: i32,
+        right: &PermitRight,
+    ) -> Result<(), Error> {
+        right.check_org(org)?;
+        self.set_active(org, grn, true, Some(expected)).await
+    }
+
+    async fn set_active(
+        &self,
+        org: &OrgGrn,
+        grn: &str,
+        permits: bool,
+        expected: Option<i32>,
+    ) -> Result<(), Error> {
         owned(org, grn)?;
         let updated = sqlx::query(
             "UPDATE policies SET status = 'active', updated_at = now()
              WHERE grn = $1
+               AND ($3::int IS NULL OR default_version = $3)
                AND ($2 OR NOT EXISTS (SELECT 1 FROM policy_versions
                                       WHERE policy_grn = $1
                                         AND version = policies.default_version
@@ -211,14 +283,16 @@ impl PolicyStore {
         )
         .bind(grn)
         .bind(permits)
+        .bind(expected)
         .execute(&self.pool)
         .await
         .map_err(Error::Store)?;
         if updated.rows_affected() > 0 {
             return Ok(());
         }
-        let permit: Option<bool> = sqlx::query_scalar(
-            "SELECT policy_versions.body->>'kind' = 'permit' FROM policies
+        let default: Option<(i32, bool)> = sqlx::query_as(
+            "SELECT policies.default_version,
+                    policy_versions.body->>'kind' = 'permit' FROM policies
              JOIN policy_versions
                ON policy_versions.policy_grn = policies.grn
               AND policy_versions.version = policies.default_version
@@ -228,8 +302,14 @@ impl PolicyStore {
         .fetch_optional(&self.pool)
         .await
         .map_err(Error::Store)?;
-        match permit {
-            Some(true) => Err(Error::PermitNeedsRight(grn.to_owned())),
+        match (default, expected) {
+            (Some((version, _)), Some(expected)) if version != expected => {
+                Err(Error::DefaultMoved {
+                    policy: grn.to_owned(),
+                    expected,
+                })
+            }
+            (Some((_, true)), _) => Err(Error::PermitNeedsRight(grn.to_owned())),
             _ => Err(Error::NotFound(grn.to_owned())),
         }
     }
@@ -246,6 +326,30 @@ impl PolicyStore {
             return Err(Error::NotFound(grn.to_owned()));
         }
         Ok(())
+    }
+
+    /// One policy of the organization, without its versions.
+    pub async fn get(&self, org: &OrgGrn, grn: &str) -> Result<Summary, Error> {
+        owned(org, grn)?;
+        let row = sqlx::query(summary_sql!("WHERE policies.grn = $1"))
+            .bind(grn)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(Error::Store)?
+            .ok_or_else(|| Error::NotFound(grn.to_owned()))?;
+        summary(&row)
+    }
+
+    /// The organization's policies, by GRN.
+    pub async fn list(&self, org: &OrgGrn) -> Result<Vec<Summary>, Error> {
+        let rows = sqlx::query(summary_sql!(
+            "WHERE policies.org_grn = $1 ORDER BY policies.grn"
+        ))
+        .bind(org.as_str())
+        .fetch_all(&self.pool)
+        .await
+        .map_err(Error::Store)?;
+        rows.iter().map(summary).collect()
     }
 
     /// Every stored version, oldest first.
@@ -303,6 +407,27 @@ impl PolicySource for PolicyStore {
     async fn active(&self, org: &OrgGrn) -> Result<OrgPolicies, Cause> {
         self.active_policies(org).await.map_err(Cause::from)
     }
+}
+
+fn summary(row: &sqlx::postgres::PgRow) -> Result<Summary, Error> {
+    let grn: String = row.try_get("grn").map_err(Error::Store)?;
+    let status: String = row.try_get("status").map_err(Error::Store)?;
+    let kind: String = row.try_get("kind").map_err(Error::Store)?;
+    let unknown = |what: &str| Error::StoredBody {
+        policy: grn.clone(),
+        source: format!("unknown {what}").into(),
+    };
+    Ok(Summary {
+        name: row.try_get("name").map_err(Error::Store)?,
+        status: match status.as_str() {
+            "draft" => Status::Draft,
+            "active" => Status::Active,
+            _ => return Err(unknown("status")),
+        },
+        default_version: row.try_get("default_version").map_err(Error::Store)?,
+        kind: BodyKind::from_tag(&kind).ok_or_else(|| unknown("kind"))?,
+        grn: grn.clone(),
+    })
 }
 
 /// Refuses a GRN that is not `grn:<org>/iam/policy/<id>` under this

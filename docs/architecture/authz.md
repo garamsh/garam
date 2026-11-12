@@ -102,9 +102,11 @@ only in the policy service: nothing sends one yet.
   organization. The principal scope is not read. A `when` or `unless`
   is bounded as a guardrail's is. A decision composes the
   organization's `permit` policies beside its guardrails, and
-  `access-report` lists one by its id. Not built: an RPC to write one,
-  and a check of an entity literal in a `permit`'s principal scope or
-  condition.
+  `access-report` lists one by its id, and a `permit` never reaches an
+  operator: a decision for an `Iam::Operator` composes the
+  organization's guardrails and none of its `permit`s. An RPC writes
+  one (item 3 of ADR-0146). Not built: a check of an entity literal in
+  a `permit`'s principal scope or condition.
 
 **Built of ADR-0143** (items 1, 2, 3, 4 and 5): the two manifests, the
 `manifest` crate that reads them, `lib/grn`'s generated catalogue, the
@@ -150,7 +152,7 @@ which `garam policy-feed start` runs and `stop` undoes. Restoring the
 platform's database rewinds that sequence, so it means rebuilding the
 entity store.
 
-**The switch is decided, and not built.**
+**The switch is decided, and built only in the policy service's write.**
 [ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md) has the
 platform's browser and machine listeners decide through the policy
 service alone; nothing below it is yet true of the platform.
@@ -162,12 +164,17 @@ service alone; nothing below it is yet true of the platform.
   have a request decided refuses it. The sections below this one,
   from Policy document to Explain, describe what the removed evaluator
   does today.
-- **The service serves the write.** Role links, guardrails and
-  `permit`s, with versions, activation, roll-back and removal. The
-  request names the writer and the service evaluates the writer's
-  action on the organization before it stores. Writing a role link for
-  another asks that the writer hold the role it links, so an admin
-  cannot link `role-owner`; that an admin might is open.
+- **The service serves the write.** Built: seven gRPC RPCs write and
+  read role links, guardrails and `permit`s, with versions,
+  activation, roll-back and removal, and the HTTP binding gains no
+  write route. Only the platform calls them; a scoped caller is
+  refused whole. The request names the writer and the service
+  evaluates the writer's action on the organization, read current,
+  before it stores: `iam:permit.write` for a `permit`, the policy
+  actions the Iam manifest declares for the rest. A writer links only
+  a role it holds, so an admin cannot link `role-owner`. A write with
+  no writer is accepted for a role link alone, written or removed from
+  a membership. A policy keeps the kind of its first version.
 - **A member's role is a role link.** The platform writes it from the
   membership, as the caller `platform` and with no writer, and the
   outbox carries it, so a rebuild rewrites it.

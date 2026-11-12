@@ -279,3 +279,69 @@ async fn a_guardrail_reads_back_as_a_forbid_under_its_grn(pool: PgPool) {
             .is_ok()
     );
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_policy_is_read_and_listed_by_its_own_organization(pool: PgPool) {
+    let store = PolicyStore::new(pool);
+    let org = OrgGrn::new(ACME);
+    store.create(draft(role(Role::Member), &org)).await.unwrap();
+
+    let one = store.get(&org, GRANT).await.unwrap();
+    let all = store.list(&org).await.unwrap();
+    let other = store.list(&OrgGrn::new(GLOBEX)).await.unwrap();
+
+    assert_eq!(one.grn, GRANT);
+    assert_eq!(all.len(), 1);
+    assert!(other.is_empty());
+    let missing = store.get(&org, "grn:acme/iam/policy/none").await;
+    assert!(matches!(missing, Err(Error::NotFound(_))), "{missing:?}");
+    let foreign = store.get(&OrgGrn::new(GLOBEX), GRANT).await;
+    assert!(foreign.is_err(), "{foreign:?}");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_version_of_another_kind_is_refused_by_the_store(pool: PgPool) {
+    let store = PolicyStore::new(pool);
+    let org = OrgGrn::new(ACME);
+    store.create(draft(role(Role::Member), &org)).await.unwrap();
+    let guardrail = Body::guardrail(
+        &Engine::load().unwrap(),
+        &org,
+        "forbid (principal, action, resource);",
+    )
+    .unwrap();
+
+    let appended = store
+        .append_version(&org, GRANT, &guardrail, "grn:acme/iam/user/kim")
+        .await;
+
+    assert!(
+        matches!(appended, Err(Error::KindChange(_))),
+        "{appended:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn activation_pins_the_default_the_caller_checked(pool: PgPool) {
+    let store = PolicyStore::new(pool);
+    let org = OrgGrn::new(ACME);
+    store.create(draft(role(Role::Member), &org)).await.unwrap();
+    store
+        .append_version(&org, GRANT, &role(Role::Admin), "grn:acme/iam/user/kim")
+        .await
+        .unwrap();
+    store.roll_back(&org, GRANT, 2).await.unwrap();
+
+    let stale = store.activate_pinned(&org, GRANT, 1).await;
+
+    assert!(
+        matches!(stale, Err(Error::DefaultMoved { expected: 1, .. })),
+        "{stale:?}"
+    );
+    assert!(roles(&active(&store, &org).await).is_empty());
+    store.activate_pinned(&org, GRANT, 2).await.unwrap();
+    assert_eq!(roles(&active(&store, &org).await), [Role::Admin]);
+}

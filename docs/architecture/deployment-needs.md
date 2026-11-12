@@ -200,8 +200,9 @@ which a goroutine relays turn events
 ## garam/server: serve authz
 
 `garam serve authz` answers authorization over gRPC for the other
-`garam` processes (`serve.go:274-325`). It is removed by #1796; that
-issue is open at this commit, so it is described as it stands.
+`garam` processes (`serve.go:274-325`). Issue #1796 is named to remove
+it, and the command exists at this commit, so it is described as it
+stands.
 
 | Setting | Required | If unset |
 |---|---|---|

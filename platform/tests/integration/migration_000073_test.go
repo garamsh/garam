@@ -11,10 +11,11 @@ import (
 
 // TestMigration000073_GivesEachExistingOrganizationACoworkPrincipal
 // applies 000073 over organizations that already exist: each gains one
-// principal named cowork, GRN grn:<org>/iam/service/cowork, no other
-// row changes, the table's check refuses a principal in another
-// organization's name, deleting an organization removes its principal,
-// and the way down drops the table.
+// principal named cowork, GRN grn:<org>/iam/service/cowork, except one
+// still in the five-segment form, which gains none and does not fail
+// the migration. No other row changes, the table's check refuses a
+// principal in another organization's name, deleting an organization
+// removes its principal, and the way down drops the table.
 func TestMigration000073_GivesEachExistingOrganizationACoworkPrincipal(t *testing.T) {
 	const schema = "migrate_000073_case0"
 	ctx := context.Background()
@@ -31,6 +32,13 @@ func TestMigration000073_GivesEachExistingOrganizationACoworkPrincipal(t *testin
 		require.NoError(t, err)
 	}
 
+	// An organization 000069 left in the five-segment form has no name
+	// of the grammar to derive a principal from, and must not fail the
+	// migration.
+	_, err = p.Exec(ctx, "INSERT INTO "+schema+".orgs (grn, name, created_at, updated_at) VALUES ($1, 'legacy', now(), now())",
+		formerGRN("root", "org", "legacy"))
+	require.NoError(t, err)
+
 	require.NoError(t, m.Up())
 	rows, err := p.Query(ctx, "SELECT grn, org_grn FROM "+schema+".service_principals ORDER BY grn")
 	require.NoError(t, err)
@@ -45,7 +53,7 @@ func TestMigration000073_GivesEachExistingOrganizationACoworkPrincipal(t *testin
 	assert.Equal(t, [][2]string{
 		{"grn:acme/iam/service/cowork", "grn:root/iam/org/acme"},
 		{"grn:globex/iam/service/cowork", "grn:root/iam/org/globex"},
-	}, got, "one cowork principal per organization that existed")
+	}, got, "one cowork principal per organization of the grammar that existed")
 
 	_, err = p.Exec(ctx, "INSERT INTO "+schema+".service_principals (grn, org_grn) VALUES ($1, $2)",
 		"grn:globex/iam/service/cowork-2", "grn:root/iam/org/acme")

@@ -10,7 +10,10 @@
 --
 -- What this does to stored rows: it adds a principal named cowork to
 -- each organization that exists now, and changes no existing row. An
--- organization created after it is given its principals by CreateOrg.
+-- organization whose GRN is still the five-segment form 000069 left
+-- unrewritten gets none, as no name of the grammar can be derived from
+-- it. An organization created after this is given its principals by
+-- CreateOrg.
 CREATE TABLE service_principals (
     grn        text PRIMARY KEY,
     org_grn    text NOT NULL REFERENCES orgs (grn) ON DELETE CASCADE,
@@ -25,4 +28,5 @@ CREATE INDEX service_principals_org ON service_principals (org_grn);
 
 INSERT INTO service_principals (grn, org_grn)
 SELECT 'grn:' || grn_id(o.grn) || '/iam/service/cowork', o.grn
-FROM orgs AS o;
+FROM orgs AS o
+WHERE grn_id(o.grn) <> '';

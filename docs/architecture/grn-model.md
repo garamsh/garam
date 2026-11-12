@@ -131,10 +131,10 @@ policy check-gen`. A type is therefore added in a manifest, and this
 table describes what they declare. Not built: codehub declares no
 manifest, so `repo` is in no catalogue and `lib/grn` refuses a name of
 `codehub` until it does (#1760). ADR-0149 proposes it, unbuilt.
-Built (#1788): `GET /registry` answers the services with their types and actions, and `GET
-/registry/grn?grn=<name>` answers a name's service, type, entity type,
-parent, locator and the actions that apply to its type, both from the
-catalogue alone and reading no entity.
+Built (#1788): `GET /registry` answers the services with their types
+and actions, and `GET /registry/grn?grn=<name>` answers a name's
+service, type, entity type, parent, locator and the actions that apply
+to its type, both from the catalogue alone and reading no entity.
 
 ## identifier
 

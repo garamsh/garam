@@ -13,10 +13,12 @@ WORKDIR /src
 
 # Dependencies resolve from the manifests alone, retried as
 # deploy/local/Dockerfile retries them (#1622). cowork/go.mod replaces
-# lib/errorx and lib/grn with their folders (ADR-0132).
+# lib/errorx, lib/grn and lib/policy-sdk-go with their folders
+# (ADR-0132).
 COPY cowork/go.mod cowork/go.sum ./cowork/
 COPY lib/errorx/go.mod lib/errorx/go.sum ./lib/errorx/
 COPY lib/grn/go.mod lib/grn/go.sum ./lib/grn/
+COPY lib/policy-sdk-go/go.mod lib/policy-sdk-go/go.sum ./lib/policy-sdk-go/
 RUN for attempt in 1 2 3; do \
       go -C cowork mod download && exit 0; \
       [ "$attempt" = 3 ] && exit 1; \

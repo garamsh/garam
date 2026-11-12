@@ -1,10 +1,11 @@
 # ADR 0143: A service is declared by one manifest that is its Cedar schema, and garam serves what the manifests say
 
 > Status: accepted; partly built. Items 1, 2, 3 and 5 are built
-> (#1777) and item 4, the platform's own action names, is built
-> (#1779); item 6, the registry, and item 7's proofs are decided and
-> not built. Item 3's separator and group spelling are superseded by
-> ADR-0145: an action is `<type>.<verb>`, its group `<type>.*`
+> (#1777), item 4, the platform's own action names, is built (#1779)
+> and item 6, the registry, is built (#1788); item 7's proofs are
+> decided and not built. Item 3's separator and group spelling are
+> superseded by ADR-0145: an action is `<type>.<verb>`, its group
+> `<type>.*`
 > Date: 2026-11-12
 
 Drafted for #1775, under #1774, which reserves this number and holds

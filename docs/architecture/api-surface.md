@@ -10,6 +10,7 @@ authoritative for.
 - Authentication and enrollment profiles
 - What admits a caller
 - What decides the rest
+- The registry
 - An agent on the browser-facing listener
 - cowork's principal on the machine listener
 - The issuer's endpoints
@@ -572,6 +573,25 @@ it does not have yet ([domains.md](./domains.md) §Future domains) — so
 what the commitment binds is the surface that serves that domain when it
 arrives
 ([ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)).
+
+## The registry
+
+**Built (#1788).**
+[ADR-0143](./adr/0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
+item 6 adds two read-only operations to the browser-facing listener,
+both answered from `lib/grn`'s generated catalogue and neither reading
+an entity.
+
+- **`getRegistry`** (`GET /registry`) lists each service with its types
+  and its actions.
+- **`describeGrn`** (`GET /registry/grn?grn=<name>`) answers a name's
+  service, type, entity type, parent, locator and the actions that
+  apply to its type. The name is a query parameter, never a path
+  segment. A name of a service or type no manifest declares is answered
+  `known: false` with status 200; a string that is no GRN is refused
+  with 400.
+- **What admits a caller** is a session, and nothing decides the rest:
+  neither operation asks the engine.
 
 ## An agent on the browser-facing listener
 

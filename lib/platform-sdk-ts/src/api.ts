@@ -348,6 +348,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/registry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the services, their types and their actions. Requires a signed-in caller.
+         * @description What the service manifests declare (ADR-0143): each service, the entity types a GRN of it names, with each type's parent types, and each action of it with the types it applies to. It answers from the manifests the platform was built with and reads no organization, so it holds nothing of one and asks the caller for no permission beyond a session.
+         */
+        get: operations["getRegistry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/registry/grn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Describe a GRN's service, type, parent and actions. Requires a signed-in caller.
+         * @description Says what a name is, and never whether the thing it names exists or whether the caller may act on it: it reads no entity and no organization. A name of a declared service and type answers `known` true with its service, its type, the entity type it is written as, its parent (the name with its last type and id pair removed, absent for a name of one pair), its locator where it has one, and the actions whose resource types name its entity type. A name whose service or type no manifest declares answers `known` false and nothing else: it is a well-formed name the registry has no declaration for, and not an error. A string that is no GRN is refused with 400. The name is a query parameter because a GRN holds `/`.
+         */
+        get: operations["describeGrn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs": {
         parameters: {
             query?: never;
@@ -1512,6 +1552,72 @@ export interface components {
             /** @example grn:garam/iam/user/117421510527410544321 */
             grn: string;
             nickname: string;
+        };
+        Registry: {
+            services: components["schemas"]["RegistryService"][];
+        };
+        RegistryService: {
+            /**
+             * @description The service's one name, the `service` segment of its GRNs.
+             * @example cowork
+             */
+            name: string;
+            /** @description The entity types a GRN of this service names, sorted by `name`. */
+            types: components["schemas"]["RegistryType"][];
+            /** @description The service's actions, sorted by `name`. */
+            actions: components["schemas"]["RegistryAction"][];
+        };
+        RegistryType: {
+            /**
+             * @description The `type` segment of a GRN of this type.
+             * @example channel
+             */
+            name: string;
+            /**
+             * @description The qualified entity type the name is written as.
+             * @example Cowork::Channel
+             */
+            entityType: string;
+            /** @description The qualified types an entity of this type may be a member of. */
+            parents: string[];
+        };
+        RegistryAction: {
+            /**
+             * @description The action as it is written on the wire, `<service>:<type>.<verb>`.
+             * @example cowork:channel.post
+             */
+            name: string;
+            /** @description The qualified types that may take the action. */
+            principals: string[];
+            /** @description The qualified types the action applies to. */
+            resources: string[];
+        };
+        GrnDescription: {
+            /** @description The name as asked, locator included. */
+            grn: string;
+            /** @description False where the name's service or type is declared by no manifest. Every property below is absent then. */
+            known: boolean;
+            /** @example cowork */
+            service?: string;
+            /**
+             * @description The name's last type segment.
+             * @example channel
+             */
+            type?: string;
+            /**
+             * @description The qualified entity type the name is written as.
+             * @example Cowork::Channel
+             */
+            entityType?: string;
+            /**
+             * @description The name with its last type and id pair removed. Absent for a name of one pair.
+             * @example grn:acme/cowork/project/frontend
+             */
+            parent?: string;
+            /** @description The place inside the resource, as written after `#`. */
+            locator?: string;
+            /** @description The names of the actions whose resource types name `entityType`, sorted. `getRegistry` says what each applies to. */
+            actions?: string[];
         };
         PasswordLogin: {
             /** @example alice */
@@ -2745,6 +2851,52 @@ export interface operations {
                     "application/json": components["schemas"]["User"];
                 };
             };
+            401: components["responses"]["Error"];
+        };
+    };
+    getRegistry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The services the manifests declare, sorted by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Registry"];
+                };
+            };
+            401: components["responses"]["Error"];
+        };
+    };
+    describeGrn: {
+        parameters: {
+            query: {
+                /** @description The name to describe. */
+                grn: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What the name is, or that no manifest declares it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrnDescription"];
+                };
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
         };
     };

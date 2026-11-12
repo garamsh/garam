@@ -4,7 +4,9 @@
 > [ADR-0141](./0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
 > (§2, who the callers are and who asks for cowork)
 > and by [ADR-0143](./0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
-> (§2, where the ownership of a type is written)
+> (§2, where the ownership of a type is written) and by
+> [ADR-0146](./0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md)
+> (the feed's "off by default", and a feed of entities alone)
 > Date: 2026-10-31
 
 Drafted for #1689, which reserves this number and holds the rulings

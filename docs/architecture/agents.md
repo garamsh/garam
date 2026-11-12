@@ -152,6 +152,9 @@ lets an agent call it, and the garam CLI, as itself:
   that reach its GRN and its groups, holds no role, and is never
   written to `org_members`
   ([authz.md](./authz.md) §An agent on the browser-facing listener).
+  Decided, not built: [ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md) replaces the attached
+  policies with the system tier and the organization's `permit`s
+  and guardrails, which the agent's GRN and groups reach.
 - **It cannot extend itself through that listener.** It reaches no
   operation that issues an operator key, an invitation or an
   operation authority, or approves an enrollment, so it creates no

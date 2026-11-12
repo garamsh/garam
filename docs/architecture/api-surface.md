@@ -392,7 +392,8 @@ and not in the same place on every surface.
   Why no policy may reach past that boundary is
   [authz.md](./authz.md) §Policy attachment. A restriction meant to
   bear on a cross-organization send is therefore not something a policy
-  can carry.
+  can carry. Decided, not built: [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
+  has the engine decide it, with both organizations' guardrails read.
 - **Asking the engine has a precondition of its own**: a caller may ask
   only about a subject belonging to the object's organization
   ([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md)). The

@@ -113,16 +113,19 @@ type's names.
 The owner of `doc` and `secret` is not decided, so the service names
 in their examples are illustrative.
 
-**Decided and not built.**
+**Built, and not built.**
 [ADR-0143](./adr/0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
 makes a service's Cedar schema file its manifest, and a type's GRN
-type its `@grn` annotation there. When it is built the catalogue in
-`lib/grn/grn.go` is generated from the manifests, and this table
-describes what they declare rather than being where a type is added.
-The platform is then to serve, read-only, a GRN's service, type,
-parent and the actions that apply, from the same declarations. Today
-`lib/grn/grn.go` is written by hand, no manifest exists and nothing
-serves that answer.
+type its `@grn` annotation there. Built: `policy/schema/iam.cedarschema`
+and `cowork.cedarschema` are the manifests, and the catalogue in
+`lib/grn` is `catalogue_gen.go`, written by `make -C policy gen` from
+them with each type's qualified entity type, its parents and each
+action with the types it applies to, and held to them by `make -C
+policy check-gen`. A type is therefore added in a manifest, and this
+table describes what they declare. Not built: codehub declares no
+manifest, so `repo` is held by hand in `lib/grn`'s `pending` until it
+does, and nothing yet serves, read-only, a GRN's service, type, parent
+and the actions that apply.
 
 ## identifier
 
@@ -182,11 +185,11 @@ grammar as follows.
 
 ## Open questions
 
-The per-service manifest and the served registry of types are decided
-and unbuilt, in ADR-0143, which also settles how an action reads once
-types belong to services: `<service>:<type>-<verb>`, so an action's
-name does change. Left open there: a service an organization defines,
-and a served registry of locator shapes. Settled for the
+The per-service manifest is built and the served registry of types is
+decided and unbuilt, in ADR-0143, which also settles how an action
+reads once types belong to services: `<service>:<type>-<verb>`, so an
+action's name does change. Left open there: a service an organization
+defines, and a served registry of locator shapes. Settled for the
 implementation: the policy service's caller name and the feed's `sub`
 stay `platform`; a Cedar entity identifier is the whole name before
 `#`; a `*` in a policy pattern matches as it did, `/` included, so an

@@ -1231,9 +1231,11 @@ ADRs:
   `<service>:<type>-<verb>` and every action moves, the platform's
   included; a role is the `Iam` namespace's; the platform serves a
   read-only registry of services, types and actions; adding a service
-  is one pull request adding one manifest; decided, not built;
-  supersedes 0130 in part, on §3's one schema file, 0140 in part, on
-  §2's table of who owns a type, and 0141 in part, on §5 and §13
+  is one pull request adding one manifest; partly built (items 1, 2,
+  3 and 5, #1777), the platform's action names, the registry and a new
+  service's proofs not; supersedes 0130 in part, on §3's one schema
+  file, 0140 in part, on §2's table of who owns a type, and 0141 in
+  part, on §5 and §13
 - [0144](./adr/0144-an-organization-may-write-permit-policies-over-resources-inside-itself.md)
   — an organization may write `permit` policies beside its role links
   and `forbid` guardrails, each scoped at the write to resources inside

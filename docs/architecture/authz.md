@@ -48,11 +48,11 @@ ADR-0141 supersedes in part its §2: the platform no longer asks for
 cowork's checks, since cowork asks the policy service itself, and the
 list stays closed and static.
 
-**Two further decisions are taken and unbuilt.** Today
-`policy/schema/garam.cedarschema` is one file with no namespace, the
-platform's actions are `<type>:<verb>` and cowork's
-`cowork:<type>-<verb>`, and an organization writes role links and
-`forbid` guardrails and no `permit`.
+**Two further decisions are taken, the first partly built.** The
+policy service loads `policy/schema/iam.cedarschema` and
+`policy/schema/cowork.cedarschema` as one schema, and the platform's
+role table and console still write `<type>:<verb>`. An organization
+writes role links and `forbid` guardrails and no `permit`.
 
 - **A service is declared by one manifest**
   ([ADR-0143](./adr/0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)).
@@ -82,10 +82,19 @@ platform's actions are `<type>:<verb>` and cowork's
   first; another role writing one, bounded by what it holds, is open.
   The console's editor and the platform's switch are #1689 slice 4.
 
-None of this is built: the schema is one file, the catalogue and the
-audience list are written by hand, no action has its new name, no
-registry is served and the policy service accepts no `permit` from an
-organization.
+**Built of ADR-0143** (items 1, 2, 3 and 5): the two manifests, the
+`manifest` crate that reads them, `lib/grn`'s generated catalogue, the
+`make -C policy check-gen` that holds the catalogue, the audience list
+and the caller list to the manifests, the types a caller may write read
+from `@caller`, qualified types and `<service>:<type>-<verb>` actions
+on the wire with the unqualified form refused, the `Iam` roles, and
+`iam:policy-permit` declared in `role-owner` alone. The platform's
+outbox sends `Iam::` types under migration 000070. **Not built:** item
+4, the platform's role table, `role.go` and the console still write
+`<type>:<verb>`, so no platform check names an action the service now
+accepts; item 6, the registry; item 7's proofs for a new service;
+codehub's manifest, so `repo` is held in `lib/grn`'s `pending`; and the
+policy service accepts no `permit` from an organization (ADR-0144).
 
 **The platform's outbox, its delivery and its signer are built.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set
@@ -158,7 +167,7 @@ makes any evaluation error a deny.
 
 | Today | Under ADR-0130 |
 |-------|----------------|
-| IAM-style documents, matched by `platform/internal/authz` | Cedar policies, evaluated by the `cedar-policy` crate and validated against `policy/schema/garam.cedarschema` |
+| IAM-style documents, matched by `platform/internal/authz` | Cedar policies, evaluated by the `cedar-policy` crate and validated against the manifests under `policy/schema/` |
 | `CheckRequest` carries collected statements, `subject_groups` and `subject_org` | `Evaluate(subject, action, resource, context)` in AuthZEN's shape; the service reads memberships and ancestors itself |
 | Roles are org data the api server turns into statements | A role is a system-tier template, one set for an organization and one for a team or project, and an assignment is a policy linking it |
 | A policy attaches to a user, an agent or a group | A grant names its principal; a guardrail is a `forbid` |

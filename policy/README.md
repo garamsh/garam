@@ -7,8 +7,18 @@ stack runs its image under the `policy` profile, and nothing calls it
 yet (#1689).
 
 - `proto/garam/policy/v1/` — the gRPC contract in AuthZEN's shape.
-- `schema/garam.cedarschema` — the entity types, actions and attributes
-  a decision can name.
+- `schema/<service>.cedarschema` — a service's manifest (ADR-0143):
+  one namespace, `Iam` or `Cowork`, annotated with `@service` on the
+  namespace and `@grn` and `@caller` on each entity type. Together they
+  are the entity types, actions and attributes a decision can name, and
+  a type or an action is named by its qualified form,
+  `Iam::Org` and `iam:org-read`. `make -C policy gen` writes
+  `lib/grn/catalogue_gen.go` from them, and `make -C policy check-gen`
+  fails, naming what disagrees, when the committed catalogue is stale,
+  a manifest breaks a rule every manifest holds, an `@caller` is
+  neither `none` nor a `Caller`, a `Caller` is named by no manifest, or
+  an audience of the platform names no manifest service and is neither
+  `policy` nor `codehub`.
 - `system-policies/` — the system tier: tenant isolation, an agent's
   sending, and the role templates. One policy per file, and the file's
   stem is the id a decision's reasons name. Their tests sit in
@@ -35,15 +45,26 @@ yet (#1689).
 - **A caller is a service this list names, read from its token's
   `sub`.** Any other `sub` is refused with `PERMISSION_DENIED`, however
   well its token verifies. `Caller` in `crates/server/src/caller.rs` is
-  that list, and a test holds it to the schema: every entity type is
-  owned, or stated as no caller's.
+  that list. Which types a caller writes is read from the manifests'
+  `@caller` annotations, and a test holds each to that list: every
+  entity type names a `Caller`'s `sub`, or `none`.
 
 | `sub` | Writes | Asks |
 |-------|--------|------|
-| `platform` | `Org`, `OrgMembers`, `Team`, `Project`, `User`, `Agent`, `Operator` | anything |
+| `platform` | the types whose `@caller` is `platform`: `Iam::Org`, `Iam::OrgMembers`, `Iam::Team`, `Iam::Project`, `Iam::User`, `Iam::Agent`, `Iam::Operator` | anything |
 
-- **No caller writes the rest.** `Channel`, `Page`, `Task` and
-  `Artifact` wait for cowork as a caller, and `Policy` for `grant`.
+- **No caller writes the rest.** `@caller("none")` holds
+  `Cowork::Channel`, `Cowork::Page`, `Cowork::Task` and
+  `Cowork::Artifact`, which wait for
+  cowork as a caller, and `Iam::Policy`, `Iam::Supervisor` and
+  `Iam::Service`.
+- **An entity type and an action are written qualified.** A type is
+  `Iam::Org`, and an action `iam:org-read`, which is
+  `Iam::Action::"org-read"`. The unqualified form is refused. The
+  platform's feed sends `Iam::` types from the migration that qualified
+  the outbox, but the platform's role table and its calls still write
+  `<type>:<verb>`, so nothing it asks of this service yet names an
+  action this service accepts (ADR-0143 item 4, not built).
 - **A type the caller does not own refuses the whole
   `ApplyEntityChanges`.** Any other fault refuses that entry, named by
   its index in the response, and the rest are written. A request holds

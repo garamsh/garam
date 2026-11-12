@@ -1,6 +1,7 @@
 # ADR 0035: A cross-organization message needs both organizations' consent
 
-> Status: accepted
+> Status: accepted; the send-path precondition is superseded by
+> [ADR-0147](./0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
 > Date: 2026-08-19
 
 ## Contents

@@ -135,6 +135,56 @@ which `garam policy-feed start` runs and `stop` undoes. Restoring the
 platform's database rewinds that sequence, so it means rebuilding the
 entity store.
 
+**The switch is decided, and not built.**
+[ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md) has the
+platform's browser and machine listeners decide through the policy
+service alone; nothing below it is yet true of the platform.
+
+- **One evaluator.** `garam serve authz`, its gRPC, its policy tables,
+  its change notification and `CheckCurrent` are removed, and no
+  stored document of the earlier format is converted. The policy
+  service is required in every deployment, and a listener that cannot
+  have a request decided refuses it. The sections below this one,
+  from Policy document to Explain, describe what the removed evaluator
+  does today.
+- **The service serves the write.** Role links, guardrails and
+  `permit`s, with versions, activation, roll-back and removal. The
+  request names the writer and the service evaluates the writer's
+  action on the organization before it stores. Writing a role link for
+  another asks that the writer hold the role it links, so an admin
+  cannot link `role-owner`; that an admin might is open.
+- **A member's role is a role link.** The platform writes it from the
+  membership, as the caller `platform` and with no writer, and the
+  outbox carries it, so a rebuild rewrites it.
+- **A writer reads its own write.** A request that changes an entity, a
+  membership or a policy waits, up to a bound of 5 seconds, until
+  the outbox marks it wrote are applied, and is answered as
+  unavailable if they are not.
+- **Every present capability has a place.** The ADR's inventory gives
+  each origin of a statement and each surface that reads a decision
+  its form. A hosted operator's delegation, handed to the evaluator
+  as a per-call Allow today, becomes an attribute of the operator's
+  entity that a system policy per delegable operation reads. Only an
+  owner writes a `permit`, so an administrator keeps assigning the
+  roles it holds and writing guardrails and no longer writes an
+  `Allow`.
+- **cowork asks the service alone,** and its path through
+  `checkPermissions` goes.
+- Every denial and every write of a policy is recorded by the policy
+  service for the organization of the resource, and an organization's
+  owners and administrators read it on `iam:audit.read`
+  ([ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)).
+  Not built.
+
+[ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md) makes a
+message between two agents of two consenting organizations tenant
+isolation's one exception: `Org` gains `consents`, the platform feeds
+it, the isolation `forbid` gains one `unless` branch for `message.send`
+between agents where each organization's `consents` holds the other,
+and both organizations' guardrails are read for such a send. The send
+path's refusal before the engine, as
+[messaging.md](./messaging.md), stands until it is built.
+
 ### Delivery
 
 `serve api` runs the loop when `GARAM_POLICY_ADDR` is set, and only

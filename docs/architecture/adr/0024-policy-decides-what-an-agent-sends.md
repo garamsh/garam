@@ -1,6 +1,8 @@
 # ADR 0024: A policy decides what an agent may send
 
-> Status: accepted
+> Status: accepted; the refusal of a recipient of another organization
+> before the engine is asked is superseded by
+> [ADR-0147](./0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
 > Date: 2026-08-17
 
 ## Contents

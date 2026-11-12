@@ -548,7 +548,8 @@ ADRs:
 - [0023](./adr/0023-web-probes.md) — the web app answers the same two
   probes as the rest
 - [0024](./adr/0024-policy-decides-what-an-agent-sends.md) — a policy
-  decides what an agent may send
+  decides what an agent may send; the refusal of another organization's
+  recipient before the engine is superseded by 0147
 - [0025](./adr/0025-engine-scope-is-a-caller-obligation.md) — an
   unattached policy's org scope is the caller's to hold
 - [0026](./adr/0026-the-console-defines-an-agent.md) — the console
@@ -578,7 +579,8 @@ ADRs:
 - [0034](./adr/0034-a-delivered-message-keeps-its-key-and-drops-its-body.md)
   — a delivered message keeps its key and drops its body
 - [0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)
-  — a cross-organization message needs both organizations' consent
+  — a cross-organization message needs both organizations' consent;
+  the send-path precondition is superseded by 0147
 - [0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md) — a
   secret in garam is a reference, not a value
 - [0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md)
@@ -1200,7 +1202,8 @@ ADRs:
   slice 3's delivery; built: the policy service's half, the platform's
   outbox and its delivery (#1689);
   supersedes 0138 in part, on when the issuer lands; §2's table of who
-  owns a type is superseded by 0143
+  owns a type is superseded by 0143, and the feed's "off by default" by
+  0146
 - [0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
   — garam is an OIDC and OAuth issuer inside `platform/` that exchanges
   a CLI session or an agent's token (RFC 8693) for a JWT of at most 300
@@ -1258,6 +1261,27 @@ ADRs:
   a `permit` is `iam:permit.write`; built (#1783); supersedes 0143 in
   part, on item 3's separator and group spelling, and 0144 in part, on
   item 7's action name
+- [0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md)
+  — the platform's browser and machine listeners decide through the
+  policy service alone, `garam serve authz` and its tables removed and
+  no stored document converted; the service is required and a listener
+  that cannot have a request decided refuses it; the service serves an
+  organization's role links, guardrails and `permit`s and authorizes
+  each write against the writer it is named; a member's role is a role
+  link the platform writes from its memberships through the outbox; a
+  request that changes an entity, a membership or a policy waits for
+  the policy service to decide with it; an inventory gives every
+  present capability its form, a hosted operator's delegation a fed
+  attribute of its entity that a system policy per operation reads, and
+  a `permit` written by an owner alone; not yet built; supersedes 0140
+  in part, on the feed's "off by default" and its entities alone
+- [0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
+  — a message between two agents of two organizations is tenant
+  isolation's one exception, where each organization's `consents`
+  attribute on its `Org` holds the other, both organizations'
+  guardrails are read for it and a withdrawal denies the next send;
+  not yet built; supersedes 0035 in part, on the send-path
+  precondition, and 0024 in part, on the refusal before the engine
 - [0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)
   — the policy service records every write of a policy, kept as long as
   its organization exists, and every denial, removed 90 days after it

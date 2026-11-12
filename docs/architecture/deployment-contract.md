@@ -95,6 +95,11 @@ Dependencies each process reports (`platform/internal/cli/serve.go`,
 | `serve machine` | the database, and the channel to the engine |
 | web | none — it reads nothing, so an API outage takes no replica out of rotation ([ADR-0023](./adr/0023-web-probes.md)) |
 
+Decided, not built: [ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md) removes
+`serve authz`, makes the policy service a required part of every
+deployment and its address required, and has a listener that cannot
+have a request decided refuse it.
+
 The semantics, fixed in `platform/internal/health/health.go`:
 
 - A single readiness answer is bounded at two seconds inside the

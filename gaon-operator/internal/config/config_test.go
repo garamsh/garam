@@ -15,7 +15,8 @@ var full = map[string]string{
 	"GARAM_MACHINE_URL": "https://garam.example", "GARAM_ROOT_FILE": "/c/g",
 	"CONTROL_URL": "https://control.example", "CONTROL_ROOT_FILE": "/c/ctl",
 	"OPERATOR_KEY_FILE": "/c/op", "OPERATOR_CLIENT_ID": "op1",
-	"AGENT_IMAGE": "registry.example/agent:1",
+	"AGENT_IMAGE":     "registry.example/agent:1",
+	"GARAM_TOKEN_URL": "https://garam.example/oauth/token", "CONTROL_GRN": "grn:garam:org1/iam:operator/ctl1",
 }
 
 func get(m map[string]string) func(string) string {
@@ -29,6 +30,32 @@ func TestLoad_ReadsEverySetting(t *testing.T) {
 	assert.Equal(t, "https://gaon.example", c.GaonURL)
 	assert.Equal(t, "registry.example/agent:1", c.AgentImage)
 	assert.Equal(t, "op1", c.OperatorClientID)
+	assert.Equal(t, "https://garam.example/oauth/token", c.GaramTokenURL)
+	assert.Equal(t, "grn:garam:org1/iam:operator/ctl1", c.ControlGRN)
+	assert.Equal(t, config.DefaultHealthAddr, c.HealthAddr)
+}
+
+func TestLoad_HealthAddrIsOptionalAndOverridable(t *testing.T) {
+	withAddr := map[string]string{"HEALTH_ADDR": "127.0.0.1:9"}
+	for k, v := range full {
+		withAddr[k] = v
+	}
+	c, err := config.Load(get(withAddr))
+	require.NoError(t, err)
+	assert.Equal(t, "127.0.0.1:9", c.HealthAddr)
+}
+
+func TestLoad_TheNewSettingsAreRequired(t *testing.T) {
+	for _, k := range []string{"GARAM_TOKEN_URL", "CONTROL_GRN"} {
+		partial := map[string]string{}
+		for key, v := range full {
+			partial[key] = v
+		}
+		delete(partial, k)
+		_, err := config.Load(get(partial))
+		require.Error(t, err, k)
+		assert.Contains(t, err.Error(), k)
+	}
 }
 
 func TestLoad_NamesEveryMissingSettingAndNoValue(t *testing.T) {

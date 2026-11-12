@@ -5,12 +5,17 @@ package main
 import (
 	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/garamsh/garam/gaon-operator/internal/cli"
 )
 
 func main() {
-	if err := cli.Run(context.Background(), os.Getenv, os.Stderr); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := cli.Run(ctx, os.Getenv, os.Stderr)
+	stop()
+	if err != nil {
 		os.Exit(1)
 	}
 }

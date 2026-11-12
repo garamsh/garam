@@ -6,7 +6,10 @@ is not the Helm chart is written from this document.
 
 Every claim holds at commit
 `210b58da3bcdf9b4e3fd5346dca01a74f9d80e4e`, read from the files cited,
-and is not checked against any later one.
+and is not checked against any later one. The exception is the
+`GARAM_TRANSIT_*` entries for `serve machine`: they follow the change
+of #1833 (ADR-0152), whose line numbers differ from that commit's in
+`machine.go` and `platform/internal/message/transit`.
 
 ## Contents
 
@@ -256,9 +259,12 @@ owner's states the rule on what may stand in front of it.
 | `GARAM_CA_KEY_FILE` | yes | refused at start (`platform/internal/ca/sealer.go:80-95`) |
 | `GARAM_AGENT_TOKEN_LIFETIME` | no | 1h; bounded 20m to 24h by `platform/internal/agent` |
 | `GARAM_MACHINE_ISSUER` | yes | refused at start; `message.ParseIssuer` (`platform/internal/message/signing.go:53-62`) |
-| `GARAM_TRANSIT_ADDR` | no | no Transit; then none of the four below may be set (`machine.go:422-446`) |
-| `GARAM_TRANSIT_CA_FILE`, `GARAM_TRANSIT_TOKEN_FILE`, `GARAM_TRANSIT_SIGNING_KEY` | with the address | refused (`machine.go:437`) |
-| `GARAM_TRANSIT_MOUNT` | no | read with the address (`machine.go:422-446`) |
+| `GARAM_TRANSIT_ADDR` | no | no Transit; then none of the other `GARAM_TRANSIT_*` may be set (`machine.go:422-462`) |
+| `GARAM_TRANSIT_CA_FILE`, `GARAM_TRANSIT_SIGNING_KEY` | with the address | refused (`machine.go:441`) |
+| `GARAM_TRANSIT_TOKEN_FILE` or `GARAM_TRANSIT_IDENTITY_FILE` | one of the two with the address | refused when neither or both is set (`machine.go:441-447`) |
+| `GARAM_TRANSIT_AUTH_ROLE` | with the identity file | refused without it, and beside the token file (`machine.go:449-456`) |
+| `GARAM_TRANSIT_AUTH_MOUNT` | no | `jwt`; refused beside the token file (`machine.go:449-451`) |
+| `GARAM_TRANSIT_MOUNT` | no | read with the address (`machine.go:422-462`) |
 | `GARAM_MACHINE_TOKEN_URL` | no | no assertion exchange; with the service-keys file set it must end in `/oauth/token` (`identity.go:92-99`) |
 | `GARAM_IDENTITY_ISSUER` | no | issuer off (`identity.go:26-56`); the chart does not render it (`deploy/charts/garam/README.md:348`) |
 | `GARAM_POLICY_SIGNING_KEY_FILE` | no | issuer and principal exchange off; the exchange answers 503 |
@@ -280,7 +286,10 @@ owner's states the rule on what may stand in front of it.
   - `GARAM_POLICY_SIGNING_KEY_FILE`: owner-only RSA PEM, 2048 to 4096
     bits (`platform/internal/signer/signer.go:68-76`).
   - `GARAM_TRANSIT_TOKEN_FILE`: owner-only
-    (`platform/internal/message/transit/transit.go:247`).
+    (`platform/internal/message/transit/tokens.go:44`).
+  - `GARAM_TRANSIT_IDENTITY_FILE`: owner-only, read at start
+    (`platform/internal/message/transit/transit.go:124`) and at each
+    login (`tokens.go:125`).
   - `GARAM_IDENTITY_SERVICE_KEYS_FILE`: public JWKS by service name,
     read at start and again on every authentication
     (`identity.go:65-86`); no mode is enforced.
@@ -701,6 +710,7 @@ enforces about key material.
 | `GARAM_MACHINE_TLS_KEY_FILE` | `serve machine` | owner-only file |
 | `GARAM_POLICY_SIGNING_KEY_FILE` | `serve api`, `serve machine` | owner-only RSA PEM |
 | `GARAM_TRANSIT_TOKEN_FILE` | `serve machine` | owner-only file |
+| `GARAM_TRANSIT_IDENTITY_FILE` | `serve machine` | owner-only file |
 | `COWORK_S3_ACCESS_KEY`, `COWORK_S3_SECRET_KEY` | `cowork serve` | environment |
 | `COWORK_USERCONTENT_SECRET` | `cowork serve` | environment, at least 32 bytes |
 | `COWORK_DEPLOYMENT_KEY_FILE` | `cowork serve` | owner-only RSA PEM |

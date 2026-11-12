@@ -51,8 +51,21 @@ type Settings struct {
 	CAFile string
 	// TokenFile names the owner-only file holding the token garam
 	// presents. It is read on every call, so a renewed token takes
-	// effect on the next one.
+	// effect on the next one. Exactly one of TokenFile and IdentityFile
+	// is set.
 	TokenFile string
+	// IdentityFile names the owner-only file holding the workload
+	// identity token garam logs in with, to the JWT auth method at
+	// AuthMount under AuthRole. It is read at each login and the
+	// OpenBao token that follows is held in memory, renewed before it
+	// lapses and obtained again where renewal is refused.
+	IdentityFile string
+	// AuthMount is the JWT auth method's mount, DefaultAuthMount when
+	// empty. It is set with IdentityFile only.
+	AuthMount string
+	// AuthRole is the JWT auth role garam logs in as. It is set with
+	// IdentityFile only, and there it is required.
+	AuthRole string
 	// Mount is the Transit mount, DefaultMount when empty.
 	Mount string
 	// Key is the name of the ecdsa-p256 key messages are signed under.
@@ -61,11 +74,11 @@ type Settings struct {
 
 // Custodian is a message.Custodian over one Transit key.
 type Custodian struct {
-	base      *url.URL
-	mount     string
-	key       string
-	tokenFile string
-	client    *http.Client
+	base   *url.URL
+	mount  string
+	key    string
+	tokens tokenSource
+	client *http.Client
 }
 
 // Compile-time check that Custodian holds message signing keys.
@@ -89,8 +102,28 @@ func New(s Settings) (*Custodian, error) {
 	if s.Key == "" || strings.Contains(s.Key, "/") || s.Key == "." || s.Key == ".." {
 		return nil, errorx.New(errorx.KindInvalidArgument, "transit: key must be one path segment")
 	}
-	if s.TokenFile == "" {
-		return nil, errorx.New(errorx.KindInvalidArgument, "transit: token file is required")
+	if (s.TokenFile == "") == (s.IdentityFile == "") {
+		return nil, errorx.New(errorx.KindInvalidArgument, "transit: exactly one of the token file and the identity file is required")
+	}
+	if s.TokenFile != "" && (s.AuthMount != "" || s.AuthRole != "") {
+		return nil, errorx.New(errorx.KindInvalidArgument, "transit: the auth mount and role belong to the identity file, not the token file")
+	}
+	authMount := s.AuthMount
+	if authMount == "" {
+		authMount = DefaultAuthMount
+	}
+	if s.IdentityFile != "" {
+		if !pathSegments(authMount) {
+			return nil, errorx.New(errorx.KindInvalidArgument, "transit: auth mount must be a path with no empty, '.' or '..' segment")
+		}
+		if s.AuthRole == "" {
+			return nil, errorx.New(errorx.KindInvalidArgument, "transit: auth role is required with the identity file")
+		}
+		// The identity is read at each login; reading it here refuses a
+		// start where it could never be, and keeps nothing of it.
+		if _, err := keyfile.Read(s.IdentityFile); err != nil {
+			return nil, errorx.Wrap(err, "transit: identity file", errorx.KindInvalidArgument)
+		}
 	}
 	root, err := os.ReadFile(s.CAFile)
 	if err != nil {
@@ -100,18 +133,17 @@ func New(s Settings) (*Custodian, error) {
 	if !roots.AppendCertsFromPEM(root) {
 		return nil, errorx.New(errorx.KindInvalidArgument, "transit: no certificate in the CA file")
 	}
-	return &Custodian{
-		base:      base,
-		mount:     mount,
-		key:       s.Key,
-		tokenFile: s.TokenFile,
-		client: &http.Client{
-			Timeout:   callTimeout,
-			Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}},
-			// A redirect would carry the token to wherever it points.
-			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		},
-	}, nil
+	client := &http.Client{
+		Timeout:   callTimeout,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}},
+		// A redirect would carry the token to wherever it points.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	var tokens tokenSource = fileTokens{path: s.TokenFile}
+	if s.IdentityFile != "" {
+		tokens = &loginTokens{client: client, base: base, mount: authMount, role: s.AuthRole, file: s.IdentityFile, now: time.Now}
+	}
+	return &Custodian{base: base, mount: mount, key: s.Key, tokens: tokens, client: client}, nil
 }
 
 // pathSegments reports whether p is a relative path of ordinary
@@ -244,10 +276,26 @@ func (s *versionSigner) Sign(ctx context.Context, input []byte) ([]byte, error) 
 // is garam's misconfiguration. The token travels in its header alone
 // and is never part of an error.
 func (c *Custodian) call(ctx context.Context, op, path string, body, out any) error {
-	token, err := keyfile.Read(c.tokenFile)
+	token, err := c.tokens.Token(ctx, op)
 	if err != nil {
-		return errorx.Wrap(err, "transit: "+op+": token file", errorx.KindUnavailable)
+		return err
 	}
+	var forbidden bool
+	err = c.send(ctx, op, path, token, body, out, &forbidden)
+	// A 403 to a token that served before is a token revoked since:
+	// log in again and send once more.
+	if forbidden && c.tokens.Refused(token) {
+		if token, err = c.tokens.Token(ctx, op); err != nil {
+			return err
+		}
+		return c.send(ctx, op, path, token, body, out, &forbidden)
+	}
+	return err
+}
+
+// send makes one request under token, and sets forbidden where
+// OpenBao answered 403.
+func (c *Custodian) send(ctx context.Context, op, path, token string, body, out any, forbidden *bool) error {
 	var payload io.Reader = http.NoBody
 	if body != nil {
 		encoded, err := json.Marshal(body)
@@ -261,7 +309,7 @@ func (c *Custodian) call(ctx context.Context, op, path string, body, out any) er
 	if err != nil {
 		return errorx.Wrap(err, "transit: "+op, errorx.KindInternal)
 	}
-	req.Header.Set("X-Vault-Token", strings.TrimSpace(string(token)))
+	req.Header.Set("X-Vault-Token", token)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -273,6 +321,7 @@ func (c *Custodian) call(ctx context.Context, op, path string, body, out any) er
 		return errorx.Wrap(err, "transit: "+op+": answer", errorx.KindUnavailable)
 	}
 	if resp.StatusCode != http.StatusOK {
+		*forbidden = resp.StatusCode == http.StatusForbidden
 		return refusal(op, resp.StatusCode, raw)
 	}
 	var answer struct {

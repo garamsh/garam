@@ -54,14 +54,25 @@
 //	                       holds the message signing keys (ADR-0104;
 //	                       optional for serve machine — unset, they are
 //	                       sealed under GARAM_CA_KEY_FILE as before).
-//	                       Set, the next three are required; unset, none
-//	                       of GARAM_TRANSIT_* may be
+//	                       Set, the CA file, the signing key and one of
+//	                       the token file and the identity file are
+//	                       required; unset, none of GARAM_TRANSIT_* may
+//	                       be
 //	GARAM_TRANSIT_CA_FILE  the PEM root OpenBao's certificate is verified
 //	                       against; the system roots are not consulted
 //	GARAM_TRANSIT_TOKEN_FILE  the token garam presents to OpenBao,
 //	                       readable by its owner alone and read on every
 //	                       call; what writes and renews it is the
-//	                       deployment's
+//	                       deployment's. Not with the identity file
+//	GARAM_TRANSIT_IDENTITY_FILE  the workload identity token garam logs
+//	                       in to OpenBao with, readable by its owner
+//	                       alone and read at each login; garam holds the
+//	                       OpenBao token in memory and renews it itself
+//	                       (ADR-0152). Needs GARAM_TRANSIT_AUTH_ROLE
+//	GARAM_TRANSIT_AUTH_MOUNT  the JWT auth method's mount (default
+//	                       "jwt"); with the identity file only
+//	GARAM_TRANSIT_AUTH_ROLE  the JWT auth role garam logs in as; with the
+//	                       identity file only
 //	GARAM_TRANSIT_SIGNING_KEY  the ecdsa-p256 Transit key messages are
 //	                       signed under
 //	GARAM_TRANSIT_MOUNT    the Transit mount (default "transit")
@@ -222,6 +233,9 @@ const (
 	envTransitTokenFile        envName = "GARAM_TRANSIT_TOKEN_FILE"
 	envTransitSigningKey       envName = "GARAM_TRANSIT_SIGNING_KEY"
 	envTransitMount            envName = "GARAM_TRANSIT_MOUNT"
+	envTransitIdentityFile     envName = "GARAM_TRANSIT_IDENTITY_FILE"
+	envTransitAuthMount        envName = "GARAM_TRANSIT_AUTH_MOUNT"
+	envTransitAuthRole         envName = "GARAM_TRANSIT_AUTH_ROLE"
 	envAdapterAgent            envName = "GARAM_ADAPTER_AGENT"
 	envAdapterMachineURL       envName = "GARAM_ADAPTER_MACHINE_URL"
 	envAdapterGatewayURL       envName = "GARAM_ADAPTER_GATEWAY_URL"

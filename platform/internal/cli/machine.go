@@ -426,6 +426,10 @@ func transitCustodian() (message.Custodian, error) {
 		TokenFile: envOr(envTransitTokenFile, ""),
 		Key:       envOr(envTransitSigningKey, ""),
 		Mount:     envOr(envTransitMount, ""),
+
+		IdentityFile: envOr(envTransitIdentityFile, ""),
+		AuthMount:    envOr(envTransitAuthMount, ""),
+		AuthRole:     envOr(envTransitAuthRole, ""),
 	}
 	if settings.Address == "" {
 		if settings != (transit.Settings{}) {
@@ -434,9 +438,21 @@ func transitCustodian() (message.Custodian, error) {
 		}
 		return nil, nil
 	}
-	if settings.CAFile == "" || settings.TokenFile == "" || settings.Key == "" {
+	if settings.CAFile == "" || (settings.TokenFile == "" && settings.IdentityFile == "") || settings.Key == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument,
-			"GARAM_TRANSIT_CA_FILE, GARAM_TRANSIT_TOKEN_FILE and GARAM_TRANSIT_SIGNING_KEY are required beside GARAM_TRANSIT_ADDR")
+			"GARAM_TRANSIT_CA_FILE, GARAM_TRANSIT_SIGNING_KEY and one of GARAM_TRANSIT_TOKEN_FILE and GARAM_TRANSIT_IDENTITY_FILE are required beside GARAM_TRANSIT_ADDR")
+	}
+	if settings.TokenFile != "" && settings.IdentityFile != "" {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"GARAM_TRANSIT_TOKEN_FILE and GARAM_TRANSIT_IDENTITY_FILE are two ways to hold the token; set one")
+	}
+	if settings.TokenFile != "" && (settings.AuthMount != "" || settings.AuthRole != "") {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"GARAM_TRANSIT_AUTH_MOUNT and GARAM_TRANSIT_AUTH_ROLE are set beside GARAM_TRANSIT_TOKEN_FILE, which logs in to nothing")
+	}
+	if settings.IdentityFile != "" && settings.AuthRole == "" {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"GARAM_TRANSIT_AUTH_ROLE is required beside GARAM_TRANSIT_IDENTITY_FILE")
 	}
 	custodian, err := transit.New(settings)
 	if err != nil {

@@ -275,3 +275,93 @@ func TestTransitCustodian_TakesTheProviderWholeOrNotAtAll(t *testing.T) {
 		})
 	}
 }
+
+// TestTransitCustodian_HoldsTheTokenOneWayOrTheOther holds ADR-0152's
+// rule: the token is a file the deployment keeps
+// (GARAM_TRANSIT_TOKEN_FILE) or one garam logs in for
+// (GARAM_TRANSIT_IDENTITY_FILE), never both, and the auth mount and
+// role belong to the login alone. The complete
+// login setting is the control each refused one is read against.
+func TestTransitCustodian_HoldsTheTokenOneWayOrTheOther(t *testing.T) {
+	// Internal: which custodian a start chose is not observable.
+	dir := t.TempDir()
+	root := writeServerRoot(t, dir)
+	identity := filepath.Join(dir, "identity")
+	require.NoError(t, os.WriteFile(identity, []byte("not read at start"), 0o600))
+	token := filepath.Join(dir, "token")
+	base := map[envName]string{
+		envTransitAddr:       "https://openbao.example:8200",
+		envTransitCAFile:     root,
+		envTransitSigningKey: "garam-message-signing",
+	}
+	with := func(extra map[envName]string) map[envName]string {
+		values := map[envName]string{}
+		for k, v := range base {
+			values[k] = v
+		}
+		for k, v := range extra {
+			values[k] = v
+		}
+		return values
+	}
+	set := func(t *testing.T, values map[envName]string) {
+		t.Helper()
+		for _, name := range []envName{
+			envTransitAddr, envTransitCAFile, envTransitTokenFile, envTransitSigningKey, envTransitMount,
+			envTransitIdentityFile, envTransitAuthMount, envTransitAuthRole,
+		} {
+			t.Setenv(string(name), values[name])
+		}
+	}
+
+	for name, values := range map[string]map[envName]string{
+		"the login":                   with(map[envName]string{envTransitIdentityFile: identity, envTransitAuthRole: "garam"}),
+		"the login on a named mount":  with(map[envName]string{envTransitIdentityFile: identity, envTransitAuthRole: "garam", envTransitAuthMount: "gaon/jwt"}),
+		"the token file, the control": with(map[envName]string{envTransitTokenFile: token}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			set(t, values)
+			custodian, err := transitCustodian()
+			require.NoError(t, err)
+			assert.NotNil(t, custodian)
+		})
+	}
+
+	refused := map[string]map[envName]string{
+		"both forms":                  with(map[envName]string{envTransitIdentityFile: identity, envTransitAuthRole: "garam", envTransitTokenFile: token}),
+		"neither form":                with(nil),
+		"the identity without role":   with(map[envName]string{envTransitIdentityFile: identity}),
+		"a role with the token file":  with(map[envName]string{envTransitTokenFile: token, envTransitAuthRole: "garam"}),
+		"a mount with the token file": with(map[envName]string{envTransitTokenFile: token, envTransitAuthMount: "jwt"}),
+		"a mount alone":               {envTransitAuthMount: "jwt"},
+		"an identity alone":           {envTransitIdentityFile: identity},
+		"an identity not there":       with(map[envName]string{envTransitIdentityFile: filepath.Join(dir, "absent"), envTransitAuthRole: "garam"}),
+		"a mount that climbs":         with(map[envName]string{envTransitIdentityFile: identity, envTransitAuthRole: "garam", envTransitAuthMount: "../sys"}),
+	}
+	for name, values := range refused {
+		t.Run(name, func(t *testing.T) {
+			set(t, values)
+			_, err := transitCustodian()
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), err.Error())
+		})
+	}
+
+	t.Run("both forms are refused by the names the deployment set", func(t *testing.T) {
+		set(t, refused["both forms"])
+		_, err := transitCustodian()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "GARAM_TRANSIT_TOKEN_FILE")
+		assert.Contains(t, err.Error(), "GARAM_TRANSIT_IDENTITY_FILE")
+	})
+
+	t.Run("an identity others can read", func(t *testing.T) {
+		open := filepath.Join(dir, "open-identity")
+		require.NoError(t, os.WriteFile(open, []byte("x"), 0o600))
+		require.NoError(t, os.Chmod(open, 0o640))
+		set(t, with(map[envName]string{envTransitIdentityFile: open, envTransitAuthRole: "garam"}))
+		_, err := transitCustodian()
+		require.Error(t, err)
+		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), err.Error())
+	})
+}

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use cedar_policy::{
     Authorizer, Context, Entities, EntityId, EntityTypeName, EntityUid, EvalResult, Policy,
-    PolicySet, Request, Schema, ValidationMode, Validator,
+    PolicyId, PolicySet, Request, Schema, ValidationMode, Validator,
 };
 use manifest::Manifests;
 
@@ -167,11 +167,22 @@ impl Engine {
             Some(org) => policies.active(org).await.map_err(Error::PolicyRead)?,
             None => OrgPolicies::default(),
         };
-        let sender_guardrails = match self.sender_org(&request, &slice) {
-            Some(org) => policies.active(&org).await.map_err(Error::PolicyRead)?,
-            None => OrgPolicies::default(),
-        }
-        .guardrails;
+        // Named by the organization they came from: two organizations
+        // choose ids alone, and a shared id would fail the composition.
+        let sender_guardrails: Vec<Policy> = match self.sender_org(&request, &slice) {
+            Some(org) => policies
+                .active(&org)
+                .await
+                .map_err(Error::PolicyRead)?
+                .guardrails
+                .into_iter()
+                .map(|guardrail| {
+                    let id = PolicyId::new(format!("{org}/{}", guardrail.id()));
+                    guardrail.new_id(id)
+                })
+                .collect(),
+            None => Vec::new(),
+        };
         let own = [
             org_policies.guardrails.as_slice(),
             org_policies.permits.as_slice(),

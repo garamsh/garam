@@ -33,6 +33,18 @@ pub const BOT: Named = ("Iam::Agent", "grn:acme/iam/agent/bot");
 pub const PEER: Named = ("Iam::Agent", "grn:acme/iam/agent/peer");
 pub const RIVAL: Named = ("Iam::Agent", "grn:globex/iam/agent/rival");
 
+/// Acme's hosted operator, holding `agent.activate` and
+/// `agent.configure`.
+pub const OPERATOR: Named = ("Iam::Operator", "grn:acme/iam/operator/hosting");
+/// Globex's hosted operator, holding the same two.
+pub const GLOBEX_OPERATOR: Named = ("Iam::Operator", "grn:globex/iam/operator/hosting");
+/// Acme's operator with no delegation: the store holds no `operations`.
+pub const IDLE_OPERATOR: Named = ("Iam::Operator", "grn:acme/iam/operator/idle");
+/// Acme's operator holding `agent.configure` alone.
+pub const CONFIGURE_ONLY: Named = ("Iam::Operator", "grn:acme/iam/operator/configure");
+/// What `OPERATOR` and `GLOBEX_OPERATOR` hold.
+pub const HELD: [&str; 2] = ["iam:agent.activate", "iam:agent.configure"];
+
 pub struct World {
     pub engine: Engine,
     pub entities: Entities,
@@ -43,6 +55,16 @@ impl World {
         let engine = Engine::load().expect("the system tier loads");
         let entities = engine
             .entities(directory())
+            .expect("the directory conforms");
+        Self { engine, entities }
+    }
+
+    /// The directory where acme has consented to `acme` and globex to
+    /// `globex`: each an organization's half of ADR-0147's consent.
+    pub fn consenting(acme: &[Named], globex: &[Named]) -> Self {
+        let engine = Engine::load().expect("the system tier loads");
+        let entities = engine
+            .entities(directory_with(acme, globex))
             .expect("the directory conforms");
         Self { engine, entities }
     }
@@ -107,14 +129,32 @@ fn org(named: Named) -> Value {
 }
 
 pub fn organization(named: Named, members: Named) -> Value {
-    json!({
-        "uid": parent(named),
-        "attrs": {
-            "org": {"__entity": parent(named)},
-            "members": {"__entity": parent(members)},
-        },
-        "parents": [],
-    })
+    consenting(named, members, None)
+}
+
+/// An organization that states its consents, or none at all when
+/// `consents` is `None`: the attribute is optional.
+fn consenting(named: Named, members: Named, consents: Option<&[Named]>) -> Value {
+    let mut attrs = json!({
+        "org": {"__entity": parent(named)},
+        "members": {"__entity": parent(members)},
+    });
+    if let Some(consents) = consents {
+        let each: Vec<Value> = consents
+            .iter()
+            .map(|org| json!({"__entity": parent(*org)}))
+            .collect();
+        attrs["consents"] = Value::Array(each);
+    }
+    json!({"uid": parent(named), "attrs": attrs, "parents": []})
+}
+
+fn operator(named: Named, org: Named, members: Named, operations: Option<&[&str]>) -> Value {
+    let mut attrs = json!({"org": {"__entity": parent(org)}});
+    if let Some(operations) = operations {
+        attrs["operations"] = json!(operations);
+    }
+    entity(named, attrs, &[members, org])
 }
 
 fn entity(named: Named, attrs: Value, parents: &[Named]) -> Value {
@@ -123,11 +163,34 @@ fn entity(named: Named, attrs: Value, parents: &[Named]) -> Value {
 }
 
 pub fn directory() -> Value {
+    directory_with_orgs(
+        organization(ACME, ACME_MEMBERS),
+        organization(GLOBEX, GLOBEX_MEMBERS),
+    )
+}
+
+fn directory_with(acme: &[Named], globex: &[Named]) -> Value {
+    directory_with_orgs(
+        consenting(ACME, ACME_MEMBERS, Some(acme)),
+        consenting(GLOBEX, GLOBEX_MEMBERS, Some(globex)),
+    )
+}
+
+fn directory_with_orgs(acme: Value, globex: Value) -> Value {
     json!([
         entity(ACME_MEMBERS, json!({}), &[]),
         entity(GLOBEX_MEMBERS, json!({}), &[]),
-        organization(ACME, ACME_MEMBERS),
-        organization(GLOBEX, GLOBEX_MEMBERS),
+        acme,
+        globex,
+        operator(OPERATOR, ACME, ACME_MEMBERS, Some(&HELD)),
+        operator(GLOBEX_OPERATOR, GLOBEX, GLOBEX_MEMBERS, Some(&HELD)),
+        operator(IDLE_OPERATOR, ACME, ACME_MEMBERS, None),
+        operator(
+            CONFIGURE_ONLY,
+            ACME,
+            ACME_MEMBERS,
+            Some(&["iam:agent.configure"]),
+        ),
         entity(ENG, org(ACME), &[ACME]),
         entity(WEB, org(ACME), &[ACME]),
         entity(API, org(ACME), &[ACME]),

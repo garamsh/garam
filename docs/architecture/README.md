@@ -491,6 +491,11 @@ Responsibility documents:
   through tools an AI can use: its binary, its ports and what it asks
   of the platform; the server's pages and real-time editing are built,
   the rest is not
+- [gaon-operator.md](../../gaon-operator/docs/gaon-operator.md) — the
+  operator that runs each managed agent as one MicroVM on a gaon
+  cluster: its reconciler, what it is tested against and what is not
+  wired; the reconciler is built, the binary cannot run against garam
+  yet
 - [web-app.md](./web-app.md) — what the application a person uses garam
   through is responsible for, the one seam it reaches the backend
   through, the design system its pages are built on, and what it does

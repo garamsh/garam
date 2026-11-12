@@ -61,10 +61,10 @@ func TestCheckPermissions_DeniesAnActionGaramDoesNotDefine(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	subject := grn.New("root", user.ServiceType, "owner-sub")
-	f.permit(permission{subject, "iam:org-frobnicate"}, permission{subject, org.ActionOrgUpdate})
+	f.permit(permission{subject, "iam:org.frobnicate"}, permission{subject, org.ActionOrgUpdate})
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
-		apigen.PermissionCheck{Action: "iam:org-frobnicate"},
+		apigen.PermissionCheck{Action: "iam:org.frobnicate"},
 		apigen.PermissionCheck{Action: org.ActionOrgUpdate},
 	), owner)
 

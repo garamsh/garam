@@ -214,7 +214,7 @@ evaluation reads it. Every other key below is read.
     {
       "Sid": "AllowOrgRead",
       "Effect": "Allow",
-      "Action": ["iam:org.read", "iam:project-list"],
+      "Action": ["iam:org.read", "iam:project.read"],
       "Resource": ["grn:acme/*"]
     }
   ]

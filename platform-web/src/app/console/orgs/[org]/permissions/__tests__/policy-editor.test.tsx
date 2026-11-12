@@ -52,7 +52,7 @@ describe("policy editor", () => {
       name: "Statement 2 action 1",
     });
     await user.clear(action);
-    await enter(user, action, "iam:project-list");
+    await enter(user, action, "iam:project.list");
     await user.click(
       within(second).getByRole("button", { name: "Add resource" }),
     );
@@ -61,7 +61,7 @@ describe("policy editor", () => {
       Version: "2026-07-25",
       Statement: [
         { Effect: "Deny", Action: ["iam:project.delete"], Resource: ["*"] },
-        { Effect: "Allow", Action: ["iam:project-list"], Resource: ["*", ""] },
+        { Effect: "Allow", Action: ["iam:project.list"], Resource: ["*", ""] },
       ],
     });
 
@@ -69,7 +69,7 @@ describe("policy editor", () => {
       screen.getByRole("button", { name: "Remove statement 1" }),
     );
     expect(sent()).toMatchObject({
-      Statement: [{ Effect: "Allow", Action: ["iam:project-list"] }],
+      Statement: [{ Effect: "Allow", Action: ["iam:project.list"] }],
     });
   });
 

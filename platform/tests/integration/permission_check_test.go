@@ -178,7 +178,7 @@ func TestCheckPermissions_ReadsAttachedPolicies(t *testing.T) {
 func TestCheckPermissions_DeniesAnUndefinedAction(t *testing.T) {
 	s := newCheckStack(t)
 
-	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionAllow}, s.check(t, s.owner, "iam:org-frobnicate", org.ActionOrgDelete))
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionAllow}, s.check(t, s.owner, "iam:org.frobnicate", org.ActionOrgDelete))
 }
 
 // TestCheckPermissions_AsksAtMostFifty answers fifty pairs and refuses

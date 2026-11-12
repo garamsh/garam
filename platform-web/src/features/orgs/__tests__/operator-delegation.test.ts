@@ -41,7 +41,7 @@ describe("getOperatorDelegation", () => {
     // and not one accepting anything.
     server.use(
       http.get(DELEGATION, () =>
-        HttpResponse.json(grantOf(["iam:operator-frobnicate"])),
+        HttpResponse.json(grantOf(["iam:operator.frobnicate"])),
       ),
     );
     expect(await getOperatorDelegation("acme", "hosted")).toEqual({

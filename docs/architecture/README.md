@@ -843,7 +843,7 @@ ADRs:
   never written or removed
 - [0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)
   — garam accepts no new agent definition: `defineAgent` and
-  `iam:agent-define` are removed, a schema guard refuses a new
+  `agent:define` are removed, a schema guard refuses a new
   definition, a changed value or a direct delete from whichever release
   sends it while a rename and the organization's cascade stay admitted,
   every definition held stays readable, claimable and cut-over-able, and

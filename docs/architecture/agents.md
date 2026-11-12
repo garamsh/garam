@@ -372,7 +372,7 @@ in #1157.
   drops the execution row's mode. It refuses, each by an exception
   naming what it found, a definition or a cut-over of an agent not in
   legacy mode and a delegation holding no operation but
-  `iam:agent-cutover`.
+  `agent:cutover`.
 - **garam keeps no template of its own** ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)). The templates
   ADR-0088 retired read-only and did not import are dropped with their
   table by migration 000057, which refuses to run while one is held; a

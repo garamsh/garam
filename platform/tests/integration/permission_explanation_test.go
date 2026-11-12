@@ -247,7 +247,7 @@ func TestExplainPermission_LeavesOperationDecidedActionsToTheOperation(t *testin
 	}
 	assert.Equal(t, apigen.DecisionUnknown, s.explain(t, s.ada, org.ActionAgentCreate).Decision)
 
-	undefined := s.explain(t, s.ada, "iam:org-frobnicate")
+	undefined := s.explain(t, s.ada, "iam:org.frobnicate")
 	assert.Equal(t, apigen.DecisionDeny, undefined.Decision)
 	assert.Equal(t, apigen.BasisUndefinedAction, undefined.Basis)
 

@@ -14,7 +14,7 @@ fn engine() -> Engine {
 fn an_action_the_schema_does_not_name_is_refused() {
     let engine = engine();
 
-    let refused = engine.request(&evaluation(LEE, "iam:org-rename", ACME));
+    let refused = engine.request(&evaluation(LEE, "iam:org.rename", ACME));
     assert!(matches!(refused, Err(Error::Evaluation(_))), "{refused:?}");
 
     let control = engine.request(&evaluation(LEE, "iam:org.read", ACME));

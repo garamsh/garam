@@ -30,15 +30,15 @@ use tonic::{Code, Request};
 type Named = (&'static str, &'static str);
 
 const ACME: &str = "grn:root/iam/org/acme";
-const ORG: Named = ("Org", ACME);
-const MEMBERS: Named = ("OrgMembers", ACME);
-const ENG: Named = ("Team", "grn:acme/iam/group/eng");
-const LEE: Named = ("User", "grn:acme/iam/user/lee");
+const ORG: Named = ("Iam::Org", ACME);
+const MEMBERS: Named = ("Iam::OrgMembers", ACME);
+const ENG: Named = ("Iam::Team", "grn:acme/iam/group/eng");
+const LEE: Named = ("Iam::User", "grn:acme/iam/user/lee");
 /// A member, in eng, which holds a role on the organization.
-const DUO: Named = ("User", "grn:acme/iam/user/duo");
-const MIA: Named = ("User", "grn:globex/iam/user/mia");
-const BOT: Named = ("Agent", "grn:acme/iam/agent/bot");
-const PEER: Named = ("Agent", "grn:acme/iam/agent/peer");
+const DUO: Named = ("Iam::User", "grn:acme/iam/user/duo");
+const MIA: Named = ("Iam::User", "grn:globex/iam/user/mia");
+const BOT: Named = ("Iam::Agent", "grn:acme/iam/agent/bot");
+const PEER: Named = ("Iam::Agent", "grn:acme/iam/agent/peer");
 
 static MIGRATIONS: Migrator = sqlx::migrate!("../../migrations");
 
@@ -181,7 +181,7 @@ async fn evaluate_decides_from_the_services_own_stores(pool: PgPool) {
     let mut client = client(pool).await;
 
     let allowed = client
-        .evaluate(authenticated(question(LEE, "agent:read", BOT)))
+        .evaluate(authenticated(question(LEE, "iam:agent-read", BOT)))
         .await
         .unwrap()
         .into_inner();
@@ -190,7 +190,7 @@ async fn evaluate_decides_from_the_services_own_stores(pool: PgPool) {
     assert_eq!(reasons[0].policy_id, "grn:acme/iam/policy/lee-member");
 
     let outside = client
-        .evaluate(authenticated(question(MIA, "agent:read", BOT)))
+        .evaluate(authenticated(question(MIA, "iam:agent-read", BOT)))
         .await
         .unwrap()
         .into_inner();
@@ -204,7 +204,7 @@ async fn a_resource_outside_the_store_is_denied_with_its_error_as_a_reason(pool:
     let mut client = client(pool).await;
 
     let unknown = client
-        .evaluate(authenticated(question(LEE, "agent:read", PEER)))
+        .evaluate(authenticated(question(LEE, "iam:agent-read", PEER)))
         .await
         .unwrap()
         .into_inner();
@@ -220,7 +220,7 @@ async fn deleting_a_team_or_org_members_ends_what_it_held(pool: PgPool) {
     seed(&pool).await;
     let store = EntityStore::new(pool.clone(), Engine::load().unwrap());
     let mut client = client(pool).await;
-    let ask = || authenticated(question(DUO, "agent:read", BOT));
+    let ask = || authenticated(question(DUO, "iam:agent-read", BOT));
     let held = client.evaluate(ask()).await.unwrap().into_inner();
     assert!(held.decision, "{held:?}");
 
@@ -231,7 +231,7 @@ async fn deleting_a_team_or_org_members_ends_what_it_held(pool: PgPool) {
     let after_team = client.evaluate(ask()).await.unwrap().into_inner();
     assert!(!after_team.decision, "{after_team:?}");
 
-    let lees = || authenticated(question(LEE, "agent:read", BOT));
+    let lees = || authenticated(question(LEE, "iam:agent-read", BOT));
     let control = client.evaluate(lees()).await.unwrap().into_inner();
     assert!(control.decision, "{control:?}");
 
@@ -250,7 +250,7 @@ async fn evaluations_with_no_entries_answer_the_question_the_defaults_state(pool
     let mut client = client(pool).await;
     let empty = |who: Named| EvaluationsRequest {
         subject: subject(who),
-        action: action("agent:read"),
+        action: action("iam:agent-read"),
         resource: resource(BOT),
         context: None,
         read: 0,
@@ -297,14 +297,14 @@ async fn a_bad_entry_is_denied_where_it_stands_and_the_rest_are_answered(pool: P
     let answers = client
         .evaluations(authenticated(EvaluationsRequest {
             subject: None,
-            action: action("agent:read"),
+            action: action("iam:agent-read"),
             resource: resource(BOT),
             context: None,
             read: 0,
             evaluations: vec![
                 entry(LEE),
                 entry(("Nope", "x")),
-                entry(("User", "a\0b")),
+                entry(("Iam::User", "a\0b")),
                 entry(LEE),
             ],
         }))
@@ -326,7 +326,7 @@ async fn a_batch_past_the_bound_is_refused(pool: PgPool) {
     let mut client = client(pool).await;
     let batch = |entries: usize| EvaluationsRequest {
         subject: subject(LEE),
-        action: action("agent:read"),
+        action: action("iam:agent-read"),
         resource: resource(BOT),
         context: None,
         read: 0,
@@ -392,7 +392,7 @@ async fn mia_may_read(client: &mut PolicyServiceClient<Channel>) -> bool {
     client
         .evaluate(authenticated(EvaluateRequest {
             subject: subject(MIA),
-            action: action("agent:read"),
+            action: action("iam:agent-read"),
             resource: resource(BOT),
             context: None,
             read: 0,
@@ -509,7 +509,11 @@ async fn a_type_of_another_service_writes_nothing_through_the_shipped_graph(pool
     grant_mia_the_member_role(&pool).await;
     let mut client = client(pool).await;
 
-    let foreign = wire_upsert(("Channel", "grn:acme/cowork/channel/one"), 10, &[ORG]);
+    let foreign = wire_upsert(
+        ("Cowork::Channel", "grn:acme/cowork/channel/one"),
+        10,
+        &[ORG],
+    );
     let batch = vec![wire_upsert(MIA, 10, &[MEMBERS]), foreign];
     let refused = client
         .apply_entity_changes(authenticated(ApplyEntityChangesRequest { changes: batch }))
@@ -595,7 +599,7 @@ async fn evaluations_answer_in_order_and_take_the_requests_defaults(pool: PgPool
     let answers = client
         .evaluations(authenticated(EvaluationsRequest {
             subject: None,
-            action: action("agent:read"),
+            action: action("iam:agent-read"),
             resource: resource(BOT),
             context: None,
             read: 0,
@@ -615,14 +619,14 @@ async fn a_caller_supplies_no_grounds_and_names_only_the_schema(pool: PgPool) {
     seed(&pool).await;
     let mut client = client(pool).await;
 
-    let mut with_properties = question(LEE, "agent:read", BOT);
+    let mut with_properties = question(LEE, "iam:agent-read", BOT);
     if let Some(resource) = with_properties.resource.as_mut() {
         resource.properties = Some(context_field());
     }
     let refused = client.evaluate(authenticated(with_properties)).await;
     assert_eq!(refused.unwrap_err().code(), Code::InvalidArgument);
 
-    let mut with_context = question(LEE, "agent:read", BOT);
+    let mut with_context = question(LEE, "iam:agent-read", BOT);
     with_context.context = Some(context_field());
     let refused = client.evaluate(authenticated(with_context)).await;
     assert_eq!(refused.unwrap_err().code(), Code::InvalidArgument);
@@ -632,12 +636,12 @@ async fn a_caller_supplies_no_grounds_and_names_only_the_schema(pool: PgPool) {
         .await;
     assert_eq!(unnamed.unwrap_err().code(), Code::InvalidArgument);
 
-    let nul = question(("User", "a\0b"), "agent:read", BOT);
+    let nul = question(("Iam::User", "a\0b"), "iam:agent-read", BOT);
     let refused = client.evaluate(authenticated(nul)).await;
     assert_eq!(refused.unwrap_err().code(), Code::InvalidArgument);
 
     let control = client
-        .evaluate(authenticated(question(LEE, "agent:read", BOT)))
+        .evaluate(authenticated(question(LEE, "iam:agent-read", BOT)))
         .await;
     assert!(control.is_ok(), "{control:?}");
 }
@@ -648,14 +652,14 @@ async fn a_store_that_cannot_be_read_fails_the_call_rather_than_answering(pool: 
     seed(&pool).await;
     let mut client = client(pool.clone()).await;
     let control = client
-        .evaluate(authenticated(question(LEE, "agent:read", BOT)))
+        .evaluate(authenticated(question(LEE, "iam:agent-read", BOT)))
         .await;
     assert!(control.is_ok(), "{control:?}");
 
     pool.close().await;
 
     let failed = client
-        .evaluate(authenticated(question(LEE, "agent:read", BOT)))
+        .evaluate(authenticated(question(LEE, "iam:agent-read", BOT)))
         .await;
     assert_eq!(failed.unwrap_err().code(), Code::Unavailable);
 }

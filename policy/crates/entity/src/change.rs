@@ -37,7 +37,7 @@ impl EntityChange {
         members: Option<EntityUid>,
         parents: Vec<EntityUid>,
     ) -> Result<Self, Error> {
-        if uid.type_name().to_string() == "Org" && !carries_itself(&uid, &org, &members) {
+        if uid.type_name().to_string() == "Iam::Org" && !carries_itself(&uid, &org, &members) {
             return Err(Error::OrgNotItself);
         }
         let attrs: Map<String, Value> = [("org", &org), ("members", &members)]
@@ -80,7 +80,7 @@ impl EntityChange {
 fn carries_itself(uid: &EntityUid, org: &Option<EntityUid>, members: &Option<EntityUid>) -> bool {
     org.as_ref() == Some(uid)
         && members.as_ref().is_some_and(|members| {
-            members.type_name().to_string() == "OrgMembers" && members.id() == uid.id()
+            members.type_name().to_string() == "Iam::OrgMembers" && members.id() == uid.id()
         })
 }
 

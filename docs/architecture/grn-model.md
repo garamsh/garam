@@ -56,8 +56,8 @@ Examples:
 | a platform type | `grn:acme/iam/user/alice` |
 | an organization | `grn:root/iam/org/acme` |
 | a project-scoped resource | `grn:acme/docs/project/frontend/doc/readme` |
-| a nested resource | `grn:acme/codehub/project/frontend/repo/api-server` |
-| a locator | `grn:acme/codehub/repo/api-server#refs/heads/main:cmd/main.go` |
+| a nested resource | `grn:acme/cowork/project/frontend/channel/general` |
+| a locator | `grn:acme/cowork/page/home#section-2` |
 
 ## Ownership
 
@@ -106,23 +106,26 @@ type's names.
 | `iam` | `supervisor` | runs one agent on a standalone host; garam mints the identifier and registers it for that agent on an administrator's approval (ADR-0082) | `grn:acme/iam/supervisor/0a1b2c3d4e5f6071` |
 | `iam` | `policy` | stored policy document | `grn:acme/iam/policy/a1b2c3d4` |
 | `iam` | `service` | a first-party service acting in one organization, one per organization and service, the identifier the service's name (planned, ADR-0129; codehub's is planned, ADR-0141) | `grn:acme/iam/service/cowork` |
-| `codehub` | `repo` | a repository codehub stores, owned by an organization, or by a project as `project/<id>/repo/<id>` once that step is taken (planned, ADR-0141) | `grn:acme/codehub/repo/api-server` |
+| `codehub` | `repo` | a repository codehub stores, owned by an organization, or by a project as `project/<id>/repo/<id>` once that step is taken (planned, ADR-0141; in no catalogue until codehub declares a manifest) | `grn:acme/codehub/repo/api-server` |
 | not decided | `doc` | permissioned document (planned) | `grn:acme/docs/project/frontend/doc/readme` |
 | not decided | `secret` | reference to a value an external store holds, never the value (planned, ADR-0036) | `grn:acme/iam/secret/model-api-key` |
 
 The owner of `doc` and `secret` is not decided, so the service names
 in their examples are illustrative.
 
-**Decided and not built.**
+**Built, and not built.**
 [ADR-0143](./adr/0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
 makes a service's Cedar schema file its manifest, and a type's GRN
-type its `@grn` annotation there. When it is built the catalogue in
-`lib/grn/grn.go` is generated from the manifests, and this table
-describes what they declare rather than being where a type is added.
-The platform is then to serve, read-only, a GRN's service, type,
-parent and the actions that apply, from the same declarations. Today
-`lib/grn/grn.go` is written by hand, no manifest exists and nothing
-serves that answer.
+type its `@grn` annotation there. Built: `policy/schema/iam.cedarschema`
+and `cowork.cedarschema` are the manifests, and the catalogue in
+`lib/grn` is `catalogue_gen.go`, written by `make -C policy gen` from
+them with each type's qualified entity type, its parents and each
+action with the types it applies to, and held to them by `make -C
+policy check-gen`. A type is therefore added in a manifest, and this
+table describes what they declare. Not built: codehub declares no
+manifest, so `repo` is in no catalogue and `lib/grn` refuses a name of
+`codehub` until it does (#1760), and nothing yet serves, read-only, a
+GRN's service, type, parent and the actions that apply.
 
 ## identifier
 
@@ -182,11 +185,11 @@ grammar as follows.
 
 ## Open questions
 
-The per-service manifest and the served registry of types are decided
-and unbuilt, in ADR-0143, which also settles how an action reads once
-types belong to services: `<service>:<type>-<verb>`, so an action's
-name does change. Left open there: a service an organization defines,
-and a served registry of locator shapes. Settled for the
+The per-service manifest is built and the served registry of types is
+decided and unbuilt, in ADR-0143, which also settles how an action
+reads once types belong to services: `<service>:<type>-<verb>`, so an
+action's name does change. Left open there: a service an organization
+defines, and a served registry of locator shapes. Settled for the
 implementation: the policy service's caller name and the feed's `sub`
 stay `platform`; a Cedar entity identifier is the whole name before
 `#`; a `*` in a policy pattern matches as it did, `/` included, so an

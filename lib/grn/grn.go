@@ -11,11 +11,12 @@
 //	grn:acme/iam/user/alice
 //	grn:acme/iam/agent/bot-1
 //	grn:root/iam/org/acme
-//	grn:acme/codehub/project/frontend/repo/api-server
-//	grn:acme/codehub/repo/api#refs/heads/main:cmd/main.go
+//	grn:acme/cowork/project/frontend/channel/general
+//	grn:acme/cowork/page/home#section-2
 package grn
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/garamsh/garam/lib/errorx"
@@ -38,31 +39,69 @@ const RootOwner = "root"
 // ServiceTypeOrg is the type of an organization's GRN.
 const ServiceTypeOrg = "org"
 
-// catalogue is the one place the types a service owns are written,
-// keyed by service and then by type. It agrees with grn-model.md
-// §Types by owning service. A type name is a service's own, so two
-// services may each hold one of the same name.
-var catalogue = map[string]map[string]bool{
-	"iam": {
-		"user":         true,
-		"agent":        true,
-		ServiceTypeOrg: true,
-		"group":        true,
-		"project":      true,
-		"operator":     true,
-		"supervisor":   true,
-		"policy":       true,
-		"service":      true,
-	},
-	"codehub": {
-		"repo": true,
-	},
-	"cowork": {
-		"page":     true,
-		"channel":  true,
-		"task":     true,
-		"artifact": true,
-	},
+// TypeInfo is what a manifest says of one entity type a GRN names.
+type TypeInfo struct {
+	// Entity is the qualified Cedar entity type, as it is written on
+	// the wire.
+	Entity string
+	// Parents are the qualified types an entity of this type may be a
+	// member of.
+	Parents []string
+}
+
+// ActionInfo is what a manifest says of one action.
+type ActionInfo struct {
+	// Name is the action as it is written on the wire,
+	// `<service>:<type>-<verb>`.
+	Name string
+	// Principals and Resources are the qualified types it applies to.
+	Principals []string
+	Resources  []string
+}
+
+// catalogue is the one place the types a service owns are read from,
+// keyed by service and then by type: what the manifests declare, which
+// `make -C policy gen` writes into catalogue_gen.go. A service no
+// manifest declares owns no type, and a name under it is refused. A
+// type name is a service's own, so two services may each hold one of
+// the same name.
+var catalogue = buildCatalogue()
+
+func buildCatalogue() map[string]map[string]bool {
+	built := map[string]map[string]bool{}
+	for service, types := range generatedTypes {
+		built[service] = map[string]bool{}
+		for name := range types {
+			built[service][name] = true
+		}
+	}
+	return built
+}
+
+// Services returns the services a manifest declares, sorted.
+func Services() []string {
+	names := make([]string, 0, len(generatedTypes))
+	for service := range generatedTypes {
+		names = append(names, service)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// Types returns what the manifest of service says of each of its
+// entity types, by GRN type segment.
+func Types(service string) map[string]TypeInfo {
+	found := make(map[string]TypeInfo, len(generatedTypes[service]))
+	for name, info := range generatedTypes[service] {
+		found[name] = info
+	}
+	return found
+}
+
+// Actions returns every action a manifest declares with what it
+// applies to.
+func Actions() []ActionInfo {
+	return append([]ActionInfo(nil), generatedActions...)
 }
 
 // ownerOf returns the one service whose catalogue holds typ, or the

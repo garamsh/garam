@@ -13,14 +13,14 @@ use sqlx::PgPool;
 type Named = (&'static str, &'static str);
 
 const ACME: &str = "grn:root/iam/org/acme";
-const ORG: Named = ("Org", ACME);
-const MEMBERS: Named = ("OrgMembers", ACME);
-const ENG: Named = ("Team", "grn:acme/iam/group/eng");
-const LEE: Named = ("User", "grn:acme/iam/user/lee");
-const OUTSIDER: Named = ("User", "grn:acme/iam/user/outsider");
-const BOT: Named = ("Agent", "grn:acme/iam/agent/bot");
-const CHANNEL: Named = ("Channel", "grn:acme/cowork/channel/general");
-const GONE: Named = ("Channel", "grn:acme/cowork/channel/gone");
+const ORG: Named = ("Iam::Org", ACME);
+const MEMBERS: Named = ("Iam::OrgMembers", ACME);
+const ENG: Named = ("Iam::Team", "grn:acme/iam/group/eng");
+const LEE: Named = ("Iam::User", "grn:acme/iam/user/lee");
+const OUTSIDER: Named = ("Iam::User", "grn:acme/iam/user/outsider");
+const BOT: Named = ("Iam::Agent", "grn:acme/iam/agent/bot");
+const CHANNEL: Named = ("Cowork::Channel", "grn:acme/cowork/channel/general");
+const GONE: Named = ("Cowork::Channel", "grn:acme/cowork/channel/gone");
 
 fn uid(named: Named) -> EntityUid {
     EntityUid::from_type_name_and_id(
@@ -95,7 +95,7 @@ fn message(from: Named, to: Named) -> Evaluation<'static> {
             entity_type: from.0,
             id: from.1,
         },
-        action: "message:send",
+        action: "iam:message-send",
         resource: EntityRef {
             entity_type: to.0,
             id: to.1,
@@ -118,7 +118,7 @@ async fn a_slice_holds_each_resources_org_and_org_members(pool: PgPool) {
     assert!(!holds(&slice, OUTSIDER), "a slice holds no other member");
 
     // No parent of the asker leads to these: only the resource does.
-    let stranger: Named = ("User", "grn:globex/iam/user/stranger");
+    let stranger: Named = ("Iam::User", "grn:globex/iam/user/stranger");
     store
         .apply(&[upsert(stranger, 1, None, &[])])
         .await
@@ -136,8 +136,8 @@ async fn a_slice_holds_each_resources_org_and_org_members(pool: PgPool) {
 async fn a_slice_decides_a_member_in_and_a_team_only_user_out(pool: PgPool) {
     let store = store(pool).await;
     let engine = Engine::load().unwrap();
-    let peer: Named = ("Agent", "grn:acme/iam/agent/peer");
-    let stranger: Named = ("Agent", "grn:acme/iam/agent/stranger");
+    let peer: Named = ("Iam::Agent", "grn:acme/iam/agent/peer");
+    let stranger: Named = ("Iam::Agent", "grn:acme/iam/agent/stranger");
     let more = [
         upsert(peer, 1, Some(ORG), &[MEMBERS, ORG]),
         upsert(stranger, 1, Some(ORG), &[ENG]),

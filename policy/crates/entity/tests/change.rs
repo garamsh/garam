@@ -27,40 +27,40 @@ fn change(
 }
 
 fn acme() -> Option<EntityUid> {
-    Some(uid("Org", ACME))
+    Some(uid("Iam::Org", ACME))
 }
 
 #[test]
 fn a_resource_without_its_organization_is_refused() {
-    let team = uid("Team", ENG);
+    let team = uid("Iam::Team", ENG);
 
-    let refused = change(team.clone(), None, vec![uid("Org", ACME)]);
+    let refused = change(team.clone(), None, vec![uid("Iam::Org", ACME)]);
     assert!(matches!(refused, Err(Error::Refused(_))), "{refused:?}");
 
-    let control = change(team, acme(), vec![uid("Org", ACME)]);
+    let control = change(team, acme(), vec![uid("Iam::Org", ACME)]);
     assert!(control.is_ok(), "{control:?}");
 }
 
 #[test]
 fn a_team_inside_a_team_is_refused() {
-    let team = uid("Team", ENG);
-    let other = uid("Team", "grn:acme/iam/group/web");
+    let team = uid("Iam::Team", ENG);
+    let other = uid("Iam::Team", "grn:acme/iam/group/web");
 
     let refused = change(team.clone(), acme(), vec![other]);
     assert!(matches!(refused, Err(Error::Refused(_))), "{refused:?}");
 
-    let control = change(team, acme(), vec![uid("Org", ACME)]);
+    let control = change(team, acme(), vec![uid("Iam::Org", ACME)]);
     assert!(control.is_ok(), "{control:?}");
 }
 
 #[test]
 fn a_team_inside_an_organizations_members_is_refused() {
-    let team = uid("Team", ENG);
+    let team = uid("Iam::Team", ENG);
 
-    let refused = change(team.clone(), acme(), vec![uid("OrgMembers", ACME)]);
+    let refused = change(team.clone(), acme(), vec![uid("Iam::OrgMembers", ACME)]);
     assert!(matches!(refused, Err(Error::Refused(_))), "{refused:?}");
 
-    let control = change(team, acme(), vec![uid("Org", ACME)]);
+    let control = change(team, acme(), vec![uid("Iam::Org", ACME)]);
     assert!(control.is_ok(), "{control:?}");
 }
 
@@ -71,15 +71,15 @@ fn a_type_the_schema_does_not_name_is_refused() {
     let refused = change(service, None, vec![]);
     assert!(matches!(refused, Err(Error::Refused(_))), "{refused:?}");
 
-    let control = change(uid("OrgMembers", ACME), None, vec![]);
+    let control = change(uid("Iam::OrgMembers", ACME), None, vec![]);
     assert!(control.is_ok(), "{control:?}");
 }
 
 #[test]
 fn an_organization_carries_itself_and_its_own_members() {
     let engine = Engine::load().unwrap();
-    let org = uid("Org", ACME);
-    let members = uid("OrgMembers", ACME);
+    let org = uid("Iam::Org", ACME);
+    let members = uid("Iam::OrgMembers", ACME);
     let globex = "grn:root/iam/org/globex";
     let upsert = |org_attr: &EntityUid, members_attr: &EntityUid| {
         EntityChange::upsert(
@@ -92,9 +92,9 @@ fn an_organization_carries_itself_and_its_own_members() {
         )
     };
 
-    let refused = upsert(&uid("Org", globex), &members);
+    let refused = upsert(&uid("Iam::Org", globex), &members);
     assert!(matches!(refused, Err(Error::OrgNotItself)), "{refused:?}");
-    let refused = upsert(&org, &uid("OrgMembers", globex));
+    let refused = upsert(&org, &uid("Iam::OrgMembers", globex));
     assert!(matches!(refused, Err(Error::OrgNotItself)), "{refused:?}");
 
     let control = upsert(&org, &members);

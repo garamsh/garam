@@ -6,6 +6,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use jsonwebtoken::{
     Algorithm, DecodingKey, Validation, decode, decode_header, get_current_timestamp,
 };
+use manifest::Manifests;
 use serde::Deserialize;
 use tonic::service::Interceptor;
 use tonic::{Request, Status};
@@ -23,39 +24,40 @@ const MODULUS_BITS: std::ops::RangeInclusive<usize> = 2048..=4096;
 /// The skew allowed against the issuer's clock, as ADR-0102's.
 const CLOCK_SKEW_SECONDS: u64 = 30;
 
-/// The entity types the platform owns (ADR-0130 §7, ADR-0140).
-const PLATFORM_TYPES: [&str; 7] = [
-    "Org",
-    "OrgMembers",
-    "Team",
-    "Project",
-    "User",
-    "Agent",
-    "Operator",
-];
-
 /// An authenticated service, read from the `sub` of its token. Another
 /// `sub` is refused however well its token verifies, so what a service
-/// may ask is decided here and nowhere else (ADR-0140).
+/// may ask is decided here and nowhere else (ADR-0140). Which types it
+/// writes is not decided here: the manifests' `@caller` annotations say
+/// (ADR-0143 item 2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Caller {
-    /// The platform, which asks anything and owns `PLATFORM_TYPES`.
+    /// The platform, which asks anything and writes the types whose
+    /// `@caller` is `platform`.
     Platform,
 }
 
 impl Caller {
-    fn from_subject(subject: &str) -> Option<Self> {
-        match subject {
-            "platform" => Some(Self::Platform),
-            _ => None,
+    /// The closed list of callers, which a check holds the manifests'
+    /// `@caller` values to.
+    pub const ALL: [Self; 1] = [Self::Platform];
+
+    /// The `sub` of this caller's token.
+    pub const fn subject(self) -> &'static str {
+        match self {
+            Self::Platform => "platform",
         }
     }
 
-    /// Whether this service writes entities of this type (ADR-0130 §8).
-    pub fn owns(self, entity_type: &str) -> bool {
-        match self {
-            Self::Platform => PLATFORM_TYPES.contains(&entity_type),
-        }
+    fn from_subject(subject: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|caller| caller.subject() == subject)
+    }
+
+    /// Whether this service writes entities of this qualified type,
+    /// as the manifests' `@caller` say (ADR-0130 §8).
+    pub fn owns(self, manifests: &Manifests, entity_type: &str) -> bool {
+        manifests.owns(self.subject(), entity_type)
     }
 }
 

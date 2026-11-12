@@ -109,7 +109,7 @@ impl<P, E: EntitySink> Service<P, E> {
             .changes
             .iter()
             .filter_map(|change| change.entity.as_ref())
-            .find(|entity| !caller.owns(&entity.r#type));
+            .find(|entity| !caller.owns(self.engine.manifests(), &entity.r#type));
         if let Some(entity) = not_owned {
             return Err(ServiceError::NotOwned(entity.r#type.clone()));
         }

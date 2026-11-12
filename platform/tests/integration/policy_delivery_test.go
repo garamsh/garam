@@ -245,13 +245,13 @@ func TestPolicyDelivery_SendsWhatTheOwnersTablesSayAndDeletesTheMarks(t *testing
 	}
 	assert.Len(t, seqs, 1, "one pass takes one sequence")
 
-	org := changes["Org "+outboxOrg].GetUpsert()
+	org := changes["Iam::Org "+outboxOrg].GetUpsert()
 	assert.Equal(t, outboxOrg, org.GetOrg().GetId())
-	assert.Equal(t, "OrgMembers", org.GetMembers().GetType())
+	assert.Equal(t, "Iam::OrgMembers", org.GetMembers().GetType())
 	assert.Equal(t, []string{
-		"OrgMembers " + outboxOrg, "Project " + outboxProject, "Team " + outboxTeam,
-	}, parentKeys(changes["User "+outboxUser]))
-	assert.Equal(t, outboxOrg, changes["Team "+outboxTeam].GetUpsert().GetOrg().GetId())
+		"Iam::OrgMembers " + outboxOrg, "Iam::Project " + outboxProject, "Iam::Team " + outboxTeam,
+	}, parentKeys(changes["Iam::User "+outboxUser]))
+	assert.Equal(t, outboxOrg, changes["Iam::Team "+outboxTeam].GetUpsert().GetOrg().GetId())
 }
 
 func TestPolicyDelivery_SequenceRisesAcrossPasses(t *testing.T) {
@@ -259,10 +259,10 @@ func TestPolicyDelivery_SequenceRisesAcrossPasses(t *testing.T) {
 	fake, key := newFake(t)
 	d := newDeliverer(t, p, fake, key)
 	seedWithFeedOn(t, p)
-	execSQL(t, p, `SELECT policy_outbox_mark('Team', $1)`, outboxTeam)
+	execSQL(t, p, `SELECT policy_outbox_mark('Iam::Team', $1)`, outboxTeam)
 	_, err := d.pass(t)
 	require.NoError(t, err)
-	execSQL(t, p, `SELECT policy_outbox_mark('Team', $1)`, outboxTeam)
+	execSQL(t, p, `SELECT policy_outbox_mark('Iam::Team', $1)`, outboxTeam)
 	_, err = d.pass(t)
 	require.NoError(t, err)
 
@@ -278,12 +278,12 @@ func TestPolicyDelivery_AnEntityTheOwnersNoLongerHoldIsADelete(t *testing.T) {
 	seedWithFeedOn(t, p)
 	execSQL(t, p, `DELETE FROM project_members WHERE project_grn = $1`, outboxProject)
 	execSQL(t, p, `DELETE FROM projects WHERE grn = $1`, outboxProject)
-	require.Contains(t, outboxMarks(t, p), "Project "+outboxProject)
+	require.Contains(t, outboxMarks(t, p), "Iam::Project "+outboxProject)
 
 	_, err := d.pass(t)
 	require.NoError(t, err)
 
-	change := changesByEntity(fake.received()[0])["Project "+outboxProject]
+	change := changesByEntity(fake.received()[0])["Iam::Project "+outboxProject]
 	require.NotNil(t, change)
 	assert.NotNil(t, change.GetDelete())
 	assert.Nil(t, change.GetUpsert())
@@ -294,18 +294,18 @@ func TestPolicyDelivery_AWriteLandingMidPassSurvivesIt(t *testing.T) {
 	fake, key := newFake(t)
 	d := newDeliverer(t, p, fake, key)
 	seedWithFeedOn(t, p)
-	execSQL(t, p, `SELECT policy_outbox_mark('Team', $1)`, outboxTeam)
-	execSQL(t, p, `SELECT policy_outbox_mark('Team', $1)`, outboxTeam2)
+	execSQL(t, p, `SELECT policy_outbox_mark('Iam::Team', $1)`, outboxTeam)
+	execSQL(t, p, `SELECT policy_outbox_mark('Iam::Team', $1)`, outboxTeam2)
 	fake.onApply = func() {
 		// A write to one team commits between the read and the delete.
-		execSQL(t, p, `SELECT policy_outbox_mark('Team', $1)`, outboxTeam)
+		execSQL(t, p, `SELECT policy_outbox_mark('Iam::Team', $1)`, outboxTeam)
 	}
 
 	_, err := d.pass(t)
 	require.NoError(t, err)
 
 	marks := outboxMarks(t, p)
-	assert.Equal(t, map[string]int64{"Team " + outboxTeam: 2}, marks,
+	assert.Equal(t, map[string]int64{"Iam::Team " + outboxTeam: 2}, marks,
 		"the mark written mid-pass stays at its new generation, and the other goes")
 
 	fake.onApply = nil
@@ -324,14 +324,14 @@ func TestPolicyDelivery_ARefusedEntityIsDeletedAtAHigherSequence(t *testing.T) {
 	fake.refuse = map[string]string{outboxTeam: "too many parents"}
 	d := newDeliverer(t, p, fake, key)
 	seedWithFeedOn(t, p)
-	execSQL(t, p, `SELECT policy_outbox_mark('Team', $1)`, outboxTeam)
-	execSQL(t, p, `SELECT policy_outbox_mark('Team', $1)`, outboxTeam2)
+	execSQL(t, p, `SELECT policy_outbox_mark('Iam::Team', $1)`, outboxTeam)
+	execSQL(t, p, `SELECT policy_outbox_mark('Iam::Team', $1)`, outboxTeam2)
 
 	result, err := d.pass(t)
 	require.NoError(t, err)
 
 	assert.Equal(t, []policyfeed.Refusal{{
-		Entity: policyfeed.Entity{Type: "Team", ID: outboxTeam}, Reason: "too many parents",
+		Entity: policyfeed.Entity{Type: "Iam::Team", ID: outboxTeam}, Reason: "too many parents",
 	}}, result.Refused)
 	calls := fake.received()
 	require.Len(t, calls, 2)
@@ -349,11 +349,11 @@ func TestPolicyDelivery_AFailedCallLeavesEveryMark(t *testing.T) {
 	fake.fail = status.Error(codes.Unavailable, "down")
 	d := newDeliverer(t, p, fake, key)
 	seedWithFeedOn(t, p)
-	execSQL(t, p, `SELECT policy_outbox_mark('Team', $1)`, outboxTeam)
+	execSQL(t, p, `SELECT policy_outbox_mark('Iam::Team', $1)`, outboxTeam)
 
 	_, err := d.pass(t)
 	require.Error(t, err)
-	assert.Equal(t, map[string]int64{"Team " + outboxTeam: 1}, outboxMarks(t, p))
+	assert.Equal(t, map[string]int64{"Iam::Team " + outboxTeam: 1}, outboxMarks(t, p))
 
 	fake.mu.Lock()
 	fake.fail = nil
@@ -369,7 +369,7 @@ func TestPolicyDelivery_ATokenTheServiceRefusesDeliversNothing(t *testing.T) {
 	otherKey, _ := newKey(t)
 	d := newDeliverer(t, p, fake, otherKey)
 	seedWithFeedOn(t, p)
-	execSQL(t, p, `SELECT policy_outbox_mark('Team', $1)`, outboxTeam)
+	execSQL(t, p, `SELECT policy_outbox_mark('Iam::Team', $1)`, outboxTeam)
 
 	_, err := d.pass(t)
 
@@ -383,7 +383,7 @@ func TestPolicyDelivery_AFeedThatIsOffSendsNothing(t *testing.T) {
 	p := pool(t)
 	fake, key := newFake(t)
 	d := newDeliverer(t, p, fake, key)
-	execSQL(t, p, `INSERT INTO policy_outbox (entity_type, entity_id) VALUES ('Team', $1)`, outboxTeam)
+	execSQL(t, p, `INSERT INTO policy_outbox (entity_type, entity_id) VALUES ('Iam::Team', $1)`, outboxTeam)
 	require.False(t, feedEnabled(t, p))
 
 	result, err := d.pass(t)
@@ -405,7 +405,7 @@ func TestPolicyDelivery_OneReplicaDeliversAtATime(t *testing.T) {
 	fake, key := newFake(t)
 	d := newDeliverer(t, p, fake, key)
 	seedWithFeedOn(t, p)
-	execSQL(t, p, `SELECT policy_outbox_mark('Team', $1)`, outboxTeam)
+	execSQL(t, p, `SELECT policy_outbox_mark('Iam::Team', $1)`, outboxTeam)
 
 	// Another replica mid-pass holds the feed's row.
 	holder, err := p.Begin(context.Background())
@@ -430,7 +430,7 @@ func TestPolicyDelivery_ABatchHoldsAtMostTheLimit(t *testing.T) {
 	d := newDeliverer(t, p, fake, key)
 	seedWithFeedOn(t, p)
 	execSQL(t, p, `INSERT INTO policy_outbox (entity_type, entity_id)
-		SELECT 'Team', 'grn:acme/iam/group/g' || n FROM generate_series(1, 7) n`)
+		SELECT 'Iam::Team', 'grn:acme/iam/group/g' || n FROM generate_series(1, 7) n`)
 
 	result, err := d.store.Deliver(context.Background(), 3, d.sender)
 	require.NoError(t, err)

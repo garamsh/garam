@@ -14,10 +14,10 @@ fn engine() -> Engine {
 fn an_action_the_schema_does_not_name_is_refused() {
     let engine = engine();
 
-    let refused = engine.request(&evaluation(LEE, "org:rename", ACME));
+    let refused = engine.request(&evaluation(LEE, "iam:org-rename", ACME));
     assert!(matches!(refused, Err(Error::Evaluation(_))), "{refused:?}");
 
-    let control = engine.request(&evaluation(LEE, "org:read", ACME));
+    let control = engine.request(&evaluation(LEE, "iam:org-read", ACME));
     assert!(control.is_ok(), "{control:?}");
 }
 
@@ -25,17 +25,17 @@ fn an_action_the_schema_does_not_name_is_refused() {
 fn an_action_asked_of_a_resource_type_it_does_not_apply_to_is_refused() {
     let engine = engine();
 
-    let refused = engine.request(&evaluation(LEE, "org:read", WEB));
+    let refused = engine.request(&evaluation(LEE, "iam:org-read", WEB));
     assert!(matches!(refused, Err(Error::Evaluation(_))), "{refused:?}");
 
-    let control = engine.request(&evaluation(LEE, "project:read", WEB));
+    let control = engine.request(&evaluation(LEE, "iam:project-read", WEB));
     assert!(control.is_ok(), "{control:?}");
 }
 
 #[test]
 fn a_context_attribute_the_schema_does_not_name_is_refused() {
     let engine = engine();
-    let mut question = evaluation(LEE, "org:read", ACME);
+    let mut question = evaluation(LEE, "iam:org-read", ACME);
     question.context = json!({"hour": 3});
 
     let refused = engine.request(&question);
@@ -45,15 +45,15 @@ fn a_context_attribute_the_schema_does_not_name_is_refused() {
 fn team(id: &str, attrs: Value, parents: Value) -> Value {
     json!([
         organization(ACME, ACME_MEMBERS),
-        {"uid": {"type": "Team", "id": id}, "attrs": attrs, "parents": parents},
+        {"uid": {"type": "Iam::Team", "id": id}, "attrs": attrs, "parents": parents},
     ])
 }
 
 #[test]
 fn an_organization_without_its_members_is_refused() {
     let engine = engine();
-    let bare = json!({"org": {"__entity": {"type": "Org", "id": ACME.1}}});
-    let entity = json!([{"uid": {"type": "Org", "id": ACME.1}, "attrs": bare, "parents": []}]);
+    let bare = json!({"org": {"__entity": {"type": "Iam::Org", "id": ACME.1}}});
+    let entity = json!([{"uid": {"type": "Iam::Org", "id": ACME.1}, "attrs": bare, "parents": []}]);
 
     let refused = engine.entities(entity);
     assert!(matches!(refused, Err(Error::Entities(_))), "{refused:?}");
@@ -65,24 +65,28 @@ fn an_organization_without_its_members_is_refused() {
 #[test]
 fn a_team_inside_an_organizations_members_is_refused() {
     let engine = engine();
-    let org = json!({"org": {"__entity": {"type": "Org", "id": ACME.1}}});
+    let org = json!({"org": {"__entity": {"type": "Iam::Org", "id": ACME.1}}});
 
     let refused = engine.entities(team(
         ENG.1,
         org.clone(),
-        json!([{"type": "OrgMembers", "id": ACME.1}]),
+        json!([{"type": "Iam::OrgMembers", "id": ACME.1}]),
     ));
     assert!(matches!(refused, Err(Error::Entities(_))), "{refused:?}");
 
-    let control = engine.entities(team(ENG.1, org, json!([{"type": "Org", "id": ACME.1}])));
+    let control = engine.entities(team(
+        ENG.1,
+        org,
+        json!([{"type": "Iam::Org", "id": ACME.1}]),
+    ));
     assert!(control.is_ok(), "{control:?}");
 }
 
 #[test]
 fn a_resource_without_its_organization_is_refused() {
     let engine = engine();
-    let org = json!({"org": {"__entity": {"type": "Org", "id": ACME.1}}});
-    let parents = json!([{"type": "Org", "id": ACME.1}]);
+    let org = json!({"org": {"__entity": {"type": "Iam::Org", "id": ACME.1}}});
+    let parents = json!([{"type": "Iam::Org", "id": ACME.1}]);
 
     let refused = engine.entities(team(ENG.1, json!({}), parents.clone()));
     assert!(matches!(refused, Err(Error::Entities(_))), "{refused:?}");
@@ -94,19 +98,19 @@ fn a_resource_without_its_organization_is_refused() {
 #[test]
 fn a_team_inside_a_team_is_refused() {
     let engine = engine();
-    let org = json!({"org": {"__entity": {"type": "Org", "id": ACME.1}}});
+    let org = json!({"org": {"__entity": {"type": "Iam::Org", "id": ACME.1}}});
 
     let refused = engine.entities(team(
         "grn:acme/iam/group/nested",
         org.clone(),
-        json!([{"type": "Team", "id": "grn:acme/iam/group/outer"}]),
+        json!([{"type": "Iam::Team", "id": "grn:acme/iam/group/outer"}]),
     ));
     assert!(matches!(refused, Err(Error::Entities(_))), "{refused:?}");
 
     let control = engine.entities(team(
         "grn:acme/iam/group/flat",
         org,
-        json!([{"type": "Org", "id": ACME.1}]),
+        json!([{"type": "Iam::Org", "id": ACME.1}]),
     ));
     assert!(control.is_ok(), "{control:?}");
 }

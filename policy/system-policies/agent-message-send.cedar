@@ -2,7 +2,7 @@
 // organization, and an organization narrows that with a forbid
 // (ADR-0024). Tenant isolation holds the organization boundary.
 permit (
-  principal is Agent,
-  action == Action::"message:send",
-  resource is Agent
+  principal is Iam::Agent,
+  action == Iam::Action::"message-send",
+  resource is Iam::Agent
 );

@@ -42,14 +42,14 @@ export async function readMemberChoices(
     ...teams.map((choice): [string, PermissionCheck] => [
       `team:${choice.value}`,
       {
-        action: "group:member-add",
+        action: "iam:group.member-add",
         resource: { type: "group", id: choice.value },
       },
     ]),
     ...policyList.map((choice): [string, PermissionCheck] => [
       `policy:${choice.value}`,
       {
-        action: "policy:attach",
+        action: "iam:policy.attach",
         resource: { type: "policy", id: choice.value },
       },
     ]),

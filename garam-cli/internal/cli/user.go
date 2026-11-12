@@ -13,6 +13,7 @@ import (
 
 	"github.com/garamsh/garam/garam-cli/internal/session"
 	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/lib/platform-sdk-go"
 )
 
@@ -128,7 +129,12 @@ func (c *userCommand) render(value any, header []string, rows func() [][]string)
 }
 
 // lastSegment is a GRN's identifier, which is what --org and a
-// command's argument name an object by.
+// command's argument name an object by. A string that is not a GRN is
+// returned as it is.
 func lastSegment(g string) string {
-	return g[strings.LastIndex(g, ":")+1:]
+	parsed, err := grn.Parse(g)
+	if err != nil {
+		return g
+	}
+	return parsed.Identifier
 }

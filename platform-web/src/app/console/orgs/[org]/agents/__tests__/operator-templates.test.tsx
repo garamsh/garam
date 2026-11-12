@@ -21,17 +21,17 @@ const BASE = `${ENDPOINT}/v1/orgs/acme`;
 
 function hosted(operations: string[]): DelegatedOperator {
   return {
-    grn: "grn:acme:default:operator:hosted",
+    grn: "grn:acme/iam/operator/hosted",
     identifier: "hosted",
     name: "Hosted",
     endpoint: ENDPOINT,
     delegation: {
       grantId: "grant-1",
-      operatorGrn: "grn:acme:default:operator:hosted",
+      operatorGrn: "grn:acme/iam/operator/hosted",
       controllers: [],
       operations: operations as DelegatedOperator["delegation"]["operations"],
       expiresAt: "2099-01-01T00:00:00Z",
-      grantedBy: "grn:acme:default:user:alice",
+      grantedBy: "grn:acme/iam/user/alice",
       grantedAt: "2026-10-01T00:00:00Z",
     },
     problem: null,
@@ -39,9 +39,9 @@ function hosted(operations: string[]): DelegatedOperator {
 }
 
 const READS = [
-  "agent-template:read",
-  "agent-template:publish",
-  "execution-profile:read",
+  "iam:agent-template.read",
+  "iam:agent-template.publish",
+  "iam:execution-profile.read",
 ];
 
 function controlService() {
@@ -84,7 +84,7 @@ function renderPanel(operations = READS, publishDenied = false) {
   return render(
     <OperatorTemplates
       org="acme"
-      orgGrn="grn:root:default:org:acme"
+      orgGrn="grn:root/iam/org/acme"
       hosted={hosted(operations)}
       publishDenied={publishDenied}
     />,
@@ -154,7 +154,7 @@ describe("control service templates", () => {
     ).toBeNull();
     denied.unmount();
 
-    renderPanel(["agent-template:read", "execution-profile:read"]);
+    renderPanel(["iam:agent-template.read", "iam:execution-profile.read"]);
     await screen.findByRole("table", { name: "Published templates" });
     expect(
       screen.queryByRole("button", { name: "Publish version" }),

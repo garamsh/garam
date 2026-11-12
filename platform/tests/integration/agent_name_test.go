@@ -82,7 +82,7 @@ func agentName(t *testing.T, browser string, cookie *http.Cookie, g grn.GRN) str
 func TestAgentName_AManagedCreationNamesTheAgentAndARetryAsksForTheSameName(t *testing.T) {
 	s := newManagedStack(t)
 	ref := s.creationRef(t, s.member, "named-1")
-	path := "/operators/" + s.controller.String() + "/managed-agents"
+	path := "/operators/" + pathEscape(s.controller.String()) + "/managed-agents"
 	got := s.enrollment(t, s.hostedTLS, path, namedCreationBody("named-1", ref, "  sherlock  "))
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var m machinegen.ManagedAgent
@@ -159,7 +159,7 @@ func TestAgentName_AReplacementCarriesNoName(t *testing.T) {
 }
 
 // TestAgentName_RenameIsAuthorizedOnTheAgentsOwnGRN: an owner renames
-// an agent and clears the name again. A Deny of agent:rename on one
+// an agent and clears the name again. A Deny of iam:agent.rename on one
 // agent refuses ada that agent alone; her rename of its sibling and
 // dan's rename of the denied one are the controls.
 func TestAgentName_RenameIsAuthorizedOnTheAgentsOwnGRN(t *testing.T) {
@@ -189,12 +189,12 @@ func TestAgentName_RenameIsAuthorizedOnTheAgentsOwnGRN(t *testing.T) {
 	assert.Empty(t, agentName(t, s.url, s.dan, denied), "null clears the name")
 }
 
-// TestAgentName_AMemberRenamesAnAgent: agent:rename is the member's as
-// it is every role's.
+// TestAgentName_AMemberRenamesAnAgent: iam:agent.rename is the member's
+// as it is every role's.
 func TestAgentName_AMemberRenamesAnAgent(t *testing.T) {
 	s := newListStack(t)
 	ctx := context.Background()
-	g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "mel")
+	g := grn.New(grn.RootOwner, user.ServiceType, "mel")
 	require.NoError(t, userpg.New(s.pool).Create(ctx, user.New(g, "mel")))
 	require.NoError(t, s.orgs.AddMember(ctx, org.NewMembership(s.acme, g, org.RoleMember)))
 	token, err := authn.NewToken()

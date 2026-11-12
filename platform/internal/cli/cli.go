@@ -115,6 +115,13 @@
 //	                       authz.md §Delivery)
 //	GARAM_POLICY_TOKEN_ISSUER  the iss of those tokens, which the
 //	                       service's POLICY_TOKEN_ISSUER names
+//	GARAM_IDENTITY_ISSUER  the iss of the OIDC issuer's tokens; where
+//	                       both it and GARAM_POLICY_TOKEN_ISSUER are
+//	                       set they are the same, or start-up fails
+//	GARAM_IDENTITY_SERVICE_KEYS_FILE  each first-party service's
+//	                       public keys, JSON, by service name, at most
+//	                       two each, re-read on every authentication
+//	                       (serve machine)
 package cli
 
 import (
@@ -190,47 +197,49 @@ type envName string
 // in deploy/charts/garam/README.md; this block is the set that README
 // is checked against.
 const (
-	envDatabaseURL           envName = "GARAM_DATABASE_URL"
-	envMigrationsDir         envName = "GARAM_MIGRATIONS_DIR"
-	envHTTPAddr              envName = "GARAM_HTTP_ADDR"
-	envGRPCAddr              envName = "GARAM_GRPC_ADDR"
-	envMetricsAddr           envName = "GARAM_METRICS_ADDR"
-	envAuthzAddr             envName = "GARAM_AUTHZ_ADDR"
-	envSessionTTL            envName = "GARAM_SESSION_TTL"
-	envCookieSecure          envName = "GARAM_COOKIE_SECURE"
-	envGoogleClientID        envName = "GOOGLE_CLIENT_ID"
-	envGoogleClientSecret    envName = "GOOGLE_CLIENT_SECRET"
-	envGoogleRedirectURL     envName = "GOOGLE_REDIRECT_URL"
-	envCAKeyFile             envName = "GARAM_CA_KEY_FILE"
-	envAgentTokenLifetime    envName = "GARAM_AGENT_TOKEN_LIFETIME"
-	envMachineAddr           envName = "GARAM_MACHINE_ADDR"
-	envMachineHealthAddr     envName = "GARAM_MACHINE_HEALTH_ADDR"
-	envMachineTLSCertFile    envName = "GARAM_MACHINE_TLS_CERT_FILE"
-	envMachineTLSKeyFile     envName = "GARAM_MACHINE_TLS_KEY_FILE"
-	envMachineServerRootFile envName = "GARAM_MACHINE_SERVER_ROOT_FILE"
-	envMachineIssuer         envName = "GARAM_MACHINE_ISSUER"
-	envMachineTokenURL       envName = "GARAM_MACHINE_TOKEN_URL"
-	envTransitAddr           envName = "GARAM_TRANSIT_ADDR"
-	envTransitCAFile         envName = "GARAM_TRANSIT_CA_FILE"
-	envTransitTokenFile      envName = "GARAM_TRANSIT_TOKEN_FILE"
-	envTransitSigningKey     envName = "GARAM_TRANSIT_SIGNING_KEY"
-	envTransitMount          envName = "GARAM_TRANSIT_MOUNT"
-	envAdapterAgent          envName = "GARAM_ADAPTER_AGENT"
-	envAdapterMachineURL     envName = "GARAM_ADAPTER_MACHINE_URL"
-	envAdapterGatewayURL     envName = "GARAM_ADAPTER_GATEWAY_URL"
-	envAdapterTokenFile      envName = "GARAM_ADAPTER_TOKEN_FILE"
-	envAdapterControlToken   envName = "GARAM_ADAPTER_CONTROL_TOKEN_FILE"
-	envAdapterServerRootFile envName = "GARAM_ADAPTER_SERVER_ROOT_FILE"
-	envAdapterControlURL     envName = "GARAM_ADAPTER_CONTROL_URL"
-	envAdapterControlRoot    envName = "GARAM_ADAPTER_CONTROL_ROOT_FILE"
-	envAdapterPlacementToken envName = "GARAM_ADAPTER_PLACEMENT_TOKEN_FILE"
-	envAdapterOutboxDir      envName = "GARAM_ADAPTER_OUTBOX_DIR"
-	envAdapterControlSocket  envName = "GARAM_ADAPTER_CONTROL_SOCKET"
-	envAdapterSignMessages   envName = "GARAM_ADAPTER_SIGN_MESSAGES"
-	envPolicyAddr            envName = "GARAM_POLICY_ADDR"
-	envPolicyCAFile          envName = "GARAM_POLICY_CA_FILE"
-	envPolicySigningKeyFile  envName = "GARAM_POLICY_SIGNING_KEY_FILE"
-	envPolicyTokenIssuer     envName = "GARAM_POLICY_TOKEN_ISSUER"
+	envDatabaseURL             envName = "GARAM_DATABASE_URL"
+	envMigrationsDir           envName = "GARAM_MIGRATIONS_DIR"
+	envHTTPAddr                envName = "GARAM_HTTP_ADDR"
+	envGRPCAddr                envName = "GARAM_GRPC_ADDR"
+	envMetricsAddr             envName = "GARAM_METRICS_ADDR"
+	envAuthzAddr               envName = "GARAM_AUTHZ_ADDR"
+	envSessionTTL              envName = "GARAM_SESSION_TTL"
+	envCookieSecure            envName = "GARAM_COOKIE_SECURE"
+	envGoogleClientID          envName = "GOOGLE_CLIENT_ID"
+	envGoogleClientSecret      envName = "GOOGLE_CLIENT_SECRET"
+	envGoogleRedirectURL       envName = "GOOGLE_REDIRECT_URL"
+	envCAKeyFile               envName = "GARAM_CA_KEY_FILE"
+	envAgentTokenLifetime      envName = "GARAM_AGENT_TOKEN_LIFETIME"
+	envMachineAddr             envName = "GARAM_MACHINE_ADDR"
+	envMachineHealthAddr       envName = "GARAM_MACHINE_HEALTH_ADDR"
+	envMachineTLSCertFile      envName = "GARAM_MACHINE_TLS_CERT_FILE"
+	envMachineTLSKeyFile       envName = "GARAM_MACHINE_TLS_KEY_FILE"
+	envMachineServerRootFile   envName = "GARAM_MACHINE_SERVER_ROOT_FILE"
+	envMachineIssuer           envName = "GARAM_MACHINE_ISSUER"
+	envMachineTokenURL         envName = "GARAM_MACHINE_TOKEN_URL"
+	envTransitAddr             envName = "GARAM_TRANSIT_ADDR"
+	envTransitCAFile           envName = "GARAM_TRANSIT_CA_FILE"
+	envTransitTokenFile        envName = "GARAM_TRANSIT_TOKEN_FILE"
+	envTransitSigningKey       envName = "GARAM_TRANSIT_SIGNING_KEY"
+	envTransitMount            envName = "GARAM_TRANSIT_MOUNT"
+	envAdapterAgent            envName = "GARAM_ADAPTER_AGENT"
+	envAdapterMachineURL       envName = "GARAM_ADAPTER_MACHINE_URL"
+	envAdapterGatewayURL       envName = "GARAM_ADAPTER_GATEWAY_URL"
+	envAdapterTokenFile        envName = "GARAM_ADAPTER_TOKEN_FILE"
+	envAdapterControlToken     envName = "GARAM_ADAPTER_CONTROL_TOKEN_FILE"
+	envAdapterServerRootFile   envName = "GARAM_ADAPTER_SERVER_ROOT_FILE"
+	envAdapterControlURL       envName = "GARAM_ADAPTER_CONTROL_URL"
+	envAdapterControlRoot      envName = "GARAM_ADAPTER_CONTROL_ROOT_FILE"
+	envAdapterPlacementToken   envName = "GARAM_ADAPTER_PLACEMENT_TOKEN_FILE"
+	envAdapterOutboxDir        envName = "GARAM_ADAPTER_OUTBOX_DIR"
+	envAdapterControlSocket    envName = "GARAM_ADAPTER_CONTROL_SOCKET"
+	envAdapterSignMessages     envName = "GARAM_ADAPTER_SIGN_MESSAGES"
+	envPolicyAddr              envName = "GARAM_POLICY_ADDR"
+	envPolicyCAFile            envName = "GARAM_POLICY_CA_FILE"
+	envPolicySigningKeyFile    envName = "GARAM_POLICY_SIGNING_KEY_FILE"
+	envPolicyTokenIssuer       envName = "GARAM_POLICY_TOKEN_ISSUER"
+	envIdentityIssuer          envName = "GARAM_IDENTITY_ISSUER"
+	envIdentityServiceKeysFile envName = "GARAM_IDENTITY_SERVICE_KEYS_FILE"
 )
 
 // envOr reads a declared name, or the fallback when it is unset or

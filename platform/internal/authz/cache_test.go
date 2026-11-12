@@ -23,8 +23,8 @@ func policyDocument(sid string, effect wire.Effect) authz.PolicyDocument {
 		Statement: []authz.Statement{{
 			Sid:      sid,
 			Effect:   effect,
-			Action:   []string{"org:read"},
-			Resource: []string{"grn:acme:*"},
+			Action:   []string{"iam:org.read"},
+			Resource: []string{"grn:acme/*"},
 		}},
 	}
 }
@@ -41,11 +41,11 @@ func attachedPolicy(sid string, effect wire.Effect, subjects ...grn.GRN) authz.A
 }
 
 func subjectGRN(id string) grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, "user", id)
+	return grn.New(grn.RootOwner, "user", id)
 }
 
 func groupGRN(id string) grn.GRN {
-	return grn.New("acme", grn.DefaultProject, "group", id)
+	return grn.New("acme", "group", id)
 }
 
 // TestPolicyCache_LoadsOncePerOrg keeps the mock: how often the cache
@@ -172,7 +172,7 @@ func TestPolicyCache_InvalidateDropsOnlyTheOrgNamed(t *testing.T) {
 	require.Equal(t, "other", otherBefore[0].Sid)
 
 	// An org nothing has cached leaves both entries where they are.
-	cache.Invalidate(grn.New(grn.RootOwner, grn.DefaultProject, "org", "missing"))
+	cache.Invalidate(grn.New(grn.RootOwner, "org", "missing"))
 	acmeAfterUnknown, err := cache.Statements(context.Background(), acme, nil)
 	require.NoError(t, err)
 	assert.Equal(t, before, acmeAfterUnknown)

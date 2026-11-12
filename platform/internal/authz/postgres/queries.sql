@@ -9,13 +9,13 @@ SELECT * FROM policies WHERE grn = $1;
 -- name: ListPolicies :many
 SELECT * FROM policies WHERE org_grn = $1 ORDER BY grn;
 
--- SearchPolicies answers the org's policies whose name or identifier
--- (the GRN's fifth segment) matches pattern, case aside, ordered by
--- GRN.
+-- SearchPolicies answers the org's policies whose name matches
+-- pattern or whose GRN matches id_pattern, case aside, ordered by GRN.
+-- id_pattern is a LIKE pattern over the whole GRN that lib/grn builds.
 -- name: SearchPolicies :many
 SELECT * FROM policies
 WHERE org_grn = sqlc.arg('org_grn')
-  AND (name ILIKE sqlc.arg('pattern') OR split_part(grn, ':', 5) ILIKE sqlc.arg('pattern'))
+  AND (name ILIKE sqlc.arg('pattern') OR grn ILIKE sqlc.arg('id_pattern'))
 ORDER BY grn;
 
 -- name: DeletePolicy :one

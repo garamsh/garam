@@ -17,13 +17,13 @@ import (
 )
 
 const (
-	outboxOrg      = "grn:root:default:org:acme"
-	outboxUser     = "grn:acme:default:user:lee"
-	outboxAgent    = "grn:acme:default:agent:bot"
-	outboxOperator = "grn:acme:default:operator:op1"
-	outboxTeam     = "grn:acme:default:group:eng"
-	outboxTeam2    = "grn:acme:default:group:ops"
-	outboxProject  = "grn:acme:default:project:web"
+	outboxOrg      = "grn:root/iam/org/acme"
+	outboxUser     = "grn:acme/iam/user/lee"
+	outboxAgent    = "grn:acme/iam/agent/bot"
+	outboxOperator = "grn:acme/iam/operator/op1"
+	outboxTeam     = "grn:acme/iam/group/eng"
+	outboxTeam2    = "grn:acme/iam/group/ops"
+	outboxProject  = "grn:acme/iam/project/web"
 )
 
 // seedOutboxOrg writes one organization holding a user, an agent, an
@@ -51,9 +51,9 @@ func seedOutboxOrg(t *testing.T, p *pgxpool.Pool) {
 
 // outboxEntities is every entity the seeded organization holds.
 var outboxEntities = []string{
-	"Agent " + outboxAgent, "Operator " + outboxOperator, "Org " + outboxOrg,
-	"OrgMembers " + outboxOrg, "Project " + outboxProject, "Team " + outboxTeam,
-	"Team " + outboxTeam2, "User " + outboxUser,
+	"Iam::Agent " + outboxAgent, "Iam::Operator " + outboxOperator, "Iam::Org " + outboxOrg,
+	"Iam::OrgMembers " + outboxOrg, "Iam::Project " + outboxProject, "Iam::Team " + outboxTeam,
+	"Iam::Team " + outboxTeam2, "Iam::User " + outboxUser,
 }
 
 func execSQL(t *testing.T, p *pgxpool.Pool, q string, args ...any) {
@@ -119,44 +119,44 @@ func seedWithFeedOn(t *testing.T, p *pgxpool.Pool) {
 }
 
 func TestPolicyOutbox_EachChangeMarksTheEntitiesItReaches(t *testing.T) {
-	const org2 = "grn:root:default:org:globex"
+	const org2 = "grn:root/iam/org/globex"
 	tests := []struct {
 		name string
 		sql  string
 		want []string
 	}{
 		{"an organization is added", `INSERT INTO orgs (grn, name, created_at, updated_at) VALUES ('` + org2 + `', 'globex', now(), now())`,
-			[]string{"Org " + org2, "OrgMembers " + org2}},
-		{"a team is added", `INSERT INTO groups (grn, org_grn, name, created_at, updated_at) VALUES ('grn:acme:default:group:new', '` + outboxOrg + `', 'new', now(), now())`,
-			[]string{"Team grn:acme:default:group:new"}},
-		{"a project is added", `INSERT INTO projects (grn, org_grn, name, created_at, updated_at) VALUES ('grn:acme:default:project:new', '` + outboxOrg + `', 'new', now(), now())`,
-			[]string{"Project grn:acme:default:project:new"}},
-		{"a user is added", `INSERT INTO users (grn, nickname, created_at, updated_at) VALUES ('grn:acme:default:user:new', 'new', now(), now())`,
-			[]string{"User grn:acme:default:user:new"}},
-		{"an agent is added", `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at) VALUES ('grn:acme:default:agent:new', '` + outboxOrg + `', 'ready', 'unknown', now(), now())`,
-			[]string{"Agent grn:acme:default:agent:new"}},
-		{"an operator is added", `INSERT INTO operators (grn, org_grn, registered_by, created_at, name) VALUES ('grn:acme:default:operator:new', '` + outboxOrg + `', 'x', now(), 'new')`,
-			[]string{"Operator grn:acme:default:operator:new"}},
+			[]string{"Iam::Org " + org2, "Iam::OrgMembers " + org2}},
+		{"a team is added", `INSERT INTO groups (grn, org_grn, name, created_at, updated_at) VALUES ('grn:acme/iam/group/new', '` + outboxOrg + `', 'new', now(), now())`,
+			[]string{"Iam::Team grn:acme/iam/group/new"}},
+		{"a project is added", `INSERT INTO projects (grn, org_grn, name, created_at, updated_at) VALUES ('grn:acme/iam/project/new', '` + outboxOrg + `', 'new', now(), now())`,
+			[]string{"Iam::Project grn:acme/iam/project/new"}},
+		{"a user is added", `INSERT INTO users (grn, nickname, created_at, updated_at) VALUES ('grn:acme/iam/user/new', 'new', now(), now())`,
+			[]string{"Iam::User grn:acme/iam/user/new"}},
+		{"an agent is added", `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at) VALUES ('grn:acme/iam/agent/new', '` + outboxOrg + `', 'ready', 'unknown', now(), now())`,
+			[]string{"Iam::Agent grn:acme/iam/agent/new"}},
+		{"an operator is added", `INSERT INTO operators (grn, org_grn, registered_by, created_at, name) VALUES ('grn:acme/iam/operator/new', '` + outboxOrg + `', 'x', now(), 'new')`,
+			[]string{"Iam::Operator grn:acme/iam/operator/new"}},
 		{"a user joins a team", `INSERT INTO group_members (group_grn, member_grn) VALUES ('` + outboxTeam2 + `', '` + outboxUser + `')`,
-			[]string{"User " + outboxUser}},
+			[]string{"Iam::User " + outboxUser}},
 		{"an agent joins a team", `INSERT INTO group_members (group_grn, member_grn) VALUES ('` + outboxTeam2 + `', '` + outboxAgent + `')`,
-			[]string{"Agent " + outboxAgent}},
+			[]string{"Iam::Agent " + outboxAgent}},
 		{"a member of another type joins a team", `INSERT INTO group_members (group_grn, member_grn) VALUES ('` + outboxTeam2 + `', '` + outboxOperator + `')`,
 			nil},
 		{"an agent leaves a project", `DELETE FROM project_members WHERE member_grn = '` + outboxAgent + `'`,
-			[]string{"Agent " + outboxAgent}},
+			[]string{"Iam::Agent " + outboxAgent}},
 		{"a user leaves an organization", `DELETE FROM org_members WHERE user_grn = '` + outboxUser + `'`,
-			[]string{"User " + outboxUser}},
+			[]string{"Iam::User " + outboxUser}},
 		{"a team is removed", `DELETE FROM groups WHERE grn = '` + outboxTeam + `'`,
-			[]string{"Team " + outboxTeam, "User " + outboxUser, "Agent " + outboxAgent}},
+			[]string{"Iam::Team " + outboxTeam, "Iam::User " + outboxUser, "Iam::Agent " + outboxAgent}},
 		{"a project is removed", `DELETE FROM projects WHERE grn = '` + outboxProject + `'`,
-			[]string{"Project " + outboxProject, "User " + outboxUser, "Agent " + outboxAgent}},
+			[]string{"Iam::Project " + outboxProject, "Iam::User " + outboxUser, "Iam::Agent " + outboxAgent}},
 		{"a user is removed", `DELETE FROM users WHERE grn = '` + outboxUser + `'`,
-			[]string{"User " + outboxUser}},
+			[]string{"Iam::User " + outboxUser}},
 		{"an agent is removed", `DELETE FROM agents WHERE grn = '` + outboxAgent + `'`,
-			[]string{"Agent " + outboxAgent}},
+			[]string{"Iam::Agent " + outboxAgent}},
 		{"an operator is removed", `DELETE FROM operators WHERE grn = '` + outboxOperator + `'`,
-			[]string{"Operator " + outboxOperator}},
+			[]string{"Iam::Operator " + outboxOperator}},
 		{"an organization is removed and its foreign keys take the rest", `DELETE FROM orgs WHERE grn = '` + outboxOrg + `'`,
 			outboxEntities},
 		{"a member's role changes", `UPDATE org_members SET role = 'admin'`, nil},
@@ -191,7 +191,7 @@ func TestPolicyOutbox_AUserJoiningAnOrganizationMarksTheUser(t *testing.T) {
 	execSQL(t, p, `INSERT INTO org_members (org_grn, user_grn, role, created_at)
 		VALUES ($1, $2, 'member', now())`, outboxOrg, outboxUser)
 
-	assert.Equal(t, []string{"User " + outboxUser}, markKeys(outboxMarks(t, p)))
+	assert.Equal(t, []string{"Iam::User " + outboxUser}, markKeys(outboxMarks(t, p)))
 }
 
 func TestPolicyOutbox_AFeedThatIsOffWritesNothing(t *testing.T) {
@@ -217,15 +217,15 @@ func TestPolicyOutbox_AWriteRaisesTheGeneration(t *testing.T) {
 
 	execSQL(t, p, `DELETE FROM group_members WHERE member_grn = '`+outboxUser+`'`)
 	first := outboxMarks(t, p)
-	require.Equal(t, int64(1), first["User "+outboxUser], "the first mark starts at one")
+	require.Equal(t, int64(1), first["Iam::User "+outboxUser], "the first mark starts at one")
 
 	execSQL(t, p, `INSERT INTO group_members (group_grn, member_grn) VALUES ('`+outboxTeam2+`', '`+outboxUser+`')`)
 	execSQL(t, p, `DELETE FROM project_members WHERE member_grn = '`+outboxUser+`'`)
 	execSQL(t, p, `DELETE FROM project_members WHERE member_grn = '`+outboxAgent+`'`)
 
 	second := outboxMarks(t, p)
-	assert.Equal(t, int64(3), second["User "+outboxUser], "each write raised the mark's generation")
-	assert.Equal(t, int64(1), second["Agent "+outboxAgent], "a mark written once stays at one")
+	assert.Equal(t, int64(3), second["Iam::User "+outboxUser], "each write raised the mark's generation")
+	assert.Equal(t, int64(1), second["Iam::Agent "+outboxAgent], "a mark written once stays at one")
 }
 
 func TestPolicyFeedStart_MarksEveryLiveEntityAsTheTriggersWould(t *testing.T) {
@@ -285,7 +285,7 @@ func TestPolicyFeedStart_WaitsOutAWriterThatReadTheFeedAsOff(t *testing.T) {
 	require.NoError(t, tx.Commit(ctx))
 	require.NoError(t, <-started)
 
-	assert.Equal(t, []string{"Org " + outboxOrg, "OrgMembers " + outboxOrg}, markKeys(outboxMarks(t, p)),
+	assert.Equal(t, []string{"Iam::Org " + outboxOrg, "Iam::OrgMembers " + outboxOrg}, markKeys(outboxMarks(t, p)),
 		"the organization the writer committed is marked")
 }
 
@@ -301,7 +301,7 @@ func TestPolicyFeedStop_TurnsTheFeedOffAndEmptiesTheOutbox(t *testing.T) {
 	assert.Equal(t, int64(len(outboxEntities)), removed)
 	assert.False(t, feedEnabled(t, p))
 	assert.Empty(t, outboxMarks(t, p))
-	execSQL(t, p, `INSERT INTO users (grn, nickname, created_at, updated_at) VALUES ('grn:acme:default:user:late', 'late', now(), now())`)
+	execSQL(t, p, `INSERT INTO users (grn, nickname, created_at, updated_at) VALUES ('grn:acme/iam/user/late', 'late', now(), now())`)
 	assert.Empty(t, outboxMarks(t, p), "a write after stop marks nothing")
 }
 
@@ -365,15 +365,15 @@ func TestPolicyEntityState_ReturnsWhatTheOwnersTablesSay(t *testing.T) {
 		id   string
 		want entityState
 	}{
-		{"an org names itself and its members", "Org", outboxOrg, entityState{org: ptr(outboxOrg), members: ptr(outboxOrg)}},
-		{"an OrgMembers names nothing", "OrgMembers", outboxOrg, entityState{}},
-		{"a team sits in its org", "Team", outboxTeam, entityState{org: ptr(outboxOrg), parents: []string{"Org " + outboxOrg}}},
-		{"a project sits in its org", "Project", outboxProject, entityState{org: ptr(outboxOrg), parents: []string{"Org " + outboxOrg}}},
-		{"an operator sits in its org", "Operator", outboxOperator, entityState{org: ptr(outboxOrg), parents: []string{"Org " + outboxOrg}}},
-		{"a user sits in each membership it holds", "User", outboxUser, entityState{parents: []string{
-			"OrgMembers " + outboxOrg, "Project " + outboxProject, "Team " + outboxTeam}}},
-		{"an agent is a member and a contained resource", "Agent", outboxAgent, entityState{org: ptr(outboxOrg), parents: []string{
-			"Org " + outboxOrg, "OrgMembers " + outboxOrg, "Project " + outboxProject, "Team " + outboxTeam}}},
+		{"an org names itself and its members", "Iam::Org", outboxOrg, entityState{org: ptr(outboxOrg), members: ptr(outboxOrg)}},
+		{"an OrgMembers names nothing", "Iam::OrgMembers", outboxOrg, entityState{}},
+		{"a team sits in its org", "Iam::Team", outboxTeam, entityState{org: ptr(outboxOrg), parents: []string{"Iam::Org " + outboxOrg}}},
+		{"a project sits in its org", "Iam::Project", outboxProject, entityState{org: ptr(outboxOrg), parents: []string{"Iam::Org " + outboxOrg}}},
+		{"an operator sits in its org", "Iam::Operator", outboxOperator, entityState{org: ptr(outboxOrg), parents: []string{"Iam::Org " + outboxOrg}}},
+		{"a user sits in each membership it holds", "Iam::User", outboxUser, entityState{parents: []string{
+			"Iam::OrgMembers " + outboxOrg, "Iam::Project " + outboxProject, "Iam::Team " + outboxTeam}}},
+		{"an agent is a member and a contained resource", "Iam::Agent", outboxAgent, entityState{org: ptr(outboxOrg), parents: []string{
+			"Iam::Org " + outboxOrg, "Iam::OrgMembers " + outboxOrg, "Iam::Project " + outboxProject, "Iam::Team " + outboxTeam}}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -384,19 +384,19 @@ func TestPolicyEntityState_ReturnsWhatTheOwnersTablesSay(t *testing.T) {
 	}
 
 	t.Run("an entity the tables no longer hold has no state", func(t *testing.T) {
-		require.NotNil(t, readEntityState(t, p, "User", outboxUser), "the control: the user is held")
+		require.NotNil(t, readEntityState(t, p, "Iam::User", outboxUser), "the control: the user is held")
 		execSQL(t, p, `DELETE FROM users WHERE grn = $1`, outboxUser)
 		// A deleted user leaves its group_members and project_members
 		// rows behind, which must not read as a user.
 		require.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM group_members WHERE member_grn = $1`, outboxUser))
-		assert.Nil(t, readEntityState(t, p, "User", outboxUser))
-		assert.Nil(t, readEntityState(t, p, "Team", "grn:acme:default:group:absent"))
+		assert.Nil(t, readEntityState(t, p, "Iam::User", outboxUser))
+		assert.Nil(t, readEntityState(t, p, "Iam::Team", "grn:acme/iam/group/absent"))
 	})
 
 	t.Run("a change to a membership reaches the next read", func(t *testing.T) {
 		execSQL(t, p, `DELETE FROM project_members WHERE member_grn = $1`, outboxAgent)
-		got := readEntityState(t, p, "Agent", outboxAgent)
+		got := readEntityState(t, p, "Iam::Agent", outboxAgent)
 		require.NotNil(t, got)
-		assert.Equal(t, []string{"Org " + outboxOrg, "OrgMembers " + outboxOrg, "Team " + outboxTeam}, got.parents)
+		assert.Equal(t, []string{"Iam::Org " + outboxOrg, "Iam::OrgMembers " + outboxOrg, "Iam::Team " + outboxTeam}, got.parents)
 	})
 }

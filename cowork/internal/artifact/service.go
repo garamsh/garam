@@ -9,10 +9,10 @@ import (
 )
 
 // Service is artifacts as a caller acts on them. Listing needs
-// cowork:artifact-read on the organization and on each artifact
-// listed, creating cowork:artifact-write on the organization, reading
-// an artifact or any version cowork:artifact-read on it, and saving a
-// version cowork:artifact-write on it. Freezing a page needs the
+// cowork:artifact.read on the organization and on each artifact
+// listed, creating cowork:artifact.write on the organization, reading
+// an artifact or any version cowork:artifact.read on it, and saving a
+// version cowork:artifact.write on it. Freezing a page needs the
 // caller to read the page.
 type Service interface {
 	Create(ctx context.Context, caller platform.Caller, org string, in CreateInput) (Artifact, error)

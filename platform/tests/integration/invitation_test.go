@@ -40,7 +40,7 @@ func TestGetInvitation_ReadsEachStateFromPostgres(t *testing.T) {
 
 	users := userpg.New(p)
 	orgs := orgpg.New(p)
-	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
+	owner := grn.New(grn.RootOwner, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
 	acme := grn.Org("acme")
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "Acme Robotics")))
@@ -136,7 +136,7 @@ func newInvitationStack(t *testing.T) *invitationStack {
 	p := pool(t)
 	users := userpg.New(p)
 	orgs := orgpg.New(p)
-	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
+	owner := grn.New(grn.RootOwner, user.ServiceType, "owner")
 	require.NoError(t, users.Create(context.Background(), user.New(owner, "Owner")))
 	srv := api.NewServer(users, orgs, nil, nil, nil, nil,
 		authnpg.NewSessionStore(p), nil,
@@ -185,7 +185,7 @@ func TestAcceptInvitation_TwoRacingAcceptsJoinOne(t *testing.T) {
 	var people []grn.GRN
 	var cookies []*http.Cookie
 	for _, id := range []string{"bob", "carol"} {
-		g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
+		g := grn.New(grn.RootOwner, user.ServiceType, id)
 		require.NoError(t, st.users.Create(ctx, user.New(g, id)))
 		token, err := authn.NewToken()
 		require.NoError(t, err)
@@ -234,8 +234,8 @@ func TestRegisterPassword_TwoRacingRegistrationsCreateOneAccount(t *testing.T) {
 		orgGRN, token := st.invite(t, fmt.Sprintf("acme-%d", round))
 		names := []string{fmt.Sprintf("alice-%d", round), fmt.Sprintf("carol-%d", round)}
 		accounts := []string{
-			"grn:root:default:user:local-" + names[0],
-			"grn:root:default:user:local-" + names[1],
+			grn.New(grn.RootOwner, "user", "local-"+names[0]).String(),
+			grn.New(grn.RootOwner, "user", "local-"+names[1]).String(),
 		}
 		a, b := race(st.handler, register(token, names[0]), register(token, names[1]))
 		won := winner(t, http.StatusCreated, a, b)
@@ -266,7 +266,7 @@ func TestInvitation_AnAcceptRacingARegistrationAdmitsOne(t *testing.T) {
 	st := newInvitationStack(t)
 	p := st.pool
 	ctx := context.Background()
-	bob := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "bob")
+	bob := grn.New(grn.RootOwner, user.ServiceType, "bob")
 	require.NoError(t, st.users.Create(ctx, user.New(bob, "bob")))
 	session, err := authn.NewToken()
 	require.NoError(t, err)
@@ -276,7 +276,7 @@ func TestInvitation_AnAcceptRacingARegistrationAdmitsOne(t *testing.T) {
 		orgGRN, token := st.invite(t, fmt.Sprintf("acme-%d", round))
 		accept := httptest.NewRequest(http.MethodPost, "/invitations/"+token+"/accept", nil)
 		accept.AddCookie(&http.Cookie{Name: "garam_session", Value: session})
-		account := fmt.Sprintf("grn:root:default:user:local-dave-%d", round)
+		account := fmt.Sprintf("grn:root/iam/user/local-dave-%d", round)
 		register := httptest.NewRequest(http.MethodPost, "/auth/password/register", strings.NewReader(
 			fmt.Sprintf(`{"invitationToken":%q,"username":"dave-%d","password":%q}`, token, round, integrationPassword)))
 		register.Header.Set("Content-Type", "application/json")
@@ -324,7 +324,7 @@ func TestRevokeInvitation_ItsTokenAdmitsNoOneAndAnotherOrgCannotReachIt(t *testi
 	require.NoError(t, st.orgs.CreateInvitation(ctx,
 		org.NewInvitation(stale, acme, org.RoleAdmin, st.owner, time.Now().UTC().Add(-time.Minute))))
 	globex, _ := st.invite(t, "globex")
-	bob := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "bob")
+	bob := grn.New(grn.RootOwner, user.ServiceType, "bob")
 	require.NoError(t, st.users.Create(ctx, user.New(bob, "bob")))
 
 	pending, err := st.orgs.ListPendingInvitations(ctx, acme, listfilter.Filter{})

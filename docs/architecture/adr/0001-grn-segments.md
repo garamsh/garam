@@ -1,6 +1,10 @@
 # ADR 0001: GRN organization/project segments identify owning resources
 
-> Status: accepted
+> Status: accepted; superseded in part by
+> [ADR-0142](./0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md)
+> (the five-segment format and the `default` project segment; the
+> organization segment owning the resource and the reserved `root`
+> stand)
 > Date: 2026-07-25
 
 ## Context

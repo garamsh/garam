@@ -268,7 +268,7 @@ func localUserGRN(username string) (grn.GRN, error) {
 	if username == "" {
 		return grn.GRN{}, ErrUsernameInvalid
 	}
-	g := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, localPrefix+username)
+	g := grn.New(grn.RootOwner, user.ServiceType, localPrefix+username)
 	if err := g.Validate(); err != nil {
 		return grn.GRN{}, ErrUsernameInvalid
 	}

@@ -41,7 +41,7 @@ function newUser(): SeededUser {
   const suffix = randomBytes(6).toString("hex");
   return {
     sessionToken: randomBytes(32).toString("base64url"),
-    userGrn: `grn:root:default:user:e2e-${suffix}`,
+    userGrn: `grn:root/iam/user/e2e-${suffix}`,
     userSlug: `e2e-${suffix}`,
     nickname: `e2e-user-${suffix}`,
   };
@@ -94,7 +94,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
     orgSlug: `e2e-${suffix}`,
     orgName: `E2E Org ${suffix}`,
   };
-  const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
+  const orgGrn = `grn:root/iam/org/${seed.orgSlug}`;
   await transaction(async (client) => {
     await insertUserAndSession(client, seed);
     await client.query(

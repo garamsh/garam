@@ -37,7 +37,7 @@ func TestCheckPermissions_AnswersEachPairInOrder(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOperatorRead})
+	f.permit(permission{grn.New("root", user.ServiceType, "owner-sub"), org.ActionOperatorRead})
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
 		apigen.PermissionCheck{Action: org.ActionOperatorRegister},
@@ -53,18 +53,18 @@ func TestCheckPermissions_AnswersEachPairInOrder(t *testing.T) {
 
 // TestCheckPermissions_DeniesAnActionGaramDoesNotDefine holds that a
 // name no operation checks is answered false even where the engine
-// would allow it, as a role's `org:*` would. The engine here allows
+// would allow it, as a role's `iam:org.*` would. The engine here allows
 // both names; the defined one is the control, answered true, so what
 // denies the other is the vocabulary rather than the engine.
 func TestCheckPermissions_DeniesAnActionGaramDoesNotDefine(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	subject := grn.New("root", "default", user.ServiceType, "owner-sub")
-	f.permit(permission{subject, "org:frobnicate"}, permission{subject, org.ActionOrgUpdate})
+	subject := grn.New("root", user.ServiceType, "owner-sub")
+	f.permit(permission{subject, "iam:org.frobnicate"}, permission{subject, org.ActionOrgUpdate})
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
-		apigen.PermissionCheck{Action: "org:frobnicate"},
+		apigen.PermissionCheck{Action: "iam:org.frobnicate"},
 		apigen.PermissionCheck{Action: org.ActionOrgUpdate},
 	), owner)
 
@@ -83,7 +83,7 @@ func TestCheckPermissions_AsksAboutTheNamedResource(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	allowedGroup := grn.New(slug, grn.DefaultProject, org.ServiceTypeGroup, "eng")
+	allowedGroup := grn.New(slug, org.ServiceTypeGroup, "eng")
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
 			return in.Object == allowedGroup, nil
@@ -113,7 +113,7 @@ func TestCheckPermissions_AsksACoworkPageAsItsGRN(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	allowedPage := grn.New(slug, grn.DefaultProject, org.ServiceTypeCoworkPage, "p-1")
+	allowedPage := grn.New(slug, org.ServiceTypeCoworkPage, "p-1")
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
 			return in.Object == allowedPage || in.Object == grn.Org(slug), nil
@@ -143,7 +143,7 @@ func TestCheckPermissions_AsksACoworkChannelAsItsGRN(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	allowed := grn.New(slug, grn.DefaultProject, org.ServiceTypeCoworkChannel, "c-1")
+	allowed := grn.New(slug, org.ServiceTypeCoworkChannel, "c-1")
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
 			return in.Object == allowed, nil
@@ -170,7 +170,7 @@ func TestCheckPermissions_AsksACoworkTaskAsItsGRN(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	allowed := grn.New(slug, grn.DefaultProject, org.ServiceTypeCoworkTask, "t-1")
+	allowed := grn.New(slug, org.ServiceTypeCoworkTask, "t-1")
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
 			return in.Object == allowed, nil
@@ -197,7 +197,7 @@ func TestCheckPermissions_AsksACoworkArtifactAsItsGRN(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	allowed := grn.New(slug, grn.DefaultProject, org.ServiceTypeCoworkArtifact, "a-1")
+	allowed := grn.New(slug, org.ServiceTypeCoworkArtifact, "a-1")
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
 			return in.Object == allowed, nil
@@ -255,12 +255,12 @@ func TestCheckPermissions_RefusesAMalformedResource(t *testing.T) {
 	f.permit()
 	path := "/orgs/" + slug + "/permission-checks"
 
-	rec := f.do(t, "POST", path, `{"checks":[{"action":"group:read","resource":{"type":"group","id":"eng"}}]}`, owner)
+	rec := f.do(t, "POST", path, `{"checks":[{"action":"iam:group.read","resource":{"type":"group","id":"eng"}}]}`, owner)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	for _, body := range []string{
-		`{"checks":[{"action":"group:read","resource":{"type":"team","id":"eng"}}]}`,
-		`{"checks":[{"action":"group:read","resource":{"type":"group","id":"*"}}]}`,
+		`{"checks":[{"action":"iam:group.read","resource":{"type":"team","id":"eng"}}]}`,
+		`{"checks":[{"action":"iam:group.read","resource":{"type":"group","id":"*"}}]}`,
 	} {
 		rec = f.do(t, "POST", path, body, owner)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, body)
@@ -306,12 +306,12 @@ func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
 	require.Len(t, results, 2)
-	assert.Equal(t, apigen.DecisionUnknown, results[0].Decision, "a delegation grant decides agent:create")
-	assert.Equal(t, apigen.DecisionAllow, results[1].Decision, "Check alone decides operator:register")
+	assert.Equal(t, apigen.DecisionUnknown, results[0].Decision, "a delegation grant decides iam:agent.create")
+	assert.Equal(t, apigen.DecisionAllow, results[1].Decision, "Check alone decides iam:operator.register")
 }
 
 // TestCheckPermissions_AnswersAgentEnrollAsItsWritesDecide holds that
-// agent:enroll is put to the check every approval, withdrawal and
+// iam:agent.enroll is put to the check every approval, withdrawal and
 // revoke runs, with the caller, the organization and the object the
 // pair names. That check allows the organization and refuses the
 // agent here, so the two answers differ by the object alone; a check
@@ -320,7 +320,7 @@ func TestCheckPermissions_AnswersAgentEnrollAsItsWritesDecide(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
-	agentGRN := grn.New(slug, grn.DefaultProject, "agent", "a1")
+	agentGRN := grn.New(slug, "agent", "a1")
 	f.standalone.EXPECT().AuthorizeEnroll(mock.Anything, userGRNOf("owner-sub"), orgGRNOf(slug), orgGRNOf(slug)).
 		Return(nil).Once()
 	f.standalone.EXPECT().AuthorizeEnroll(mock.Anything, userGRNOf("owner-sub"), orgGRNOf(slug), agentGRN).
@@ -370,7 +370,7 @@ func TestCheckPermissions_AsksAGrantActionAsItsMintDoes(t *testing.T) {
 			slug := createOrg(t, f, owner, "acme")
 			object := orgGRNOf(slug)
 			if tc.onAgent {
-				object = grn.New(slug, grn.DefaultProject, agent.ServiceType, "x")
+				object = grn.New(slug, agent.ServiceType, "x")
 			}
 			denied := errorx.New(errorx.KindPermissionDenied, "insufficient role")
 			f.authority.EXPECT().AuthorizeOperation(mock.Anything, userGRNOf("owner-sub"), orgGRNOf(slug), object,
@@ -391,7 +391,7 @@ func TestCheckPermissions_AsksAGrantActionAsItsMintDoes(t *testing.T) {
 }
 
 // TestCheckPermissions_AsksDelegationAsItsWritesDo holds that
-// operator:delegate is put to the check every write of a delegation
+// iam:operator.delegate is put to the check every write of a delegation
 // runs, with the caller and the organization, and answered by it: a
 // deny answers deny, an allow answers allow, and a check that cannot
 // decide fails the request. Each answer is the control for the others.
@@ -464,11 +464,11 @@ func TestCheckPermissions_RefusesAPairNoOperationChecks(t *testing.T) {
 
 	rec = f.do(t, "POST", path, checksBody(t, apigen.PermissionCheck{Action: org.ActionOperatorRegister, Resource: eng}), owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "operator:register is not checked on a resource of type group")
+	assert.Contains(t, rec.Body.String(), "iam:operator.register is not checked on a resource of type group")
 
 	rec = f.do(t, "POST", path, checksBody(t, apigen.PermissionCheck{Action: org.ActionGroupUpdate}), owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
-	assert.Contains(t, rec.Body.String(), "group:update is not checked on the organization")
+	assert.Contains(t, rec.Body.String(), "iam:group.update is not checked on the organization")
 }
 
 // TestCheckPermissions_EveryActionPairsWithSomething asks every action
@@ -552,9 +552,9 @@ func TestCheckPermissions_AMissingResourceAnswersAsADeniedOne(t *testing.T) {
 	slug := createOrg(t, f, owner, "acme")
 	orgG := orgGRNForTest(slug)
 	require.NoError(t, f.orgs.CreateGroup(testCtx(t),
-		org.NewGroup(grn.New(slug, grn.DefaultProject, org.ServiceTypeGroup, "eng"), "Engineering", orgG)))
+		org.NewGroup(grn.New(slug, org.ServiceTypeGroup, "eng"), "Engineering", orgG)))
 	require.NoError(t, f.orgs.CreateProject(testCtx(t),
-		org.NewProject(grn.New(slug, grn.DefaultProject, org.ServiceTypeProject, "web"), "Web", orgG)))
+		org.NewProject(grn.New(slug, org.ServiceTypeProject, "web"), "Web", orgG)))
 	f.permit()
 	pair := func(action string, kind apigen.PermissionResourceType, id string) apigen.PermissionCheck {
 		return apigen.PermissionCheck{Action: action, Resource: &apigen.PermissionResource{Type: kind, Id: id}}
@@ -575,12 +575,13 @@ func TestCheckPermissions_AMissingResourceAnswersAsADeniedOne(t *testing.T) {
 	}
 }
 
-// TestCheckPermissions_DecidesOperatorReadByCheck pins operator:read as
-// an action Check decides, though a console may also hand a hosted
-// operator an authority for it (#1374): garam's own operator reads are
-// enforced by Check alone, as agent-template:read's are, and a mint
-// the grant does not cover is refused at the mint. The engine allowing
-// the read and then refusing it are both answered as decided.
+// TestCheckPermissions_DecidesOperatorReadByCheck pins
+// iam:operator.read as an action Check decides, though a console may
+// also hand a hosted operator an authority for it (#1374): garam's own
+// operator reads are enforced by Check alone, as
+// iam:agent-template.read's are, and a mint the grant does not cover is
+// refused at the mint. The engine allowing the read and then refusing
+// it are both answered as decided.
 func TestCheckPermissions_DecidesOperatorReadByCheck(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")

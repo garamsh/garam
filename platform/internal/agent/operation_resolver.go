@@ -12,10 +12,10 @@ import (
 type OperationKind string
 
 const (
-	OperationKindCreate    OperationKind = "agent:create"
-	OperationKindConfigure OperationKind = "agent:configure"
-	OperationKindRecover   OperationKind = "agent:recover"
-	OperationKindReplace   OperationKind = "agent:replace"
+	OperationKindCreate    OperationKind = "iam:agent.create"
+	OperationKindConfigure OperationKind = "iam:agent.configure"
+	OperationKindRecover   OperationKind = "iam:agent.recover"
+	OperationKindReplace   OperationKind = "iam:agent.replace"
 )
 
 // OperationBinding is what a handoff or an operation reference was

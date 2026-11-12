@@ -56,7 +56,7 @@ type ExecutionService interface {
 	// tokens in the new lineage.
 	Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*RecoveredCredential, error)
 	// CreateManaged registers an agent and its first assignment under
-	// a member's agent:create reference, and answers an identical
+	// a member's iam:agent.create reference, and answers an identical
 	// retry with the same agent rather than another.
 	CreateManaged(ctx context.Context, caller grn.GRN, in ManagedCreationInput) (*ManagedCreation, bool, error)
 }

@@ -278,7 +278,7 @@ func (t *Tools) createPage(ctx context.Context, c platform.Caller, in createPage
 	for i, b := range in.Blocks {
 		edits[i] = collab.Edit{Kind: collab.EditAppend, Block: b}
 	}
-	// Creating the page was cowork:page-write on the organization;
+	// Creating the page was cowork:page.write on the organization;
 	// writing its content is the same act on the page.
 	_, room, err := t.room(ctx, c, in.Org, p.ID, true)
 	if err != nil {

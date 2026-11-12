@@ -61,8 +61,9 @@ func (s *Store) ListGroups(ctx context.Context, orgGRN grn.GRN, f listfilter.Fil
 // n, ordered by GRN.
 func (s *Store) SearchGroups(ctx context.Context, orgGRN grn.GRN, n listfilter.Needle) ([]*org.Group, error) {
 	rows, err := s.q.SearchGroups(ctx, db.SearchGroupsParams{
-		OrgGrn:  orgGRN.String(),
-		Pattern: pgxtype.Contains(n.Text()),
+		OrgGrn:    orgGRN.String(),
+		Pattern:   pgxtype.Contains(n.Text()),
+		IDPattern: grn.New(orgGRN.Identifier, org.ServiceTypeGroup, pgxtype.Contains(n.Text())).String(),
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "search groups", nil, nil)

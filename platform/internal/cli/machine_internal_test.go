@@ -28,11 +28,11 @@ import (
 )
 
 func machineGRN(org, id string) grn.GRN {
-	return grn.New(org, grn.DefaultProject, "agent", id)
+	return grn.New(org, "agent", id)
 }
 
 func orgGRN(org string) grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, "org", org)
+	return grn.New(grn.RootOwner, "org", org)
 }
 
 // writeKeyEncryptionKey writes a key-encryption key the way ADR-0015

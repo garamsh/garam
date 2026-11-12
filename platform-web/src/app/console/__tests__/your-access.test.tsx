@@ -20,12 +20,12 @@ const ACTIONS: AccessAction[] = [
   {
     key: "rename",
     label: "Rename it",
-    check: { action: "agent:rename", resource: AGENT },
+    check: { action: "iam:agent.rename", resource: AGENT },
   },
   {
     key: "replace",
     label: "Replace its host",
-    check: { action: "agent:replace", resource: AGENT },
+    check: { action: "iam:agent.replace", resource: AGENT },
   },
 ];
 
@@ -78,7 +78,7 @@ describe("Your access", () => {
           holders: [
             {
               type: "user",
-              grn: "grn:root:default:user:minji",
+              grn: "grn:root/iam/user/minji",
               nickname: "Minji",
             },
           ],
@@ -92,7 +92,7 @@ describe("Your access", () => {
     expect(panel).toHaveTextContent("You can't rename it.");
     const rename = row(panel, "Rename it");
     expect(rename).toHaveTextContent("Not allowed");
-    expect(rename).toHaveTextContent("Missing agent:rename");
+    expect(rename).toHaveTextContent("Missing iam:agent.rename");
     // The reason sits beside the inactive control, not here (ADR-0116).
     expect(rename).not.toHaveTextContent(/grants it to you/);
     expect(rename).toHaveTextContent(/Who can:.*Minji/);
@@ -143,10 +143,10 @@ describe("Your access", () => {
     let holdersAsked = 0;
     server.use(
       answerPermissionChecks((action) =>
-        action === "agent:replace" ? "unknown" : "allow",
+        action === "iam:agent.replace" ? "unknown" : "allow",
       ),
       answerExplanations((action) =>
-        action === "agent:replace"
+        action === "iam:agent.replace"
           ? { decision: "unknown", basis: "operation", statements: [] }
           : {
               decision: "allow",

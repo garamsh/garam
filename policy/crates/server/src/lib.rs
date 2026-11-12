@@ -22,7 +22,7 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tonic::service::interceptor::InterceptedService;
 use tonic::transport::{Identity, Server, ServerTlsConfig};
 
-pub use caller::{Caller, KeysError, Refusal, Verifier};
+pub use caller::{Caller, KeysError, Principal, Refusal, Verifier};
 pub use config::{Config, ConfigError, database_url};
 pub use entity_sink::EntitySink;
 pub use policy_service::Service;

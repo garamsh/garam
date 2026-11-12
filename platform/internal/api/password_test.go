@@ -32,7 +32,7 @@ func inviteTo(t *testing.T, f *fixture, slug, token string) string {
 	t.Helper()
 	orgGRN := grn.Org(slug)
 	require.NoError(t, f.orgs.CreateOrg(testCtx(t), org.NewOrganization(orgGRN, slug)))
-	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	creator := grn.New("root", user.ServiceType, "owner-sub")
 	inv := org.NewInvitation(token, orgGRN, org.RoleMember, creator, time.Now().UTC().Add(time.Hour))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), inv))
 	return token
@@ -72,14 +72,14 @@ func TestRegisterPassword_CreatesTheAccountTheInvitationNames(t *testing.T) {
 	assert.Equal(t, apigen.RoleMember, m.Role)
 	// The account sits under the reserved prefix, which is what keeps
 	// it and any provider's account from ever being one row.
-	assert.Equal(t, "grn:root:default:user:local-alice", m.UserGrn)
+	assert.Equal(t, "grn:root/iam/user/local-alice", m.UserGrn)
 
 	cookie := sessionCookie(rec.Result())
 	require.NotNil(t, cookie, "registration signs the new account in")
 
 	rec = f.do(t, "GET", "/me", "", cookie)
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "grn:root:default:user:local-alice", decodeBody[apigen.User](t, rec).Grn)
+	assert.Equal(t, "grn:root/iam/user/local-alice", decodeBody[apigen.User](t, rec).Grn)
 }
 
 // TestLoginPassword_RoundTrip signs out and back in, which is the
@@ -95,7 +95,7 @@ func TestLoginPassword_RoundTrip(t *testing.T) {
 
 	rec = f.do(t, "POST", "/auth/password/login", loginBody("alice", registeredPassword))
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "grn:root:default:user:local-alice", decodeBody[apigen.User](t, rec).Grn)
+	assert.Equal(t, "grn:root/iam/user/local-alice", decodeBody[apigen.User](t, rec).Grn)
 
 	cookie := sessionCookie(rec.Result())
 	require.NotNil(t, cookie)
@@ -255,7 +255,7 @@ func TestLoginPassword_ReportsAVerifierItCouldNotUpgrade(t *testing.T) {
 	token := inviteTo(t, f, "acme", "invite-tok")
 	require.Equal(t, http.StatusCreated,
 		f.do(t, "POST", "/auth/password/register", registerBody(token, "alice", registeredPassword)).Code)
-	alice := grn.New("root", "default", user.ServiceType, "local-alice")
+	alice := grn.New("root", user.ServiceType, "local-alice")
 
 	require.NoError(t, f.credentials.Replace(testCtx(t), alice, supersededVerifier(t, registeredPassword)))
 	require.Equal(t, http.StatusOK,
@@ -284,7 +284,7 @@ func TestLoginPassword_UpgradesASupersededVerifier(t *testing.T) {
 	require.Equal(t, http.StatusCreated,
 		f.do(t, "POST", "/auth/password/register", registerBody(token, "alice", registeredPassword)).Code)
 
-	alice := grn.New("root", "default", user.ServiceType, "local-alice")
+	alice := grn.New("root", user.ServiceType, "local-alice")
 	superseded := supersededVerifier(t, registeredPassword)
 	require.NoError(t, f.credentials.Replace(testCtx(t), alice, superseded))
 	require.False(t, f.credentials.held(alice).AtCurrentPolicy())
@@ -307,7 +307,7 @@ func TestRegisterPassword_RefusesWithoutALiveInvitation(t *testing.T) {
 		f.do(t, "POST", "/auth/password/register", registerBody(live, "alice", registeredPassword)).Code)
 
 	orgGRN := grn.Org("acme")
-	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	creator := grn.New("root", user.ServiceType, "owner-sub")
 	expired := org.NewInvitation("expired-tok", orgGRN, org.RoleMember, creator, time.Now().UTC().Add(-time.Hour))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), expired))
 
@@ -335,7 +335,7 @@ func TestRegisterPassword_RefusesAUsernameThatIsTakenOrUnusable(t *testing.T) {
 		f.do(t, "POST", "/auth/password/register", registerBody(first, "alice", registeredPassword)).Code)
 
 	orgGRN := grn.Org("acme")
-	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	creator := grn.New("root", user.ServiceType, "owner-sub")
 	second := org.NewInvitation("second-tok", orgGRN, org.RoleMember, creator, time.Now().UTC().Add(time.Hour))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), second))
 
@@ -381,7 +381,7 @@ func TestRegisterPassword_RefusesAnUnusablePasswordBeforeClaiming(t *testing.T) 
 func TestRegisterPassword_AFailureAfterTheUserIsCreatedLeavesNothing(t *testing.T) {
 	f := newFixture(t)
 	token := inviteTo(t, f, "acme", "invite-tok")
-	alice := grn.New("root", "default", user.ServiceType, "local-alice")
+	alice := grn.New("root", user.ServiceType, "local-alice")
 
 	f.credentials.refuseCreates(true)
 	rec := f.do(t, "POST", "/auth/password/register", registerBody(token, "alice", registeredPassword))

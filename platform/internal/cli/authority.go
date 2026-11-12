@@ -76,7 +76,7 @@ func (a currentAuthorization) Authorize(ctx context.Context, actor, orgGRN, obje
 			Sid:      "member-roles",
 			Effect:   authzv1.Effect_EFFECT_ALLOW,
 			Action:   org.ActionsFor(append([]string{string(m.Role)}, u.Roles...)),
-			Resource: []string{orgGRN.String(), "grn:" + orgGRN.Identifier + ":*"},
+			Resource: []string{orgGRN.String(), grn.OrgPattern(orgGRN.Identifier)},
 		}},
 		SubjectGroups: wire.GRNsToProto(groups),
 		SubjectOrg:    orgGRN.String(),

@@ -27,7 +27,7 @@ vi.mock("@/features/orgs/actions", () => ({
 }));
 
 const ENDPOINT = "https://control.example.test/garam";
-const HOSTED = "grn:acme:default:operator:hosted";
+const HOSTED = "grn:acme/iam/operator/hosted";
 
 function page() {
   return NewAgentPage({ params: Promise.resolve({ org: "acme" }) });
@@ -56,7 +56,7 @@ function hostedWith(operations: string[]) {
         controllers: [fieldOne.grn],
         operations,
         expiresAt: "2099-01-01T00:00:00Z",
-        grantedBy: "grn:root:default:user:alice",
+        grantedBy: "grn:root/iam/user/alice",
         grantedAt: "2026-10-01T00:00:00Z",
       }),
     ),
@@ -124,7 +124,7 @@ describe("new agent page", () => {
   });
 
   it("links to the operator whose grant lacks creating", async () => {
-    server.use(...hostedWith(["agent-template:read"]));
+    server.use(...hostedWith(["iam:agent-template.read"]));
 
     await renderServerComponent(page());
 
@@ -140,7 +140,7 @@ describe("new agent page", () => {
   });
 
   it("resumes at the template step once a control service can create", async () => {
-    server.use(...hostedWith(["agent:create", "agent-template:read"]));
+    server.use(...hostedWith(["iam:agent.create", "iam:agent-template.read"]));
 
     await renderServerComponent(page());
 
@@ -150,9 +150,9 @@ describe("new agent page", () => {
 
   it("says creating is denied where the server denies it", async () => {
     server.use(
-      ...hostedWith(["agent:create", "agent-template:read"]),
+      ...hostedWith(["iam:agent.create", "iam:agent-template.read"]),
       answerPermissionChecks((action) =>
-        action === "agent:create" ? "deny" : "allow",
+        action === "iam:agent.create" ? "deny" : "allow",
       ),
     );
 
@@ -164,7 +164,7 @@ describe("new agent page", () => {
 
   it("lets creating through where the server cannot answer whether it may", async () => {
     server.use(
-      ...hostedWith(["agent:create", "agent-template:read"]),
+      ...hostedWith(["iam:agent.create", "iam:agent-template.read"]),
       answerPermissionChecks(() => "unknown"),
     );
 

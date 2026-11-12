@@ -19,8 +19,8 @@ const maxHolderCandidates = maxPermissionChecks
 // ListPermissionHolders answers which members and agents of the org
 // the engine allows the action on the resource, a page of candidates
 // at a time, each asked as enforcement asks it. Requires
-// org:member-list; agents are asked only where the caller also holds
-// agent:read.
+// iam:org.member-list; agents are asked only where the caller also
+// holds iam:agent.read.
 func (s *Server) ListPermissionHolders(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListPermissionHoldersParams) {
 	u, err := s.currentUser(r)
 	if err != nil {

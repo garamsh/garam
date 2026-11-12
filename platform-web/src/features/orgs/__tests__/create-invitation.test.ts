@@ -20,7 +20,7 @@ function form(entries: Record<string, string>): FormData {
 
 const invitation = {
   token: "secret-token",
-  orgGrn: "grn:root:default:org:acme",
+  orgGrn: "grn:root/iam/org/acme",
   role: "member",
   expiresAt: "2026-01-09T03:04:05Z",
 };

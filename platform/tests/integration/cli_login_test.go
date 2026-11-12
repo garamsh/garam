@@ -96,7 +96,7 @@ func TestCLI_LogsInByTheDeviceGrantAndReadsTheOrgsObjects(t *testing.T) {
 	config := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", config)
 	t.Setenv("GARAM_ENDPOINT", s.url)
-	operatorGRN := registerOperator(t, s.pool, grn.New("acme", grn.DefaultProject, "operator", "hosted"))
+	operatorGRN := registerOperator(t, s.pool, grn.New("acme", "operator", "hosted"))
 	agentGRN := seedAgent(t, agentpg.New(s.pool), s.acme)
 
 	_, err := runCLI(t, io.Discard, "whoami")
@@ -151,7 +151,7 @@ func TestCLI_LogsInByTheDeviceGrantAndReadsTheOrgsObjects(t *testing.T) {
 
 	out, err = runCLI(t, io.Discard, "orgs", "list")
 	require.NoError(t, err)
-	assert.Regexp(t, `(?m)^grn:root:default:org:acme\s+acme\s`, out)
+	assert.Regexp(t, `(?m)^grn:root/iam/org/acme\s+acme\s`, out)
 	_, err = runCLI(t, io.Discard, "orgs", "use", "nonesuch")
 	assert.Error(t, err, "an organization the session cannot read is not saved")
 	_, err = runCLI(t, io.Discard, "orgs", "use", "acme")

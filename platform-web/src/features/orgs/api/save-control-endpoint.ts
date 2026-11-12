@@ -28,7 +28,7 @@ const Schema = z.object({
 /**
  * Registers or clears where the operator's control service answers the
  * console (#1170). It is the delegating act, decided on
- * `operator:delegate`, and is a separate write from the operator's
+ * `iam:operator.delegate`, and is a separate write from the operator's
  * name and description: renaming one never moves where operation
  * authority is sent.
  */

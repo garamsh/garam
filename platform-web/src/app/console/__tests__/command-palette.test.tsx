@@ -276,7 +276,7 @@ describe("command palette", () => {
               kind: "agent",
               objects: [
                 {
-                  grn: "grn:acme:default:agent:1c3d5e7f90a2b4c6",
+                  grn: "grn:acme/iam/agent/1c3d5e7f90a2b4c6",
                   name: "Sherlock",
                 },
               ],
@@ -306,7 +306,7 @@ describe("command palette", () => {
             {
               kind: "person",
               objects: Array.from({ length: 5 }, (_, index) => ({
-                grn: `grn:root:default:user:sam-${index}`,
+                grn: `grn:root/iam/user/sam-${index}`,
                 name: `Sam ${index}`,
               })),
               more: 2,

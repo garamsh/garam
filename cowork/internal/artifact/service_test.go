@@ -67,7 +67,7 @@ func (viewer) URL(org, id string, n int) string {
 }
 
 func person(name string) platform.Caller {
-	return platform.Caller{GRN: grn.New(grn.RootOwner, grn.DefaultProject, "user", name)}
+	return platform.Caller{GRN: grn.New(grn.RootOwner, "user", name)}
 }
 
 var (
@@ -142,8 +142,8 @@ func TestArtifacts_ThePlatformDecides(t *testing.T) {
 	s := newService(deny, &pages{})
 	a, err := s.Create(ctx, ada, "acme", artifact.CreateInput{Kind: artifact.KindHTML, Title: "Chart", Content: artifact.Content{HTML: "<p>1</p>"}})
 	require.NoError(t, err)
-	deny["bob cowork:artifact-write@"+a.ID] = true
-	deny["carol cowork:artifact-read@"+a.ID] = true
+	deny["bob cowork:artifact.write@"+a.ID] = true
+	deny["carol cowork:artifact.read@"+a.ID] = true
 
 	_, err = s.Save(ctx, bob, "acme", a.ID, artifact.Content{HTML: "<p>2</p>"})
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied))
@@ -160,7 +160,7 @@ func TestArtifacts_ThePlatformDecides(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, listed, 1)
 
-	deny["bob cowork:artifact-write"] = true
+	deny["bob cowork:artifact.write"] = true
 	_, err = s.Create(ctx, bob, "acme", artifact.CreateInput{Kind: artifact.KindHTML, Title: "x", Content: artifact.Content{HTML: "x"}})
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied))
 }

@@ -77,7 +77,7 @@ func NewHTTPQueue(client *http.Client, base string, agent grn.GRN, execution *Ex
 		execution:  execution,
 		credential: credential,
 		contract:   TokenDeliveryContract,
-		claims:     root.JoinPath("agents", agent.String(), "claims"),
+		claims:     root.JoinPath("agents", url.PathEscape(agent.String()), "claims"),
 		outbox:     root.JoinPath("outbox-messages"),
 	}, nil
 }

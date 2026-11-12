@@ -16,11 +16,11 @@ import (
 // actionEnroll is the action approving, withdrawing and revoking a
 // standalone host needs. internal/org owns it; this package does not
 // import that one, so the string is repeated.
-const actionEnroll = "agent:enroll"
+const actionEnroll = "iam:agent.enroll"
 
 // actionRead is the action listing an organization's approvals and
 // supervisors needs, repeated for the same reason.
-const actionRead = "agent:read"
+const actionRead = "iam:agent.read"
 
 // StandaloneService is how an administrator stands a standalone host
 // up for one agent and takes it down again (ADR-0082). Every act
@@ -43,7 +43,7 @@ type StandaloneService interface {
 	// registrations.
 	ListSupervisors(ctx context.Context, actor, org grn.GRN, f listfilter.Filter) ([]SupervisorSummary, error)
 	// AuthorizeEnroll decides whether the actor currently holds
-	// agent:enroll on object: the organization a new host's agent
+	// iam:agent.enroll on object: the organization a new host's agent
 	// joins, or the agent a replacement, a withdrawal or a revoke acts
 	// on. Approve, Withdraw and Revoke ask exactly this.
 	AuthorizeEnroll(ctx context.Context, actor, org, object grn.GRN) error
@@ -185,7 +185,7 @@ func (s *standaloneService) AuthorizeEnroll(ctx context.Context, actor, org, obj
 	return authorizeEnroll(ctx, s.authorizer, actor, org, object)
 }
 
-// authorizeEnroll asks authorizer for agent:enroll.
+// authorizeEnroll asks authorizer for iam:agent.enroll.
 func authorizeEnroll(ctx context.Context, authorizer MemberAuthorizer, actor, org, object grn.GRN) error {
 	return authorizeCurrent(ctx, authorizer, actor, org, object, actionEnroll)
 }
@@ -209,5 +209,5 @@ func newSupervisorGRN(orgGRN grn.GRN) (grn.GRN, error) {
 	if _, err := rand.Read(b); err != nil {
 		return grn.GRN{}, errorx.Wrap(err, "supervisor id")
 	}
-	return grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceTypeSupervisor, hex.EncodeToString(b)), nil
+	return grn.New(orgGRN.Identifier, ServiceTypeSupervisor, hex.EncodeToString(b)), nil
 }

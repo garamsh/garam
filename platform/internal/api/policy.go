@@ -259,7 +259,7 @@ func (s *Server) authorizePolicy(r *http.Request, orgSlug, policySlug, action st
 // segment scopes the identifier, so a policy of another org is not
 // addressable through that org's paths.
 func policyGRN(orgSlug, policySlug string) grn.GRN {
-	return grn.New(orgSlug, grn.DefaultProject, serviceTypePolicy, policySlug)
+	return grn.New(orgSlug, serviceTypePolicy, policySlug)
 }
 
 func policyToAPI(p *Policy) apigen.Policy {

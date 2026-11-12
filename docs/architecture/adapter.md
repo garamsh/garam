@@ -113,8 +113,8 @@ it.
   (§Activation and runtime status). Re-arming asks the authority again,
   and the answer decides: the rewrite activates nothing and clears no
   fence. While a definite refusal stands, that costs one request per
-  refresh. After `agent:recover`, garam has ended the activation, so the
-  same generation and placement are refused again as ended, and the
+  refresh. After `iam:agent.recover`, garam has ended the activation, so
+  the same generation and placement are refused again as ended, and the
   agent resumes on the next generation or placement its assignee
   starts.
 
@@ -444,6 +444,12 @@ The v0.1.0 rows above still hold for an unsigned message.
 | The lookup answers the transport principal that posted, signed or not, `pending`, `completed` or `unknown` | `docs/architecture/gateway.md` §Signed messages | A lost event on a signed message could not be recovered |
 | A signature is refused with 403 `signature rejected: <check>`, a missing one under `require-signature` with 403 `signature required`, and an issuer with no usable key set with 503 `issuer keys unavailable` | `docs/architecture/gateway.md` §Signed messages | A refusal would not read as a message not delivered |
 | A trusted issuer is an exact `iss` in the runtime's `issuers` | `docs/architecture/gateway.md` §Signed messages | garam's `GARAM_MACHINE_ISSUER` would not need to match it byte for byte (deployment-contract.md §The message issuer is kept for the deployment's life) |
+
+garam calls the runtime's `/agents/{agent}/...` routes with the agent
+segment percent-encoded, because an agent's GRN holds `/`
+([grn-model.md](./grn-model.md) §Format). Whether the pinned Sherlock
+release, `v0.8.0`, routes an escaped `/` in that segment was not
+verified in this pull request; nothing above states that it does.
 
 This promotes an observability surface into a delivery contract, and
 the two carry different obligations: observability may lose an event, a

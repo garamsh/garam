@@ -214,9 +214,9 @@ as a quiet one.
 
 Which browser is admitted is decided at the browser-facing listener, by
 a grant separate from reading an agent and carried by no role, so a
-policy allows `agent:watch` or nobody watches (ADR-0022); whose events a
-caller may forward, and whose watchers it may count, is decided here by
-one comparison against the identity the caller authenticated as.
+policy allows `iam:agent.watch` or nobody watches (ADR-0022); whose
+events a caller may forward, and whose watchers it may count, is decided
+here by one comparison against the identity the caller authenticated as.
 
 ### The adapter's delivery loop
 

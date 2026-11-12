@@ -16,7 +16,7 @@ import (
 	authzv1 "github.com/garamsh/garam/platform/proto/gen/garam/authz/v1"
 )
 
-const validDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"s1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`
+const validDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"s1","Effect":"Allow","Action":["iam:org.read"],"Resource":["grn:acme/*"]}]}`
 
 // newPolicyServer serves the policy lifecycle over store, with the
 // cache its writes invalidate.
@@ -42,12 +42,12 @@ func TestPolicyGRPCServer_CreatePolicyRejectsBadInput(t *testing.T) {
 		"accepted": {
 			&authzv1.CreatePolicyRequest{
 				OrgGrn: acme.String(), Name: "n", Document: validDocument,
-				CreatedBy: "grn:root:default:user:ada",
+				CreatedBy: "grn:root/iam/user/ada",
 			},
 			codes.OK,
 		},
 		"bad org grn": {
-			&authzv1.CreatePolicyRequest{OrgGrn: "nope", Name: "n", Document: validDocument, CreatedBy: "grn:root:default:user:ada"},
+			&authzv1.CreatePolicyRequest{OrgGrn: "nope", Name: "n", Document: validDocument, CreatedBy: "grn:root/iam/user/ada"},
 			codes.InvalidArgument,
 		},
 		"bad author": {
@@ -55,13 +55,13 @@ func TestPolicyGRPCServer_CreatePolicyRejectsBadInput(t *testing.T) {
 			codes.InvalidArgument,
 		},
 		"empty name": {
-			&authzv1.CreatePolicyRequest{OrgGrn: acme.String(), Name: "", Document: validDocument, CreatedBy: "grn:root:default:user:ada"},
+			&authzv1.CreatePolicyRequest{OrgGrn: acme.String(), Name: "", Document: validDocument, CreatedBy: "grn:root/iam/user/ada"},
 			codes.InvalidArgument,
 		},
 		"bad document": {
 			&authzv1.CreatePolicyRequest{
 				OrgGrn: acme.String(), Name: "n", Document: `{"Version":"v"}`,
-				CreatedBy: "grn:root:default:user:ada",
+				CreatedBy: "grn:root/iam/user/ada",
 			},
 			codes.InvalidArgument,
 		},
@@ -348,6 +348,12 @@ func TestPolicyGRPCServer_AttachmentRejectsBadGRN(t *testing.T) {
 		"both grns parse": {&authzv1.AttachPolicyRequest{PolicyGrn: g.String(), SubjectGrn: ada.String()}, codes.OK},
 		"bad policy grn":  {&authzv1.AttachPolicyRequest{PolicyGrn: "nope", SubjectGrn: ada.String()}, codes.InvalidArgument},
 		"bad subject grn": {&authzv1.AttachPolicyRequest{PolicyGrn: g.String(), SubjectGrn: "nope"}, codes.InvalidArgument},
+		"another org's subject": {&authzv1.AttachPolicyRequest{
+			PolicyGrn: g.String(), SubjectGrn: grn.New("globex", "user", "ada").String(),
+		}, codes.FailedPrecondition},
+		"a root-owned subject": {&authzv1.AttachPolicyRequest{
+			PolicyGrn: g.String(), SubjectGrn: grn.New(grn.RootOwner, "user", "ada").String(),
+		}, codes.OK},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

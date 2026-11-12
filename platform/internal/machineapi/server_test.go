@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
 	"strings"
 	"testing"
 	"time"
@@ -32,15 +33,15 @@ import (
 )
 
 func operatorGRN(org string) grn.GRN {
-	return grn.New(org, grn.DefaultProject, agent.ServiceTypeOperator, "one")
+	return grn.New(org, agent.ServiceTypeOperator, "one")
 }
 
 func agentGRN(org, id string) grn.GRN {
-	return grn.New(org, grn.DefaultProject, agent.ServiceType, id)
+	return grn.New(org, agent.ServiceType, id)
 }
 
 func groupGRN(org, name string) grn.GRN {
-	return grn.New(org, grn.DefaultProject, "group", name)
+	return grn.New(org, "group", name)
 }
 
 // call is one thing the surface asked the agent service for.
@@ -163,7 +164,7 @@ func (c *consents) Stands(_ context.Context, a, b grn.GRN) (bool, error) {
 // organization returns the GRN of the org the identifier names. Orgs
 // are root-owned (ADR-0001).
 func organization(identifier string) grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, "org", identifier)
+	return grn.New(grn.RootOwner, "org", identifier)
 }
 
 // listenerCertificate is what garam presents, as the listener asks for
@@ -347,7 +348,7 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	relay := &announced{}
 	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, nil, messages, consenting(), watching(t, relay), groups, policies, nil, nil, nil, nil, nil, nil, nil)))
 	t.Cleanup(plain.Close)
-	bot := agentGRN("acme", "0a1b2c3d4e5f6071").String()
+	bot := neturl.PathEscape(agentGRN("acme", "0a1b2c3d4e5f6071").String())
 	routes := map[string]struct{ method, path string }{
 		"identity": {http.MethodGet, "/identity"},
 		"post":     {http.MethodPost, "/messages"},

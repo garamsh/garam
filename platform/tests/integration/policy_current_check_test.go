@@ -42,13 +42,13 @@ func servedEngine(t *testing.T, cache *authz.PolicyCache) authzv1.AuthzServiceCl
 }
 
 // activateStatement stores and activates an org-wide policy granting
-// or denying project:read across acme, and returns its GRN.
+// or denying iam:project.read across acme, and returns its GRN.
 func activateStatement(t *testing.T, s *authzpg.Store, orgGRN grn.GRN, sid string, effect wire.Effect) grn.GRN {
 	t.Helper()
 	ctx := context.Background()
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, sid), statementDoc(sid, effect, "project:read", "grn:acme:*"), grnOf("user", "ada"))
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, sid), statementDoc(sid, effect, "iam:project.read", "grn:acme/*"), grnOf("user", "ada"))
 	require.NoError(t, err)
 	_, err = s.SetPolicyStatus(ctx, g, wire.PolicyStatusActive)
 	require.NoError(t, err)
@@ -61,7 +61,7 @@ func readProject() *authzv1.CheckRequest {
 	return &authzv1.CheckRequest{
 		SubjectGrn: grnOf("user", "ada").String(),
 		ObjectGrn:  grnOf("project", "web").String(),
-		Action:     "project:read",
+		Action:     "iam:project.read",
 		SubjectOrg: grnOf("org", "acme").String(),
 	}
 }

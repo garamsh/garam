@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -71,7 +72,7 @@ func (s *supervisorService) Exchange(_ context.Context, credential string) (*age
 // supervisor does not hold, and is refused as any other (ADR-0117).
 func TestServer_ExchangesASupervisorsCredentialForAToken(t *testing.T) {
 	subject := operatorGRN("acme")
-	supervisor := grn.New("acme", grn.DefaultProject, agent.ServiceTypeSupervisor, "host-1")
+	supervisor := grn.New("acme", agent.ServiceTypeSupervisor, "host-1")
 	supervisors := &supervisorService{supervisor: supervisor, credential: "garam_sc_held"}
 	url, _ := serveTLS(t, machineapi.NewServer(&agentService{}, nil, &messageService{}, consenting(),
 		unwatched(t), &memberGroups{}, &engine{}, nil, nil, nil, nil, supervisors, nil, stubKeyring{}), subject)
@@ -87,7 +88,7 @@ func TestServer_ExchangesASupervisorsCredentialForAToken(t *testing.T) {
 	assert.Nil(t, token.Audience)
 
 	status, _, _ = exchange(t, client, url, "Garam-Credential garam_sc_held", operator.TokenContractVersion,
-		`{"audience":"grn:acme:default:operator:control"}`)
+		`{"audience":"grn:acme/iam/operator/control"}`)
 	assert.Equal(t, http.StatusBadRequest, status, "a supervisor's token names no audience")
 
 	status, version, _ = exchange(t, client, url, "Garam-Credential garam_sc_held", "", `{}`)
@@ -112,7 +113,7 @@ func TestServer_ExchangesASupervisorsCredentialForAToken(t *testing.T) {
 
 // TestSpecification_EveryOperationButTheExemptOnesTakesAToken holds the
 // specification to what the listener does (ADR-0118): every operation
-// lists machineToken but the four that authenticate by what else a
+// lists machineToken but the five that authenticate by what else a
 // request carries, and the Bearer alias is listed exactly where
 // machineToken is (ADR-0102). The count of operations read is asserted
 // too, so a file that failed to parse into paths could not pass as one
@@ -129,7 +130,7 @@ func TestSpecification_EveryOperationButTheExemptOnesTakesAToken(t *testing.T) {
 	require.NoError(t, yaml.Unmarshal(raw, &spec))
 
 	exempt := map[string]bool{standaloneEnrollmentRoute: true, tokenExchangeRoute: true,
-		assertionExchangeRoute: true, keySetRoute: true}
+		assertionExchangeRoute: true, keySetRoute: true, introspectionRoute: true}
 	listed, bearer, every := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	operations := 0
 	for path, methods := range spec.Paths {
@@ -193,10 +194,10 @@ func TestServer_MintsAnAgentTokenForTheCallingOperator(t *testing.T) {
 		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, nil, stubKeyring{})
 	url, _ := serveTLSTokens(t, srv, controller, presentedTokens{"garam_ot_live": controller})
 	client := anonymous(t)
-	path := url + "/agents/" + bot.String() + "/tokens"
+	path := url + "/agents/" + neturl.PathEscape(bot.String()) + "/tokens"
 	contract := map[string]string{"Garam-Contract-Version": operator.TokenContractVersion}
 
-	hosted := grn.New("acme", grn.DefaultProject, operator.ServiceType, "control")
+	hosted := grn.New("acme", operator.ServiceType, "control")
 	status, version, body := tokenRequest(t, client, http.MethodPost, path, "garam_ot_live", contract,
 		`{"audience":"`+hosted.String()+`"}`)
 	require.Equal(t, http.StatusCreated, status, body)
@@ -239,7 +240,7 @@ func TestServer_AnAgentTokenCarriesItsExecutionTokenInAHeaderOfItsOwn(t *testing
 	client := anonymous(t)
 	execution, err := agent.NewToken()
 	require.NoError(t, err)
-	claims := url + "/agents/" + bot.String() + "/claims"
+	claims := url + "/agents/" + neturl.PathEscape(bot.String()) + "/claims"
 
 	status, _, body := tokenRequest(t, client, http.MethodPost, claims, "garam_at_live",
 		map[string]string{"Garam-Execution": execution.String()}, "")
@@ -315,7 +316,7 @@ func TestServer_ABearerTokenTakesWhatAGaramTokenTakes(t *testing.T) {
 		assert.Contains(t, body, message.TokenDeliveryContractVersion, scheme)
 
 		before := len(messages.fences)
-		status, _, body = tokenRequest(t, client, http.MethodPost, url+"/agents/"+bot.String()+"/claims", "",
+		status, _, body = tokenRequest(t, client, http.MethodPost, url+"/agents/"+neturl.PathEscape(bot.String())+"/claims", "",
 			with(map[string]string{"Garam-Execution": execution.String()}), "")
 		require.Equal(t, http.StatusNoContent, status, "%s: %s", scheme, body)
 		require.Len(t, messages.fences, before+1, scheme)

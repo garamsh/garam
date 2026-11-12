@@ -32,7 +32,7 @@ const hashToken = (token: string) =>
 async function insertPerson(client: Client, nickname: string): Promise<Person> {
   const person = {
     nickname,
-    userGrn: `grn:root:default:user:${nickname}-${randomUUID().slice(0, 8)}`,
+    userGrn: `grn:root/iam/user/${nickname}-${randomUUID().slice(0, 8)}`,
     sessionToken: randomBytes(32).toString("hex"),
   };
   await client.query(
@@ -60,7 +60,7 @@ export async function seedWorkspace(
   try {
     await client.query("BEGIN");
     const orgSlug = `cw-${randomUUID().slice(0, 8)}`;
-    const orgGrn = `grn:root:default:org:${orgSlug}`;
+    const orgGrn = `grn:root/iam/org/${orgSlug}`;
     await client.query(
       `INSERT INTO orgs (grn, name, created_at, updated_at) VALUES ($1, $2, now(), now())`,
       [orgGrn, orgSlug],

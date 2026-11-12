@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,8 +30,8 @@ func TestProjectFlow_RoleEnforcement(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
-	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
+	memberGRN := grn.New("root", user.ServiceType, "member-sub")
 	f.permit(
 		permission{ownerGRN, org.ActionProjectCreate},
 		permission{ownerGRN, org.ActionProjectRead},
@@ -52,7 +53,7 @@ func TestProjectFlow_RoleEnforcement(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	got := decodeBody[apigen.Project](t, rec)
 	assert.Equal(t, "web", got.Name)
-	assert.Equal(t, "grn:"+slug+":default:project:"+project, got.Grn)
+	assert.Equal(t, grn.New(slug, "project", project).String(), got.Grn)
 	assert.Equal(t, orgGRN.String(), got.OrgGrn)
 
 	rec = f.do(t, "GET", "/orgs/"+slug+"/projects", "", member)
@@ -79,8 +80,8 @@ func TestProjectMembers_Lifecycle(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
-	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
+	memberGRN := grn.New("root", user.ServiceType, "member-sub")
 	f.permit(
 		permission{ownerGRN, org.ActionProjectCreate},
 		permission{ownerGRN, org.ActionProjectMemberAdd},
@@ -89,7 +90,7 @@ func TestProjectMembers_Lifecycle(t *testing.T) {
 		permission{memberGRN, org.ActionProjectMemberList},
 	)
 	project := createProject(t, f, owner, slug, "web")
-	ada := grn.New(slug, "default", user.ServiceType, "ada").String()
+	ada := grn.New(slug, user.ServiceType, "ada").String()
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/projects/"+project+"/members", `{"memberGrn":"`+ada+`"}`, owner)
 	require.Equal(t, http.StatusNoContent, rec.Code)
@@ -107,10 +108,10 @@ func TestProjectMembers_Lifecycle(t *testing.T) {
 
 	rec = f.do(t, "POST", "/orgs/"+slug+"/projects/"+project+"/members", `{"memberGrn":"`+ada+`"}`, member)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
-	rec = f.do(t, "DELETE", "/orgs/"+slug+"/projects/"+project+"/members/"+ada, "", member)
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/projects/"+project+"/members/"+url.PathEscape(ada), "", member)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 
-	rec = f.do(t, "DELETE", "/orgs/"+slug+"/projects/"+project+"/members/"+ada, "", owner)
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/projects/"+project+"/members/"+url.PathEscape(ada), "", owner)
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	rec = f.do(t, "GET", "/orgs/"+slug+"/projects/"+project+"/members", "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
@@ -119,7 +120,7 @@ func TestProjectMembers_Lifecycle(t *testing.T) {
 	// The two removals that match nothing, against the one above as
 	// their control: it took a membership away and answered 204, and
 	// neither of these has one to take.
-	rec = f.do(t, "DELETE", "/orgs/"+slug+"/projects/"+project+"/members/"+ada, "", owner)
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/projects/"+project+"/members/"+url.PathEscape(ada), "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "ada is no longer a member")
 	rec = f.do(t, "DELETE", "/orgs/"+slug+"/projects/nope/members/"+ada, "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code, "the project does not exist")
@@ -130,7 +131,7 @@ func TestProjectRoles_AssignedOverHTTP(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(
 		permission{ownerGRN, org.ActionProjectCreate},
 		permission{ownerGRN, org.ActionProjectUpdate},
@@ -164,7 +165,7 @@ func TestProjectRoles_RejectUnknownRole(t *testing.T) {
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 
-	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	ownerGRN := grn.New("root", user.ServiceType, "owner-sub")
 	f.permit(
 		permission{ownerGRN, org.ActionProjectCreate},
 		permission{ownerGRN, org.ActionProjectUpdate},

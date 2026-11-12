@@ -328,7 +328,7 @@ func (s *Server) expireCookie(w http.ResponseWriter, name string) {
 // Users are root-owned: they exist before any org membership
 // (ADR-0001).
 func userGRN(subject string) grn.GRN {
-	return grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, subject)
+	return grn.New(grn.RootOwner, user.ServiceType, subject)
 }
 
 // randomHex returns n random bytes hex-encoded.

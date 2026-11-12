@@ -69,7 +69,7 @@ func TestWatchSurface_AWatchInOneProcessIsCountedAndFedByAnother(t *testing.T) {
 	t.Cleanup(stopReceiving)
 	go func() { _ = browser.Receive(receiving) }()
 
-	events := url + "/agents/" + watched.String() + "/turn-events"
+	events := url + "/agents/" + pathEscape(watched.String()) + "/turn-events"
 
 	// Nobody is watching. The poll says so, forwarding reaches no one, and
 	// the database holds nothing about the agent.
@@ -203,7 +203,7 @@ func claimOne(t *testing.T, adapter *http.Client, url string, watched grn.GRN, k
 	status, body := machineSend(t, adapter, http.MethodPost, url+"/messages", submissionTo(watched, key))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
-	status, body = machineSend(t, adapter, http.MethodPost, url+"/agents/"+watched.String()+"/claims", "")
+	status, body = machineSend(t, adapter, http.MethodPost, url+"/agents/"+pathEscape(watched.String())+"/claims", "")
 	require.Equal(t, http.StatusOK, status, string(body))
 	var claimed machinegen.Claim
 	require.NoError(t, json.Unmarshal(body, &claimed))
@@ -215,7 +215,7 @@ func claimOne(t *testing.T, adapter *http.Client, url string, watched grn.GRN, k
 func renewOne(t *testing.T, adapter *http.Client, url string, watched grn.GRN, claim machinegen.Claim) machinegen.Claim {
 	t.Helper()
 	status, body := machineSend(t, adapter, http.MethodPost,
-		url+"/agents/"+watched.String()+"/claims/"+claim.Id+"/renewal", "")
+		url+"/agents/"+pathEscape(watched.String())+"/claims/"+claim.Id+"/renewal", "")
 	require.Equal(t, http.StatusOK, status, string(body))
 	var renewed machinegen.Claim
 	require.NoError(t, json.Unmarshal(body, &renewed))
@@ -227,6 +227,6 @@ func renewOne(t *testing.T, adapter *http.Client, url string, watched grn.GRN, c
 func completeOne(t *testing.T, adapter *http.Client, url string, watched grn.GRN, claim machinegen.Claim) {
 	t.Helper()
 	status, body := machineSend(t, adapter, http.MethodPost,
-		url+"/agents/"+watched.String()+"/claims/"+claim.Id+"/completion", "")
+		url+"/agents/"+pathEscape(watched.String())+"/claims/"+claim.Id+"/completion", "")
 	require.Equal(t, http.StatusNoContent, status, string(body))
 }

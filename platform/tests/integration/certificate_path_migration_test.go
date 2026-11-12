@@ -81,11 +81,11 @@ func TestMigration000059_RefusesWhatItWouldStrandAndDropsTheCertificatePath(t *t
 	t.Cleanup(func() { _, _ = m.Close() })
 	require.NoError(t, m.Migrate(58))
 	sp := connect(t, databaseURL, nil)
-	const (
-		orgGRN     = "grn:root:default:org:cert"
-		agentGRN   = "grn:cert:default:agent:9f2ac1b40d8e7a35"
-		keyedGRN   = "grn:cert:default:agent:0a1b2c3d4e5f6071"
-		supervisor = "grn:cert:default:supervisor:4c3b2a1908f7e6d5"
+	var (
+		orgGRN     = formerGRN("root", "org", "cert")
+		agentGRN   = formerGRN("cert", "agent", "9f2ac1b40d8e7a35")
+		keyedGRN   = formerGRN("cert", "agent", "0a1b2c3d4e5f6071")
+		supervisor = formerGRN("cert", "supervisor", "4c3b2a1908f7e6d5")
 	)
 	for _, statement := range []string{
 		`INSERT INTO orgs (grn, name, created_at, updated_at) VALUES ('` + orgGRN + `', 'cert', now(), now())`,
@@ -99,7 +99,7 @@ func TestMigration000059_RefusesWhatItWouldStrandAndDropsTheCertificatePath(t *t
 		`INSERT INTO agent_enrollments (id, org_grn, agent_grn, supervisor_grn, host_name, request_id, approved_by,
 			secret_sha256, expires_at, created_at, consumed_at, request_sha256, epoch, lineage)
 			VALUES ('00000000-0000-0000-0000-000000000001', '` + orgGRN + `', '` + agentGRN + `', '` + supervisor + `',
-			'laptop', 'spent', 'grn:root:default:user:ada', sha256('spent'::bytea), now() + interval '1 hour', now(),
+			'laptop', 'spent', '` + formerGRN("root", "user", "ada") + `', sha256('spent'::bytea), now() + interval '1 hour', now(),
 			now(), sha256('request'::bytea), 1, gen_random_uuid())`,
 		`INSERT INTO agent_supervisors (grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at)
 			VALUES ('` + supervisor + `', '` + agentGRN + `', '00000000-0000-0000-0000-000000000001', 'laptop',
@@ -108,7 +108,7 @@ func TestMigration000059_RefusesWhatItWouldStrandAndDropsTheCertificatePath(t *t
 		`INSERT INTO agent_enrollments (id, org_grn, agent_grn, supervisor_grn, host_name, request_id, approved_by,
 			secret_sha256, expires_at, created_at, supervisor_key_sha256, agent_key_sha256)
 			VALUES ('00000000-0000-0000-0000-000000000002', '` + orgGRN + `', '` + keyedGRN + `',
-			'grn:cert:default:supervisor:5d4c3b2a1908f7e6', 'laptop', 'keyed', 'grn:root:default:user:ada',
+			'` + formerGRN("cert", "supervisor", "5d4c3b2a1908f7e6") + `', 'laptop', 'keyed', '` + formerGRN("root", "user", "ada") + `',
 			sha256('keyed'::bytea), now() + interval '1 hour', now(), sha256('s'::bytea), sha256('a'::bytea))`,
 	} {
 		_, err := sp.Exec(ctx, statement)

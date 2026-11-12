@@ -5,7 +5,7 @@ import type { ReportsSource } from "./operator-reports";
 
 /**
  * Where a page reads its operators' reports from: every hosted
- * operator whose grant carries `operator:read`, each with the
+ * operator whose grant carries `iam:operator.read`, each with the
  * organization's GRN its record names. A service answers only for the
  * controllers that reached it (garam-agent-operator ADR 0074 §4 at
  * `ba691a6`), so no one of them speaks for the rest.
@@ -25,7 +25,7 @@ export function reportsSource(
     (o) => !identities.includes(o.grn),
   );
   const services = hosted.data.flatMap((h) => {
-    const reach = controlReach(h, "operator:read");
+    const reach = controlReach(h, "iam:operator.read");
     const record = hosted.operators.find((o) => o.grn === h.grn);
     return reach.status === "ready" && record !== undefined
       ? [{ operator: reach.hosted, orgGrn: record.orgGrn }]
@@ -34,7 +34,7 @@ export function reportsSource(
   const first = hosted.data[0];
   const reach =
     services.length === 0 && first !== undefined
-      ? controlReach(first, "operator:read")
+      ? controlReach(first, "iam:operator.read")
       : null;
   return {
     status: "ready",

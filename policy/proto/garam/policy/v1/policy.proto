@@ -40,7 +40,7 @@ message Subject {
 
 // Action is what the subject asks to do.
 message Action {
-  // name is an action of the Cedar schema, such as `project:read`.
+  // name is an action of the Cedar schema, such as `project.read`.
   string name = 1;
 }
 

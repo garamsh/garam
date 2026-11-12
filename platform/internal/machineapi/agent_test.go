@@ -2,6 +2,7 @@ package machineapi_test
 
 import (
 	"net/http"
+	neturl "net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,8 +28,8 @@ func TestServer_ReportsTheStateTheBodyNamesAndParsesItFirst(t *testing.T) {
 	url, client := listener(t, agents, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, operator)
 	// The agent reports its own runtime state, presenting its own token.
 	agentURL, self := listener(t, agents, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, held)
-	provisioning := url + "/agents/" + held.String() + "/provisioning-state"
-	runtime := agentURL + "/agents/" + held.String() + "/runtime-state"
+	provisioning := url + "/agents/" + neturl.PathEscape(held.String()) + "/provisioning-state"
+	runtime := agentURL + "/agents/" + neturl.PathEscape(held.String()) + "/runtime-state"
 
 	status, body := send(t, client, http.MethodPost, provisioning, `{"epoch":3,"state":"ready"}`)
 	require.Equal(t, http.StatusNoContent, status, body)

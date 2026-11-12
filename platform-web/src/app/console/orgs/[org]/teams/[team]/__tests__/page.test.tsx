@@ -88,7 +88,7 @@ describe("team page", () => {
         HttpResponse.json([
           aliceMembership,
           {
-            userGrn: "grn:root:default:user:bob",
+            userGrn: "grn:root/iam/user/bob",
             nickname: "Bob",
             role: "member",
             since: "2026-01-02T03:04:05Z",
@@ -110,7 +110,7 @@ describe("team page", () => {
 
   it("tells two agents apart by their rows and removes the one chosen", async () => {
     const first = reportedAgent.grn;
-    const second = "grn:acme:default:agent:0a1b2c3d4e5f6071";
+    const second = "grn:acme/iam/agent/0a1b2c3d4e5f6071";
     const removed: string[] = [];
     server.use(
       membersAre(first, second),
@@ -187,9 +187,9 @@ describe("team page", () => {
     server.use(
       membersAre(
         alice.grn,
-        "grn:root:default:user:gone",
-        "grn:acme:default:agent:retired",
-        "grn:acme:default:project:frontend",
+        "grn:root/iam/user/gone",
+        "grn:acme/iam/agent/retired",
+        "grn:acme/iam/project/frontend",
       ),
     );
 
@@ -390,7 +390,8 @@ describe("team page", () => {
 
     server.use(
       answerPermissionChecks((action) =>
-        action === "group:member-add" || action === "group:member-remove"
+        action === "iam:group.member-add" ||
+        action === "iam:group.member-remove"
           ? "deny"
           : "allow",
       ),
@@ -414,7 +415,7 @@ describe("team page", () => {
   it("drops the Settings tab when the server denies renaming and deleting", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "group:update" || action === "group:delete"
+        action === "iam:group.update" || action === "iam:group.delete"
           ? "deny"
           : "allow",
       ),
@@ -480,10 +481,10 @@ describe("team page", () => {
       {
         // In the order Your access lists them, which shares the check.
         checks: [
-          { action: "group:update", resource: group },
-          { action: "group:member-add", resource: group },
-          { action: "group:member-remove", resource: group },
-          { action: "group:delete", resource: group },
+          { action: "iam:group.update", resource: group },
+          { action: "iam:group.member-add", resource: group },
+          { action: "iam:group.member-remove", resource: group },
+          { action: "iam:group.delete", resource: group },
         ],
       },
     ]);
@@ -491,7 +492,7 @@ describe("team page", () => {
   it("hides the rename alone when only renaming is denied", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "group:update" ? "deny" : "allow",
+        action === "iam:group.update" ? "deny" : "allow",
       ),
     );
     const user = userEvent.setup();
@@ -509,7 +510,7 @@ describe("team page", () => {
   it("hides the delete alone when only deleting is denied", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "group:delete" ? "deny" : "allow",
+        action === "iam:group.delete" ? "deny" : "allow",
       ),
     );
     const user = userEvent.setup();

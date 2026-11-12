@@ -207,6 +207,14 @@ func (s *PolicyGRPCServer) AttachPolicy(ctx context.Context, req *authzv1.Attach
 	if err != nil {
 		return nil, grpcError(err)
 	}
+	// An attachment stays inside the policy's org (ADR-0008). An
+	// org-owned subject names the org in its organization segment; a
+	// root-owned identity exists above every org and cannot, so it is
+	// admitted and its org membership stays the api server's
+	// precondition.
+	if subject.Organization != grn.RootOwner && subject.Organization != p.Organization.Identifier {
+		return nil, grpcError(errorx.New(errorx.KindFailedPrecondition, "policy attachment crosses orgs"))
+	}
 	a, err := s.store.AttachPolicy(ctx, g, subject)
 	if err != nil {
 		return nil, grpcError(err)

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -137,7 +138,7 @@ func (s *supervisorTokens) Activate(ctx context.Context, req workload.Activation
 		return nil, errorx.Wrap(err, "activation", errorx.KindInternal)
 	}
 	var answer machinegen.Activation
-	status, err := s.call(ctx, "/agents/"+s.agent.String()+"/activations", agent.TokenExecutionContractVersion, raw, &answer)
+	status, err := s.call(ctx, "/agents/"+url.PathEscape(s.agent.String())+"/activations", agent.TokenExecutionContractVersion, raw, &answer)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +152,7 @@ func (s *supervisorTokens) Activate(ctx context.Context, req workload.Activation
 // mint answers a new agent token for garam. The caller holds mu.
 func (s *supervisorTokens) mint(ctx context.Context) (heldToken, error) {
 	var answer machinegen.AgentToken
-	if _, err := s.call(ctx, "/agents/"+s.agent.String()+"/tokens", operator.TokenContractVersion,
+	if _, err := s.call(ctx, "/agents/"+url.PathEscape(s.agent.String())+"/tokens", operator.TokenContractVersion,
 		[]byte("{}"), &answer); err != nil {
 		return heldToken{}, err
 	}

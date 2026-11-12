@@ -1,0 +1,10 @@
+DROP TRIGGER policy_outbox_artifacts ON artifacts;
+DROP TRIGGER policy_outbox_tasks ON tasks;
+DROP TRIGGER policy_outbox_pages ON pages;
+DROP TRIGGER policy_outbox_channels ON channels;
+DROP FUNCTION policy_entity_state(text, text, text);
+DROP FUNCTION policy_outbox_track();
+DROP FUNCTION policy_outbox_mark(text, text, text);
+DROP TABLE policy_outbox;
+DROP SEQUENCE policy_feed_sequence;
+DROP TABLE policy_feed;

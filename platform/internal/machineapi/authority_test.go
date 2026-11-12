@@ -48,10 +48,10 @@ func versioned(t *testing.T, client *http.Client, method, url, version, body str
 
 func configureBinding(audience grn.GRN) operator.Binding {
 	return operator.Binding{
-		Ref: "ref-1", Grant: "grant-1", Org: grn.New("root", "default", "org", "acme"),
-		Actor: grn.New("root", "default", "user", "member"), Audience: audience,
+		Ref: "ref-1", Grant: "grant-1", Org: grn.New("root", "org", "acme"),
+		Actor: grn.New("root", "user", "member"), Audience: audience,
 		Operation: operator.OperationAgentConfigure, Target: agentGRN("acme", "0a1b2c3d4e5f6071"),
-		Assignment: &operator.Assignment{Assignee: grn.New("acme", "default", "operator", "controller"), Epoch: "7"},
+		Assignment: &operator.Assignment{Assignee: grn.New("acme", "operator", "controller"), Epoch: "7"},
 		RequestID:  "req-1", Digest: operator.BodyDigest(strings.Repeat("0", 64)),
 	}
 }
@@ -61,7 +61,7 @@ func configureBinding(audience grn.GRN) operator.Binding {
 // handshake proved, never one the request names, and that the answer
 // carries the binding with the token's expiry and the contract version.
 func TestIntrospectOperationAuthority_AnswersTheAudienceTheTokenNames(t *testing.T) {
-	hosted := grn.New("acme", "default", "operator", "hosted")
+	hosted := grn.New("acme", "operator", "hosted")
 	expiresAt := time.Date(2026, time.October, 4, 12, 5, 0, 0, time.UTC)
 	authority := operatormocks.NewMockAuthorityService(t)
 	authority.EXPECT().Introspect(mock.Anything, hosted, "secret").
@@ -77,7 +77,7 @@ func TestIntrospectOperationAuthority_AnswersTheAudienceTheTokenNames(t *testing
 	require.NotNil(t, got.ExpiresAt)
 	assert.True(t, expiresAt.Equal(*got.ExpiresAt))
 	require.NotNil(t, got.Assignment)
-	assert.Equal(t, machinegen.BoundAssignment{OperatorGrn: "grn:acme:default:operator:controller", Epoch: "7"}, *got.Assignment)
+	assert.Equal(t, machinegen.BoundAssignment{OperatorGrn: "grn:acme/iam/operator/controller", Epoch: "7"}, *got.Assignment)
 	assert.Equal(t, "ref-1", got.OperationRef)
 }
 
@@ -87,7 +87,7 @@ func TestIntrospectOperationAuthority_AnswersTheAudienceTheTokenNames(t *testing
 // service has no expectation, so reaching it fails the test; the test
 // above is the control.
 func TestOperationAuthorityRoutes_RefuseAMissingOrUnsupportedVersion(t *testing.T) {
-	hosted := grn.New("acme", "default", "operator", "hosted")
+	hosted := grn.New("acme", "operator", "hosted")
 	url, client := authorityListener(t, operatormocks.NewMockAuthorityService(t), hosted)
 	for _, route := range []struct{ method, path, body string }{
 		{http.MethodPost, "/operation-authorities/introspection", `{"authority":"secret"}`},
@@ -107,7 +107,7 @@ func TestOperationAuthorityRoutes_RefuseAMissingOrUnsupportedVersion(t *testing.
 // 403 for one current state no longer authorizes, and 503 naming no
 // cause for one garam could not decide.
 func TestOperationAuthorityRoutes_MapRefusals(t *testing.T) {
-	hosted := grn.New("acme", "default", "operator", "hosted")
+	hosted := grn.New("acme", "operator", "hosted")
 	cases := []struct {
 		err    error
 		status int
@@ -133,7 +133,7 @@ func TestOperationAuthorityRoutes_MapRefusals(t *testing.T) {
 // check answers the binding without a token expiry: a reference is not
 // a token and does not run out with one.
 func TestCheckOperationReference_AnswersNoExpiry(t *testing.T) {
-	hosted := grn.New("acme", "default", "operator", "hosted")
+	hosted := grn.New("acme", "operator", "hosted")
 	authority := operatormocks.NewMockAuthorityService(t)
 	authority.EXPECT().Reference(mock.Anything, hosted, operator.OperationRef("ref-1")).Return(configureBinding(hosted), nil).Once()
 	url, client := authorityListener(t, authority, hosted)

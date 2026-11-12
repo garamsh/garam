@@ -122,7 +122,10 @@ describe("operator keys", () => {
     server.use(
       http.delete(`${API_URL}/orgs/acme/operators/field-one/keys/:kid`, () =>
         HttpResponse.json(
-          { kind: "permission_denied", message: "denied: operator:reissue" },
+          {
+            kind: "permission_denied",
+            message: "denied: iam:operator.reissue",
+          },
           { status: 403 },
         ),
       ),
@@ -142,7 +145,7 @@ describe("operator keys", () => {
       REFUSAL_COPY.permissionDenied,
     );
     expect(dialog).toBeInTheDocument();
-    expect(screen.queryByText(/operator:reissue/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/iam:operator.reissue/)).not.toBeInTheDocument();
   });
 
   it("sends nothing when revoking is cancelled", async () => {

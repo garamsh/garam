@@ -52,40 +52,40 @@ type Operation string
 const (
 	// OperationAgentCreate registers an agent from an immutable template
 	// or profile the Operator already allows.
-	OperationAgentCreate Operation = "agent:create"
+	OperationAgentCreate Operation = "iam:agent.create"
 	// OperationAgentConfigure changes an agent's execution settings: a
 	// high-trust action no member role grants.
-	OperationAgentConfigure Operation = "agent:configure"
+	OperationAgentConfigure Operation = "iam:agent.configure"
 	// OperationAgentActivate bounds the hosted operator's own lifecycle
 	// authority (ADR-0078). No member mints it.
-	OperationAgentActivate Operation = "agent:activate"
+	OperationAgentActivate Operation = "iam:agent.activate"
 	// OperationAgentRecover replaces an agent's credential lineage: a
 	// high-trust action no member role grants, minted for one exact
 	// recovery request (ADR-0078).
-	OperationAgentRecover Operation = "agent:recover"
+	OperationAgentRecover Operation = "iam:agent.recover"
 	// OperationTemplateRead reads the Operator's published agent
 	// templates (#1170).
-	OperationTemplateRead Operation = "agent-template:read"
+	OperationTemplateRead Operation = "iam:agent-template.read"
 	// OperationTemplatePublish publishes the next immutable version of an
 	// Operator template. It edits no agent created from an earlier one.
-	OperationTemplatePublish Operation = "agent-template:publish"
+	OperationTemplatePublish Operation = "iam:agent-template.publish"
 	// OperationProfileRead reads the Operator's published execution
 	// profiles. Publishing one stays with the deployment.
-	OperationProfileRead Operation = "execution-profile:read"
+	OperationProfileRead Operation = "iam:execution-profile.read"
 	// OperationExecutionRead reads an agent's pending, rendered and
 	// runtime-reported execution. Reading the agent's identity, which
-	// agent:read is, grants none of it.
-	OperationExecutionRead Operation = "agent:execution-read"
+	// iam:agent.read is, grants none of it.
+	OperationExecutionRead Operation = "iam:agent.execution-read"
 	// OperationOperatorRead reads what the Operator reports for every
 	// operator of the organization: its images and its last contact
 	// (#1374). It is the action a member already holds to list them.
-	OperationOperatorRead Operation = "operator:read"
+	OperationOperatorRead Operation = "iam:operator.read"
 	// OperationAgentReplace moves an existing agent to another
 	// controller under its GRN, in a new lineage: a high-trust action
 	// no member role grants. Its authority binds the controller the
 	// agent moves to, which the grant covers beside the one it is on
 	// (ADR-0107).
-	OperationAgentReplace Operation = "agent:replace"
+	OperationAgentReplace Operation = "iam:agent.replace"
 )
 
 // ParseOperation parses an operation a grant may carry.

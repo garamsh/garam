@@ -9,9 +9,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use caller_tokens::*;
-use cedar_policy::{EntityUid, Schema};
+use cedar_policy::EntityUid;
 use decision::{Cause, Engine, EntitySlice, EntitySource, OrgGrn, OrgPolicies, PolicySource};
 use entity::{Applied, EntityChange as StoreChange, Error};
+use manifest::Writer;
 use serde_json::json;
 use server::proto::entity_change::Operation;
 use server::proto::policy_service_client::PolicyServiceClient;
@@ -25,8 +26,8 @@ use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::{Channel, Server};
 use tonic::{Code, Request, Status};
 
-const ACME: &str = "grn:root:default:org:acme";
-const ENG: &str = "grn:acme:default:group:eng";
+const ACME: &str = "grn:root/iam/org/acme";
+const ENG: &str = "grn:acme/iam/group/eng";
 
 /// Counts what reaches the store, and writes it nowhere.
 #[derive(Clone)]
@@ -120,9 +121,9 @@ fn upsert(entity: EntityRef, org: Option<EntityRef>, parents: Vec<EntityRef>) ->
 
 fn team() -> EntityChange {
     upsert(
-        named("Team", ENG),
-        Some(named("Org", ACME)),
-        vec![named("Org", ACME)],
+        named("Iam::Team", ENG),
+        Some(named("Iam::Org", ACME)),
+        vec![named("Iam::Org", ACME)],
     )
 }
 
@@ -130,11 +131,17 @@ fn team() -> EntityChange {
 async fn a_type_the_caller_does_not_own_refuses_the_whole_batch() {
     let (mut client, reached) = served().await;
 
-    for not_owned in ["Channel", "Page", "Task", "Artifact", "Policy"] {
+    for not_owned in [
+        "Cowork::Channel",
+        "Cowork::Page",
+        "Cowork::Task",
+        "Cowork::Artifact",
+        "Iam::Policy",
+    ] {
         let foreign = upsert(
-            named(not_owned, "grn:acme:default:thing:one"),
-            Some(named("Org", ACME)),
-            vec![named("Org", ACME)],
+            named(not_owned, "grn:acme/iam/thing/one"),
+            Some(named("Iam::Org", ACME)),
+            vec![named("Iam::Org", ACME)],
         );
         let refused = apply(&mut client, vec![team(), foreign]).await.unwrap_err();
         assert_eq!(refused.code(), Code::PermissionDenied, "{not_owned}");
@@ -156,13 +163,13 @@ async fn a_delete_of_a_type_the_caller_does_not_own_is_refused_too() {
         operation: Some(Operation::Delete(EntityDelete {})),
     };
 
-    let refused = apply(&mut client, vec![delete("Channel")])
+    let refused = apply(&mut client, vec![delete("Cowork::Channel")])
         .await
         .unwrap_err();
     assert_eq!(refused.code(), Code::PermissionDenied);
     assert_eq!(reached.load(Ordering::SeqCst), 0);
 
-    let control = apply(&mut client, vec![delete("Team")]).await.unwrap();
+    let control = apply(&mut client, vec![delete("Iam::Team")]).await.unwrap();
     assert_eq!(control.written, 1);
 }
 
@@ -170,7 +177,7 @@ async fn a_delete_of_a_type_the_caller_does_not_own_is_refused_too() {
 async fn a_change_at_fault_is_refused_where_it_stands_and_the_rest_are_written() {
     let (mut client, reached) = served().await;
 
-    let no_org = upsert(named("Team", ENG), None, vec![named("Org", ACME)]);
+    let no_org = upsert(named("Iam::Team", ENG), None, vec![named("Iam::Org", ACME)]);
     let no_entity = EntityChange {
         entity: None,
         ..team()
@@ -188,24 +195,28 @@ async fn a_change_at_fault_is_refused_where_it_stands_and_the_rest_are_written()
         ..team()
     };
     let not_itself = upsert(
-        named("Org", ACME),
-        Some(named("Org", "grn:root:default:org:globex")),
+        named("Iam::Org", ACME),
+        Some(named("Iam::Org", "grn:root/iam/org/globex")),
         vec![],
     );
     let nul = upsert(
-        named("Team", "grn:acme:\0"),
-        Some(named("Org", ACME)),
+        named("Iam::Team", "grn:acme/\0"),
+        Some(named("Iam::Org", ACME)),
         vec![],
     );
     let nul_parent = upsert(
-        named("Team", ENG),
-        Some(named("Org", ACME)),
-        vec![named("Org", "grn:\0")],
+        named("Iam::Team", ENG),
+        Some(named("Iam::Org", ACME)),
+        vec![named("Iam::Org", "grn:\0")],
     );
-    let empty = upsert(named("Team", ""), Some(named("Org", ACME)), vec![]);
+    let empty = upsert(
+        named("Iam::Team", ""),
+        Some(named("Iam::Org", ACME)),
+        vec![],
+    );
     let bad_parent_type = upsert(
-        named("Team", ENG),
-        Some(named("Org", ACME)),
+        named("Iam::Team", ENG),
+        Some(named("Iam::Org", ACME)),
         vec![named("not a type", ACME)],
     );
 
@@ -243,31 +254,43 @@ async fn a_change_at_fault_is_refused_where_it_stands_and_the_rest_are_written()
 #[tokio::test]
 async fn a_type_an_id_and_a_parent_list_are_bounded() {
     let (mut client, reached) = served().await;
-    let org = || Some(named("Org", ACME));
-    let id = |len: usize| format!("grn:acme:{}", "a".repeat(len - "grn:acme:".len()));
+    let org = || Some(named("Iam::Org", ACME));
+    let id = |len: usize| format!("grn:acme/{}", "a".repeat(len - "grn:acme/".len()));
     let at_limit = id(512);
-    let parents = |count: usize| vec![named("Org", ACME); count];
+    let parents = |count: usize| vec![named("Iam::Org", ACME); count];
 
     let answer = apply(
         &mut client,
         vec![
-            upsert(named("Team", &at_limit), org(), vec![]),
-            upsert(named("Team", &id(513)), org(), vec![]),
-            upsert(named("Team", ENG), org(), vec![named("Org", &id(513))]),
-            upsert(named("Team", ENG), Some(named("Org", &id(513))), vec![]),
-            upsert(named("Team", ENG), org(), vec![named("Org", &at_limit)]),
+            upsert(named("Iam::Team", &at_limit), org(), vec![]),
+            upsert(named("Iam::Team", &id(513)), org(), vec![]),
             upsert(
-                named("Team", ENG),
+                named("Iam::Team", ENG),
+                org(),
+                vec![named("Iam::Org", &id(513))],
+            ),
+            upsert(
+                named("Iam::Team", ENG),
+                Some(named("Iam::Org", &id(513))),
+                vec![],
+            ),
+            upsert(
+                named("Iam::Team", ENG),
+                org(),
+                vec![named("Iam::Org", &at_limit)],
+            ),
+            upsert(
+                named("Iam::Team", ENG),
                 org(),
                 vec![named(&"T".repeat(65), ACME)],
             ),
             upsert(
-                named("Team", ENG),
+                named("Iam::Team", ENG),
                 org(),
                 vec![named(&"T".repeat(64), ACME)],
             ),
-            upsert(named("Team", ENG), org(), parents(1000)),
-            upsert(named("Team", ENG), org(), parents(1001)),
+            upsert(named("Iam::Team", ENG), org(), parents(1000)),
+            upsert(named("Iam::Team", ENG), org(), parents(1001)),
         ],
     )
     .await
@@ -316,19 +339,48 @@ async fn a_write_with_no_token_reaches_no_store() {
 }
 
 #[test]
-fn every_entity_type_of_the_schema_is_owned_or_stated_as_no_callers() {
-    // Cowork's types wait for cowork as a caller, and `Policy` is what
-    // `grant` writes for itself (ADR-0140).
-    const NO_CALLERS: [&str; 5] = ["Channel", "Page", "Task", "Artifact", "Policy"];
-    let source = include_str!("../../../schema/garam.cedarschema");
-    let (schema, _) = Schema::from_cedarschema_str(source).unwrap();
+fn every_entity_type_names_a_caller_that_exists_or_none() {
+    let engine = Engine::load().unwrap();
+    let manifests = engine.manifests();
+    let subjects: Vec<&str> = Caller::ALL.iter().map(|caller| caller.subject()).collect();
 
-    let types: Vec<String> = schema.entity_types().map(ToString::to_string).collect();
-    assert!(types.iter().any(|name| name == "Org"), "{types:?}");
-
-    for name in &types {
-        let owned = Caller::Platform.owns(name);
-        let stated = NO_CALLERS.contains(&name.as_str());
-        assert!(owned != stated, "{name}: owned {owned}, stated {stated}");
+    let types: Vec<_> = manifests
+        .services()
+        .iter()
+        .flat_map(|service| &service.entity_types)
+        .collect();
+    assert!(types.iter().any(|found| found.name == "Iam::Org"));
+    for found in &types {
+        match &found.writer {
+            Writer::Nobody => {}
+            Writer::Caller(sub) => assert!(
+                subjects.contains(&sub.as_str()),
+                "{}: @caller {sub:?} is no Caller",
+                found.name
+            ),
+            Writer::Missing => panic!("{}: no @caller", found.name),
+        }
     }
+    for caller in Caller::ALL {
+        assert!(
+            types
+                .iter()
+                .any(|found| found.writer == Writer::Caller(caller.subject().to_owned())),
+            "no manifest names {caller:?}"
+        );
+    }
+}
+
+#[test]
+fn what_a_caller_owns_is_what_its_annotation_says() {
+    let engine = Engine::load().unwrap();
+    let manifests = engine.manifests();
+
+    assert!(Caller::Platform.owns(manifests, "Iam::Team"));
+    assert!(Caller::Platform.owns(manifests, "Iam::OrgMembers"));
+    // Control: a type of the schema whose `@caller` is `none`, one of
+    // another service, and the unqualified form of an owned one.
+    assert!(!Caller::Platform.owns(manifests, "Iam::Policy"));
+    assert!(!Caller::Platform.owns(manifests, "Cowork::Page"));
+    assert!(!Caller::Platform.owns(manifests, "Team"));
 }

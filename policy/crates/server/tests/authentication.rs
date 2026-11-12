@@ -72,15 +72,15 @@ async fn client() -> PolicyServiceClient<Channel> {
 fn question() -> EvaluateRequest {
     EvaluateRequest {
         subject: Some(Subject {
-            r#type: "User".into(),
-            id: "grn:acme:default:user:lee".into(),
+            r#type: "Iam::User".into(),
+            id: "grn:acme/iam/user/lee".into(),
         }),
         action: Some(Action {
-            name: "agent:read".into(),
+            name: "iam:agent.read".into(),
         }),
         resource: Some(Resource {
-            r#type: "Agent".into(),
-            id: "grn:acme:default:agent:bot".into(),
+            r#type: "Iam::Agent".into(),
+            id: "grn:acme/iam/agent/bot".into(),
             properties: None,
         }),
         context: None,
@@ -124,15 +124,30 @@ async fn a_request_with_no_bearer_token_is_refused() {
     assert_eq!(answer_with(Some(format!("Bearer {token}"))).await, Ok(()));
 }
 
+/// Subjects that are neither the bare `platform` nor a principal of a
+/// scoped caller in an organization other than `root`.
+const UNKNOWN_SUBJECTS: [&str; 16] = [
+    "cowork",
+    "Platform",
+    "platform ",
+    "grn:root/iam/service/platform",
+    "grn:acme/iam/service/platform",
+    "grn:root/iam/service/cowork",
+    "grn:acme/iam/service/other",
+    "grn:acme/iam/service/",
+    "grn:acme/iam/service/cowork/x",
+    "grn:acme/iam/service/cowork#x",
+    "grn:acme/iam/user/cowork",
+    "grn:acme/codehub/service/cowork",
+    "grn:Acme/iam/service/cowork",
+    "grn:/iam/service/cowork",
+    "grn:acme:iam:service:cowork",
+    "grn:root/iam/org/acme",
+];
+
 #[tokio::test]
 async fn a_verified_token_of_a_service_this_one_does_not_serve_is_refused() {
-    for subject in [
-        "cowork",
-        "Platform",
-        "platform ",
-        "grn:root:default:service:platform",
-        "grn:acme:default:service:cowork",
-    ] {
+    for subject in UNKNOWN_SUBJECTS {
         let token = signer().sign(&Claims {
             sub: subject.to_owned(),
             ..claims()
@@ -149,11 +164,39 @@ async fn a_verified_token_of_a_service_this_one_does_not_serve_is_refused() {
 }
 
 #[test]
+fn a_subject_outside_the_two_forms_is_no_known_service() {
+    let verifier = verifier();
+
+    for subject in UNKNOWN_SUBJECTS {
+        let refused = verifier.verify(&signer().sign(&Claims {
+            sub: subject.to_owned(),
+            ..claims()
+        }));
+        assert!(matches!(refused, Err(Refusal::UnknownService)), "{subject}");
+    }
+    let control = verifier.verify(&signer().sign(&Claims {
+        sub: "grn:acme/iam/service/cowork".to_owned(),
+        ..claims()
+    }));
+    assert!(control.is_ok(), "{control:?}");
+}
+
+#[test]
 fn a_verified_token_is_read_as_the_service_its_subject_names() {
     let verifier = verifier();
 
-    let platform = verifier.verify(&signer().sign(&claims()));
-    assert!(matches!(platform, Ok(Caller::Platform)), "{platform:?}");
+    let platform = verifier.verify(&signer().sign(&claims())).unwrap();
+    assert_eq!(platform.caller(), Caller::Platform);
+    assert_eq!(platform.org(), None);
+
+    let cowork = verifier
+        .verify(&signer().sign(&Claims {
+            sub: "grn:acme/iam/service/cowork".to_owned(),
+            ..claims()
+        }))
+        .unwrap();
+    assert_eq!(cowork.caller(), Caller::Cowork);
+    assert_eq!(cowork.org(), Some(&OrgGrn::named("acme")));
 
     let other = verifier.verify(&signer().sign(&Claims {
         sub: "cowork".to_owned(),

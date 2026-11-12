@@ -3,6 +3,10 @@
 > Status: accepted; not yet built; tenant isolation's form, the role
 > templates' scopes and the GRN examples are superseded by
 > [ADR-0137](./0137-tenant-isolation-is-membership-and-the-policy-engine-fails-closed-on-any-evaluation-error.md)
+> and §4's last clause, on a `permit` an organization writes, by
+> [ADR-0144](./0144-an-organization-may-write-permit-policies-over-resources-inside-itself.md)
+> and §3's one schema file and its unqualified names by
+> [ADR-0143](./0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)
 > Date: 2026-10-28
 
 Drafted for #1689, which reserves this number. The direction is the

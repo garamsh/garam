@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 import { SESSION_COOKIE } from "@garam/platform-sdk-ts/session";
 
 import { env } from "@/env";
+import { identifierOf } from "@/lib/grn";
 
 /** An organization the caller belongs to, as cowork names it. */
 export type Organization = { slug: string; name: string };
@@ -26,7 +27,7 @@ export async function listOrganizations(): Promise<Organization[] | null> {
     throw new Error(`platform: listOrgs answered ${response.status}`);
   const orgs = (await response.json()) as { grn: string; name: string }[];
   return orgs.map((o) => ({
-    slug: o.grn.split(":").at(-1) ?? o.grn,
+    slug: identifierOf(o.grn),
     name: o.name,
   }));
 }
@@ -76,12 +77,12 @@ export async function listParticipants(org: string): Promise<Participant[]> {
   return [
     ...members.map((m) => ({
       grn: m.userGrn,
-      name: m.nickname ?? m.userGrn.split(":").at(-1) ?? m.userGrn,
+      name: m.nickname ?? identifierOf(m.userGrn),
       kind: "person" as const,
     })),
     ...agents.map((a) => ({
       grn: a.grn,
-      name: a.name ?? a.grn.split(":").at(-1) ?? a.grn,
+      name: a.name ?? identifierOf(a.grn),
       kind: "agent" as const,
     })),
   ];

@@ -9,6 +9,7 @@ import {
   seedMemberDeniedOperatorRead,
   type Seed,
 } from "./seed";
+import { formatGrn } from "../src/lib/grn";
 
 /*
  * The console against a hosted operator's control service (#1170).
@@ -25,11 +26,11 @@ import {
 const ENDPOINT = "https://control.example.test/garam";
 
 const READS = [
-  "agent:create",
-  "agent-template:read",
-  "agent-template:publish",
-  "execution-profile:read",
-  "agent:execution-read",
+  "iam:agent.create",
+  "iam:agent-template.read",
+  "iam:agent-template.publish",
+  "iam:execution-profile.read",
+  "iam:agent.execution-read",
 ];
 
 /** One request the stub received, as it arrived. */
@@ -143,12 +144,12 @@ async function expectBound(
   expect(recorded!.operation).toBe(operation);
   expect(recorded!.actorGrn).toBe(seed.userGrn);
   expect(recorded!.audienceGrn).toBe(
-    `grn:${seed.orgSlug}:default:operator:hosted`,
+    formatGrn(seed.orgSlug, "iam", "operator", "hosted"),
   );
   expect(recorded!.targetGrn).toBe(target);
   expect(recorded!.bodySha256).toBe(sha256(got.body));
   expect(recorded!.requestTarget).toBe(
-    operation === "agent:create" ? null : got.url.pathname + got.url.search,
+    operation === "iam:agent.create" ? null : got.url.pathname + got.url.search,
   );
   return recorded!;
 }
@@ -332,22 +333,22 @@ test.describe("control service, as contract tests against the agreed Operator wi
         .nth(1),
     ).toHaveText("2");
 
-    const orgGrn = `grn:root:default:org:${signedIn.orgSlug}`;
+    const orgGrn = `grn:root/iam/org/${signedIn.orgSlug}`;
     const list = received.find((r) => r.url.pathname === `${base}/templates`)!;
-    await expectBound(list, signedIn, "agent-template:read", orgGrn);
+    await expectBound(list, signedIn, "iam:agent-template.read", orgGrn);
     const version = received.find((r) =>
       r.url.pathname.endsWith("/versions/1"),
     )!;
-    await expectBound(version, signedIn, "agent-template:read", orgGrn);
+    await expectBound(version, signedIn, "iam:agent-template.read", orgGrn);
     const profiles = received.find(
       (r) => r.url.pathname === `${base}/profiles`,
     )!;
-    await expectBound(profiles, signedIn, "execution-profile:read", orgGrn);
+    await expectBound(profiles, signedIn, "iam:execution-profile.read", orgGrn);
     const publish = received.find((r) => r.method === "POST")!;
     const recorded = await expectBound(
       publish,
       signedIn,
-      "agent-template:publish",
+      "iam:agent-template.publish",
       orgGrn,
     );
     const sent = JSON.parse(publish.body) as {
@@ -471,7 +472,12 @@ test.describe("control service, as contract tests against the agreed Operator wi
     baseURL,
   }) => {
     await seedHostedOperator(signedIn, ENDPOINT, READS);
-    const agentGrn = `grn:${signedIn.orgSlug}:default:agent:${signedIn.agentIdentifier}`;
+    const agentGrn = formatGrn(
+      signedIn.orgSlug,
+      "iam",
+      "agent",
+      signedIn.agentIdentifier,
+    );
     const base = `/garam/v1/orgs/${signedIn.orgSlug}`;
     let reported = false;
     const received = await stubControl(
@@ -537,11 +543,16 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(page.getByText(/^Created at revision 1\.$/)).toBeVisible();
 
     const create = received.find((r) => r.method === "POST")!;
-    const controller = `grn:${signedIn.orgSlug}:default:operator:${signedIn.operatorIdentifier}`;
+    const controller = formatGrn(
+      signedIn.orgSlug,
+      "iam",
+      "operator",
+      signedIn.operatorIdentifier,
+    );
     const recorded = await expectBound(
       create,
       signedIn,
-      "agent:create",
+      "iam:agent.create",
       controller,
     );
     expect(JSON.parse(create.body)).toEqual({
@@ -551,8 +562,8 @@ test.describe("control service, as contract tests against the agreed Operator wi
       profile: { name: "small", version: 1 },
     });
 
-    // The grant carries agent:execution-read, so the last step reads
-    // the agent back from the control service.
+    // The grant carries iam:agent.execution-read, so the last step
+    // reads the agent back from the control service.
     await expect(
       page.getByRole("heading", { level: 2, name: "Verify", exact: true }),
     ).toBeVisible();
@@ -582,7 +593,12 @@ test.describe("control service, as contract tests against the agreed Operator wi
     const execution = received.find((r) =>
       r.url.pathname.endsWith("/execution"),
     )!;
-    await expectBound(execution, signedIn, "agent:execution-read", agentGrn);
+    await expectBound(
+      execution,
+      signedIn,
+      "iam:agent.execution-read",
+      agentGrn,
+    );
 
     reported = true;
     await page.reload();
@@ -642,7 +658,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(page.getByText(signedIn.nickname).first()).toBeVisible();
   });
 
-  test("a member denied operator:read keeps the agent views, with the control service panels saying why", async ({
+  test("a member denied iam:operator.read keeps the agent views, with the control service panels saying why", async ({
     page,
     context,
     signedIn,

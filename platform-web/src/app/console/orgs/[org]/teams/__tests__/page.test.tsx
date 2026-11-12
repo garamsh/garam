@@ -111,7 +111,7 @@ describe("teams section", () => {
 
     server.use(
       answerPermissionChecks((action) =>
-        action === "group:create" ? "deny" : "allow",
+        action === "iam:group.create" ? "deny" : "allow",
       ),
     );
     await renderServerComponent(TeamsPage(params("acme")));
@@ -171,7 +171,7 @@ describe("teams section", () => {
 
     server.use(
       answerPermissionChecks((action) =>
-        action === "group:create" ? "deny" : "allow",
+        action === "iam:group.create" ? "deny" : "allow",
       ),
     );
     await renderServerComponent(TeamsPage(params("acme")));

@@ -64,7 +64,7 @@ func (p *policy) Authorize(_ context.Context, _, _, object grn.GRN, action strin
 }
 
 // proofFixture is one organization's hosted operator, the controller
-// its grant covers for agent:activate, and an agent placed on it.
+// its grant covers for iam:agent.activate, and an agent placed on it.
 type proofFixture struct {
 	now        time.Time
 	org        grn.GRN
@@ -82,7 +82,7 @@ func newProofFixture() *proofFixture {
 	agent := agentGRN("acme", "bot")
 	return &proofFixture{
 		now:        now,
-		org:        grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme"),
+		org:        grn.New(grn.RootOwner, "org", "acme"),
 		hosted:     operatorGRN("acme", "hosted"),
 		controller: controller,
 		agent:      agent,
@@ -108,7 +108,7 @@ func TestProofService_ProvesAControllerItsGrantCovers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &operator.ControllerProof{Controller: f.controller, Org: f.org}, proof)
 	assert.Equal(t, f.org, f.policy.object, "a session is decided on the organization")
-	assert.Equal(t, "agent:activate", f.policy.action)
+	assert.Equal(t, "iam:agent.activate", f.policy.action)
 
 	ended := f.now
 	tests := map[string]struct {
@@ -124,7 +124,7 @@ func TestProofService_ProvesAControllerItsGrantCovers(t *testing.T) {
 			g.ExpiresAt = f.now
 			return currentGrant{grant: &g}
 		}, kind: errorx.KindPermissionDenied},
-		"a grant without agent:activate": {store: func(g operator.Grant) operator.GrantStore {
+		"a grant without iam:agent.activate": {store: func(g operator.Grant) operator.GrantStore {
 			g.Operations = []operator.Operation{operator.OperationAgentCreate, operator.OperationAgentConfigure}
 			return currentGrant{grant: &g}
 		}, kind: errorx.KindPermissionDenied},
@@ -206,14 +206,14 @@ func TestProofService_BindsAnAgentToItsCurrentPlacement(t *testing.T) {
 // controller is the control.
 func TestParseController_AnswersOnlyAnOperatorOfTheCallersOrganization(t *testing.T) {
 	hosted := operatorGRN("acme", "hosted")
-	controller, err := operator.ParseController(hosted, "grn:acme:default:operator:controller")
+	controller, err := operator.ParseController(hosted, "grn:acme/iam/operator/controller")
 	require.NoError(t, err)
 	assert.Equal(t, operatorGRN("acme", "controller"), controller)
 
 	for raw, kind := range map[string]errorx.Kind{
-		"not a grn":                         errorx.KindInvalidArgument,
-		"grn:globex:default:operator:other": errorx.KindNotFound,
-		"grn:acme:default:agent:bot":        errorx.KindNotFound,
+		"not a grn":                     errorx.KindInvalidArgument,
+		"grn:globex/iam/operator/other": errorx.KindNotFound,
+		"grn:acme/iam/agent/bot":        errorx.KindNotFound,
 	} {
 		_, err := operator.ParseController(hosted, raw)
 		assert.Equal(t, kind, errorx.KindOf(err), raw)

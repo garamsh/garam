@@ -4,6 +4,7 @@ import { z } from "zod";
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, holdSession, test } from "./fixtures";
 import { seedMember, type Seed } from "./seed";
+import { formatGrn, slugFromGrn } from "../src/lib/grn";
 
 /** Opens a tab of the page and waits until it is the one shown. */
 async function openTab(page: Page, name: string | RegExp): Promise<void> {
@@ -29,14 +30,14 @@ function denyDocument(orgSlug: string, actions: string[]): string {
   return JSON.stringify({
     Version: "2026-07-25",
     Statement: [
-      { Effect: "Deny", Action: actions, Resource: [`grn:${orgSlug}:*`] },
+      { Effect: "Deny", Action: actions, Resource: [`grn:${orgSlug}/*`] },
     ],
   });
 }
 
 /** The seeded team's GRN: its identifier is `engineering`. */
 function teamGrn(seed: Seed): string {
-  return `grn:${seed.orgSlug}:default:group:engineering`;
+  return formatGrn(seed.orgSlug, "iam", "group", "engineering");
 }
 
 /**
@@ -54,7 +55,7 @@ async function createPolicy(
   });
   expect(created.status()).toBe(201);
   const { grn } = z.object({ grn: z.string() }).parse(await created.json());
-  return grn.split(":")[4];
+  return slugFromGrn(grn);
 }
 
 /** Attaches a policy to the seeded team and activates it, through the API. */
@@ -123,7 +124,7 @@ test.describe("permissions", () => {
       JSON.stringify({
         Version: "2026-07-25",
         Statement: [
-          { Effect: "Maybe", Action: ["project:delete"], Resource: ["*"] },
+          { Effect: "Maybe", Action: ["iam:project.delete"], Resource: ["*"] },
         ],
       }),
     );
@@ -162,8 +163,8 @@ test.describe("permissions", () => {
         Statement: [
           {
             Effect: "Deny",
-            Action: ["project:update"],
-            Resource: [`grn:${signedIn.orgSlug}:default:project:*`],
+            Action: ["iam:project.update"],
+            Resource: [`grn:${signedIn.orgSlug}/iam/project/*`],
           },
         ],
       }),
@@ -275,8 +276,8 @@ test.describe("permissions", () => {
         Statement: [
           {
             Effect: "Allow",
-            Action: ["org:read"],
-            Resource: [`grn:${signedIn.orgSlug}:*`],
+            Action: ["iam:org.read"],
+            Resource: [`grn:${signedIn.orgSlug}/*`],
           },
         ],
       }),
@@ -335,7 +336,7 @@ test.describe("permissions", () => {
       page.request,
       signedIn,
       "Deny project deletion",
-      denyDocument(signedIn.orgSlug, ["project:delete"]),
+      denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
     );
     await attachToTeamAndActivate(page.request, signedIn, policy);
     const second = await page.request.post(
@@ -402,7 +403,7 @@ test.describe("permissions", () => {
       page.request,
       signedIn,
       "Deny project deletion",
-      denyDocument(signedIn.orgSlug, ["project:delete"]),
+      denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
     );
     await attachToTeamAndActivate(page.request, signedIn, policy);
     await page.goto(policyUrl(signedIn, policy));
@@ -419,7 +420,7 @@ test.describe("permissions", () => {
     );
     await page
       .getByRole("textbox", { name: "Statement 1 action 2" })
-      .fill("project:update");
+      .fill("iam:project.update");
     await expect(page.getByText("Edited, not published")).toBeVisible();
 
     await publish.click();
@@ -430,7 +431,7 @@ test.describe("permissions", () => {
       `It applies at once. Applies to ${signedIn.groupName} (Team).`,
     );
     await expect(dialog.getByRole("figure")).toContainText(
-      'Added: "project:update"',
+      'Added: "iam:project.update"',
     );
     await dialog
       .getByRole("button", { name: "Publish v2", exact: true })
@@ -515,7 +516,7 @@ test.describe("permissions accessibility", () => {
         page.request,
         signedIn,
         name,
-        denyDocument(signedIn.orgSlug, ["project:delete"]),
+        denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
       );
     }
     await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions`);
@@ -544,7 +545,7 @@ test.describe("permissions accessibility", () => {
       request,
       signedIn,
       "Deny project deletion",
-      denyDocument(signedIn.orgSlug, ["project:delete"]),
+      denyDocument(signedIn.orgSlug, ["iam:project.delete"]),
     );
     await attachToTeamAndActivate(request, signedIn, policy);
     const saved = await request.post(
@@ -552,7 +553,7 @@ test.describe("permissions accessibility", () => {
       {
         data: {
           document: JSON.parse(
-            denyDocument(signedIn.orgSlug, ["project:update"]),
+            denyDocument(signedIn.orgSlug, ["iam:project.update"]),
           ),
         },
       },
@@ -653,8 +654,8 @@ test.describe("permissions accessibility", () => {
           .getByRole("button", { name: /^Compare/ })
           .click();
         const diff = page.getByRole("dialog").getByRole("figure");
-        await expect(diff).toContainText('Added: "project:update"');
-        await expect(diff).toContainText('Removed: "project:delete"');
+        await expect(diff).toContainText('Added: "iam:project.update"');
+        await expect(diff).toContainText('Removed: "iam:project.delete"');
       },
       include: ['[role="dialog"]'],
     },

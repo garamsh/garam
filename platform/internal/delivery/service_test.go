@@ -1495,20 +1495,27 @@ func idleEnds(t *testing.T, queue delivery.Queue, done <-chan struct{}) delivery
 // without it a loop that asked again at once whatever garam said would
 // read exactly like this one.
 func TestService_ReadsAnEmptyPollFromTheKindGaramAnswers(t *testing.T) {
-	empty := runPolling(t, errorx.New(errorx.KindNotFound, "delivery: no message ready"))
+	empty := runPolling(t, errorx.New(errorx.KindNotFound, "delivery: no message ready"), 2)
 	assert.Greater(t, empty, 1, "an empty poll is asked again at once")
 
-	unreachable := runPolling(t, errorx.New(errorx.KindUnavailable, "delivery: garam answered 503"))
+	unreachable := runPolling(t, errorx.New(errorx.KindUnavailable, "delivery: garam answered 503"), 1)
 	assert.Equal(t, 1, unreachable, "the control: another kind waits the retry delay out")
 }
 
-// runPolling runs the loop for one window against a garam answering
-// every poll with err, and returns how many polls it made. The retry
-// delay is far longer than the window, so a poll waited on is a poll not
-// repeated.
-func runPolling(t *testing.T, answer error) int {
+// pollWindow is how long runPolling watches the loop once it has made
+// the polls the case needs. It opens on those polls rather than on the
+// loop's start, so a runner that gives this process no CPU delays the
+// window instead of closing it on a loop that never got to run.
+const pollWindow = 50 * time.Millisecond
+
+// runPolling runs the loop against a garam answering every poll with
+// err, waits until it has polled at least reached times, then watches
+// it for one more window and returns how many polls it made. The
+// retry delay is far longer than the window, so a poll waited on is a
+// poll not repeated.
+func runPolling(t *testing.T, answer error, reached int) int {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	queue := &pollingQueue{err: answer}
 	s, err := delivery.NewService(idleEnds(t, queue, ctx.Done()), delivery.Config{
@@ -1518,7 +1525,12 @@ func runPolling(t *testing.T, answer error) int {
 		CallTimeout:      time.Second,
 	})
 	require.NoError(t, err)
-	require.NoError(t, s.Run(ctx))
+	ran := make(chan error, 1)
+	go func() { ran <- s.Run(ctx) }()
+	eventually(t, func() bool { return queue.polls() >= reached }, "the loop never made the polls the case needs")
+	time.Sleep(pollWindow)
+	cancel()
+	require.NoError(t, <-ran)
 	return queue.polls()
 }
 

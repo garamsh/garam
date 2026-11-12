@@ -1,12 +1,12 @@
 apiVersion: v2
 name: garam
-description: The five workloads garam runs — serve api, serve authz, serve machine, the web console, and the migrate job
+description: The workloads garam runs — serve api, serve authz, serve machine, the policy service, the web console, the site, and the two migrate jobs
 type: application
 # The chart's own version, moved by a change to the chart. It is not a
 # garam version: nothing packages or publishes this chart, so a consumer
 # pins it by a git ref of garamsh/garam and pins the images separately
 # through image.*.tag (ADR-0042).
-version: 0.11.0
+version: 0.12.0
 # No appVersion. ADR-0042 records that the change publishing the first
 # release sets it; `v0.1.0` published on 2026-09-01 and this change does
 # not set it, so the field is still absent and nothing here decides

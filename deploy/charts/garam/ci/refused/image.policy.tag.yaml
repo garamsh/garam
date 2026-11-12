@@ -1,0 +1,6 @@
+# No policy image tag. The render must refuse and name image.policy.tag:
+# the version a deployment runs is its own to name, and a default would
+# go on naming one build after the next lands.
+image:
+  policy:
+    tag: ""

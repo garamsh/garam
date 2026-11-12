@@ -37,6 +37,10 @@ CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
 CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z][A-Z0-9_]*"' --include=*.go ../../platform/internal ../../platform/cmd | sed 's/.*"\([A-Z][A-Z0-9_]*\)"/\1/' | sort -u)
 CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' ../../platform-web/src/env.ts ../../site-web/src/env.ts | sort -u)
 
+# The policy service's own, read from the one place its settings are
+# read: every name reaches `required(...)` in its config.rs.
+CHART_POLICY_ENV = $(shell grep -hoE 'required\("[A-Z][A-Z0-9_]*"\)' ../../policy/crates/server/src/config.rs | sed 's/.*"\([A-Z][A-Z0-9_]*\)".*/\1/' | sort -u)
+
 # What the chart declares it does not set, read from the table that
 # carries the reasons. A renamed heading empties this and fails the
 # target below rather than exempting nothing quietly.
@@ -74,9 +78,15 @@ chart-lint:
 # chart is lowercase, so an all-caps `- name:` in the render is an
 # environment variable.
 chart-render:
-	@echo 'chart-render: $(words $(CHART_GO_ENV)) Go and $(words $(CHART_WEB_ENV)) web environment names read by the source, $(words $(CHART_UNSET_ENV)) declared unset — environment names only, $(CHART_DIR)/README.md §What the checks are complete over'
-	@test -n '$(CHART_GO_ENV)' && test -n '$(CHART_WEB_ENV)' \
-		|| { echo 'chart-render: the source sweep read no name — the envName block or the env.ts parse is broken'; exit 1; }
+	@echo 'chart-render: $(words $(CHART_GO_ENV)) Go and $(words $(CHART_WEB_ENV)) web and $(words $(CHART_POLICY_ENV)) policy environment names read by the source, $(words $(CHART_UNSET_ENV)) declared unset — environment names only, $(CHART_DIR)/README.md §What the checks are complete over'
+	@test -n '$(CHART_GO_ENV)' && test -n '$(CHART_WEB_ENV)' && test -n '$(CHART_POLICY_ENV)' \
+		|| { echo 'chart-render: the source sweep read no name — the envName block, the env.ts parse or the policy config.rs parse is broken'; exit 1; }
+	@# The same for the policy service: every read is std::env::var, and
+	@# it is called once, inside required(). A second read is a name the
+	@# sweep above cannot see.
+	@preads="$$(grep -rhoE 'env::(var|var_os|vars)\(' --include=*.rs ../../policy/crates | wc -l)"; \
+		test "$$preads" -eq 1 \
+		|| { echo "chart-render: $$preads reads of the environment under policy/crates, expected the one required() holds — a read outside it is a name this check cannot see"; exit 1; }
 	@# What makes the block above the whole of what the Go source reads:
 	@# every read reaches os.Getenv, and os.Getenv is called once, inside
 	@# envOr. A second read is a name this check cannot see.
@@ -97,7 +107,7 @@ chart-render:
 		echo "chart-render: $$(cat "$$out"/*-values.yaml | grep -c '^kind:') documents rendered"; \
 		sed -n 's/^ *- name: \([A-Z][A-Z0-9_]*\)$$/\1/p' "$$out"/*-values.yaml | sort -u > "$$out/rendered"; \
 		printf '%s\n' $(CHART_UNSET_ENV) | sort -u > "$$out/unset"; \
-		printf '%s\n' $(CHART_GO_ENV) $(CHART_WEB_ENV) | sort -u > "$$out/source"; \
+		printf '%s\n' $(CHART_GO_ENV) $(CHART_WEB_ENV) $(CHART_POLICY_ENV) | sort -u > "$$out/source"; \
 		both="$$(comm -12 "$$out/rendered" "$$out/unset")"; \
 		test -z "$$both" || { echo "chart-render: rendered and declared unset at once:"; echo "$$both"; exit 1; }; \
 		sort -u "$$out/rendered" "$$out/unset" > "$$out/covered"; \

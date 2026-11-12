@@ -1,0 +1,159 @@
+# The policy service (ADR-0146). It serves gRPC over TLS and in no
+# other way (ADR-0138), so its probes and nothing else answer in
+# plaintext, on a port of their own.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "garam.name" (dict "root" $ "word" "policy") }}
+  labels:
+    {{- include "garam.labels" (dict "root" $ "component" "policy") | nindent 4 }}
+spec:
+  # Fixed at one, as on every workload here: replica safety above one is
+  # not established.
+  replicas: 1
+  # Recreate, not the default RollingUpdate: at one replica the default
+  # brings the new pod up before taking the old one down, so an upgrade
+  # runs two of a workload whose safety above one replica is not
+  # established (docs/architecture/deployment-contract.md §Not
+  # established). Terminating first holds the count `replicas` fixes
+  # across an upgrade as well as at rest.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "garam.selectorLabels" (dict "root" $ "component" "policy") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "garam.selectorLabels" (dict "root" $ "component" "policy") | nindent 8 }}
+    spec:
+{{- include "garam.serviceAccountName" (dict "root" $ "component" "policy") }}
+{{- include "garam.imagePullSecrets" . }}
+      # The volume below is projected 0440, so its group owner decides
+      # who reads it. fsGroup makes that group the containers', without
+      # which the copy cannot open its source.
+{{- include "garam.podSecurityContext" (dict "root" $ "name" "policy" "fsGroup" .Values.image.policy.runAsGroup) }}
+      initContainers:
+        # A projected Secret is root-owned and group-readable, and the
+        # process refuses a key file it does not own or that any group
+        # or other bit is set on (ADR-0015). This copies the pair as the
+        # same UID, as machine.yaml does for the machine listener's.
+        - name: tls
+          image: {{ required "machine.copyImage is required" .Values.machine.copyImage }}
+{{- include "garam.containerSecurityContext" . }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              for f in {{ .Values.policy.tls.certKey }} {{ .Values.policy.tls.keyKey }}; do
+                install -m 0600 "/etc/garam/policy-tls-secret/$f" "/run/garam/policy-tls/$f"
+              done
+              ls -l /run/garam/policy-tls
+          volumeMounts:
+            - name: tls-secret
+              mountPath: /etc/garam/policy-tls-secret
+              readOnly: true
+            - name: tls
+              mountPath: /run/garam/policy-tls
+          # The policy container's figure reaches this one too, for the
+          # reason machine.yaml gives.
+          resources: {{- toYaml .Values.policy.resources | nindent 12 }}
+      containers:
+        - name: policy
+          image: {{ include "garam.image" (dict "root" $ "name" "policy") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+{{- include "garam.containerSecurityContext" . }}
+          args: ["serve"]
+          env:
+            {{- include "garam.policyDatabaseEnv" . | nindent 12 }}
+            - name: POLICY_ADDR
+              value: "0.0.0.0:8443"
+            - name: POLICY_HEALTH_ADDR
+              value: "0.0.0.0:8091"
+            # The one issuer the service trusts is the one the platform
+            # signs its own calls under, so one value renders both.
+            - name: POLICY_TOKEN_ISSUER
+              value: {{ required "api.policy.tokenIssuer is required: it is the issuer the policy service trusts and the platform signs under, one value for both" .Values.api.policy.tokenIssuer | quote }}
+            # The public half of the platform's signing key, read once
+            # at start (ADR-0138), so a rotation is a rollout.
+            - name: POLICY_JWKS_FILE
+              value: {{ printf "/etc/garam/policy-jwks/%s" (required "policy.jwks.key is required" .Values.policy.jwks.key) | quote }}
+            # These two name files and carry none of their contents,
+            # and the pair is read once at start.
+            - name: POLICY_TLS_CERT_FILE
+              value: {{ printf "/run/garam/policy-tls/%s" (required "policy.tls.certKey is required" .Values.policy.tls.certKey) | quote }}
+            - name: POLICY_TLS_KEY_FILE
+              value: {{ printf "/run/garam/policy-tls/%s" (required "policy.tls.keyKey is required" .Values.policy.tls.keyKey) | quote }}
+          ports:
+            - name: grpc
+              containerPort: 8443
+            - name: health
+              containerPort: 8091
+          # The contract port serves TLS alone, so the probes answer on
+          # a plaintext listener of their own.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8091
+          # Readiness is bounded at 2s inside the process, so a probe
+          # timing out at the default 1s reports its own deadline
+          # instead of the dependency that failed.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8091
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: tls
+              mountPath: /run/garam/policy-tls
+              readOnly: true
+            - name: jwks
+              mountPath: /etc/garam/policy-jwks
+              readOnly: true
+          resources: {{- toYaml .Values.policy.resources | nindent 12 }}
+      volumes:
+        # One source per file, so only the pair is projected from a
+        # Secret that may carry more.
+        - name: tls-secret
+          projected:
+            defaultMode: 0440
+            sources:
+              - secret:
+                  name: {{ required "policy.tls.secretName is required: it names the Secret holding the service's certificate and key" .Values.policy.tls.secretName }}
+                  items:
+                    - key: {{ .Values.policy.tls.certKey }}
+                      path: {{ .Values.policy.tls.certKey }}
+                    - key: {{ .Values.policy.tls.keyKey }}
+                      path: {{ .Values.policy.tls.keyKey }}
+        # Memory-backed, so the copy the process owns never reaches the
+        # node's disk.
+        - name: tls
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        # The verifying keys are public, so they are projected as they
+        # are rather than copied to an owner-only file.
+        - name: jwks
+          secret:
+            secretName: {{ required "policy.jwks.secretName is required: it names the Secret holding the JWKS file, the public half of the platform's signing key" .Values.policy.jwks.secretName }}
+            items:
+              - key: {{ .Values.policy.jwks.key }}
+                path: {{ .Values.policy.jwks.key }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "garam.name" (dict "root" $ "word" "policy") }}
+  labels:
+    {{- include "garam.labels" (dict "root" $ "component" "policy") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "garam.selectorLabels" (dict "root" $ "component" "policy") | nindent 4 }}
+  ports:
+    - name: grpc
+      port: 8443
+      targetPort: grpc
+    - name: health
+      port: 8091
+      targetPort: health
+{{- include "garam.serviceAccount" (dict "root" $ "component" "policy") }}

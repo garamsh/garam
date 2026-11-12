@@ -72,7 +72,13 @@ organization. Tenancy is structural, not a flag.
   `iam` service.
 - **A resource's parent is its name with the last pair removed.** A
   name of one pair has no parent in the name; its owner is its
-  organization.
+  organization. Where only the first `project/<id>` pair is left, that
+  pair names the platform's project and no entity of the service
+  holding it, so the parent is the project's own name,
+  `grn:<org>/iam/project/<id>`: the parent of
+  `grn:acme/cowork/project/web/channel/general` is
+  `grn:acme/iam/project/web`. `GRN.Parent()` answers it, and every
+  parent it answers parses.
 - **A project-scoped resource begins with `project/<id>`** after the
   service. The `default` placeholder of the earlier form is gone: an
   organization-level resource has no project pair. A first
@@ -124,8 +130,11 @@ action with the types it applies to, and held to them by `make -C
 policy check-gen`. A type is therefore added in a manifest, and this
 table describes what they declare. Not built: codehub declares no
 manifest, so `repo` is in no catalogue and `lib/grn` refuses a name of
-`codehub` until it does (#1760), and nothing yet serves, read-only, a
-GRN's service, type, parent and the actions that apply.
+`codehub` until it does (#1760). Built (#1788): `GET /registry`
+answers the services with their types and actions, and `GET
+/registry/grn?grn=<name>` answers a name's service, type, entity type,
+parent, locator and the actions that apply to its type, both from the
+catalogue alone and reading no entity.
 
 ## identifier
 
@@ -185,8 +194,8 @@ grammar as follows.
 
 ## Open questions
 
-The per-service manifest is built and the served registry of types is
-decided and unbuilt, in ADR-0143, which also settles how an action
+The per-service manifest and the served registry of types are built
+(ADR-0143, #1788), and ADR-0143 also settles how an action
 reads once types belong to services: `<service>:<type>.<verb>`
 (ADR-0145, which replaced ADR-0143's hyphen), so an action's name does
 change. Left open there: a service an organization defines, and a

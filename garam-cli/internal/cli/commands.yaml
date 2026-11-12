@@ -47,6 +47,8 @@ names:
   revokeMySession: sessions revoke
   decideDeviceCode: device decide
   listProviders: providers list
+  getRegistry: registry list
+  describeGrn: registry describe
 
 # Header parameters the CLI sends with a fixed value.
 headers:

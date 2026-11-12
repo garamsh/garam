@@ -1232,8 +1232,9 @@ ADRs:
   included; a role is the `Iam` namespace's; the platform serves a
   read-only registry of services, types and actions; adding a service
   is one pull request adding one manifest; partly built (items 1, 2,
-  3 and 5, #1777, and item 4, the platform's action names, #1779), the
-  registry and a new service's proofs not; supersedes 0130 in part, on
+  3 and 5, #1777, item 4, the platform's action names, #1779, and
+  item 6, the registry, #1788), a new service's proofs not;
+  supersedes 0130 in part, on
   §3's one schema file, 0140 in part, on §2's table of who owns a
   type, and 0141 in part, on §5 and §13; item 3's separator and group
   spelling are superseded by 0145

@@ -1,6 +1,7 @@
 package grn_test
 
 import (
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
@@ -200,6 +201,79 @@ func TestParse(t *testing.T) {
 			assert.Equal(t, tc.want, got)
 			assert.Equal(t, tc.input, got.String())
 		})
+	}
+}
+
+// TestParse_TellsAnUndeclaredNameFromOneThatIsNoGRN reads the refusal
+// for a service or type no manifest declares apart from the refusals
+// for a string that is no GRN. Each other row is the control: it is
+// not ErrUndeclared, so the sentinel tracks the catalogue and not
+// every refusal.
+func TestParse_TellsAnUndeclaredNameFromOneThatIsNoGRN(t *testing.T) {
+	tests := []struct {
+		name       string
+		input      string
+		undeclared bool
+		refused    bool
+	}{
+		{"service no manifest declares", "grn:acme/nosuch/thing/x", true, true},
+		{"type its service does not declare", "grn:acme/iam/widget/x", true, true},
+		{"type another service declares", "grn:acme/cowork/user/alice", true, true},
+		{"no prefix", "arn:acme/iam/user/alice", false, true},
+		{"half a pair", "grn:acme/iam/user", false, true},
+		{"five-segment form", "grn:acme:default:user:alice", false, true},
+		{"invalid organization", "grn:AC/iam/user/alice", false, true},
+		{"invalid identifier", "grn:acme/iam/user/al?ice", false, true},
+		{"declared and well formed", "grn:acme/iam/user/alice", false, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := grn.Parse(tc.input)
+			assert.Equal(t, tc.refused, err != nil)
+			assert.Equal(t, tc.undeclared, errors.Is(err, grn.ErrUndeclared))
+			if tc.refused {
+				assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+			}
+		})
+	}
+}
+
+// TestGRN_ParentIsTheNameWithItsLastPairRemoved reads ADR-0142 item 3:
+// a name of one pair has none, and a locator is not part of a parent.
+func TestGRN_ParentIsTheNameWithItsLastPairRemoved(t *testing.T) {
+	tests := []struct{ name, input, want string }{
+		{"one pair", "grn:acme/iam/user/alice", ""},
+		{"organization", "grn:root/iam/org/acme", ""},
+		{"project-scoped cowork name", "grn:acme/cowork/project/frontend/channel/general", "grn:acme/iam/project/frontend"},
+		{"iam name under a project", "grn:acme/iam/project/frontend/agent/bot", "grn:acme/iam/project/frontend"},
+		{"nested two deep", "grn:acme/cowork/project/frontend/channel/general/task/t1", "grn:acme/cowork/project/frontend/channel/general"},
+		{"locator dropped", "grn:acme/cowork/project/frontend/page/home#section-2", "grn:acme/iam/project/frontend"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			g, err := grn.Parse(tc.input)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, g.Parent())
+		})
+	}
+}
+
+// TestGRN_EveryParentIsAGRN holds that a parent is a name garam knows:
+// following it never lands on a name Parse refuses, up to a name of one
+// pair.
+func TestGRN_EveryParentIsAGRN(t *testing.T) {
+	for _, input := range []string{
+		"grn:acme/cowork/project/frontend/channel/general",
+		"grn:acme/iam/project/frontend/agent/bot",
+		"grn:acme/cowork/project/frontend/channel/general/task/t1",
+		"grn:acme/cowork/project/frontend/page/home#section-2",
+	} {
+		g, err := grn.Parse(input)
+		require.NoError(t, err, input)
+		for parent := g.Parent(); parent != ""; parent = g.Parent() {
+			g, err = grn.Parse(parent)
+			require.NoError(t, err, "the parent %s of %s", parent, input)
+		}
 	}
 }
 

@@ -35,7 +35,8 @@ yet (#1689).
   the sequenced write owners reach it by.
 - `crates/access-report/` — the policies naming a subject or a resource.
 - `crates/server/` — the binary, `policy`. `policy serve` serves the
-  contract, authenticates callers and joins the adapters to the ports,
+  contract and AuthZEN's HTTP binding, authenticates callers and joins
+  the adapters to the ports,
   reading `POLICY_ADDR`, `POLICY_HEALTH_ADDR`, `POLICY_DATABASE_URL`,
   `POLICY_TOKEN_ISSUER`, `POLICY_JWKS_FILE`, `POLICY_TLS_CERT_FILE` and
   `POLICY_TLS_KEY_FILE`. `policy migrate` applies the migrations and
@@ -130,6 +131,10 @@ yet (#1689).
 
 ## Transport
 
+- **The contract and its HTTP binding share one listener,
+  `POLICY_ADDR`.** The TLS handshake offers `h2` and `http/1.1`, so a
+  gRPC client and a client with no HTTP/2 reach the same port under the
+  same certificate, and no setting is added for either.
 - **The contract is served over TLS and in no other way.** Every setting
   `policy serve` reads is required, so with either half of the pair
   unset it refuses to start, and no setting turns TLS off: a bearer
@@ -151,6 +156,57 @@ yet (#1689).
   a connection is encrypted and what it verifies. `sslrootcert` names
   the database's root, and without one it verifies against the system's
   roots, which the image ships.
+
+## AuthZEN binding
+
+The service serves OpenID AuthZEN Authorization API 1.0 beside its gRPC
+contract, as HTTP/1.1 and JSON on the same listener (sections 5, 6, 7,
+9 and 10 of the specification). The bearer token is verified, and the
+caller bound, as `Callers` states for gRPC, and both transports reach
+one implementation of the decision and of the entity write.
+
+| Route | Does |
+|-------|------|
+| `POST /access/v1/evaluation` | `Evaluate` |
+| `POST /access/v1/evaluations` | `Evaluations` |
+| `GET /.well-known/authzen-configuration` | names the two endpoints above; asks for no token |
+| `POST /garam/policy/v1/entity-changes` | `ApplyEntityChanges` |
+
+- **Bodies are the specification's.** A request carries `subject`,
+  `action`, `resource` and `context`, and the answer is
+  `{"decision": bool}` with the gRPC reasons under
+  `context.reasons`, each a `policy_id` or an `error`. Fields the
+  binding does not know are ignored. A `subject` or an `action`
+  carrying `properties` is a malformed body, since a decision reads
+  those grounds for itself.
+- **Evaluations are decided one by one, in order.** Top-level
+  `subject`, `action`, `resource` and `context` are the defaults of an
+  entry that omits them, and entries that share a resource type and id
+  are never merged. Only the `execute_all` semantic is served, named
+  or by default, and any other `evaluations_semantic` is a 400.
+- **The entity-changes body is the JSON form of
+  `ApplyEntityChangesRequest`,** and its answer that of the response,
+  under the same bounds, the same per-entry faults and the same caller
+  checks. A change holds an `upsert` or a `delete`, not both, and a
+  `sequence` is a string or a number.
+- **The metadata names the endpoints under the host the client
+  reached.** A request that names no host is a 400.
+- **`X-Request-ID` is echoed where it is sent,** on a refusal as on an
+  answer.
+- **A refusal is the gRPC status's message, in plain text, under the
+  status this table gives it.** A denial is no refusal: it is a 200
+  with `decision: false`.
+
+| gRPC status | HTTP status | When |
+|-------------|-------------|------|
+| `UNAUTHENTICATED` | 401 | no token, or a token that does not verify |
+| `PERMISSION_DENIED` | 403 | a `sub` the service does not serve, a scoped caller asking or writing outside what it is bound to, a type it does not own |
+| `INVALID_ARGUMENT` | 400 | a malformed body, a missing field, a request over its bound, an unserved semantic |
+| `UNAVAILABLE` | 503 | a store that cannot be read or written |
+| any other | 500 | the service could not decide |
+
+The token is checked before the body is read, so a request with neither
+is a 401.
 
 ## Analysis
 

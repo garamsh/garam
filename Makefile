@@ -21,7 +21,7 @@ modules-with = $(strip $(foreach m,$(MODULES),$(if $(shell grep -q '^$(1):' $(m)
 VERBS := ci install format lint test build gen check-gen stack-up suites integration
 
 .PHONY: $(VERBS) affected e2e web-e2e cowork-web-e2e db-up db-down db-prune backend-up
-.PHONY: template-diff search image-build web-image-e2e site-image-e2e cowork-image-e2e cowork-web-image-e2e policy-image-e2e test-image test-image-e2e test-image-push test-image-pin
+.PHONY: template-diff search image-build web-image-e2e site-image-e2e cowork-image-e2e cowork-web-image-e2e policy-image-e2e codehub-e2e test-image test-image-e2e test-image-push test-image-pin
 
 $(VERBS):
 	@test -n '$(call modules-with,$@)' || { echo '$@: no module defines it — tooling/ci/modules or a module Makefile is misread'; exit 1; }
@@ -115,6 +115,11 @@ cowork-web-image-e2e: $(if $(COWORK_WEB_IMAGE),,image-build)
 # to check instead, and then nothing is built here.
 policy-image-e2e: $(if $(POLICY_IMAGE),,image-build)
 	POLICY_IMAGE='$(or $(POLICY_IMAGE),$(call image_ref,policy))' tooling/$@.sh
+
+# codehub-e2e: what its script states. It builds the stack's images
+# itself, from this checkout, under a compose project of its own.
+codehub-e2e:
+	tooling/$@.sh
 
 # test-image builds the test image another repository's CI copies
 # garam, testprincipal and the migrations out of (ADR-0092), tagged

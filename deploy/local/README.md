@@ -30,6 +30,7 @@ no second compose file.
 - Startup order
 - cowork
 - policy
+- codehub-e2e
 - Probes
 - Metrics
 - Configuration
@@ -99,6 +100,8 @@ moves that one server rather than standing up a second.
   serves under.
 - `policy-jwks.json` — the public key the `policy` profile verifies
   against, whose private half was never kept.
+- `docker-compose.codehub-e2e.yml`, `codehub-e2e-keys.sh` — what `make
+  codehub-e2e` adds to the stack; see codehub-e2e below.
 - `cowork-gateway.Caddyfile` — the path split on cowork's host.
 - `Dockerfile.web` — multi-stage Next.js standalone build of the app
   `APP` names: `platform-web`, `site-web` or `cowork-web`; context is
@@ -202,6 +205,47 @@ The service serves no plaintext, here or anywhere (`policy/README.md`
 that is plaintext, because this Postgres serves no TLS. `make
 policy-image-e2e` checks the image outside the stack, against a Postgres
 that refuses anything else.
+
+## codehub-e2e
+
+```sh
+make codehub-e2e
+```
+
+Runs garam's side of codehub taking garam as its issuer and decision
+point, against a stack of its own, and exits non-zero when any answer
+differs from the one `tooling/codehub-e2e.sh` names. A stand-in plays
+codehub's token client, adapter and outbox. The run prints each
+request and the answer's status and body, with a token cut to its
+header, its claims and the first 12 characters of its signature.
+
+`docker-compose.codehub-e2e.yml` is the override, used with the
+`policy` profile and never by the default stack: it turns the identity
+issuer on, adds a `machine` service running `serve machine`, points the
+policy service at the issuer's own keys, and publishes the api, the
+machine listener and the policy service each on a free host port. The
+keys are made by the script under a temporary directory and carried
+into the stack by `codehub-e2e-keys.sh`; the project, its volumes and
+the keys are removed at every exit. `CODEHUB_E2E_PROJECT` names the
+compose project (default `garam-codehub-e2e`); the script refuses
+`garam-local`, the dev stack's.
+
+The images are built from the checkout. Nothing is pulled from ECR.
+
+What the platform's feed does and does not write. `garam
+policy-feed start` delivers entities: the organization, its members, its
+teams, projects, users, agents and operators. It delivers no role link
+and no policy. The run therefore writes two itself, the owner's and the
+member's role links on the organization, through the policy service's
+`CreatePolicy` as the platform with no writer, and activates them. Every
+allow in the output rests on those two links; a control before them
+shows the member denied. The run also writes the owner's user and
+session row by SQL, as `platform-web/e2e/seed.ts` does, because the
+stack has no sign-in that needs no browser; the member registers through
+an invitation. The run says each of these where it does it.
+
+A person's token for the audience `codehub` comes from the device
+grant the garam CLI uses, approved with the owner's session.
 
 ## Startup order
 

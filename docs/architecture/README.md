@@ -479,6 +479,10 @@ Responsibility documents:
   must plan for that no manifest carries: readiness, termination,
   migration failure, key-material enforcement, and what is not
   established
+- [deployment-needs.md](./deployment-needs.md) — what a deployment must
+  give each of the six images: settings, files, listeners, probes,
+  stop, order of start, what each calls, the public names, what
+  codehub must reach, the three databases, and what is not established
 - [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
   gateway, the keys it holds, how it routes and what it records; not
   yet built
@@ -1320,6 +1324,11 @@ ADRs:
   `chart-rewrite` is removed; a release publishes six images; supersedes
   0056 in full, 0039's bound-to-one-API-URL consequence and 0134's
   site-bakes-the-address sentence
+- [0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md)
+  — the gaon operator is a service here that runs each managed agent as
+  one MicroVM: a `gaon-operator/` folder with its own module and image,
+  no custom gaon kind, one composed guest image, one no-ingress network
+  policy, a pair registered in garam; accepted, and unbuilt
 - [0152](./adr/0152-garam-may-log-in-to-openbao-with-a-workload-identity-file-beside-the-token-file.md)
   — garam may hold the Transit token by logging in to OpenBao's JWT auth
   method with a workload identity file beside the token file:

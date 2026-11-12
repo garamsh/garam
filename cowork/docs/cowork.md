@@ -101,6 +101,15 @@ agents.
   `cowork-page` for one page. Every role grants both (#1663).
 - cowork answers 503 whenever the platform cannot be reached, and
   decides nothing alone.
+- **Where the policy service is configured**, `checkPermissions` is
+  asked of it instead, as that same caller, in one `Evaluations` call
+  under cowork's own caller token for the organization
+  ([ADR-0141](../../docs/architecture/adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
+  §12). `me` and the organization list stay with the platform. The
+  policy service has no membership question for cowork, so each batch
+  carries one more evaluation, `cowork:page.read` on the organization,
+  and a caller denied it is no member. With none of the four settings
+  below set, cowork asks the platform as above.
 - **The session.** A person signs in on the site and cowork-web is
   handed a session of its own on its host, by ADR-0131's one-time code
   ([sign-in.md](../../docs/architecture/sign-in.md)). The cookie is
@@ -374,6 +383,18 @@ orgs use <org>` or tell the AI which one `list_workspaces` answers.
 | `COWORK_USERCONTENT_ORIGIN` | the user-content origin as browsers reach it; unset views no HTML artifact |
 | `COWORK_USERCONTENT_ADDR` | where that origin listens, default `:8092` |
 | `COWORK_USERCONTENT_SECRET` | the key its addresses are signed with, at least 32 bytes; the same on every instance |
+| `COWORK_POLICY_ADDR` | the policy service's gRPC address; with the next three it moves `checkPermissions` to that service, and set alone it refuses to start |
+| `COWORK_POLICY_CA_FILE` | the PEM file of the CA that signs the service's certificate and the token endpoint's, beside the system roots |
+| `COWORK_MACHINE_TOKEN_URL` | the platform's machine token endpoint, where cowork's caller token is fetched for each organization |
+| `COWORK_DEPLOYMENT_KEY_FILE` | cowork's deployment key, an owner-only PEM file read at each token exchange |
+
+The policy service also holds cowork's channels, pages, tasks and
+artifacts as entities, fed from an outbox in cowork's database
+([ADR-0140](../../docs/architecture/adr/0140-owners-feed-the-policy-service-from-a-dirty-set-of-entities-read-at-delivery-and-a-caller-is-a-closed-list-of-services.md)).
+The feed is off until `cowork policy-feed start` marks every entity
+and `cowork policy-feed stop` ends it. `serve` delivers it, one
+organization at a time under that organization's token, once the four
+settings are set.
 
 Swapping the store is configuration alone. RustFS, as the deployment
 runs it:

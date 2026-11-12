@@ -33,6 +33,15 @@ const (
 	envUserContentOrigin = "COWORK_USERCONTENT_ORIGIN"
 	envUserContentAddr   = "COWORK_USERCONTENT_ADDR"
 	envUserContentSecret = "COWORK_USERCONTENT_SECRET"
+
+	// The policy service, which cowork asks what a caller may do where
+	// these are set (ADR-0141 §12): its address, the CA file that signs
+	// its certificate, the machine token URL cowork's caller token is
+	// fetched from, and the deployment key file that signs the request.
+	envPolicyAddr        = "COWORK_POLICY_ADDR"
+	envPolicyCAFile      = "COWORK_POLICY_CA_FILE"
+	envMachineTokenURL   = "COWORK_MACHINE_TOKEN_URL"
+	envDeploymentKeyFile = "COWORK_DEPLOYMENT_KEY_FILE"
 )
 
 func envOr(key, fallback string) string {
@@ -61,6 +70,6 @@ func NewRootCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand())
+	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(), newPolicyFeedCommand())
 	return root
 }

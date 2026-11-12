@@ -5,6 +5,7 @@
 !cowork
 !lib/errorx
 !lib/grn
+!lib/policy-sdk-go
 cowork/docs
 cowork/engine
 cowork/tests

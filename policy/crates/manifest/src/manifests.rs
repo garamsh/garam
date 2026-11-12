@@ -102,6 +102,23 @@ impl Manifests {
         ))
     }
 
+    /// Whether a hosted operator may hold the operation: the manifests
+    /// declare the action with `Iam::Operator` among its principals
+    /// (ADR-0146). A name no manifest declares is not.
+    pub fn delegable(&self, wire: &str) -> bool {
+        self.services
+            .iter()
+            .flat_map(|service| &service.actions)
+            .filter(|action| action.name == wire)
+            .filter_map(|action| action.applies_to.as_ref())
+            .any(|applies| {
+                applies
+                    .principals
+                    .iter()
+                    .any(|kind| kind == "Iam::Operator")
+            })
+    }
+
     /// What breaks the rules every manifest holds (ADR-0143 item 2):
     /// one namespace and one `@service` each, no service named twice,
     /// a `@grn` unique within its service and a slug, a `@caller` on

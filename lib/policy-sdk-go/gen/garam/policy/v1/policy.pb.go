@@ -737,7 +737,8 @@ func (x *EntityRef) GetId() string {
 }
 
 // EntityUpsert is what an entity now is. It carries containment and
-// membership and nothing else (ADR-0138).
+// membership, and two attributes of the one type each belongs to
+// (ADR-0138, ADR-0146, ADR-0147).
 type EntityUpsert struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// org is required of every resource type, and an `Org` names itself.
@@ -745,7 +746,18 @@ type EntityUpsert struct {
 	// members is required of an `Org`, and names its own `OrgMembers`.
 	Members *EntityRef `protobuf:"bytes,2,opt,name=members,proto3" json:"members,omitempty"`
 	// parents holds at most 1000 references.
-	Parents       []*EntityRef `protobuf:"bytes,3,rep,name=parents,proto3" json:"parents,omitempty"`
+	Parents []*EntityRef `protobuf:"bytes,3,rep,name=parents,proto3" json:"parents,omitempty"`
+	// consents holds the organizations an `Org` has granted its half of
+	// a message toward (ADR-0147). Each is an `Org`, and an upsert of
+	// any other type that holds one is refused. Left empty, the `Org`
+	// consents to none.
+	Consents []*EntityRef `protobuf:"bytes,4,rep,name=consents,proto3" json:"consents,omitempty"`
+	// operations holds the operations an `Operator`'s current delegation
+	// grants, as action names in their wire form, such as
+	// `iam:agent.activate` (ADR-0146). Each is an action `Iam::Operator`
+	// may be the principal of, and an upsert of any other type that
+	// holds one is refused. Left empty, the `Operator` holds none.
+	Operations    []string `protobuf:"bytes,5,rep,name=operations,proto3" json:"operations,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -797,6 +809,20 @@ func (x *EntityUpsert) GetMembers() *EntityRef {
 func (x *EntityUpsert) GetParents() []*EntityRef {
 	if x != nil {
 		return x.Parents
+	}
+	return nil
+}
+
+func (x *EntityUpsert) GetConsents() []*EntityRef {
+	if x != nil {
+		return x.Consents
+	}
+	return nil
+}
+
+func (x *EntityUpsert) GetOperations() []string {
+	if x != nil {
+		return x.Operations
 	}
 	return nil
 }
@@ -1148,11 +1174,15 @@ const file_garam_policy_v1_policy_proto_rawDesc = "" +
 	"\vevaluations\x18\x01 \x03(\v2!.garam.policy.v1.EvaluateResponseR\vevaluations\"/\n" +
 	"\tEntityRef\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x0e\n" +
-	"\x02id\x18\x02 \x01(\tR\x02id\"\xa8\x01\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\"\x80\x02\n" +
 	"\fEntityUpsert\x12,\n" +
 	"\x03org\x18\x01 \x01(\v2\x1a.garam.policy.v1.EntityRefR\x03org\x124\n" +
 	"\amembers\x18\x02 \x01(\v2\x1a.garam.policy.v1.EntityRefR\amembers\x124\n" +
-	"\aparents\x18\x03 \x03(\v2\x1a.garam.policy.v1.EntityRefR\aparents\"\x0e\n" +
+	"\aparents\x18\x03 \x03(\v2\x1a.garam.policy.v1.EntityRefR\aparents\x126\n" +
+	"\bconsents\x18\x04 \x03(\v2\x1a.garam.policy.v1.EntityRefR\bconsents\x12\x1e\n" +
+	"\n" +
+	"operations\x18\x05 \x03(\tR\n" +
+	"operations\"\x0e\n" +
 	"\fEntityDelete\"\xdd\x01\n" +
 	"\fEntityChange\x122\n" +
 	"\x06entity\x18\x01 \x01(\v2\x1a.garam.policy.v1.EntityRefR\x06entity\x12\x1a\n" +
@@ -1237,22 +1267,23 @@ var file_garam_policy_v1_policy_proto_depIdxs = []int32{
 	11, // 19: garam.policy.v1.EntityUpsert.org:type_name -> garam.policy.v1.EntityRef
 	11, // 20: garam.policy.v1.EntityUpsert.members:type_name -> garam.policy.v1.EntityRef
 	11, // 21: garam.policy.v1.EntityUpsert.parents:type_name -> garam.policy.v1.EntityRef
-	11, // 22: garam.policy.v1.EntityChange.entity:type_name -> garam.policy.v1.EntityRef
-	12, // 23: garam.policy.v1.EntityChange.upsert:type_name -> garam.policy.v1.EntityUpsert
-	13, // 24: garam.policy.v1.EntityChange.delete:type_name -> garam.policy.v1.EntityDelete
-	14, // 25: garam.policy.v1.ApplyEntityChangesRequest.changes:type_name -> garam.policy.v1.EntityChange
-	16, // 26: garam.policy.v1.ApplyEntityChangesResponse.refusals:type_name -> garam.policy.v1.EntityChangeRefusal
-	4,  // 27: garam.policy.v1.PolicyService.Evaluate:input_type -> garam.policy.v1.EvaluateRequest
-	9,  // 28: garam.policy.v1.PolicyService.Evaluations:input_type -> garam.policy.v1.EvaluationsRequest
-	15, // 29: garam.policy.v1.PolicyService.ApplyEntityChanges:input_type -> garam.policy.v1.ApplyEntityChangesRequest
-	7,  // 30: garam.policy.v1.PolicyService.Evaluate:output_type -> garam.policy.v1.EvaluateResponse
-	10, // 31: garam.policy.v1.PolicyService.Evaluations:output_type -> garam.policy.v1.EvaluationsResponse
-	17, // 32: garam.policy.v1.PolicyService.ApplyEntityChanges:output_type -> garam.policy.v1.ApplyEntityChangesResponse
-	30, // [30:33] is the sub-list for method output_type
-	27, // [27:30] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	11, // 22: garam.policy.v1.EntityUpsert.consents:type_name -> garam.policy.v1.EntityRef
+	11, // 23: garam.policy.v1.EntityChange.entity:type_name -> garam.policy.v1.EntityRef
+	12, // 24: garam.policy.v1.EntityChange.upsert:type_name -> garam.policy.v1.EntityUpsert
+	13, // 25: garam.policy.v1.EntityChange.delete:type_name -> garam.policy.v1.EntityDelete
+	14, // 26: garam.policy.v1.ApplyEntityChangesRequest.changes:type_name -> garam.policy.v1.EntityChange
+	16, // 27: garam.policy.v1.ApplyEntityChangesResponse.refusals:type_name -> garam.policy.v1.EntityChangeRefusal
+	4,  // 28: garam.policy.v1.PolicyService.Evaluate:input_type -> garam.policy.v1.EvaluateRequest
+	9,  // 29: garam.policy.v1.PolicyService.Evaluations:input_type -> garam.policy.v1.EvaluationsRequest
+	15, // 30: garam.policy.v1.PolicyService.ApplyEntityChanges:input_type -> garam.policy.v1.ApplyEntityChangesRequest
+	7,  // 31: garam.policy.v1.PolicyService.Evaluate:output_type -> garam.policy.v1.EvaluateResponse
+	10, // 32: garam.policy.v1.PolicyService.Evaluations:output_type -> garam.policy.v1.EvaluationsResponse
+	17, // 33: garam.policy.v1.PolicyService.ApplyEntityChanges:output_type -> garam.policy.v1.ApplyEntityChangesResponse
+	31, // [31:34] is the sub-list for method output_type
+	28, // [28:31] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_garam_policy_v1_policy_proto_init() }

@@ -6,6 +6,6 @@ mod change;
 mod error;
 mod postgres;
 
-pub use change::EntityChange;
+pub use change::{EntityChange, Upsert};
 pub use error::Error;
 pub use postgres::{Applied, EntityStore};

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use cedar_policy::{EntityId, EntityTypeName, EntityUid, ParseErrors};
 use decision::Engine;
-use entity::EntityChange;
+use entity::{EntityChange, Upsert};
 
 use crate::caller::Principal;
 use crate::proto;
@@ -36,6 +36,9 @@ pub(crate) enum Fault {
     /// More parents than one change may name.
     #[error("a change names more than {MAX_PARENTS} parents")]
     Parents,
+    /// More consents or operations than one change may name.
+    #[error("a change names more than {MAX_PARENTS} consents or operations")]
+    Attributes,
     /// A type that does not parse.
     #[error("an entity type does not parse")]
     Type(#[source] Box<ParseErrors>),
@@ -50,10 +53,13 @@ pub(crate) fn parse(engine: &Engine, change: &proto::EntityChange) -> Result<Ent
         return Err(Fault::Sequence);
     }
     let entity = change.entity.as_ref().ok_or(Fault::Missing("entity"))?;
-    if let Some(Operation::Upsert(upsert)) = change.operation.as_ref()
-        && upsert.parents.len() > MAX_PARENTS
-    {
-        return Err(Fault::Parents);
+    if let Some(Operation::Upsert(upsert)) = change.operation.as_ref() {
+        if upsert.parents.len() > MAX_PARENTS {
+            return Err(Fault::Parents);
+        }
+        if upsert.consents.len() > MAX_PARENTS || upsert.operations.len() > MAX_PARENTS {
+            return Err(Fault::Attributes);
+        }
     }
     let entity = uid(entity)?;
     match change.operation.as_ref() {
@@ -61,9 +67,13 @@ pub(crate) fn parse(engine: &Engine, change: &proto::EntityChange) -> Result<Ent
             engine,
             entity,
             change.sequence,
-            upsert.org.as_ref().map(uid).transpose()?,
-            upsert.members.as_ref().map(uid).transpose()?,
-            upsert.parents.iter().map(uid).collect::<Result<_, _>>()?,
+            Upsert {
+                org: upsert.org.as_ref().map(uid).transpose()?,
+                members: upsert.members.as_ref().map(uid).transpose()?,
+                parents: upsert.parents.iter().map(uid).collect::<Result<_, _>>()?,
+                consents: upsert.consents.iter().map(uid).collect::<Result<_, _>>()?,
+                operations: upsert.operations.clone(),
+            },
         )
         .map_err(Fault::Entity),
         Some(Operation::Delete(_)) => Ok(EntityChange::delete(entity, change.sequence)),

@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use cedar_policy::{EntityId, EntityTypeName, EntityUid};
 use decision::Engine;
-use entity::{EntityChange, Error};
+use entity::{EntityChange, Error, Upsert};
 
 const ACME: &str = "grn:root/iam/org/acme";
 const ENG: &str = "grn:acme/iam/group/eng";
@@ -23,7 +23,16 @@ fn change(
     org: Option<EntityUid>,
     parents: Vec<EntityUid>,
 ) -> Result<EntityChange, Error> {
-    EntityChange::upsert(&Engine::load().unwrap(), uid, 1, org, None, parents)
+    EntityChange::upsert(
+        &Engine::load().unwrap(),
+        uid,
+        1,
+        Upsert {
+            org,
+            parents,
+            ..Upsert::default()
+        },
+    )
 }
 
 fn acme() -> Option<EntityUid> {
@@ -86,9 +95,11 @@ fn an_organization_carries_itself_and_its_own_members() {
             &engine,
             org.clone(),
             1,
-            Some(org_attr.clone()),
-            Some(members_attr.clone()),
-            vec![],
+            Upsert {
+                org: Some(org_attr.clone()),
+                members: Some(members_attr.clone()),
+                ..Upsert::default()
+            },
         )
     };
 

@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use cedar_policy::{EntityId, EntityTypeName, EntityUid};
 use decision::{Engine, EntityRef, Evaluation, OrgGrn, OrgPolicies, Outcome, PolicySource};
-use entity::{Applied, EntityChange, EntityStore};
+use entity::{Applied, EntityChange, EntityStore, Upsert};
 use serde_json::json;
 use sqlx::PgPool;
 
@@ -44,9 +44,12 @@ fn change(
         &Engine::load().unwrap(),
         uid(named),
         sequence,
-        org.map(uid),
-        members.map(uid),
-        parents.iter().copied().map(uid).collect(),
+        Upsert {
+            org: org.map(uid),
+            members: members.map(uid),
+            parents: parents.iter().copied().map(uid).collect(),
+            ..Upsert::default()
+        },
     )
     .unwrap()
 }

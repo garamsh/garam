@@ -115,6 +115,7 @@ fn upsert(entity: EntityRef, org: Option<EntityRef>, parents: Vec<EntityRef>) ->
             org,
             members: None,
             parents,
+            ..EntityUpsert::default()
         })),
     }
 }

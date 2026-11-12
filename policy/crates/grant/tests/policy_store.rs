@@ -26,8 +26,8 @@ fn role(role: Role) -> Body {
         &OrgGrn::new(ACME),
         role,
         RoleScope::Organization,
-        uid("User", "grn:acme/iam/user/lee"),
-        uid("Org", ACME),
+        uid("Iam::User", "grn:acme/iam/user/lee"),
+        uid("Iam::Org", ACME),
     )
     .unwrap()
 }

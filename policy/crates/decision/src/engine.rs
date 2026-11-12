@@ -4,6 +4,7 @@ use cedar_policy::{
     Authorizer, Context, Entities, EntityId, EntityTypeName, EntityUid, Policy, PolicySet, Request,
     Schema, ValidationMode, Validator,
 };
+use manifest::Manifests;
 
 use crate::decision::Decision;
 use crate::entity_source::EntitySource;
@@ -15,7 +16,7 @@ use crate::system_tier;
 /// An entity as a caller names it.
 #[derive(Debug, Clone, Copy)]
 pub struct EntityRef<'a> {
-    /// An entity type of the schema.
+    /// An entity type of the schema, qualified: `Iam::Org`.
     pub entity_type: &'a str,
     /// The entity's GRN.
     pub id: &'a str,
@@ -26,7 +27,7 @@ pub struct EntityRef<'a> {
 pub struct Evaluation<'a> {
     /// Who asks.
     pub subject: EntityRef<'a>,
-    /// An action of the schema.
+    /// An action of a manifest, `<service>:<action>`.
     pub action: &'a str,
     /// What the action is asked of.
     pub resource: EntityRef<'a>,
@@ -49,20 +50,29 @@ impl Policies {
 /// Holds the schema and the system tier, and decides.
 #[derive(Debug, Clone)]
 pub struct Engine {
+    manifests: Manifests,
     schema: Schema,
     system_tier: PolicySet,
 }
 
 impl Engine {
-    /// Loads the embedded schema and system tier.
+    /// Loads the embedded manifests, merged into one schema, and the
+    /// system tier.
     pub fn load() -> Result<Self, Error> {
-        let (schema, _warnings) = Schema::from_cedarschema_str(system_tier::SCHEMA)
-            .map_err(|error| Error::Schema(error.into()))?;
+        let manifests = Manifests::load().map_err(|error| Error::Schema(error.into()))?;
+        let schema = manifests.schema().clone();
         let system_tier = system_tier::load(&schema)?;
         Ok(Self {
+            manifests,
             schema,
             system_tier,
         })
+    }
+
+    /// The manifests the schema was merged from, which keep what the
+    /// merged schema drops: each service's name and its annotations.
+    pub fn manifests(&self) -> &Manifests {
+        &self.manifests
     }
 
     /// The vocabulary a decision can name.
@@ -75,10 +85,10 @@ impl Engine {
         let refused = |error: Box<dyn std::error::Error + Send + Sync>| Error::Evaluation(error);
         let principal = entity_uid(evaluation.subject).map_err(refused)?;
         let resource = entity_uid(evaluation.resource).map_err(refused)?;
-        let action = EntityUid::from_type_name_and_id(
-            EntityTypeName::from_str("Action").map_err(|error| refused(error.into()))?,
-            EntityId::new(evaluation.action),
-        );
+        let action = self
+            .manifests
+            .action(evaluation.action)
+            .map_err(|error| refused(error.into()))?;
         let context = Context::from_json_value(evaluation.context.clone(), None)
             .map_err(|error| refused(error.into()))?;
         Request::new(principal, action, resource, context, Some(&self.schema))

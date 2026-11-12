@@ -15,24 +15,26 @@ use serde_json::{Value, json};
 type Named = (&'static str, &'static str);
 
 const ACME: &str = "grn:root/iam/org/acme";
-const KIM: Named = ("User", "grn:acme/iam/user/kim");
-const LEE: Named = ("User", "grn:acme/iam/user/lee");
-const ENG: Named = ("Team", "grn:acme/iam/group/eng");
-const OPS: Named = ("Team", "grn:acme/iam/group/ops");
-const BOT: Named = ("Agent", "grn:acme/iam/agent/bot");
-const WEB: Named = ("Project", "grn:acme/iam/project/web");
-const RIVALS: Named = ("Team", "grn:globex/iam/group/secret");
-const ORG: Named = ("Org", ACME);
-const MEMBERS: Named = ("OrgMembers", ACME);
+const KIM: Named = ("Iam::User", "grn:acme/iam/user/kim");
+const LEE: Named = ("Iam::User", "grn:acme/iam/user/lee");
+const ENG: Named = ("Iam::Team", "grn:acme/iam/group/eng");
+const OPS: Named = ("Iam::Team", "grn:acme/iam/group/ops");
+const BOT: Named = ("Iam::Agent", "grn:acme/iam/agent/bot");
+const WEB: Named = ("Iam::Project", "grn:acme/iam/project/web");
+const RIVALS: Named = ("Iam::Team", "grn:globex/iam/group/secret");
+const ORG: Named = ("Iam::Org", ACME);
+const MEMBERS: Named = ("Iam::OrgMembers", ACME);
 
-const ON_ENG: &str = r#"forbid (principal in Team::"grn:acme/iam/group/eng", action, resource);"#;
-const ON_OPS_IN_CONDITION: &str = r#"forbid (principal, action, resource is Agent)
-    when { principal in Team::"grn:acme/iam/group/ops" };"#;
+const ON_ENG: &str =
+    r#"forbid (principal in Iam::Team::"grn:acme/iam/group/eng", action, resource);"#;
+const ON_OPS_IN_CONDITION: &str = r#"forbid (principal, action, resource is Iam::Agent)
+    when { principal in Iam::Team::"grn:acme/iam/group/ops" };"#;
 const EVERYONE: &str = "forbid (principal, action, resource);";
 const ON_ENG_ALONE: &str =
-    r#"forbid (principal == Team::"grn:acme/iam/group/eng", action, resource);"#;
-const ON_AGENTS: &str = "forbid (principal is Agent, action, resource);";
-const ON_LEE: &str = r#"forbid (principal == User::"grn:acme/iam/user/lee", action, resource);"#;
+    r#"forbid (principal == Iam::Team::"grn:acme/iam/group/eng", action, resource);"#;
+const ON_AGENTS: &str = "forbid (principal is Iam::Agent, action, resource);";
+const ON_LEE: &str =
+    r#"forbid (principal == Iam::User::"grn:acme/iam/user/lee", action, resource);"#;
 
 fn uid(named: Named) -> EntityUid {
     EntityUid::from_type_name_and_id(
@@ -96,7 +98,7 @@ fn link(id: &str, principal: Named, resource: Named) -> RoleLink {
     RoleLink {
         id: PolicyId::new(id),
         role: Role::Member,
-        scope: if resource.0 == "Org" {
+        scope: if resource.0 == "Iam::Org" {
             RoleScope::Organization
         } else {
             RoleScope::TeamOrProject

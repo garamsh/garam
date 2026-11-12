@@ -634,6 +634,7 @@ version = "0.0.0"
 dependencies = [
  "cedar-policy",
  "cedar-policy-symcc",
+ "manifest",
  "serde_json",
  "thiserror",
  "tokio",
@@ -1746,6 +1747,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "manifest"
+version = "0.0.0"
+dependencies = [
+ "cedar-policy",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "matchit"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2785,6 +2795,7 @@ dependencies = [
  "entity",
  "grant",
  "jsonwebtoken",
+ "manifest",
  "prost",
  "prost-types",
  "protox",

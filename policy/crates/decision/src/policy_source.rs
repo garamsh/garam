@@ -63,8 +63,8 @@ impl OrgGrn {
     pub fn owns(&self, entity: &EntityUid) -> bool {
         let id = entity.id().unescaped();
         match entity.type_name().to_string().as_str() {
-            "User" => true,
-            "Org" | "OrgMembers" => id == self.0,
+            "Iam::User" => true,
+            "Iam::Org" | "Iam::OrgMembers" => id == self.0,
             _ => self.owns_grn(id),
         }
     }

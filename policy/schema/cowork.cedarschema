@@ -1,0 +1,43 @@
+// cowork's manifest: the entity types and actions of the `cowork`
+// service (ADR-0143). Its types sit in the `iam` service's
+// organization and project, and its actions join the roles of `iam`.
+@service("cowork")
+namespace Cowork {
+  @grn("channel") @caller("none")
+  entity Channel in [Iam::Org, Iam::Project] { org: Iam::Org };
+  @grn("page") @caller("none")
+  entity Page in [Iam::Org] { org: Iam::Org };
+  @grn("task") @caller("none")
+  entity Task in [Iam::Org] { org: Iam::Org };
+  @grn("artifact") @caller("none")
+  entity Artifact in [Iam::Org] { org: Iam::Org };
+
+  action "page-read", "page-write"
+    in [Iam::Action::"role-owner", Iam::Action::"role-admin",
+        Iam::Action::"role-member"]
+    appliesTo {
+      principal: [Iam::User, Iam::Agent],
+      resource: [Iam::Org, Page]
+    };
+  action "channel-read", "channel-post"
+    in [Iam::Action::"role-owner", Iam::Action::"role-admin",
+        Iam::Action::"role-member"]
+    appliesTo {
+      principal: [Iam::User, Iam::Agent],
+      resource: [Iam::Org, Channel]
+    };
+  action "task-read", "task-write"
+    in [Iam::Action::"role-owner", Iam::Action::"role-admin",
+        Iam::Action::"role-member"]
+    appliesTo {
+      principal: [Iam::User, Iam::Agent],
+      resource: [Iam::Org, Task]
+    };
+  action "artifact-read", "artifact-write"
+    in [Iam::Action::"role-owner", Iam::Action::"role-admin",
+        Iam::Action::"role-member"]
+    appliesTo {
+      principal: [Iam::User, Iam::Agent],
+      resource: [Iam::Org, Artifact]
+    };
+}

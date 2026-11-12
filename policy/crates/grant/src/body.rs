@@ -104,7 +104,7 @@ impl Body {
     pub fn guardrail(engine: &Engine, org: &OrgGrn, source: &str) -> Result<Self, Error> {
         let policy = parse_guardrail(PolicyId::new("candidate"), source)?;
         for entity in policy.entity_literals() {
-            if entity.type_name().to_string() != "Action" && !org.owns(&entity) {
+            if entity.type_name().basename() != "Action" && !org.owns(&entity) {
                 return Err(Error::ForeignEntity(entity.to_string()));
             }
         }

@@ -36,14 +36,14 @@ fn verifier() -> Verifier {
 fn question() -> EvaluateRequest {
     EvaluateRequest {
         subject: Some(Subject {
-            r#type: "User".into(),
+            r#type: "Iam::User".into(),
             id: "grn:acme/iam/user/lee".into(),
         }),
         action: Some(Action {
-            name: "agent:read".into(),
+            name: "iam:agent-read".into(),
         }),
         resource: Some(Resource {
-            r#type: "Agent".into(),
+            r#type: "Iam::Agent".into(),
             id: "grn:acme/iam/agent/bot".into(),
             properties: None,
         }),

@@ -146,7 +146,7 @@ async fn the_analysis_refutes_isolation_read_through_containment() {
     let contained = set(&[EVERYTHING, CONTAINMENT]);
     let members = set(&[MEMBERS_ONLY]);
     let mut solver = compiler();
-    let request = request_on(schema, "agent:read", "User", "Agent");
+    let request = request_on(schema, "iam:agent-read", "Iam::User", "Iam::Agent");
 
     let counterexample = solver
         .check_implies_with_counterexample_opt(
@@ -204,7 +204,7 @@ async fn the_tier_alone_allows_only_an_agents_sending() {
             .check_always_denies_opt(&compiled(&tier, &request, schema))
             .await
             .unwrap();
-        if action_of(&request) == "message:send" {
+        if action_of(&request) == "iam:message-send" {
             assert!(!denied, "the tier stopped allowing an agent's sending");
             sending += 1;
         } else {
@@ -227,7 +227,7 @@ async fn no_role_holds_agent_watch() {
     let mut solver = compiler();
     let requests: Vec<RequestEnv> = every_request(schema)
         .into_iter()
-        .filter(|request| action_of(request) == "agent:watch")
+        .filter(|request| action_of(request) == "iam:agent-watch")
         .collect();
     assert_eq!(requests.len(), 4);
     for request in requests {
@@ -336,10 +336,10 @@ fn a_rendered_link_decides_as_the_link_does() {
             let static_form = world.compose(&[], &[rendered(&world, role, scope, ENG, what)]);
             for who in [KIM, LEE, OUTSIDER] {
                 for action in [
-                    "agent:read",
-                    "agent:configure",
-                    "org:delete",
-                    "group:update",
+                    "iam:agent-read",
+                    "iam:agent-configure",
+                    "iam:org-delete",
+                    "iam:group-update",
                 ] {
                     for resource in [ACME, ENG, BOT] {
                         let question = fixture::evaluation(who, action, resource);

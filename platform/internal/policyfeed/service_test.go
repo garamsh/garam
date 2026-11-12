@@ -98,7 +98,7 @@ func TestRun_LogsEachRefusal(t *testing.T) {
 	_, logs := run(t, []step{{result: policyfeed.Result{
 		Marks: 2,
 		Refused: []policyfeed.Refusal{
-			{Entity: policyfeed.Entity{Type: "Team", ID: "grn:acme/iam/group/t1"}, Reason: "too many parents"},
+			{Entity: policyfeed.Entity{Type: "Iam::Team", ID: "grn:acme/iam/group/t1"}, Reason: "too many parents"},
 		},
 	}}}, policyfeed.Config{Poll: time.Millisecond, MaxBackoff: time.Millisecond})
 

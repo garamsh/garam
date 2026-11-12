@@ -80,11 +80,23 @@ by `Explain` as any policy is.**
    sending are the repository's, and no write reaches them. It cannot
    permit across organizations: a resource of another organization
    is refused by item 2 and denied by isolation if it got that far.
+7. **Writing a `permit` is an action of its own, `iam:policy-permit`,
+   held by `role-owner` and no other role.** It is
+   `Iam::Action::"policy-permit"` (ADR-0143 item 3) and sits outside
+   the group `iam:policy-*`, which `role-admin` holds, so that
+   holding the group does not carry it. An owner already holds every
+   action in its organization, so a `permit` an owner writes grants
+   nothing its writer lacked. Letting another role write one, bounded
+   by what that writer itself holds, is left open. Whatever serves the
+   write asks for `iam:policy-permit` before it stores a `permit`: the
+   policy service's write path in #1774, and the console in #1689
+   slice 4.
 
-This leaves open, for the implementation: which role may write a
-`permit`, how the scope check reads a resource scope that combines
-`in` and `is`, and whether a principal scope is also checked (isolation
-already requires membership of the resource's organization).
+This leaves open, for the implementation: how the scope check reads a
+resource scope that combines `in` and `is`, and whether a principal
+scope is also checked (isolation already requires membership of the
+resource's organization). Left open as a decision: a role other than
+the owner writing a `permit`, bounded by what it holds.
 
 ## Consequences
 
@@ -93,11 +105,13 @@ already requires membership of the resource's organization).
   a `permit`.
 - **Writing a policy may widen access, and once it could only narrow.**
   `policy-*` is held by `role-owner` and `role-admin` in
-  `policy/schema/garam.cedarschema`. Unless the write of a `permit` is
-  gated by something narrower, an administrator can permit itself an
-  action the owner role alone holds, such as `org:delete`. The ADR
-  does not decide who may write a `permit`, and the implementation
-  decides it before a `permit` is accepted.
+  `policy/schema/garam.cedarschema`, so a `permit` gated by that group
+  would let an administrator permit itself an action the owner role
+  alone holds, such as `org:delete`. Item 7 gates it by an action only
+  the owner holds, so no `permit` is written by a role that lacks what
+  it grants. The cost is that an administrator writes guardrails and
+  role links and no `permit`, until the open question of item 7 is
+  decided.
 - **The access report gains a source.** `crates/access-report/` lists
   the policies naming a subject or a resource, and a `permit` names
   them in its scope, so the report lists it by the same lookup.
@@ -118,8 +132,9 @@ already requires membership of the resource's organization).
   role templates are bypassed in most grants.
 - A guardrail is written to narrow a `permit` more often than it
   narrows a role, which would show the two kinds need separate tools.
-- An administrator permits itself an owner action, which would show
-  the question the ADR leaves open needed an answer before this one.
+- A role other than the owner writes a `permit` that grants an action
+  its writer lacks, which would show item 7's gate was bypassed or
+  that `iam:policy-permit` was put in a group a lesser role holds.
 
 ## Alternatives rejected
 

@@ -76,9 +76,11 @@ platform's actions are `<type>:<verb>` and cowork's
   Its resource scope is inside the organization and the write refuses
   one that is not; tenant isolation stays above it; it names only what
   the manifests declare, and `Explain` names it as any policy. It still
-  cannot touch the system tier or permit across organizations. Which
-  role may write a `permit` is open in the ADR. The console's editor
-  and the platform's switch are #1689 slice 4.
+  cannot touch the system tier or permit across organizations. Writing
+  one is the action `iam:policy-permit`, held by `role-owner` alone and
+  outside `iam:policy-*`, which whatever serves the write asks for
+  first; another role writing one, bounded by what it holds, is open.
+  The console's editor and the platform's switch are #1689 slice 4.
 
 None of this is built: the schema is one file, the catalogue and the
 audience list are written by hand, no action has its new name, no

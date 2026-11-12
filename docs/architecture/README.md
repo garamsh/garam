@@ -1238,6 +1238,8 @@ ADRs:
   — an organization may write `permit` policies beside its role links
   and `forbid` guardrails, each scoped at the write to resources inside
   the organization, validated against the manifests and named by
-  `Explain`; it still cannot touch the system tier or permit across
+  `Explain`; writing one is the action `iam:policy-permit`, held by
+  `role-owner` alone, and a role other than the owner writing one is
+  open; it still cannot touch the system tier or permit across
   organizations; decided, not built; supersedes 0130 in part, on §4's
   last clause

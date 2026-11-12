@@ -77,3 +77,5 @@ ALTER TABLE operation_authorities
            AND (request_target IS NULL OR char_length(request_target) BETWEEN 1 AND 2048)) NOT VALID,
     ADD CONSTRAINT operation_authorities_destination
         CHECK ((operation = 'iam:agent.replace') = (destination_grn IS NOT NULL)) NOT VALID;
+
+DROP FUNCTION pg_temp.dotted(text);

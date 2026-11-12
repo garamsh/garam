@@ -77,3 +77,5 @@ BEGIN
         v_minted, v_assigned, v_targeted, pg_temp.hyphenated('iam:agent.replace'));
 END
 $$;
+
+DROP FUNCTION pg_temp.hyphenated(text);

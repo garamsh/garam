@@ -104,9 +104,9 @@ only in the policy service: nothing sends one yet.
   organization's `permit` policies beside its guardrails, and
   `access-report` lists one by its id, and a `permit` never reaches an
   operator: a decision for an `Iam::Operator` composes the
-  organization's guardrails and none of its `permit`s. An RPC writes one (item 3 of
-  ADR-0146). Not built: a check of an entity literal in a `permit`'s
-  principal scope or condition.
+  organization's guardrails and none of its `permit`s. An RPC writes
+  one (item 3 of ADR-0146). Not built: a check of an entity literal in
+  a `permit`'s principal scope or condition.
 
 **Built of ADR-0143** (items 1, 2, 3, 4 and 5): the two manifests, the
 `manifest` crate that reads them, `lib/grn`'s generated catalogue, the

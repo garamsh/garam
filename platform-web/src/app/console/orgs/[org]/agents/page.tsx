@@ -55,7 +55,7 @@ export default async function AgentsPage({ params, searchParams }: Params) {
     lookupAgents(org),
     lookupOperators(org),
     readMemberChoices(org, query.team, {
-      create: { action: "agent:create" },
+      create: { action: "iam:agent-create" },
     }),
   ]);
 

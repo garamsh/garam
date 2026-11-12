@@ -66,7 +66,7 @@ function service(
     identifier: "hosted",
     name: "Hosted control",
     endpoint: "https://control.example.test/garam",
-    operations: ["operator:read"],
+    operations: ["iam:operator-read"],
     controllers: [fieldOne.grn],
     ...overrides,
   };
@@ -165,7 +165,7 @@ function renderList() {
 function deciding(decision: "deny" | "unknown") {
   server.use(
     answerPermissionChecks((action) =>
-      action === "operator:read" ? decision : "allow",
+      action === "iam:operator-read" ? decision : "allow",
     ),
   );
 }
@@ -313,7 +313,7 @@ describe("an operator's page: its reported images and last contact", () => {
       service({
         answer: () =>
           HttpResponse.json(
-            { message: "operator:read is not delegated to you" },
+            { message: "iam:operator-read is not delegated to you" },
             { status: 403 },
           ),
       }),
@@ -331,10 +331,10 @@ describe("an operator's page: its reported images and last contact", () => {
     expect(container.textContent).not.toContain("not delegated to you");
   });
 
-  it("says not checked, and why, where no grant carries operator:read, and asks no control service", async () => {
+  it("says not checked, and why, where no grant carries iam:operator-read, and asks no control service", async () => {
     const asked = acme([
       service({
-        operations: ["agent-template:read"],
+        operations: ["iam:agent-template-read"],
         answer: answering(reportFrom(fieldOne.grn)),
       }),
     ]);
@@ -370,7 +370,7 @@ describe("an operator's page: its reported images and last contact", () => {
     expect(fact("Last contact")).toHaveTextContent("Not checked");
   });
 
-  it("leaves the facts out and asks nothing only where the server denies operator:read, and shows them where it cannot say", async () => {
+  it("leaves the facts out and asks nothing only where the server denies iam:operator-read, and shows them where it cannot say", async () => {
     const asked = acme([
       service({ answer: answering(reportFrom(fieldOne.grn)) }),
     ]);
@@ -397,7 +397,7 @@ describe("an operator's page: its reported images and last contact", () => {
 });
 
 describe("the operators list: each operator's reported images and last contact", () => {
-  it("asks every service whose grant carries operator:read and shows each operator's report from the service that serves it", async () => {
+  it("asks every service whose grant carries iam:operator-read and shows each operator's report from the service that serves it", async () => {
     const asked = acme(
       [
         service({ answer: answering(reportFrom(fieldOne.grn)) }),
@@ -553,7 +553,7 @@ describe("the operators list: each operator's reported images and last contact",
     expect(again).toEqual({ hosted: 1 });
   });
 
-  it("leaves the columns out and asks nothing only where the server denies operator:read", async () => {
+  it("leaves the columns out and asks nothing only where the server denies iam:operator-read", async () => {
     const asked = acme([
       service({ answer: answering(reportFrom(fieldOne.grn)) }),
     ]);

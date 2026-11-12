@@ -12,7 +12,7 @@ import (
 )
 
 // CreateManagedAgent creates an agent assigned to a controller for the
-// hosted control service calling, under a member's agent:create
+// hosted control service calling, under a member's iam:agent-create
 // reference (ADR-0077). The caller's own credential and registration
 // are read again first, as on every lifecycle decision. Creation opens
 // the agent's lineage under managed-enrollment.v1 and v2 alike; under

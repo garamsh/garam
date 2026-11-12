@@ -66,12 +66,12 @@ export default async function AgentPage({ params }: Params) {
     {
       key: "enroll",
       label: "Replace its standalone host",
-      check: { action: "agent:enroll", resource: self },
+      check: { action: "iam:agent-enroll", resource: self },
     },
     {
       key: "rename",
       label: "Rename it",
-      check: { action: "agent:rename", resource: self },
+      check: { action: "iam:agent-rename", resource: self },
     },
   ]);
   const [organization, agents, operators, hosted, readings] = await Promise.all(
@@ -163,7 +163,7 @@ export default async function AgentPage({ params }: Params) {
               agentGrn={agentGrn}
               hosted={hostedFor(
                 hosted.data,
-                "agent:execution-read",
+                "iam:agent-execution-read",
                 reported.assignment?.assigneeGrn,
               )}
             />

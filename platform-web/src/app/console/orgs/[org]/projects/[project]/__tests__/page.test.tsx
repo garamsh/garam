@@ -102,7 +102,7 @@ describe("a project's page", () => {
   it("leaves out the writes the server denies, and keeps them in Your access", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "project:delete" || action === "project:member-add"
+        action === "iam:project-delete" || action === "iam:project-member-add"
           ? "deny"
           : "allow",
       ),

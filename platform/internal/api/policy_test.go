@@ -20,7 +20,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/wire"
 )
 
-const policyDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme/*"]}]}`
+const policyDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["iam:org-read"],"Resource":["grn:acme/*"]}]}`
 
 // policyFixture stubs the PolicyManager seam with the policy the
 // handlers address, and returns its GRN.

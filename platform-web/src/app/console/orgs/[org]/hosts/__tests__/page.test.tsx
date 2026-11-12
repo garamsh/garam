@@ -218,10 +218,10 @@ describe("hosts", () => {
     await vi.waitFor(() => expect(revoked).toEqual(["build-07"]));
   });
 
-  it("keeps approving, withdrawing and revoking on the page, inactive, where the server denies agent:enroll", async () => {
+  it("keeps approving, withdrawing and revoking on the page, inactive, where the server denies iam:agent-enroll", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "agent:enroll" ? "deny" : "allow",
+        action === "iam:agent-enroll" ? "deny" : "allow",
       ),
     );
 

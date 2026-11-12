@@ -60,7 +60,7 @@ func TestCreatePolicy_AnswersTheEnginesReasonAndPointer(t *testing.T) {
 	f.permit(permission{ownerGRN, org.ActionPolicyCreate})
 	_, p := policyFixture(slug)
 
-	document := json.RawMessage(`{"Version":"2026-07-25","Statement":[{"Sid":"s","Effect":"Deny","Action":["org:delete"]}]}`)
+	document := json.RawMessage(`{"Version":"2026-07-25","Statement":[{"Sid":"s","Effect":"Deny","Action":["iam:org-delete"]}]}`)
 	_, refusal := enginePolicyManager(t).CreatePolicy(testCtx(t), p.OrgGRN, "read-only", document, ownerGRN)
 	require.Error(t, refusal, "the engine refuses the document")
 	f.policies.EXPECT().

@@ -93,7 +93,7 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen
 
 // RenameAgent sets or clears what the org calls an agent, and nothing
 // else (ADR-0119). It is authorized on the agent's own GRN, so a
-// policy denying agent:rename on that agent refuses it.
+// policy denying iam:agent-rename on that agent refuses it.
 func (s *Server) RenameAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, agentSlug apigen.AgentSlug) {
 	u, err := s.currentUser(r)
 	if err != nil {

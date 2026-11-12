@@ -26,18 +26,18 @@ describe("checkPermissions", () => {
   it("answers each action by the name the page gave it", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "operator:read"
+        action === "iam:operator-read"
           ? "allow"
-          : action === "agent:create"
+          : action === "iam:agent-create"
             ? "unknown"
             : "deny",
       ),
     );
 
     const permissions = await checkPermissions("acme", {
-      register: { action: "operator:register" },
-      read: { action: "operator:read" },
-      create: { action: "agent:create" },
+      register: { action: "iam:operator-register" },
+      read: { action: "iam:operator-read" },
+      create: { action: "iam:agent-create" },
     });
 
     expect(permissions.get("register")).toBe("denied");
@@ -53,8 +53,8 @@ describe("checkPermissions", () => {
         sent.push(await request.json());
         return HttpResponse.json({
           results: [
-            { action: "group:update", decision: "allow" },
-            { action: "org:read", decision: "allow" },
+            { action: "iam:group-update", decision: "allow" },
+            { action: "iam:org-read", decision: "allow" },
           ],
         });
       }),
@@ -62,17 +62,20 @@ describe("checkPermissions", () => {
 
     await checkPermissions("acme", {
       rename: {
-        action: "group:update",
+        action: "iam:group-update",
         resource: { type: "group", id: "eng" },
       },
-      read: { action: "org:read" },
+      read: { action: "iam:org-read" },
     });
 
     expect(sent).toEqual([
       {
         checks: [
-          { action: "group:update", resource: { type: "group", id: "eng" } },
-          { action: "org:read" },
+          {
+            action: "iam:group-update",
+            resource: { type: "group", id: "eng" },
+          },
+          { action: "iam:org-read" },
         ],
       },
     ]);
@@ -92,7 +95,7 @@ describe("checkPermissions", () => {
     server.use(http.post(CHECKS, answer));
 
     const permissions = await checkPermissions("acme", {
-      register: { action: "operator:register" },
+      register: { action: "iam:operator-register" },
     });
 
     expect(permissions.get("register")).toBe("unknown");
@@ -101,7 +104,7 @@ describe("checkPermissions", () => {
     // `unknown` above is the failure's and not the helper's default.
     server.use(answerPermissionChecks(() => "deny"));
     const answered = await checkPermissions("acme", {
-      register: { action: "operator:register" },
+      register: { action: "iam:operator-register" },
     });
     expect(answered.get("register")).toBe("denied");
   });
@@ -110,7 +113,9 @@ describe("checkPermissions", () => {
     server.use(...signedOut());
 
     await expect(
-      checkPermissions("acme", { register: { action: "operator:register" } }),
+      checkPermissions("acme", {
+        register: { action: "iam:operator-register" },
+      }),
     ).rejects.toThrow("NEXT_REDIRECT:/auth/sign-in");
   });
 
@@ -118,14 +123,14 @@ describe("checkPermissions", () => {
     ["does not pair with what was asked", { results: [] }],
     [
       "carries a decision the contract does not name",
-      { results: [{ action: "operator:register", decision: "maybe" }] },
+      { results: [{ action: "iam:operator-register", decision: "maybe" }] },
     ],
   ])("answers unknown, and logs it, when the answer %s", async (_, body) => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     server.use(http.post(CHECKS, () => HttpResponse.json(body)));
 
     const permissions = await checkPermissions("acme", {
-      register: { action: "operator:register" },
+      register: { action: "iam:operator-register" },
     });
 
     expect(permissions.get("register")).toBe("unknown");
@@ -136,7 +141,7 @@ describe("checkPermissions", () => {
     // is the malformed body's and not the helper's default.
     server.use(answerPermissionChecks(() => "deny"));
     const answered = await checkPermissions("acme", {
-      register: { action: "operator:register" },
+      register: { action: "iam:operator-register" },
     });
     expect(answered.get("register")).toBe("denied");
   });
@@ -146,7 +151,7 @@ describe("checkPermissions", () => {
       Object.fromEntries(
         Array.from({ length: n }, (_, i): [string, PermissionCheck] => [
           `action-${i}`,
-          { action: "org:read" },
+          { action: "iam:org-read" },
         ]),
       );
 

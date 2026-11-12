@@ -34,7 +34,7 @@ const hosted: DelegatedOperator = {
     grantId: "grant-1",
     operatorGrn: "grn:acme/iam/operator/hosted",
     controllers: [],
-    operations: ["agent-template:publish"],
+    operations: ["iam:agent-template-publish"],
     expiresAt: "2099-01-01T00:00:00Z",
     grantedBy: "grn:acme/iam/user/alice",
     grantedAt: "2026-10-01T00:00:00Z",

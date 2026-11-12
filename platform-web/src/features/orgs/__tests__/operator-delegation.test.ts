@@ -20,10 +20,12 @@ function grantOf(operations: string[]) {
 }
 
 describe("getOperatorDelegation", () => {
-  it("reads a grant that delegates operator:read", async () => {
+  it("reads a grant that delegates iam:operator-read", async () => {
     server.use(
       http.get(DELEGATION, () =>
-        HttpResponse.json(grantOf(["agent-template:read", "operator:read"])),
+        HttpResponse.json(
+          grantOf(["iam:agent-template-read", "iam:operator-read"]),
+        ),
       ),
     );
 
@@ -31,15 +33,15 @@ describe("getOperatorDelegation", () => {
 
     expect(read).toEqual({
       status: "ok",
-      data: grantOf(["agent-template:read", "operator:read"]),
+      data: grantOf(["iam:agent-template-read", "iam:operator-read"]),
     });
 
     // The control: an operation the contract does not name is outside
-    // it, so the read above is the parser accepting operator:read and
-    // not one accepting anything.
+    // it, so the read above is the parser accepting iam:operator-read
+    // and not one accepting anything.
     server.use(
       http.get(DELEGATION, () =>
-        HttpResponse.json(grantOf(["operator:frobnicate"])),
+        HttpResponse.json(grantOf(["iam:operator-frobnicate"])),
       ),
     );
     expect(await getOperatorDelegation("acme", "hosted")).toEqual({

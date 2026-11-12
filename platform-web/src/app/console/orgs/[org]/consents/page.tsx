@@ -22,7 +22,7 @@ const DESCRIPTION =
 /**
  * The organizations this one may exchange messages with, one card per
  * pair, and the dialog that grants this organization's half of a new
- * one. Reading them needs `consent:read`, which not every member
+ * one. Reading them needs `iam:consent-read`, which not every member
  * holds, so a refused list is said rather than shown as none; the
  * organization is read beside it so that a caller who is not a member
  * is still answered not-found (ADR-0011).
@@ -37,8 +37,8 @@ export default async function ConsentsPage({ params }: Params) {
     getOrg(org),
     lookupOrgConsents(org),
     checkPermissions(org, {
-      grant: { action: "consent:grant" },
-      withdraw: { action: "consent:withdraw" },
+      grant: { action: "iam:consent-grant" },
+      withdraw: { action: "iam:consent-withdraw" },
     }),
   ]);
   const mayGrant = permissions.get("grant") !== "denied";

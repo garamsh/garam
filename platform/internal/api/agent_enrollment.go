@@ -137,10 +137,10 @@ func (s *Server) RevokeAgentSupervisor(w http.ResponseWriter, r *http.Request, o
 }
 
 // ListAgentEnrollments pages the organization's standalone approvals
-// in every state. Authorization is the service's agent:read, decided
-// from current state as the writes beside it are. No secret, hash,
-// fingerprint or certificate reaches the answer: the summary the store
-// reads carries none.
+// in every state. Authorization is the service's iam:agent-read,
+// decided from current state as the writes beside it are. No secret,
+// hash, fingerprint or certificate reaches the answer: the summary the
+// store reads carries none.
 func (s *Server) ListAgentEnrollments(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListAgentEnrollmentsParams) {
 	u, err := s.currentUser(r)
 	if err != nil {

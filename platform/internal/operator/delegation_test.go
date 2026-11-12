@@ -25,7 +25,7 @@ var (
 func TestParseGrantTerms_BoundsWhatAGrantCanReach(t *testing.T) {
 	now := time.Date(2026, time.October, 4, 12, 0, 0, 0, time.UTC)
 	valid := func() ([]string, []string, time.Time) {
-		return []string{controller.String()}, []string{"agent:configure", "agent:create"}, now.Add(30 * 24 * time.Hour)
+		return []string{controller.String()}, []string{"iam:agent-configure", "iam:agent-create"}, now.Add(30 * 24 * time.Hour)
 	}
 	controllers, operations, expiresAt := valid()
 	terms, err := operator.ParseGrantTerms(acme, hosted, controllers, operations, expiresAt, now)
@@ -53,7 +53,7 @@ func TestParseGrantTerms_BoundsWhatAGrantCanReach(t *testing.T) {
 			return []string{controller.String(), controller.String()}, o, e
 		},
 		"no operation":         func() ([]string, []string, time.Time) { c, _, e := valid(); return c, nil, e },
-		"an unknown operation": func() ([]string, []string, time.Time) { c, _, e := valid(); return c, []string{"agent:*"}, e },
+		"an unknown operation": func() ([]string, []string, time.Time) { c, _, e := valid(); return c, []string{"iam:agent-*"}, e },
 		"already expired":      func() ([]string, []string, time.Time) { c, o, _ := valid(); return c, o, now },
 		"past thirty days": func() ([]string, []string, time.Time) {
 			c, o, _ := valid()
@@ -125,8 +125,8 @@ func TestGrantCovers_ReadsNoControllerForAnOrganizationOperation(t *testing.T) {
 
 // TestOperation_BindsRequestTargetExactlyForTheReadsAndPublication
 // holds which operations bind a request target: the four #1170 added
-// and operator:read (#1374), and none of the operations that bind only
-// their body.
+// and iam:operator-read (#1374), and none of the operations that bind
+// only their body.
 func TestOperation_BindsRequestTargetExactlyForTheReadsAndPublication(t *testing.T) {
 	for _, op := range []operator.Operation{operator.OperationTemplateRead, operator.OperationTemplatePublish,
 		operator.OperationProfileRead, operator.OperationExecutionRead, operator.OperationOperatorRead} {

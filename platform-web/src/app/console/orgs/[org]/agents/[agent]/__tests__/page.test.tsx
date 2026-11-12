@@ -65,10 +65,10 @@ describe("agent page", () => {
     );
   });
 
-  it("offers no rename where agent:rename is denied on the agent", async () => {
+  it("offers no rename where iam:agent-rename is denied on the agent", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "agent:rename" ? "deny" : "allow",
+        action === "iam:agent-rename" ? "deny" : "allow",
       ),
     );
     await renderAgent();
@@ -154,7 +154,7 @@ describe("agent page", () => {
           grantId: "grant-1",
           operatorGrn: hosted,
           controllers: [fieldOne.grn],
-          operations: ["agent:execution-read"],
+          operations: ["iam:agent-execution-read"],
           expiresAt: "2099-01-01T00:00:00Z",
           grantedBy: "grn:root/iam/user/alice",
           grantedAt: "2026-10-01T00:00:00Z",

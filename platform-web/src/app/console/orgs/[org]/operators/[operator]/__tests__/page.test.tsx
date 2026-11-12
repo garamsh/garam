@@ -140,7 +140,7 @@ describe("operator page", () => {
   it("leaves out rotating and revoking where the server denies re-issuing", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "operator:reissue" ? "deny" : "allow",
+        action === "iam:operator-reissue" ? "deny" : "allow",
       ),
     );
 
@@ -163,14 +163,14 @@ describe("operator page", () => {
           grantId: "g-1",
           operatorGrn: fieldOne.grn,
           controllers: [fieldOne.grn],
-          operations: ["agent:create"],
+          operations: ["iam:agent-create"],
           expiresAt: "2026-10-21T00:00:00Z",
           grantedBy: "grn:root/iam/user/alice",
           grantedAt: "2026-10-14T00:00:00Z",
         }),
       ),
       answerPermissionChecks((action) =>
-        action === "operator:delegate" ? "deny" : "allow",
+        action === "iam:operator-delegate" ? "deny" : "allow",
       ),
     );
 
@@ -195,7 +195,7 @@ describe("operator page", () => {
           grantId: "g-1",
           operatorGrn: fieldOne.grn,
           controllers: [fieldOne.grn],
-          operations: ["agent:create"],
+          operations: ["iam:agent-create"],
           expiresAt: "2026-10-21T00:00:00Z",
           grantedBy: "grn:root/iam/user/alice",
           grantedAt: "2026-10-14T00:00:00Z",
@@ -217,7 +217,7 @@ describe("operator page", () => {
     server.use(
       http.get(`${OPERATOR}/keys`, () => HttpResponse.json({ keys: [] })),
       answerPermissionChecks((action) =>
-        action === "operator:register" ? "deny" : "allow",
+        action === "iam:operator-register" ? "deny" : "allow",
       ),
     );
 
@@ -232,7 +232,7 @@ describe("operator page", () => {
     server.use(
       http.get(`${OPERATOR}/keys`, () => HttpResponse.json({ keys: [] })),
       answerPermissionChecks((action) =>
-        action === "operator:register" || action === "operator:reissue"
+        action === "iam:operator-register" || action === "iam:operator-reissue"
           ? "deny"
           : "allow",
       ),
@@ -278,7 +278,7 @@ describe("operator page", () => {
   it("leaves the danger zone out where the server denies deleting", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "operator:delete" ? "deny" : "allow",
+        action === "iam:operator-delete" ? "deny" : "allow",
       ),
     );
 
@@ -308,7 +308,7 @@ describe("operator page", () => {
           grantId: "g-1",
           operatorGrn: fieldOne.grn,
           controllers: ["grn:acme/iam/operator/field-manager"],
-          operations: ["agent:create"],
+          operations: ["iam:agent-create"],
           expiresAt: "2026-10-21T00:00:00Z",
           grantedBy: "grn:root/iam/user/alice",
           grantedAt: "2026-10-14T00:00:00Z",

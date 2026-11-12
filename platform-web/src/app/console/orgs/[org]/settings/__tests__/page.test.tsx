@@ -70,7 +70,7 @@ describe("organization settings", () => {
 
     await renderServerComponent(OrgSettingsPage(params("acme")));
 
-    expect(asked).toEqual([["org:update", "org:delete"]]);
+    expect(asked).toEqual([["iam:org-update", "iam:org-delete"]]);
   });
 
   it.each(["allow", "unknown"] as const)(
@@ -90,7 +90,7 @@ describe("organization settings", () => {
   it("leaves the rename out when only the rename is denied, and keeps the name readable", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "org:update" ? "deny" : "allow",
+        action === "iam:org-update" ? "deny" : "allow",
       ),
     );
 
@@ -109,7 +109,7 @@ describe("organization settings", () => {
   it("leaves the danger zone out when only the delete is denied", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "org:delete" ? "deny" : "allow",
+        action === "iam:org-delete" ? "deny" : "allow",
       ),
     );
 

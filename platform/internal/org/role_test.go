@@ -43,59 +43,59 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		constant string
 		want     string
 	}{
-		{org.ActionOrgRead, "org:read"},
-		{org.ActionOrgUpdate, "org:update"},
-		{org.ActionOrgDelete, "org:delete"},
-		{org.ActionOrgMemberList, "org:member-list"},
-		{org.ActionOrgInvite, "org:invite"},
+		{org.ActionOrgRead, "iam:org-read"},
+		{org.ActionOrgUpdate, "iam:org-update"},
+		{org.ActionOrgDelete, "iam:org-delete"},
+		{org.ActionOrgMemberList, "iam:org-member-list"},
+		{org.ActionOrgInvite, "iam:org-invite"},
 
-		{org.ActionGroupCreate, "group:create"},
-		{org.ActionGroupRead, "group:read"},
-		{org.ActionGroupUpdate, "group:update"},
-		{org.ActionGroupDelete, "group:delete"},
-		{org.ActionGroupMemberList, "group:member-list"},
-		{org.ActionGroupMemberAdd, "group:member-add"},
-		{org.ActionGroupMemberRemove, "group:member-remove"},
+		{org.ActionGroupCreate, "iam:group-create"},
+		{org.ActionGroupRead, "iam:group-read"},
+		{org.ActionGroupUpdate, "iam:group-update"},
+		{org.ActionGroupDelete, "iam:group-delete"},
+		{org.ActionGroupMemberList, "iam:group-member-list"},
+		{org.ActionGroupMemberAdd, "iam:group-member-add"},
+		{org.ActionGroupMemberRemove, "iam:group-member-remove"},
 
-		{org.ActionProjectCreate, "project:create"},
-		{org.ActionProjectRead, "project:read"},
-		{org.ActionProjectUpdate, "project:update"},
-		{org.ActionProjectDelete, "project:delete"},
-		{org.ActionProjectMemberList, "project:member-list"},
-		{org.ActionProjectMemberAdd, "project:member-add"},
-		{org.ActionProjectMemberRemove, "project:member-remove"},
+		{org.ActionProjectCreate, "iam:project-create"},
+		{org.ActionProjectRead, "iam:project-read"},
+		{org.ActionProjectUpdate, "iam:project-update"},
+		{org.ActionProjectDelete, "iam:project-delete"},
+		{org.ActionProjectMemberList, "iam:project-member-list"},
+		{org.ActionProjectMemberAdd, "iam:project-member-add"},
+		{org.ActionProjectMemberRemove, "iam:project-member-remove"},
 
-		{org.ActionPolicyCreate, "policy:create"},
-		{org.ActionPolicyRead, "policy:read"},
-		{org.ActionPolicyUpdate, "policy:update"},
-		{org.ActionPolicyAttach, "policy:attach"},
-		{org.ActionPolicyDetach, "policy:detach"},
-		{org.ActionPolicyDelete, "policy:delete"},
+		{org.ActionPolicyCreate, "iam:policy-create"},
+		{org.ActionPolicyRead, "iam:policy-read"},
+		{org.ActionPolicyUpdate, "iam:policy-update"},
+		{org.ActionPolicyAttach, "iam:policy-attach"},
+		{org.ActionPolicyDetach, "iam:policy-detach"},
+		{org.ActionPolicyDelete, "iam:policy-delete"},
 
-		{org.ActionConsentRead, "consent:read"},
-		{org.ActionConsentGrant, "consent:grant"},
-		{org.ActionConsentWithdraw, "consent:withdraw"},
+		{org.ActionConsentRead, "iam:consent-read"},
+		{org.ActionConsentGrant, "iam:consent-grant"},
+		{org.ActionConsentWithdraw, "iam:consent-withdraw"},
 
-		{org.ActionOperatorRead, "operator:read"},
-		{org.ActionOperatorRegister, "operator:register"},
-		{org.ActionOperatorUpdate, "operator:update"},
-		{org.ActionOperatorDelete, "operator:delete"},
-		{org.ActionOperatorReissue, "operator:reissue"},
-		{org.ActionOperatorDelegate, "operator:delegate"},
+		{org.ActionOperatorRead, "iam:operator-read"},
+		{org.ActionOperatorRegister, "iam:operator-register"},
+		{org.ActionOperatorUpdate, "iam:operator-update"},
+		{org.ActionOperatorDelete, "iam:operator-delete"},
+		{org.ActionOperatorReissue, "iam:operator-reissue"},
+		{org.ActionOperatorDelegate, "iam:operator-delegate"},
 
-		{org.ActionAgentRead, "agent:read"},
-		{org.ActionAgentWatch, "agent:watch"},
-		{org.ActionAgentRename, "agent:rename"},
-		{org.ActionAgentCreate, "agent:create"},
-		{org.ActionAgentConfigure, "agent:configure"},
-		{org.ActionAgentRecover, "agent:recover"},
-		{org.ActionAgentReplace, "agent:replace"},
+		{org.ActionAgentRead, "iam:agent-read"},
+		{org.ActionAgentWatch, "iam:agent-watch"},
+		{org.ActionAgentRename, "iam:agent-rename"},
+		{org.ActionAgentCreate, "iam:agent-create"},
+		{org.ActionAgentConfigure, "iam:agent-configure"},
+		{org.ActionAgentRecover, "iam:agent-recover"},
+		{org.ActionAgentReplace, "iam:agent-replace"},
 
-		{org.ActionAgentEnroll, "agent:enroll"},
-		{org.ActionAgentTemplateRead, "agent-template:read"},
-		{org.ActionAgentTemplatePublish, "agent-template:publish"},
-		{org.ActionExecutionProfileRead, "execution-profile:read"},
-		{org.ActionAgentExecutionRead, "agent:execution-read"},
+		{org.ActionAgentEnroll, "iam:agent-enroll"},
+		{org.ActionAgentTemplateRead, "iam:agent-template-read"},
+		{org.ActionAgentTemplatePublish, "iam:agent-template-publish"},
+		{org.ActionExecutionProfileRead, "iam:execution-profile-read"},
+		{org.ActionAgentExecutionRead, "iam:agent-execution-read"},
 
 		{org.ActionCoworkPageRead, "cowork:page-read"},
 		{org.ActionCoworkPageWrite, "cowork:page-write"},
@@ -119,7 +119,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 // with the same prefix is the control.
 func TestIsAction_RefusesWhatOnlyAWildcardMatches(t *testing.T) {
 	assert.True(t, org.IsAction(org.ActionOrgDelete))
-	for _, name := range []string{"org:*", "org:frobnicate", ""} {
+	for _, name := range []string{"iam:org-*", "iam:org-frobnicate", ""} {
 		assert.False(t, org.IsAction(name), name)
 	}
 }
@@ -127,7 +127,7 @@ func TestIsAction_RefusesWhatOnlyAWildcardMatches(t *testing.T) {
 func TestRoleActions_GrantSets(t *testing.T) {
 	assert.Equal(t,
 		[]string{
-			"org:*", "group:*", "project:*", "policy:*", "consent:*",
+			"iam:org-*", "iam:group-*", "iam:project-*", "iam:policy-*", "iam:consent-*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
@@ -144,7 +144,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 	assert.Equal(t,
 		[]string{
 			org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite,
-			"group:*", "project:*", "policy:*", "consent:*",
+			"iam:group-*", "iam:project-*", "iam:policy-*", "iam:consent-*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
@@ -176,10 +176,10 @@ func TestRoleActions_GrantSets(t *testing.T) {
 }
 
 // TestRoleActions_NoRoleReachesAgentWatch pins what the grant sets
-// above leave implicit: no role names `agent:watch`, and none carries
-// the `agent:*` that would reach it without naming it. ADR-0022
-// separates watching from reading so an organization may give one and
-// withhold the other, and ADR-0012 keeps provisioning out of a
+// above leave implicit: no role names `iam:agent-watch`, and none
+// carries the `iam:agent-*` that would reach it without naming it.
+// ADR-0022 separates watching from reading so an organization may give
+// one and withhold the other, and ADR-0012 keeps provisioning out of a
 // wildcard; both make an agent action a role grants a deliberate one.
 //
 // The read and the rename are the control. Without them the two
@@ -188,19 +188,19 @@ func TestRoleActions_GrantSets(t *testing.T) {
 func TestRoleActions_NoRoleReachesAgentWatch(t *testing.T) {
 	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
 		assert.NotContains(t, r.Actions(), org.ActionAgentWatch, string(r))
-		assert.NotContains(t, r.Actions(), "agent:*", string(r))
+		assert.NotContains(t, r.Actions(), "iam:agent-*", string(r))
 		assert.Contains(t, r.Actions(), org.ActionAgentRead, string(r))
 		assert.Contains(t, r.Actions(), org.ActionAgentRename, string(r))
 	}
 }
 
 // TestRoleActions_NoRoleDefinesAnAgent pins ADR-0090: garam accepts no
-// desired value, so no role grants the `agent:define` a definition was
-// written under. Creating through the control service is the control:
-// every role still reaches an agent's creation.
+// desired value, so no role grants the `iam:agent-define` a definition
+// was written under. Creating through the control service is the
+// control: every role still reaches an agent's creation.
 func TestRoleActions_NoRoleDefinesAnAgent(t *testing.T) {
 	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
-		assert.NotContains(t, r.Actions(), "agent:define", string(r))
+		assert.NotContains(t, r.Actions(), "iam:agent-define", string(r))
 		assert.Contains(t, r.Actions(), org.ActionAgentCreate, string(r))
 	}
 }
@@ -217,7 +217,7 @@ func TestRoleActions_NoRoleDefinesAnAgent(t *testing.T) {
 func TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator(t *testing.T) {
 	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
 		assert.Contains(t, r.Actions(), org.ActionOperatorRead, string(r))
-		assert.NotContains(t, r.Actions(), "operator:*", string(r))
+		assert.NotContains(t, r.Actions(), "iam:operator-*", string(r))
 	}
 	for _, action := range []string{org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete, org.ActionOperatorReissue} {
 		assert.Contains(t, org.RoleOwner.Actions(), action)
@@ -317,7 +317,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionCoworkTaskRead, org.ActionCoworkTaskWrite,
 			org.ActionCoworkArtifactRead, org.ActionCoworkArtifactWrite,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
-			"group:*", "project:*", "policy:*", "consent:*",
+			"iam:group-*", "iam:project-*", "iam:policy-*", "iam:consent-*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
 			org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
 			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead,

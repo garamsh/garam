@@ -97,7 +97,7 @@ func TestPolicyService_DeleteRoundTrip(t *testing.T) {
 		created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
 			OrgGrn:    orgGRN.String(),
 			Name:      name,
-			Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme/*"]}]}`,
+			Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["iam:org-read"],"Resource":["grn:acme/*"]}]}`,
 			CreatedBy: grnOf("user", "ada").String(),
 		})
 		require.NoError(t, err)
@@ -211,8 +211,8 @@ func TestPolicyVersions_StoreAndReturnTheSubmittedDocument(t *testing.T) {
 	orgGRN := newPolicyOrg(t, p)
 
 	const (
-		conditioned   = `{"Version":"2026-07-25","Statement":[{"Sid":"OfficeOnly","Effect":"Allow","Action":["org:update"],"Resource":["grn:acme/*"],"Condition":{"IpAddress":{"garam:SourceIp":"203.0.113.0/24"}}}]}`
-		unconditioned = `{"Version":"2026-07-25","Statement":[{"Sid":"Anywhere","Effect":"Allow","Action":["org:update"],"Resource":["grn:acme/*"]}]}`
+		conditioned   = `{"Version":"2026-07-25","Statement":[{"Sid":"OfficeOnly","Effect":"Allow","Action":["iam:org-update"],"Resource":["grn:acme/*"],"Condition":{"IpAddress":{"garam:SourceIp":"203.0.113.0/24"}}}]}`
+		unconditioned = `{"Version":"2026-07-25","Statement":[{"Sid":"Anywhere","Effect":"Allow","Action":["iam:org-update"],"Resource":["grn:acme/*"]}]}`
 	)
 
 	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
@@ -328,7 +328,7 @@ func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
 		OrgGrn:    orgGRN.String(),
 		Name:      "read-only",
-		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme/*"]}]}`,
+		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["iam:org-read"],"Resource":["grn:acme/*"]}]}`,
 		CreatedBy: ada.String(),
 	})
 	require.NoError(t, err)
@@ -380,7 +380,7 @@ func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	// for the refusal after it.
 	engine := authz.NewGRPCServer(cache)
 	check := &authzv1.CheckRequest{
-		SubjectGrn: bob.String(), ObjectGrn: grnOf("project", "web").String(), Action: "org:read",
+		SubjectGrn: bob.String(), ObjectGrn: grnOf("project", "web").String(), Action: "iam:org-read",
 		SubjectGroups: []string{eng.String()}, SubjectOrg: orgGRN.String(),
 	}
 	before, err := engine.Check(ctx, check)
@@ -437,7 +437,7 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 		Statement: []authz.Statement{{
 			Sid:      "deny-read",
 			Effect:   wire.EffectDeny,
-			Action:   []string{"project:read"},
+			Action:   []string{"iam:project-read"},
 			Resource: []string{"grn:acme/*"},
 		}},
 	}
@@ -453,11 +453,11 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 	req := &authzv1.CheckRequest{
 		SubjectGrn: ada.String(),
 		ObjectGrn:  grnOf("project", "web").String(),
-		Action:     "project:read",
+		Action:     "iam:project-read",
 		Statements: []*authzv1.Statement{{
 			Sid:      "org-role-owner",
 			Effect:   authzv1.Effect_EFFECT_ALLOW,
-			Action:   []string{"project:*"},
+			Action:   []string{"iam:project-*"},
 			Resource: []string{"grn:acme/*"},
 		}},
 		// ada is a member of acme: the api server populates subject_org
@@ -493,7 +493,7 @@ func TestPolicyAttachment_ADenyDoesNotWidenOnDetach(t *testing.T) {
 	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
 		OrgGrn:    orgGRN.String(),
 		Name:      "no-read",
-		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"deny-read","Effect":"Deny","Action":["project:read"],"Resource":["grn:acme/*"]}]}`,
+		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"deny-read","Effect":"Deny","Action":["iam:project-read"],"Resource":["grn:acme/*"]}]}`,
 		CreatedBy: ada.String(),
 	})
 	require.NoError(t, err)

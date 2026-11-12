@@ -151,7 +151,7 @@ export const denyDeletesVersions: PolicyVersion[] = [1, 2].map((version) => ({
     Statement: [
       {
         Effect: "Deny",
-        Action: version === 1 ? ["project:delete"] : ["project:*"],
+        Action: version === 1 ? ["iam:project-delete"] : ["iam:project-*"],
         Resource: ["grn:acme/*"],
       },
     ],

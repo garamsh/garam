@@ -52,8 +52,8 @@ export default async function ConnectOperatorPage({
     getOperator(org, operator),
     listOperatorKeys(org, operator),
     checkPermissions(org, {
-      register: { action: "operator:register" },
-      reissue: { action: "operator:reissue" },
+      register: { action: "iam:operator-register" },
+      reissue: { action: "iam:operator-reissue" },
     }),
   ]);
   // garam issues a key to an operator holding no live one under either

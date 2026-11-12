@@ -24,16 +24,6 @@ struct RoleTable {
     roles: BTreeMap<String, Vec<String>>,
 }
 
-/// A name as role.go writes it, `<type>:<verb>`, as the manifests write
-/// it, `iam:<type>-<verb>` (ADR-0143 item 4). cowork's keep their
-/// spelling.
-fn wire(name: &str) -> String {
-    match name.split_once(':') {
-        Some(("cowork", _)) | None => name.to_string(),
-        Some((kind, verb)) => format!("iam:{kind}-{verb}"),
-    }
-}
-
 fn quoted(text: &str) -> Option<&str> {
     text.split('"').nth(1)
 }
@@ -64,7 +54,7 @@ impl RoleTable {
                 let is_constant = name.starts_with("Action") && !name.contains(' ');
                 Some((
                     name.to_string(),
-                    wire(quoted(value).filter(|_| is_constant)?),
+                    quoted(value).filter(|_| is_constant)?.to_string(),
                 ))
             })
             .collect();
@@ -93,7 +83,7 @@ impl RoleTable {
                 .map(|action| actions[action].clone())
                 .collect();
             let wildcards = body.split('"').skip(1).step_by(2);
-            patterns.extend(wildcards.map(wire));
+            patterns.extend(wildcards.map(String::from));
             if body.contains("machineActionsHeld(false)") {
                 patterns.extend(machine[&false].iter().cloned());
             }
@@ -154,7 +144,7 @@ fn the_schema_names_every_action_role_go_defines_and_no_other() {
     let table = RoleTable::read();
 
     let mut expected: BTreeSet<String> = table.actions.values().cloned().collect();
-    // No role.go constant: `message:send` is the platform's own, and
+    // No role.go constant: `iam:message-send` is the platform's own, and
     // `policy-permit` is ADR-0144 item 7's, held by owners alone.
     expected.insert("iam:message-send".to_string());
     expected.insert("iam:policy-permit".to_string());

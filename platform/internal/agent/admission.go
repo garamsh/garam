@@ -47,7 +47,7 @@ var (
 		"unsupported Garam-Contract-Version: this route serves "+AdmissionContractVersion)
 	// ErrDirectPlacementRequiresAdministratorApproval refuses direct
 	// placement under this contract, permanently: a direct agent's
-	// authority is an administrator's agent:enroll approval and a
+	// authority is an administrator's iam:agent-enroll approval and a
 	// supervisor registered for that one agent, never an operator
 	// (ADR-0111). The wire keeps the reason v1 shipped it under,
 	// direct_placement_gated.
@@ -89,10 +89,10 @@ func ParseApprovalID(s string) (ApprovalID, error) {
 
 // EnrollmentBinding is what an approval binds and what admitting it
 // repeats: the request identifier, the placement, the assignee and the
-// member's reference, agent:create for a new agent. Replaces is the
+// member's reference, iam:agent-create for a new agent. Replaces is the
 // agent a replacement moves and the assignment it expects, and nil for
-// a new agent; its reference is agent:replace (ADR-0107). Name is the
-// name a new agent is given, nil for none (ADR-0119).
+// a new agent; its reference is iam:agent-replace (ADR-0107). Name is
+// the name a new agent is given, nil for none (ADR-0119).
 type EnrollmentBinding struct {
 	RequestID    RequestID
 	Placement    Placement

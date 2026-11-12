@@ -36,7 +36,7 @@ func policyVersionRow() db.PolicyVersion {
 	return db.PolicyVersion{
 		PolicyGrn: "grn:acme/iam/policy/9f2ac1b40d8e7a35",
 		Version:   1,
-		Document:  []byte(`{"Version":"2026-07-25","Statement":[{"Sid":"s","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme/*"]}]}`),
+		Document:  []byte(`{"Version":"2026-07-25","Statement":[{"Sid":"s","Effect":"Allow","Action":["iam:org-read"],"Resource":["grn:acme/*"]}]}`),
 		CreatedBy: "grn:root/iam/user/alice",
 		CreatedAt: pgtype.Timestamptz{Valid: true},
 	}

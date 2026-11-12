@@ -57,8 +57,9 @@ func (c *heldClock) set(at time.Time) {
 
 // proofStack is the machine listener `garam serve machine` builds, over
 // Postgres and a policy engine, with acme's hosted operator, the
-// controller its grant covers for agent:activate, a second controller
-// the grant does not name, and globex's controller beside them.
+// controller its grant covers for iam:agent-activate, a second
+// controller the grant does not name, and globex's controller beside
+// them.
 type proofStack struct {
 	pool       *pgxpool.Pool
 	policies   *authz.PolicyGRPCServer
@@ -173,7 +174,7 @@ func (s *proofStack) operatorTLS(t *testing.T, subject grn.GRN) *http.Client {
 	return tokenPresenting(t, s.token(t, subject, nil))
 }
 
-// delegate writes the hosted operator's grant of agent:activate on
+// delegate writes the hosted operator's grant of iam:agent-activate on
 // controllers, replacing expected, and answers its identifier.
 func (s *proofStack) delegate(t *testing.T, requestID string, expected *operator.GrantID, expiresAt time.Time, controllers ...grn.GRN) operator.GrantID {
 	t.Helper()
@@ -411,7 +412,7 @@ func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
 	team := scopedGRN("acme", org.ServiceTypeGroup, "controllers")
 	require.NoError(t, orgs.CreateGroup(ctx, org.NewGroup(team, "controllers", s.acme)))
 	denied := activePolicy(t, policies, s.acme, "deny-activate",
-		statementDoc("deny-activate", wire.EffectDeny, "agent:activate", s.acme.String()))
+		statementDoc("deny-activate", wire.EffectDeny, "iam:agent-activate", s.acme.String()))
 	attachPolicy(t, policies, denied, team)
 	got := s.prove(t, s.hostedTLS, s.controller, s.controllerShown, "")
 	require.Equal(t, http.StatusOK, got.status, "not in the denied group: %s", got.body)
@@ -421,9 +422,9 @@ func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
 	onOpenConnection(t, s.prove(t, s.hostedTLS, s.controller, s.controllerShown, ""), http.StatusOK, "removed again")
 
 	check := &authzv1.CheckRequest{
-		SubjectGrn: s.hosted.String(), ObjectGrn: s.acme.String(), Action: "agent:activate",
+		SubjectGrn: s.hosted.String(), ObjectGrn: s.acme.String(), Action: "iam:agent-activate",
 		Statements: []*authzv1.Statement{{Sid: "delegation", Effect: authzv1.Effect_EFFECT_ALLOW,
-			Action: []string{"agent:activate"}, Resource: []string{s.acme.String()}}},
+			Action: []string{"iam:agent-activate"}, Resource: []string{s.acme.String()}}},
 		SubjectOrg: s.acme.String(),
 	}
 	client := authzv1.NewAuthzServiceClient(engine)
@@ -434,11 +435,11 @@ func TestControllerProof_DecidesOnCurrentPolicyPastACachedAllow(t *testing.T) {
 	store := authzpg.New(p)
 	elsewhere := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
 	attachPolicy(t, elsewhere, activePolicy(t, elsewhere, s.acme, "deny-agent",
-		statementDoc("deny-agent", wire.EffectDeny, "agent:activate", placed)), s.hosted)
+		statementDoc("deny-agent", wire.EffectDeny, "iam:agent-activate", placed)), s.hosted)
 	stale, err := client.Check(ctx, &authzv1.CheckRequest{
-		SubjectGrn: s.hosted.String(), ObjectGrn: placed, Action: "agent:activate",
+		SubjectGrn: s.hosted.String(), ObjectGrn: placed, Action: "iam:agent-activate",
 		Statements: []*authzv1.Statement{{Sid: "delegation", Effect: authzv1.Effect_EFFECT_ALLOW,
-			Action: []string{"agent:activate"}, Resource: []string{placed}}},
+			Action: []string{"iam:agent-activate"}, Resource: []string{placed}}},
 		SubjectOrg: s.acme.String(),
 	})
 	require.NoError(t, err)

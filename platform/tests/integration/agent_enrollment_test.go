@@ -234,7 +234,7 @@ func TestAgentEnrollment_ModelledPlacementsRefuseByName(t *testing.T) {
 	got = s.prepare(t, bindingBody("enrol-1", "managed", s.controller, ref, map[string]string{
 		"agent": s.agent.String(), "expectedAssignee": s.controller.String(), "expectedEpoch": "1",
 	}))
-	assert.Equal(t, http.StatusForbidden, got.status, "an agent:create reference replaces nothing: %s", got.body)
+	assert.Equal(t, http.StatusForbidden, got.status, "an iam:agent-create reference replaces nothing: %s", got.body)
 	assert.Equal(t, 0, s.count(t, `SELECT count(*) FROM agent_enrollment_approvals WHERE operation_ref = $1`, ref),
 		"neither refusal wrote an approval")
 

@@ -46,8 +46,8 @@ type Published = VersionRef & { profile: VersionRef };
  * The templates and profiles a hosted operator's control service has
  * published (#1170). Each version is immutable and an agent copies the
  * one it was created from once, so publishing a new version changes no
- * existing agent. Reading needs `agent-template:read`, publishing
- * `agent-template:publish`, and the profiles `execution-profile:read`;
+ * existing agent. Reading needs `iam:agent-template-read`, publishing
+ * `iam:agent-template-publish`, and the profiles `iam:execution-profile-read`;
  * publishing is also left out where the server denies the caller it.
  */
 export function OperatorTemplates({
@@ -79,29 +79,29 @@ export function OperatorTemplates({
         }
       : null;
 
-  const read = controlReach(hosted, "agent-template:read");
+  const read = controlReach(hosted, "iam:agent-template-read");
   const templates = useControlRead(
     org,
-    "agent-template:read",
-    reach("agent-template:read", `${base}/templates`),
+    "iam:agent-template-read",
+    reach("iam:agent-template-read", `${base}/templates`),
     TemplatesParser,
     generation,
   );
   const detail = useControlRead(
     org,
-    "agent-template:read",
+    "iam:agent-template-read",
     selected === null
       ? null
       : reach(
-          "agent-template:read",
+          "iam:agent-template-read",
           `${base}/templates/${segment(selected.name)}/versions/${segment(selected.version)}`,
         ),
     TemplateVersionParser,
   );
   const profiles = useControlRead(
     org,
-    "execution-profile:read",
-    reach("execution-profile:read", `${base}/profiles`),
+    "iam:execution-profile-read",
+    reach("iam:execution-profile-read", `${base}/profiles`),
     ProfilesParser,
   );
 
@@ -124,15 +124,15 @@ export function OperatorTemplates({
     return (
       <ControlNotice
         operatorsHref={orgHref(org, "operators")}
-        reason={controlFailureCopy(templates, "agent-template:read")}
+        reason={controlFailureCopy(templates, "iam:agent-template-read")}
         fix={NO_FIX}
       />
     );
   }
 
-  const publish = controlReach(hosted, "agent-template:publish");
+  const publish = controlReach(hosted, "iam:agent-template-publish");
   const canPublish = publish.status === "ready" && !publishDenied;
-  const profileBlock = controlBlocker(hosted, "execution-profile:read");
+  const profileBlock = controlBlocker(hosted, "iam:execution-profile-read");
   const columns: ColumnDef<Published, unknown>[] = [
     { id: "name", header: "Template", accessorKey: "name" },
     {
@@ -225,7 +225,7 @@ export function OperatorTemplates({
         ) : (
           <ControlNotice
             operatorsHref={orgHref(org, "operators")}
-            reason={controlFailureCopy(profiles, "execution-profile:read")}
+            reason={controlFailureCopy(profiles, "iam:execution-profile-read")}
             fix={NO_FIX}
           />
         )}
@@ -268,7 +268,7 @@ export function OperatorTemplates({
             </>
           ) : (
             <Refusal>
-              {controlFailureCopy(detail, "agent-template:read")}
+              {controlFailureCopy(detail, "iam:agent-template-read")}
             </Refusal>
           )}
         </DialogContent>

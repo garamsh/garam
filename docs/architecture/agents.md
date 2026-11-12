@@ -16,7 +16,7 @@ garam keeps no template of its own and no browser `operatorGrn`
 | `Service` | records the state each party reports (ADR-0053), and mints an agent's tokens for the operator or supervisor holding it (ADR-0100) |
 | `ExecutionService` | what a lifecycle authority does to an agent's execution — creates a managed agent, activates a generation, deactivates it, inspects a forwarded token and a generation, and recovers the credential lineage (ADR-0077, ADR-0078) |
 | `ExecutionStore` | the execution row every agent has, its activations and its credential lineage, written under the row's lock (ADR-0080), and a managed agent's creation, which opens its lineage |
-| `ManagedCreation` | an agent the hosted control service created: its GRN, the controller and epoch of its first assignment, the `agent:create` reference and request identifier that authorized it, and the lineage it was born into |
+| `ManagedCreation` | an agent the hosted control service created: its GRN, the controller and epoch of its first assignment, the `iam:agent-create` reference and request identifier that authorized it, and the lineage it was born into |
 | `Enrollment` | an administrator's approval of a standalone host: the hash of the host's bootstrap secret, its request identifier, the agent and supervisor GRNs it binds, the assignment a replacement expects, and the public result once spent (ADR-0082) |
 | `Supervisor` | a standalone host's current supervisor registration: the one agent it holds |
 | `StandaloneService` | how an administrator approves a host, withdraws an unspent approval and revokes a supervisor, each decided from current authority; it signs nothing |
@@ -72,9 +72,9 @@ and nothing an operator reads
   request, so a retry asking for another name, or for none where the
   first asked for one, is a conflict. A replacement binding carries no
   name, since the agent it moves keeps its own.
-- **Renamed.** `Store.Rename` sets or clears it under `agent:rename`,
-  checked on the agent's own GRN, and moves nothing else, the agent's
-  `updatedAt` included.
+- **Renamed.** `Store.Rename` sets or clears it under
+  `iam:agent-rename`, checked on the agent's own GRN, and moves nothing
+  else, the agent's `updatedAt` included.
 - **Shown.** Where an agent has no name, the console shows its
   identifier in its place.
 
@@ -176,8 +176,8 @@ whose Errata record that the wire is this one). §Separated execution
 and §Standalone hosts describe the older cohorts, which stay served.
 
 - **What is built.** The hosted control service prepares an approval
-  under a member's `agent:create` reference, then admits the agent it
-  binds; `platform/api/machine.yaml` §prepareAgentEnrollment and
+  under a member's `iam:agent-create` reference, then admits the agent
+  it binds; `platform/api/machine.yaml` §prepareAgentEnrollment and
   §admitAgentEnrollment are authoritative for the wire and the
   refusal reasons. Credential delivery is `mintAgentToken` and
   activation `activateAgent`, unchanged. `AdmissionService`
@@ -186,7 +186,7 @@ and §Standalone hosts describe the older cohorts, which stay served.
   reason `direct_placement_gated`, permanently: a direct agent's
   authority is an administrator and a one-agent supervisor, never an
   operator.
-- **A managed replacement rests on `agent:replace`.** An owner's or
+- **A managed replacement rests on `iam:agent-replace`.** An owner's or
   administrator's reference names the agent, the assignment it is on
   and the controller it moves to, and the hosted service's grant
   covers both controllers
@@ -372,15 +372,15 @@ in #1157.
   drops the execution row's mode. It refuses, each by an exception
   naming what it found, a definition or a cut-over of an agent not in
   legacy mode and a delegation holding no operation but
-  `agent:cutover`.
+  `iam:agent-cutover`.
 - **garam keeps no template of its own** ([ADR-0117](./adr/0117-garam-keeps-no-legacy-path-no-live-deployment-uses.md)). The templates
   ADR-0088 retired read-only and did not import are dropped with their
   table by migration 000057, which refuses to run while one is held; a
   new agent starts from a template the control service published.
 - **A managed agent is created by request, not by claim.** The control
-  service presents a member's `agent:create` reference and the request
-  identifier it binds; garam rechecks the reference from current state
-  before it creates or answers an earlier creation, and reads no
+  service presents a member's `iam:agent-create` reference and the
+  request identifier it binds; garam rechecks the reference from current
+  state before it creates or answers an earlier creation, and reads no
   lifecycle authority to create. The identity, its first assignment to
   the bound controller, its execution and the creation record are one
   transaction (migration 000030), so a failure leaves no agent, and the
@@ -406,12 +406,12 @@ in #1157.
   lock in its own transaction, which is what orders a replacement
   against writes already admitted (ADR-0078, ADR-0080). A restart is a
   new activation, not a new credential; a revision still pending
-  carries a durable `agent:configure` reference, rechecked fresh, and
-  one the runtime already applied needs none. A managed agent's first
-  activation carries its own creation's reference or such a configure
-  reference, and an activation carrying no reference is refused until
-  one has succeeded; the creation reference starts that first
-  generation and no later one.
+  carries a durable `iam:agent-configure` reference, rechecked fresh,
+  and one the runtime already applied needs none. A managed agent's
+  first activation carries its own creation's reference or such a
+  configure reference, and an activation carrying no reference is
+  refused until one has succeeded; the creation reference starts that
+  first generation and no later one.
 - **The browser API answers the generation last activated.**
   `getAgent` and `listAgents` answer `generation`: the most recent
   activation's, read from the execution row's latest activation, whether
@@ -431,9 +431,9 @@ in #1157.
 - **A lost credential is recovered for the same GRN**, replacing its
   lineage and fencing the old one, rather than by recreating the agent
   (ADR-0078). It is built: the control service presents an
-  administrator's `agent:recover` handoff for the exact request body,
-  in a `Garam-Operation` header under `execution-fence.v2`. It answers
-  what may have been taken rather than what was lost: it signs
+  administrator's `iam:agent-recover` handoff for the exact request
+  body, in a `Garam-Operation` header under `execution-fence.v2`. It
+  answers what may have been taken rather than what was lost: it signs
   nothing, ends the lineage and opens the next, so every token minted
   before it is refused from the next request, on a connection already
   open too, and the assignee mints in the new one. It answers the GRN
@@ -458,7 +458,7 @@ restart that keeps memory, joined to garam, are unverified (#1180,
   generates a bootstrap secret before it asks, and keeps it with a
   request identifier; the approval binds the secret's hash and that
   identifier to one organization, host name and agent, expiring within
-  a day, on `agent:enroll` read from current state (ADR-0082), and
+  a day, on `iam:agent-enroll` read from current state (ADR-0082), and
   binds no key (ADR-0118). An identical approval retry answers the same
   binding; a withdrawn or expired one is not revived.
 - **Spending is one transaction and retryable.** The host presents the
@@ -486,7 +486,7 @@ restart that keeps memory, joined to garam, are unverified (#1180,
 - **The supervisor activates its own agent and nothing else.** On the
   execution routes it is authorized by its current registration, its
   being the agent's assignee and current policy, read per request; it
-  holds `agent:activate` alone. Its registration is read again under
+  holds `iam:agent-activate` alone. Its registration is read again under
   the execution lock beside the assignment, so an activation queued
   behind a revocation or a replacement is refused rather than
   installing a token. Its first activation rests on the approval,
@@ -526,8 +526,8 @@ restart that keeps memory, joined to garam, are unverified (#1180,
   withdrawn or expired, and `listAgentSupervisors` every registration,
   active or revoked, with its host, agent, epoch and the latest
   activation of its agent at that epoch. Both are paged like any list
-  and decided on `agent:read` from current state, as the writes beside
-  them are. The store reads them into summary types
+  and decided on `iam:agent-read` from current state, as the writes
+  beside them are. The store reads them into summary types
   (`platform/internal/agent/standalone.go`, `EnrollmentSummary` and
   `SupervisorSummary`) with no field for a secret's hash, a request
   digest or a credential, so no listing can answer one.

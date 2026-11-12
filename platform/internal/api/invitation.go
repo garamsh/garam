@@ -70,7 +70,8 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, orgSlu
 
 // ListInvitations lists the org's invitations that can still be
 // accepted, by the id that admits no one and never by their token. It
-// is authorized on org:invite, the action that issues them (ADR-0136).
+// is authorized on iam:org-invite, the action that issues them
+// (ADR-0136).
 func (s *Server) ListInvitations(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListInvitationsParams) {
 	u, err := s.currentUser(r)
 	if err != nil {

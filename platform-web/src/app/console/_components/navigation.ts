@@ -63,35 +63,35 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     segment: "people",
     label: "People",
     icon: UserRound,
-    read: "org:member-list",
+    read: "iam:org-member-list",
     items: { fallback: "Person" },
   },
   {
     segment: "agents",
     label: "Agents",
     icon: Bot,
-    read: "agent:read",
+    read: "iam:agent-read",
     items: { create: "New agent", fallback: "Agent" },
   },
   {
     segment: "teams",
     label: "Teams",
     icon: UsersRound,
-    read: "group:read",
+    read: "iam:group-read",
     items: { create: "New team", fallback: "Team" },
   },
   {
     segment: "projects",
     label: "Projects",
     icon: FolderGit2,
-    read: "project:read",
+    read: "iam:project-read",
     items: { fallback: "Project" },
   },
   {
     segment: "operators",
     label: "Operators",
     icon: Server,
-    read: "operator:read",
+    read: "iam:operator-read",
     // An operator's identifier is typed, and `new` is one: registering
     // stays on the list page rather than taking that segment
     // (ADR-0074). `connect` is the operator's setup and `keys` is
@@ -108,7 +108,7 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     segment: "hosts",
     label: "Hosts",
     icon: HardDrive,
-    read: "agent:read",
+    read: "iam:agent-read",
   },
   {
     // Listed in no sidebar group (ADR-0116): Settings and the palette
@@ -116,17 +116,22 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     segment: "consents",
     label: "Consents",
     icon: Handshake,
-    read: "consent:read",
+    read: "iam:consent-read",
   },
   {
     segment: "permissions",
     label: "Permissions",
     icon: ShieldCheck,
-    read: "policy:read",
+    read: "iam:policy-read",
     items: { create: "New policy", fallback: "Policy" },
     views: [{ segment: "attachments", label: "Attachments" }],
   },
-  { segment: "settings", label: "Settings", icon: Settings, read: "org:read" },
+  {
+    segment: "settings",
+    label: "Settings",
+    icon: Settings,
+    read: "iam:org-read",
+  },
 ];
 
 /** A group of sidebar entries, by section segment; one without a label stands alone. */

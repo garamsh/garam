@@ -191,7 +191,7 @@ describe("operators list", () => {
   it("leaves connecting out for a caller the server denies registering", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "operator:register" ? "deny" : "allow",
+        action === "iam:operator-register" ? "deny" : "allow",
       ),
     );
 

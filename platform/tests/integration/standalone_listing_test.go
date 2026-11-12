@@ -122,11 +122,11 @@ func TestStandaloneListing_ListsSupervisorsActiveAndRevoked(t *testing.T) {
 	assert.NotContains(t, raw, "CERTIFICATE")
 }
 
-// TestStandaloneListing_IsReadOnAgentRead attaches a Deny of agent:read
-// to the member: both lists refuse it with 403. The member before the
-// Deny is the control, so what refuses is the Deny on agent:read and
-// not a gate that refuses members; the owner after it is the control
-// that the Deny reached the member alone.
+// TestStandaloneListing_IsReadOnAgentRead attaches a Deny of
+// iam:agent-read to the member: both lists refuse it with 403. The
+// member before the Deny is the control, so what refuses is the Deny on
+// iam:agent-read and not a gate that refuses members; the owner after
+// it is the control that the Deny reached the member alone.
 func TestStandaloneListing_IsReadOnAgentRead(t *testing.T) {
 	p := pool(t)
 	policies, engine := policyEngine(t, p)

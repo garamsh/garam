@@ -1258,3 +1258,12 @@ ADRs:
   a `permit` is `iam:permit.write`; built (#1783); supersedes 0143 in
   part, on item 3's separator and group spelling, and 0144 in part, on
   item 7's action name
+- [0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)
+  — the policy service records every write of a policy, kept as long as
+  its organization exists, and every denial, removed 90 days after it
+  was last made, in its own database and for the organization of the
+  resource; an allowed decision is not recorded; identical denials in
+  an hour collapse into one record with a count and an organization
+  holds at most 10,000 live denial records, with a per-day overflow
+  record beyond; an organization's owners and administrators read them
+  on `iam:audit.read`; not built; supersedes nothing

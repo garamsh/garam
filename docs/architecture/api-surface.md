@@ -433,6 +433,14 @@ and not in the same place on every surface.
   ([ADR-0114](./adr/0114-every-machine-credential-issuance-renewal-and-refusal-is-an-audit-event-read-on-the-subjects-own-read.md)).
   No event carries a key, token, credential or certificate
   ([machine-identity.md](./machine-identity.md) §Credential events).
+- **An organization's policy writes and denials are read on
+  `iam:audit.read`.** Unbuilt
+  ([ADR-0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)):
+  no operation serves them yet, and the manifest declares no such
+  action. When built, the platform's browser API and the CLI answer an
+  organization's owners and administrators from a read on the policy
+  service's contract ([audit.md](./audit.md) §The policy service's
+  record).
 - **A list answers only the objects its caller may read.**
   `listGroups`, `listProjects`, `listAgents` and `listPolicies` are
   authorized on their read action on the organization, and then drop

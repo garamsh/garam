@@ -470,14 +470,22 @@ deployment supplies:
     makes each lease end in a login) are the deployment's. The auth
     mount and role are refused beside a token file.
 
-  The identity file's writer is gaon's Node Agent, **which does not
-  write it yet**: gaon has decided a fixed path, renewal in place at 80%
-  of the token's lifetime, and an API server that serves discovery and
-  the key set (`garamsh/gaon` at
-  `9941e390da42b49071ded0508f953ccac60e6e58`), and serves only the
-  token request itself. Its path, owner and mode are stated nowhere
-  there. The gaon deployment contract does not exist yet, so this
-  document says nothing further of gaon's side.
+  The identity file's writer is gaon's Node Agent. At `garamsh/gaon`
+  `c7e8436d85cd6e49e57ba2c39a75221edc6d8a4e` gaon documents it
+  (ADR 0029, `node-agent.md`): the path is
+  `/var/run/secrets/gaon.garam.sh/serviceaccount/token`; the mode is
+  0600; the owner is the MicroVM's `user` when that is a numeric
+  `uid:gid`, root when the MicroVM has no `user`, and a MicroVM whose
+  `user` is a name is `InvalidSpec`. The token is renewed in place
+  before 80% of its lifetime, and garamsh/gaon#161 and #162 are done
+  (#175 as `1312f67`, #179 as `0ef1363`). That meets the key-file rule
+  the file is held to, no group or other permission bits and an owner
+  that is the process's own UID, when the MicroVM's `user` is the
+  numeric `uid:gid` of the process; the mode needs nothing of the
+  deployment. It is met by what gaon documents, not by a run of the
+  Node Agent, and not where the `user` names another uid or none. The
+  gaon objects and the settings that follow from this are in
+  [deployment-gaon.md](./deployment-gaon.md) §The Transit arrangement.
 
 **What the binary does with it:** the published set is read from
 Postgres and keeps being served while OpenBao is unreachable; a claim

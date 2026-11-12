@@ -517,15 +517,43 @@ document and the key set are fetched from it, and it is never
 `GARAM_MACHINE_ISSUER`: `serve` refuses to start where the two are
 equal, so that a token of one never verifies as the other.
 
-**`GARAM_IDENTITY_SERVICE_KEYS_FILE` names who may introspect.** It is a
-JSON object from each audience, `policy` or `codehub`, to the JSON Web
-Key Set holding the public keys that service signs its client
-assertions with. `serve machine` serves `/oauth/introspect` only where
-it is set, and each service reads only the tokens issued for its own
-audience. The file holds no secret, so it needs no owner-only mode. The
+**One issuer, so one `iss`.** The policy service trusts one issuer
+([ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)),
+so the feed's tokens carry `GARAM_POLICY_TOKEN_ISSUER` and the
+issuer's carry `GARAM_IDENTITY_ISSUER`, and both set and different is
+refused at start, before the signing key is read. Set only one, or set
+both to the same value.
+
+**`GARAM_IDENTITY_SERVICE_KEYS_FILE` is the keys of the first-party
+services.** It is a JSON object from a service name, `cowork` today,
+to the JSON Web Key Set holding the public keys that service signs its
+client assertions with: RSA keys, at most two per service so that one
+can be replaced beside another, and a name off the closed list in code
+refuses the file. The `kid` is each key's RFC 7638 thumbprint. The
+file holds no secret, so it needs no owner-only mode, and it is read
+once, at start: a changed file takes a restart. There is no other
+setting and the earlier meaning, a map from audience, is gone.
+
+Each service has one principal per organization,
+`grn:<org>/iam/service/<name>`, written with the organization and
+removed with it. A principal asks `serve machine`'s `/oauth/token`
+for `policy` with an assertion its service's key signs, and is
+answered the issuer's token for it of at most 300 seconds. The
 introspection URL an assertion names as its `aud` is
 `GARAM_MACHINE_TOKEN_URL` with its `/oauth/token` replaced by
-`/oauth/introspect`.
+`/oauth/introspect`. A principal introspects only tokens of the
+audience equal to its service's name, and no first-party service is an
+audience today, so introspection has no caller a deployment can
+configure yet. Each assertion is spent in the database, so a second
+replica refuses what the first admitted.
+
+**The machine listener keeps the private signing key.** The exchange
+signs the principal's token in `serve machine`, so the process that
+answers `/oauth/token` holds `GARAM_POLICY_SIGNING_KEY_FILE` as the
+process that serves the issuer does. The key is the one the policy
+feed already signs with, and a deployment that does not want it on
+that listener leaves the issuer unset there: the principal exchange
+then answers 503.
 
 ## The migrate job
 

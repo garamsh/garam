@@ -21,27 +21,41 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/lib/grn"
 	apigen "github.com/garamsh/garam/platform/api"
 	machinegen "github.com/garamsh/garam/platform/api/machine"
 	"github.com/garamsh/garam/platform/internal/api"
 	authnpg "github.com/garamsh/garam/platform/internal/authn/postgres"
 	"github.com/garamsh/garam/platform/internal/identity"
+	identitypg "github.com/garamsh/garam/platform/internal/identity/postgres"
 	"github.com/garamsh/garam/platform/internal/machineapi"
 	"github.com/garamsh/garam/platform/internal/operator"
+	"github.com/garamsh/garam/platform/internal/org"
+	orgpg "github.com/garamsh/garam/platform/internal/org/postgres"
 	"github.com/garamsh/garam/platform/internal/signer"
 )
 
 const issuerURL = "https://garam.test/api"
 
 // issuerStack is the device stack with garam's OIDC issuer on its
-// browser listener and introspection on a machine listener, as `serve
-// api` and `serve machine` wire them (ADR-0141). The key is generated
-// here; policy holds the other half of the service key pair.
+// browser listener and a machine listener beside it that authenticates
+// service principals, as `serve api` and `serve machine` wire them
+// (ADR-0141, ADR-0129). The keys are generated here. The organization
+// "globex" holds a principal of cowork, which is first-party, and of
+// policy, an audience no first-party service is yet, built through the
+// org store's seam so that introspection has a caller to be tested
+// with.
 type issuerStack struct {
 	*deviceStack
-	key     *signer.Key
-	machine string
-	policy  *rsa.PrivateKey
+	key      *signer.Key
+	issuer   *identity.Issuer
+	keys     identity.ServiceKeys
+	machine  string
+	policy   *rsa.PrivateKey
+	cowork   *rsa.PrivateKey
+	globex   string
+	policyID grn.GRN
+	coworkID grn.GRN
 }
 
 func newIssuerStack(t *testing.T) *issuerStack {
@@ -53,32 +67,60 @@ func newIssuerStack(t *testing.T) *issuerStack {
 	key, err := signer.ParseKey(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
 	require.NoError(t, err)
 
-	var issuer *identity.Issuer
-	s := &issuerStack{key: key}
+	s := &issuerStack{key: key, globex: "globex"}
 	s.deviceStack = newDeviceStack(t, func(p *pgxpool.Pool, srv *api.Server) {
 		var err error
-		issuer, err = identity.NewIssuer(issuerURL, key, authnpg.NewSessionStore(p), nil)
+		s.issuer, err = identity.NewIssuer(issuerURL, key, authnpg.NewSessionStore(p), nil)
 		require.NoError(t, err)
-		srv.WithIdentity(issuer)
+		srv.WithIdentity(s.issuer)
 	})
+	require.NoError(t, orgpg.New(s.pool).WithServices(identity.AudiencePolicy, identity.ServiceCowork).
+		CreateOrg(t.Context(), org.NewOrganization(orgRootGRN(s.globex), s.globex)))
+	s.policyID = identity.PrincipalGRN(s.globex, identity.AudiencePolicy)
+	s.coworkID = identity.PrincipalGRN(s.globex, identity.ServiceCowork)
 
-	s.policy, err = rsa.GenerateKey(rand.Reader, operator.MinKeyBits)
-	require.NoError(t, err)
-	keys, err := json.Marshal(map[string]jose.JSONWebKeySet{
-		"policy": {Keys: []jose.JSONWebKey{{Key: &s.policy.PublicKey, Algorithm: "RS256", Use: "sig"}}},
-	})
-	require.NoError(t, err)
-
-	var handler http.Handler
-	machine := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
-	t.Cleanup(machine.Close)
-	callers, err := identity.ParseCallers(keys, machine.URL+"/oauth/introspect", nil)
-	require.NoError(t, err)
-	handler = machinegen.HandlerWithOptions(
-		machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil).WithIdentity(issuer, callers),
-		machinegen.StdHTTPServerOptions{ErrorHandlerFunc: machineapi.BindingError})
-	s.machine = machine.URL
+	s.policy, s.cowork = serviceKey(t), serviceKey(t)
+	s.keys = identity.ServiceKeys{
+		identity.AudiencePolicy: {publicKey(t, s.policy)},
+		identity.ServiceCowork:  {publicKey(t, s.cowork)},
+	}
+	s.machine = s.machineListener(t, s.issuer)
 	return s
+}
+
+func serviceKey(t *testing.T) *rsa.PrivateKey {
+	t.Helper()
+	private, err := rsa.GenerateKey(rand.Reader, operator.MinKeyBits)
+	require.NoError(t, err)
+	return private
+}
+
+func publicKey(t *testing.T, private *rsa.PrivateKey) operator.Key {
+	t.Helper()
+	kid, err := operator.Thumbprint(&private.PublicKey)
+	require.NoError(t, err)
+	return operator.Key{KID: kid, Algorithm: operator.KeyAlgorithm, Public: &private.PublicKey}
+}
+
+// machineListener serves another machine listener over the stack's
+// database, the issuer given and the stack's keys, as a second replica
+// of `serve machine` does, and answers its URL. A nil issuer is the
+// issuer off.
+func (s *issuerStack) machineListener(t *testing.T, issuer *identity.Issuer) string {
+	t.Helper()
+	var handler http.Handler
+	listener := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
+	t.Cleanup(listener.Close)
+	principals := identity.NewPrincipals(identity.PrincipalsConfig{
+		Keys:               s.keys,
+		ExchangeEndpoint:   listener.URL + "/oauth/token",
+		IntrospectEndpoint: listener.URL + "/oauth/introspect",
+		Admitter:           identitypg.New(s.pool),
+	})
+	handler = machinegen.HandlerWithOptions(
+		machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil).WithIdentity(issuer, principals),
+		machinegen.StdHTTPServerOptions{ErrorHandlerFunc: machineapi.BindingError})
+	return listener.URL
 }
 
 // serve makes one request and answers the response exactly as served:
@@ -121,40 +163,77 @@ func bodyOf(dump string) string {
 	return body
 }
 
-// introspect asks the machine listener about token as policy, with a
-// fresh assertion each time.
-func (s *issuerStack) introspect(t *testing.T, token string) (int, string) {
+// principalAssertion signs a client assertion as principal, addressed to the
+// URL named by to, with the jti given or a fresh one.
+func principalAssertion(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, to, jti string) string {
 	t.Helper()
-	kid, err := operator.Thumbprint(&s.policy.PublicKey)
+	kid, err := operator.Thumbprint(&private.PublicKey)
 	require.NoError(t, err)
-	signing, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: s.policy},
+	signing, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: private},
 		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", kid))
 	require.NoError(t, err)
-	client := identity.CallerGRN("policy").String()
-	jti := make([]byte, 32)
-	_, err = rand.Read(jti)
-	require.NoError(t, err)
+	if jti == "" {
+		raw := make([]byte, 32)
+		_, err = rand.Read(raw)
+		require.NoError(t, err)
+		jti = base64.RawURLEncoding.EncodeToString(raw)
+	}
+	client := principal.String()
 	payload, err := json.Marshal(map[string]any{
-		"iss": client, "sub": client, "aud": s.machine + "/oauth/introspect",
-		"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(),
-		"jti": base64.RawURLEncoding.EncodeToString(jti),
+		"iss": client, "sub": client, "aud": to,
+		"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(), "jti": jti,
 	})
 	require.NoError(t, err)
 	object, err := signing.Sign(payload)
 	require.NoError(t, err)
-	assertion, err := object.CompactSerialize()
+	compact, err := object.CompactSerialize()
 	require.NoError(t, err)
+	return compact
+}
 
-	form := url.Values{
-		"token": {token}, "client_id": {client}, "client_assertion": {assertion},
-		"client_assertion_type": {operator.ClientAssertionTypeJWT},
-	}
-	resp, err := http.PostForm(s.machine+"/oauth/introspect", form)
+// post sends a form to the machine listener at url and answers the
+// status and body.
+func post(t *testing.T, url string, form url.Values) (int, string) {
+	t.Helper()
+	resp, err := http.PostForm(url, form)
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	return resp.StatusCode, string(raw)
+}
+
+// introspectAs asks the machine listener at listener about token as
+// principal, signing with private under the jti given or a fresh one.
+func (s *issuerStack) introspectAs(t *testing.T, listener string, private *rsa.PrivateKey, principal grn.GRN, jti, token string) (int, string) {
+	t.Helper()
+	return post(t, listener+"/oauth/introspect", url.Values{
+		"token": {token}, "client_id": {principal.String()},
+		"client_assertion":      {principalAssertion(t, private, principal, listener+"/oauth/introspect", jti)},
+		"client_assertion_type": {operator.ClientAssertionTypeJWT},
+	})
+}
+
+// introspect asks as the principal of policy, which is the audience
+// the tokens of the issuer's exchange are for.
+func (s *issuerStack) introspect(t *testing.T, token string) (int, string) {
+	t.Helper()
+	return s.introspectAs(t, s.machine, s.policy, s.policyID, "", token)
+}
+
+// exchangeAs asks the machine listener at listener for a token as
+// principal, naming audience.
+func (s *issuerStack) exchangeAs(t *testing.T, listener string, private *rsa.PrivateKey, principal grn.GRN, jti, audience string) (int, string) {
+	t.Helper()
+	form := url.Values{
+		"grant_type": {operator.GrantTypeClientCredentials}, "client_id": {principal.String()},
+		"client_assertion":      {principalAssertion(t, private, principal, listener+"/oauth/token", jti)},
+		"client_assertion_type": {operator.ClientAssertionTypeJWT},
+	}
+	if audience != "" {
+		form.Set("audience", audience)
+	}
+	return post(t, listener+"/oauth/token", form)
 }
 
 // TestIssuer_ExchangesASessionAndAnswersForItWhileItsRowLives runs the

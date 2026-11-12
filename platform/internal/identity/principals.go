@@ -1,0 +1,109 @@
+package identity
+
+import (
+	"context"
+	"time"
+
+	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/platform/internal/operator"
+)
+
+// ErrPrincipalsOff is what a request that needs the issuer and the
+// service keys is refused with where a process was given either none.
+var ErrPrincipalsOff = errorx.New(errorx.KindUnavailable, "identity: the issuer or the service keys are not configured")
+
+// Route is an endpoint of the machine listener that authenticates a
+// service principal. An assertion names the URL of the route it is for
+// as its audience, so one made for the other is refused.
+type Route int
+
+const (
+	// RouteExchange is the token endpoint, where a principal asks for
+	// a token of the policy service's audience.
+	RouteExchange Route = iota
+	// RouteIntrospect is the introspection endpoint.
+	RouteIntrospect
+)
+
+// PrincipalsConfig is what [NewPrincipals] is built from.
+type PrincipalsConfig struct {
+	// Keys are the public keys of each service, as
+	// [ParseServiceKeys] read them.
+	Keys ServiceKeys
+	// ExchangeEndpoint and IntrospectEndpoint are the URLs an
+	// assertion names as its audience on each route.
+	ExchangeEndpoint   string
+	IntrospectEndpoint string
+	// Admitter holds the principal's record and the jtis spent.
+	Admitter Admitter
+	// Now supplies the time the per-source bound counts in; zero takes
+	// time.Now. The assertion's own time is read from the database.
+	Now func() time.Time
+}
+
+// Principals authenticates a service principal by `private_key_jwt`
+// (ADR-0129 item 2) and answers which principal it proved. It reuses
+// the client assertion of ADR-0102 unchanged: the same parse, the same
+// verification, the same lifetime and skew, each assertion's jti spent
+// once in the database, and the per-source bound of the operator
+// exchange. The keys are the service's own and the record is the
+// organization's: an assertion signed by a key of the service for a
+// principal that no longer exists is refused.
+type Principals struct {
+	keys      ServiceKeys
+	endpoints map[Route]string
+	admitter  Admitter
+	perSource map[Route]*operator.Limiter
+}
+
+// NewPrincipals builds the authenticator. A route has its own bound,
+// so a flood of one does not spend the other's.
+func NewPrincipals(cfg PrincipalsConfig) *Principals {
+	limiter := func() *operator.Limiter {
+		return operator.NewLimiter(operator.LimiterConfig{
+			Limit: operator.ExchangesPerSource, Window: operator.ExchangeWindow,
+			MaxKeys: operator.TrackedClients, Now: cfg.Now,
+		})
+	}
+	return &Principals{
+		keys:      cfg.Keys,
+		endpoints: map[Route]string{RouteExchange: cfg.ExchangeEndpoint, RouteIntrospect: cfg.IntrospectEndpoint},
+		admitter:  cfg.Admitter,
+		perSource: map[Route]*operator.Limiter{RouteExchange: limiter(), RouteIntrospect: limiter()},
+	}
+}
+
+// Authenticate returns the principal clientID proved itself as on
+// route, or [operator.ErrClientInvalid]. source is the peer's address,
+// which the per-source bound counts before anything else is read, and
+// past it the answer is an [*operator.Exceeded]. A bad signature, a
+// service with no key, a wrong identity, audience or time, a principal
+// that does not exist and a replayed assertion are one refusal.
+func (p *Principals) Authenticate(ctx context.Context, route Route, source, clientID, assertion string) (Principal, error) {
+	if err := p.perSource[route].Check(source); err != nil {
+		return Principal{}, err
+	}
+	principal, ok := parsePrincipal(clientID, func(service string) bool { return len(p.keys[service]) > 0 })
+	if !ok {
+		return Principal{}, operator.ErrClientInvalid
+	}
+	parsed, err := operator.ParseClientAssertion(assertion)
+	if err != nil {
+		return Principal{}, operator.ErrClientInvalid
+	}
+	for _, key := range p.keys[principal.Service] {
+		if key.KID != parsed.KID() {
+			continue
+		}
+		key.Operator = principal.GRN
+		verified, err := parsed.Verify(key, principal.GRN, p.endpoints[route])
+		if err != nil {
+			return Principal{}, operator.ErrClientInvalid
+		}
+		if err := p.admitter.Admit(ctx, principal.GRN, verified); err != nil {
+			return Principal{}, err
+		}
+		return principal, nil
+	}
+	return Principal{}, operator.ErrClientInvalid
+}

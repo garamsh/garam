@@ -585,7 +585,7 @@ type Claim struct {
 
 // ClientAssertionRequest The client credentials request `exchangeClientAssertion` reads (ADR-0102). Each parameter appears once.
 type ClientAssertionRequest struct {
-	// Audience The GRN of another operator of the caller's organization the token is to be shown to. Absent, the token is garam's.
+	// Audience The GRN of another operator of the caller's organization the token is to be shown to. Absent, the token is garam's. A service principal's request names `policy` here.
 	Audience *string `json:"audience,omitempty"`
 
 	// ClientAssertion One compact RS256 JWT the operator's private key signed; never the key itself.
@@ -700,7 +700,7 @@ type IntrospectionRequest struct {
 	ClientAssertion     string                                  `json:"client_assertion"`
 	ClientAssertionType IntrospectionRequestClientAssertionType `json:"client_assertion_type"`
 
-	// ClientId The calling service's GRN, `grn:root/iam/service/<audience>`.
+	// ClientId The calling service principal's GRN, `grn:<org>/iam/service/<audience>`.
 	ClientId string `json:"client_id"`
 
 	// Token The compact JWT garam issued.

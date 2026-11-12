@@ -115,6 +115,12 @@
 //	                       authz.md §Delivery)
 //	GARAM_POLICY_TOKEN_ISSUER  the iss of those tokens, which the
 //	                       service's POLICY_TOKEN_ISSUER names
+//	GARAM_IDENTITY_ISSUER  the iss of the OIDC issuer's tokens; where
+//	                       both it and GARAM_POLICY_TOKEN_ISSUER are
+//	                       set they are the same, or start-up fails
+//	GARAM_IDENTITY_SERVICE_KEYS_FILE  each first-party service's
+//	                       public keys, JSON, by service name, at most
+//	                       two each (serve machine)
 package cli
 
 import (

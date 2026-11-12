@@ -259,6 +259,17 @@ paths:
         `scope` is `invalid_scope`, a `client_secret` and any other
         grant are refused, and unrecognised parameters are ignored.
 
+        A `client_id` that is a service principal's GRN,
+        `grn:<org>/iam/service/<name>`, takes the principal route
+        (ADR-0129): the assertion is signed by a key of that service,
+        its `aud` is this URL, and the request names `audience`
+        `policy`, the only audience answered; any other is
+        `invalid_request` before the assertion is read. The answer is
+        garam's OIDC issuer's JWT (ADR-0141) for the principal, `aud`
+        `policy`, valid at most 300 seconds. It answers 503
+        `temporarily_unavailable` where the issuer is not configured.
+        The replay, time and per-source bounds below are the same.
+
         **Each assertion is exchanged once.** Its (`client_id`, `jti`)
         is spent in the transaction that records the token, on every
         replica and across restarts, so two copies yield one token and
@@ -324,9 +335,10 @@ paths:
         RFC 7662's introspection of a token garam signed as an OIDC
         issuer (ADR-0141), asked by the service the token is for. The
         caller authenticates by `private_key_jwt`, as
-        `exchangeClientAssertion` does: `client_id` is the service's
-        GRN, `grn:root/iam/service/<audience>`, and `client_assertion`
-        an assertion its key signed with `aud` equal to this
+        `exchangeClientAssertion` does: `client_id` is the
+        service principal's GRN, `grn:<org>/iam/service/<audience>`, live
+        in the organization, and `client_assertion` an assertion its
+        service's key signed with `aud` equal to this
         operation's URL, under the same profile and spent once. The
         request carries no `Authorization` header. It is served only
         where a deployment configured the issuer: otherwise it answers
@@ -1987,6 +1999,7 @@ components:
           description: >-
             The GRN of another operator of the caller's organization the
             token is to be shown to. Absent, the token is garam's.
+            A service principal's request names `policy` here.
           example: grn:acme/iam/operator/control
     OAuthToken:
       type: object
@@ -2021,7 +2034,7 @@ components:
           description: Ignored.
         client_id:
           type: string
-          description: The calling service's GRN, `grn:root/iam/service/<audience>`.
+          description: The calling service principal's GRN, `grn:<org>/iam/service/<audience>`.
         client_assertion_type:
           type: string
           enum: ['urn:ietf:params:oauth:client-assertion-type:jwt-bearer']

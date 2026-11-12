@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/garamsh/garam/lib/errorx"
+	"github.com/garamsh/garam/lib/grn"
 	"github.com/garamsh/garam/platform/internal/authn"
 	"github.com/garamsh/garam/platform/internal/signer"
 )
@@ -209,6 +210,31 @@ func (i *Issuer) Exchange(ctx context.Context, req ExchangeRequest) (Exchanged, 
 		return Exchanged{}, err
 	}
 	return Exchanged{Token: token, ExpiresIn: int(lifetime / time.Second)}, nil
+}
+
+// IssueCaller answers a token for the service principal subject to
+// present to the policy service: this issuer's, `sub` the principal's
+// GRN, `aud` the policy service, and no session behind it, which is
+// what tells it from a CLI user's token. Its lifetime is
+// [signer.MaxLifetime], and the caller has proved itself before this is
+// asked (ADR-0129 item 3).
+func (i *Issuer) IssueCaller(subject grn.GRN) (Exchanged, error) {
+	jti, err := newJTI()
+	if err != nil {
+		return Exchanged{}, err
+	}
+	token, err := i.key.Sign(signer.Claims{
+		Issuer:   i.issuer,
+		Subject:  subject.String(),
+		Audience: AudiencePolicy,
+		IssuedAt: i.now(),
+		Lifetime: signer.MaxLifetime,
+		JTI:      jti,
+	})
+	if err != nil {
+		return Exchanged{}, err
+	}
+	return Exchanged{Token: token, ExpiresIn: int(signer.MaxLifetime / time.Second)}, nil
 }
 
 func knownAudience(audience string) bool {

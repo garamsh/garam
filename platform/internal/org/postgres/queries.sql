@@ -1,6 +1,16 @@
+-- Writes the organization and one service principal for each name in
+-- services, in one statement, so an organization never exists without
+-- them (ADR-0129 item 1). A principal's GRN is built from the
+-- organization's: grn:<org id>/iam/service/<name>.
 -- name: CreateOrg :exec
-INSERT INTO orgs (grn, name, created_at, updated_at)
-VALUES ($1, $2, $3, $4);
+WITH created AS (
+    INSERT INTO orgs (grn, name, created_at, updated_at)
+    VALUES (sqlc.arg('grn'), sqlc.arg('name'), sqlc.arg('created_at'), sqlc.arg('updated_at'))
+    RETURNING grn
+)
+INSERT INTO service_principals (grn, org_grn, created_at)
+SELECT 'grn:' || grn_id(created.grn) || '/iam/service/' || s.name, created.grn, sqlc.arg('created_at')
+FROM created, unnest(sqlc.arg('services')::text[]) AS s (name);
 
 -- name: GetOrg :one
 SELECT * FROM orgs WHERE grn = $1;

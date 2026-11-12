@@ -239,22 +239,34 @@ func (q *Queries) CreateInvitation(ctx context.Context, arg CreateInvitationPara
 }
 
 const createOrg = `-- name: CreateOrg :exec
-INSERT INTO orgs (grn, name, created_at, updated_at)
-VALUES ($1, $2, $3, $4)
+WITH created AS (
+    INSERT INTO orgs (grn, name, created_at, updated_at)
+    VALUES ($3, $4, $1, $5)
+    RETURNING grn
+)
+INSERT INTO service_principals (grn, org_grn, created_at)
+SELECT 'grn:' || grn_id(created.grn) || '/iam/service/' || s.name, created.grn, $1
+FROM created, unnest($2::text[]) AS s (name)
 `
 
 type CreateOrgParams struct {
+	CreatedAt pgtype.Timestamptz
+	Services  []string
 	Grn       string
 	Name      string
-	CreatedAt pgtype.Timestamptz
 	UpdatedAt pgtype.Timestamptz
 }
 
+// Writes the organization and one service principal for each name in
+// services, in one statement, so an organization never exists without
+// them (ADR-0129 item 1). A principal's GRN is built from the
+// organization's: grn:<org id>/iam/service/<name>.
 func (q *Queries) CreateOrg(ctx context.Context, arg CreateOrgParams) error {
 	_, err := q.db.Exec(ctx, createOrg,
+		arg.CreatedAt,
+		arg.Services,
 		arg.Grn,
 		arg.Name,
-		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
 	return err

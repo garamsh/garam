@@ -27,6 +27,12 @@ pub struct Service<P, E> {
 }
 
 impl<P, E> Service<P, E> {
+    /// The manifests the engine decides under, which the HTTP binding
+    /// reads a GRN's type through.
+    pub(crate) fn manifests(&self) -> &manifest::Manifests {
+        self.engine.manifests()
+    }
+
     /// Joins the engine to its stores.
     pub fn new(engine: Engine, policies: P, entities: E) -> Self {
         Self {
@@ -275,10 +281,6 @@ impl<'a> Question<'a> {
         if holds_fields(resource.properties.as_ref()) {
             return Err(ServiceError::Grounds("resource properties"));
         }
-        // No action of the schema declares a context, so none has one.
-        if holds_fields(self.context) {
-            return Err(ServiceError::Grounds("context"));
-        }
         Ok(Evaluation {
             subject: EntityRef {
                 entity_type: &subject.r#type,
@@ -289,13 +291,39 @@ impl<'a> Question<'a> {
                 entity_type: &resource.r#type,
                 id: &resource.id,
             },
-            context: json!({}),
+            context: self.context.map_or_else(|| json!({}), json_of_struct),
         })
     }
 }
 
 fn holds_fields(fields: Option<&prost_types::Struct>) -> bool {
     fields.is_some_and(|fields| !fields.fields.is_empty())
+}
+
+/// A context as the JSON object the engine reads. The schema refuses a
+/// key or a type its action does not declare.
+fn json_of_struct(fields: &prost_types::Struct) -> serde_json::Value {
+    serde_json::Value::Object(
+        fields
+            .fields
+            .iter()
+            .map(|(name, value)| (name.clone(), json_of_value(value)))
+            .collect(),
+    )
+}
+
+fn json_of_value(value: &prost_types::Value) -> serde_json::Value {
+    use prost_types::value::Kind;
+    match &value.kind {
+        None | Some(Kind::NullValue(_)) => serde_json::Value::Null,
+        Some(Kind::BoolValue(flag)) => json!(flag),
+        Some(Kind::NumberValue(number)) => json!(number),
+        Some(Kind::StringValue(text)) => json!(text),
+        Some(Kind::ListValue(list)) => {
+            serde_json::Value::Array(list.values.iter().map(json_of_value).collect())
+        }
+        Some(Kind::StructValue(fields)) => json_of_struct(fields),
+    }
 }
 
 fn refused(error: &ServiceError) -> proto::EvaluateResponse {

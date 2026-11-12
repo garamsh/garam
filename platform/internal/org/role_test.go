@@ -139,6 +139,8 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionCoworkChannelRead, org.ActionCoworkChannelPost,
 			org.ActionCoworkTaskRead, org.ActionCoworkTaskWrite,
 			org.ActionCoworkArtifactRead, org.ActionCoworkArtifactWrite,
+			org.ActionCodehubRepoRead, org.ActionCodehubOrgUse, org.ActionCodehubRepoWrite,
+			org.ActionCodehubRepoCreate, org.ActionCodehubRunnerAdminister,
 		},
 		org.RoleOwner.Actions())
 	assert.Equal(t,
@@ -156,6 +158,8 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionCoworkChannelRead, org.ActionCoworkChannelPost,
 			org.ActionCoworkTaskRead, org.ActionCoworkTaskWrite,
 			org.ActionCoworkArtifactRead, org.ActionCoworkArtifactWrite,
+			org.ActionCodehubRepoRead, org.ActionCodehubOrgUse, org.ActionCodehubRepoWrite,
+			org.ActionCodehubRepoCreate, org.ActionCodehubRunnerAdminister,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -170,6 +174,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionCoworkChannelRead, org.ActionCoworkChannelPost,
 			org.ActionCoworkTaskRead, org.ActionCoworkTaskWrite,
 			org.ActionCoworkArtifactRead, org.ActionCoworkArtifactWrite,
+			org.ActionCodehubRepoRead, org.ActionCodehubOrgUse,
 		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
@@ -316,14 +321,49 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionCoworkChannelRead, org.ActionCoworkChannelPost,
 			org.ActionCoworkTaskRead, org.ActionCoworkTaskWrite,
 			org.ActionCoworkArtifactRead, org.ActionCoworkArtifactWrite,
+			org.ActionCodehubRepoRead, org.ActionCodehubOrgUse,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
 			org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
 			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead,
 			org.ActionAgentReplace,
+			org.ActionCodehubRepoWrite, org.ActionCodehubRepoCreate, org.ActionCodehubRunnerAdminister,
 		},
 		org.ActionsFor([]string{"member", "admin"}))
 	assert.Empty(t, org.ActionsFor([]string{"superuser"}))
 	assert.Empty(t, org.ActionsFor(nil))
+}
+
+// TestRoleActions_AMemberReadsRepositoriesAndOnlyOwnersAndAdminsWrite
+// pins ADR-0149 item 1: every role reads and uses codehub, and an
+// owner's `permit` says who else writes. Each is named rather than
+// granted as `codehub:*`.
+func TestRoleActions_AMemberReadsRepositoriesAndOnlyOwnersAndAdminsWrite(t *testing.T) {
+	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
+		assert.Contains(t, r.Actions(), org.ActionCodehubRepoRead, string(r))
+		assert.Contains(t, r.Actions(), org.ActionCodehubOrgUse, string(r))
+		assert.NotContains(t, r.Actions(), "codehub:*", string(r))
+	}
+	for _, action := range []string{
+		org.ActionCodehubRepoWrite, org.ActionCodehubRepoCreate, org.ActionCodehubRunnerAdminister,
+	} {
+		assert.Contains(t, org.RoleOwner.Actions(), action)
+		assert.Contains(t, org.RoleAdmin.Actions(), action)
+		assert.NotContains(t, org.RoleMember.Actions(), action)
+	}
+}
+
+// TestIsAction_NamesNoCodehubAction holds that codehub's actions are
+// granted by the roles and asked of the policy service, not checked
+// by an operation of this platform. The cowork action beside them is
+// the control.
+func TestIsAction_NamesNoCodehubAction(t *testing.T) {
+	assert.True(t, org.IsAction(org.ActionCoworkPageRead))
+	for _, action := range []string{
+		org.ActionCodehubRepoRead, org.ActionCodehubRepoWrite, org.ActionCodehubRepoCreate,
+		org.ActionCodehubRunnerAdminister, org.ActionCodehubOrgUse,
+	} {
+		assert.False(t, org.IsAction(action), action)
+	}
 }

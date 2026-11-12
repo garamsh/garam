@@ -121,7 +121,8 @@ where
 {
     let outcome = async {
         let principal = binding.caller(&headers)?;
-        let request = wire::read::<wire::Evaluation>(&body_of(body)?)?.into_proto()?;
+        let request = wire::read::<wire::Evaluation>(&body_of(body)?)?
+            .into_proto(binding.service.manifests())?;
         let answer = binding.service.evaluate_one(&principal, &request).await?;
         json(&wire::Decision::from(&answer))
     }
@@ -140,7 +141,8 @@ where
 {
     let outcome = async {
         let principal = binding.caller(&headers)?;
-        let request = wire::read::<wire::Evaluations>(&body_of(body)?)?.into_proto()?;
+        let request = wire::read::<wire::Evaluations>(&body_of(body)?)?
+            .into_proto(binding.service.manifests())?;
         let answers = binding.service.answer_batch(&principal, &request).await?;
         json(&wire::Decisions::from(&answers))
     }
@@ -159,7 +161,8 @@ where
 {
     let outcome = async {
         let principal = binding.caller(&headers)?;
-        let request = wire::read::<wire::Changes>(&body_of(body)?)?.into_proto()?;
+        let request = wire::read::<wire::Changes>(&body_of(body)?)?
+            .into_proto(binding.service.manifests())?;
         let applied = binding.service.apply_changes(&principal, &request).await?;
         json(&wire::Applied::from(&applied))
     }

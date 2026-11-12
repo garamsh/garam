@@ -308,8 +308,11 @@ func TestNewIn_ATypeBelongsToTheServiceThatDeclaresIt(t *testing.T) {
 
 	_, err = grn.Parse("grn:acme/iam/page/home")
 	require.Error(t, err, "iam holds no page")
-	_, err = grn.Parse("grn:acme/codehub/repo/api")
-	require.Error(t, err, "no manifest declares codehub")
+	_, err = grn.Parse("grn:acme/billing/invoice/1")
+	require.Error(t, err, "no manifest declares billing")
+	repo, err := grn.Parse("grn:acme/codehub/repo/4821")
+	require.NoError(t, err, "codehub declares repo")
+	assert.Equal(t, "codehub", repo.Service)
 }
 
 // TestValidate_LocatorIsAnRFC3986Fragment holds the locator to the

@@ -8,9 +8,10 @@ use crate::error::Error;
 use crate::service::{Action, AppliesTo, EntityType, Service, Writer};
 
 /// The manifests the service embeds, one per service (ADR-0143 item 1).
-const EMBEDDED: [&str; 2] = [
+const EMBEDDED: [&str; 3] = [
     include_str!("../../../schema/iam.cedarschema"),
     include_str!("../../../schema/cowork.cedarschema"),
+    include_str!("../../../schema/codehub.cedarschema"),
 ];
 
 /// The manifests the service embeds, as source. A manifest in
@@ -100,6 +101,34 @@ impl Manifests {
             EntityTypeName::from_str(&action_type).map_err(|_| refused())?,
             EntityId::new(&action.id),
         ))
+    }
+
+    /// The qualified entity type a GRN names: its service and its last
+    /// type segment, read through the manifests' `@grn`
+    /// (ADR-0143 item 2). A locator after `#` names no entity and is
+    /// not read. A GRN no manifest declares is refused (ADR-0149
+    /// item 2).
+    pub fn entity_type_of_grn(&self, grn: &str) -> Result<&str, Error> {
+        let refused = || Error::Grn(grn.to_owned());
+        let path = grn.strip_prefix("grn:").ok_or_else(refused)?;
+        let path = path.split_once('#').map_or(path, |(path, _)| path);
+        let segments: Vec<&str> = path.split('/').collect();
+        // `<org>/<service>` and then pairs of a type and an id.
+        if segments.len() < 4 || !segments.len().is_multiple_of(2) {
+            return Err(refused());
+        }
+        let (service, kind) = (segments[1], segments[segments.len() - 2]);
+        self.services
+            .iter()
+            .find(|found| found.name == service)
+            .and_then(|found| {
+                found
+                    .entity_types
+                    .iter()
+                    .find(|entity| entity.grn.as_deref() == Some(kind))
+            })
+            .map(|entity| entity.name.as_str())
+            .ok_or_else(refused)
     }
 
     /// Whether a hosted operator may hold the operation: the manifests

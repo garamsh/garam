@@ -71,6 +71,22 @@ impl RoleTable {
             machine.entry(false).or_default().push(name);
         }
 
+        let mut codehub: BTreeMap<bool, Vec<String>> = BTreeMap::new();
+        let rows = block(
+            &source,
+            "var codehubActions = []struct {\n\taction string\n\tmember bool\n}{",
+        );
+        for row in rows.lines() {
+            let Some(action) = identifiers(row).next() else {
+                continue;
+            };
+            let name = actions[action].clone();
+            if row.contains("true") {
+                codehub.entry(true).or_default().push(name.clone());
+            }
+            codehub.entry(false).or_default().push(name);
+        }
+
         let cowork: Vec<String> = identifiers(block(&source, "var coworkActions = []string{"))
             .map(|action| actions[action].clone())
             .collect();
@@ -89,6 +105,12 @@ impl RoleTable {
             }
             if body.contains("machineActionsHeld(true)") {
                 patterns.extend(machine[&true].iter().cloned());
+            }
+            if body.contains("codehubActionsHeld(false)") {
+                patterns.extend(codehub[&false].iter().cloned());
+            }
+            if body.contains("codehubActionsHeld(true)") {
+                patterns.extend(codehub[&true].iter().cloned());
             }
             if body.contains("coworkActions") {
                 patterns.extend(cowork.iter().cloned());

@@ -164,7 +164,13 @@ service alone; nothing below it is yet true of the platform.
   each origin of a statement and each surface that reads a decision
   its form. A hosted operator's delegation, handed to the evaluator
   as a per-call Allow today, becomes an attribute of the operator's
-  entity that a system policy per delegable operation reads. Only an
+  entity that a system policy per delegable operation reads. The
+  policy service holds this half (#1805): `Iam::Operator` carries
+  `operations`, joins the principals of the ten delegable actions
+  alone and sits in its organization's `Iam::OrgMembers`, and a system
+  policy per operation permits an operator of the resource's
+  organization that holds it; the platform does not yet feed the
+  attribute. Only an
   owner writes a `permit`, so an administrator keeps assigning the
   roles it holds and writing guardrails and no longer writes an
   `Allow`.
@@ -181,9 +187,13 @@ message between two agents of two consenting organizations tenant
 isolation's one exception: `Org` gains `consents`, the platform feeds
 it, the isolation `forbid` gains one `unless` branch for `message.send`
 between agents where each organization's `consents` holds the other,
-and both organizations' guardrails are read for such a send. The send
-path's refusal before the engine, as
-[messaging.md](./messaging.md), stands until it is built.
+and both organizations' guardrails are read for such a send. The
+policy service holds all of this (#1805); the platform does not yet
+feed `consents`, and the send path's refusal before the engine, as
+[messaging.md](./messaging.md), stands until it does. The sender's
+guardrails are read as `forbid`s alone and under ids prefixed by its
+organization, and the exception is read by no other action, since
+an `unless` branch names `message.send` and two agents.
 
 ### Delivery
 

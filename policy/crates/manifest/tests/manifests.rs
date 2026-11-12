@@ -216,3 +216,45 @@ fn what_an_action_applies_to_is_read_and_a_group_applies_to_nothing() {
         .unwrap();
     assert!(group.applies_to.is_none());
 }
+
+/// The ten operations migration 000072 lets a hosted operator hold
+/// (ADR-0146), and no other action in the manifests.
+#[test]
+fn an_operator_may_hold_the_ten_delegable_operations_and_no_other_action() {
+    const TEN: [&str; 10] = [
+        "iam:agent.create",
+        "iam:agent.configure",
+        "iam:agent.activate",
+        "iam:agent.recover",
+        "iam:agent-template.read",
+        "iam:agent-template.publish",
+        "iam:execution-profile.read",
+        "iam:agent.execution-read",
+        "iam:operator.read",
+        "iam:agent.replace",
+    ];
+    let manifests = Manifests::load().unwrap();
+
+    let delegable: Vec<&str> = manifests
+        .services()
+        .iter()
+        .flat_map(|service| &service.actions)
+        .map(|action| action.name.as_str())
+        .filter(|name| manifests.delegable(name))
+        .collect();
+    let mut found = delegable.clone();
+    found.sort_unstable();
+    found.dedup();
+    let mut expected = TEN.to_vec();
+    expected.sort_unstable();
+    assert_eq!(found, expected);
+
+    for not in [
+        "iam:agent.read",
+        "iam:message.send",
+        "iam:role-owner",
+        "nope:x.y",
+    ] {
+        assert!(!manifests.delegable(not), "{not}");
+    }
+}

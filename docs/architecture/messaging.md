@@ -61,14 +61,16 @@ forget, and an organization that is deleted takes its halves with it.
 Granting and withdrawing is the browser-facing listener's surface, under
 the org's path; this domain owns the relation itself.
 
-**Decided, not built.** [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
+**Decided; built in the policy service, not in the platform.** [ADR-0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
 moves the decision of a cross-organization send into the policy
 service: each organization's half becomes an attribute of its `Org`
 the platform feeds, tenant isolation gains one exception for
 `message.send` between agents where both halves stand, both
 organizations' guardrails are read, and the check before the engine
-goes. The relation stays this domain's fact, and the text above holds
-until it is built.
+goes. The policy service holds its half (#1805): `Org`'s `consents`,
+the exception and the sender's guardrails. The platform does not yet
+feed `consents`, so the check before the engine stays, the relation
+stays this domain's fact, and the text above holds until it does.
 
 The queue is a table and never a connection, so any garam instance can
 hand any recipient's message to a reader and no process holds anything

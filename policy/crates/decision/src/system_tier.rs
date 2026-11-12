@@ -3,8 +3,9 @@ use cedar_policy::{Policy, PolicyId, PolicySet, Schema, Template, ValidationMode
 use crate::error::Error;
 
 /// Each file holds one policy, and its stem is that policy's id, which
-/// is what a decision's reasons name.
-const POLICIES: [(&str, &str); 2] = [
+/// is what a decision's reasons name. The ten `operator-` files are the
+/// delegable operations, one policy each (ADR-0146).
+const POLICIES: [(&str, &str); 12] = [
     (
         "tenant-isolation",
         include_str!("../../../system-policies/tenant-isolation.cedar"),
@@ -12,6 +13,46 @@ const POLICIES: [(&str, &str); 2] = [
     (
         "agent-message-send",
         include_str!("../../../system-policies/agent-message-send.cedar"),
+    ),
+    (
+        "operator-agent-create",
+        include_str!("../../../system-policies/operator-agent-create.cedar"),
+    ),
+    (
+        "operator-agent-configure",
+        include_str!("../../../system-policies/operator-agent-configure.cedar"),
+    ),
+    (
+        "operator-agent-activate",
+        include_str!("../../../system-policies/operator-agent-activate.cedar"),
+    ),
+    (
+        "operator-agent-recover",
+        include_str!("../../../system-policies/operator-agent-recover.cedar"),
+    ),
+    (
+        "operator-agent-template-read",
+        include_str!("../../../system-policies/operator-agent-template-read.cedar"),
+    ),
+    (
+        "operator-agent-template-publish",
+        include_str!("../../../system-policies/operator-agent-template-publish.cedar"),
+    ),
+    (
+        "operator-execution-profile-read",
+        include_str!("../../../system-policies/operator-execution-profile-read.cedar"),
+    ),
+    (
+        "operator-agent-execution-read",
+        include_str!("../../../system-policies/operator-agent-execution-read.cedar"),
+    ),
+    (
+        "operator-operator-read",
+        include_str!("../../../system-policies/operator-operator-read.cedar"),
+    ),
+    (
+        "operator-agent-replace",
+        include_str!("../../../system-policies/operator-agent-replace.cedar"),
     ),
 ];
 

@@ -1273,15 +1273,19 @@ ADRs:
   the policy service to decide with it; an inventory gives every
   present capability its form, a hosted operator's delegation a fed
   attribute of its entity that a system policy per operation reads, and
-  a `permit` written by an owner alone; not yet built; supersedes 0140
-  in part, on the feed's "off by default" and its entities alone
+  a `permit` written by an owner alone; not yet built, except that the
+  policy service holds an operator's operations and the system policy
+  per operation (#1805); supersedes 0140 in part, on the feed's "off
+  by default" and its entities alone
 - [0147](./adr/0147-a-message-between-two-consenting-organizations-is-tenant-isolations-one-exception.md)
   — a message between two agents of two organizations is tenant
   isolation's one exception, where each organization's `consents`
   attribute on its `Org` holds the other, both organizations'
   guardrails are read for it and a withdrawal denies the next send;
-  not yet built; supersedes 0035 in part, on the send-path
-  precondition, and 0024 in part, on the refusal before the engine
+  built in the policy service (#1805), not yet in the platform, which
+  feeds no `consents` and still refuses before the engine; supersedes
+  0035 in part, on the send-path precondition, and 0024 in part, on
+  the refusal before the engine
 - [0148](./adr/0148-the-policy-service-records-every-policy-write-and-every-denial-for-the-organization-it-concerns.md)
   — the policy service records every write of a policy, kept as long as
   its organization exists, and every denial, removed 90 days after it

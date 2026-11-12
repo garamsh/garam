@@ -115,6 +115,7 @@ fn upsert(entity: EntityRef, org: Option<EntityRef>, parents: Vec<EntityRef>) ->
             org,
             members: None,
             parents,
+            ..EntityUpsert::default()
         })),
     }
 }
@@ -307,6 +308,100 @@ async fn a_type_an_id_and_a_parent_list_are_bounded() {
     assert!(!too_long(6));
     assert_eq!(answer.written, 3);
     assert_eq!(reached.load(Ordering::SeqCst), 3);
+}
+
+fn with_attributes(
+    entity: EntityRef,
+    org: Option<EntityRef>,
+    parents: Vec<EntityRef>,
+    consents: Vec<EntityRef>,
+    operations: Vec<&str>,
+) -> EntityChange {
+    EntityChange {
+        entity: Some(entity),
+        sequence: 1,
+        operation: Some(Operation::Upsert(EntityUpsert {
+            org,
+            members: None,
+            parents,
+            consents,
+            operations: operations.into_iter().map(str::to_owned).collect(),
+        })),
+    }
+}
+
+#[tokio::test]
+async fn consents_and_operations_are_written_on_their_own_types_and_refused_on_any_other() {
+    let (mut client, reached) = served().await;
+    let org = || Some(named("Iam::Org", ACME));
+    let members = || named("Iam::OrgMembers", ACME);
+    let globex = || vec![named("Iam::Org", "grn:root/iam/org/globex")];
+    let operator = |operations: Vec<&str>| {
+        with_attributes(
+            named("Iam::Operator", "grn:acme/iam/operator/hosting"),
+            org(),
+            vec![members(), named("Iam::Org", ACME)],
+            vec![],
+            operations,
+        )
+    };
+    let bot = |consents, operations| {
+        with_attributes(
+            named("Iam::Agent", "grn:acme/iam/agent/bot"),
+            org(),
+            vec![members()],
+            consents,
+            operations,
+        )
+    };
+    let mut consenting_org =
+        with_attributes(named("Iam::Org", ACME), org(), vec![], globex(), vec![]);
+    if let Some(Operation::Upsert(upsert)) = consenting_org.operation.as_mut() {
+        upsert.members = Some(members());
+    }
+
+    let answer = apply(
+        &mut client,
+        vec![
+            consenting_org,
+            operator(vec!["iam:agent.activate", "iam:agent.configure"]),
+            bot(globex(), vec![]),
+            bot(vec![], vec!["iam:agent.activate"]),
+            operator(vec!["iam:agent.read"]),
+            bot(vec![], vec![]),
+        ],
+    )
+    .await
+    .unwrap();
+
+    let refused: Vec<u32> = answer.refusals.iter().map(|r| r.index).collect();
+    assert_eq!(refused, [2, 3, 4]);
+    assert_eq!(answer.written, 3, "{answer:?}");
+    assert_eq!(reached.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test]
+async fn more_consents_or_operations_than_the_bound_refuse_the_entry() {
+    let (mut client, reached) = served().await;
+    let org = || Some(named("Iam::Org", ACME));
+    let operator = |count: usize| {
+        with_attributes(
+            named("Iam::Operator", "grn:acme/iam/operator/hosting"),
+            org(),
+            vec![named("Iam::OrgMembers", ACME), named("Iam::Org", ACME)],
+            vec![],
+            vec!["iam:agent.activate"; count],
+        )
+    };
+
+    let answer = apply(&mut client, vec![operator(1000), operator(1001)])
+        .await
+        .unwrap();
+
+    let refused: Vec<u32> = answer.refusals.iter().map(|r| r.index).collect();
+    assert_eq!(refused, [1]);
+    assert_eq!(answer.written, 1);
+    assert_eq!(reached.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

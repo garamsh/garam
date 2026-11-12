@@ -21,14 +21,26 @@ namespace Iam {
 
   // Containment is the fixed, shallow hierarchy: organization, then
   // team and project, then channel. No team sits in a team.
+  //
+  // `consents` holds the organizations this one has granted its half of
+  // a message toward (ADR-0147 item 2). Tenant isolation lets a send
+  // between agents through only where each organization holds the
+  // other's, so no organization's entity names another's half. It is
+  // optional so an organization stored without one consents to none.
   @grn("org") @caller("platform")
-  entity Org { org: Org, members: OrgMembers };
+  entity Org { org: Org, members: OrgMembers, consents?: Set<Org> };
   @grn("group") @caller("platform")
   entity Team in [Org] { org: Org };
   @grn("project") @caller("platform")
   entity Project in [Org] { org: Org };
+  // `operations` holds the operations its organization's current
+  // delegation grants, as action names in their wire form, such as
+  // `iam:agent.activate` (ADR-0146, "A hosted operator's delegation").
+  // An operator sits in its organization's OrgMembers, as an agent
+  // does, which is what tenant isolation reads of a principal. It is
+  // optional so an operator stored without one holds none.
   @grn("operator") @caller("platform")
-  entity Operator in [Org] { org: Org };
+  entity Operator in [OrgMembers, Org] { org: Org, operations?: Set<String> };
   @grn("policy") @caller("none")
   entity Policy in [Org] { org: Org };
   @grn("supervisor") @caller("none")
@@ -91,20 +103,27 @@ namespace Iam {
     in ["consent.*"]
     appliesTo { principal: [User, Agent], resource: [Org] };
 
+  // An operator is a principal of the delegable operations, the ten
+  // `Operator` appears in below, and of no other action (ADR-0146).
   action "operator.read" in ["role-owner", "role-admin", "role-member"]
-    appliesTo { principal: [User, Agent], resource: [Org, Operator] };
+    appliesTo { principal: [User, Agent, Operator], resource: [Org, Operator] };
   action "operator.register", "operator.update", "operator.delete",
     "operator.reissue", "operator.delegate"
     in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org, Operator] };
 
-  action "agent.read", "agent.rename", "agent.create"
+  action "agent.read", "agent.rename"
     in ["role-owner", "role-admin", "role-member"]
     appliesTo { principal: [User, Agent], resource: [Org, Agent] };
-  action "agent.configure", "agent.recover", "agent.enroll",
-    "agent.replace", "agent.execution-read"
-    in ["role-owner", "role-admin"]
+  action "agent.create"
+    in ["role-owner", "role-admin", "role-member"]
+    appliesTo { principal: [User, Agent, Operator], resource: [Org, Agent] };
+  action "agent.enroll" in ["role-owner", "role-admin"]
     appliesTo { principal: [User, Agent], resource: [Org, Agent] };
+  action "agent.configure", "agent.recover", "agent.replace",
+    "agent.execution-read"
+    in ["role-owner", "role-admin"]
+    appliesTo { principal: [User, Agent, Operator], resource: [Org, Agent] };
 
   // No role holds it: a grant carries it or nothing does (ADR-0022).
   action "agent.watch"
@@ -113,13 +132,13 @@ namespace Iam {
   // Activating an agent is a delegated operation the platform writes
   // (ADR-0078). No role holds it, as with `agent.watch`.
   action "agent.activate"
-    appliesTo { principal: [User, Agent], resource: [Org, Agent] };
+    appliesTo { principal: [User, Agent, Operator], resource: [Org, Agent] };
 
   action "agent-template.read", "execution-profile.read"
     in ["role-owner", "role-admin", "role-member"]
-    appliesTo { principal: [User, Agent], resource: [Org] };
+    appliesTo { principal: [User, Agent, Operator], resource: [Org] };
   action "agent-template.publish" in ["role-owner", "role-admin"]
-    appliesTo { principal: [User, Agent], resource: [Org] };
+    appliesTo { principal: [User, Agent, Operator], resource: [Org] };
 
   action "message.send"
     appliesTo { principal: [Agent], resource: [Agent] };

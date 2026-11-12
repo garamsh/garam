@@ -19,8 +19,10 @@ yet (#1689).
   neither `none` nor a `Caller`, a `Caller` is named by no manifest, or
   an audience of the platform names no manifest service and is neither
   `policy` nor `codehub`.
-- `system-policies/` — the system tier: tenant isolation, an agent's
-  sending, and the role templates. One policy per file, and the file's
+- `system-policies/` — the system tier: tenant isolation and its one
+  exception, an agent's sending, a hosted operator's ten delegated
+  operations (`operator-<type>-<verb>`), and the role templates. One
+  policy per file, and the file's
   stem is the id a decision's reasons name. Their tests sit in
   `crates/decision/tests/`.
 - `migrations/` — the service's own database.
@@ -93,6 +95,32 @@ yet (#1689).
   its index in the response, and the rest are written. A request holds
   at most 1000 changes, an id holds at most 512 bytes, a type 64 and a
   change 1000 parents.
+- **Two types carry one attribute each.** An `EntityUpsert` of an
+  `Iam::Org` may name `consents`, the organizations it has granted its
+  half of a message toward (ADR-0147), and one of an `Iam::Operator`
+  may name `operations`, the actions its current delegation holds as
+  wire-form names, `iam:agent.activate` (ADR-0146). An entity of another
+  type carrying either, and an operation no manifest declares with
+  `Iam::Operator` as a principal, refuse that entry, and each holds at
+  most 1000. `Iam::Org` and `Iam::Operator` are the platform's, so a
+  scoped caller writing either refuses its whole request, and neither
+  attribute can be written by a service that is not the platform. An
+  operator is written in its organization's `Iam::OrgMembers` and
+  `Iam::Org`, as a user is, and the platform's feed does not yet write
+  that parent or either attribute.
+- **Tenant isolation has one exception, a message both sides consent
+  to.** A `message.send` from an agent to an agent lifts the
+  isolation `forbid` when each of their organizations lists the other
+  in `consents`, and no other action, principal or resource type does.
+  The send still needs the `permit` of `agent-message-send`, and the
+  engine also reads the sender organization's guardrails (its `forbid`s
+  alone), named `<org>/<id>` so that two organizations' ids never
+  collide.
+- **A hosted operator holds what its `operations` list names.** One
+  system policy per delegable operation permits an `Iam::Operator`
+  of the resource's organization whose `operations` holds it, and a
+  guardrail forbids it as it forbids any principal. `Iam::Operator` is
+  a principal of those ten actions and of no other.
 - **The platform's writes are checked by type alone.** The types of
   its `org`, `members` and `parents` are not judged against it, since
   it writes every organization.
@@ -129,7 +157,17 @@ yet (#1689).
 `crates/decision/tests/analysis.rs` proves properties of the system
 tier with `cedar-policy-symcc` and cvc5, for every request and entity
 store the schema admits (ADR-0130 §5). `policy/Makefile` pins the
-solver and fetches it under `target/`.
+solver and fetches it under `target/`. They hold that:
+
+- no system policy and no link can error on a request the schema
+  admits;
+- with every link and a `permit` on everything, a request reaches a
+  resource only for a member of its organization, or as an agent's
+  `message.send` to an agent of an organization that consents to each
+  other, and a second proof names that send as the only request
+  members alone do not cover;
+- the tier alone allows an agent's sending and an operator's ten
+  delegable operations, and denies every other request.
 
 `make -C policy ci` is the fast gate, and `make -C policy stack-up
 suites` runs the store tests against Postgres and the analysis.

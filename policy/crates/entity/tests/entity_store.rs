@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use cedar_policy::{EntityId, EntityTypeName, EntityUid};
 use decision::{Engine, EntityRef, Evaluation, OrgGrn, OrgPolicies, Outcome, PolicySource};
-use entity::{Applied, EntityChange, EntityStore};
+use entity::{Applied, EntityChange, EntityStore, Upsert};
 use serde_json::json;
 use sqlx::PgPool;
 
@@ -44,9 +44,12 @@ fn change(
         &Engine::load().unwrap(),
         uid(named),
         sequence,
-        org.map(uid),
-        members.map(uid),
-        parents.iter().copied().map(uid).collect(),
+        Upsert {
+            org: org.map(uid),
+            members: members.map(uid),
+            parents: parents.iter().copied().map(uid).collect(),
+            ..Upsert::default()
+        },
     )
     .unwrap()
 }
@@ -260,4 +263,116 @@ async fn a_slice_holds_no_parent_the_store_has_deleted(pool: PgPool) {
     let slice = store.read_slice(&uid(LEE), &uid(CHANNEL)).await.unwrap();
     assert!(!slice.entities.is_ancestor_of(&uid(ENG), &uid(LEE)));
     assert!(slice.entities.is_ancestor_of(&uid(MEMBERS), &uid(LEE)));
+}
+
+const GLOBEX: Named = ("Iam::Org", "grn:root/iam/org/globex");
+const GLOBEX_MEMBERS: Named = ("Iam::OrgMembers", "grn:root/iam/org/globex");
+const RIVAL: Named = ("Iam::Agent", "grn:globex/iam/agent/rival");
+
+/// An organization that states its consents.
+fn consenting(org: Named, members: Named, sequence: i64, consents: &[Named]) -> EntityChange {
+    EntityChange::upsert(
+        &Engine::load().unwrap(),
+        uid(org),
+        sequence,
+        Upsert {
+            org: Some(uid(org)),
+            members: Some(uid(members)),
+            consents: consents.iter().copied().map(uid).collect(),
+            ..Upsert::default()
+        },
+    )
+    .unwrap()
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_slice_carries_both_organizations_consents_to_a_send_across(pool: PgPool) {
+    let store = store(pool).await;
+    let engine = Engine::load().unwrap();
+    let globex = [
+        upsert(GLOBEX_MEMBERS, 1, None, &[]),
+        consenting(GLOBEX, GLOBEX_MEMBERS, 1, &[ORG]),
+        upsert(RIVAL, 1, Some(GLOBEX), &[GLOBEX_MEMBERS, GLOBEX]),
+    ];
+    store.apply(&globex).await.unwrap();
+
+    // Globex consents to acme; acme has not consented back.
+    let one_half = engine
+        .evaluate(&NoPolicies, &store, &message(BOT, RIVAL))
+        .await
+        .unwrap();
+    assert_eq!(one_half.outcome, Outcome::Deny, "{one_half:?}");
+
+    store
+        .apply(&[consenting(ORG, MEMBERS, 2, &[GLOBEX])])
+        .await
+        .unwrap();
+    let both = engine
+        .evaluate(&NoPolicies, &store, &message(BOT, RIVAL))
+        .await
+        .unwrap();
+    assert_eq!(both.outcome, Outcome::Allow, "{both:?}");
+
+    // Withdrawn: a later write that names no consent takes it away.
+    store
+        .apply(&[consenting(ORG, MEMBERS, 3, &[])])
+        .await
+        .unwrap();
+    let withdrawn = engine
+        .evaluate(&NoPolicies, &store, &message(BOT, RIVAL))
+        .await
+        .unwrap();
+    assert_eq!(withdrawn.outcome, Outcome::Deny, "{withdrawn:?}");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_slice_carries_the_operations_an_operator_holds(pool: PgPool) {
+    let store = store(pool).await;
+    let engine = Engine::load().unwrap();
+    let hosting: Named = ("Iam::Operator", "grn:acme/iam/operator/hosting");
+    let operator = |sequence: i64, operations: &[&str]| {
+        EntityChange::upsert(
+            &engine,
+            uid(hosting),
+            sequence,
+            Upsert {
+                org: Some(uid(ORG)),
+                parents: vec![uid(MEMBERS), uid(ORG)],
+                operations: operations.iter().map(ToString::to_string).collect(),
+                ..Upsert::default()
+            },
+        )
+        .unwrap()
+    };
+    let activate = Evaluation {
+        subject: EntityRef {
+            entity_type: hosting.0,
+            id: hosting.1,
+        },
+        action: "iam:agent.activate",
+        resource: EntityRef {
+            entity_type: BOT.0,
+            id: BOT.1,
+        },
+        context: json!({}),
+    };
+
+    store.apply(&[operator(1, &[])]).await.unwrap();
+    let none = engine
+        .evaluate(&NoPolicies, &store, &activate)
+        .await
+        .unwrap();
+    assert_eq!(none.outcome, Outcome::Deny, "{none:?}");
+
+    store
+        .apply(&[operator(2, &["iam:agent.activate"])])
+        .await
+        .unwrap();
+    let held = engine
+        .evaluate(&NoPolicies, &store, &activate)
+        .await
+        .unwrap();
+    assert_eq!(held.outcome, Outcome::Allow, "{held:?}");
 }

@@ -1,17 +1,21 @@
 use std::str::FromStr;
 
 use cedar_policy::{
-    Authorizer, Context, Entities, EntityId, EntityTypeName, EntityUid, Policy, PolicySet, Request,
-    Schema, ValidationMode, Validator,
+    Authorizer, Context, Entities, EntityId, EntityTypeName, EntityUid, EvalResult, Policy,
+    PolicyId, PolicySet, Request, Schema, ValidationMode, Validator,
 };
 use manifest::Manifests;
 
 use crate::decision::Decision;
-use crate::entity_source::EntitySource;
+use crate::entity_source::{EntitySlice, EntitySource};
 use crate::error::Error;
-use crate::policy_source::{OrgPolicies, PolicySource};
+use crate::policy_source::{OrgGrn, OrgPolicies, PolicySource};
 use crate::role_link::RoleLink;
 use crate::system_tier;
+
+/// The action that sends, the one a send across organizations is
+/// asked as (ADR-0147).
+const MESSAGE_SEND: &str = "iam:message.send";
 
 /// An entity as a caller names it.
 #[derive(Debug, Clone, Copy)]
@@ -163,13 +167,47 @@ impl Engine {
             Some(org) => policies.active(org).await.map_err(Error::PolicyRead)?,
             None => OrgPolicies::default(),
         };
+        // Named by the organization they came from: two organizations
+        // choose ids alone, and a shared id would fail the composition.
+        let sender_guardrails: Vec<Policy> = match self.sender_org(&request, &slice) {
+            Some(org) => policies
+                .active(&org)
+                .await
+                .map_err(Error::PolicyRead)?
+                .guardrails
+                .into_iter()
+                .map(|guardrail| {
+                    let id = PolicyId::new(format!("{org}/{}", guardrail.id()));
+                    guardrail.new_id(id)
+                })
+                .collect(),
+            None => Vec::new(),
+        };
         let own = [
             org_policies.guardrails.as_slice(),
             org_policies.permits.as_slice(),
+            sender_guardrails.as_slice(),
         ]
         .concat();
         let composed = self.compose(&org_policies.links, &own)?;
         Ok(self.decide(&request, &composed, &slice.entities))
+    }
+
+    /// The sender's organization, where the request is a send across
+    /// organizations: its guardrails are read too, its `forbid`s alone
+    /// (ADR-0147 item 4). Any other request reads the resource's
+    /// organization only.
+    fn sender_org(&self, request: &Request, slice: &EntitySlice) -> Option<OrgGrn> {
+        let send = self.manifests.action(MESSAGE_SEND).ok()?;
+        if request.action() != Some(&send) {
+            return None;
+        }
+        let sender = slice.entities.get(request.principal()?)?;
+        let Ok(EvalResult::EntityUid(org)) = sender.attr("org")? else {
+            return None;
+        };
+        let org = OrgGrn::new(org.id().unescaped());
+        (slice.org.as_ref()? != &org).then_some(org)
     }
 
     /// Decides one request, failing closed on any evaluation error.

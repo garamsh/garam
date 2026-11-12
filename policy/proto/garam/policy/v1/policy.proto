@@ -134,7 +134,8 @@ message EntityRef {
 }
 
 // EntityUpsert is what an entity now is. It carries containment and
-// membership and nothing else (ADR-0138).
+// membership, and two attributes of the one type each belongs to
+// (ADR-0138, ADR-0146, ADR-0147).
 message EntityUpsert {
   // org is required of every resource type, and an `Org` names itself.
   EntityRef org = 1;
@@ -142,6 +143,17 @@ message EntityUpsert {
   EntityRef members = 2;
   // parents holds at most 1000 references.
   repeated EntityRef parents = 3;
+  // consents holds the organizations an `Org` has granted its half of
+  // a message toward (ADR-0147). Each is an `Org`, and an upsert of
+  // any other type that holds one is refused. Left empty, the `Org`
+  // consents to none.
+  repeated EntityRef consents = 4;
+  // operations holds the operations an `Operator`'s current delegation
+  // grants, as action names in their wire form, such as
+  // `iam:agent.activate` (ADR-0146). Each is an action `Iam::Operator`
+  // may be the principal of, and an upsert of any other type that
+  // holds one is refused. Left empty, the `Operator` holds none.
+  repeated string operations = 5;
 }
 
 // EntityDelete says the owner no longer has the entity.

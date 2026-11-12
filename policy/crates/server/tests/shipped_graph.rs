@@ -11,7 +11,7 @@ use std::str::FromStr;
 use caller_tokens::*;
 use cedar_policy::{EntityId, EntityTypeName, EntityUid};
 use decision::{Engine, OrgGrn, Role, RoleScope};
-use entity::{EntityChange, EntityStore};
+use entity::{EntityChange, EntityStore, Upsert};
 use grant::{Body, NewPolicy, PolicyStore};
 use listening::{Pair, bound, trusting};
 use server::proto::entity_change::Operation;
@@ -60,9 +60,12 @@ fn upsert(
         engine,
         uid(named),
         1,
-        org.map(uid),
-        members.map(uid),
-        parents.iter().copied().map(uid).collect(),
+        Upsert {
+            org: org.map(uid),
+            members: members.map(uid),
+            parents: parents.iter().copied().map(uid).collect(),
+            ..Upsert::default()
+        },
     )
     .unwrap()
 }
@@ -363,6 +366,7 @@ fn wire_upsert(named: Named, sequence: i64, parents: &[Named]) -> WireChange {
             org: None,
             members: None,
             parents: parents.iter().copied().map(wire_ref).collect(),
+            ..EntityUpsert::default()
         })),
     }
 }

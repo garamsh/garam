@@ -1,0 +1,12 @@
+// `iam:agent-template.read` delegated to an operator of the
+// resource's organization (ADR-0146). A guardrail of that
+// organization forbids it as it does any principal's.
+permit (
+  principal is Iam::Operator,
+  action == Iam::Action::"agent-template.read",
+  resource
+) when {
+  principal has operations &&
+  principal.operations.contains("iam:agent-template.read") &&
+  principal.org == resource.org
+};

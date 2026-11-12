@@ -26,6 +26,27 @@ type Compiler = CedarSymCompiler<LocalSolver>;
 const EVERYTHING: &str = "permit (principal, action, resource);";
 const MEMBERS_ONLY: &str =
     "permit (principal, action, resource) when { principal in resource.org.members };";
+/// ADR-0147 item 3's exception, as the permit it lifts the forbid
+/// toward: an agent's message to an agent of an organization that has
+/// each consented to the other.
+const CONSENTED_SEND: &str = r#"permit (principal is Iam::Agent,
+  action == Iam::Action::"message.send", resource is Iam::Agent)
+  when { principal.org has consents && resource.org has consents &&
+    principal.org.consents.contains(resource.org) &&
+    resource.org.consents.contains(principal.org) };"#;
+/// The operations a hosted operator may hold (migration 000072).
+const DELEGABLE: [&str; 10] = [
+    "iam:agent.create",
+    "iam:agent.configure",
+    "iam:agent.activate",
+    "iam:agent.recover",
+    "iam:agent-template.read",
+    "iam:agent-template.publish",
+    "iam:execution-profile.read",
+    "iam:agent.execution-read",
+    "iam:operator.read",
+    "iam:agent.replace",
+];
 /// ADR-0137's rejected first draft of tenant isolation.
 const CONTAINMENT: &str =
     "forbid (principal, action, resource) unless { principal in resource.org };";
@@ -122,10 +143,28 @@ async fn no_system_policy_and_no_link_can_error_on_a_request_the_schema_admits()
 /// ADR-0130 §5's global question: can anything outside an organization
 /// reach a resource? The forbid is held against `permit` on everything,
 /// which is wider than any set of links an organization can hold, so
-/// the answer covers every organization's policies.
+/// the answer covers every organization's policies. The one way in is
+/// ADR-0147's: an agent's send to an agent of an organization that
+/// consents to each other, so the proof reads members, or that send.
 #[tokio::test]
 #[ignore = "needs cvc5: make -C policy suites"]
-async fn nothing_reaches_a_resource_but_a_member_of_its_organization() {
+async fn nothing_reaches_a_resource_but_a_member_of_its_organization_or_a_consented_send() {
+    let world = World::new();
+    let schema = world.engine.schema();
+    let mut links = every_link(&world);
+    links.push(policy("everything", EVERYTHING));
+    let widest = composed(&world, &links);
+    let reach = set(&[MEMBERS_ONLY, CONSENTED_SEND]);
+    let mut solver = compiler();
+    assert!(implied_everywhere(&mut solver, schema, &widest, &reach).await);
+}
+
+/// The control, and what bounds the exception: against members alone
+/// the same proof fails, on `message.send` from an agent to an agent
+/// and on no other request, so the exception reaches nothing else.
+#[tokio::test]
+#[ignore = "needs cvc5: make -C policy suites"]
+async fn the_exception_to_isolation_is_a_send_between_agents_and_nothing_else() {
     let world = World::new();
     let schema = world.engine.schema();
     let mut links = every_link(&world);
@@ -133,7 +172,28 @@ async fn nothing_reaches_a_resource_but_a_member_of_its_organization() {
     let widest = composed(&world, &links);
     let members = set(&[MEMBERS_ONLY]);
     let mut solver = compiler();
-    assert!(implied_everywhere(&mut solver, schema, &widest, &members).await);
+    let mut beyond = Vec::new();
+    for request in every_request(schema) {
+        let held = solver
+            .check_implies_opt(
+                &compiled(&widest, &request, schema),
+                &compiled(&members, &request, schema),
+            )
+            .await
+            .unwrap();
+        if !held {
+            beyond.push(format!(
+                "{} {} {}",
+                request.principal(),
+                request.action(),
+                request.resource()
+            ));
+        }
+    }
+    assert_eq!(
+        beyond,
+        [r#"Iam::Agent Iam::Action::"message.send" Iam::Agent"#]
+    );
 }
 
 /// The control: the same question of the form ADR-0137 rejected is
@@ -198,31 +258,43 @@ fn action_of(request: &RequestEnv) -> String {
     request.action().to_string()
 }
 
-/// With no link, the only thing the tier allows is an agent's sending
-/// (ADR-0024), so every other grant is a link someone can read.
+/// With no link, the tier allows an agent's sending (ADR-0024) and a
+/// hosted operator's ten delegable operations (ADR-0146), and nothing
+/// else, so every other grant is a link someone can read.
 #[tokio::test]
 #[ignore = "needs cvc5: make -C policy suites"]
-async fn the_tier_alone_allows_only_an_agents_sending() {
+async fn the_tier_alone_allows_only_an_agents_sending_and_an_operators_operations() {
     let world = World::new();
     let schema = world.engine.schema();
     let tier = composed(&world, &[]);
+    let delegable: Vec<String> = DELEGABLE.iter().map(|wire| cedar_action(wire)).collect();
     let mut solver = compiler();
     let mut sending = 0;
+    let mut delegated = Vec::new();
     let mut proved = 0;
     for request in every_request(schema) {
         let denied = solver
             .check_always_denies_opt(&compiled(&tier, &request, schema))
             .await
             .unwrap();
+        let operator = request.principal().to_string() == "Iam::Operator";
         if action_of(&request) == cedar_action("iam:message.send") {
             assert!(!denied, "the tier stopped allowing an agent's sending");
             sending += 1;
+        } else if operator && delegable.contains(&action_of(&request)) {
+            assert!(!denied, "the tier stopped allowing {request:?}");
+            delegated.push(action_of(&request));
         } else {
             assert!(denied, "the tier alone allows on {request:?}");
             proved += 1;
         }
     }
     assert_eq!(sending, 1);
+    delegated.sort();
+    delegated.dedup();
+    let mut expected = delegable.clone();
+    expected.sort();
+    assert_eq!(delegated, expected);
     println!("analysis: {proved} proofs");
 }
 

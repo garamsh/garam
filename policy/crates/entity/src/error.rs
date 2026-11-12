@@ -7,6 +7,13 @@ pub enum Error {
     /// An `Org` names an organization or members other than its own.
     #[error("an organization carries itself and its own members")]
     OrgNotItself,
+    /// An attribute belongs to a type this entity is not: `consents`
+    /// to an `Org`, `operations` to an `Operator`.
+    #[error("{0} is an attribute of another type")]
+    Attribute(&'static str),
+    /// An operation no operator may hold.
+    #[error("{0} is not an operation an operator may hold")]
+    NotDelegable(String),
     /// A stored document no longer parses.
     #[error("the stored entities do not fit the schema")]
     Stored(#[source] decision::Error),

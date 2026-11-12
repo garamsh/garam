@@ -394,9 +394,10 @@ when this was written; at
 [deployment-contract.md](./deployment-contract.md) §A Transit provider
 for message signing keys cites, they were open. The documents of the
 commit above describe both as built (`resource-api.md`,
-`node-agent.md`). Neither issue's own thread was read. The Node Agent also needs `--service-account-audience` set to one
-of the API server's audiences, and without it a MicroVM that names a
-ServiceAccount is not created (`node-agent.md`); that is a cluster
+`node-agent.md`). Neither issue's own thread was read. The Node Agent
+also needs `--service-account-audience` set to one of the API server's
+audiences, and without it a MicroVM that names a ServiceAccount is not
+created (`node-agent.md`); that is a cluster
 setting, not an object of this document. Which role and which issuer
 OpenBao's JWT method trusts are the deployment's, as in
 [deployment-contract.md](./deployment-contract.md).

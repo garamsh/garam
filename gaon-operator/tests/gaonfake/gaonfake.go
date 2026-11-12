@@ -58,6 +58,9 @@ func New(t *testing.T, selector api.Selector) (*Server, *api.Client) {
 	return s, api.NewClient(ts.URL, ts.Client(), api.WithLabelSelector(selector))
 }
 
+// URL is the address the fake serves at.
+func (s *Server) URL() string { return s.url }
+
 // Requests returns every request served so far, in order.
 func (s *Server) Requests() []Request {
 	s.mu.Lock()

@@ -51,6 +51,17 @@ image:
     # (deploy/local/Dockerfile.web).
     runAsUser: 1000
     runAsGroup: 1000
+  # The policy service (ADR-0130), whose image
+  # deploy/local/Dockerfile.policy builds. Its `USER policy` is the uid
+  # that file creates, and the gid its `adduser` gives with it. No
+  # release publishes this repository yet, so the tag a deployment
+  # names is a build it pushed itself.
+  policy:
+    repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/policy
+    tag: ""
+    digest: ""
+    runAsUser: 10001
+    runAsGroup: 10001
   # The site (ADR-0131), built from the same Dockerfile as `web` with
   # `APP=site-web`, so it runs as the same account.
   site:
@@ -91,17 +102,20 @@ api:
     clientSecret:
       secretName: ""
       secretKey: ""
-  # Delivers the policy feed to the policy service (ADR-0140). Off while
-  # `address` is empty, and the feed is off by default too; set, the
-  # rest are required and the render refuses a partial setting. None of
-  # these carries a secret: the signing key arrives as a file something
-  # the deployment runs writes, as the process's UID and readable by it
-  # alone — see the README, §Delivering the policy feed.
+  # Delivers the policy feed to the policy service (ADR-0140), which is
+  # a required part of every deployment (ADR-0146), so the rest are
+  # required and the render refuses a partial setting. None of these
+  # carries a secret: the signing key arrives as a file something the
+  # deployment runs writes, as the process's UID and readable by it
+  # alone — see the README, §Delivering the policy feed. The feed
+  # itself is off by default in the binary.
   policy:
-    # The policy service's host:port, which serves TLS.
+    # The policy service's host:port, which serves TLS. Empty names the
+    # service this chart deploys, `<release>-garam-policy:8443`, and
+    # the certificate it serves must name that host.
     address: ""
-    # The `iss` of the tokens garam signs for it, and the issuer the
-    # policy service trusts.
+    # The `iss` of the tokens garam signs for it. The policy service
+    # trusts the same value, so it is the one value for both.
     tokenIssuer: ""
     # The Secret holding the PEM root the policy service's certificate
     # is verified against, and its key.
@@ -115,6 +129,46 @@ api:
   resources: {}
 
 authz:
+  serviceAccount:
+    name: ""
+    create: false
+    annotations: {}
+  resources: {}
+
+# The policy service (ADR-0146): a process that decides every request
+# the listeners take and stores an organization's policies. Its
+# database is its own, and its image is `image.policy`.
+policy:
+  serviceAccount:
+    name: ""
+    create: false
+    annotations: {}
+  database:
+    # The Secret holding its connection string, and its key. One DSN,
+    # consumed as-is, and not `database`'s.
+    secretName: ""
+    secretKey: uri
+  # The public half of the platform's signing key, as a JWKS file
+  # (ADR-0138): the Secret it is read from and the key it is under.
+  # The deployment writes it, and the service reads it once at start,
+  # so replacing it is a rollout. It is public, so it is projected as
+  # it is.
+  jwks:
+    secretName: ""
+    key: jwks.json
+  # The certificate and key the service serves TLS under, from one
+  # Secret. The key reaches the process as the owner-only file it
+  # requires (ADR-0015): the pod copies it as `machine`'s does, from
+  # `machine.copyImage`. The chart generates neither, and the
+  # certificate names the host `api.policy.address` resolves to.
+  tls:
+    secretName: ""
+    certKey: tls.crt
+    keyKey: tls.key
+  resources: {}
+
+# Applies the policy service's migrations to its database.
+policyMigrate:
   serviceAccount:
     name: ""
     create: false
@@ -175,8 +229,9 @@ machine:
   # https URL with a host and no user information, query or fragment.
   # No private key passes through this value or any other here.
   tokenUrl: ""
-  # Runs the copy that gives the process a file it owns. The garam image
-  # is scratch and carries no shell. Pinned by digest, the reference
+  # Runs the copy that gives the process a file it owns, here and in
+  # the policy service's pod. The garam image is scratch and carries no
+  # shell. Pinned by digest, the reference
   # deploy/local/minikube/garam.yaml already uses.
   #
   # Nothing proposes a bump for it: Dependabot's docker and helm

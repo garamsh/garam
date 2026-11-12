@@ -52,8 +52,9 @@ and the hook phase the migration Job runs in.
 
 Each image has one repository, named `<publishing repository>/<image>`
 ([ADR-0134](./adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)):
-`garam/server`, `garam/console` and `garam/site`, which the chart's
-`image.*.repository` names, and `garam/cowork` and `garam/cowork-web`,
+`garam/server`, `garam/console`, `garam/site` and `garam/policy`, which
+the chart's `image.*.repository` names (no release publishes
+`garam/policy` yet), and `garam/cowork` and `garam/cowork-web`,
 which no chart here deploys. The tag says what a build is. A bare
 `X.Y.Z` is a release, which only a `vX.Y.Z` git tag publishes
 ([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
@@ -93,9 +94,12 @@ Dependencies each process reports (`platform/internal/cli/serve.go`,
 | `serve api` | the database, and the channel to the engine |
 | `serve authz` | the database alone |
 | `serve machine` | the database, and the channel to the engine |
+| `policy serve` | the database alone, on a plaintext port of its own (`policy/crates/server/src/probes.rs`) |
 | web | none — it reads nothing, so an API outage takes no replica out of rotation ([ADR-0023](./adr/0023-web-probes.md)) |
 
-Decided, not built: [ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md) removes
+The chart deploys the policy service beside `serve authz`, with its own
+database and its own migration (§The migrate job). Decided, not built:
+[ADR-0146](./adr/0146-the-platform-decides-through-the-policy-service-which-stores-an-organizations-policies-and-holds-its-role-links.md) removes
 `serve authz`, makes the policy service a required part of every
 deployment and its address required, and has a listener that cannot
 have a request decided refuse it.
@@ -123,8 +127,9 @@ Two sentences a consumer must plan against:
   ([ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)).
 
 garam takes one position on probe tolerance and no other. The chart
-sets `timeoutSeconds: 3` on the readiness probe of `api`, `authz` and
-`machine`, because a readiness answer is bounded at two seconds and a
+sets `timeoutSeconds: 3` on the readiness probe of `api`, `authz`,
+`machine` and `policy`, because a readiness answer is bounded at two
+seconds (inside `policy serve` too, `probes.rs`) and a
 probe timing out at the platform's one-second default would report its
 own deadline instead of the dependency that failed. That value is
 literal in those templates — no chart value moves it — and `web`'s
@@ -236,7 +241,8 @@ when its owner is not the process's own UID, and every key file a
 process reads at startup goes through it: the key-encryption key and the
 machine listener's own TLS key (`platform/internal/cli/machine.go`), and
 the key that signs the platform's calls to the policy service
-(`platform/internal/signer`, read when `GARAM_POLICY_ADDR` is set), so
+(`platform/internal/signer`, read when `GARAM_POLICY_ADDR` is set), and
+the policy service's own TLS key (`POLICY_TLS_KEY_FILE`, ADR-0015), so
 either refusal stops the start of that process. Plain Kubernetes Secret
 projection satisfies neither half — a projected file is root-owned, and
 `fsGroup` changes the group owner rather than the user owner (read
@@ -568,6 +574,11 @@ then answers 503.
 
 `migrate` applies all pending migrations and exits
 (`platform/internal/cli/migrate.go`) and listens on nothing.
+`policy migrate` is the policy service's own and runs against a database
+of its own (ADR-0130): `policy serve` applies none, and the chart orders
+its Job as it orders this one. What follows is `migrate`'s alone, read
+from `platform/internal/cli/migrate.go`, and none of it is claimed here
+for `policy migrate`.
 
 - **It fails closed on a dirty database and never clears the flag
   itself.** A failed run leaves the database dirty, and every later run

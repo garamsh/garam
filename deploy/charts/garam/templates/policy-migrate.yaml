@@ -1,0 +1,42 @@
+# Applies the policy service's pending migrations to its own database
+# and exits (ADR-0138). `policy serve` applies none, so this runs
+# before it, as a hook, beside the platform's.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "garam.name" (dict "root" $ "word" "policy-migrate") }}
+  labels:
+    {{- include "garam.labels" (dict "root" $ "component" "policy-migrate") | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    # before-hook-creation, and deliberately not hook-failed: a failed
+    # run's log is the only place its error exists, and deleting the Job
+    # on failure destroys it.
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "garam.selectorLabels" (dict "root" $ "component" "policy-migrate") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+{{- include "garam.serviceAccountName" (dict "root" $ "component" "policy-migrate" "valuesKey" "policyMigrate") }}
+{{- include "garam.imagePullSecrets" . }}
+{{- include "garam.podSecurityContext" (dict "root" $ "name" "policy") }}
+      containers:
+        - name: migrate
+          image: {{ include "garam.image" (dict "root" $ "name" "policy") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["migrate"]
+{{- include "garam.containerSecurityContext" . }}
+          env:
+            {{- include "garam.policyDatabaseEnv" . | nindent 12 }}
+          resources: {{- toYaml .Values.policyMigrate.resources | nindent 12 }}
+{{/*
+The Job's account is created in the same phase and at a lower weight,
+for the reason migrate.yaml gives.
+*/}}
+{{- $hook := dict "helm.sh/hook" "pre-install,pre-upgrade" "helm.sh/hook-weight" "-10" "helm.sh/hook-delete-policy" "before-hook-creation" -}}
+{{- include "garam.serviceAccount" (dict "root" $ "component" "policy-migrate" "valuesKey" "policyMigrate" "hookAnnotations" $hook) }}

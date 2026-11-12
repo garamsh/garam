@@ -262,7 +262,10 @@ paths:
         A `client_id` that is a service principal's GRN,
         `grn:<org>/iam/service/<name>`, takes the principal route
         (ADR-0129): the assertion is signed by a key of that service,
-        its `aud` is this URL, and the request names `audience`
+        its `aud` is the issuer identifier alone (RFC 10070 §4, `typ`
+        `client-authentication+jwt` or `JWT`) or this URL (`typ`
+        `JWT`, the form to be withdrawn), never both and never
+        another, and the request names `audience`
         `policy`, the only audience answered; any other is
         `invalid_request` before the assertion is read. The answer is
         garam's OIDC issuer's JWT (ADR-0141) for the principal, `aud`
@@ -279,7 +282,16 @@ paths:
         A bad signature, a key that is unknown, withdrawn or past its
         rollover, a wrong identity, audience or time, and a replay are
         one refusal, `invalid_client` with 400, which says nothing
-        about which registrations or keys exist. A token is refused
+        about which registrations or keys exist. One case is told
+        apart: an assertion of a service principal that is signed by a
+        key configured for its service and is timely, whose
+        `client_id` names an organization garam holds none of, answers
+        400 `unauthorized_client`, so a service that serves many
+        organizations tells a refusal of one request from a key that
+        is wrong. It is given only after the signature verified, so a
+        caller without the service's key learns of no organization.
+        A principal gone from an organization that exists is not this
+        case and stays `invalid_client`. A token is refused
         from the next request once its key is withdrawn. A process
         answers at most 60 exchanges per client address, counted before
         anything is read, and 10 verified ones per `client_id`, each per
@@ -338,8 +350,9 @@ paths:
         `exchangeClientAssertion` does: `client_id` is the
         service principal's GRN, `grn:<org>/iam/service/<audience>`, live
         in the organization, and `client_assertion` an assertion its
-        service's key signed with `aud` equal to this
-        operation's URL, under the same profile and spent once. The
+        service's key signed with `aud` equal to this operation's URL
+        or to the issuer identifier alone, as the exchange takes
+        them, under the same profile and spent once. The
         request carries no `Authorization` header. It is served only
         where a deployment configured the issuer: otherwise it answers
         404 as an unknown path does.
@@ -2072,13 +2085,17 @@ components:
       properties:
         error:
           type: string
-          enum: [invalid_request, invalid_client, unsupported_grant_type, invalid_scope, temporarily_unavailable, server_error]
+          enum: [invalid_request, invalid_client, unauthorized_client, unsupported_grant_type, invalid_scope, temporarily_unavailable, server_error]
           description: >-
             `invalid_request` for a malformed or repeated parameter, a
             `Authorization` header, or an audience
             that is not another operator of the organization;
             `invalid_client` for an assertion that authenticates no
-            operator; `unsupported_grant_type` for a grant other than
+            operator or service principal; `unauthorized_client` for
+            an assertion of a service principal that authenticated,
+            signed by a key of its service and otherwise valid, whose
+            `client_id` names an organization garam does not hold;
+            `unsupported_grant_type` for a grant other than
             `client_credentials`; `invalid_scope` for any `scope`;
             `temporarily_unavailable` with 429 or 503; `server_error`
             with 500.

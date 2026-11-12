@@ -20,14 +20,23 @@ const (
 	principalService = "iam"
 )
 
-// ServiceCowork is the first-party service that acts for an
-// organization through the policy service (ADR-0129).
-const ServiceCowork = "cowork"
+// The services garam issues a principal for.
+const (
+	// ServiceCowork acts for an organization through the policy
+	// service (ADR-0129).
+	ServiceCowork = "cowork"
+	// ServiceCodehub is a service garam does not deploy, which acts for
+	// an organization through the policy service as cowork does
+	// (ADR-0143 item 7).
+	ServiceCodehub = "codehub"
+)
 
 // firstParty is the closed list of first-party services, in code and
-// not in configuration or a table (ADR-0129 item 1). Every organization
-// holds one principal for each of them.
-var firstParty = []string{ServiceCowork}
+// not in configuration or a table (ADR-0129 item 1, ADR-0141 item 13).
+// First-party means a service garam issues a principal for, whether or
+// not garam deploys it. Every organization holds one principal for
+// each of them.
+var firstParty = []string{ServiceCowork, ServiceCodehub}
 
 // FirstParty returns the closed list of first-party services a
 // principal is written for with each organization.

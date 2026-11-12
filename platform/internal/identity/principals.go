@@ -34,6 +34,10 @@ type PrincipalsConfig struct {
 	// assertion names as its audience on each route.
 	ExchangeEndpoint   string
 	IntrospectEndpoint string
+	// Issuer is the issuer identifier (GARAM_IDENTITY_ISSUER), the
+	// audience RFC 10070 §4 gives an assertion for any endpoint of the
+	// issuer; empty accepts none. The endpoint form is to be withdrawn.
+	Issuer string
 	// Admitter holds the principal's record and the jtis spent.
 	Admitter Admitter
 	// Now supplies the time the per-source bound counts in; zero takes
@@ -52,6 +56,7 @@ type PrincipalsConfig struct {
 type Principals struct {
 	keys      KeySource
 	endpoints map[Route]string
+	issuer    string
 	admitter  Admitter
 	perSource map[Route]*operator.Limiter
 }
@@ -67,6 +72,7 @@ func NewPrincipals(cfg PrincipalsConfig) *Principals {
 	}
 	return &Principals{
 		keys:      cfg.Keys,
+		issuer:    cfg.Issuer,
 		endpoints: map[Route]string{RouteExchange: cfg.ExchangeEndpoint, RouteIntrospect: cfg.IntrospectEndpoint},
 		admitter:  cfg.Admitter,
 		perSource: map[Route]*operator.Limiter{RouteExchange: limiter(), RouteIntrospect: limiter()},
@@ -74,13 +80,15 @@ func NewPrincipals(cfg PrincipalsConfig) *Principals {
 }
 
 // Authenticate returns the principal clientID proved itself as on
-// route, or [operator.ErrClientInvalid]. source is the peer's address,
-// which the per-source bound counts before anything else is read, and
-// past it the answer is an [*operator.Exceeded]. A bad signature, a
-// service with no key, a wrong identity, audience or time, a principal
-// that does not exist and a replayed assertion are one refusal. Keys
-// that cannot be read are [ErrPrincipalsOff]'s kind, unavailable, and
-// not a bad client.
+// route, [operator.ErrClientInvalid], or [ErrOrganizationUnknown].
+// source is the peer's address, which the per-source bound counts
+// before anything else is read, and past it the answer is an
+// [*operator.Exceeded]. A bad signature, a service with no key, a wrong
+// identity, audience or time, a principal gone from an organization
+// that exists and a replayed assertion are one refusal. A principal of
+// an organization that is not held is told apart only once the
+// signature verified (see [Admitter]). Keys that cannot be read are
+// [ErrPrincipalsOff]'s kind, unavailable, and not a bad client.
 func (p *Principals) Authenticate(ctx context.Context, route Route, source, clientID, assertion string) (Principal, error) {
 	if err := p.perSource[route].Check(source); err != nil {
 		return Principal{}, err
@@ -93,7 +101,7 @@ func (p *Principals) Authenticate(ctx context.Context, route Route, source, clie
 	if !ok {
 		return Principal{}, operator.ErrClientInvalid
 	}
-	parsed, err := operator.ParseClientAssertion(assertion)
+	parsed, err := operator.ParseServiceAssertion(assertion)
 	if err != nil {
 		return Principal{}, operator.ErrClientInvalid
 	}
@@ -102,7 +110,7 @@ func (p *Principals) Authenticate(ctx context.Context, route Route, source, clie
 			continue
 		}
 		key.Operator = principal.GRN
-		verified, err := parsed.Verify(key, principal.GRN, p.endpoints[route])
+		verified, err := parsed.VerifyService(key, principal.GRN, p.endpoints[route], p.issuer)
 		if err != nil {
 			return Principal{}, operator.ErrClientInvalid
 		}

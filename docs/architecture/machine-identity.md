@@ -315,7 +315,9 @@ else.
 - **What is built.** Only a CLI session's access token is accepted as
   the subject: an agent's browser token (§Browser tokens) is unbuilt,
   and a browser session's cookie is refused as any session that is not
-  a CLI's. A first-party service's principal
+  a CLI's. A first-party service's principal, meaning a service garam
+  issues a principal for whether or not garam deploys it, and today
+  cowork's and codehub's
   (`grn:<org>/iam/service/<name>`, one per organization, written and
   removed with it) authenticates at introspection and at the exchange
   from the public keys `GARAM_IDENTITY_SERVICE_KEYS_FILE` names, read
@@ -323,10 +325,12 @@ else.
   database, so a replay reaching another replica is refused. Each
   route bounds a
   source by the operator exchange's constants, in a limiter of its own
-  in each process. No first-party service is an audience today, so
-  introspection has no caller a deployment can configure yet. The
-  signing key is the policy feed's `GARAM_POLICY_SIGNING_KEY_FILE`,
-  held by the machine listener too.
+  in each process. codehub is both an audience and a first-party
+  service, so its principal introspects the tokens issued for
+  `codehub`; cowork is no audience, and `policy` is no first-party
+  service, so introspection of a `policy` token has no caller a
+  deployment can configure yet. The signing key is the policy feed's
+  `GARAM_POLICY_SIGNING_KEY_FILE`, held by the machine listener too.
 
 - **An exchange, not a new credential.** A CLI session's access token
   or an agent's browser token (§Browser tokens) is presented as an RFC
@@ -369,7 +373,9 @@ Where its endpoints are served is
 
 ## cowork's principal
 
-**Partly built (#1758); the rest is unbuilt (#1664).**
+**Partly built (#1758); the rest is unbuilt (#1664).** Where it says
+"a first-party service", codehub's principal (§codehub's principal)
+is built the same way.
 [ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
 adds a fourth kind of machine caller beside an operator, an agent and
 a supervisor. Built: the record, written with the organization and by
@@ -390,6 +396,27 @@ every machine operation it reaches, so cowork reaches no queue.
   on every authentication, so removing a compromised key takes no
   restart, and a file that is gone or no longer parses refuses every
   principal as unavailable (503), not as a bad client.
+- **The signing algorithm is RS256, and only it.** A service key is an
+  RSA public key, and an assertion's protected header names `alg`
+  `RS256`, a `kid` that is the key's RFC 7638 thumbprint, and `typ`
+  `JWT`; any other algorithm is refused as a bad client. A caller
+  cites this bullet for the accepted algorithm, which is the
+  operator exchange's (§Asymmetric Operator exchange), and for every
+  service's keys alike.
+- **Two assertion forms, one to be withdrawn (#1811).** For a
+  service principal, `aud` is exactly one of two strings. The
+  issuer identifier (`GARAM_IDENTITY_ISSUER`) as its only value is
+  RFC 10070 §4's form, accepted with `typ`
+  `client-authentication+jwt` or `JWT`, since the RFC advises
+  against rejecting an untyped assertion. The URL of the route it
+  is for, the token endpoint or introspection, is the form of
+  ADR-0102, accepted with `typ` `JWT` as before and **to be
+  withdrawn** once every caller sends the issuer form. An `aud`
+  naming both, a list, any other string, or the URL form under the
+  new `typ` is refused as a bad client. The operator exchange takes
+  neither: its `typ` is `JWT` and its `aud` the token endpoint, as
+  before. Where the issuer is not configured the issuer form
+  accepts nothing.
 - **The exchange is `exchangeClientAssertion`** under
   `machine-token.v2`, with the organization's principal GRN as
   `client_id`, `iss` and `sub`, and the key found by `kid` among the
@@ -398,6 +425,19 @@ every machine operation it reaches, so cowork reaches no queue.
   `policy`, answered the issuer's JWT of at most 300 seconds; any
   other audience is refused. The hour-long token with its own prefix
   is unbuilt.
+- **Two answers to an assertion that does not admit (#1811).** Every
+  failure to authenticate, an unknown service, an unknown `kid`, a bad
+  signature, a wrong `aud`, a replayed `jti` and an expired assertion,
+  is 400 `invalid_client`. One case is told apart: an assertion signed
+  by a key configured for its service, timely, whose `client_id`
+  names an organization garam holds none of, is 400
+  `unauthorized_client` (RFC 6749 §5.2), so a service that serves many
+  organizations tells a refusal of one request from a key that is
+  wrong, which for it is an outage. It is answered only after the
+  signature verified, so a caller without the service's key learns of
+  no organization, and it spends no `jti`. A principal gone from an
+  organization that exists is not that case and stays
+  `invalid_client`. Both routes answer so.
 - **Read on every request** joined to the principal's record and its
   incarnation, with the key still configured, so a revocation, a
   removed key or the organization's deletion refuses it from the next
@@ -548,7 +588,8 @@ answer whether that caller is still the one allowed to act.
 
 ## codehub's principal
 
-**Unbuilt.** codehub, a service garam does not deploy, acts in an
+**Built on the platform's side (#1811); the policy service's side is
+unbuilt.** codehub, a service garam does not deploy, acts in an
 organization as `grn:<org>/iam/service/codehub`, the form cowork's
 principal takes under the grammar
 [ADR-0142](./adr/0142-a-grn-names-its-organization-its-service-and-a-path-of-type-and-id-pairs-with-a-locator-the-service-reads.md).
@@ -556,5 +597,30 @@ The repositories it stores are `grn:<org>/codehub/repo/<id>`. It
 reaches the policy service as a direct caller owning a `Codehub`
 namespace
 ([ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)).
-Its row is built when codehub calls: the closed list of services holds
-no entry before a caller proves it.
+
+Built, as cowork's principal is (§cowork's principal):
+
+- **The record.** `codehub` is the second name on the closed list in
+  code, so a new organization is written with its principal and
+  cowork's, and migration `000074` wrote it for each organization that
+  existed. The organization's deletion removes it by cascade.
+- **One deployment key for every organization**, in the same service
+  keys file under the name `codehub`, at most two keys, RS256 as
+  §cowork's principal states it. A deployment that configures no
+  codehub key authenticates no codehub principal, and nothing else
+  about the listener differs.
+- **The exchange** answers a codehub principal's assertion, with
+  `audience` `policy`, the issuer's JWT whose `sub` is its principal.
+  Cowork's key, an unconfigured key, a replayed jti and any other
+  audience are refused.
+- **Introspection** answers a codehub principal for the tokens issued
+  for the `codehub` audience, and reads one issued for `policy` as
+  inactive.
+
+Unbuilt:
+
+- **The policy service accepting the principal** as a caller, its
+  `Codehub` manifest included, which is a change of its own. Until it
+  lands the policy service refuses the token the exchange issues.
+- **An authorization-code flow** for codehub.
+- **The chart rendering the issuer's settings.**

@@ -30,6 +30,26 @@ func (q *Queries) HoldServicePrincipal(ctx context.Context, grn string) (pgtype.
 	return decided_at, err
 }
 
+const organizationHeld = `-- name: OrganizationHeld :one
+SELECT now()::timestamptz AS decided_at,
+       EXISTS (SELECT 1 FROM orgs WHERE grn_id(grn) = $1::text) AS held
+`
+
+type OrganizationHeldRow struct {
+	DecidedAt pgtype.Timestamptz
+	Held      bool
+}
+
+// Answers whether an organization of this id exists, with the
+// database's clock, for an assertion whose principal has no record. It
+// reads, locks and writes nothing.
+func (q *Queries) OrganizationHeld(ctx context.Context, org string) (OrganizationHeldRow, error) {
+	row := q.db.QueryRow(ctx, organizationHeld, org)
+	var i OrganizationHeldRow
+	err := row.Scan(&i.DecidedAt, &i.Held)
+	return i, err
+}
+
 const spendServiceAssertion = `-- name: SpendServiceAssertion :one
 INSERT INTO operator_assertions (operator_grn, jti, expires_at)
 VALUES ($1, $2, $3)

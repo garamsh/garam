@@ -9,6 +9,13 @@ FROM service_principals
 WHERE grn = $1
 FOR KEY SHARE;
 
+-- Answers whether an organization of this id exists, with the
+-- database's clock, for an assertion whose principal has no record. It
+-- reads, locks and writes nothing.
+-- name: OrganizationHeld :one
+SELECT now()::timestamptz AS decided_at,
+       EXISTS (SELECT 1 FROM orgs WHERE grn_id(grn) = sqlc.arg('org')::text) AS held;
+
 -- Drops the principal's spent identifiers past their keeping. It is a
 -- statement of its own rather than the spend's CTE, which would share
 -- the spend's snapshot and still conflict with a row it deletes.

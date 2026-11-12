@@ -1,8 +1,8 @@
 //! Lists the active policies whose scope reaches a subject with its
 //! teams, or a resource with its ancestors, in one organization. It is
 //! a lookup over grants, not a decision (ADR-0130 §9): a guardrail's
-//! condition is not evaluated, so one is listed wherever its scope
-//! reaches.
+//! or a permit's condition is not evaluated, so one is listed wherever
+//! its scope reaches.
 
 use std::collections::BTreeSet;
 
@@ -28,8 +28,8 @@ pub struct Entry {
     /// The policy.
     pub policy: PolicyId,
     /// What it names of the subject or resource asked about and what
-    /// holds it. Empty for a guardrail whose scope reaches what was
-    /// asked and names none of it.
+    /// holds it. Empty for a guardrail or a permit whose scope reaches
+    /// what was asked and names none of it.
     pub named: Vec<EntityUid>,
 }
 
@@ -105,11 +105,12 @@ fn entries(policies: &OrgPolicies, asked: &Asked<'_>, side: Side) -> Vec<Entry> 
         .links
         .iter()
         .filter_map(|link| link_entry(link, asked, side));
-    let guardrails = policies
+    let own = policies
         .guardrails
         .iter()
-        .filter_map(|guardrail| guardrail_entry(guardrail, asked, side));
-    let mut entries: Vec<Entry> = links.chain(guardrails).collect();
+        .chain(&policies.permits)
+        .filter_map(|policy| policy_entry(policy, asked, side));
+    let mut entries: Vec<Entry> = links.chain(own).collect();
     entries.sort_by_key(|entry| entry.policy.to_string());
     entries
 }
@@ -130,11 +131,11 @@ fn link_entry(link: &RoleLink, asked: &Asked<'_>, side: Side) -> Option<Entry> {
     })
 }
 
-fn guardrail_entry(guardrail: &Policy, asked: &Asked<'_>, side: Side) -> Option<Entry> {
-    if !scope_reaches(guardrail, asked, side) {
+fn policy_entry(policy: &Policy, asked: &Asked<'_>, side: Side) -> Option<Entry> {
+    if !scope_reaches(policy, asked, side) {
         return None;
     }
-    let mut named: Vec<EntityUid> = guardrail
+    let mut named: Vec<EntityUid> = policy
         .entity_literals()
         .into_iter()
         .filter(|literal| asked.held_by.contains(literal))
@@ -142,16 +143,16 @@ fn guardrail_entry(guardrail: &Policy, asked: &Asked<'_>, side: Side) -> Option<
     named.sort();
     named.dedup();
     Some(Entry {
-        policy: guardrail.id().clone(),
+        policy: policy.id().clone(),
         named,
     })
 }
 
 /// Reads the scope as Cedar does: `==` is the entity alone, `in` what
 /// holds it, and `is` its type.
-fn scope_reaches(guardrail: &Policy, asked: &Asked<'_>, side: Side) -> bool {
+fn scope_reaches(policy: &Policy, asked: &Asked<'_>, side: Side) -> bool {
     let (is_of, equals, within) = match side {
-        Side::Subject => match guardrail.principal_constraint() {
+        Side::Subject => match policy.principal_constraint() {
             PrincipalConstraint::Any => (None, None, None),
             PrincipalConstraint::Eq(entity) => (None, Some(entity), None),
             PrincipalConstraint::In(entity) => (None, None, Some(entity)),
@@ -160,7 +161,7 @@ fn scope_reaches(guardrail: &Policy, asked: &Asked<'_>, side: Side) -> bool {
                 (Some(entity_type), None, Some(entity))
             }
         },
-        Side::Resource => match guardrail.resource_constraint() {
+        Side::Resource => match policy.resource_constraint() {
             ResourceConstraint::Any => (None, None, None),
             ResourceConstraint::Eq(entity) => (None, Some(entity), None),
             ResourceConstraint::In(entity) => (None, None, Some(entity)),

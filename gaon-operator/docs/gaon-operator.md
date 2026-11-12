@@ -7,11 +7,11 @@ How it sits among garam's operators is
 [operators.md](../../docs/architecture/operators.md) §The gaon operator.
 
 **Built: the reconciler (#1834), garam's and the control service's wire
-clients, and the binary that composes them (#1839).** `cmd/gaon-operator`
-exchanges its assertion with a key garam issued, reads the control
-service's feed as its registered manager and reconciles into gaon. The
-guest image, the release's image and the deployment are not built
-(§What is not built).
+clients, and the binary that composes them (#1839).**
+`cmd/gaon-operator` exchanges its assertion with a key garam issued,
+reads the control service's feed as its registered manager and
+reconciles into gaon. The guest image, the release's image and the
+deployment are not built (§What is not built).
 
 ## Contents
 - What is built

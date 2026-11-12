@@ -179,10 +179,11 @@ URL, so `GARAM_DB_PORT` moves the suite with the server.
 ### The image a cluster runs
 
 `make web-image-e2e` builds the release's images and checks the
-console's rather than the app: that the standalone server starts, that `/healthz` and `/readyz`
-answer, and that `/api/*` reaches the URL baked into the build. The
-Playwright suite above runs the built app from the source tree, outside
-any container, so nothing else here exercises the image.
+console's rather than the app: that the standalone server starts, that
+`/healthz` and `/readyz` answer, and that `/api/*` reaches the address
+the container is given. The Playwright suite above runs the built app
+from the source tree, outside any container, so nothing else here
+exercises the image.
 
 ```sh
 make web-image-e2e                        # builds the images, then checks it
@@ -228,12 +229,10 @@ garamsh/aurora#710).
 checks the console image you built before you push it.
 A deployment running it sets the tag alone.
 
-Without `IMAGE_REGISTRY`, `make image-build` builds all five as
+Without `IMAGE_REGISTRY`, `make image-build` builds all six as
 `garam/<image>:ci`, which is what `.github/workflows/images.yml` runs
 through `make web-image-e2e site-image-e2e cowork-image-e2e
-cowork-web-image-e2e`. It runs `make policy-image-e2e` beside them,
-which builds its own image, since no release publishes `garam/policy`
-yet.
+cowork-web-image-e2e policy-image-e2e`.
 
 ## Test image
 

@@ -268,8 +268,7 @@ Every variable is documented in `.env.example`. Three notes:
   An empty database holds no admin, so the way in is Google credentials
   or user and session rows written against the database directly, as
   `platform-web/e2e/seed.ts` does for the browser suite.
-- The web image bakes `GARAM_API_URL` into the build, because the
-  `/api/*` rewrite is resolved at build time. Changing it means
-  rebuilding the image, not just restarting the container.
+- The web image holds no `GARAM_API_URL`: the process reads it when it
+  starts, so changing it means restarting the container.
 
 Never commit a filled-in `.env`; `.gitignore` already excludes it.

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { config, proxy } from "@/proxy";
 
@@ -68,10 +68,79 @@ describe("proxy", () => {
   it("answers the site's own pages itself", () => {
     // The control for the list above: a matcher that took every path
     // would pass it as well.
-    for (const page of ["/", "/login", "/register", "/consoles", "/api/me"]) {
+    for (const page of ["/", "/login", "/register", "/consoles", "/apiary"]) {
       expect(
         unstable_doesMiddlewareMatch({ config, url: `${SITE}${page}` }),
       ).toBe(false);
     }
+  });
+});
+
+/**
+ * The proxy as a process started with `apiUrl` runs it: `env` is read
+ * when the module loads, so each address is a fresh import.
+ */
+async function proxyServing(apiUrl: string) {
+  vi.resetModules();
+  vi.stubEnv("GARAM_API_URL", apiUrl);
+  return (await import("@/proxy")).proxy;
+}
+
+describe("proxy /api/*", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each([
+    ["http://garam-api:8080", "http://garam-api:8080/healthz"],
+    ["http://api.other.invalid:9000", "http://api.other.invalid:9000/healthz"],
+  ])(
+    "sends /api/healthz to the backend at %s, the address the process was given",
+    async (apiUrl, want) => {
+      const response = (await proxyServing(apiUrl))(
+        new NextRequest(new URL("/api/healthz", SITE)),
+      );
+
+      // Two addresses through one build is the property: a destination
+      // fixed when the code was built would be the same for both.
+      expect(response.headers.get("x-middleware-rewrite")).toBe(want);
+    },
+  );
+
+  it.each([
+    ["/api/me?x=1", "/me?x=1"],
+    [
+      "/api/auth/google/callback?code=a%2Fb",
+      "/auth/google/callback?code=a%2Fb",
+    ],
+    ["/api", "/"],
+  ])("sends %s to %s, the backend's own path", async (path, want) => {
+    const response = (await proxyServing("http://backend.invalid:8080"))(
+      new NextRequest(new URL(path, SITE)),
+    );
+
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      `http://backend.invalid:8080${want}`,
+    );
+    expect(response.headers.get("location")).toBeNull();
+  });
+
+  it("keeps a path prefix the backend's address carries", async () => {
+    const response = (await proxyServing("http://gateway.invalid/garam"))(
+      new NextRequest(new URL("/api/me", SITE)),
+    );
+
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      "http://gateway.invalid/garam/me",
+    );
+  });
+
+  it("runs on /api and what is under it, and on no path that only starts with it", () => {
+    for (const path of ["/api", "/api/me", "/api/a/b/c"]) {
+      expect(
+        unstable_doesMiddlewareMatch({ config, url: `${SITE}${path}` }),
+      ).toBe(true);
+    }
+    expect(
+      unstable_doesMiddlewareMatch({ config, url: `${SITE}/apiary` }),
+    ).toBe(false);
   });
 });

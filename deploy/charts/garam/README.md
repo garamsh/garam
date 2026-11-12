@@ -77,34 +77,20 @@ a node failure.
 ## Choosing a release name
 
 Every object here is named after the release, and the name is a
-deployment's to choose — with one exception no render shows. **A
-published console or site image reaches the api Service a release named
-`garam` renders.** The browser's `/api/*` calls are rewritten to an
-address baked into the image when it is built, and
-`.github/workflows/release.yml` builds both with
-`http://garam-api:8080`
-([ADR-0056](../../../docs/architecture/adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)).
-Under any other release name this chart renders `<release>-garam-api`,
-the rewrite reaches a name that resolves to nothing, and nothing reports
-it: every object is `Ready`, the web app's probes read nothing outside
-the process (ADR-0023), and the first report is a console that shows
-nothing.
+deployment's to choose. A published console or site image holds no
+address of the api Service: the browser's `/api/*` calls are sent to
+`web.apiUrl` (`site.apiUrl` for the site), which the process reads when
+it starts, so any release name works if that value names the api Service
+the release renders — `<release>-garam-api` under the default naming.
+Before this was decided the address was fixed when the image was built
+and a published image reached only the Service a release named `garam`
+renders
+([ADR-0056](../../../docs/architecture/adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)),
+which `docs/architecture/web-app.md` records as no longer true.
 
-So a deployment pinning `image.web.tag` or `image.site.tag` to a
-published version installs under the release name `garam`, or makes
-`garam-api` resolve to its own
-api Service — a Service of that name over the same selector labels is
-one shape, and rendering it and checking it are that deployment's. A
-deployment that builds its own web image bakes its own address and is
-bound to that one instead.
-
-`make -C deploy/charts ci` holds the half of this that lives here: what
-`.github/workflows/release.yml` bakes is the api Service this chart
-renders under the release name `garam`, read against a second release
-name that must render something else (§What keeps it true). The other
-half — that the image a deployment pins was built with the address that
-deployment's release renders — is outside every check here
-(§What the checks are complete over).
+An image started with no `web.apiUrl` answers every request with a 500,
+the probes included, so the readiness probe keeps the pod out of
+service; no default address stands in.
 
 ## Workload identities
 
@@ -242,16 +228,13 @@ fails without them:
   listener and not this value, so nothing here asks for the listener
   to be published.
 - `web.apiUrl` — the address the web process reaches `serve api` on,
-  baked into the image at build time as the `/api/*` rewrite target and
-  read again at runtime by every server-side render
-  (`platform-web/src/lib/garam.ts`, binding `lib/platform-sdk-ts`), and
-  for a published image it is the address §Choosing a release name
-  states.
-  Absent at runtime the process still starts and answers both probes,
-  `/` and the rewrite keep serving, and every server-rendered route
-  answers 500:
-  `platform-web/src/env.ts` parses at import, and only the routes
-  reaching the backend import it. `site.apiUrl` is the same address for
+  read at runtime as the `/api/*` target and by every server-side
+  render (`platform-web/src/lib/garam.ts`, binding
+  `lib/platform-sdk-ts`); §Choosing a release name says what it must
+  name.
+  Absent at runtime the process starts and every request, the probes
+  included, answers 500: `platform-web/src/env.ts` parses at import, and
+  the proxy that carries `/api/*` imports it. `site.apiUrl` is the same address for
   the site, on the same terms (`site-web/src/lib/garam.ts`).
 - `web.siteUrl` and `site.consoleUrl` — where each app sends a visitor
   to the other (ADR-0131): the console sends a visitor without a
@@ -579,8 +562,7 @@ one, tagged by a commit prefix or `X.Y.Z-<prerelease>` rather than a
 bare version (ADR-0071,
 [ADR-0134](../../../docs/architecture/adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)),
 so running one sets the tag alone, and pins a build nobody released.
-No release publishes `garam/policy` yet, so `image.policy.tag` names a
-build nobody released until one does.
+A release publishes `garam/policy` with the other images.
 
 **A digest is optional and names the bytes.** `image.server.digest` and
 `image.web.digest` render after the tag rather than in place of it —
@@ -632,12 +614,6 @@ covered and fails when a count is zero:
   that fails fails the target: each lands in a file before its names are
   read, so a failure cannot pass as a value file that named nothing
   while the other kept the count above zero.
-- `chart-rewrite` — the `/api/*` target `.github/workflows/release.yml`
-  bakes into the console's and the site's images, which must be one URL,
-  against the api Service this chart renders under the release name
-  `garam` (§Choosing a release name). It renders
-  again under `chart-names`' release name as the control: that render
-  must name something else, so the equality is read rather than assumed.
 - `chart-guards` — each value file under `ci/refused/` rendered on top
   of `minimal-values.yaml`, and refused by the guard it is named after:
   the failure must be an `execution error` from a template, opening with
@@ -670,7 +646,7 @@ discovered by a deployment.
 
 A check that fires correctly says nothing about what it never reads, so
 what each is complete over is recorded here rather than inferred.
-`chart-render`, `chart-identity`, `chart-names`, `chart-rewrite`,
+`chart-render`, `chart-identity`, `chart-names`,
 `chart-security` and `chart-package` each point here in the line they
 print.
 
@@ -704,18 +680,7 @@ print.
   any other field an apiserver would refuse, passes. It asks no
   apiserver either — it holds one rule that an apply enforces, which is
   why the rule is written here rather than discovered there. It reads no
-  image either, and the release name it renders under is one no
-  published web image serves: the object names survive it and the
-  `/api/*` rewrite does not, which §Choosing a release name states and
-  `chart-rewrite` reads.
-- `chart-rewrite` is complete over **one URL against one rendered
-  Service**: the `GARAM_API_URL` build arguments in
-  `.github/workflows/release.yml`, which must agree, against the api
-  Service and port a
-  render under the release name `garam` names. It reads no other build
-  argument, no other workload's address and no image — what a build
-  actually baked is the image's fact, and `make web-image-e2e` and
-  `make site-image-e2e` are what read that one.
+  image either.
 - `chart-guards` is complete over **the values named by the files in
   `ci/refused/`**: each must refuse the render and name the value its
   filename names, and `minimal-values.yaml` must still render. It reads
@@ -764,12 +729,10 @@ Two things sit outside any of them:
   to is the registry's fact and no target opens a registry, so a pair
   naming two different images renders, pulls the digest, and leaves the
   tag naming a version that is not running.
-- `web.apiUrl` must equal the value the web image was built with, and
-  nothing here can check it: the rewrite target is baked in at build
-  time, so the value is the image's and no render holds it.
-  `chart-rewrite` reaches the published image's half of that — what a
-  release bakes — and a deployment's own image and its own value are
-  outside it.
+- `web.apiUrl` must name the api Service the release renders, and
+  nothing here checks it: the value is a string the chart passes
+  through, and the process reads it when it starts. The image holds no
+  address, which `make web-image-e2e` and `make site-image-e2e` read.
 
 ## What it is not
 

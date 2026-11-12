@@ -83,7 +83,7 @@ reg=registry.invalid
 # Every image the release publishes, under the repository it publishes
 # to. A development build takes those repositories in the registry it
 # is given, and its tag alone says it is not a release.
-for repository in garam/server garam/console garam/site garam/cowork garam/cowork-web; do
+for repository in garam/server garam/console garam/site garam/cowork garam/cowork-web garam/policy; do
 	accepted ". $repository:ci" --names
 	accepted ". $reg/$repository:$short" --names --registry "$reg"
 done
@@ -122,10 +122,11 @@ elif ! grep -Fq -- "build -t $reg/garam/server:1.2.3-rc.1 -f deploy/local/Docker
 	|| ! grep -Fq -- "build -t $reg/garam/site:1.2.3-rc.1 -f deploy/local/Dockerfile.web --build-arg APP=site-web " "$log" \
 	|| ! grep -Fq -- "build -t $reg/garam/cowork:1.2.3-rc.1 -f deploy/local/Dockerfile.cowork " "$log" \
 	|| ! grep -Fq -- "build -t $reg/garam/cowork-web:1.2.3-rc.1 -f deploy/local/Dockerfile.web --build-arg APP=cowork-web --build-arg IMAGE_REVISION=$head " "$log" \
+	|| ! grep -Fq -- "build -t $reg/garam/policy:1.2.3-rc.1 -f deploy/local/Dockerfile.policy --build-arg IMAGE_REVISION=$head " "$log" \
 	|| ! grep -Fq -- "--build-arg IMAGE_REVISION=$head --build-arg IMAGE_VERSION=1.2.3-rc.1 " "$log"; then
 	fail "built with other arguments: $(cat "$log")"
-elif [ "$(grep -c '^build ' "$log")" != 5 ]; then
-	fail "built other than the five images a release publishes: $(cat "$log")"
+elif [ "$(grep -c '^build ' "$log")" != 6 ]; then
+	fail "built other than the six images a release publishes: $(cat "$log")"
 fi
 touch "$repo/untracked"
 refused 'differs from HEAD' --registry "$reg" --tag 1.2.3-rc.1

@@ -37,8 +37,8 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 {{- include "garam.containerSecurityContext" . }}
           env:
-            # Baked into the image at build time as well, so this must
-            # equal the value that build used.
+            # The `/api/*` target, read when the process starts
+            # (ADR-0009), so the image is bound to no address.
             - name: GARAM_API_URL
               value: {{ required "site.apiUrl is required: without it every server-rendered route answers 500" .Values.site.apiUrl | quote }}
             # Where a signed-in visitor, and every address under

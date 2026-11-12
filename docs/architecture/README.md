@@ -307,16 +307,14 @@ on hosted runners.
   guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names
   two files and not three (#899).
 - **Every image a release publishes is built on a pull request.**
-  `images.yml` builds the five from what `release.yml` says each is
+  `images.yml` builds the six from what `release.yml` says each is
   built from, once each, and then checks the console's, the site's,
-  cowork's and cowork-web's. The web one is the image a release used to
-  be able to fail on irreversibly: the server image was pushed before
-  the web image was built, and immutability makes the repair the next
-  version (ADR-0039 §Consequences). `release.yml` builds all five and
+  cowork's, cowork-web's and the policy service's. The web one is the
+  image a release used to be able to fail on irreversibly: the server
+  image was pushed before the web image was built, and immutability
+  makes the repair the next version (ADR-0039 §Consequences). `release.yml` builds all six and
   pushes none until all are built (#945), so what a build failure there
   now costs is the run. Until #850 no image was built by any check.
-  `images.yml` also runs `make policy-image-e2e`, which builds
-  `garam/policy` itself, since no release publishes it yet (#1689).
 - **A pull request's image builds take their layers from the GitHub
   Actions cache and their bases from `mirror.gcr.io`.**
   The `suites` jobs' `make -C <module> stack-up` and `images`'
@@ -342,7 +340,7 @@ on hosted runners.
   hosted runners share. Its `429 toomanyrequests: Data limit exceeded`
   failed both attempts of v0.4.0's release run 39120748198 (#1532).
 - **No run here reaches a deployment, so `main` is not what a caller
-  meets.** `release.yml` publishes five images on a `vX.Y.Z` tag and no
+  meets.** `release.yml` publishes six images on a `vX.Y.Z` tag and no
   other workflow pushes one, so a merge to `main` publishes nothing;
   an operator pushes the test image, from a checkout, to an ECR
   repository no deployment pulls (ADR-0092, ADR-0093);

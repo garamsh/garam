@@ -53,10 +53,11 @@ and the hook phase the migration Job runs in.
 Each image has one repository, named `<publishing repository>/<image>`
 ([ADR-0134](./adr/0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)):
 `garam/server`, `garam/console`, `garam/site` and `garam/policy`, which
-the chart's `image.*.repository` names (no release publishes
-`garam/policy` yet), and `garam/cowork` and `garam/cowork-web`,
-which no chart here deploys. The tag says what a build is. A bare
-`X.Y.Z` is a release, which only a `vX.Y.Z` git tag publishes
+the chart's `image.*.repository` names, and `garam/cowork` and
+`garam/cowork-web`, which no chart here deploys. A release publishes
+all six, and no image holds an address chosen when it was built. The
+tag says what a build is. A bare `X.Y.Z` is a release, which only a
+`vX.Y.Z` git tag publishes
 ([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
 and a development build a person made and pushed carries a
 commit-derived or prerelease tag

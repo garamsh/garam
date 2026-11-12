@@ -10,6 +10,17 @@ import { SESSION_COOKIE } from "@garam/platform-sdk-ts/session";
 import { env } from "@/env";
 
 /**
+ * Answers `/api/*` from the backend at `GARAM_API_URL`, with the `/api`
+ * segment dropped (ADR-0009). It is a proxy rewrite rather than one in
+ * `next.config.ts`, which is evaluated when the image is built, so the
+ * backend's address is the deployment's and not the build's.
+ */
+function apiRewrite(pathname: string, search: string) {
+  const path = pathname.replace(/^\/api\/?/, "");
+  return NextResponse.rewrite(new URL(`${env.GARAM_API_URL}/${path}${search}`));
+}
+
+/**
  * Sends visitors without a session cookie to sign in before the console
  * shell renders. The session cookie is host-only (ADR-0131), so signing
  * in is a handoff from the site, which `HANDOFF_START_PATH` starts. This
@@ -27,6 +38,9 @@ import { env } from "@/env";
  */
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  if (pathname === "/api" || pathname.startsWith("/api/")) {
+    return apiRewrite(pathname, search);
+  }
   if (pathname === "/") {
     return NextResponse.redirect(new URL("/console", request.url));
   }
@@ -49,7 +63,8 @@ export function proxy(request: NextRequest) {
 
 /** The routes `proxy` runs on; Next.js reads this export by name. */
 export const config = {
-  // Everything else — static assets, the device page's forward, and
-  // the `/api` rewrite the OAuth round trip runs through — is public.
-  matcher: ["/", "/login", "/register", "/console/:path*"],
+  // Everything else — static assets and the device page's forward — is
+  // public. `/api` is here for its rewrite alone: the OAuth round trip
+  // runs through it, and the backend is what reads the session cookie.
+  matcher: ["/", "/login", "/register", "/console/:path*", "/api/:path*"],
 };

@@ -94,7 +94,7 @@ reads it to decide whether a caller is admitted.
 
 ## The gaon operator
 
-Unbuilt, and proposed by [ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md): a second operator, in this
+Unbuilt, and decided by [ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md): a second operator, in this
 repository, that runs each managed agent as one MicroVM on a gaon
 cluster. It is an operator in this document's sense, so everything
 above and below holds for it: it holds a garam-issued key, exchanges an

@@ -99,7 +99,7 @@ standalone host's enrollment. The queue a message reaches an agent
 through is the messaging domain.
 
 What an agent is built from is the operator's, and garam holds no
-value of it. A second operator is proposed and unbuilt, which runs an
+value of it. A second operator is decided and unbuilt, which runs an
 agent as one MicroVM on a gaon cluster
 ([ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md)); the paragraph below describes the Kubernetes
 operator only. The images an agent's Pod is

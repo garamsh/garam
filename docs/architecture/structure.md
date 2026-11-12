@@ -99,7 +99,7 @@ on are boundaries inside a service.
   publishes**: its API specification, or a library in `lib/`. Reaching
   into another service's `internal/` or its database is a
   defect, even where it builds.
-- **`gaon-operator/` is proposed and not yet created**
+- **`gaon-operator/` is decided and not yet created**
   ([ADR-0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md)): an operator that runs managed agents as MicroVMs
   on a gaon cluster, with a module of its own, the binary
   `cmd/gaon-operator` and the image `garam/gaon-operator`. A service's

@@ -1,6 +1,6 @@
 # ADR 0151: The gaon operator is a service here that runs each managed agent as one MicroVM
 
-> Status: proposed
+> Status: accepted; not built
 > Date: 2026-11-13
 
 Drafted for #1825, which reserves this number. The direction is the
@@ -136,9 +136,10 @@ listed with the reason.
   module to `go.work` and to `tooling/ci/modules`.
 - **The dependency on gaon's client** is
   `github.com/garamsh/gaon/lib/api`, and no tag of it exists at the
-  revision read. A tag is the gaon PM's to cut; a pseudo-version of a
-  commit is what Go accepts before it, and whether the first slice may
-  take one is the PM's question (§Questions).
+  revision read. Until `lib/api/v0.1.0` exists the module takes a
+  pseudo-version of a commit of gaon, recorded in the pull request
+  that adds it, and takes the tag when it is cut. A tag is the gaon
+  PM's to cut.
 
 ### 2. No custom gaon kind for an agent: the MicroVM is the record
 
@@ -195,13 +196,38 @@ listed with the reason.
   ([agents.md](../agents.md) §The host's runner) moved inside the
   guest: gaon's MicroVM carries one process, and a guest is a machine
   where several processes under one parent are the ordinary shape.
-- **The image is composed, not pulled.** The runtime and workspace
-  images are the agent platform's and are pinned by digest as the
-  runner pins them; garam's adapter is garam's. The composed image is
-  built from those digests by a Dockerfile in `gaon-operator/`, and
-  which images and which digests an agent is built from stays what
-  garam holds no value of (agents.md, the paragraph on what an agent
-  is built from). Two images would be a gaon change, below.
+- **What the feed carries for images.** Contract C2 at
+  `garamsh/garam-agent-operator@ac7c9f3c40b9611f6e2bdf1eba62c14e145b4aec`
+  answers the controller's whole releasable set with each agent's
+  latest revision, its profile's settings and its configuration (model,
+  embedding, tools, workspace size), and the flags `stopped` and
+  `recovery`; it carries no image and no digest, because "the container
+  image is neither a profile nor a definition field" and "stays the
+  operator's own configuration"
+  (`…:docs/architecture/control.md`, ADR-0007 there). The controller
+  states the images it runs the other way, by `PUT
+  /v1/operators/self/images` (`{name, ref, digest?}`, ADR-0074 there).
+  A promise that the feed will name images is not found at that commit.
+- **First slice: one composed image per release of `gaon-operator`.**
+  The runtime, workspace and adapter images are pinned by digest as the
+  runner pins them, and an image built here from the three digests
+  carries the supervisor; the three digests are recorded as labels of
+  the image and reported by `PUT /v1/operators/self/images`. Where a
+  revision, now or later, names an image or digest for an agent that
+  the composed image does not carry, the operator starts nothing for
+  that agent and reports `failed` with that reason; it never runs an
+  agent from other images than the feed names. **The limit this sets:**
+  in the first slice an agent's version moves with the operator's
+  release, and no agent is moved to another image alone.
+- **Direction: ask gaon for read-only OCI image volumes.** A MicroVM
+  that mounts further OCI images read-only as volumes, beside its one
+  root image. mvmd already turns an image into a read-only filesystem,
+  so a guest whose root holds garam's supervisor and adapter and which
+  mounts the runtime's and the workspace's images at paths needs no
+  build-time composition and no container engine in the guest, and
+  digests a feed names are honoured as named. This is the request to
+  gaon in place of a multi-process MicroVM. The supervisor stays
+  garam's either way.
 - **User and files.** The user is 65532, as in the runner; each of the
   agent's token files, the garam server root and the control root is a
   `files` entry sourced from a `Secret` key with mode `0400` and the
@@ -233,16 +259,21 @@ listed with the reason.
   a selector rule refuses it
   (`garamsh/gaon@a7bdc57cc75f5ba5df9fcce3175fb41f5498a1f1:docs/workloads.md`).
 - **Refresh does not reach a running MicroVM, and that is a gaon
-  need.** The alternatives: replace the MicroVM at every token period,
-  which ends the agent each hour; lengthen the token to the one-day
-  ceiling garam allows, which moves the same cut to once a day and
-  leaves a stale file for the whole day; let the guest renew its own
-  token, which ADR-0100 rejects because a stolen token would renew
-  itself; or ask gaon to re-resolve a `Secret`-sourced `files` entry in
-  a running MicroVM, as the Node Agent already renews a ServiceAccount
-  token file (D13 on #117). The decision is the last. The first slice
-  does not need it for an agent that lives less than a token; every
-  agent that lives longer does.
+  need.** The alternatives: replace the MicroVM at every token period
+  with nothing else done, which restarts the agent each period; lengthen
+  the token to the one-day ceiling alone, which leaves a stale file for
+  the whole day; let the guest renew its own token, which ADR-0100
+  rejects because a stolen token would renew itself; or ask gaon to
+  re-resolve a `Secret`-sourced `files` entry in a running MicroVM, as
+  the Node Agent already renews a ServiceAccount token file (D13 on
+  #117). The decision is the last.
+- **The interim, until gaon serves it.** The operator mints again and
+  replaces the MicroVM before the token lapses, with the deployment
+  setting `GARAM_AGENT_TOKEN_LIFETIME` at its ceiling of one day, so an
+  agent is restarted once in that period. Replacement is therefore
+  part of the second slice (§7). In the first slice a token that lapses
+  stops the agent being served, and the operator reports what it
+  observes of the MicroVM, which is not a statement about the token.
 - **Alternatives for the shape.**
   - *Three MicroVMs, one per program.* The agent's gateway binds
     loopback unless mTLS is configured, and the workspace is reached
@@ -252,15 +283,17 @@ listed with the reason.
   - *A multi-process MicroVM in gaon* (a list of processes sharing a
     network, an order and a stop order). It is a pod, which gaon
     chose not to build; and the order-and-drain rules would be gaon's
-    to carry for one tenant. It is the option to ask for if the
-    supervisor proves to be a second runner to keep.
+    to carry for one tenant. Rejected, and replaced by the request
+    for read-only image volumes above.
+  - *A container engine inside the guest* (the standalone runner's
+    shape moved in whole). It repeats inside the guest what mvmd does
+    outside it, and it needs registry credentials in the guest.
   - *The standalone runner's supervisor reused.* It drives a container
     engine and holds its intent in a store beside the volumes
     (`platform/internal/workload`), none of which a guest has.
-- **The recommendation depends on a fact not read.** What the
-  composed image's supervisor costs to build and keep is not measured,
-  and neither is whether a gaon `Always` strategy restarts the process
-  inside one guest or the whole guest (§Questions).
+- **Not measured.** What the supervisor costs to build and keep, and
+  whether a gaon `Always` strategy restarts the process inside one
+  guest or the whole guest (§What gaon does not yet serve).
 
 ### 4. One policy for every agent, ingress denied, egress by prefix
 
@@ -268,7 +301,8 @@ listed with the reason.
   `garam.sh/organization=<digest of the organization GRN>`.** One
   `NetworkPolicy` selects `role=agent` and allows no ingress at all, and
   egress to a short list: garam's machine listener, the control
-  service, the cluster's DNS address, and the model path. A MicroVM any
+  service, the cluster's DNS address, and any address outside the
+  cluster's and the LAN's prefixes on port 443. A MicroVM any
   policy selects is default-deny in that direction (D15 on #117,
   `garamsh/gaon#125` item 12).
 - **No ingress is needed, so none is allowed.** Delivery is
@@ -286,14 +320,12 @@ listed with the reason.
   the same, in a larger number. No policy and mvmd's per-MicroVM
   policy alone, which is the outer bound and is not written by the
   operator.
-- **What egress to the model needs is open.** `NetworkPolicy` allows
-  traffic by label selector or prefix (D15), and a hosted model
-  provider is known by name. Whether the agents reach the model
-  through garam's gateway
-  ([ai-gateway.md](../ai-gateway.md)), which would put the whole list
-  at garam's addresses, or through the provider directly, which
-  needs a prefix list that moves, is not settled by anything read here
-  (§Questions).
+- **Why the last entry is wide.** [ai-gateway.md](../ai-gateway.md)
+  says the gateway (ADR-0126) is unbuilt and that "an agent today holds
+  its own provider key and calls the provider directly", and a
+  provider is known by name and not by a prefix that stays. Until the
+  gateway is built the wide entry stands; when it exists the entry
+  becomes the gateway's address, and the gateway is what retires it.
 - **Enforcement is gaon's.** `NetworkPolicy` and `Network` are
   interpreted by the network plugin and are not in `lib/api` at the
   revision read (`…:lib/api` holds no such type), so a client library
@@ -321,7 +353,9 @@ listed with the reason.
   what garam holds before any report. Each report carries the epoch
   the operator holds the agent at, and a stale one is refused.
 - **Deactivation.** The lifecycle authority deactivates, and for a
-  managed agent that is the control service. The operator stops the
+  managed agent that is the control service, whose feed carries
+  `"stopped": true` for an agent a stop holds (contract C2, as above).
+  The operator stops the
   workload by setting `runStrategy` to `Halted`, the field gaon lets
   change, and deletes nothing while the stop is unverified. It treats
   gaon's `Stopped` as the evidence the writers stopped, and treats a
@@ -336,10 +370,11 @@ listed with the reason.
   starts under a new placement token, minted at each release as the
   Kubernetes operator does. Whether gaon refuses a second MicroVM that
   uses a `Volume` already bound to another is gaon's and was not read
-  (§Questions). A replacement that moves the agent to another
-  operator is the lifecycle authority's and arrives at this operator
-  as the agent leaving its feed: the operator halts the MicroVM and
-  keeps the `Volume`, as the Kubernetes operator keeps the claim.
+  (§What gaon does not yet serve). A replacement that moves the agent
+  to another operator is the lifecycle authority's and arrives at
+  this operator as the agent leaving its feed: the operator halts the
+  MicroVM and keeps the `Volume`, as the Kubernetes operator keeps the
+  claim.
 - **A MicroVM that exits.** For an active agent the strategy is
   `Always`, so gaon restarts it; the adapter obtains a new activation
   at each start through the lifecycle authority, which is what the
@@ -347,8 +382,9 @@ listed with the reason.
   `restartCount` and `lastExit` are what the operator logs. Whether
   `Always` restarts the process or the guest, and what a restart does
   with `files`, decides whether a restart is a new generation to the
-  fence (§Questions). `RerunOnFailure` and `Once` are not chosen: an
-  agent that exits cleanly is as unwanted as one that fails.
+  fence (§What gaon does not yet serve). `RerunOnFailure` and `Once`
+  are not chosen: an agent that exits cleanly is as unwanted as one
+  that fails.
 - **Its own restart.** The operator holds no state a restart loses.
   It lists the MicroVMs it labelled, reads the whole feed, and renders
   again what differs: the cursor is in memory and a request without it
@@ -360,7 +396,7 @@ listed with the reason.
 ### 6. Identity: a certificate and a label-limited ClusterRole in gaon; a pair registered in garam
 
 - **In gaon**, the operator authenticates with a client certificate
-  whose CN is `garam-operator` and whose subject carries no
+  whose CN is `garam-gaon-operator` and whose subject carries no
   `gaon:nodes` Organization (D12 on #117), and holds one ClusterRole
   bound to that CN: `microvms`, `volumes` and `secrets` limited by a
   label selector to what it labels, `list` and `watch` of
@@ -371,7 +407,7 @@ listed with the reason.
   issued is not shown by what was read: the signer's approval rule
   admits a Node subject only (`resource-api.md`,
   CertificateSigningRequest),
-  so the route is gaon's or aurora's to state (§Questions).
+  so the route is gaon's to state (§What gaon does not yet serve).
 - **In garam**, the operator is a registered pair: a cluster manager,
   which this service is, and a control service. The control service
   is the lifecycle authority of its agents (ADR-0078) and holds the
@@ -382,17 +418,33 @@ listed with the reason.
   recovery and replacement are added by a new grant when the slice
   that needs them lands, since a grant is never edited (operators.md
   §Delegated operation authority). `iam:agent.activate` is grant-only.
-- **The control service is a second instance of the one
-  `garamsh/garam-agent-operator` builds**, registered under its own
-  record and key. A manager holds at most one control service and a
-  control service names one manager (ADR-0124), so the pair cannot
-  share the existing instance's registration. The alternatives: a
-  control service written in this repository, which writes a second
+- **The control service is the existing published image, run
+  unchanged.** The pair in a gaon deployment is `gaon-operator` as the
+  manager and the control service of `garamsh/garam-agent-operator`
+  run from its published image `garam/garam-agent-operator-control`
+  in the same registry, registered under its own record and key. A
+  manager holds at most one control service and a control service
+  names one manager (ADR-0124), so the pair does not share the
+  Kubernetes operator's registration. The alternatives: a control
+  service written in this repository, which writes a second
   desired-state store for the same values; the operator writing the
   definition itself, which breaks the seam that the control service
-  holds no cluster access; and garam holding the definition, which
-  reverses ADR-0118. Whether one deployment of that binary can serve
-  two controllers is a question for its owner (§Questions).
+  holds no cluster access (ADR-0079 there); and garam holding the
+  definition, which reverses ADR-0118.
+- **What the image needs to run**, as that repository's `control.md`
+  states it: a PostgreSQL store at `CONTROL_DATABASE_URL`, which it
+  migrates before it serves; a TLS certificate and key for its API
+  listener (`--api-certificate-file`, `--api-key-file`, port 8080
+  by default); garam's machine URL and server root; and the key, the
+  `client_id` and the token URL of its operator, placed from one key
+  issuance; a health listener on 8081. Its settings were read from
+  that document and not from the image or its source, and the image's
+  registry path and tag were not read.
+- **The condition this rests on.** Nothing merges in that repository
+  under `garamsh/aurora#749`. The first slice shows the image starting
+  and serving C2 outside Kubernetes to a controller that is not its
+  own. If it cannot without a change there, that is an escalation on
+  `garamsh/aurora#749` and not a patch from this repository.
 - **The key lives in a gaon `Secret`** and arrives as a `files` entry
   of the operator's own MicroVM, owned by its user, as operators.md
   asks of the operator's half (one external writer, reread at each
@@ -409,13 +461,19 @@ listed with the reason.
   MicroVM when the feed deactivates it, and reports `failed` on a
   `Failed` phase. One agent of one organization, started, reported
   ready and stopped on deactivation, under the single `NetworkPolicy`.
+- **The second slice** is replacement: the operator mints again and
+  replaces the MicroVM before the token lapses (§3, the interim), with
+  the writer-stopped evidence before the new one starts.
 - **Left for later slices**, each its own pull request:
-  - token refresh in a running MicroVM (a gaon need);
-  - replacement and recovery, with the writer-stopped evidence;
+  - token refresh in a running MicroVM, once gaon serves it, which
+    retires the interim;
+  - recovery;
   - the adapter's activation through the control service and the
     placement token;
   - draining under `terminationGracePeriodSeconds`;
-  - a rolling change of the composed image;
+  - the read-only image volumes, once gaon serves them, which retire
+    the composed image;
+  - the gateway's address in place of the wide egress entry;
   - metrics for the exchange and the feed.
 - **Alternatives.** A slice that starts a MicroVM with no adapter
   would be ready and unreachable, and a slice with the whole of
@@ -456,42 +514,33 @@ listed with the reason.
 
 Read from the Resource API document, the `lib/api` sources, and
 `garamsh/gaon#117` and `#125` at the revision above; "not verified"
-says the document promises it and `main` was not read.
+says the document promises it and `main` was not read. Each item has a
+place for the gaon issue the PM files for it. Where a number is shown
+it is one the sources name.
 
 - A tag of `github.com/garamsh/gaon/lib/api`: `lib/api/v0.1.0`
-  follows #118 and #119 (D17 on #117). None is cut.
+  follows #118 and #119 (D17 on #117). None is cut. Issue: #118, #119.
 - Labels, selectors and `ownerReferences` serving (#118 contract,
   #119 serving, #120 garbage collection). The types are in `lib/api`
-  (`labels.go`); serving is not verified.
-- `NetworkPolicy` as a type in `lib/api` and its contract (D15). No
-  issue number is cited on #117 or #125 for it.
+  (`labels.go`); serving is not verified. Issue: #118, #119, #120.
+- `NetworkPolicy` as a type in `lib/api` and its contract (D15).
+  Issue: to be filed.
 - RBAC rules limited by label selector, which codehub's PM made a
   condition (a comment on #117, #118's scope). Served is not verified.
+  Issue: to be filed.
 - The Node authorizer's read of a Secret a MicroVM references and the
-  MicroVM ADR with named ports (#124). Documented, not verified.
-- `lastExit`'s end time (#73, D14 reply on #125); the code and time
-  are in `lib/api` already.
+  MicroVM ADR with named ports. Documented, not verified. Issue: #124.
+- `lastExit`'s end time. The code and time are in `lib/api` already.
+  Issue: #73.
 - Re-resolving a `Secret`-sourced `files` entry in a running MicroVM:
-  documented as not done, with no issue.
-- A statement of how a non-Node client certificate is obtained.
-- Whether a second MicroVM may use a `Volume` already bound.
-
-## Questions the repositories did not settle
-
-For the PM:
-
-1. May the first slice take a pseudo-version of `lib/api` before
-   `lib/api/v0.1.0`?
-2. Is a second instance of the control service acceptable under
-   `garamsh/garam-agent-operator` ADR-0079's seams, and who registers
-   it?
-3. Does the agent reach its model through garam's gateway or the
-   provider?
-4. Composed image with a supervisor here, or a multi-process request
-   to gaon?
-
-For gaon's PM: the five gaon needs above that carry no issue number,
-and whether `Always` restarts the process or the guest.
+  documented as not done. Issue: to be filed.
+- Read-only OCI image volumes beside a MicroVM's root image. Issue: to
+  be filed.
+- How a non-Node client certificate is obtained. Issue: to be filed.
+- Whether a second MicroVM may use a `Volume` already bound to
+  another. Issue: to be filed.
+- Whether `RunStrategy` `Always` restarts the process or the guest,
+  and what a restart does with `files`. Issue: to be filed.
 
 ## Consequences
 
@@ -499,11 +548,12 @@ and whether `Always` restarts the process or the guest.
   second kind and no store, and a restart loses nothing. Tenant
   separation is one policy that allows no ingress.
 - **Harder.** The agent runtime, workspace and adapter are composed
-  into one image, so a change in any of the three images is a rebuild
-  here, and the supervisor is a program to keep. A token cannot be
-  renewed in a running MicroVM until gaon serves it. The pair needs a
-  second control service instance. Every gaon item above is a
-  dependency of the first slice.
+  into one image, so an agent's version moves with the operator's
+  release, and the supervisor is a program to keep. A token cannot be
+  renewed in a running MicroVM until gaon serves it, so an agent is
+  restarted once a day meanwhile. The control service must start and
+  serve outside Kubernetes unchanged, or the work escalates. Every
+  gaon item above is a dependency of the first slice.
 - **Ruled out.** Garam dialing the cluster, a custom kind in the first
   slice, a MicroVM per program, an ingress rule for agents.
 
@@ -512,14 +562,14 @@ and whether `Always` restarts the process or the guest.
 - A second tenant or process needs to reach an agent, and the ingress
   rule becomes a list.
 - The supervisor in the composed image grows into the standalone
-  runner's intent, adoption and nonce store, which is the sign to ask
-  gaon for several processes in one MicroVM.
+  runner's intent, adoption and nonce store, or gaon declines read-only
+  image volumes and the composed image stays for good.
 - The operator needs a durable fact that no label or annotation holds,
   or a person needs to write an agent by hand: the sign to add the
   kind.
 - Token refresh cannot be served by gaon, and agents are replaced each
   hour or day.
-- The model path is a provider prefix that changes weekly, so the
-  egress rule is edited as often.
+- The wide egress entry outlives the gateway, or the control service
+  cannot run unchanged outside Kubernetes.
 - A second operator for another cluster repeats most of the folder's
   code, which is the sign that the shared part is a library.

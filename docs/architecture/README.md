@@ -1324,4 +1324,4 @@ ADRs:
   — the gaon operator is a service here that runs each managed agent as
   one MicroVM: a `gaon-operator/` folder with its own module and image,
   no custom gaon kind, one composed guest image, one no-ingress network
-  policy, a pair registered in garam; proposed, and unbuilt
+  policy, a pair registered in garam; accepted, and unbuilt

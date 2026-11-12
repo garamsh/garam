@@ -1297,3 +1297,12 @@ ADRs:
   holds at most 10,000 live denial records, with a per-day overflow
   record beyond; an organization's owners and administrators read them
   on `iam:audit.read`; not built; supersedes nothing
+- [0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
+  — codehub is a service of the policy service: a `Codehub` manifest
+  with the entity `Codehub::Repo` and the actions `repo.read`,
+  `repo.write`, `repo.create` and `runner.administer`, a path sent as
+  the context key `path` and not as an entity, `CreateOrganisation`
+  dropped because an organization is garam's, repositories fed through
+  an outbox with a sequence per repository, and a runner as an
+  `Iam::Agent` codehub registers; proposed, not built; supersedes
+  0141 in part, on its codehub example's answers 4 to 6

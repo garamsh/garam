@@ -125,6 +125,19 @@ permission, since they answer what the manifests declare and read no
 entity. **Not built:** item 7's proofs for a new service; and codehub's
 manifest, so `repo` is in no catalogue.
 
+**codehub as a service is proposed, and not built.**
+[ADR-0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
+proposes a `Codehub` manifest with the entity type `Codehub::Repo`
+(`grn:<org>/codehub/repo/<name>`) and the actions `codehub:repo.read`,
+`repo.write`, `repo.create` and `runner.administer`, a path asked as
+the context key `path` and no entity, no `CreateOrganisation` because
+an organization is garam's, codehub's repositories fed through an
+outbox with a sequence per repository, and a runner as an `Iam::Agent`
+that codehub registers. No manifest, `Caller` variant, declared
+context or HTTP binding for it exists: the policy service refuses a
+`context` field and a resource's properties today, and `codehub` stays
+outside the caller list.
+
 **The platform's outbox, its delivery and its signer are built.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set
 holding one row per entity and no document, and a loop reads each

@@ -21,7 +21,7 @@ modules-with = $(strip $(foreach m,$(MODULES),$(if $(shell grep -q '^$(1):' $(m)
 VERBS := ci install format lint test build gen check-gen stack-up suites integration
 
 .PHONY: $(VERBS) affected e2e web-e2e cowork-web-e2e db-up db-down db-prune backend-up
-.PHONY: template-diff search image-build web-image-e2e site-image-e2e cowork-image-e2e cowork-web-image-e2e policy-image policy-image-e2e test-image test-image-e2e test-image-push test-image-pin
+.PHONY: template-diff search image-build web-image-e2e site-image-e2e cowork-image-e2e cowork-web-image-e2e policy-image-e2e test-image test-image-e2e test-image-push test-image-pin
 
 $(VERBS):
 	@test -n '$(call modules-with,$@)' || { echo '$@: no module defines it — tooling/ci/modules or a module Makefile is misread'; exit 1; }
@@ -70,7 +70,7 @@ export SEARCH_Q = $(Q)
 search:
 	@tooling/search.sh
 
-# image-build builds the five images a release publishes, each from
+# image-build builds the six images a release publishes, each from
 # what .github/workflows/release.yml says it is built from; nothing else
 # builds one (#760, #850). IMAGE_REGISTRY makes it a development build
 # of the same repositories in that registry, tagged IMAGE_TAG or HEAD's
@@ -96,7 +96,8 @@ image_ref = $(or $(shell tooling/image-build.sh --names $(IMAGE_BUILD_ARGS) | aw
 # image-build.
 #
 # web-image-e2e and site-image-e2e: the standalone server starts,
-# answers both probes and reaches the baked `/api/*` target.
+# answers both probes and reaches `/api/*` at the address it is given
+# when it starts.
 web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
 	GARAM_WEB_IMAGE='$(or $(GARAM_WEB_IMAGE),$(call image_ref,console))' platform/tests/image/web.sh
 
@@ -110,18 +111,10 @@ cowork-image-e2e: $(if $(COWORK_IMAGE),,image-build)
 cowork-web-image-e2e: $(if $(COWORK_WEB_IMAGE),,image-build)
 	COWORK_WEB_IMAGE='$(or $(COWORK_WEB_IMAGE),$(call image_ref,cowork-web))' tooling/$@.sh
 
-# policy-image-e2e: what its script states. No release publishes
-# garam/policy yet, and image-build builds what a release publishes, so
-# policy-image builds this check's subject itself. POLICY_IMAGE names
-# one to check instead, and then nothing is built here.
-POLICY_LOCAL_IMAGE := garam/policy:ci
-comma := ,
-
-policy-image-e2e: $(if $(POLICY_IMAGE),,policy-image)
-	POLICY_IMAGE='$(or $(POLICY_IMAGE),$(POLICY_LOCAL_IMAGE))' tooling/$@.sh
-
-policy-image:
-	docker build -t $(POLICY_LOCAL_IMAGE) -f deploy/local/Dockerfile.policy $(if $(IMAGE_BUILD_CACHE),--load --cache-from type=$(IMAGE_BUILD_CACHE)$(comma)scope=garam/policy --cache-to type=$(IMAGE_BUILD_CACHE)$(comma)mode=max$(comma)scope=garam/policy) .
+# policy-image-e2e: what its script states. POLICY_IMAGE names an image
+# to check instead, and then nothing is built here.
+policy-image-e2e: $(if $(POLICY_IMAGE),,image-build)
+	POLICY_IMAGE='$(or $(POLICY_IMAGE),$(call image_ref,policy))' tooling/$@.sh
 
 # test-image builds the test image another repository's CI copies
 # garam, testprincipal and the migrations out of (ADR-0092), tagged

@@ -331,8 +331,7 @@ spec:
           image: garam-web:local
           imagePullPolicy: Never
           env:
-            # The /api/* rewrite is baked into the image at build time,
-            # so this value has to match the one the build used.
+            # The /api/* target, read when the process starts.
             - name: GARAM_API_URL
               value: "http://api:8080"
           ports:

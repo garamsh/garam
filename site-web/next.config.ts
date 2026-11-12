@@ -2,8 +2,6 @@ import path from "node:path";
 
 import type { NextConfig } from "next";
 
-import { env } from "./src/env";
-
 const nextConfig: NextConfig = {
   reactCompiler: true,
   // lib/design/ and lib/platform-sdk-ts/ ship TypeScript source, which
@@ -24,18 +22,6 @@ const nextConfig: NextConfig = {
     "/*": [
       "../node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers/esm/**/*",
     ],
-  },
-  // The backend is reachable under `/api/*` on this origin so the
-  // `garam_session` cookie stays same-origin and no CORS layer is
-  // needed (ADR-0009). The backend's own paths are unprefixed, so the
-  // `/api` segment is stripped here.
-  async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: `${env.GARAM_API_URL}/:path*`,
-      },
-    ];
   },
 };
 

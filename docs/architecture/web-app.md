@@ -108,7 +108,7 @@ which is why every console path starts with it. Each app answers a
 path the other serves with a redirect to the other's origin, keeping
 the path and query, so a bookmark from before the split still lands
 (`site-web/src/proxy.ts`, `platform-web/src/proxy.ts`). Both answer the
-probes and the `/api/*` rewrite.
+probes and the `/api/*` proxy rewrite.
 
 | Path | For | Served by | Reached by |
 |---|---|---|---|
@@ -118,7 +118,7 @@ probes and the `/api/*` rewrite.
 | `/console/*` | the signed-in application | console | a visitor carrying a session cookie |
 | `/device` | the page `garam login` names ([ADR-0120](./adr/0120-a-person-signs-the-cli-in-by-the-device-grant-and-holds-a-server-side-session-as-a-bearer.md)); it forwards to `/console/device` with the code it was given, as `code` or RFC 8628's `user_code` | console | anyone |
 | `/healthz`, `/readyz` | the two probes, spelled as every other process spells them ([ADR-0023](./adr/0023-web-probes.md)) | both | anything that can open the port |
-| `/api/*` | the same-origin rewrite onto the browser-facing listener ([ADR-0009](./adr/0009-web-frontend.md)) | both | the browser |
+| `/api/*` | the same-origin proxy rewrite onto the browser-facing listener ([ADR-0009](./adr/0009-web-frontend.md)) | both | the browser |
 
 The sign-in page asks `/auth/providers` at runtime and renders a
 provider button only for a name it answers with, so a build cannot
@@ -357,19 +357,22 @@ It is reached over two paths, and only one of them is the rewrite:
   exists for the browser, not because it is how the application reads
   data.
 
-The two take that address at different times, and that is what binds a
-published image to one deployment. A server-side render reads it when
-the process starts, so a deployment sets it; the browser's rewrite is
-resolved when the image is built, so what is in it is whatever that
-build was given and no environment moves it
-([ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)).
-`.github/workflows/release.yml` builds the console's and the site's
-images with `http://garam-api:8080` — the api Service a release named
-`garam` renders and no other — so a deployment running a published
-image installs under that release name or makes the name resolve.
+Both read that address when the process starts, from `GARAM_API_URL`,
+so a published image holds none and a deployment sets it. The browser's
+path is a rewrite in each app's `src/proxy.ts`, not one in
+`next.config.ts`: a config rewrite is evaluated when `next build` runs
+and written into the standalone server, which is how an image used to
+reach only the api Service a release named `garam` renders
+([ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md),
+superseded by [ADR-0150](./adr/0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)). The proxy drops the `/api` segment and
+sends the rest, query included, to the address, and streams the response
+back. With no address the production schema fails to parse and every
+request, the probes included, answers 500, so a pod without one is held
+out of service by its readiness probe.
+`make web-image-e2e` and `make site-image-e2e` run one image against two
+backends, and search the image for an address.
 `deploy/charts/garam/README.md` §Choosing a release name is
-authoritative for what a deployment does about it, and `make ci`
-compares the value the release bakes against what the chart renders.
+authoritative for what a deployment sets.
 
 The address is server-side only and never reaches a browser. It is
 declared once, as a typed schema in `platform-web/src/env.ts`, parsed at
@@ -776,8 +779,8 @@ The rest bear on it without being about it:
 - [ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)
   — no surface serves a secret's value, the console named among them
 - [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
-  — the application is one of the two published images, and its API
-  address is baked in at build time
+  — the application is one of the two published images; its API
+  address was baked in at build time and is now read at start
 - [ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)
   — a password is garam's own credential, `/register` is invitation
   gated, and one refusal covers a wrong password and an unknown name
@@ -796,12 +799,13 @@ The rest bear on it without being about it:
   — an operator and an agent each report a state elsewhere, and the two
   are what the Agents section reads and shows
 - [ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)
-  — the browser's `/api/*` address is fixed when the image is built, so
-  a published image reaches the api Service a release named `garam`
-  renders
+  — the browser's `/api/*` address was fixed when the image was built;
+  it is now read when the process starts, so a published image is bound
+  to no release name; superseded by
+  [ADR-0150](./adr/0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)
 - [ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
-  — a development build of this image bakes the same address, since it
-  is built from what the release builds, and is told apart by its tag
+  — a development build of this image is built from what the release
+  builds, and is told apart by its tag
 - [ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — `structure.md` governs what a module under `platform-web/src/` may
   import, so a feature reaches a sibling through its declared entry

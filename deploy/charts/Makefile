@@ -7,7 +7,7 @@
 
 include ../../tooling/make/go.mk
 
-.PHONY: ci chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
+.PHONY: ci chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
 
 # helm is not a tool directive: helm.sh/helm/v4 requires a
 # google.golang.org/protobuf newer than protoc-gen-go's, and merging its
@@ -64,7 +64,7 @@ CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 # records as the whole of what that target reaches.
 CHART_RESOURCE_NAMES := cpu memory
 
-ci: chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
+ci: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
 	@test -n '$(CHART_TEMPLATES)' || { echo 'chart-lint: nothing to lint — $(CHART_DIR)/templates holds no template'; exit 1; }
@@ -190,39 +190,6 @@ chart-names:
 		over="$$(awk 'length($$0) > 63 { print length($$0)" "$$0 }' "$$out/names" | sort -u)"; \
 		test -z "$$over" || { echo 'chart-names: over the 63-character limit, which an apply refuses and a render does not:'; echo "$$over"; exit 1; }; \
 		echo "chart-names: $$total distinct object names, longest $$(awk '{ if (length($$0) > m) m = length($$0) } END { print m }' "$$out/names"), none over 63"
-
-# chart-rewrite holds the `/api/*` target a release bakes into the
-# console's and the site's images against the api Service rendered under
-# release `garam`, two facts nothing else reads together (#861). $(sort)
-# drops the repeat, so the two images baking one URL read as one and
-# baking two fail the count. The render under $(CHART_LONG_RELEASE) is
-# the control and must differ, or the equality proves nothing
-# (ADR-0056). tooling/image-build.sh reads the same file for what the
-# release builds.
-CHART_BAKED_API_URL = $(sort $(shell sed -n 's/^ *GARAM_API_URL=\(.*\)$$/\1/p' ../../.github/workflows/release.yml))
-
-chart-rewrite:
-	@echo 'chart-rewrite: $(CHART_BAKED_API_URL), baked by .github/workflows/release.yml — one URL against the api Service, $(CHART_DIR)/README.md §What the checks are complete over'
-	@test '$(words $(CHART_BAKED_API_URL))' = 1 \
-		|| { echo 'chart-rewrite: .github/workflows/release.yml bakes $(words $(CHART_BAKED_API_URL)) GARAM_API_URL values, expected the one a release is bound to — the parse is broken'; exit 1; }
-	@set -e; \
-		apiurl() { $(HELM) template "$$1" $(CHART_DIR) --values $(CHART_DEFAULT_VALUES) | awk ' \
-			function flush() { if (kind == "Service" && comp == "api") printf "http://%s:%s\n", name, port } \
-			/^---$$/ { flush(); kind = ""; comp = ""; name = ""; port = ""; next } \
-			/^kind: / { kind = $$2 } \
-			/^  name: / { if (name == "") name = $$2 } \
-			/app.kubernetes.io\/component: / { if (comp == "") comp = $$2 } \
-			$$1 == "port:" { if (port == "") port = $$2 } \
-			END { flush() }'; }; \
-		rendered="$$(apiurl garam)"; \
-		test -n "$$rendered" && test "$$(printf '%s\n' "$$rendered" | wc -l)" -eq 1 \
-			|| { echo "chart-rewrite: the render named no single api Service — the parse is broken:"; echo "$$rendered"; exit 1; }; \
-		test "$$rendered" = '$(CHART_BAKED_API_URL)' \
-			|| { echo "chart-rewrite: the release bakes $(CHART_BAKED_API_URL) and release garam renders $$rendered — a published web image reaches a name this chart does not render, and nothing after the install says so"; exit 1; }; \
-		control="$$(apiurl $(CHART_LONG_RELEASE))"; \
-		test "$$control" != '$(CHART_BAKED_API_URL)' \
-			|| { echo "chart-rewrite: release $(CHART_LONG_RELEASE) renders $$control as well, so the equality above holds under every release name and this check reads nothing"; exit 1; }; \
-		echo "chart-rewrite: release garam renders $$rendered; release $(CHART_LONG_RELEASE) renders $$control, which no published web image reaches"
 
 # chart-guards renders each values file under ci/refused/ and holds that
 # helm refuses it with `execution error at (<template>): <value> `,

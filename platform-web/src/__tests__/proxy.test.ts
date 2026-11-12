@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { config, proxy } from "@/proxy";
 import { RETURN_PATH_HEADER } from "@garam/platform-sdk-ts/return-path";
@@ -90,5 +90,94 @@ describe("proxy", () => {
     expect(
       response.headers.get(`x-middleware-request-${RETURN_PATH_HEADER}`),
     ).toBe("/console/invitations/tok-123?x=1");
+  });
+});
+
+/**
+ * The proxy as a process started with `apiUrl` runs it: `env` is read
+ * when the module loads, so each address is a fresh import.
+ */
+async function proxyServing(apiUrl: string) {
+  vi.resetModules();
+  vi.stubEnv("GARAM_API_URL", apiUrl);
+  return (await import("@/proxy")).proxy;
+}
+
+describe("proxy /api/*", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each([
+    ["http://garam-api:8080", "http://garam-api:8080/healthz"],
+    ["http://api.other.invalid:9000", "http://api.other.invalid:9000/healthz"],
+  ])(
+    "sends /api/healthz to the backend at %s, the address the process was given",
+    async (apiUrl, want) => {
+      const response = (await proxyServing(apiUrl))(request("/api/healthz"));
+
+      // Two addresses through one build is the property: a destination
+      // fixed when the code was built would be the same for both.
+      expect(response.headers.get("x-middleware-rewrite")).toBe(want);
+    },
+  );
+
+  it.each([
+    [
+      "/api/orgs/acme/people?limit=5&after=x",
+      "/orgs/acme/people?limit=5&after=x",
+    ],
+    [
+      "/api/auth/google/callback?code=a%2Fb",
+      "/auth/google/callback?code=a%2Fb",
+    ],
+    ["/api", "/"],
+    [
+      "/api/orgs/acme/agents/grn%3Aacme%2Fiam%2Fagent%2F1?x=a%2Fb",
+      "/orgs/acme/agents/grn%3Aacme%2Fiam%2Fagent%2F1?x=a%2Fb",
+    ],
+  ])("sends %s to %s, the backend's own path", async (path, want) => {
+    const response = (await proxyServing("http://backend.invalid:8080"))(
+      request(path),
+    );
+
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      `http://backend.invalid:8080${want}`,
+    );
+  });
+
+  it("keeps a path prefix the backend's address carries", async () => {
+    const response = (await proxyServing("http://gateway.invalid/garam"))(
+      request("/api/me"),
+    );
+
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      "http://gateway.invalid/garam/me",
+    );
+  });
+
+  it("answers a request with no session cookie from the backend, not with a sign-in redirect", async () => {
+    const response = (await proxyServing("http://backend.invalid:8080"))(
+      request("/api/me"),
+    );
+
+    // The OAuth round trip and `garam login` arrive without a cookie.
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-rewrite")).not.toBeNull();
+  });
+
+  it("runs on /api and what is under it, and on no path that only starts with it", () => {
+    for (const path of ["/api", "/api/me", "/api/a/b/c"]) {
+      expect(
+        unstable_doesMiddlewareMatch({
+          config,
+          url: `http://localhost:3000${path}`,
+        }),
+      ).toBe(true);
+    }
+    expect(
+      unstable_doesMiddlewareMatch({
+        config,
+        url: "http://localhost:3000/apiary",
+      }),
+    ).toBe(false);
   });
 });

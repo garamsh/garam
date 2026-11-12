@@ -60,14 +60,16 @@ Two cases decide most of this document:
   `env`, `files`, `ports`, probes and `terminationGracePeriodSeconds`,
   the Secret, ConfigMap and ServiceAccount kinds and the ServiceAccount
   token file are served: `docs/architecture/workloads.md`,
-  `resource-api.md` and `node-agent.md` describe them as built.
+  `resource-api.md` and `node-agent.md` describe them as built, and
+  ADR 0020, 0024, 0026, 0029 and 0030 decide them
+  (`docs/architecture/adr/` of gaon at the same commit).
 - `Service`, `Endpoints` and `NetworkPolicy` are contract only.
   `resource-api.md` §Service, Endpoints and NetworkPolicy says the API
   server's serving of them, the endpoints controller and enforcement
   are later issues; that is garamsh/gaon#182, open. A search of
   gaon's non-test Go files at the commit above for the routes of these
   kinds found nothing, and it was not shown to find a route that does
-  exist.
+  exist. ADR 0027 decides that the core serves them.
 
 A field name appears below only where a gaon document shows it. Where
 none does, the gap table says so.
@@ -99,14 +101,19 @@ here, and [deployment-contract.md](./deployment-contract.md)
 second replica, each uses the `Recreate` strategy and not
 `RollingUpdate` (`workloads.md`, which gives both): an update stops the
 old MicroVM and then starts the new, and the process is down between
-them. Gaon documents no minimum ready time and no ReplicaSet kind, so
-a rolling update would also give no hold on how long the new replica is
-ready before the old is removed.
+them. ADR 0026 decides that a replica is available as soon as it is
+Ready, with no minimum ready time, and that there is no ReplicaSet
+kind, so a rolling update would also give no hold on how long the new
+replica is ready before the old is removed. `Recreate` is, in that ADR,
+a surge of 0 and an unavailability of `replicas`.
 
 Spread across Nodes follows from the replica count and states nothing:
 with one replica there is nothing to spread. Gaon's decision that a
-replicated kind spreads across Nodes is on garamsh/gaon#117 (D16) and is
-not in `scheduler.md`, which says it has no spreading.
+replicated kind spreads across Nodes through a topology-spread filter
+plugin is a comment on garamsh/gaon#117, which numbers it D16
+(`https://github.com/garamsh/gaon/issues/117#issuecomment-6830309068`);
+the issue's body numbers a different decision D16. It is not in
+`scheduler.md`, which says it has no spreading.
 
 ## What each object states
 
@@ -119,18 +126,21 @@ per process for what differs.
 |---|---|---|
 | `image` | `<repository>@sha256:<digest>` of the release; a tag is refused | `resource-api.md` §MicroVM |
 | `command`, `args` | the image's entry point and the garam command; a `$(VAR)` in either is not expanded | `resource-api.md` §MicroVM |
-| `user` | the numeric uid from [deployment-needs.md](./deployment-needs.md) §The images: `10001` for `garam/server`, `garam/cowork` and `garam/policy`, `1000` for the three web images | `node-agent.md` |
+| `user` | `uid:gid`, both numbers: the uid from [deployment-needs.md](./deployment-needs.md) §The images, `10001` for `garam/server`, `garam/cowork` and `garam/policy` and `1000` for the three web images, and the gid of that account in the image | `node-agent.md`, ADR 0029 |
 | `env` | one entry per setting: `value` for a setting that is no secret, `valueFrom.secretKeyRef` or `valueFrom.configMapKeyRef` of `{name, key}` otherwise | `resource-api.md` §MicroVM |
 | `files` | one entry per file, below | `resource-api.md` §MicroVM |
 | `ports` | one named port per listener, a name of at most 15 characters | `resource-api.md` §MicroVM |
 | `terminationGracePeriodSeconds` | gaon's default of 30 | `resource-api.md` §MicroVM |
 | `runStrategy` | `Always` under a `Deployment`; a `Job` forces `Once` | `workloads.md` |
 
-- **Why `user` is numeric.** A file's owner defaults to the MicroVM's
-  `user`, and a `user` that is a name and not a number, with no owner
-  given, fails the MicroVM as `InvalidSpec` (`node-agent.md`). The
-  scratch images carry a passwd file naming the account, but the
-  numeric form does not depend on it.
+- **Why `user` is `uid:gid`.** A file's owner is its own `owner`, else
+  the MicroVM's `user` when that is a numeric `uid:gid`, else root when
+  there is no `user`; a file that gives no owner under any other `user`,
+  a bare name included, fails the MicroVM as `InvalidSpec`
+  (`node-agent.md`). The scratch images carry a passwd file naming the
+  account, but the numeric form does not depend on it. A bare number is
+  not stated there to be accepted, so the form is `uid:gid`; the gid is
+  under §Not established.
 - **Which settings come from a `Secret`.** Exactly the ones
   [deployment-needs.md](./deployment-needs.md) §Secrets and key
   material lists with kind "environment" or "a URL that may carry a
@@ -140,7 +150,9 @@ per process for what differs.
   document or in a commit.
 - **A key file** is a `files` entry whose `valueFrom.secretKeyRef`
   names a `Secret`, with `mode: 0400`, owned by the process's uid, which
-  is the file's owner when none is given and `user` is that uid. This
+  is the file's owner when none is given and `user` is that uid as
+  `uid:gid`. A `Secret`'s `data` is bytes, and its keys and values
+  together are at most 512 KiB (ADR 0020). This
   is the key-file rule of
   [deployment-contract.md](./deployment-contract.md) §What the binary
   enforces about key material. The files are `GARAM_CA_KEY_FILE`,
@@ -159,11 +171,22 @@ per process for what differs.
 - **Bounds.** A MicroVM takes at most 64 files and 1 MiB of file
   content in all; over either it fails as `FilesOverBound`
   (`node-agent.md`). Each process here holds fewer than ten files.
+- **Probe timing.** A zero timing field takes gaon's default:
+  `initialDelaySeconds` 0, `periodSeconds` 10, `timeoutSeconds` 1,
+  `successThreshold` 1 and `failureThreshold` 3, and a liveness failure
+  restarts the MicroVM (ADR 0020). `/readyz` of `serve api` is bounded
+  at 2s and the policy service's at 2s
+  ([deployment-needs.md](./deployment-needs.md) entries Probes), so the
+  readiness probe of each states `timeoutSeconds` of 3, not the
+  default 1. Start-to-ready time is not established, so no
+  `initialDelaySeconds` is stated.
 - **Probes.** The three Go and Rust images have no shell, no `wget`
   and no `curl`, so their probes are `httpGet`; `exec` would run the
   process's own `probe` command and is not used. The node-based web
   images could take either, and `httpGet` is stated for all eight so
-  that one form holds. Liveness reads `/healthz`; readiness reads
+  that one form holds. A `Service` lists only MicroVMs that are
+  `Ready` (ADR 0027), so the readiness probe also decides which
+  replica receives traffic. Liveness reads `/healthz`; readiness reads
   `/readyz`. A probe may name its port by name or by number
   (`resource-api.md` §MicroVM).
 - **Stop.** The three `serve` commands of `garam/server` and
@@ -179,7 +202,7 @@ per process for what differs.
 
 | Process | Kind | Replicas | Probe port | Files | Settings routed to |
 |---|---|---|---|---|---|
-| `garam serve api` | `Deployment` | 1 | its one HTTP port | key: `GARAM_POLICY_SIGNING_KEY_FILE` where set | §garam/server: serve api |
+| `garam serve api` | `Deployment` | 1 | `GARAM_HTTP_ADDR`, 8080 by default | key: `GARAM_POLICY_SIGNING_KEY_FILE` where set | §garam/server: serve api |
 | `garam serve authz` | `Deployment` | 1 | `GARAM_METRICS_ADDR`, 9091 | none | §garam/server: serve authz |
 | `garam serve machine` | `Deployment` | 1 | `GARAM_MACHINE_HEALTH_ADDR`, 8444; the TLS listener is port 8443 | key: `GARAM_CA_KEY_FILE`, `GARAM_MACHINE_TLS_KEY_FILE`, `GARAM_POLICY_SIGNING_KEY_FILE` where set | §garam/server: serve machine |
 | `garam migrate` | `Job` | n/a | none | none | §garam/server: migrate |
@@ -279,15 +302,18 @@ the gap table lists each.
 | The identity issuer | `/api` on the site's host: the route above reaches `garam/site`, which proxies `/api/*` to the api | at the gateway |
 | The token endpoint | `serve machine`'s `/oauth/token`, on the machine listener's host | in `serve machine` |
 
-- **The gateway is decided, not documented.** Garamsh/gaon#117 (D16,
-  D18) records a gateway with a listener per port, plain HTTP, TLS
-  terminated or TLS passed through by SNI, routes by host and by path
-  prefix, a prefix replacement that a route opts into, and
-  `X-Forwarded-For` and `X-Forwarded-Proto` added to a forwarded
-  request with `Host` and the path otherwise unmodified. No gaon
-  document on `main` states its kind or fields, and the comment on
-  garamsh/gaon#159 says its contract issue is "not yet filed". No field
-  name is given here for it.
+- **The gateway is decided, not documented.** The body of
+  garamsh/gaon#117 records, in D6, a TLS-terminating gateway as a
+  workload kind delivered as an extension; in D16, `Host` and the path
+  forwarded unmodified; and in D18, a gateway with a listener per
+  port, plain HTTP, TLS terminated or TLS passed through by SNI, routes
+  by host and by path prefix, a prefix replacement that a route opts
+  into, and `X-Forwarded-For` and `X-Forwarded-Proto` added to a
+  forwarded request with `Host` and the path otherwise unmodified.
+  No gaon document at the commit above states its kind or fields:
+  `resource-api.md` §Open questions lists "Gateway" among default
+  extensions of `apps.gaon.garam.sh` that none is written for yet.
+  Its contract is garamsh/gaon#187. No field name is given here for it.
 - **The machine listener** ends TLS in the process, with the
   certificate of `GARAM_MACHINE_TLS_CERT_FILE`, so a gateway that
   terminated it would present another. A `LoadBalancer` `Service` is L4
@@ -298,9 +324,18 @@ the gap table lists each.
   console and the site proxy `/api/*` themselves
   ([deployment-needs.md](./deployment-needs.md) §Public names).
 - **The names a person types** are the host names of the gateway
-  routes; which addresses they resolve to, and DNS for them, belong to
-  the cluster owner. Gaon's decision D6 on garamsh/gaon#117 serves DNS
-  for Services as a workload; no document on `main` describes it.
+  routes; which addresses they resolve to belong to the cluster owner.
+  Gaon's decision D6 on garamsh/gaon#117 serves DNS for Services as a
+  workload; its contract is garamsh/gaon#187, and no document at the
+  commit above describes it.
+- **A gateway can hold a LAN address** through a `LoadBalancer`
+  `Service` that names `loadBalancerIP` (`resource-api.md`); that
+  serving is garamsh/gaon#182.
+- **What codehub reaches** is the policy listener, `/oauth/token` and
+  `/oauth/introspect` on the api, and the issuer's discovery document
+  and key set; it is a caller, and its needs are in
+  [deployment-needs.md](./deployment-needs.md) §codehub, not restated
+  here.
 
 **Internal addresses**
 
@@ -388,16 +423,32 @@ A deployment that gives Transit uses one of two forms of
 What the second form needs of gaon is garamsh/gaon#161, which serves
 the issuer's OpenID discovery document and key set, and
 garamsh/gaon#162, which writes the token as a file and renews it in
-place. Both read as closed in the issue list of `garamsh/gaon` taken
-when this was written; at
+place. Both are closed: #161 was done in #175 as `1312f67` and #162 in
+#179 as `0ef1363`, and their threads were read. At
 `9941e390da42b49071ded0508f953ccac60e6e58`, the commit that
 [deployment-contract.md](./deployment-contract.md) §A Transit provider
-for message signing keys cites, they were open. The documents of the
-commit above describe both as built (`resource-api.md`,
-`node-agent.md`). Neither issue's own thread was read. The Node Agent
-also needs `--service-account-audience` set to one of the API server's
-audiences, and without it a MicroVM that names a ServiceAccount is not
-created (`node-agent.md`); that is a cluster
+for message signing keys cites, they were open.
+
+What ADR 0029 and `node-agent.md` document at the commit above for the
+token file:
+
+- the path `/var/run/secrets/gaon.garam.sh/serviceaccount/token`;
+- mode 0600;
+- the owner of a file that names none: the MicroVM's `user` when it is
+  a numeric `uid:gid`, root when there is no `user`, and `InvalidSpec`
+  when it is a name;
+- renewal by `WriteFile` before 80% of the token's lifetime, which
+  mvmd's guest agent at `223e3eca764caf60b8dd72c7399b83ff6b437d49`
+  does by writing a temporary file, syncing and renaming it, so a
+  reader never sees a partial token;
+- after a start that is not the first, the guest holds the token of
+  the create-time until the next resync, as `env` and `files` are not
+  yet resolved again at a start (garamsh/gaon#170, waiting on
+  garamsh/mvmd#519).
+
+The Node Agent also needs `--service-account-audience` set to one of
+the API server's audiences, and without it a MicroVM that names a
+ServiceAccount is not created (`node-agent.md`); that is a cluster
 setting, not an object of this document. Which role and which issuer
 OpenBao's JWT method trusts are the deployment's, as in
 [deployment-contract.md](./deployment-contract.md).
@@ -414,12 +465,12 @@ titles, and is for the PM to file; no number is invented here.
 |---|---|---|
 | `Service`, `Endpoints` and address allocation served by the API server | garamsh/gaon#182, open | a setting that carries an internal address takes a MicroVM's address from `status.addresses` and is rewritten at every replacement; the deployer does the rewriting |
 | `NetworkPolicy` kind and its enforcement, for egress limits on `serve machine`, `cowork serve` and codehub | garamsh/gaon#165, open | no policy; every MicroVM can reach every other. Where garam's reach is limited, the cluster owner does it outside gaon |
-| A gateway: kind, fields, hosts, prefix replacement, TLS | no gaon issue (garamsh/gaon#159 says the contract issue is "not yet filed"); decided on #117 | the deployer runs a TLS-terminating proxy as a `Deployment` of its own with the host and path split of §Names, and reaches it as the cluster owner decides |
-| DNS names for `Service`s | no gaon issue found (decided as D6 on #117) | settings carry addresses, as in the first row |
+| A gateway: kind, fields, hosts, prefix replacement, TLS | garamsh/gaon#187, open; decided on #117 | the deployer runs a TLS-terminating proxy as a `Deployment` of its own with the host and path split of §Names, and reaches it as the cluster owner decides |
+| DNS names for `Service`s | garamsh/gaon#187, open (decided as D6 on #117) | settings carry addresses, as in the first row |
 | A `LoadBalancer` address for the machine listener | garamsh/gaon#182, open | the machine listener is reached at the address of its MicroVM, or through the proxy in L4 passthrough |
 | `env` and `files` resolved again at each restart, and `workingDir` | garamsh/gaon#170, open (waits on garamsh/mvmd#519) | a changed `Secret` reaches a key file by in-place replacement and an `env` entry only at a replacement of the MicroVM; no object here sets `workingDir` |
 | `nodeSelector` has no effect, as a Node has no labels | garamsh/gaon#181, open | none of the objects here states a `nodeSelector` |
-| Spread of a replicated workload across Nodes | no gaon issue found (decided as D16 on #117, not in `scheduler.md`) | every `Deployment` is one replica, so none is needed |
+| Spread of a replicated workload across Nodes | no gaon issue found (decided in a comment on #117, not in `scheduler.md`) | every `Deployment` is one replica, so none is needed |
 | A `Deployment`'s minimum ready time, or a ReplicaSet | no gaon issue found | `Recreate`, as above |
 | Order between kinds: a `Deployment` that waits for a `Job` | no gaon issue found; garamsh/gaon#125 gives the order to garam | the deployer sequences it, as in §Order |
 | A `Job` with `parallelism` | no gaon issue found | none needed |
@@ -430,11 +481,12 @@ None of these blocks writing the objects of this document: each
 object above is stated so that it does without.
 
 The identity file form's two issues, garamsh/gaon#161 and #162, are not
-in the table: they read as closed.
+in the table: they are closed.
 
-Garamsh/gaon#117, #125, #159, #164, #170 and #182 were read with their
-comments; the state of every other issue named is that of the list of
-titles and states, and its thread was not read.
+garamsh/gaon#117, #125, #159, #161, #162, #164, #170, #182 and #187
+were read with their comments. The state of every other issue named
+is that of the list of titles and states, and its thread was not
+read.
 
 ## Not established
 
@@ -454,8 +506,7 @@ Not guessed. Each is what the documents read do not state.
 - **How the machine listener and the issuer are reached from outside
   the cluster.** That is the cluster owner's and the gateway's, and
   neither is documented ([Names](#names)).
-- **The group of a file's owner.** A file's owner defaults to the
-  MicroVM's `user`; the group of the account is in the image's group
-  file and is not read here.
+- **The gid of `user`.** `user` is `uid:gid`; the group of the
+  account is in the image's group file and is not read here.
 - **Whether a MicroVM's `status.addresses` carries one address or
   more**, and which a deployer reads when it carries several.

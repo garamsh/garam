@@ -19,7 +19,7 @@ const MAX_CHANGES: usize = 1000;
 /// Serves `garam.policy.v1`. Every read goes to storage, as no cache
 /// exists yet, so both `Read` options answer what `READ_CURRENT`
 /// promises.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Service<P, E> {
     engine: Engine,
     policies: P,
@@ -38,6 +38,25 @@ impl<P, E> Service<P, E> {
 }
 
 impl<P: PolicySource, E: EntitySource> Service<P, E> {
+    /// Answers one question: what both transports' single evaluation
+    /// reaches.
+    pub(crate) async fn evaluate_one(
+        &self,
+        principal: &Principal,
+        request: &proto::EvaluateRequest,
+    ) -> Result<proto::EvaluateResponse, ServiceError> {
+        self.answer(
+            principal,
+            Question {
+                subject: request.subject.as_ref(),
+                action: request.action.as_ref(),
+                resource: request.resource.as_ref(),
+                context: request.context.as_ref(),
+            },
+        )
+        .await
+    }
+
     async fn answer(
         &self,
         principal: &Principal,
@@ -71,7 +90,7 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
         }
     }
 
-    async fn answer_batch(
+    pub(crate) async fn answer_batch(
         &self,
         principal: &Principal,
         request: &proto::EvaluationsRequest,
@@ -107,7 +126,7 @@ impl<P, E: EntitySink> Service<P, E> {
     /// outside the organization a scoped caller is bound to, refuses
     /// all of it, being the caller's mistake rather than an entry's,
     /// and any other fault refuses its own entry.
-    async fn apply_changes(
+    pub(crate) async fn apply_changes(
         &self,
         principal: &Principal,
         request: &proto::ApplyEntityChangesRequest,
@@ -178,15 +197,8 @@ where
         request: Request<proto::EvaluateRequest>,
     ) -> Result<Response<proto::EvaluateResponse>, Status> {
         let principal = principal_of(&request).map_err(|e| to_status(&e))?;
-        let request = request.into_inner();
-        let question = Question {
-            subject: request.subject.as_ref(),
-            action: request.action.as_ref(),
-            resource: request.resource.as_ref(),
-            context: request.context.as_ref(),
-        };
         let answer = self
-            .answer(&principal, question)
+            .evaluate_one(&principal, request.get_ref())
             .await
             .map_err(|e| to_status(&e))?;
         Ok(Response::new(answer))

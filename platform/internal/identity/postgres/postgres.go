@@ -4,7 +4,9 @@ package postgres
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/lib/errorx"
@@ -45,6 +47,9 @@ func (s *Store) Admit(ctx context.Context, principal grn.GRN, a operator.Verifie
 
 	q := s.q.WithTx(tx)
 	decided, err := q.HoldServicePrincipal(ctx, key)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return s.refuseGone(ctx, q, principal, a)
+	}
 	if err != nil {
 		return storageError(err, "hold service principal")
 	}
@@ -64,6 +69,22 @@ func (s *Store) Admit(ctx context.Context, principal grn.GRN, a operator.Verifie
 		return errorx.Wrap(err, "commit", errorx.KindUnavailable)
 	}
 	return nil
+}
+
+// refuseGone answers an assertion whose principal has no record: an
+// organization garam holds none of is [identity.ErrOrganizationUnknown]
+// where the assertion is timely, and every other case, a principal gone
+// from an organization that exists included, is a client that does not
+// authenticate. Nothing is spent for either.
+func (s *Store) refuseGone(ctx context.Context, q *db.Queries, principal grn.GRN, a operator.VerifiedAssertion) error {
+	held, err := q.OrganizationHeld(ctx, principal.Organization)
+	if err != nil {
+		return storageError(err, "read organization")
+	}
+	if held.Held || !a.Timely(held.DecidedAt.Time.UTC()) {
+		return operator.ErrClientInvalid
+	}
+	return identity.ErrOrganizationUnknown
 }
 
 // storageError classifies a driver error as pgxerr does, with a record

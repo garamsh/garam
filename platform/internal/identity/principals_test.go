@@ -28,8 +28,9 @@ const (
 )
 
 var (
-	coworkID = identity.PrincipalGRN("acme", identity.ServiceCowork)
-	policyID = identity.PrincipalGRN("acme", identity.AudiencePolicy)
+	coworkID  = identity.PrincipalGRN("acme", identity.ServiceCowork)
+	codehubID = identity.PrincipalGRN("acme", identity.ServiceCodehub)
+	policyID  = identity.PrincipalGRN("acme", identity.AudiencePolicy)
 )
 
 func rsaKey(t *testing.T) *rsa.PrivateKey {
@@ -121,6 +122,45 @@ func TestPrincipals_AuthenticateAServicesPrincipalByItsKeyOnEachRoute(t *testing
 	require.NoError(t, err)
 	assert.Equal(t, identity.ServiceCowork, got.Service)
 	assert.Equal(t, []grn.GRN{coworkID, coworkID}, store.admitted, "each assertion is admitted through the store")
+}
+
+func TestPrincipals_AuthenticateCodehubsPrincipalByCodehubsKeyAlone(t *testing.T) {
+	codehub, cowork := rsaKey(t), rsaKey(t)
+	store := &admitter{}
+	principals := principalsOf(identity.ServiceKeys{
+		identity.ServiceCodehub: {publicKeyOf(t, codehub)},
+		identity.ServiceCowork:  {publicKeyOf(t, cowork)},
+	}, store)
+	ask := func(route identity.Route, key *rsa.PrivateKey, to, jti string) (identity.Principal, error) {
+		return principals.Authenticate(context.Background(), route, "10.0.0.1",
+			codehubID.String(), assertion(t, key, codehubID, to, jti))
+	}
+
+	got, err := ask(identity.RouteExchange, codehub, tokenURL, jtiA)
+	require.NoError(t, err)
+	assert.Equal(t, identity.Principal{GRN: codehubID, Service: identity.ServiceCodehub}, got)
+	got, err = ask(identity.RouteIntrospect, codehub, introspectURL, jtiB)
+	require.NoError(t, err)
+	assert.Equal(t, identity.ServiceCodehub, got.Service)
+
+	admitted := len(store.admitted)
+	_, err = ask(identity.RouteExchange, cowork, tokenURL, "c")
+	assert.ErrorIs(t, err, operator.ErrClientInvalid, "cowork's key, which is configured, signs for no other service")
+	assert.Len(t, store.admitted, admitted, "a refused assertion is not admitted")
+}
+
+func TestPrincipals_RefuseCodehubsPrincipalWhereNoCodehubKeyIsConfigured(t *testing.T) {
+	cowork := rsaKey(t)
+	store := &admitter{}
+	principals := principalsOf(identity.ServiceKeys{identity.ServiceCowork: {publicKeyOf(t, cowork)}}, store)
+
+	_, err := principals.Authenticate(context.Background(), identity.RouteExchange, "10.0.0.1",
+		coworkID.String(), assertion(t, cowork, coworkID, tokenURL, jtiA))
+	require.NoError(t, err, "the control: cowork's own principal authenticates with the same keys")
+	_, err = principals.Authenticate(context.Background(), identity.RouteExchange, "10.0.0.1",
+		codehubID.String(), assertion(t, cowork, codehubID, tokenURL, jtiB))
+	assert.ErrorIs(t, err, operator.ErrClientInvalid)
+	assert.Equal(t, []grn.GRN{coworkID}, store.admitted)
 }
 
 func TestPrincipals_RefuseWhatIsNotTheServicesOwnAssertion(t *testing.T) {
@@ -221,10 +261,18 @@ func TestParseServiceKeys(t *testing.T) {
 	assert.Equal(t, []operator.Key{publicKeyOf(t, a), publicKeyOf(t, b)}, keys[identity.ServiceCowork],
 		"the kid is the key's thumbprint, at most two keys")
 
+	both, err := identity.ParseServiceKeys(keysFile(t, map[string][]*rsa.PrivateKey{
+		identity.ServiceCowork: {a}, identity.ServiceCodehub: {b},
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, []operator.Key{publicKeyOf(t, b)}, both[identity.ServiceCodehub], "codehub holds its own key set")
+	assert.Equal(t, []operator.Key{publicKeyOf(t, a)}, both[identity.ServiceCowork])
+
 	for name, raw := range map[string][]byte{
 		"not JSON":                    []byte("x"),
 		"a service off the list":      keysFile(t, map[string][]*rsa.PrivateKey{identity.AudiencePolicy: {a}}),
 		"three keys of one service":   keysFile(t, map[string][]*rsa.PrivateKey{identity.ServiceCowork: {a, b, c}}),
+		"three keys of codehub":       keysFile(t, map[string][]*rsa.PrivateKey{identity.ServiceCodehub: {a, b, c}}),
 		"a private key":               []byte(`{"cowork":{"keys":[` + privateJWK(t, a) + `]}}`),
 		"a key that is not RSA":       []byte(`{"cowork":{"keys":[{"kty":"oct","k":"AAAA"}]}}`),
 		"a set that is not an object": []byte(`{"cowork":[]}`),
@@ -241,13 +289,14 @@ func privateJWK(t *testing.T, private *rsa.PrivateKey) string {
 	return string(raw)
 }
 
-func TestIsFirstParty_TheClosedListHoldsCowork(t *testing.T) {
-	assert.Equal(t, []string{"cowork"}, identity.FirstParty())
+func TestIsFirstParty_TheClosedListHoldsCoworkAndCodehub(t *testing.T) {
+	assert.Equal(t, []string{"cowork", "codehub"}, identity.FirstParty())
 	assert.True(t, identity.IsFirstParty("cowork"))
+	assert.True(t, identity.IsFirstParty("codehub"))
 	assert.False(t, identity.IsFirstParty("policy"))
 	list := identity.FirstParty()
 	list[0] = "changed"
-	assert.Equal(t, []string{"cowork"}, identity.FirstParty(), "the list is a copy")
+	assert.Equal(t, []string{"cowork", "codehub"}, identity.FirstParty(), "the list is a copy")
 }
 
 func TestIsPrincipalClient(t *testing.T) {

@@ -39,7 +39,7 @@ func TestMigration000073_GivesEachExistingOrganizationACoworkPrincipal(t *testin
 		formerGRN("root", "org", "legacy"))
 	require.NoError(t, err)
 
-	require.NoError(t, m.Up())
+	require.NoError(t, m.Migrate(73))
 	rows, err := p.Query(ctx, "SELECT grn, org_grn FROM "+schema+".service_principals ORDER BY grn")
 	require.NoError(t, err)
 	defer rows.Close()

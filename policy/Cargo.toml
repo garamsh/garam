@@ -19,14 +19,16 @@ prost-types = "0.14"
 protox = "0.10"
 rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem", "ring"] }
 rsa = "0.9"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustix = { version = "1", features = ["process"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.9", default-features = false, features = ["json", "macros", "migrate", "postgres", "runtime-tokio", "tls-rustls-ring-native-roots"] }
 thiserror = "2"
-tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 tokio-stream = { version = "0.1", features = ["net"] }
-tonic = { version = "0.14", features = ["tls-ring"] }
+tonic = { version = "0.14", features = ["tls-ring", "tls-connect-info"] }
 tonic-prost = "0.14"
 tonic-prost-build = "0.14"
 tracing = "0.1"

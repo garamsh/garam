@@ -6,9 +6,9 @@
 use std::net::SocketAddr;
 
 use rcgen::{CertifiedKey, generate_simple_self_signed};
-use server::Listeners;
+use server::{Identity, Listeners};
 use tokio::net::TcpListener;
-use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
+use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 
 pub struct Pair {
     pub cert: String,

@@ -206,6 +206,8 @@ func writeOAuthError(w http.ResponseWriter, err error) {
 	case errors.As(err, &exceeded):
 		status = http.StatusTooManyRequests
 		w.Header().Set("Retry-After", strconv.Itoa(exceeded.RetryAfterSeconds()))
+	case errors.Is(err, identity.ErrOrganizationUnknown):
+		status, body.Error = http.StatusBadRequest, machinegen.UnauthorizedClient
 	case errors.Is(err, operator.ErrAudienceInvalid):
 		status, body.Error = http.StatusBadRequest, machinegen.InvalidRequest
 		description := "audience is another operator the organization registered"

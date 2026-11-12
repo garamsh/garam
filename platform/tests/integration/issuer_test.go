@@ -41,21 +41,23 @@ const issuerURL = "https://garam.test/api"
 // browser listener and a machine listener beside it that authenticates
 // service principals, as `serve api` and `serve machine` wire them
 // (ADR-0141, ADR-0129). The keys are generated here. The organization
-// "globex" holds a principal of cowork, which is first-party, and of
-// policy, an audience no first-party service is yet, built through the
-// org store's seam so that introspection has a caller to be tested
-// with.
+// "globex" holds a principal of cowork and of codehub, which are
+// first-party, and of policy, an audience no first-party service is
+// yet, built through the org store's seam so that introspection has a
+// caller to be tested with.
 type issuerStack struct {
 	*deviceStack
-	key      *signer.Key
-	issuer   *identity.Issuer
-	keys     identity.ServiceKeys
-	machine  string
-	policy   *rsa.PrivateKey
-	cowork   *rsa.PrivateKey
-	globex   string
-	policyID grn.GRN
-	coworkID grn.GRN
+	key       *signer.Key
+	issuer    *identity.Issuer
+	keys      identity.ServiceKeys
+	machine   string
+	policy    *rsa.PrivateKey
+	cowork    *rsa.PrivateKey
+	codehub   *rsa.PrivateKey
+	globex    string
+	policyID  grn.GRN
+	coworkID  grn.GRN
+	codehubID grn.GRN
 }
 
 func newIssuerStack(t *testing.T) *issuerStack {
@@ -74,15 +76,17 @@ func newIssuerStack(t *testing.T) *issuerStack {
 		require.NoError(t, err)
 		srv.WithIdentity(s.issuer)
 	})
-	require.NoError(t, orgpg.New(s.pool).WithServices(identity.AudiencePolicy, identity.ServiceCowork).
+	require.NoError(t, orgpg.New(s.pool).WithServices(identity.AudiencePolicy, identity.ServiceCowork, identity.ServiceCodehub).
 		CreateOrg(t.Context(), org.NewOrganization(orgRootGRN(s.globex), s.globex)))
 	s.policyID = identity.PrincipalGRN(s.globex, identity.AudiencePolicy)
 	s.coworkID = identity.PrincipalGRN(s.globex, identity.ServiceCowork)
+	s.codehubID = identity.PrincipalGRN(s.globex, identity.ServiceCodehub)
 
-	s.policy, s.cowork = serviceKey(t), serviceKey(t)
+	s.policy, s.cowork, s.codehub = serviceKey(t), serviceKey(t), serviceKey(t)
 	s.keys = identity.ServiceKeys{
 		identity.AudiencePolicy: {publicKey(t, s.policy)},
 		identity.ServiceCowork:  {publicKey(t, s.cowork)},
+		identity.ServiceCodehub: {publicKey(t, s.codehub)},
 	}
 	s.machine = s.machineListener(t, s.issuer)
 	return s
@@ -115,6 +119,7 @@ func (s *issuerStack) machineListener(t *testing.T, issuer *identity.Issuer) str
 		Keys:               identity.FixedKeys(s.keys),
 		ExchangeEndpoint:   listener.URL + "/oauth/token",
 		IntrospectEndpoint: listener.URL + "/oauth/introspect",
+		Issuer:             issuerURL,
 		Admitter:           identitypg.New(s.pool),
 	})
 	handler = machinegen.HandlerWithOptions(
@@ -167,10 +172,17 @@ func bodyOf(dump string) string {
 // URL named by to, with the jti given or a fresh one.
 func principalAssertion(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, to, jti string) string {
 	t.Helper()
+	return principalAssertionAs(t, private, principal, "JWT", to, jti)
+}
+
+// principalAssertionAs signs the assertion under header typ, naming aud
+// as given: a string, or a list for an assertion naming two audiences.
+func principalAssertionAs(t *testing.T, private *rsa.PrivateKey, principal grn.GRN, typ string, aud any, jti string) string {
+	t.Helper()
 	kid, err := operator.Thumbprint(&private.PublicKey)
 	require.NoError(t, err)
 	signing, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: private},
-		(&jose.SignerOptions{}).WithType("JWT").WithHeader("kid", kid))
+		(&jose.SignerOptions{}).WithType(jose.ContentType(typ)).WithHeader("kid", kid))
 	require.NoError(t, err)
 	if jti == "" {
 		raw := make([]byte, 32)
@@ -180,7 +192,7 @@ func principalAssertion(t *testing.T, private *rsa.PrivateKey, principal grn.GRN
 	}
 	client := principal.String()
 	payload, err := json.Marshal(map[string]any{
-		"iss": client, "sub": client, "aud": to,
+		"iss": client, "sub": client, "aud": aud,
 		"iat": time.Now().Unix(), "exp": time.Now().Add(time.Minute).Unix(), "jti": jti,
 	})
 	require.NoError(t, err)

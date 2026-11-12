@@ -1,8 +1,11 @@
 # ADR 0147: A message between two consenting organizations is tenant isolation's one exception
 
-> Status: accepted; not yet built. The send path still refuses a
-> cross-organization recipient before the engine is asked, and tenant
-> isolation has no exception
+> Status: accepted; built in the policy service (#1805), not yet in the
+> platform. The service's `Org` carries `consents`, tenant isolation
+> holds the exception and both organizations' guardrails are read for
+> a send, but the platform does not feed `consents` and its send path
+> still refuses a cross-organization recipient before the engine is
+> asked
 > Date: 2026-11-12
 
 Drafted for #1799, under #1796, which holds the owner's decisions of

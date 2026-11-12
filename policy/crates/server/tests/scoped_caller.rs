@@ -250,6 +250,38 @@ async fn a_type_a_scoped_caller_does_not_own_refuses_the_whole_batch() {
     .await;
 }
 
+/// A consent is an organization's half of ADR-0147's, and an operator's
+/// operations are ADR-0146's grant: only the platform writes either, so
+/// a scoped caller can neither give an organization its other half nor
+/// hold an operator to an operation.
+#[tokio::test]
+async fn a_scoped_caller_writes_neither_a_consent_nor_an_operators_operations() {
+    let org = || Some(named("Iam::Org", ACME));
+    let globex = || vec![named("Iam::Org", GLOBEX)];
+    let consenting = EntityChange {
+        entity: Some(named("Iam::Org", ACME)),
+        sequence: 1,
+        operation: Some(Operation::Upsert(EntityUpsert {
+            org: org(),
+            members: Some(named("Iam::OrgMembers", ACME)),
+            consents: globex(),
+            ..EntityUpsert::default()
+        })),
+    };
+    let delegated = EntityChange {
+        entity: Some(named("Iam::Operator", "grn:acme/iam/operator/hosting")),
+        sequence: 1,
+        operation: Some(Operation::Upsert(EntityUpsert {
+            org: org(),
+            parents: vec![named("Iam::OrgMembers", ACME)],
+            operations: vec!["iam:agent.activate".to_owned()],
+            ..EntityUpsert::default()
+        })),
+    };
+    refused_whole(consenting).await;
+    refused_whole(delegated).await;
+}
+
 #[tokio::test]
 async fn another_fault_of_a_scoped_caller_is_still_its_entry_s_alone() {
     let (mut client, reached) = served().await;

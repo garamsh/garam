@@ -1243,5 +1243,6 @@ ADRs:
   `Explain`; writing one is the action `iam:policy-permit`, held by
   `role-owner` alone, and a role other than the owner writing one is
   open; it still cannot touch the system tier or permit across
-  organizations; decided, not built; supersedes 0130 in part, on §4's
-  last clause
+  organizations; partly built (the policy service's write, store and
+  decision, #1780), the console's editor and the platform's switch
+  not; supersedes 0130 in part, on §4's last clause

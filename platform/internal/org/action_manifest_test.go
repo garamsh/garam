@@ -43,9 +43,9 @@ func undeclared(patterns, declared []string) []string {
 // other tests here rely on a name it must report and a control it must
 // not, so a check that reports nothing fails.
 func TestUndeclared_ReportsANameTheManifestsDoNotHold(t *testing.T) {
-	assert.Equal(t, []string{"iam:org-frobnicate", "org:read", "iam:billing-*"},
+	assert.Equal(t, []string{"iam:org-frobnicate", "org-read", "iam:billing-*"},
 		undeclared([]string{
-			"iam:org-read", "iam:org-*", "iam:org-frobnicate", "org:read", "iam:billing-*",
+			"iam:org-read", "iam:org-*", "iam:org-frobnicate", "org-read", "iam:billing-*",
 		}, declared()))
 }
 

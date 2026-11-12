@@ -1,6 +1,8 @@
 # ADR 0144: An organization may write permit policies over resources inside itself
 
-> Status: accepted; not yet built
+> Status: accepted; partly built. The policy service's half is built
+> (#1780): the write, the store and the decision. The console's editor
+> and the platform's switch are not.
 > Date: 2026-11-12
 
 Drafted for #1775, under #1774, which reserves this number. The

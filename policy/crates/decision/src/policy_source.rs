@@ -61,9 +61,16 @@ impl OrgGrn {
     /// it may belong to several organizations, and tenant isolation
     /// decides each (ADR-0137).
     pub fn owns(&self, entity: &EntityUid) -> bool {
+        entity.type_name().to_string() == "Iam::User" || self.names(entity)
+    }
+
+    /// Whether the entity's GRN names this organization, as the
+    /// organization's own `Org` and `OrgMembers` do. A user's GRN names
+    /// the organization that wrote it, which [`OrgGrn::owns`] leaves
+    /// out.
+    pub fn names(&self, entity: &EntityUid) -> bool {
         let id = entity.id().unescaped();
         match entity.type_name().to_string().as_str() {
-            "Iam::User" => true,
             "Iam::Org" | "Iam::OrgMembers" => id == self.0,
             _ => self.owns_grn(id),
         }
@@ -83,6 +90,8 @@ pub struct OrgPolicies {
     pub links: Vec<RoleLink>,
     /// Its `forbid` guardrails.
     pub guardrails: Vec<Policy>,
+    /// Its `permit` policies (ADR-0144).
+    pub permits: Vec<Policy>,
 }
 
 /// Reads an organization's active policies.

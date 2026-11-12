@@ -60,6 +60,7 @@ fn acme_grants_lee() -> Policies {
         held: OrgPolicies {
             links: vec![link(Role::Member, RoleScope::Organization, LEE, ACME)],
             guardrails: vec![],
+            permits: vec![],
         },
     }
 }

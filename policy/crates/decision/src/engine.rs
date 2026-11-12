@@ -102,9 +102,9 @@ impl Engine {
             .map_err(|error| Error::Entities(error.into()))
     }
 
-    /// Joins an organization's role links and guardrails to the system
-    /// tier.
-    pub fn compose(&self, links: &[RoleLink], guardrails: &[Policy]) -> Result<Policies, Error> {
+    /// Joins an organization's role links and its own policies, the
+    /// guardrails and permits it wrote, to the system tier.
+    pub fn compose(&self, links: &[RoleLink], own: &[Policy]) -> Result<Policies, Error> {
         let mut policies = self.system_tier.clone();
         for link in links {
             link.check_scope()?;
@@ -115,11 +115,11 @@ impl Engine {
                     source: error.into(),
                 })?;
         }
-        for guardrail in guardrails {
+        for policy in own {
             policies
-                .add(guardrail.clone())
+                .add(policy.clone())
                 .map_err(|error| Error::Composition {
-                    policy: guardrail.id().to_string(),
+                    policy: policy.id().to_string(),
                     source: error.into(),
                 })?;
         }
@@ -128,8 +128,8 @@ impl Engine {
 
     /// Refuses what the schema does not admit, with the checks a
     /// composition makes. A write runs this before it stores anything.
-    pub fn validate(&self, links: &[RoleLink], guardrails: &[Policy]) -> Result<(), Error> {
-        let policies = self.compose(links, guardrails)?;
+    pub fn validate(&self, links: &[RoleLink], own: &[Policy]) -> Result<(), Error> {
+        let policies = self.compose(links, own)?;
         let validation =
             Validator::new(self.schema.clone()).validate(&policies.0, ValidationMode::Strict);
         if validation.validation_passed() {
@@ -163,7 +163,12 @@ impl Engine {
             Some(org) => policies.active(org).await.map_err(Error::PolicyRead)?,
             None => OrgPolicies::default(),
         };
-        let composed = self.compose(&org_policies.links, &org_policies.guardrails)?;
+        let own = [
+            org_policies.guardrails.as_slice(),
+            org_policies.permits.as_slice(),
+        ]
+        .concat();
+        let composed = self.compose(&org_policies.links, &own)?;
         Ok(self.decide(&request, &composed, &slice.entities))
     }
 

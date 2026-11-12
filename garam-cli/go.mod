@@ -1,6 +1,6 @@
 module github.com/garamsh/garam/garam-cli
 
-go 1.27.2
+go 1.27.4
 
 require (
 	github.com/garamsh/garam/lib/cowork-sdk-go v0.0.0-00010101000000-000000000000

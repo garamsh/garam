@@ -1,0 +1,525 @@
+# ADR 0151: The gaon operator is a service here that runs each managed agent as one MicroVM
+
+> Status: proposed
+> Date: 2026-11-13
+
+Drafted for #1825, which reserves this number. The direction is the
+PM's on #1813: the operator lives in this repository, it is an
+operator in ADR-0012's sense, the Helm chart and
+`garamsh/garam-agent-operator` stand, and this is a second operator
+and not a port. garam is read at
+`210b58da3bcdf9b4e3fd5346dca01a74f9d80e4e`. gaon is read at
+`a7bdc57cc75f5ba5df9fcce3175fb41f5498a1f1`, and
+`garamsh/garam-agent-operator` at
+`ac7c9f3c40b9611f6e2bdf1eba62c14e145b4aec`; a claim below that names
+no revision holds for the one of the repository it concerns.
+
+## Context
+
+- **garam dials no cluster, and an operator is what runs agents.**
+  An operator holds a garam-issued key, exchanges its assertion at
+  `exchangeClientAssertion` for a one-hour token and calls the machine
+  listener (ADR-0012, ADR-0102,
+  [operators.md](../operators.md)). Its half of the key is unbuilt
+  (operators.md §Issued PEM identity). The operator this ADR decides
+  is unbuilt, and so is every file below it.
+- **Provisioning and runtime are separate facts.** The operator
+  reports whether the workload exists and is ready through
+  `reportProvisioningState`, one of `pending`, `provisioned`, `ready`
+  and `failed`; the agent reports whether it is connected
+  (ADR-0012, `platform/api/machine.yaml` `ProvisioningState`). `failed`
+  is reserved there for an observation that separates a workload that
+  cannot start from one still starting.
+- **garam holds no agent definition.** ADR-0118 dropped
+  `agent_definitions`, and `platform/api/machine.yaml` has no
+  operation that lists the agents assigned to a caller. The desired
+  values of a managed agent are the Operator control service's, which
+  the cluster controller pulls
+  ([agents.md](../agents.md) §Separated execution). In
+  `garamsh/garam-agent-operator` that pull is contract C2:
+  `GET /v1/operators/self/desired` answers the whole releasable set of
+  the proved controller, level-triggered, under a cursor that only
+  wakes a long poll, and `POST /v1/operators/self/agents/{agent}/status`
+  reports the rendered revision
+  (`garamsh/garam-agent-operator@ac7c9f3c40b9611f6e2bdf1eba62c14e145b4aec:docs/architecture/adr/0043-pull-managed-agents-desired-state-from-the-control-service-and-keep-each-grn-on-one-source.md`,
+  whose source marker its ADR-0077 supersedes; the feed stands, and
+  `…:docs/architecture/agent.md` states that nothing else builds an
+  `Agent`).
+  Its control service holds no cluster access, by seam, and a
+  controller is served only its own agents
+  (`…:docs/architecture/adr/0079-run-only-on-our-own-system-and-keep-the-seams-that-allow-a-bring-your-own-operator.md`).
+  A pair is one cluster manager and at most one control service, each
+  with its own key, and a control service names one manager once
+  (ADR-0124, operators.md §An Operator's two identities).
+- **What an agent's pod holds today is wide.** In
+  `garamsh/garam-agent-operator` a managed agent is a StatefulSet of
+  one: the agent container, a workspace container, `garam`'s adapter as
+  a native sidecar, init containers that place credentials and make
+  directories, two claims, one user for every container, a
+  supplementary group, a finalizer fencing the writers on evidence
+  they stopped, and a placement token minted at each release
+  (`…:docs/architecture/agent.md`, `…:docs/architecture/adr/0042-fence-each-agent-pod-on-positive-evidence-its-writers-stopped-and-mint-an-adapter-only-placement-token.md`).
+  garam's own standalone runner keeps the same three-process shape on
+  rootless Docker as three containers in one network namespace, user
+  65532, two volumes, a SIGTERM drain that never forces, and the
+  adapter stopped last ([agents.md](../agents.md) §The host's runner).
+  The adapter runs beside exactly one agent because the agent's
+  gateway binds loopback and because it must outlive the agent while
+  it shuts down ([adapter.md](../adapter.md) §What it is).
+- **gaon serves a smaller unit.** The group is
+  `compute.gaon.garam.sh/v1alpha1`, cluster-scoped, with no namespaces
+  (D4 on `garamsh/gaon#117`). A `MicroVM` has one `image`, one
+  `command`/`args`, `env`, `user`, `files` and `ports`, readiness and
+  liveness probes, `terminationGracePeriodSeconds`, `volumes` and
+  `serviceAccountName`
+  (`garamsh/gaon@a7bdc57cc75f5ba5df9fcce3175fb41f5498a1f1:lib/api/microvm.go`).
+  Its spec is immutable once created except `runStrategy`,
+  `idleTimeoutSeconds`, `resources` and `volumes`
+  (`…:lib/api/microvm.go`, `Spec` update rule). Its status is a phase
+  (`Pending`, `Running`, `Suspended`, `Succeeded`, `Failed`,
+  `Stopped`), `conditions` (`Ready` is written by the Node Agent,
+  `LeaseExpired` by the node lifecycle controller), `restartCount`,
+  `addresses` and `lastExit` (code and time); a status whose
+  `bindingEpoch` differs from the spec's reads as `Pending` through
+  `EffectivePhase` (`…:lib/api/microvm.go`).
+- **gaon's answer to garam's needs is recorded.** On
+  `garamsh/gaon#125` (2026-11-12) gaon's PM answered the twelve needs
+  as served: a custom kind through a CustomResourceDefinition with
+  `ownerReferences` and garbage collection, a Go client in
+  `github.com/garamsh/gaon/lib/api` whose first tag is `lib/api/v0.1.0`
+  after #118 and #119 merge, conditions and `lastExit` readable,
+  Secrets the operator writes and a Node reads only when a MicroVM
+  bound to it references them, and a label-selected `NetworkPolicy`
+  (D15 on #117) enforced beside mvmd's per-MicroVM policy. What the
+  Resource API document promises and what `main` serves are different
+  things, and §Consequences keeps them apart.
+- **The credential cannot be refreshed in a running MicroVM as the
+  document reads.** A `valueFrom` of an `env` or a `files` entry is
+  "resolved when the MicroVM starts and is not updated while the
+  MicroVM runs" (`…:lib/api/microvm_process.go`). garam's agent tokens
+  live an hour by default and are replaced by the assignee, and the
+  adapter reads each token file before every call and never holds it
+  ([agents.md](../agents.md) §Tokens in place of certificates,
+  [adapter.md](../adapter.md) §Token mode).
+- **garam's side names no Kubernetes API.** The words are prose: "pod"
+  at `platform/api/machine.yaml` lines 463, 467, 474, 534, 1925, 1928,
+  1946 and 1965, "replica" and "containers" at 1928-1931, and at
+  `platform/internal/agent/agent.go` lines 7, 56 and 80.
+
+## Decision
+
+Each point answers one item of #1825. Every alternative not chosen is
+listed with the reason.
+
+### 1. A folder `gaon-operator/`, a module of its own and an image `garam/gaon-operator`
+
+- **The folder is `gaon-operator/`**, a service's own tree under
+  ADR-0132's first kind, as `cowork/` is: the module, the binary under
+  `cmd/`, its tests and its documents. Its module is
+  `github.com/garamsh/garam/gaon-operator`, its binary
+  `gaon-operator/cmd/gaon-operator` (as `cowork/cmd/cowork`), and its
+  image `garam/gaon-operator` under ADR-0134's rule that an image
+  lives at its publishing repository. The name says which cluster it
+  is an operator for and so cannot be mistaken for
+  `garamsh/garam-agent-operator`, which stays the Kubernetes one.
+- **Alternatives.** `operator/` and `agent-operator/` name no cluster,
+  and the second is one word from the other repository. A
+  `<service>-<surface>` name (ADR-0132's second kind) would make the
+  operator a surface of `platform/`, and it is a peer of it
+  (ADR-0012), authenticating with tokens `platform/` issues
+  (structure.md §Services). A folder under `platform/` puts a second
+  binary in the server's module and its dependencies in the server's
+  `go.sum`, which ADR-0125 chose not to do for `cowork/`.
+- **The folder is not created by this pull request.** A service's
+  folder is created by its first pull request (structure.md
+  §Services), which is the first slice's. That pull request adds the
+  module to `go.work` and to `tooling/ci/modules`.
+- **The dependency on gaon's client** is
+  `github.com/garamsh/gaon/lib/api`, and no tag of it exists at the
+  revision read. A tag is the gaon PM's to cut; a pseudo-version of a
+  commit is what Go accepts before it, and whether the first slice may
+  take one is the PM's question (§Questions).
+
+### 2. No custom gaon kind for an agent: the MicroVM is the record
+
+- **The operator reconciles the control service's desired feed
+  directly into a `MicroVM`, a `Secret` and a `Volume`.** It writes no
+  `CustomResourceDefinition`. Everything it needs to find again after a
+  restart is on the objects it made: a label carrying the digest of
+  the agent's GRN (a label value is at most 63 characters of a set
+  that holds no `:`, `…:lib/api/labels.go`), a label carrying the
+  organization's digest, and annotations carrying the epoch and the
+  revision rendered. The objects' names are the digest of the whole
+  GRN, as `garamsh/garam-agent-operator` names its objects: `agent-`
+  and sixteen hex characters of the SHA-256 of the GRN
+  (`…:docs/architecture/adr/0009-construct-a-claimed-agent-from-the-operators-own-configuration.md`,
+  whose construction its ADR-0077 supersedes and whose naming
+  stands),
+  because gaon has no namespace to carry the organization and a name
+  is a DNS subdomain.
+- **What a kind of its own would add.** A place for a person to write
+  an agent by hand, as `Agent` is in Kubernetes; a status of its own
+  that holds the evidence the operator needs and cannot recompute,
+  which in Kubernetes is the epoch and the writer-fence record
+  (`…:docs/architecture/adr/0016-report-what-the-operator-observed-and-stay-silent-where-it-observed-nothing.md`,
+  superseded by its ADR-0077, read here as history);
+  and one owner for `ownerReferences` so that a `Secret` and a
+  `Volume` are collected with it. **What it costs.** A second record
+  of what the control service already holds, with the source-marker
+  problem `garamsh/garam-agent-operator` met in ADR-0043 and
+  removed in ADR-0077 by building an `Agent` only from the feed; a
+  CRD the operator registers with a role that can register kinds; and
+  a status split in two. Nothing in the first
+  slice writes an agent by hand: `garamsh/garam-agent-operator`
+  builds no other (`…:docs/architecture/agent.md`).
+- **A gaon-side kind would be gaon's or aurora's, not garam's.**
+  gaon's PM names a CRD the operator registers as served (D1, D3,
+  `garamsh/gaon#125` item 9), so it is available whenever a second
+  case needs it.
+- **The `ownerReferences` between a `MicroVM`, its `Secret` and its
+  `Volume`** are the gaon-side way to collect them together
+  (`resource-api.md` §Metadata); whether garbage collection is served
+  at the revision read is gaon#120's and not verified.
+- **Sign it is wrong.** An operator that needs a durable fact it can
+  neither recompute nor put in a label or annotation, or a person who
+  needs to write an agent without the control service.
+
+### 3. One MicroVM holds one composed guest image with a supervisor; the credential arrives as a Secret-sourced file
+
+- **The agent is one MicroVM and one image, whose entrypoint is a
+  small supervisor that runs the three programs of a generation**:
+  the agent runtime, the workspace and garam's adapter, as one user,
+  the gateway on the guest's loopback, started in that order and
+  drained in the reverse order, without force, with the adapter last.
+  It is the standalone runner's contract
+  ([agents.md](../agents.md) §The host's runner) moved inside the
+  guest: gaon's MicroVM carries one process, and a guest is a machine
+  where several processes under one parent are the ordinary shape.
+- **The image is composed, not pulled.** The runtime and workspace
+  images are the agent platform's and are pinned by digest as the
+  runner pins them; garam's adapter is garam's. The composed image is
+  built from those digests by a Dockerfile in `gaon-operator/`, and
+  which images and which digests an agent is built from stays what
+  garam holds no value of (agents.md, the paragraph on what an agent
+  is built from). Two images would be a gaon change, below.
+- **User and files.** The user is 65532, as in the runner; each of the
+  agent's token files, the garam server root and the control root is a
+  `files` entry sourced from a `Secret` key with mode `0400` and the
+  MicroVM's user as owner (`…:lib/api/microvm_process.go`, `MicroVMFile`
+  and `ValueSource`). No credential is an inline `content` or `value`:
+  a Node may read every MicroVM, so the spec is not where a secret
+  lives (`resource-api.md` §Authorization, "Reads of MicroVMs and
+  Volumes are open to a Node").
+- **Storage.** The memory store and the workspace are two gaon
+  `Volume`s named by the agent's digest, mounted by `volumes` where
+  the runner mounts its two volumes. A `Volume` outlives a MicroVM
+  and is removed only by a person, as the runner refuses to replace a
+  volume that is gone.
+- **The readiness probe** is the supervisor's own listener on a named
+  port (D14): ready means the three programs run, and says nothing of
+  whether the agent works, which is what `ready` means in
+  `ProvisioningState`. `terminationGracePeriodSeconds` is the drain's
+  bound, to be set from the same value the control service renders.
+- **How the credential reaches it.** The operator mints the agent's
+  tokens as its assignee (`mintAgentToken`), writes them to a `Secret`
+  it labels, and creates the MicroVM naming that `Secret`. The only
+  reader of the `Secret` besides the operator is the Node the MicroVM
+  is bound to, which the Node authorizer admits for a `get` of one
+  `Secret` a MicroVM bound to it references, and no `list` or `watch`
+  (`resource-api.md` §Authorization). The operator's ClusterRole may
+  `create`, `update`, `delete` and `list` `secrets` limited by label
+  selector (gaon#118 and `resource-api.md` §RBAC), and reads an absent
+  object by `list`, because a `get` of one is judged on no labels and
+  a selector rule refuses it
+  (`garamsh/gaon@a7bdc57cc75f5ba5df9fcce3175fb41f5498a1f1:docs/workloads.md`).
+- **Refresh does not reach a running MicroVM, and that is a gaon
+  need.** The alternatives: replace the MicroVM at every token period,
+  which ends the agent each hour; lengthen the token to the one-day
+  ceiling garam allows, which moves the same cut to once a day and
+  leaves a stale file for the whole day; let the guest renew its own
+  token, which ADR-0100 rejects because a stolen token would renew
+  itself; or ask gaon to re-resolve a `Secret`-sourced `files` entry in
+  a running MicroVM, as the Node Agent already renews a ServiceAccount
+  token file (D13 on #117). The decision is the last. The first slice
+  does not need it for an agent that lives less than a token; every
+  agent that lives longer does.
+- **Alternatives for the shape.**
+  - *Three MicroVMs, one per program.* The agent's gateway binds
+    loopback unless mTLS is configured, and the workspace is reached
+    over loopback; separate MicroVMs have separate addresses, so
+    every link would need the certificates ADR-0012 refused to
+    operate.
+  - *A multi-process MicroVM in gaon* (a list of processes sharing a
+    network, an order and a stop order). It is a pod, which gaon
+    chose not to build; and the order-and-drain rules would be gaon's
+    to carry for one tenant. It is the option to ask for if the
+    supervisor proves to be a second runner to keep.
+  - *The standalone runner's supervisor reused.* It drives a container
+    engine and holds its intent in a store beside the volumes
+    (`platform/internal/workload`), none of which a guest has.
+- **The recommendation depends on a fact not read.** What the
+  composed image's supervisor costs to build and keep is not measured,
+  and neither is whether a gaon `Always` strategy restarts the process
+  inside one guest or the whole guest (§Questions).
+
+### 4. One policy for every agent, ingress denied, egress by prefix
+
+- **Every agent MicroVM carries the labels `garam.sh/role=agent` and
+  `garam.sh/organization=<digest of the organization GRN>`.** One
+  `NetworkPolicy` selects `role=agent` and allows no ingress at all, and
+  egress to a short list: garam's machine listener, the control
+  service, the cluster's DNS address, and the model path. A MicroVM any
+  policy selects is default-deny in that direction (D15 on #117,
+  `garamsh/gaon#125` item 12).
+- **No ingress is needed, so none is allowed.** Delivery is
+  agent-initiated and garam dials nothing (ADR-0012); the adapter and
+  the agent talk over loopback inside the guest. This is stricter than
+  the recipe gaon's answer suggests, which admits the same
+  organization label: an agent has no reason to be reached by another
+  agent, and a rule that admits it is a path a later flaw would use.
+  Tenant separation is then the absence of a route and not a rule per
+  organization, so the organization label is carried for audit and for
+  a later policy and no second kind of policy is written now.
+- **Alternatives.** A policy per organization, as the answer on #125
+  describes: one object per tenant to create and delete with it, and
+  it enforces nothing the single policy does not. A policy per agent:
+  the same, in a larger number. No policy and mvmd's per-MicroVM
+  policy alone, which is the outer bound and is not written by the
+  operator.
+- **What egress to the model needs is open.** `NetworkPolicy` allows
+  traffic by label selector or prefix (D15), and a hosted model
+  provider is known by name. Whether the agents reach the model
+  through garam's gateway
+  ([ai-gateway.md](../ai-gateway.md)), which would put the whole list
+  at garam's addresses, or through the provider directly, which
+  needs a prefix list that moves, is not settled by anything read here
+  (§Questions).
+- **Enforcement is gaon's.** `NetworkPolicy` and `Network` are
+  interpreted by the network plugin and are not in `lib/api` at the
+  revision read (`…:lib/api` holds no such type), so a client library
+  for it is a need (§What gaon does not yet serve).
+
+### 5. Conditions, deactivation, replacement, exit and restart
+
+- **The report.** It follows `garamsh/garam-agent-operator`'s rule that
+  the operator reports what it observed and nothing else, and sends
+  nothing where it observed nothing (its ADR-0016, superseded by its
+  ADR-0077, read here as history and not as what that repository
+  serves).
+
+  | Observed on the MicroVM | Reported |
+  |---|---|
+  | `Pending`, or a status whose epoch differs from the spec's | `provisioned` once the MicroVM exists |
+  | `Ready` true and `Running` | `ready` |
+  | `Failed`, with `lastExit` | `failed` |
+  | the object was not read | nothing |
+
+  `failed` is reachable here and was not on a StatefulSet, because
+  `Failed` and `lastExit` separate a workload that cannot start or
+  exited from one still starting; `machine.yaml` reserves the state for
+  exactly an observation of that kind. `pending` is never sent: it is
+  what garam holds before any report. Each report carries the epoch
+  the operator holds the agent at, and a stale one is refused.
+- **Deactivation.** The lifecycle authority deactivates, and for a
+  managed agent that is the control service. The operator stops the
+  workload by setting `runStrategy` to `Halted`, the field gaon lets
+  change, and deletes nothing while the stop is unverified. It treats
+  gaon's `Stopped` as the evidence the writers stopped, and treats a
+  Node whose `LeaseExpired` is true, or a status it cannot read, as no
+  evidence and leaves the MicroVM and its `Volume`s as they are, which
+  is the rule of `garamsh/garam-agent-operator` ADR-0042 stated in
+  gaon's terms.
+- **Replacement.** A MicroVM's spec is immutable, so any change of the
+  image, user, files or environment is a new MicroVM. The operator
+  creates it only after the old one is observed `Stopped` or absent,
+  because the two would share the agent's `Volume`; a new MicroVM
+  starts under a new placement token, minted at each release as the
+  Kubernetes operator does. Whether gaon refuses a second MicroVM that
+  uses a `Volume` already bound to another is gaon's and was not read
+  (§Questions). A replacement that moves the agent to another
+  operator is the lifecycle authority's and arrives at this operator
+  as the agent leaving its feed: the operator halts the MicroVM and
+  keeps the `Volume`, as the Kubernetes operator keeps the claim.
+- **A MicroVM that exits.** For an active agent the strategy is
+  `Always`, so gaon restarts it; the adapter obtains a new activation
+  at each start through the lifecycle authority, which is what the
+  fence expects (adapter.md §Activation and runtime status).
+  `restartCount` and `lastExit` are what the operator logs. Whether
+  `Always` restarts the process or the guest, and what a restart does
+  with `files`, decides whether a restart is a new generation to the
+  fence (§Questions). `RerunOnFailure` and `Once` are not chosen: an
+  agent that exits cleanly is as unwanted as one that fails.
+- **Its own restart.** The operator holds no state a restart loses.
+  It lists the MicroVMs it labelled, reads the whole feed, and renders
+  again what differs: the cursor is in memory and a request without it
+  answers the whole set, as in its ADR-0043. A credential Secret that
+  exists is left alone and one that is missing is minted again, never
+  retried in memory, because a token held only in one process is lost
+  with it.
+
+### 6. Identity: a certificate and a label-limited ClusterRole in gaon; a pair registered in garam
+
+- **In gaon**, the operator authenticates with a client certificate
+  whose CN is `garam-operator` and whose subject carries no
+  `gaon:nodes` Organization (D12 on #117), and holds one ClusterRole
+  bound to that CN: `microvms`, `volumes` and `secrets` limited by a
+  label selector to what it labels, `list` and `watch` of
+  `microvms`, and `create` on `serviceaccounts/token` only if a later
+  slice gives a guest a ServiceAccount. It may not register a kind,
+  and may not bind a role (the escalation rule,
+  `resource-api.md` §Authorization). How a non-Node certificate is
+  issued is not shown by what was read: the signer's approval rule
+  admits a Node subject only (`resource-api.md`,
+  CertificateSigningRequest),
+  so the route is gaon's or aurora's to state (§Questions).
+- **In garam**, the operator is a registered pair: a cluster manager,
+  which this service is, and a control service. The control service
+  is the lifecycle authority of its agents (ADR-0078) and holds the
+  delegation; the operator holds its own key and nothing else of
+  garam's. The grant the organization writes to the control service
+  names this manager as its controller and covers `iam:agent.activate`
+  and the creation operation for the first slice; configuration,
+  recovery and replacement are added by a new grant when the slice
+  that needs them lands, since a grant is never edited (operators.md
+  §Delegated operation authority). `iam:agent.activate` is grant-only.
+- **The control service is a second instance of the one
+  `garamsh/garam-agent-operator` builds**, registered under its own
+  record and key. A manager holds at most one control service and a
+  control service names one manager (ADR-0124), so the pair cannot
+  share the existing instance's registration. The alternatives: a
+  control service written in this repository, which writes a second
+  desired-state store for the same values; the operator writing the
+  definition itself, which breaks the seam that the control service
+  holds no cluster access; and garam holding the definition, which
+  reverses ADR-0118. Whether one deployment of that binary can serve
+  two controllers is a question for its owner (§Questions).
+- **The key lives in a gaon `Secret`** and arrives as a `files` entry
+  of the operator's own MicroVM, owned by its user, as operators.md
+  asks of the operator's half (one external writer, reread at each
+  exchange); the Secret-sourced file is not refreshed while the
+  MicroVM runs, so a rotated key is read at the next start, which an
+  operator that holds no state accepts. The same Secret is created by
+  whoever deploys it, never by the operator.
+
+### 7. The first slice
+
+- **In scope.** The operator reads the feed as the proved controller,
+  mints an agent's tokens, writes the `Secret`, creates the labelled
+  MicroVM and `Volume`s, reports `provisioned` and `ready`, halts the
+  MicroVM when the feed deactivates it, and reports `failed` on a
+  `Failed` phase. One agent of one organization, started, reported
+  ready and stopped on deactivation, under the single `NetworkPolicy`.
+- **Left for later slices**, each its own pull request:
+  - token refresh in a running MicroVM (a gaon need);
+  - replacement and recovery, with the writer-stopped evidence;
+  - the adapter's activation through the control service and the
+    placement token;
+  - draining under `terminationGracePeriodSeconds`;
+  - a rolling change of the composed image;
+  - metrics for the exchange and the feed.
+- **Alternatives.** A slice that starts a MicroVM with no adapter
+  would be ready and unreachable, and a slice with the whole of
+  replacement would hold the fence before the first agent runs. The
+  slice above is the smallest that a person can watch end to end.
+
+### 8. What garam's side changes
+
+- **The wording.** "pod", "replica" and "containers" in
+  `platform/api/machine.yaml` (lines 463, 467, 474, 534, 1925, 1928,
+  1931, 1946, 1965) and in `platform/internal/agent/agent.go` (lines
+  7, 56, 80) become the neutral "workload", and "ready replica"
+  becomes "ready workload": the contract says what the report means,
+  and not which scheduler observed it. It is a description change
+  with no operation or schema change, and a separate pull request
+  from this ADR, which is Markdown only. `machine.yaml` is
+  authoritative and `agent.go` follows it.
+- **`failed` is described for a second kind of observer.** The
+  reserved wording at line 1931 names a ready replica count as what
+  fails to separate the cases; it stays true, and gains the case of an
+  observer that has a terminal phase.
+- **Other assumptions found.** `adapter.md` §What it is and
+  §Foreign facts say the adapter runs "in that agent's pod" and that
+  the sidecar is native; in a guest it is a process beside the agent
+  and the reason (outlive the agent while it shuts down) is carried by
+  the supervisor's order. `agents.md` §What an agent is built from
+  names `garamsh/garam-agent-operator`'s flags as the only operator's
+  construction. `overview.md` lines 47, 52, 248 and 280 repeat "pod".
+  ADR-0012 and ADR-0053 are frozen and keep their wording.
+  `deployment-contract.md` is held by another worker this round and is
+  not touched here.
+- **Nothing in garam's operations changes.** The operator calls
+  `exchangeClientAssertion`, `mintAgentToken`,
+  `reportProvisioningState` and the control service's C2; it names no
+  new route.
+
+## What gaon does not yet serve that the first slice needs
+
+Read from the Resource API document, the `lib/api` sources, and
+`garamsh/gaon#117` and `#125` at the revision above; "not verified"
+says the document promises it and `main` was not read.
+
+- A tag of `github.com/garamsh/gaon/lib/api`: `lib/api/v0.1.0`
+  follows #118 and #119 (D17 on #117). None is cut.
+- Labels, selectors and `ownerReferences` serving (#118 contract,
+  #119 serving, #120 garbage collection). The types are in `lib/api`
+  (`labels.go`); serving is not verified.
+- `NetworkPolicy` as a type in `lib/api` and its contract (D15). No
+  issue number is cited on #117 or #125 for it.
+- RBAC rules limited by label selector, which codehub's PM made a
+  condition (a comment on #117, #118's scope). Served is not verified.
+- The Node authorizer's read of a Secret a MicroVM references and the
+  MicroVM ADR with named ports (#124). Documented, not verified.
+- `lastExit`'s end time (#73, D14 reply on #125); the code and time
+  are in `lib/api` already.
+- Re-resolving a `Secret`-sourced `files` entry in a running MicroVM:
+  documented as not done, with no issue.
+- A statement of how a non-Node client certificate is obtained.
+- Whether a second MicroVM may use a `Volume` already bound.
+
+## Questions the repositories did not settle
+
+For the PM:
+
+1. May the first slice take a pseudo-version of `lib/api` before
+   `lib/api/v0.1.0`?
+2. Is a second instance of the control service acceptable under
+   `garamsh/garam-agent-operator` ADR-0079's seams, and who registers
+   it?
+3. Does the agent reach its model through garam's gateway or the
+   provider?
+4. Composed image with a supervisor here, or a multi-process request
+   to gaon?
+
+For gaon's PM: the five gaon needs above that carry no issue number,
+and whether `Always` restarts the process or the guest.
+
+## Consequences
+
+- **Easier.** The operator is small: it holds no definition, no
+  second kind and no store, and a restart loses nothing. Tenant
+  separation is one policy that allows no ingress.
+- **Harder.** The agent runtime, workspace and adapter are composed
+  into one image, so a change in any of the three images is a rebuild
+  here, and the supervisor is a program to keep. A token cannot be
+  renewed in a running MicroVM until gaon serves it. The pair needs a
+  second control service instance. Every gaon item above is a
+  dependency of the first slice.
+- **Ruled out.** Garam dialing the cluster, a custom kind in the first
+  slice, a MicroVM per program, an ingress rule for agents.
+
+## Signs the decision was wrong
+
+- A second tenant or process needs to reach an agent, and the ingress
+  rule becomes a list.
+- The supervisor in the composed image grows into the standalone
+  runner's intent, adoption and nonce store, which is the sign to ask
+  gaon for several processes in one MicroVM.
+- The operator needs a durable fact that no label or annotation holds,
+  or a person needs to write an agent by hand: the sign to add the
+  kind.
+- Token refresh cannot be served by gaon, and agents are replaced each
+  hour or day.
+- The model path is a provider prefix that changes weekly, so the
+  egress rule is edited as often.
+- A second operator for another cluster repeats most of the folder's
+  code, which is the sign that the shared part is a library.

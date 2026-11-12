@@ -348,6 +348,9 @@ or a name here that the source no longer reads.
 | `GARAM_IDENTITY_ISSUER` | garam's own OIDC issuer is off until a deployment sets it with a signing key, and the chart does not render it yet (ADR-0141). |
 | `GARAM_IDENTITY_SERVICE_KEYS_FILE` | The public keys of each first-party service, by service name, at most two each, which authenticate its principals (ADR-0129); the chart does not render it yet. |
 | `GARAM_MIGRATIONS_DIR` | The migrations ship inside the image and the default resolves to them there. A value here could only point the Job away from them. |
+| `GARAM_TRANSIT_IDENTITY_FILE` | The login form of the Transit token (ADR-0152) is for a deployment with no process beside garam to write a token file, such as a gaon MicroVM. A cluster has one, so the chart renders the token-file form alone (ADR-0104). |
+| `GARAM_TRANSIT_AUTH_MOUNT` | Same: it belongs to the login form, which the chart does not render. |
+| `GARAM_TRANSIT_AUTH_ROLE` | Same: it belongs to the login form, which the chart does not render. |
 
 Two things sit outside that comparison:
 

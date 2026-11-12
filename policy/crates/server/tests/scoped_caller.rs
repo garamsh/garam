@@ -11,10 +11,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use caller_tokens::*;
-use cedar_policy::EntityUid;
-use decision::{Cause, Engine, EntitySlice, EntitySource, OrgGrn, OrgPolicies, PolicySource};
+use cedar_policy::{EntityUid, PolicyId};
+use decision::{
+    Cause, Engine, EntitySlice, EntitySource, OrgGrn, OrgPolicies, PolicySource, Role, RoleLink,
+    RoleScope,
+};
 use entity::{Applied, EntityChange as StoreChange, Error};
-use serde_json::json;
+use serde_json::{Value, json};
 use server::proto::entity_change::Operation;
 use server::proto::policy_service_client::PolicyServiceClient;
 use server::proto::{
@@ -33,24 +36,31 @@ const COWORK: &str = "grn:acme/iam/service/cowork";
 const PROJECT: &str = "grn:acme/iam/project/web";
 const CHANNEL: &str = "grn:acme/cowork/project/web/channel/general";
 
-/// Counts what reaches the store, and writes it nowhere.
+/// Counts what reaches the store, and writes it nowhere. It holds no
+/// policy and no entity unless a test hands it some.
 #[derive(Clone)]
 struct Counting {
     engine: Engine,
     reached: Arc<AtomicUsize>,
+    links: Vec<RoleLink>,
+    directory: Value,
+    org: Option<OrgGrn>,
 }
 
 impl PolicySource for Counting {
     async fn active(&self, _: &OrgGrn) -> Result<OrgPolicies, Cause> {
-        Ok(OrgPolicies::default())
+        Ok(OrgPolicies {
+            links: self.links.clone(),
+            ..OrgPolicies::default()
+        })
     }
 }
 
 impl EntitySource for Counting {
     async fn slice(&self, _: &EntityUid, _: &EntityUid) -> Result<EntitySlice, Cause> {
         Ok(EntitySlice {
-            entities: self.engine.entities(json!([]))?,
-            org: None,
+            entities: self.engine.entities(self.directory.clone())?,
+            org: self.org.clone(),
         })
     }
 }
@@ -66,11 +76,22 @@ impl EntitySink for Counting {
 }
 
 async fn served() -> (PolicyServiceClient<Channel>, Arc<AtomicUsize>) {
+    serving(Vec::new(), json!([]), None).await
+}
+
+async fn serving(
+    links: Vec<RoleLink>,
+    directory: Value,
+    org: Option<OrgGrn>,
+) -> (PolicyServiceClient<Channel>, Arc<AtomicUsize>) {
     let engine = Engine::load().unwrap();
     let reached = Arc::new(AtomicUsize::new(0));
     let stores = Counting {
         engine: engine.clone(),
         reached: reached.clone(),
+        links,
+        directory,
+        org,
     };
     let service = Service::new(engine, stores.clone(), stores);
     let verifier = Verifier::from_jwks(&jwks(&[signer()]), ISSUER).unwrap();
@@ -375,4 +396,115 @@ async fn one_question_out_of_scope_in_a_batch_refuses_the_batch() {
         .await
         .unwrap_err();
     assert_eq!(refused.code(), Code::PermissionDenied);
+}
+
+const PAGE: &str = "grn:acme/cowork/page/home";
+const MEMBERS: &str = "grn:acme/iam/user/lee";
+const NOT_A_MEMBER: &str = "grn:globex/iam/user/mia";
+
+fn entry(entity_type: &str, id: &str, attrs: Value, parents: &[(&str, &str)]) -> Value {
+    let parents: Vec<Value> = parents
+        .iter()
+        .map(|(t, i)| json!({"type": t, "id": i}))
+        .collect();
+    json!({"uid": {"type": entity_type, "id": id}, "attrs": attrs, "parents": parents})
+}
+
+/// Acme with its members, its page, a user who is a member and one who
+/// is not, and a role link that makes the member a `Member` of acme.
+fn acme() -> (Vec<RoleLink>, Value) {
+    let org = json!({"__entity": {"type": "Iam::Org", "id": ACME}});
+    let members = json!({"__entity": {"type": "Iam::OrgMembers", "id": ACME}});
+    let directory = json!([
+        entry("Iam::OrgMembers", ACME, json!({}), &[]),
+        entry(
+            "Iam::Org",
+            ACME,
+            json!({"org": org, "members": members}),
+            &[]
+        ),
+        entry(
+            "Cowork::Page",
+            PAGE,
+            json!({"org": org}),
+            &[("Iam::Org", ACME)]
+        ),
+        entry(
+            "Iam::User",
+            MEMBERS,
+            json!({}),
+            &[("Iam::OrgMembers", ACME)]
+        ),
+        entry("Iam::User", NOT_A_MEMBER, json!({}), &[]),
+    ]);
+    let uid = |t: &str, id: &str| format!("{t}::\"{id}\"").parse::<EntityUid>().unwrap();
+    let link = RoleLink {
+        id: PolicyId::new("link-lee-acme"),
+        role: Role::Member,
+        scope: RoleScope::Organization,
+        principal: uid("Iam::User", MEMBERS),
+        resource: uid("Iam::Org", ACME),
+    };
+    (vec![link], directory)
+}
+
+fn page_read_by(subject: &str) -> EvaluateRequest {
+    EvaluateRequest {
+        subject: Some(Subject {
+            r#type: "Iam::User".into(),
+            id: subject.into(),
+        }),
+        ..question("cowork:page.read", "Cowork::Page", PAGE)
+    }
+}
+
+/// Prints what the service answered cowork, and asserts each thing it
+/// prints. Run it with `--nocapture` to read the answers.
+#[tokio::test]
+async fn what_the_service_answers_the_cowork_principal() {
+    let (links, directory) = acme();
+    let (mut client, reached) = serving(links, directory, Some(OrgGrn::new(ACME))).await;
+
+    let allowed = client
+        .evaluate(bearer(page_read_by(MEMBERS), COWORK))
+        .await
+        .unwrap()
+        .into_inner();
+    let policy_ids = |answer: &server::proto::EvaluateResponse| -> Vec<String> {
+        answer
+            .context
+            .iter()
+            .flat_map(|context| &context.reasons)
+            .map(|reason| reason.policy_id.clone())
+            .collect()
+    };
+    println!("sub: {COWORK}");
+    println!("evaluate member: cowork:page.read on {PAGE} for {MEMBERS}");
+    println!("  decision: {}", allowed.decision);
+    println!("  reason policy_ids: {:?}", policy_ids(&allowed));
+    assert!(allowed.decision);
+    assert_eq!(policy_ids(&allowed), ["link-lee-acme"]);
+
+    let denied = client
+        .evaluate(bearer(page_read_by(NOT_A_MEMBER), COWORK))
+        .await
+        .unwrap()
+        .into_inner();
+    println!("evaluate non-member: cowork:page.read on {PAGE} for {NOT_A_MEMBER}");
+    println!("  decision: {}", denied.decision);
+    println!("  reason policy_ids: {:?}", policy_ids(&denied));
+    assert!(!denied.decision);
+    assert!(policy_ids(&denied).contains(&"tenant-isolation".to_owned()));
+
+    let foreign = upsert(
+        named("Iam::Team", "grn:acme/iam/team/eng"),
+        Some(named("Iam::Org", ACME)),
+        vec![named("Iam::Org", ACME)],
+    );
+    let refused = apply(&mut client, COWORK, vec![foreign]).await.unwrap_err();
+    println!("apply_entity_changes: write Iam::Team grn:acme/iam/team/eng");
+    println!("  code: {:?}", refused.code());
+    println!("  message: {}", refused.message());
+    assert_eq!(refused.code(), Code::PermissionDenied);
+    assert_eq!(reached.load(Ordering::SeqCst), 0);
 }

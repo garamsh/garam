@@ -38,12 +38,15 @@ pub enum Caller {
     /// cowork, which writes the types whose `@caller` is `cowork` and
     /// asks of its own service, within one organization.
     Cowork,
+    /// codehub, which writes the types whose `@caller` is `codehub` and
+    /// asks of its own service, within one organization.
+    Codehub,
 }
 
 impl Caller {
     /// The closed list of callers, which a check holds the manifests'
     /// `@caller` values to.
-    pub const ALL: [Self; 2] = [Self::Platform, Self::Cowork];
+    pub const ALL: [Self; 3] = [Self::Platform, Self::Cowork, Self::Codehub];
 
     /// The name of this caller: the bare `sub` of the platform's token,
     /// the `<name>` of a scoped caller's service principal, and the
@@ -53,6 +56,7 @@ impl Caller {
         match self {
             Self::Platform => "platform",
             Self::Cowork => "cowork",
+            Self::Codehub => "codehub",
         }
     }
 
@@ -61,7 +65,7 @@ impl Caller {
     pub const fn scoped(self) -> bool {
         match self {
             Self::Platform => false,
-            Self::Cowork => true,
+            Self::Cowork | Self::Codehub => true,
         }
     }
 

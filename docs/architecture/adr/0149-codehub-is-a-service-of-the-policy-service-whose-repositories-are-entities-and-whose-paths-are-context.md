@@ -1,6 +1,7 @@
 # ADR 0149: codehub is a service of the policy service, its repositories are entities and its paths are context
 
-> Status: accepted; not built
+> Status: accepted; built in the policy service (#1815), not in
+> codehub, its outbox or the runner
 > Date: 2026-11-13
 
 Drafted for #1812, under #1760, which reserves this number, and

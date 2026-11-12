@@ -1,0 +1,43 @@
+// codehub's manifest: the entity types and actions of the `codehub`
+// service (ADR-0143, ADR-0149). A repository is named by codehub's
+// immutable id, `grn:<org>/codehub/repo/<id>`, and its actions join
+// the roles of `iam`. A member reads and does not write: an owner's
+// `permit` says who writes (ADR-0149 item 1).
+//
+// `path` is the one per-request fact codehub asks about, the path's
+// components joined by `/`. A question of the whole repository omits
+// it, so a rule on it names `context has path` first.
+@service("codehub")
+namespace Codehub {
+  @grn("repo") @caller("codehub")
+  entity Repo in [Iam::Org] { org: Iam::Org };
+
+  action "repo.read"
+    in [Iam::Action::"role-owner", Iam::Action::"role-admin",
+        Iam::Action::"role-member"]
+    appliesTo {
+      principal: [Iam::User, Iam::Agent],
+      resource: [Iam::Org, Repo],
+      context: { path?: String }
+    };
+  action "repo.write"
+    in [Iam::Action::"role-owner", Iam::Action::"role-admin"]
+    appliesTo {
+      principal: [Iam::User, Iam::Agent],
+      resource: [Iam::Org, Repo],
+      context: { path?: String }
+    };
+  action "repo.create", "runner.administer"
+    in [Iam::Action::"role-owner", Iam::Action::"role-admin"]
+    appliesTo {
+      principal: [Iam::User, Iam::Agent],
+      resource: [Iam::Org]
+    };
+  action "org.use"
+    in [Iam::Action::"role-owner", Iam::Action::"role-admin",
+        Iam::Action::"role-member"]
+    appliesTo {
+      principal: [Iam::User, Iam::Agent],
+      resource: [Iam::Org]
+    };
+}

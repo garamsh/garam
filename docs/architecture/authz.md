@@ -122,10 +122,9 @@ the dot form of ADR-0145; no stored policy document was converted, and
 names to `grn.Actions()`. Item 6, the registry, is built (#1788):
 `getRegistry` and `describeGrn` ask for a signed-in caller and no
 permission, since they answer what the manifests declare and read no
-entity. **Not built:** item 7's proofs for a new service; and codehub's
-manifest, so `repo` is in no catalogue.
+entity. **Not built:** item 7's proofs for a new service.
 
-**codehub as a service is decided, and not built.**
+**codehub as a service is built in the policy service (#1815).**
 [ADR-0149](./adr/0149-codehub-is-a-service-of-the-policy-service-whose-repositories-are-entities-and-whose-paths-are-context.md)
 decides a `Codehub` manifest with the entity type `Codehub::Repo`
 (`grn:<org>/codehub/repo/<id>`, codehub's immutable id) and the actions
@@ -133,13 +132,13 @@ decides a `Codehub` manifest with the entity type `Codehub::Repo`
 and `runner.administer`, held by owners and administrators, and
 `org.use` on an organization in place of `create_organisation`. A path
 is asked as the exact UTF-8 context key `path` and is no entity.
-codehub's repositories are fed through an outbox with a sequence per
-entity, and a runner is an `Iam::Agent` that codehub registers and that
-holds no role by default. The HTTP binding accepts the type `grn` and
-resolves the Cedar type from the manifests' `@grn`. No manifest,
-`Caller` variant, declared context or HTTP binding for it exists: the
-policy service refuses a `context` field and a resource's properties
-today, and `codehub` stays outside the caller list.
+The manifest, `Caller::Codehub` (scoped to its organization), the
+declared `path` context on both transports and the HTTP binding's
+type `grn` are built, and the platform's role table holds the five
+actions. A resource's properties are still refused. **Not built:**
+codehub's outbox with a sequence per entity, which feeds its
+repositories, and the runner as an `Iam::Agent` that codehub registers
+and that holds no role by default.
 
 **The platform's outbox, its delivery and its signer are built.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set

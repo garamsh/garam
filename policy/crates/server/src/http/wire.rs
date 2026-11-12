@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use manifest::Manifests;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
@@ -11,6 +12,9 @@ use crate::status::ServiceError;
 /// The semantic AuthZEN 1.0 §7.1.2.1 makes the default, and the one
 /// this binding serves.
 const EXECUTE_ALL: &str = "execute_all";
+
+/// The entity type a caller sends to have the GRN's own type read.
+const GRN_TYPE: &str = "grn";
 
 /// Reads a body as the request its route takes.
 pub(super) fn read<T: DeserializeOwned>(body: &[u8]) -> Result<T, ServiceError> {
@@ -63,11 +67,14 @@ struct Options {
 }
 
 impl Evaluation {
-    pub(super) fn into_proto(self) -> Result<proto::EvaluateRequest, ServiceError> {
+    pub(super) fn into_proto(
+        self,
+        manifests: &Manifests,
+    ) -> Result<proto::EvaluateRequest, ServiceError> {
         Ok(proto::EvaluateRequest {
-            subject: subject(self.subject)?,
+            subject: subject(self.subject, manifests)?,
             action: action(self.action)?,
-            resource: self.resource.map(resource),
+            resource: resource(self.resource, manifests)?,
             context: self.context.map(structure),
             read: 0,
         })
@@ -75,7 +82,10 @@ impl Evaluation {
 }
 
 impl Evaluations {
-    pub(super) fn into_proto(self) -> Result<proto::EvaluationsRequest, ServiceError> {
+    pub(super) fn into_proto(
+        self,
+        manifests: &Manifests,
+    ) -> Result<proto::EvaluationsRequest, ServiceError> {
         let semantic = self
             .options
             .and_then(|options| options.evaluations_semantic)
@@ -91,17 +101,17 @@ impl Evaluations {
             .into_iter()
             .map(|entry| {
                 Ok(proto::Evaluation {
-                    subject: subject(entry.subject)?,
+                    subject: subject(entry.subject, manifests)?,
                     action: action(entry.action)?,
-                    resource: entry.resource.map(resource),
+                    resource: resource(entry.resource, manifests)?,
                     context: entry.context.map(structure),
                 })
             })
             .collect::<Result<_, ServiceError>>()?;
         Ok(proto::EvaluationsRequest {
-            subject: subject(self.subject)?,
+            subject: subject(self.subject, manifests)?,
             action: action(self.action)?,
-            resource: self.resource.map(resource),
+            resource: resource(self.resource, manifests)?,
             context: self.context.map(structure),
             read: 0,
             evaluations,
@@ -111,12 +121,15 @@ impl Evaluations {
 
 /// A subject carries no properties: they are the grounds a decision
 /// reads for itself, and the contract has no field for them.
-fn subject(subject: Option<Entity>) -> Result<Option<proto::Subject>, ServiceError> {
+fn subject(
+    subject: Option<Entity>,
+    manifests: &Manifests,
+) -> Result<Option<proto::Subject>, ServiceError> {
     subject
         .map(|subject| {
             refuse_properties(subject.properties.as_ref(), "subject properties")?;
             Ok(proto::Subject {
-                r#type: subject.r#type,
+                r#type: type_of(subject.r#type, &subject.id, manifests)?,
                 id: subject.id,
             })
         })
@@ -142,12 +155,33 @@ fn refuse_properties(
     }
 }
 
-fn resource(resource: Entity) -> proto::Resource {
-    proto::Resource {
-        r#type: resource.r#type,
-        id: resource.id,
-        properties: resource.properties.map(structure),
+fn resource(
+    resource: Option<Entity>,
+    manifests: &Manifests,
+) -> Result<Option<proto::Resource>, ServiceError> {
+    resource
+        .map(|resource| {
+            Ok(proto::Resource {
+                r#type: type_of(resource.r#type, &resource.id, manifests)?,
+                id: resource.id,
+                properties: resource.properties.map(structure),
+            })
+        })
+        .transpose()
+}
+
+/// The type `grn` stands for whichever entity type the id's service
+/// and last type segment name through the manifests, so a caller that
+/// does not parse a GRN need not know it (ADR-0149 item 2). Any other
+/// type is a Cedar type name and passes as sent.
+fn type_of(kind: String, id: &str, manifests: &Manifests) -> Result<String, ServiceError> {
+    if kind != GRN_TYPE {
+        return Ok(kind);
     }
+    manifests
+        .entity_type_of_grn(id)
+        .map(str::to_owned)
+        .map_err(|error| ServiceError::Malformed(error.to_string()))
 }
 
 fn structure(object: Map<String, Value>) -> prost_types::Struct {
@@ -288,23 +322,32 @@ fn int64<'de, D: Deserializer<'de>>(deserializer: D) -> Result<i64, D::Error> {
     }
 }
 
-fn entity_ref(reference: EntityRef) -> proto::EntityRef {
-    proto::EntityRef {
-        r#type: reference.r#type,
+fn entity_ref(
+    reference: EntityRef,
+    manifests: &Manifests,
+) -> Result<proto::EntityRef, ServiceError> {
+    Ok(proto::EntityRef {
+        r#type: type_of(reference.r#type, &reference.id, manifests)?,
         id: reference.id,
-    }
+    })
 }
 
-fn entity_refs(references: Option<Vec<EntityRef>>) -> Vec<proto::EntityRef> {
+fn entity_refs(
+    references: Option<Vec<EntityRef>>,
+    manifests: &Manifests,
+) -> Result<Vec<proto::EntityRef>, ServiceError> {
     references
         .unwrap_or_default()
         .into_iter()
-        .map(entity_ref)
+        .map(|reference| entity_ref(reference, manifests))
         .collect()
 }
 
 impl Changes {
-    pub(super) fn into_proto(self) -> Result<proto::ApplyEntityChangesRequest, ServiceError> {
+    pub(super) fn into_proto(
+        self,
+        manifests: &Manifests,
+    ) -> Result<proto::ApplyEntityChangesRequest, ServiceError> {
         let changes = self
             .changes
             .unwrap_or_default()
@@ -317,17 +360,26 @@ impl Changes {
                         ));
                     }
                     (Some(upsert), None) => Some(Operation::Upsert(proto::EntityUpsert {
-                        org: upsert.org.map(entity_ref),
-                        members: upsert.members.map(entity_ref),
-                        parents: entity_refs(upsert.parents),
-                        consents: entity_refs(upsert.consents),
+                        org: upsert
+                            .org
+                            .map(|reference| entity_ref(reference, manifests))
+                            .transpose()?,
+                        members: upsert
+                            .members
+                            .map(|reference| entity_ref(reference, manifests))
+                            .transpose()?,
+                        parents: entity_refs(upsert.parents, manifests)?,
+                        consents: entity_refs(upsert.consents, manifests)?,
                         operations: upsert.operations.unwrap_or_default(),
                     })),
                     (None, Some(Delete {})) => Some(Operation::Delete(proto::EntityDelete {})),
                     (None, None) => None,
                 };
                 Ok(proto::EntityChange {
-                    entity: change.entity.map(entity_ref),
+                    entity: change
+                        .entity
+                        .map(|reference| entity_ref(reference, manifests))
+                        .transpose()?,
                     sequence: change.sequence,
                     operation,
                 })

@@ -11,4 +11,7 @@ pub enum Error {
     /// declares.
     #[error("{0} is not an action of a manifest: write <service>:<action>")]
     Action(String),
+    /// A GRN whose service and last type no manifest declares.
+    #[error("{0} is no GRN of a type a manifest declares")]
+    Grn(String),
 }

@@ -8,8 +8,9 @@ yet (#1689).
 
 - `proto/garam/policy/v1/` — the gRPC contract in AuthZEN's shape.
 - `schema/<service>.cedarschema` — a service's manifest (ADR-0143):
-  one namespace, `Iam` or `Cowork`, annotated with `@service` on the
-  namespace and `@grn` and `@caller` on each entity type. Together they
+  one namespace, `Iam`, `Cowork` or `Codehub`, annotated with
+  `@service` on the namespace and `@grn` and `@caller` on each entity
+  type. Together they
   are the entity types, actions and attributes a decision can name, and
   a type or an action is named by its qualified form,
   `Iam::Org` and `iam:org.read`. `make -C policy gen` writes
@@ -17,8 +18,8 @@ yet (#1689).
   fails, naming what disagrees, when the committed catalogue is stale,
   a manifest breaks a rule every manifest holds, an `@caller` is
   neither `none` nor a `Caller`, a `Caller` is named by no manifest, or
-  an audience of the platform names no manifest service and is neither
-  `policy` nor `codehub`.
+  an audience of the platform names no manifest service and is not
+  `policy`.
 - `system-policies/` — the system tier: tenant isolation and its one
   exception, an agent's sending, a hosted operator's ten delegated
   operations (`operator-<type>-<verb>`), and the role templates. One
@@ -63,6 +64,7 @@ yet (#1689).
 |-------|--------|------|
 | `platform` | the types whose `@caller` is `platform`: `Iam::Org`, `Iam::OrgMembers`, `Iam::Team`, `Iam::Project`, `Iam::User`, `Iam::Agent`, `Iam::Operator` | anything |
 | `grn:<org>/iam/service/cowork` | the types whose `@caller` is `cowork`: `Cowork::Channel`, `Cowork::Page`, `Cowork::Task`, `Cowork::Artifact`, into `<org>` alone | `cowork:` actions on resources of `<org>` |
+| `grn:<org>/iam/service/codehub` | the types whose `@caller` is `codehub`: `Codehub::Repo`, into `<org>` alone | `codehub:` actions on resources of `<org>` |
 
 - **No caller writes the rest.** `@caller("none")` holds `Iam::Policy`,
   `Iam::Supervisor` and `Iam::Service`.
@@ -179,6 +181,26 @@ one implementation of the decision and of the entity write.
   binding does not know are ignored. A `subject` or an `action`
   carrying `properties` is a malformed body, since a decision reads
   those grounds for itself.
+- **The type `grn` stands for the id's own type** (ADR-0149 item 2),
+  for a subject, a resource and the entities of an entity feed. The
+  entity type is the one whose `@grn` is the id's last type segment,
+  in the manifest of the id's service, so
+  `grn:acme/codehub/repo/4821` is `Codehub::Repo`. A Cedar type name
+  is accepted as before, `Iam::OrgMembers` having no `@grn` and so
+  being named by its Cedar type alone. An id no manifest declares, a
+  string that is no GRN, or one with a type segment without its id
+  is a 400, and refuses the whole request, as a malformed body does.
+  A `#locator` is dropped to find the type and the id is passed on
+  unchanged. gRPC has no such type: its `type` is always a Cedar type
+  name.
+- **A context is what the action's schema declares.** `context` of an
+  evaluation, over gRPC as over HTTP, reaches the decision, and the
+  schema refuses a key or a type the action does not declare: a
+  single evaluation fails `INVALID_ARGUMENT` (400), and an entry of a
+  batch is denied with the fault as its reason. `codehub:repo.read`
+  and `repo.write` declare `path`, a string, and a question about the
+  whole repository omits it, so a rule on it names `context has path`
+  first. A resource carrying `properties` is still refused.
 - **Evaluations are decided one by one, in order.** Top-level
   `subject`, `action`, `resource` and `context` are the defaults of an
   entry that omits them, and entries that share a resource type and id
@@ -201,7 +223,7 @@ one implementation of the decision and of the entity write.
 |-------------|-------------|------|
 | `UNAUTHENTICATED` | 401 | no token, or a token that does not verify |
 | `PERMISSION_DENIED` | 403 | a `sub` the service does not serve, a scoped caller asking or writing outside what it is bound to, a type it does not own |
-| `INVALID_ARGUMENT` | 400 | a malformed body, a missing field, a request over its bound, an unserved semantic |
+| `INVALID_ARGUMENT` | 400 | a malformed body, a missing field, a GRN no manifest declares, a context the schema refuses, a request over its bound, an unserved semantic |
 | `UNAVAILABLE` | 503 | a store that cannot be read or written |
 | any other | 500 | the service could not decide |
 

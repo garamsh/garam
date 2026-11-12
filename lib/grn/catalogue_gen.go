@@ -5,6 +5,9 @@ package grn
 // generatedTypes holds, for each service, the entity types a GRN names,
 // by the GRN type segment.
 var generatedTypes = map[string]map[string]TypeInfo{
+	"codehub": {
+		"repo": {Entity: "Codehub::Repo", Parents: []string{"Iam::Org"}},
+	},
 	"cowork": {
 		"artifact": {Entity: "Cowork::Artifact", Parents: []string{"Iam::Org"}},
 		"channel":  {Entity: "Cowork::Channel", Parents: []string{"Iam::Org", "Iam::Project"}},
@@ -27,6 +30,11 @@ var generatedTypes = map[string]map[string]TypeInfo{
 // generatedActions holds each action a manifest declares with what it
 // applies to, by its name on the wire.
 var generatedActions = []ActionInfo{
+	{Name: "codehub:org.use", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
+	{Name: "codehub:repo.create", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
+	{Name: "codehub:repo.read", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org", "Codehub::Repo"}},
+	{Name: "codehub:repo.write", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org", "Codehub::Repo"}},
+	{Name: "codehub:runner.administer", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org"}},
 	{Name: "cowork:artifact.read", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org", "Cowork::Artifact"}},
 	{Name: "cowork:artifact.write", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org", "Cowork::Artifact"}},
 	{Name: "cowork:channel.post", Principals: []string{"Iam::User", "Iam::Agent"}, Resources: []string{"Iam::Org", "Cowork::Channel"}},

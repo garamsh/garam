@@ -9,7 +9,9 @@
 > in turn superseded by
 > [ADR-0093](./0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md);
 > its repository names and its two images are superseded by
-> [ADR-0134](./0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md)
+> [ADR-0134](./0134-an-image-lives-at-its-publishing-repository-and-its-tag-says-what-a-build-is.md),
+> and §Consequences' "A published web image is bound to one API URL"
+> by [ADR-0150](./0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)
 > Date: 2026-08-22
 
 ## Contents

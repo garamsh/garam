@@ -1,4 +1,6 @@
-use decision::{Engine, EntityRef, EntitySource, Evaluation, OrgGrn, Outcome, PolicySource};
+use decision::{
+    Cause, Engine, EntityRef, EntitySource, Evaluation, OrgGrn, OrgPolicies, Outcome, PolicySource,
+};
 
 use crate::error::Error;
 
@@ -16,8 +18,10 @@ pub struct PermitRight {
 impl PermitRight {
     /// Evaluates `iam:policy-permit` on `org`'s `Org` for `writer`, a
     /// user or an agent, against the system tier, the organization's
-    /// policies and its entities.
-    pub async fn ask<P: PolicySource, E: EntitySource>(
+    /// role links and `forbid` guardrails and its entities. Its
+    /// `permit`s are left out, so the right comes from the role alone:
+    /// no `permit` confers it, and a guardrail can take it away.
+    pub async fn ask<P: PolicySource + Sync, E: EntitySource>(
         engine: &Engine,
         policies: &P,
         entities: &E,
@@ -26,7 +30,7 @@ impl PermitRight {
     ) -> Result<Self, Error> {
         let decision = engine
             .evaluate(
-                policies,
+                &WithoutPermits(policies),
                 entities,
                 &Evaluation {
                     subject: writer,
@@ -52,6 +56,15 @@ impl PermitRight {
         }
     }
 
+    /// Refuses an organization other than the one the right was given
+    /// on.
+    pub(crate) fn check_org(&self, org: &OrgGrn) -> Result<(), Error> {
+        if &self.org == org {
+            return Ok(());
+        }
+        Err(Error::PermitRight)
+    }
+
     /// The organization the right was given on.
     pub(crate) fn org(&self) -> &OrgGrn {
         &self.org
@@ -60,5 +73,18 @@ impl PermitRight {
     /// The writer's GRN.
     pub(crate) fn writer(&self) -> &str {
         &self.writer
+    }
+}
+
+/// An organization's policies as the right is asked of: no `permit`.
+struct WithoutPermits<'a, P>(&'a P);
+
+impl<P: PolicySource + Sync> PolicySource for WithoutPermits<'_, P> {
+    async fn active(&self, org: &OrgGrn) -> Result<OrgPolicies, Cause> {
+        let policies = self.0.active(org).await?;
+        Ok(OrgPolicies {
+            permits: Vec::new(),
+            ..policies
+        })
     }
 }

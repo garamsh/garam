@@ -232,3 +232,56 @@ async fn the_decision_and_the_refusal_a_report_prints() {
     println!("a write in another organization: {refused}");
     assert!(matches!(refused, Error::ForeignEntity(_)));
 }
+
+const ADMIN_MAY_PERMIT: &str = r#"permit (
+    principal == Iam::User::"grn:acme/iam/user/kim",
+    action == Iam::Action::"policy-permit",
+    resource == Iam::Org::"grn:root/iam/org/acme"
+);"#;
+const NO_ONE_PERMITS: &str = r#"forbid (
+    principal,
+    action == Iam::Action::"policy-permit",
+    resource == Iam::Org::"grn:root/iam/org/acme"
+);"#;
+
+#[tokio::test]
+async fn no_permit_confers_the_right_and_a_guardrail_still_takes_it_away() {
+    let mut world = World::new();
+    let id = PolicyId::new("grn:acme/iam/policy/kim-permits");
+    world.held.permits = vec![Policy::parse(Some(id), ADMIN_MAY_PERMIT).unwrap()];
+
+    // The decision honours the permit, so it is `ask` that leaves it out.
+    let evaluation = Evaluation {
+        subject: EntityRef {
+            entity_type: ADMIN.0,
+            id: ADMIN.1,
+        },
+        action: "iam:policy-permit",
+        resource: EntityRef {
+            entity_type: ORG.0,
+            id: ORG.1,
+        },
+        context: json!({}),
+    };
+    let decision = world
+        .engine
+        .evaluate(&world, &world, &evaluation)
+        .await
+        .unwrap();
+    assert_eq!(decision.outcome, Outcome::Allow, "{decision:?}");
+
+    let refused = world.right(ADMIN).await;
+    assert!(
+        matches!(refused, Err(Error::PermitDenied { .. })),
+        "{refused:?}"
+    );
+    assert!(world.right(OWNER).await.is_ok());
+
+    let id = PolicyId::new("grn:acme/iam/policy/no-permits");
+    world.held.guardrails = vec![Policy::parse(Some(id), NO_ONE_PERMITS).unwrap()];
+    let taken = world.right(OWNER).await;
+    assert!(
+        matches!(taken, Err(Error::PermitDenied { .. })),
+        "{taken:?}"
+    );
+}

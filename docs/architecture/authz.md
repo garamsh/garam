@@ -86,18 +86,20 @@ only in the policy service: nothing sends one yet.
   only an allowed evaluation of `iam:policy-permit` for the writer on
   the organization's `Org` makes, so a `permit` is stored only through
   a path that asked; the right's organization and writer are written
-  into the stored body and the store refuses a mismatch. The write
+  into the stored body and the store refuses a mismatch. The right
+  comes from the owner role alone: it is asked with the organization's
+  `permit`s left out, so no `permit` confers it and a guardrail can
+  still take it away. Making a stored `permit` version effective,
+  `activate` or `roll_back` to it, takes a `PermitRight` too. The write
   admits `resource == E`, `resource in E` and `resource is T in E`,
   where `E` is an entity of the organization or its `Org`, and refuses
   `resource` alone, `resource is T` alone and an `E` of another
   organization. The principal scope is not read. A `when` or `unless`
   is bounded as a guardrail's is. A decision composes the
   organization's `permit` policies beside its guardrails, and
-  `access-report` lists one by its id. Not built: an RPC to write one;
-  that `activate` and `roll_back` ask for the right, so an owner's
-  stored version can be made effective by a writer that does not
-  hold `iam:policy-permit`; and a check of an entity literal in a
-  `permit`'s principal scope or condition.
+  `access-report` lists one by its id. Not built: an RPC to write one,
+  and a check of an entity literal in a `permit`'s principal scope or
+  condition.
 
 **Built of ADR-0143** (items 1, 2, 3 and 5): the two manifests, the
 `manifest` crate that reads them, `lib/grn`'s generated catalogue, the

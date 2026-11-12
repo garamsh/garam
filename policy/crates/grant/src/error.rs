@@ -39,6 +39,9 @@ pub enum Error {
     /// The permit was authorized for another organization or writer.
     #[error("the permit was authorized for another organization or writer")]
     PermitRight,
+    /// Making a `permit` version effective needs the right to write one.
+    #[error("{0} is a permit: making it effective needs a PermitRight")]
+    PermitNeedsRight(String),
     /// The policy names an entity of another organization.
     #[error("{0} is not this organization's")]
     ForeignEntity(String),

@@ -4,6 +4,7 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::body::{Body, Stored, StoredPolicy};
 use crate::error::Error;
+use crate::permit_right::PermitRight;
 
 /// Whether a policy decides anything.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -114,42 +115,123 @@ impl PolicyStore {
         Ok(version)
     }
 
-    /// Moves the default to any stored version, older or newer.
+    /// Moves the default to any stored version, older or newer, but a
+    /// `permit` one: making that effective is granting what it says,
+    /// which [`PolicyStore::roll_back_permit`] does under a right.
     pub async fn roll_back(&self, org: &OrgGrn, grn: &str, version: i32) -> Result<(), Error> {
+        self.move_default(org, grn, version, false).await
+    }
+
+    /// [`PolicyStore::roll_back`] to any stored version, a `permit`
+    /// one too, under the right to write a `permit` on `org`.
+    pub async fn roll_back_permit(
+        &self,
+        org: &OrgGrn,
+        grn: &str,
+        version: i32,
+        right: &PermitRight,
+    ) -> Result<(), Error> {
+        right.check_org(org)?;
+        self.move_default(org, grn, version, true).await
+    }
+
+    /// Makes a policy decide, and leaves its default where it is,
+    /// unless that default is a `permit` version:
+    /// [`PolicyStore::activate_permit`] does that under a right.
+    pub async fn activate(&self, org: &OrgGrn, grn: &str) -> Result<(), Error> {
+        self.set_active(org, grn, false).await
+    }
+
+    /// [`PolicyStore::activate`] for a policy whose default is a
+    /// `permit` version too, under the right to write a `permit` on
+    /// `org`.
+    pub async fn activate_permit(
+        &self,
+        org: &OrgGrn,
+        grn: &str,
+        right: &PermitRight,
+    ) -> Result<(), Error> {
+        right.check_org(org)?;
+        self.set_active(org, grn, true).await
+    }
+
+    async fn move_default(
+        &self,
+        org: &OrgGrn,
+        grn: &str,
+        version: i32,
+        permits: bool,
+    ) -> Result<(), Error> {
         owned(org, grn)?;
         let moved = sqlx::query(
             "UPDATE policies SET default_version = $2, updated_at = now()
              WHERE grn = $1
                AND EXISTS (SELECT 1 FROM policy_versions
-                           WHERE policy_grn = $1 AND version = $2)",
+                           WHERE policy_grn = $1 AND version = $2)
+               AND ($3 OR NOT EXISTS (SELECT 1 FROM policy_versions
+                                      WHERE policy_grn = $1 AND version = $2
+                                        AND body->>'kind' = 'permit'))",
         )
         .bind(grn)
         .bind(version)
+        .bind(permits)
         .execute(&self.pool)
         .await
         .map_err(Error::Store)?;
-        if moved.rows_affected() == 0 {
-            return Err(Error::NoSuchVersion {
+        if moved.rows_affected() > 0 {
+            return Ok(());
+        }
+        let permit: Option<bool> = sqlx::query_scalar(
+            "SELECT body->>'kind' = 'permit' FROM policy_versions
+             WHERE policy_grn = $1 AND version = $2",
+        )
+        .bind(grn)
+        .bind(version)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(Error::Store)?;
+        match permit {
+            Some(true) => Err(Error::PermitNeedsRight(grn.to_owned())),
+            _ => Err(Error::NoSuchVersion {
                 policy: grn.to_owned(),
                 version,
-            });
+            }),
         }
-        Ok(())
     }
 
-    /// Makes a policy decide, and leaves its default where it is.
-    pub async fn activate(&self, org: &OrgGrn, grn: &str) -> Result<(), Error> {
+    async fn set_active(&self, org: &OrgGrn, grn: &str, permits: bool) -> Result<(), Error> {
         owned(org, grn)?;
-        let updated =
-            sqlx::query("UPDATE policies SET status = 'active', updated_at = now() WHERE grn = $1")
-                .bind(grn)
-                .execute(&self.pool)
-                .await
-                .map_err(Error::Store)?;
-        if updated.rows_affected() == 0 {
-            return Err(Error::NotFound(grn.to_owned()));
+        let updated = sqlx::query(
+            "UPDATE policies SET status = 'active', updated_at = now()
+             WHERE grn = $1
+               AND ($2 OR NOT EXISTS (SELECT 1 FROM policy_versions
+                                      WHERE policy_grn = $1
+                                        AND version = policies.default_version
+                                        AND body->>'kind' = 'permit'))",
+        )
+        .bind(grn)
+        .bind(permits)
+        .execute(&self.pool)
+        .await
+        .map_err(Error::Store)?;
+        if updated.rows_affected() > 0 {
+            return Ok(());
         }
-        Ok(())
+        let permit: Option<bool> = sqlx::query_scalar(
+            "SELECT policy_versions.body->>'kind' = 'permit' FROM policies
+             JOIN policy_versions
+               ON policy_versions.policy_grn = policies.grn
+              AND policy_versions.version = policies.default_version
+             WHERE policies.grn = $1",
+        )
+        .bind(grn)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(Error::Store)?;
+        match permit {
+            Some(true) => Err(Error::PermitNeedsRight(grn.to_owned())),
+            _ => Err(Error::NotFound(grn.to_owned())),
+        }
     }
 
     /// Retires a policy: it goes with its versions (ADR-0117).

@@ -116,3 +116,59 @@ async fn a_permit_is_stored_only_for_the_org_and_writer_its_right_was_given_to(p
     let control = store.append_version(&org, PERMIT, &body(), OWNER.1).await;
     assert_eq!(control.unwrap(), 2);
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+#[ignore = "needs Postgres: make -C policy stack-up suites"]
+async fn a_permit_version_is_made_effective_only_under_a_right(pool: PgPool) {
+    let world = World::new();
+    let right = world.owner_right().await;
+    let body = |source: &str| Body::permit(&world.engine, &right, source).unwrap();
+    let store = PolicyStore::new(pool);
+    let org = OrgGrn::new(ACME);
+    let held = || async { store.active(&org).await.unwrap().permits.len() };
+
+    store
+        .create(draft(body(WATCH_BOT), &org, OWNER.1))
+        .await
+        .unwrap();
+    let without = store.activate(&org, PERMIT).await;
+    assert!(
+        matches!(without, Err(Error::PermitNeedsRight(_))),
+        "{without:?}"
+    );
+    assert_eq!(held().await, 0);
+    store.activate_permit(&org, PERMIT, &right).await.unwrap();
+    assert_eq!(held().await, 1);
+
+    // A narrower second version, made the default: rolling back to the
+    // first would widen it again.
+    let lee = r#"principal == Iam::User::"grn:acme/iam/user/lee","#;
+    let narrower = body(&WATCH_BOT.replace("principal,", lee));
+    store
+        .append_version(&org, PERMIT, &narrower, OWNER.1)
+        .await
+        .unwrap();
+    store
+        .roll_back_permit(&org, PERMIT, 2, &right)
+        .await
+        .unwrap();
+    let widened = store.roll_back(&org, PERMIT, 1).await;
+    assert!(
+        matches!(widened, Err(Error::PermitNeedsRight(_))),
+        "{widened:?}"
+    );
+    store
+        .roll_back_permit(&org, PERMIT, 1, &right)
+        .await
+        .unwrap();
+
+    // A missing version is still a missing version.
+    let missing = store.roll_back(&org, PERMIT, 9).await;
+    assert!(
+        matches!(missing, Err(Error::NoSuchVersion { .. })),
+        "{missing:?}"
+    );
+
+    // Deleting only narrows, so it asks for nothing.
+    store.delete(&org, PERMIT).await.unwrap();
+}

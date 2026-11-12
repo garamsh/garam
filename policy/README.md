@@ -47,17 +47,34 @@ yet (#1689).
   well its token verifies. `Caller` in `crates/server/src/caller.rs` is
   that list. Which types a caller writes is read from the manifests'
   `@caller` annotations, and a test holds each to that list: every
-  entity type names a `Caller`'s `sub`, or `none`.
+  entity type names a `Caller`'s name, or `none`.
+- **A `sub` names a caller in one of two forms.** The platform is the
+  bare `platform`. Any other caller is a service principal's GRN,
+  `grn:<org>/iam/service/<name>`, where `<name>` is the caller's name
+  in the table and `<org>` a slug other than `root`: the caller is then
+  bound to that organization. The bare name of a bound caller, a
+  principal named `platform`, a GRN of another service or type, and a
+  name outside the list are each an unknown caller.
 
 | `sub` | Writes | Asks |
 |-------|--------|------|
 | `platform` | the types whose `@caller` is `platform`: `Iam::Org`, `Iam::OrgMembers`, `Iam::Team`, `Iam::Project`, `Iam::User`, `Iam::Agent`, `Iam::Operator` | anything |
+| `grn:<org>/iam/service/cowork` | the types whose `@caller` is `cowork`: `Cowork::Channel`, `Cowork::Page`, `Cowork::Task`, `Cowork::Artifact`, into `<org>` alone | `cowork:` actions on resources of `<org>` |
 
-- **No caller writes the rest.** `@caller("none")` holds
-  `Cowork::Channel`, `Cowork::Page`, `Cowork::Task` and
-  `Cowork::Artifact`, which wait for
-  cowork as a caller, and `Iam::Policy`, `Iam::Supervisor` and
-  `Iam::Service`.
+- **No caller writes the rest.** `@caller("none")` holds `Iam::Policy`,
+  `Iam::Supervisor` and `Iam::Service`.
+- **A caller bound to an organization writes only into it.** Every
+  entity of its `ApplyEntityChanges` is of a type it owns, has a GRN
+  beginning `grn:<org>/`, names `<org>`'s own `Iam::Org` as its `org`,
+  and has `members` and parents of `<org>`: an `Iam::Org` is of the
+  organization its id names, anything else by the organization its GRN
+  names. A change that breaks one refuses the whole request with
+  `PERMISSION_DENIED`, as a type the caller does not own does.
+- **A caller bound to an organization asks only for its own.** The
+  action of an `Evaluate` or of an entry of `Evaluations` is of its
+  service (`cowork:...`) and the resource is of its organization;
+  anything else fails the call with `PERMISSION_DENIED`. The subject is
+  not restricted: tenant isolation decides it (ADR-0137).
 - **An entity type and an action are written qualified.** A type is
   `Iam::Org`, and an action `iam:org.read`, which is
   `Iam::Action::"org.read"`. The unqualified form is refused. An
@@ -76,9 +93,9 @@ yet (#1689).
   its index in the response, and the rest are written. A request holds
   at most 1000 changes, an id holds at most 512 bytes, a type 64 and a
   change 1000 parents.
-- **Only the type of the entity written is checked** against the
-  caller, not the types of its `org`, `members` and `parents`. Slice 5
-  decides that with the `cowork` row.
+- **The platform's writes are checked by type alone.** The types of
+  its `org`, `members` and `parents` are not judged against it, since
+  it writes every organization.
 - **The caller's address is `GARAM_POLICY_ADDR`,** unset until the
   platform's delivery exists. `POLICY_ADDR` is where this service
   listens.

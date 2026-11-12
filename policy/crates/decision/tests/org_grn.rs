@@ -26,6 +26,12 @@ fn an_organization_owns_what_names_it_first() {
 }
 
 #[test]
+fn an_organization_is_named_by_its_slug() {
+    assert_eq!(OrgGrn::named("acme"), acme());
+    assert_eq!(OrgGrn::named("acme").slug(), "acme");
+}
+
+#[test]
 fn an_organization_with_no_name_owns_nothing() {
     for nameless in ["", "grn:acme/iam/org/acme", "grn:root/iam/org/"] {
         assert!(

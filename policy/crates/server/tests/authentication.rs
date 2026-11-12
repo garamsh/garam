@@ -131,7 +131,18 @@ async fn a_verified_token_of_a_service_this_one_does_not_serve_is_refused() {
         "Platform",
         "platform ",
         "grn:root/iam/service/platform",
-        "grn:acme/iam/service/cowork",
+        "grn:acme/iam/service/platform",
+        "grn:root/iam/service/cowork",
+        "grn:acme/iam/service/other",
+        "grn:acme/iam/service/",
+        "grn:acme/iam/service/cowork/x",
+        "grn:acme/iam/service/cowork#x",
+        "grn:acme/iam/user/cowork",
+        "grn:acme/codehub/service/cowork",
+        "grn:Acme/iam/service/cowork",
+        "grn:/iam/service/cowork",
+        "grn:acme:iam:service:cowork",
+        "grn:root/iam/org/acme",
     ] {
         let token = signer().sign(&Claims {
             sub: subject.to_owned(),
@@ -152,8 +163,18 @@ async fn a_verified_token_of_a_service_this_one_does_not_serve_is_refused() {
 fn a_verified_token_is_read_as_the_service_its_subject_names() {
     let verifier = verifier();
 
-    let platform = verifier.verify(&signer().sign(&claims()));
-    assert!(matches!(platform, Ok(Caller::Platform)), "{platform:?}");
+    let platform = verifier.verify(&signer().sign(&claims())).unwrap();
+    assert_eq!(platform.caller(), Caller::Platform);
+    assert_eq!(platform.org(), None);
+
+    let cowork = verifier
+        .verify(&signer().sign(&Claims {
+            sub: "grn:acme/iam/service/cowork".to_owned(),
+            ..claims()
+        }))
+        .unwrap();
+    assert_eq!(cowork.caller(), Caller::Cowork);
+    assert_eq!(cowork.org(), Some(&OrgGrn::named("acme")));
 
     let other = verifier.verify(&signer().sign(&Claims {
         sub: "cowork".to_owned(),

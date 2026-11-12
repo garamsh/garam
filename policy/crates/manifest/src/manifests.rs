@@ -333,7 +333,7 @@ fn qualify(namespace: &str, name: &str) -> String {
 
 /// One to 64 characters of lowercase letters, digits and `-`
 /// (ADR-0142 item 4).
-fn is_slug(text: &str) -> bool {
+pub fn is_slug(text: &str) -> bool {
     !text.is_empty()
         && text.len() <= SEGMENT_MAX
         && text

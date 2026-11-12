@@ -4,8 +4,8 @@ use decision::{
 use serde_json::json;
 use tonic::{Request, Response, Status};
 
-use crate::caller::{Caller, Refusal};
-use crate::entity_changes::parse;
+use crate::caller::{Principal, Refusal};
+use crate::entity_changes::{parse, within};
 use crate::entity_sink::EntitySink;
 use crate::proto;
 use crate::proto::policy_service_server::PolicyService;
@@ -40,11 +40,16 @@ impl<P, E> Service<P, E> {
 impl<P: PolicySource, E: EntitySource> Service<P, E> {
     async fn answer(
         &self,
+        principal: &Principal,
         question: Question<'_>,
     ) -> Result<proto::EvaluateResponse, ServiceError> {
+        let evaluation = question.evaluation()?;
+        if !principal.asks(evaluation.action, &evaluation.resource) {
+            return Err(ServiceError::OutOfScope("a question"));
+        }
         let decision = self
             .engine
-            .evaluate(&self.policies, &self.entities, &question.evaluation()?)
+            .evaluate(&self.policies, &self.entities, &evaluation)
             .await?;
         Ok(response(&decision))
     }
@@ -54,9 +59,10 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
     /// whole call fails it.
     async fn answer_entry(
         &self,
+        principal: &Principal,
         question: Question<'_>,
     ) -> Result<proto::EvaluateResponse, ServiceError> {
-        match self.answer(question).await {
+        match self.answer(principal, question).await {
             Err(error) if error.is_the_questions() => {
                 tracing::info!(error = ?error, "refused an entry of a batch");
                 Ok(refused(&error))
@@ -67,6 +73,7 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
 
     async fn answer_batch(
         &self,
+        principal: &Principal,
         request: &proto::EvaluationsRequest,
     ) -> Result<proto::EvaluationsResponse, ServiceError> {
         if request.evaluations.len() > MAX_EVALUATIONS {
@@ -77,7 +84,9 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
         // An empty list states one question, as AuthZEN's does: no
         // answers would read as nothing denied to a caller folding them.
         if request.evaluations.is_empty() {
-            let answer = self.answer_entry(Question::defaults_of(request)).await?;
+            let answer = self
+                .answer_entry(principal, Question::defaults_of(request))
+                .await?;
             return Ok(proto::EvaluationsResponse {
                 evaluations: vec![answer],
             });
@@ -85,7 +94,7 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
         let mut evaluations = Vec::with_capacity(request.evaluations.len());
         for entry in &request.evaluations {
             evaluations.push(
-                self.answer_entry(Question::of_entry(request, entry))
+                self.answer_entry(principal, Question::of_entry(request, entry))
                     .await?,
             );
         }
@@ -94,12 +103,13 @@ impl<P: PolicySource, E: EntitySource> Service<P, E> {
 }
 
 impl<P, E: EntitySink> Service<P, E> {
-    /// Writes a batch. A type the caller does not own refuses all of
-    /// it, being the caller's mistake rather than an entry's, and any
-    /// other fault refuses its own entry.
+    /// Writes a batch. A type the caller does not own, or an entity
+    /// outside the organization a scoped caller is bound to, refuses
+    /// all of it, being the caller's mistake rather than an entry's,
+    /// and any other fault refuses its own entry.
     async fn apply_changes(
         &self,
-        caller: Caller,
+        principal: &Principal,
         request: &proto::ApplyEntityChangesRequest,
     ) -> Result<proto::ApplyEntityChangesResponse, ServiceError> {
         if request.changes.len() > MAX_CHANGES {
@@ -109,9 +119,20 @@ impl<P, E: EntitySink> Service<P, E> {
             .changes
             .iter()
             .filter_map(|change| change.entity.as_ref())
-            .find(|entity| !caller.owns(self.engine.manifests(), &entity.r#type));
+            .find(|entity| {
+                !principal
+                    .caller()
+                    .owns(self.engine.manifests(), &entity.r#type)
+            });
         if let Some(entity) = not_owned {
             return Err(ServiceError::NotOwned(entity.r#type.clone()));
+        }
+        if !request
+            .changes
+            .iter()
+            .all(|change| within(principal, change))
+        {
+            return Err(ServiceError::OutOfScope("an entity"));
         }
         let mut changes = Vec::with_capacity(request.changes.len());
         let mut refusals = Vec::new();
@@ -156,6 +177,7 @@ where
         &self,
         request: Request<proto::EvaluateRequest>,
     ) -> Result<Response<proto::EvaluateResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
         let request = request.into_inner();
         let question = Question {
             subject: request.subject.as_ref(),
@@ -163,7 +185,10 @@ where
             resource: request.resource.as_ref(),
             context: request.context.as_ref(),
         };
-        let answer = self.answer(question).await.map_err(|e| to_status(&e))?;
+        let answer = self
+            .answer(&principal, question)
+            .await
+            .map_err(|e| to_status(&e))?;
         Ok(Response::new(answer))
     }
 
@@ -171,8 +196,9 @@ where
         &self,
         request: Request<proto::EvaluationsRequest>,
     ) -> Result<Response<proto::EvaluationsResponse>, Status> {
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
         let answers = self
-            .answer_batch(&request.into_inner())
+            .answer_batch(&principal, &request.into_inner())
             .await
             .map_err(|e| to_status(&e))?;
         Ok(Response::new(answers))
@@ -182,19 +208,22 @@ where
         &self,
         request: Request<proto::ApplyEntityChangesRequest>,
     ) -> Result<Response<proto::ApplyEntityChangesResponse>, Status> {
-        // The interceptor verified the caller, and nothing else sets it.
-        let caller = request
-            .extensions()
-            .get::<Caller>()
-            .copied()
-            .ok_or(ServiceError::Unauthenticated(Refusal::NoToken))
-            .map_err(|e| to_status(&e))?;
+        let principal = principal_of(&request).map_err(|e| to_status(&e))?;
         let applied = self
-            .apply_changes(caller, request.get_ref())
+            .apply_changes(&principal, request.get_ref())
             .await
             .map_err(|e| to_status(&e))?;
         Ok(Response::new(applied))
     }
+}
+
+/// The caller the interceptor verified, which nothing else sets.
+fn principal_of<T>(request: &Request<T>) -> Result<Principal, ServiceError> {
+    request
+        .extensions()
+        .get::<Principal>()
+        .cloned()
+        .ok_or(ServiceError::Unauthenticated(Refusal::NoToken))
 }
 
 /// One question with each field resolved against the request's

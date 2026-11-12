@@ -3,13 +3,13 @@
 // organization and project, and its actions join the roles of `iam`.
 @service("cowork")
 namespace Cowork {
-  @grn("channel") @caller("none")
+  @grn("channel") @caller("cowork")
   entity Channel in [Iam::Org, Iam::Project] { org: Iam::Org };
-  @grn("page") @caller("none")
+  @grn("page") @caller("cowork")
   entity Page in [Iam::Org] { org: Iam::Org };
-  @grn("task") @caller("none")
+  @grn("task") @caller("cowork")
   entity Task in [Iam::Org] { org: Iam::Org };
-  @grn("artifact") @caller("none")
+  @grn("artifact") @caller("cowork")
   entity Artifact in [Iam::Org] { org: Iam::Org };
 
   action "page.read", "page.write"

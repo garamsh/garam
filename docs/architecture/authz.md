@@ -552,16 +552,24 @@ decision and every matched statement was the same for both
 
 ## cowork's principal
 
-**Unbuilt (#1664).**
+**Built in cowork (#1758); the principal's issue is unbuilt
+(#1664).**
 [ADR-0129](./adr/0129-cowork-acts-in-each-organization-as-a-principal-the-platform-issues-with-it-proving-one-deployment-key.md)
 gives each organization a cowork principal on the machine listener
 ([machine-identity.md](./machine-identity.md) §cowork's principal).
-No such subject reaches the engine today.
+No such subject reaches the engine today from the platform's path.
 [ADR-0141](./adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
-supersedes in part ADR-0127 §5: when slice 5 is built cowork asks the
-policy service itself, under a caller token from
-`exchangeClientAssertion` with `audience` `policy` and `sub` its
-principal, and not through the platform. That route is unbuilt.
+supersedes in part ADR-0127 §5: cowork asks the policy service
+itself, under a caller token from `exchangeClientAssertion` with
+`audience` `policy` and `sub` its principal, and not through the
+platform. cowork builds that route (#1758) behind four settings
+(`COWORK_POLICY_ADDR`, `COWORK_POLICY_CA_FILE`,
+`COWORK_MACHINE_TOKEN_URL`, `COWORK_DEPLOYMENT_KEY_FILE`): where they
+are set it asks one `Evaluations` per batch under the token of the
+organization asked about, and feeds its channels, pages, tasks and
+artifacts through an outbox, one organization at a time under that
+organization's token; where none is set it asks the platform as
+before. The platform's path goes with #1784.
 
 - **Decided as a machine sender.** Its `postMessage` asks
   `iam:message.send` with its GRN as subject and the recipient as

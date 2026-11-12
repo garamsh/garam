@@ -52,6 +52,9 @@ func pool(t *testing.T) *pgxpool.Pool {
 	t.Cleanup(p.Close)
 	_, err = p.Exec(context.Background(), "TRUNCATE pages, channels, tasks, artifacts CASCADE")
 	require.NoError(t, err)
+	// The policy feed starts off and empty, as a migrated database has it.
+	_, err = p.Exec(context.Background(), "TRUNCATE policy_outbox; UPDATE policy_feed SET enabled = false")
+	require.NoError(t, err)
 	return p
 }
 

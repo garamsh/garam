@@ -170,8 +170,10 @@ garam's.**
      name. An identifier is not reused, so a GRN on the name would be
      one GRN for a repository deleted and recreated, and a `permit` for
      the first would hold for the second. codehub's id is never reused
-     (answer 7). codehub sends the id as a resource property beside the
-     name and in every directory change.
+     (answer 7). codehub puts the id in the GRN it sends as
+     `resource.id` and as the entity id of every directory change, and
+     sends no property: answer 7 offered a property, and garam's
+     contract takes the GRN instead.
    - **A policy names a number.** A reader needs codehub to learn which
      repository `grn:acme/codehub/repo/4821` is. The id is unique
      within one codehub deployment, so one garam organization is served
@@ -342,9 +344,9 @@ garam's.**
   and the `unauthorized_client` answer (#1811). The HTTP binding of
   #1809 must accept a context key, the type `grn` and the type
   resolution of item 2, and must carry the `ApplyEntityChanges` form.
-  codehub needs the adapter change of item 2, the id as a property, the
-  outbox of item 5 and the `unauthorized_client` reading of item 4. None
-  is built.
+  codehub needs the adapter change of item 2, the id in the GRN it
+  sends, the outbox of item 5 and the `unauthorized_client`
+  reading of item 4. None is built.
 - **A policy on a repository names a number.** It cannot be read
   without codehub, and one garam organization has one codehub
   deployment.

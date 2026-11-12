@@ -216,9 +216,10 @@ listed with the reason.
   revision, now or later, names an image or digest for an agent that
   the composed image does not carry, the operator starts nothing for
   that agent and reports `failed` with that reason; it never runs an
-  agent from other images than the feed names. **The limit this sets:**
-  in the first slice an agent's version moves with the operator's
-  release, and no agent is moved to another image alone.
+  agent from other images than the feed names. At the commit read the
+  case cannot arise, because the feed names no image. **The limit
+  this sets:** in the first slice an agent's version moves with the
+  operator's release, and no agent is moved to another image alone.
 - **Direction: ask gaon for read-only OCI image volumes.** A MicroVM
   that mounts further OCI images read-only as volumes, beside its one
   root image. mvmd already turns an image into a read-only filesystem,
@@ -523,8 +524,8 @@ it is one the sources name.
 - Labels, selectors and `ownerReferences` serving (#118 contract,
   #119 serving, #120 garbage collection). The types are in `lib/api`
   (`labels.go`); serving is not verified. Issue: #118, #119, #120.
-- `NetworkPolicy` as a type in `lib/api` and its contract (D15).
-  Issue: to be filed.
+- `NetworkPolicy` as a type in `lib/api` and its contract (D15),
+  with egress by prefix except. Issue: `garamsh/gaon#164` item 1.
 - RBAC rules limited by label selector, which codehub's PM made a
   condition (a comment on #117, #118's scope). Served is not verified.
   Issue: to be filed.
@@ -533,14 +534,16 @@ it is one the sources name.
 - `lastExit`'s end time. The code and time are in `lib/api` already.
   Issue: #73.
 - Re-resolving a `Secret`-sourced `files` entry in a running MicroVM:
-  documented as not done. Issue: to be filed.
-- Read-only OCI image volumes beside a MicroVM's root image. Issue: to
-  be filed.
-- How a non-Node client certificate is obtained. Issue: to be filed.
+  documented as not done. Issue: `garamsh/gaon#164` item 2.
+- Read-only OCI image volumes beside a MicroVM's root image. Issue:
+  `garamsh/gaon#164` item 6.
+- How a non-Node client certificate is obtained. Issue:
+  `garamsh/gaon#164` item 3.
 - Whether a second MicroVM may use a `Volume` already bound to
-  another. Issue: to be filed.
+  another. Issue: `garamsh/gaon#164` item 4.
 - Whether `RunStrategy` `Always` restarts the process or the guest,
-  and what a restart does with `files`. Issue: to be filed.
+  and what a restart does with `files`. Issue: `garamsh/gaon#164`
+  item 5.
 
 ## Consequences
 

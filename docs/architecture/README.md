@@ -591,7 +591,8 @@ ADRs:
   superseded in part by 0071, which lets a person push a development
   build, by 0092 for non-release artifacts, whose test-image registry
   and publishing 0093 supersedes in turn, and by 0134 on the repository
-  names and on two images being all a release publishes
+  names and on two images being all a release publishes, and by 0150 on
+  a published web image being bound to one API URL
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
   certificates rotate without a restart; its client certificates, the
@@ -647,7 +648,8 @@ ADRs:
   nothing
 - [0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)
   — a published web image reaches the api Service a release named
-  `garam` renders, and `make ci` compares the two
+  `garam` renders, and `make ci` compares the two; superseded in full
+  by 0150
 - [0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md)
   — a template edit that changes the render moves the chart version,
   confirming ADR-0042 rather than superseding it, and review is what
@@ -1295,3 +1297,11 @@ ADRs:
   holds at most 10,000 live denial records, with a per-day overflow
   record beyond; an organization's owners and administrators read them
   on `iam:audit.read`; not built; supersedes nothing
+- [0150](./adr/0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)
+  — a web image reads the API address when it starts: the `/api/*`
+  rewrite is made in each app's `proxy.ts` from `GARAM_API_URL`, no
+  image holds an address and none is bound to a release name, an unset
+  address answers every request with 500, probes included, and
+  `chart-rewrite` is removed; a release publishes six images; supersedes
+  0056 in full, 0039's bound-to-one-API-URL consequence and 0134's
+  site-bakes-the-address sentence

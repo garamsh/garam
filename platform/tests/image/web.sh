@@ -170,6 +170,12 @@ body=$(curl -fsS "http://127.0.0.1:$port_b/api/healthz")
 body=$(curl -fsS "http://127.0.0.1:$port_b/api/orgs/acme/people?limit=5")
 [ "$body" = "b GET /orgs/acme/people?limit=5 0" ] ||
 	fail "GET /api/orgs/acme/people?limit=5 reached '$body'"
+# A GRN is one path segment with %2F in it: it must arrive as sent, and
+# not decoded into segments the backend would route elsewhere.
+grn='grn%3Aacme%2Fiam%2Fagent%2F1'
+body=$(curl -fsS "http://127.0.0.1:$port_a/api/orgs/acme/agents/$grn?x=a%2Fb")
+[ "$body" = "a GET /orgs/acme/agents/$grn?x=a%2Fb 0" ] ||
+	fail "GET /api/orgs/acme/agents/$grn?x=a%2Fb reached '$body', want the path as sent"
 passed=$((passed + 1))
 
 # A request body arrives whole: 4 MiB is past the 1 MiB the backend

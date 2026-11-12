@@ -86,7 +86,8 @@ Before this was decided the address was fixed when the image was built
 and a published image reached only the Service a release named `garam`
 renders
 ([ADR-0056](../../../docs/architecture/adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)),
-which `docs/architecture/web-app.md` records as no longer true.
+superseded by
+[ADR-0150](../../../docs/architecture/adr/0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md).
 
 An image started with no `web.apiUrl` answers every request with a 500,
 the probes included, so the readiness probe keeps the pod out of
@@ -234,8 +235,8 @@ fails without them:
   name.
   Absent at runtime the process starts and every request, the probes
   included, answers 500: `platform-web/src/env.ts` parses at import, and
-  the proxy that carries `/api/*` imports it. `site.apiUrl` is the same address for
-  the site, on the same terms (`site-web/src/lib/garam.ts`).
+  the proxy that carries `/api/*` imports it. `site.apiUrl` is the same
+  address for the site, on the same terms (`site-web/src/lib/garam.ts`).
 - `web.siteUrl` and `site.consoleUrl` — where each app sends a visitor
   to the other (ADR-0131): the console sends a visitor without a
   session to the site's `/handoff`, and the site sends the code it

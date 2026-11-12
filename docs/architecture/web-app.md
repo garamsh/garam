@@ -364,7 +364,7 @@ path is a rewrite in each app's `src/proxy.ts`, not one in
 and written into the standalone server, which is how an image used to
 reach only the api Service a release named `garam` renders
 ([ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md),
-which this no longer follows). The proxy drops the `/api` segment and
+superseded by [ADR-0150](./adr/0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)). The proxy drops the `/api` segment and
 sends the rest, query included, to the address, and streams the response
 back. With no address the production schema fails to parse and every
 request, the probes included, answers 500, so a pod without one is held
@@ -801,7 +801,8 @@ The rest bear on it without being about it:
 - [ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)
   — the browser's `/api/*` address was fixed when the image was built;
   it is now read when the process starts, so a published image is bound
-  to no release name
+  to no release name; superseded by
+  [ADR-0150](./adr/0150-a-web-image-reads-the-api-address-when-it-starts-and-a-published-image-is-bound-to-no-release-name.md)
 - [ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
   — a development build of this image is built from what the release
   builds, and is told apart by its tag

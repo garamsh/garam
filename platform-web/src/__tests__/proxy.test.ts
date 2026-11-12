@@ -130,6 +130,10 @@ describe("proxy /api/*", () => {
       "/auth/google/callback?code=a%2Fb",
     ],
     ["/api", "/"],
+    [
+      "/api/orgs/acme/agents/grn%3Aacme%2Fiam%2Fagent%2F1?x=a%2Fb",
+      "/orgs/acme/agents/grn%3Aacme%2Fiam%2Fagent%2F1?x=a%2Fb",
+    ],
   ])("sends %s to %s, the backend's own path", async (path, want) => {
     const response = (await proxyServing("http://backend.invalid:8080"))(
       request(path),

@@ -40,7 +40,7 @@ fn question() -> EvaluateRequest {
             id: "grn:acme/iam/user/lee".into(),
         }),
         action: Some(Action {
-            name: "iam:agent-read".into(),
+            name: "iam:agent.read".into(),
         }),
         resource: Some(Resource {
             r#type: "Iam::Agent".into(),

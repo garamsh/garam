@@ -5,7 +5,7 @@ use decision::{
 use crate::error::Error;
 
 /// The right to write a `permit` for an organization: the answer of an
-/// evaluation of `iam:policy-permit` on its `Org` for one writer
+/// evaluation of `iam:permit.write` on its `Org` for one writer
 /// (ADR-0144 item 7). Only [`PermitRight::ask`] makes one, and only on
 /// an allow, so a [`Body`](crate::Body) holding a `permit` was made by
 /// a writer the engine allowed.
@@ -16,7 +16,7 @@ pub struct PermitRight {
 }
 
 impl PermitRight {
-    /// Evaluates `iam:policy-permit` on `org`'s `Org` for `writer`, a
+    /// Evaluates `iam:permit.write` on `org`'s `Org` for `writer`, a
     /// user or an agent, against the system tier, the organization's
     /// role links and `forbid` guardrails and its entities. Its
     /// `permit`s are left out, so the right comes from the role alone:
@@ -34,7 +34,7 @@ impl PermitRight {
                 entities,
                 &Evaluation {
                     subject: writer,
-                    action: "iam:policy-permit",
+                    action: "iam:permit.write",
                     resource: EntityRef {
                         entity_type: "Iam::Org",
                         id: org.as_str(),

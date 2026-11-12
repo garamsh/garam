@@ -142,8 +142,8 @@ var actionRules = map[string]actionRule{
 // same statements, groups and engine `Check` authorizeOn uses. It
 // answers allow or deny and never why. An action a delegation grant
 // also decides is denied where its mint's check denies and unknown
-// where only the grant is left. iam:operator-delegate and
-// iam:agent-enroll are each answered by the check their writes run.
+// where only the grant is left. iam:operator.delegate and
+// iam:agent.enroll are each answered by the check their writes run.
 // Requires membership.
 func (s *Server) CheckPermissions(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
@@ -229,7 +229,7 @@ func (s *Server) decideAsMint(r *http.Request, c *caller, target grn.GRN, action
 	return "", err
 }
 
-// decideAsDelegation answers iam:operator-delegate with the check every
+// decideAsDelegation answers iam:operator.delegate with the check every
 // write of a delegation runs, for the same actor and organization. That
 // check is all of their authority, so it answers allow or deny.
 func (s *Server) decideAsDelegation(r *http.Request, c *caller) (apigen.PermissionDecision, error) {
@@ -243,7 +243,7 @@ func (s *Server) decideAsDelegation(r *http.Request, c *caller) (apigen.Permissi
 	return "", err
 }
 
-// decideAsEnroll answers iam:agent-enroll with the check every
+// decideAsEnroll answers iam:agent.enroll with the check every
 // approval, withdrawal and revoke of a standalone host runs, for the
 // same actor and object. That check is all of their authority, so it
 // answers allow or deny.

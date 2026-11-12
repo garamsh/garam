@@ -3,7 +3,8 @@
 > Status: accepted; partly built. Items 1, 2, 3 and 5 are built
 > (#1777) and item 4, the platform's own action names, is built
 > (#1779); item 6, the registry, and item 7's proofs are decided and
-> not built
+> not built. Item 3's separator and group spelling are superseded by
+> ADR-0145: an action is `<type>.<verb>`, its group `<type>.*`
 > Date: 2026-11-12
 
 Drafted for #1775, under #1774, which reserves this number and holds

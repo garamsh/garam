@@ -79,7 +79,7 @@ describe("document panel", () => {
     // Nothing to publish until the document differs from the default.
     const publish = screen.getByRole("button", { name: "Publish v3" });
     expect(publish).toBeDisabled();
-    await editAction(user, "iam:project-update");
+    await editAction(user, "iam:project.update");
     expect(publish).toBeEnabled();
     expect(screen.getByText("Edited, not published")).toBeInTheDocument();
 
@@ -91,8 +91,8 @@ describe("document panel", () => {
       "It applies at once. Applies to Engineering (Team).",
     );
     const diff = within(dialog).getByRole("figure");
-    expect(diff).toHaveTextContent('Removed: "iam:project-delete"');
-    expect(diff).toHaveTextContent('Added: "iam:project-update"');
+    expect(diff).toHaveTextContent('Removed: "iam:project.delete"');
+    expect(diff).toHaveTextContent('Added: "iam:project.update"');
 
     await user.click(
       within(dialog).getByRole("button", { name: "Publish v3" }),
@@ -102,7 +102,7 @@ describe("document panel", () => {
     expect(await screen.findByText("Published v3.")).toBeInTheDocument();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(posted).toHaveLength(1);
-    expect(posted[0]).toContain("iam:project-update");
+    expect(posted[0]).toContain("iam:project.update");
   });
 
   it("closes the dialog on a refused document and marks it on the editor", async () => {
@@ -145,7 +145,7 @@ describe("document panel", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await editAction(user, "iam:project-update");
+    await editAction(user, "iam:project.update");
     await user.click(screen.getByRole("button", { name: "Publish v3" }));
     const dialog = await screen.findByRole("alertdialog");
     await user.click(
@@ -178,7 +178,7 @@ describe("document panel", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await editAction(user, "iam:project-update");
+    await editAction(user, "iam:project.update");
     await user.click(screen.getByRole("button", { name: "Save draft" }));
 
     expect(
@@ -198,7 +198,7 @@ describe("document panel", () => {
     );
     const user = userEvent.setup();
     const { rerender } = renderPanel();
-    await editAction(user, "iam:project-update");
+    await editAction(user, "iam:project.update");
     const save = screen.getByRole("button", {
       name: "Save draft",
     });
@@ -213,7 +213,7 @@ describe("document panel", () => {
 
     expect(screen.queryByText(/, not the default\.$/)).not.toBeInTheDocument();
     // The control: a save made under the new default says so.
-    await editAction(user, "iam:project-read");
+    await editAction(user, "iam:project.read");
     await user.click(save);
     expect(
       await screen.findByText("Saved as v4, not the default."),
@@ -243,7 +243,7 @@ describe("document panel", () => {
     const user = userEvent.setup();
     renderPanel();
 
-    await editAction(user, "iam:project-update");
+    await editAction(user, "iam:project.update");
     await user.click(screen.getByRole("button", { name: "Publish v3" }));
     const dialog = await screen.findByRole("alertdialog");
     await user.click(
@@ -290,8 +290,8 @@ describe("document panel", () => {
     await user.keyboard("{Control>}a{/Control}{Backspace}");
     await user.paste(
       JSON.stringify(denyDeletesVersions[0].document).replace(
-        "iam:project-delete",
-        "iam:project-update",
+        "iam:project.delete",
+        "iam:project.update",
       ),
     );
     expect(screen.getByText("Edited, not published")).toBeInTheDocument();

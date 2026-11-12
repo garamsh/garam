@@ -48,7 +48,7 @@ import (
 // executionStack is both listeners as the serve commands compose them,
 // over one database: acme's owner and member on the browser surface;
 // on the machine surface the hosted control service, whose grant
-// covers iam:agent-activate, iam:agent-recover and iam:agent-configure
+// covers iam:agent.activate, iam:agent.recover and iam:agent.configure
 // for the controller, the controller itself, each presenting the token
 // its key was exchanged for, and an agent assigned to the controller in
 // a lineage its tokens are minted in, with no activation yet. A second
@@ -143,7 +143,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 	s.controllerToken = exchangeKey(t, s.client, s.machine, s.controller, s.controllerKey, nil)
 	s.hostedTLS = tokenPresenting(t, s.hostedToken)
 	s.controlTLS = tokenPresenting(t, s.controllerToken)
-	s.delegate(t, "iam:agent-activate", "iam:agent-recover", "iam:agent-configure")
+	s.delegate(t, "iam:agent.activate", "iam:agent.recover", "iam:agent.configure")
 
 	// The agent is the controller's, in a lineage of its own and with no
 	// activation yet.
@@ -353,7 +353,7 @@ func (s *executionStack) deactivate(t *testing.T, id string) reply {
 }
 
 // recovery is a credential recovery prepared as the Operator prepares
-// one: the exact request body, and the owner's iam:agent-recover
+// one: the exact request body, and the owner's iam:agent.recover
 // handoff for that body. Under execution-fence.v2 it signs nothing and
 // carries no certificate request (ADR-0100, ADR-0118).
 type recovery struct {
@@ -371,11 +371,11 @@ func (s *executionStack) prepareRecovery(t *testing.T, requestID string) recover
 	return recovery{body: string(raw), authority: authorityOf(t, got).Authority}
 }
 
-// mintHandoff asks for an iam:agent-recover handoff of the agent as the
+// mintHandoff asks for an iam:agent.recover handoff of the agent as the
 // user cookie names, bound to digest.
 func (s *executionStack) mintHandoff(t *testing.T, cookie *http.Cookie, digest, requestID string) (int, string) {
 	t.Helper()
-	body := `{"audience":"` + s.hosted.String() + `","operation":"iam:agent-recover","target":"` + s.agent.String() +
+	body := `{"audience":"` + s.hosted.String() + `","operation":"iam:agent.recover","target":"` + s.agent.String() +
 		`","requestId":"` + requestID + `","bodySha256":"` + digest + `"}`
 	return call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", cookie, body)
 }
@@ -579,13 +579,13 @@ func TestExecutionFence_RecoveryFencesTheOldLineageOnAnOpenConnection(t *testing
 
 	status, got := s.mintHandoff(t, s.member, strings.Repeat("c", 64), "h-member")
 	assert.Equal(t, http.StatusForbidden, status, "a member does not recover: %s", got)
-	// A grant that stops listing iam:agent-recover ends the handoff minted
+	// A grant that stops listing iam:agent.recover ends the handoff minted
 	// under it; one minted under the restored grant recovers.
 	withdrawn := s.prepareRecovery(t, "rec-0")
-	s.delegate(t, "iam:agent-activate")
+	s.delegate(t, "iam:agent.activate")
 	refused := s.recover(t, withdrawn, withdrawn.body)
 	assert.Equal(t, http.StatusForbidden, refused.status, refused.body)
-	s.delegate(t, "iam:agent-activate", "iam:agent-recover", "iam:agent-configure")
+	s.delegate(t, "iam:agent.activate", "iam:agent.recover", "iam:agent.configure")
 	r := s.prepareRecovery(t, "rec-1")
 
 	changed := s.recover(t, r, r.body+" ")

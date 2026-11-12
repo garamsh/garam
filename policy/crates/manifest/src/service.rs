@@ -36,7 +36,7 @@ pub struct AppliesTo {
 pub struct Action {
     /// The wire name, `<service>:<id>`.
     pub name: String,
-    /// The identifier inside the namespace, `<type>-<verb>`.
+    /// The identifier inside the namespace, `<type>.<verb>`.
     pub id: String,
     /// The groups it sits in, by wire name.
     pub parents: Vec<String>,

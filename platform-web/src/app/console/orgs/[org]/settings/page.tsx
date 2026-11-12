@@ -44,8 +44,8 @@ export default async function OrgSettingsPage({ params }: Params) {
   const [organization, permissions, preview] = await Promise.all([
     getOrg(org),
     checkPermissions(org, {
-      rename: { action: "iam:org-update" },
-      delete: { action: "iam:org-delete" },
+      rename: { action: "iam:org.update" },
+      delete: { action: "iam:org.delete" },
     }),
     getOrgDeletionPreview(org),
   ]);

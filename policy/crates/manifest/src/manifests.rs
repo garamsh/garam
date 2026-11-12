@@ -79,8 +79,8 @@ impl Manifests {
             })
     }
 
-    /// The Cedar action an action name on the wire is: `iam:org-read`
-    /// is `Iam::Action::"org-read"`. A name with no service, or one no
+    /// The Cedar action an action name on the wire is: `iam:org.read`
+    /// is `Iam::Action::"org.read"`. A name with no service, or one no
     /// manifest declares, is refused (ADR-0143 item 3).
     pub fn action(&self, wire: &str) -> Result<EntityUid, Error> {
         let refused = || Error::Action(wire.to_owned());
@@ -105,8 +105,10 @@ impl Manifests {
     /// What breaks the rules every manifest holds (ADR-0143 item 2):
     /// one namespace and one `@service` each, no service named twice,
     /// a `@grn` unique within its service and a slug, a `@caller` on
-    /// every type, and an action identifier of the form `<type>-<verb>`
-    /// or `<type>-*`. Each entry names what disagrees.
+    /// every type, an action identifier of the form `<type>.<verb>`,
+    /// `<type>.*` or `role-<name>`, and a `<type>.*` group holding
+    /// exactly that type's actions (ADR-0145 items 1 to 3). Each entry
+    /// names what disagrees.
     pub fn problems(&self) -> Vec<String> {
         let mut problems = Vec::new();
         let mut names = BTreeSet::new();
@@ -143,10 +145,48 @@ impl Manifests {
             for action in &service.actions {
                 if !is_action_id(&action.id) {
                     problems.push(format!(
-                        "{}: action {:?} is not <type>-<verb> or <type>-*",
+                        "{}: action {:?} is not <type>.<verb>, <type>.* or role-<name>",
                         service.name, action.id
                     ));
                 }
+            }
+            problems.extend(self.group_problems(service));
+        }
+        problems
+    }
+
+    /// Each `<type>.*` group of the service against the actions that
+    /// name it as a parent: they must be the service's actions of that
+    /// type, no more and no fewer (ADR-0145 item 2).
+    fn group_problems(&self, service: &Service) -> Vec<String> {
+        let mut problems = Vec::new();
+        for group in &service.actions {
+            let Some(kind) = group.id.strip_suffix(".*") else {
+                continue;
+            };
+            let expected: BTreeSet<&str> = service
+                .actions
+                .iter()
+                .filter(|action| {
+                    action_type(&action.id) == Some(kind) && !action.id.ends_with(".*")
+                })
+                .map(|action| action.name.as_str())
+                .collect();
+            let held: BTreeSet<&str> = self
+                .services
+                .iter()
+                .flat_map(|other| &other.actions)
+                .filter(|action| action.parents.contains(&group.name))
+                .map(|action| action.name.as_str())
+                .collect();
+            for missing in expected.difference(&held) {
+                problems.push(format!("{}: {missing} is not in its group", group.name));
+            }
+            for extra in held.difference(&expected) {
+                problems.push(format!(
+                    "{}: holds {extra}, which is not of type {kind}",
+                    group.name
+                ));
             }
         }
         problems
@@ -301,8 +341,18 @@ fn is_slug(text: &str) -> bool {
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
 }
 
-/// `<type>-<verb>`, or the group `<type>-*` (ADR-0143 item 3).
+/// The type of an action id `<type>.<verb>` or `<type>.*`: the slug
+/// before its one dot. A role group has none.
+fn action_type(id: &str) -> Option<&str> {
+    let (kind, verb) = id.split_once('.')?;
+    (is_slug(kind) && (verb == "*" || is_slug(verb))).then_some(kind)
+}
+
+/// `<type>.<verb>`, the group `<type>.*`, or the role group
+/// `role-<name>`, the one id with no dot (ADR-0145 items 1 to 3).
 fn is_action_id(id: &str) -> bool {
-    let rest = id.strip_suffix("-*").unwrap_or(id);
-    is_slug(rest) && (rest != id || rest.contains('-'))
+    match id.strip_prefix("role-") {
+        Some(name) => is_slug(name),
+        None => action_type(id).is_some(),
+    }
 }

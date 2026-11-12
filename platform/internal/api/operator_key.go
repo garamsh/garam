@@ -17,8 +17,8 @@ import (
 //
 // It is the one route that issues a key. The first key of an operator
 // holding no live one is the registration's authority,
-// iam:operator-register; issuing beside or in place of a live key is
-// iam:operator-reissue, as withdrawing a key is. A caller holding
+// iam:operator.register; issuing beside or in place of a live key is
+// iam:operator.reissue, as withdrawing a key is. A caller holding
 // only the first issues under KeyRotationFirst, which the store refuses
 // for an operator that holds a live key in the transaction that would
 // write, so a concurrent issuance cannot split the check from the
@@ -84,8 +84,8 @@ func (s *Server) IssueOperatorKey(w http.ResponseWriter, r *http.Request, orgSlu
 }
 
 // authorizeKeyIssuance answers whether the caller holds
-// iam:operator-reissue, which issues under any rotation, refusing one
-// that holds neither it nor iam:operator-register, which issues a first
+// iam:operator.reissue, which issues under any rotation, refusing one
+// that holds neither it nor iam:operator.register, which issues a first
 // key alone.
 func (s *Server) authorizeKeyIssuance(r *http.Request, orgSlug string, u *user.User) (bool, error) {
 	err := s.authorize(r, orgGRN(orgSlug), u, org.ActionOperatorReissue)
@@ -113,7 +113,7 @@ func keyRotation(r apigen.OperatorKeyIssuanceRotation) (operator.KeyRotation, er
 }
 
 // ListOperatorKeys answers the public record of every key the operator
-// was issued (ADR-0102). Requires iam:operator-read.
+// was issued (ADR-0102). Requires iam:operator.read.
 func (s *Server) ListOperatorKeys(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug) {
 	g, ok := s.authorizedOperator(w, r, orgSlug, operatorSlug, org.ActionOperatorRead)
 	if !ok {
@@ -132,7 +132,7 @@ func (s *Server) ListOperatorKeys(w http.ResponseWriter, r *http.Request, orgSlu
 }
 
 // RevokeOperatorKey withdraws the operator's key and every token
-// exchanged under it (ADR-0102). Requires iam:operator-reissue, which
+// exchanged under it (ADR-0102). Requires iam:operator.reissue, which
 // withdraws what the operator runs on as re-issuing does.
 func (s *Server) RevokeOperatorKey(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug, kid apigen.KeyID) {
 	g, ok := s.authorizedOperator(w, r, orgSlug, operatorSlug, org.ActionOperatorReissue)

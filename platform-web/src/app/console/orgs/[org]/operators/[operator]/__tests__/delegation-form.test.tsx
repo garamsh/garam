@@ -17,7 +17,7 @@ const delegation: Delegation = {
   grantId: "grant-1",
   operatorGrn: "grn:acme/iam/operator/field-one",
   controllers: [MANAGER, "grn:acme/iam/operator/gone"],
-  operations: ["iam:agent-create", "iam:operator-read"],
+  operations: ["iam:agent.create", "iam:operator.read"],
   expiresAt: "2026-10-21T00:00:00Z",
   grantedBy: "grn:root/iam/user/alice",
   grantedAt: "2026-10-14T00:00:00Z",
@@ -94,7 +94,7 @@ describe("delegation form", () => {
         HttpResponse.json(
           {
             kind: "permission_denied",
-            message: "denied: iam:operator-delegate",
+            message: "denied: iam:operator.delegate",
           },
           { status: 403 },
         ),

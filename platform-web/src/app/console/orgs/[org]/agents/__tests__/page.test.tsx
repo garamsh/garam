@@ -173,7 +173,7 @@ describe("agents", () => {
   it("keeps creating on the page, inactive with its reason, where the server denies it", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:agent-create" ? "deny" : "allow",
+        action === "iam:agent.create" ? "deny" : "allow",
       ),
     );
 

@@ -36,12 +36,12 @@ export default async function PersonPage({ params }: Params) {
     {
       key: "members",
       label: "See who is in this organization",
-      check: { action: "iam:org-member-list" },
+      check: { action: "iam:org.member-list" },
     },
     {
       key: "invite",
       label: "Invite people",
-      check: { action: "iam:org-invite" },
+      check: { action: "iam:org.invite" },
     },
   ]);
   const [organization, members] = await Promise.all([

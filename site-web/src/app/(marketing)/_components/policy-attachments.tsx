@@ -28,7 +28,7 @@ export function PolicyAttachments() {
         </span>
         <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-xs">
           <span className="text-brand">Allow</span>
-          <span>project:read</span>
+          <span>project.read</span>
           <span className="text-muted-foreground">grn:acme/*</span>
         </span>
       </div>

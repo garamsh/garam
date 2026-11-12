@@ -41,8 +41,8 @@ func (w wsConn) Write(ctx context.Context, msg []byte) error {
 
 // SyncPage upgrades to a WebSocket for one page's content. Everything
 // it can refuse, it refuses before the upgrade, as getPage would:
-// cowork:page-read on the page, which also proves it exists. Whether
-// the connection's edits are kept is cowork:page-write on the page.
+// cowork:page.read on the page, which also proves it exists. Whether
+// the connection's edits are kept is cowork:page.write on the page.
 // Both are asked again while it is open (ADR-0139): a changed answer
 // to the second closes it to reconnect, and the upgrade decides again.
 func (s *Server) SyncPage(w http.ResponseWriter, r *http.Request) {

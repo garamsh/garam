@@ -15,7 +15,7 @@ import (
 	"github.com/garamsh/garam/platform/internal/wire"
 )
 
-// enrollOn is the iam:agent-enroll pair on the organization, or on
+// enrollOn is the iam:agent.enroll pair on the organization, or on
 // agent where one is given.
 func enrollOn(agent *grn.GRN) apigen.PermissionCheck {
 	check := apigen.PermissionCheck{Action: org.ActionAgentEnroll}
@@ -26,15 +26,15 @@ func enrollOn(agent *grn.GRN) apigen.PermissionCheck {
 }
 
 // TestCheckPermissions_AnswersAgentEnrollAsAnApprovalDecides holds each
-// iam:agent-enroll answer beside the approval it describes, over the
+// iam:agent.enroll answer beside the approval it describes, over the
 // standalone service `serve api` composes. The owner is answered allow
 // on the organization and on an agent, and both approvals succeed; the
-// member, whose role holds no iam:agent-enroll, is answered deny and
+// member, whose role holds no iam:agent.enroll, is answered deny and
 // refused, which is the control that the check is not answering allow
 // to everyone. A Deny on one agent then turns the owner's answer on
 // that agent to deny while the organization stays allow, and the
 // replacement it describes is refused while a new host is approved.
-// iam:agent-create, which a delegation grant also decides, is still
+// iam:agent.create, which a delegation grant also decides, is still
 // answered unknown.
 func TestCheckPermissions_AnswersAgentEnrollAsAnApprovalDecides(t *testing.T) {
 	p := pool(t)
@@ -66,5 +66,5 @@ func TestCheckPermissions_AnswersAgentEnrollAsAnApprovalDecides(t *testing.T) {
 
 	require.Equal(t, []apigen.PermissionDecision{apigen.DecisionUnknown},
 		checkedDecisions(t, s.browser, s.owner, apigen.PermissionCheck{Action: org.ActionAgentCreate}),
-		"a delegation grant still decides iam:agent-create")
+		"a delegation grant still decides iam:agent.create")
 }

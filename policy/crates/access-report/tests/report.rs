@@ -37,7 +37,7 @@ const ON_LEE: &str =
     r#"forbid (principal == Iam::User::"grn:acme/iam/user/lee", action, resource);"#;
 const ENG_WATCHES_BOT: &str = r#"permit (
     principal in Iam::Team::"grn:acme/iam/group/eng",
-    action == Iam::Action::"agent-watch",
+    action == Iam::Action::"agent.watch",
     resource == Iam::Agent::"grn:acme/iam/agent/bot"
 );"#;
 

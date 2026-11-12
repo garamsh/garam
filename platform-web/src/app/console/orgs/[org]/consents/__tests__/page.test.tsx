@@ -129,7 +129,7 @@ describe("consents section", () => {
     );
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:consent-grant" ? "deny" : "allow",
+        action === "iam:consent.grant" ? "deny" : "allow",
       ),
     );
 
@@ -209,7 +209,7 @@ describe("consents section", () => {
     );
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:consent-withdraw" ? "deny" : "allow",
+        action === "iam:consent.withdraw" ? "deny" : "allow",
       ),
     );
 
@@ -236,7 +236,7 @@ describe("consents section", () => {
     );
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:consent-withdraw" ? "unknown" : "deny",
+        action === "iam:consent.withdraw" ? "unknown" : "deny",
       ),
     );
 

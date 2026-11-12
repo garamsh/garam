@@ -520,8 +520,8 @@ agent, on the route tagged `enrollment`, authoritative for its wire and
 token alone. Each request rereads the caller's token and registration;
 each but creation and admission rereads its grant, or a supervisor's
 registration and assignment, and current policy too, and those reread
-the member's `iam:agent-create` reference instead, or for a replacement
-the `iam:agent-replace` reference whose grant must cover both the
+the member's `iam:agent.create` reference instead, or for a replacement
+the `iam:agent.replace` reference whose grant must cover both the
 controller the agent is on and the one it moves to (ADR-0107). An
 agent's own token and a controller's are refused. Activation,
 deactivation, recovery, creation and admission are each bounded by a

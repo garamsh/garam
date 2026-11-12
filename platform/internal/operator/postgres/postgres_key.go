@@ -43,7 +43,7 @@ func (s *Store) IssueKey(ctx context.Context, k *operator.IssuedKey, rotation op
 	switch rotation {
 	case operator.KeyRotationFirst:
 		// Any row refuses, a withdrawn one included: re-keying after a
-		// revocation is iam:operator-reissue (ADR-0102).
+		// revocation is iam:operator.reissue (ADR-0102).
 		keyed, err := q.OperatorWasKeyed(ctx, operatorGRN)
 		if err != nil {
 			return operator.Key{}, pgxerr.Classify(err, "read operator keys", nil, nil)

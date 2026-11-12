@@ -124,8 +124,8 @@ func (s *Server) EndOperatorDelegation(w http.ResponseWriter, r *http.Request, o
 
 // SetOperatorControlEndpoint registers where a hosted operator's
 // control service answers the console (#1170). Authorization is the
-// service's, decided from current state on iam:operator-delegate rather
-// than on the iam:operator-update that renames one.
+// service's, decided from current state on iam:operator.delegate rather
+// than on the iam:operator.update that renames one.
 func (s *Server) SetOperatorControlEndpoint(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug, params apigen.SetOperatorControlEndpointParams) {
 	if !contract(w, params.ContractVersion) {
 		return

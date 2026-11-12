@@ -64,7 +64,7 @@ func (p *policy) Authorize(_ context.Context, _, _, object grn.GRN, action strin
 }
 
 // proofFixture is one organization's hosted operator, the controller
-// its grant covers for iam:agent-activate, and an agent placed on it.
+// its grant covers for iam:agent.activate, and an agent placed on it.
 type proofFixture struct {
 	now        time.Time
 	org        grn.GRN
@@ -108,7 +108,7 @@ func TestProofService_ProvesAControllerItsGrantCovers(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, &operator.ControllerProof{Controller: f.controller, Org: f.org}, proof)
 	assert.Equal(t, f.org, f.policy.object, "a session is decided on the organization")
-	assert.Equal(t, "iam:agent-activate", f.policy.action)
+	assert.Equal(t, "iam:agent.activate", f.policy.action)
 
 	ended := f.now
 	tests := map[string]struct {
@@ -124,7 +124,7 @@ func TestProofService_ProvesAControllerItsGrantCovers(t *testing.T) {
 			g.ExpiresAt = f.now
 			return currentGrant{grant: &g}
 		}, kind: errorx.KindPermissionDenied},
-		"a grant without iam:agent-activate": {store: func(g operator.Grant) operator.GrantStore {
+		"a grant without iam:agent.activate": {store: func(g operator.Grant) operator.GrantStore {
 			g.Operations = []operator.Operation{operator.OperationAgentCreate, operator.OperationAgentConfigure}
 			return currentGrant{grant: &g}
 		}, kind: errorx.KindPermissionDenied},

@@ -240,7 +240,7 @@ describe("connect wizard", () => {
   it("keeps the replacement open with garam's refusal, and stays on issuing", async () => {
     answerIssuance(() =>
       HttpResponse.json(
-        { kind: "permission_denied", message: "denied: iam:operator-reissue" },
+        { kind: "permission_denied", message: "denied: iam:operator.reissue" },
         { status: 403 },
       ),
     );

@@ -14,10 +14,10 @@ fn engine() -> Engine {
 fn an_action_the_schema_does_not_name_is_refused() {
     let engine = engine();
 
-    let refused = engine.request(&evaluation(LEE, "iam:org-rename", ACME));
+    let refused = engine.request(&evaluation(LEE, "iam:org.rename", ACME));
     assert!(matches!(refused, Err(Error::Evaluation(_))), "{refused:?}");
 
-    let control = engine.request(&evaluation(LEE, "iam:org-read", ACME));
+    let control = engine.request(&evaluation(LEE, "iam:org.read", ACME));
     assert!(control.is_ok(), "{control:?}");
 }
 
@@ -25,17 +25,17 @@ fn an_action_the_schema_does_not_name_is_refused() {
 fn an_action_asked_of_a_resource_type_it_does_not_apply_to_is_refused() {
     let engine = engine();
 
-    let refused = engine.request(&evaluation(LEE, "iam:org-read", WEB));
+    let refused = engine.request(&evaluation(LEE, "iam:org.read", WEB));
     assert!(matches!(refused, Err(Error::Evaluation(_))), "{refused:?}");
 
-    let control = engine.request(&evaluation(LEE, "iam:project-read", WEB));
+    let control = engine.request(&evaluation(LEE, "iam:project.read", WEB));
     assert!(control.is_ok(), "{control:?}");
 }
 
 #[test]
 fn a_context_attribute_the_schema_does_not_name_is_refused() {
     let engine = engine();
-    let mut question = evaluation(LEE, "iam:org-read", ACME);
+    let mut question = evaluation(LEE, "iam:org.read", ACME);
     question.context = json!({"hour": 3});
 
     let refused = engine.request(&question);

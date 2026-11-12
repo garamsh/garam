@@ -28,7 +28,7 @@ var (
 
 // ManagedCreationInput is a managed creation as received: the
 // controller the new agent is assigned to, the request identifier and
-// the member's iam:agent-create reference both are bound by, and the
+// the member's iam:agent.create reference both are bound by, and the
 // name the agent is given, nil for none (ADR-0119).
 type ManagedCreationInput struct {
 	Controller   grn.GRN
@@ -55,7 +55,7 @@ type ManagedCreation struct {
 }
 
 // CreateManaged registers an agent and its first assignment under the
-// caller's iam:agent-create reference, rechecked as current before any
+// caller's iam:agent.create reference, rechecked as current before any
 // earlier creation is answered. Its execution is fenced from birth in
 // a lineage of its own.
 func (s *executionService) CreateManaged(ctx context.Context, caller grn.GRN, in ManagedCreationInput) (*ManagedCreation, bool, error) {
@@ -101,7 +101,7 @@ func (s *executionService) CreateManaged(ctx context.Context, caller grn.GRN, in
 }
 
 // creationOf answers the managed creation of agentGRN when b, read
-// back for caller, is that creation's own iam:agent-create reference. A
+// back for caller, is that creation's own iam:agent.create reference. A
 // reference of another agent's creation, even on the same controller,
 // covers nothing here.
 func (s *executionService) creationOf(ctx context.Context, b *OperationBinding, caller, agentGRN grn.GRN) (*ManagedCreation, error) {

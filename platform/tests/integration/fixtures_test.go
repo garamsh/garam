@@ -266,7 +266,7 @@ func ptr[T any](v T) *T { return &v }
 // policyDoc builds a one-statement document whose Sid identifies the
 // version it belongs to.
 func policyDoc(sid string, effect wire.Effect) authz.PolicyDocument {
-	return statementDoc(sid, effect, "iam:org-read", "grn:acme/*")
+	return statementDoc(sid, effect, "iam:org.read", "grn:acme/*")
 }
 
 // statementDoc builds a one-statement document over an explicit action

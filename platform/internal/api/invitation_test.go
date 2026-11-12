@@ -136,7 +136,7 @@ func TestListInvitations_NamesEachPendingOneAndNeverItsToken(t *testing.T) {
 }
 
 // TestInvitationManagement_RefusesAMemberWhomTheRoleGrantsNoInvite asks
-// both operations as a member, who holds no iam:org-invite, and as the
+// both operations as a member, who holds no iam:org.invite, and as the
 // owner, who does, so the refusal is the action's.
 func TestInvitationManagement_RefusesAMemberWhomTheRoleGrantsNoInvite(t *testing.T) {
 	f := newFixture(t)

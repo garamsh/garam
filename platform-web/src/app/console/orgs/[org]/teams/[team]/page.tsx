@@ -61,22 +61,22 @@ export default async function TeamPage({ params }: Params) {
     {
       key: "rename",
       label: "Rename it",
-      check: { action: "iam:group-update", resource: group },
+      check: { action: "iam:group.update", resource: group },
     },
     {
       key: "add",
       label: "Add members",
-      check: { action: "iam:group-member-add", resource: group },
+      check: { action: "iam:group.member-add", resource: group },
     },
     {
       key: "remove",
       label: "Remove members",
-      check: { action: "iam:group-member-remove", resource: group },
+      check: { action: "iam:group.member-remove", resource: group },
     },
     {
       key: "delete",
       label: "Delete it",
-      check: { action: "iam:group-delete", resource: group },
+      check: { action: "iam:group.delete", resource: group },
     },
   ]);
   const [organization, read, members, people, agents, readings] =

@@ -119,8 +119,8 @@ func TestArtifacts_ADocumentFreezesAPage(t *testing.T) {
 func TestArtifacts_ThePlatformDecidesAndAnAddressIsACapability(t *testing.T) {
 	s := newStack(t)
 	a := s.createArtifact(t, "ada", `{"kind":"html","title":"Secret","html":"<p>secret</p>"}`)
-	s.platform.denyCheck("carol cowork:artifact-read@" + a.ID)
-	s.platform.denyCheck("bob cowork:artifact-write@" + a.ID)
+	s.platform.denyCheck("carol cowork:artifact.read@" + a.ID)
+	s.platform.denyCheck("bob cowork:artifact.write@" + a.ID)
 
 	status, _ := s.call(t, "carol", http.MethodGet, "/orgs/acme/artifacts/"+a.ID+"/view", "")
 	assert.Equal(t, http.StatusForbidden, status)
@@ -148,7 +148,7 @@ func TestArtifacts_AMessageEmbedsOnlyWhatItsAuthorReads(t *testing.T) {
 	_, body := s.call(t, "bob", http.MethodGet, "/orgs/acme/channels/"+general.ID+"/messages", "")
 	assert.Contains(t, body, `"artifacts":["`+a.ID+`"]`)
 
-	s.platform.denyCheck("carol cowork:artifact-read@" + a.ID)
+	s.platform.denyCheck("carol cowork:artifact.read@" + a.ID)
 	status, _ := s.call(t, "carol", http.MethodPost, "/orgs/acme/channels/"+general.ID+"/messages", `{"body":"x","artifacts":["`+a.ID+`"]}`)
 	assert.Equal(t, http.StatusForbidden, status)
 }
@@ -175,7 +175,7 @@ func TestMCP_AnAgentPublishesAndRevisesAnArtifact(t *testing.T) {
 	_, got := fetch(t, s.view(t, "ada", created.ID, ""))
 	assert.Equal(t, "<h1>Q3, revised</h1>", got, "ada views what bob's agent saved")
 
-	s.platform.denyCheck("carol cowork:artifact-write@" + created.ID)
+	s.platform.denyCheck("carol cowork:artifact.write@" + created.ID)
 	res := s.agent(t, "carol").call("update_artifact", map[string]any{"org": "acme", "artifact": created.ID, "html": "x"})
 	assert.True(t, res.IsError)
 }

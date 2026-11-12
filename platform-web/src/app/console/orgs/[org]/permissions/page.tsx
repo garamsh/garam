@@ -31,7 +31,7 @@ export default async function PermissionsPage({ params }: Params) {
   const [organization, policies, permissions] = await Promise.all([
     getOrg(org),
     listPolicies(org),
-    checkPermissions(org, { create: { action: "iam:policy-create" } }),
+    checkPermissions(org, { create: { action: "iam:policy.create" } }),
   ]);
   const listed = policies.status === "ok" ? policies.data : null;
   const create = permissions.get("create") !== "denied" && (

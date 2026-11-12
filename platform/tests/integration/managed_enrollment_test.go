@@ -23,14 +23,14 @@ import (
 
 // newManagedStack is the execution stack whose hosted control service
 // may also create agents on the controller. The member is the creator:
-// every role holds iam:agent-create, and only the owner holds
-// iam:agent-configure and iam:agent-recover.
+// every role holds iam:agent.create, and only the owner holds
+// iam:agent.configure and iam:agent.recover.
 func newManagedStack(t *testing.T) *executionStack {
 	t.Helper()
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
-	s.delegate(t, "iam:agent-create", "iam:agent-activate", "iam:agent-recover", "iam:agent-configure")
+	s.delegate(t, "iam:agent.create", "iam:agent.activate", "iam:agent.recover", "iam:agent.configure")
 	return s
 }
 
@@ -43,11 +43,11 @@ func (s *executionStack) mint(t *testing.T, cookie *http.Cookie, operation strin
 	return call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", cookie, body)
 }
 
-// creationRef is cookie's user's iam:agent-create reference for the
+// creationRef is cookie's user's iam:agent.create reference for the
 // controller, minted under requestID.
 func (s *executionStack) creationRef(t *testing.T, cookie *http.Cookie, requestID string) string {
 	t.Helper()
-	status, got := s.mint(t, cookie, "iam:agent-create", s.controller, requestID)
+	status, got := s.mint(t, cookie, "iam:agent.create", s.controller, requestID)
 	require.Equal(t, http.StatusCreated, status, got)
 	return authorityOf(t, got).OperationRef
 }
@@ -221,7 +221,7 @@ func (s *executionStack) failing(t *testing.T, table string) func() {
 }
 
 // TestManagedEnrollment_AReferenceCreatesOneFencedAgent carries one
-// iam:agent-create reference through creation, an identical retry, and
+// iam:agent.create reference through creation, an identical retry, and
 // concurrent identical requests, and refuses every request the
 // reference does not bind.
 func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
@@ -253,7 +253,7 @@ func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 		got := s.createManaged(t, r.client, r.path, "create-1", ref)
 		assert.Equal(t, r.status, got.status, "%s: %s", r.name, got.body)
 	}
-	status, configure := s.mint(t, s.owner, "iam:agent-configure", s.agent, "configure-1")
+	status, configure := s.mint(t, s.owner, "iam:agent.configure", s.agent, "configure-1")
 	require.Equal(t, http.StatusCreated, status, configure)
 	got = s.createManaged(t, s.hostedTLS, s.controller, "configure-1", authorityOf(t, configure).OperationRef)
 	assert.Equal(t, http.StatusForbidden, got.status, "a configure reference creates nothing: %s", got.body)
@@ -277,7 +277,7 @@ func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 
 	other := scopedGRN("acme", operator.ServiceType, "second")
 	registerOperator(t, s.pool, other)
-	s.delegateTo(t, []grn.GRN{s.controller, other}, "iam:agent-create", "iam:agent-activate")
+	s.delegateTo(t, []grn.GRN{s.controller, other}, "iam:agent.create", "iam:agent.activate")
 	ref = s.creationRef(t, s.member, "create-2")
 	got = s.createManaged(t, s.hostedTLS, other, "create-2", ref)
 	assert.Equal(t, http.StatusConflict, got.status, "a reference bound to another controller: %s", got.body)
@@ -396,12 +396,12 @@ func TestManagedEnrollment_TheFirstActivationNeedsTheCreationOrAConfigureReferen
 	got = s.activateManaged(t, a.agent, "a-after-deactivation", generationOf(3), &second.ActivationId, nil, aLeaf)
 	assert.Equal(t, http.StatusCreated, got.status, "deactivation keeps the history a restart rests on: %s", got.body)
 
-	status, minted := s.mint(t, s.member, "iam:agent-configure", b.agent, "b-member-configure")
+	status, minted := s.mint(t, s.member, "iam:agent.configure", b.agent, "b-member-configure")
 	assert.Equal(t, http.StatusForbidden, status, "membership grants no configuration authority: %s", minted)
 	s.removeMember(t, "bob")
 	got = s.activateManaged(t, b.agent, "b-first", generationOf(1), nil, &b.ref, bLeaf)
-	assert.Equal(t, http.StatusForbidden, got.status, "the creator no longer holds iam:agent-create: %s", got.body)
-	status, minted = s.mint(t, s.owner, "iam:agent-configure", b.agent, "b-configure")
+	assert.Equal(t, http.StatusForbidden, got.status, "the creator no longer holds iam:agent.create: %s", got.body)
+	status, minted = s.mint(t, s.owner, "iam:agent.configure", b.agent, "b-configure")
 	require.Equal(t, http.StatusCreated, status, minted)
 	configure := authorityOf(t, minted).OperationRef
 	got = s.activateManaged(t, b.agent, "b-first", generationOf(1), nil, &configure, bLeaf)
@@ -420,7 +420,7 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 	// so it can be retried.
 	enrolled := func(cookie *http.Cookie, requestID string) (managed, string) {
 		t.Helper()
-		status, minted := s.mint(t, cookie, "iam:agent-create", s.controller, requestID)
+		status, minted := s.mint(t, cookie, "iam:agent.create", s.controller, requestID)
 		require.Equal(t, http.StatusCreated, status, minted)
 		ref := authorityOf(t, minted).OperationRef
 		creation := creationBody(requestID, ref)
@@ -445,8 +445,8 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 		assert.Equal(t, http.StatusForbidden, retried(creation))
 	})
 
-	t.Run("a creator who lost iam:agent-create, after the short token expired", func(t *testing.T) {
-		s.delegate(t, "iam:agent-create", "iam:agent-activate")
+	t.Run("a creator who lost iam:agent.create, after the short token expired", func(t *testing.T) {
+		s.delegate(t, "iam:agent.create", "iam:agent.activate")
 		m, creation := enrolled(s.member, "revoked")
 		_, err := s.pool.Exec(ctx, `UPDATE operation_authorities SET token_expires_at = now() - interval '1 second' WHERE ref = $1`, m.ref)
 		require.NoError(t, err)
@@ -464,7 +464,7 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 	})
 
 	t.Run("a caller allowed only to create", func(t *testing.T) {
-		s.delegate(t, "iam:agent-create")
+		s.delegate(t, "iam:agent.create")
 		ref := s.creationRef(t, s.owner, "create-only")
 		got := s.createManaged(t, s.hostedTLS, s.controller, "create-only", ref)
 		require.Equal(t, http.StatusCreated, got.status, "creation needs no lifecycle authority: %s", got.body)
@@ -474,9 +474,9 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 		require.NoError(t, err)
 		_, forwarded := s.tokensOf(t, managed{agent: g, ref: ref})
 		got = s.activateManaged(t, g, "create-only", generationOf(1), nil, &ref, forwarded)
-		assert.Equal(t, http.StatusForbidden, got.status, "activating needs iam:agent-activate: %s", got.body)
+		assert.Equal(t, http.StatusForbidden, got.status, "activating needs iam:agent.activate: %s", got.body)
 
-		s.delegate(t, "iam:agent-create", "iam:agent-activate")
+		s.delegate(t, "iam:agent.create", "iam:agent.activate")
 		ref = s.creationRef(t, s.owner, "create-and-activate")
 		got = s.createManaged(t, s.hostedTLS, s.controller, "create-and-activate", ref)
 		require.Equal(t, http.StatusCreated, got.status, got.body)
@@ -485,6 +485,6 @@ func TestManagedEnrollment_CurrentAuthorityAndPlacementDecideEveryAnswer(t *test
 		require.NoError(t, err)
 		_, forwarded = s.tokensOf(t, managed{agent: g, ref: ref})
 		got = s.activateManaged(t, g, "create-and-activate", generationOf(1), nil, &ref, forwarded)
-		assert.Equal(t, http.StatusCreated, got.status, "control: the same request under a grant covering iam:agent-activate: %s", got.body)
+		assert.Equal(t, http.StatusCreated, got.status, "control: the same request under a grant covering iam:agent.activate: %s", got.body)
 	})
 }

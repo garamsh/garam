@@ -136,7 +136,7 @@ describe("people", () => {
   it("keeps inviting on the page, inactive with its reason, where the server denies it", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:org-invite" ? "deny" : "allow",
+        action === "iam:org.invite" ? "deny" : "allow",
       ),
     );
 
@@ -224,7 +224,7 @@ describe("people", () => {
       let read = false;
       server.use(
         answerPermissionChecks((action) =>
-          action === "iam:org-invite" ? "deny" : "allow",
+          action === "iam:org.invite" ? "deny" : "allow",
         ),
         http.get(`${API_URL}/orgs/acme/invitations`, () => {
           read = true;
@@ -323,7 +323,7 @@ describe("people", () => {
   it("offers no team the server denies adding to", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:group-member-add" ? "deny" : "allow",
+        action === "iam:group.member-add" ? "deny" : "allow",
       ),
     );
 

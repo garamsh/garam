@@ -122,7 +122,7 @@ func TestPages_AnswersAsThePlatformDecides(t *testing.T) {
 	status, _ = s.call(t, "eve", http.MethodGet, "/orgs/acme/pages", "")
 	assert.Equal(t, http.StatusForbidden, status)
 
-	s.platform.denyCheck("bob cowork:page-read@" + hidden)
+	s.platform.denyCheck("bob cowork:page.read@" + hidden)
 	pages := s.list(t, "bob")
 	require.Len(t, pages, 1)
 	assert.Equal(t, "open", pages[0].Title)

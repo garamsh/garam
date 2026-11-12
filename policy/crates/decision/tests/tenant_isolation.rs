@@ -22,11 +22,11 @@ fn a_role_linked_across_organizations_is_refused() {
     let insider = link(Role::Owner, RoleScope::Organization, MIA, GLOBEX);
     let policies = world.compose(&[outsider, insider], &[]);
 
-    let refused = world.ask(&policies, LEE, "iam:agent-read", RIVAL);
+    let refused = world.ask(&policies, LEE, "iam:agent.read", RIVAL);
     assert_eq!(refused.outcome, Outcome::Deny);
     assert_eq!(refused.reasons, decided_by_isolation());
 
-    let control = world.ask(&policies, MIA, "iam:agent-read", RIVAL);
+    let control = world.ask(&policies, MIA, "iam:agent.read", RIVAL);
     assert_eq!(control.outcome, Outcome::Allow);
 }
 
@@ -36,11 +36,11 @@ fn a_user_only_in_a_team_is_refused_though_the_team_holds_the_role() {
     let held_by_team = link(Role::Member, RoleScope::Organization, ENG, ACME);
     let policies = world.compose(&[held_by_team], &[]);
 
-    let refused = world.ask(&policies, OUTSIDER, "iam:agent-read", BOT);
+    let refused = world.ask(&policies, OUTSIDER, "iam:agent.read", BOT);
     assert_eq!(refused.outcome, Outcome::Deny);
     assert_eq!(refused.reasons, decided_by_isolation());
 
-    let control = world.ask(&policies, KIM, "iam:agent-read", BOT);
+    let control = world.ask(&policies, KIM, "iam:agent.read", BOT);
     assert_eq!(control.outcome, Outcome::Allow);
 }
 
@@ -51,11 +51,11 @@ fn a_user_only_in_a_team_is_refused_though_a_role_names_it() {
     let member = link(Role::Member, RoleScope::Organization, LEE, ACME);
     let policies = world.compose(&[direct, member], &[]);
 
-    let refused = world.ask(&policies, OUTSIDER, "iam:agent-read", BOT);
+    let refused = world.ask(&policies, OUTSIDER, "iam:agent.read", BOT);
     assert_eq!(refused.outcome, Outcome::Deny);
     assert_eq!(refused.reasons, decided_by_isolation());
 
-    let control = world.ask(&policies, LEE, "iam:agent-read", BOT);
+    let control = world.ask(&policies, LEE, "iam:agent.read", BOT);
     assert_eq!(control.outcome, Outcome::Allow);
 }
 
@@ -65,11 +65,11 @@ fn a_user_only_in_a_project_is_refused_though_the_project_holds_the_role() {
     let held_by_project = link(Role::Member, RoleScope::TeamOrProject, WEB, WEB);
     let policies = world.compose(&[held_by_project], &[]);
 
-    let refused = world.ask(&policies, STRANGER, "iam:project-read", WEB);
+    let refused = world.ask(&policies, STRANGER, "iam:project.read", WEB);
     assert_eq!(refused.outcome, Outcome::Deny);
     assert_eq!(refused.reasons, decided_by_isolation());
 
-    let control = world.ask(&policies, KIM, "iam:project-read", WEB);
+    let control = world.ask(&policies, KIM, "iam:project.read", WEB);
     assert_eq!(control.outcome, Outcome::Allow);
 }
 
@@ -81,20 +81,20 @@ fn a_user_in_two_organizations_is_admitted_to_each_it_holds_a_grant_in() {
 
     let one = world.compose(std::slice::from_ref(&in_acme), &[]);
     assert_eq!(
-        world.ask(&one, KIM, "iam:agent-read", BOT).outcome,
+        world.ask(&one, KIM, "iam:agent.read", BOT).outcome,
         Outcome::Allow
     );
-    let ungranted = world.ask(&one, KIM, "iam:agent-read", RIVAL);
+    let ungranted = world.ask(&one, KIM, "iam:agent.read", RIVAL);
     assert_eq!(ungranted.outcome, Outcome::Deny);
     assert_eq!(ungranted.reasons, Vec::new());
 
     let both = world.compose(&[in_acme, in_globex], &[]);
     assert_eq!(
-        world.ask(&both, KIM, "iam:agent-read", BOT).outcome,
+        world.ask(&both, KIM, "iam:agent.read", BOT).outcome,
         Outcome::Allow
     );
     assert_eq!(
-        world.ask(&both, KIM, "iam:agent-read", RIVAL).outcome,
+        world.ask(&both, KIM, "iam:agent.read", RIVAL).outcome,
         Outcome::Allow
     );
 }

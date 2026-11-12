@@ -11,8 +11,8 @@ const DOCUMENT = JSON.stringify(
   {
     Version: "2026-07-25",
     Statement: [
-      { Effect: "Deny", Action: ["iam:project-delete"], Resource: ["*"] },
-      { Effect: "Allow", Action: ["iam:project-read"], Resource: ["*"] },
+      { Effect: "Deny", Action: ["iam:project.delete"], Resource: ["*"] },
+      { Effect: "Allow", Action: ["iam:project.read"], Resource: ["*"] },
     ],
   },
   null,
@@ -52,7 +52,7 @@ describe("policy editor", () => {
       name: "Statement 2 action 1",
     });
     await user.clear(action);
-    await enter(user, action, "iam:project-list");
+    await enter(user, action, "iam:project.list");
     await user.click(
       within(second).getByRole("button", { name: "Add resource" }),
     );
@@ -60,8 +60,8 @@ describe("policy editor", () => {
     expect(sent()).toEqual({
       Version: "2026-07-25",
       Statement: [
-        { Effect: "Deny", Action: ["iam:project-delete"], Resource: ["*"] },
-        { Effect: "Allow", Action: ["iam:project-list"], Resource: ["*", ""] },
+        { Effect: "Deny", Action: ["iam:project.delete"], Resource: ["*"] },
+        { Effect: "Allow", Action: ["iam:project.list"], Resource: ["*", ""] },
       ],
     });
 
@@ -69,7 +69,7 @@ describe("policy editor", () => {
       screen.getByRole("button", { name: "Remove statement 1" }),
     );
     expect(sent()).toMatchObject({
-      Statement: [{ Effect: "Allow", Action: ["iam:project-list"] }],
+      Statement: [{ Effect: "Allow", Action: ["iam:project.list"] }],
     });
   });
 
@@ -136,7 +136,7 @@ describe("policy editor", () => {
       <Harness
         initial={JSON.stringify({
           Version: "2026-07-25",
-          statement: [{ effect: "Deny", action: ["iam:project-delete"] }],
+          statement: [{ effect: "Deny", action: ["iam:project.delete"] }],
         })}
       />,
     );
@@ -144,15 +144,15 @@ describe("policy editor", () => {
     const action = screen.getByRole("textbox", {
       name: "Statement 1 action 1",
     });
-    expect(action).toHaveValue("iam:project-delete");
+    expect(action).toHaveValue("iam:project.delete");
     await user.clear(action);
-    await enter(user, action, "iam:project-update");
+    await enter(user, action, "iam:project.update");
 
     // The edit lands under the key as written; no second spelling.
     expect(sent()).toEqual({
       Version: "2026-07-25",
       statement: [
-        { effect: "Deny", action: ["iam:project-update"], Resource: [] },
+        { effect: "Deny", action: ["iam:project.update"], Resource: [] },
       ],
     });
   });

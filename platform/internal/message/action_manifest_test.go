@@ -19,5 +19,5 @@ func TestActionSend_IsDeclaredByTheManifests(t *testing.T) {
 	}
 
 	assert.True(t, declared[message.ActionSend], message.ActionSend)
-	assert.False(t, declared["iam:message-post"])
+	assert.False(t, declared["iam:message.post"])
 }

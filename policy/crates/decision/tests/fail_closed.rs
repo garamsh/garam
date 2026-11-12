@@ -26,12 +26,12 @@ fn a_forbid_that_errors_denies_what_a_role_allows() {
 
     let control = world.compose(std::slice::from_ref(&member), &[]);
     assert_eq!(
-        world.ask(&control, LEE, "iam:org-read", ACME).outcome,
+        world.ask(&control, LEE, "iam:org.read", ACME).outcome,
         Outcome::Allow
     );
 
     let policies = world.compose(&[member], &[policy("broken", ERRORING_FORBID)]);
-    let decision = world.ask(&policies, LEE, "iam:org-read", ACME);
+    let decision = world.ask(&policies, LEE, "iam:org.read", ACME);
     assert_eq!(decision.outcome, Outcome::Deny);
     assert!(errored_in(&decision.reasons, "broken"), "{decision:?}");
 }
@@ -44,14 +44,14 @@ fn a_principal_missing_from_the_store_is_denied_by_isolation_itself() {
     let member = link(Role::Member, RoleScope::Organization, LEE, ACME);
     let policies = world.compose(&[ghost, member], &[]);
 
-    let decision = world.ask(&policies, GHOST, "iam:agent-read", BOT);
+    let decision = world.ask(&policies, GHOST, "iam:agent.read", BOT);
     assert_eq!(decision.outcome, Outcome::Deny);
     assert_eq!(
         decision.reasons,
         vec![Reason::Policy(PolicyId::new("tenant-isolation"))]
     );
 
-    let control = world.ask(&policies, LEE, "iam:agent-read", BOT);
+    let control = world.ask(&policies, LEE, "iam:agent.read", BOT);
     assert_eq!(control.outcome, Outcome::Allow);
 }
 
@@ -90,7 +90,7 @@ fn a_resource_whose_organization_is_missing_from_the_store_is_denied() {
     let policies = world.compose(&[grant], &[]);
     let request = world
         .engine
-        .request(&fixture::evaluation(LEE, "iam:group-read", ENG))
+        .request(&fixture::evaluation(LEE, "iam:group.read", ENG))
         .unwrap();
 
     let decision = world.engine.decide(&request, &policies, &orphaned);
@@ -112,13 +112,13 @@ fn a_resource_missing_from_the_store_is_denied_by_isolation_erroring() {
     let gone = link(Role::Member, RoleScope::TeamOrProject, LEE, UNKNOWN);
     let policies = world.compose(&[known, gone], &[]);
 
-    let decision = world.ask(&policies, LEE, "iam:project-read", UNKNOWN);
+    let decision = world.ask(&policies, LEE, "iam:project.read", UNKNOWN);
     assert_eq!(decision.outcome, Outcome::Deny);
     assert!(
         errored_in(&decision.reasons, "tenant-isolation"),
         "{decision:?}"
     );
 
-    let control = world.ask(&policies, LEE, "iam:project-read", WEB);
+    let control = world.ask(&policies, LEE, "iam:project.read", WEB);
     assert_eq!(control.outcome, Outcome::Allow);
 }

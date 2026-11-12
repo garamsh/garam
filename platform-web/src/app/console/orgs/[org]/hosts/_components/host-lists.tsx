@@ -236,7 +236,7 @@ function supervisorColumns(
 /**
  * The organization's approvals and supervisors, each withdrawable or
  * revocable where that applies; `denied` is the reason both are
- * inactive, where the server denies `iam:agent-enroll`.
+ * inactive, where the server denies `iam:agent.enroll`.
  */
 export function HostLists({
   org,

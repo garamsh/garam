@@ -124,7 +124,7 @@ describe("operator keys", () => {
         HttpResponse.json(
           {
             kind: "permission_denied",
-            message: "denied: iam:operator-reissue",
+            message: "denied: iam:operator.reissue",
           },
           { status: 403 },
         ),
@@ -145,7 +145,7 @@ describe("operator keys", () => {
       REFUSAL_COPY.permissionDenied,
     );
     expect(dialog).toBeInTheDocument();
-    expect(screen.queryByText(/iam:operator-reissue/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/iam:operator.reissue/)).not.toBeInTheDocument();
   });
 
   it("sends nothing when revoking is cancelled", async () => {

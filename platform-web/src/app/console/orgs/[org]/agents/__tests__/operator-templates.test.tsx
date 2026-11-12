@@ -39,9 +39,9 @@ function hosted(operations: string[]): DelegatedOperator {
 }
 
 const READS = [
-  "iam:agent-template-read",
-  "iam:agent-template-publish",
-  "iam:execution-profile-read",
+  "iam:agent-template.read",
+  "iam:agent-template.publish",
+  "iam:execution-profile.read",
 ];
 
 function controlService() {
@@ -154,7 +154,7 @@ describe("control service templates", () => {
     ).toBeNull();
     denied.unmount();
 
-    renderPanel(["iam:agent-template-read", "iam:execution-profile-read"]);
+    renderPanel(["iam:agent-template.read", "iam:execution-profile.read"]);
     await screen.findByRole("table", { name: "Published templates" });
     expect(
       screen.queryByRole("button", { name: "Publish version" }),

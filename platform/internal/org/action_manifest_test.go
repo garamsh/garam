@@ -43,9 +43,9 @@ func undeclared(patterns, declared []string) []string {
 // other tests here rely on a name it must report and a control it must
 // not, so a check that reports nothing fails.
 func TestUndeclared_ReportsANameTheManifestsDoNotHold(t *testing.T) {
-	assert.Equal(t, []string{"iam:org-frobnicate", "org-read", "iam:billing-*"},
+	assert.Equal(t, []string{"iam:org.frobnicate", "org.read", "iam:billing.*"},
 		undeclared([]string{
-			"iam:org-read", "iam:org-*", "iam:org-frobnicate", "org-read", "iam:billing-*",
+			"iam:org.read", "iam:org.*", "iam:org.frobnicate", "org.read", "iam:billing.*",
 		}, declared()))
 }
 
@@ -60,17 +60,19 @@ func TestActions_AreDeclaredByTheManifests(t *testing.T) {
 	}
 }
 
-// TestActions_OmitNoActionTheIamManifestDeclaresButTwo holds that the
-// actions of the `iam` service role.go does not define are the two
-// named here and no other. `iam:message-send` is the platform's own and
-// belongs to no role; `iam:policy-permit` is held by owners alone
-// (ADR-0144 item 7) and no role.go constant names it yet.
-func TestActions_OmitNoActionTheIamManifestDeclaresButTwo(t *testing.T) {
+// TestActions_OmitNoActionTheIamManifestDeclaresButThree holds that the
+// actions of the `iam` service role.go does not define are the three
+// named here and no other. `iam:message.send` is the platform's own and
+// belongs to no role; `iam:permit.write` is held by owners alone
+// (ADR-0145 item 4) and no role.go constant names it yet;
+// `iam:agent.activate` is a delegated operation the operator package
+// names and no role holds.
+func TestActions_OmitNoActionTheIamManifestDeclaresButThree(t *testing.T) {
 	var omitted []string
 	for _, name := range declared() {
 		if strings.HasPrefix(name, "iam:") && !org.IsAction(name) {
 			omitted = append(omitted, name)
 		}
 	}
-	assert.Equal(t, []string{"iam:message-send", "iam:policy-permit"}, omitted)
+	assert.Equal(t, []string{"iam:agent.activate", "iam:message.send", "iam:permit.write"}, omitted)
 }

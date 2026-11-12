@@ -10,14 +10,14 @@ import (
 
 // The platform's actions on channels (ADR-0128).
 const (
-	ActionRead = "cowork:channel-read"
-	ActionPost = "cowork:channel-post"
+	ActionRead = "cowork:channel.read"
+	ActionPost = "cowork:channel.post"
 )
 
 // Service is messaging as a caller acts on it. Every method asks the
 // platform, and for a channel that keeps a list, the list after it
-// (ADR-0128): reading needs cowork:channel-read, posting and adding a
-// participant cowork:channel-post, on the channel and, for listing,
+// (ADR-0128): reading needs cowork:channel.read, posting and adding a
+// participant cowork:channel.post, on the channel and, for listing,
 // searching and creating, on the organization.
 type Service interface {
 	Create(ctx context.Context, caller platform.Caller, org string, in CreateInput) (Channel, error)

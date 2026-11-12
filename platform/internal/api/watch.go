@@ -26,7 +26,7 @@ const keepAliveComment = ": keepalive\n\n"
 
 // WatchAgent streams what the agent is saying to the caller, for as long
 // as the caller holds the response open (ADR-0022). Requires
-// `iam:agent-watch`, which is granted separately from reading an agent.
+// `iam:agent.watch`, which is granted separately from reading an agent.
 // The stream replays nothing and is best effort, so nothing in it may
 // be read as a record of what the agent did.
 func (s *Server) WatchAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, agentSlug apigen.AgentSlug) {

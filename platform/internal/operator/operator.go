@@ -144,7 +144,7 @@ type Operator struct {
 	Description string
 	// ControlEndpoint is where the operator's control service answers
 	// the console, nil where none is registered. Only an actor holding
-	// iam:operator-delegate moves it (#1170).
+	// iam:operator.delegate moves it (#1170).
 	ControlEndpoint *ControlEndpoint
 	// Manager is the operator this one is the control service of, nil
 	// where it is a manager or stands alone (ADR-0124). It is written

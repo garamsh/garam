@@ -205,14 +205,14 @@ func (c consumerClient) createOrg(token, name string) string {
 func (c consumerClient) delegate(token, slug string) (int, string) {
 	c.t.Helper()
 	return c.do(http.MethodPut, "/orgs/"+slug+"/operators/hosted/delegation", token,
-		`{"requestId":"g-1","controllers":["`+grn.New(slug, "operator", "controller").String()+`"],"operations":["iam:agent-create"],"expiresAt":"`+
+		`{"requestId":"g-1","controllers":["`+grn.New(slug, "operator", "controller").String()+`"],"operations":["iam:agent.create"],"expiresAt":"`+
 			time.Now().Add(time.Hour).UTC().Format(time.RFC3339)+`"}`)
 }
 
 func (c consumerClient) mint(token, slug, requestID string) (int, string) {
 	c.t.Helper()
 	return c.do(http.MethodPost, "/orgs/"+slug+"/operation-authorities", token,
-		`{"audience":"`+grn.New(slug, "operator", "hosted").String()+`","operation":"iam:agent-create","target":"`+grn.New(slug, "operator", "controller").String()+`","requestId":"`+requestID+`","bodySha256":"`+strings.Repeat("c", 64)+`"}`)
+		`{"audience":"`+grn.New(slug, "operator", "hosted").String()+`","operation":"iam:agent.create","target":"`+grn.New(slug, "operator", "controller").String()+`","requestId":"`+requestID+`","bodySha256":"`+strings.Repeat("c", 64)+`"}`)
 }
 
 // TestPrincipalFixture_DrivesDelegationThroughThePublicAPI is what a

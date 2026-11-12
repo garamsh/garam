@@ -159,7 +159,7 @@ func TestAgentName_AReplacementCarriesNoName(t *testing.T) {
 }
 
 // TestAgentName_RenameIsAuthorizedOnTheAgentsOwnGRN: an owner renames
-// an agent and clears the name again. A Deny of iam:agent-rename on one
+// an agent and clears the name again. A Deny of iam:agent.rename on one
 // agent refuses ada that agent alone; her rename of its sibling and
 // dan's rename of the denied one are the controls.
 func TestAgentName_RenameIsAuthorizedOnTheAgentsOwnGRN(t *testing.T) {
@@ -189,7 +189,7 @@ func TestAgentName_RenameIsAuthorizedOnTheAgentsOwnGRN(t *testing.T) {
 	assert.Empty(t, agentName(t, s.url, s.dan, denied), "null clears the name")
 }
 
-// TestAgentName_AMemberRenamesAnAgent: iam:agent-rename is the member's
+// TestAgentName_AMemberRenamesAnAgent: iam:agent.rename is the member's
 // as it is every role's.
 func TestAgentName_AMemberRenamesAnAgent(t *testing.T) {
 	s := newListStack(t)

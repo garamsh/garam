@@ -504,7 +504,7 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 // has written, and the listener's consent check (ADR-0035) keeps the
 // surface refusing the post anyway.
 //
-// The policy here is `Action: ["*"]` rather than `iam:message-send`,
+// The policy here is `Action: ["*"]` rather than `iam:message.send`,
 // because that is the case that needs no new document: an organization
 // holding a wildcard policy written before this action existed would
 // be exposed the day the engine's scope check is removed.

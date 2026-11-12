@@ -146,7 +146,7 @@ async fn the_analysis_refutes_isolation_read_through_containment() {
     let contained = set(&[EVERYTHING, CONTAINMENT]);
     let members = set(&[MEMBERS_ONLY]);
     let mut solver = compiler();
-    let request = request_on(schema, "iam:agent-read", "Iam::User", "Iam::Agent");
+    let request = request_on(schema, "iam:agent.read", "Iam::User", "Iam::Agent");
 
     let counterexample = solver
         .check_implies_with_counterexample_opt(
@@ -185,8 +185,8 @@ fn request_on(schema: &Schema, action: &str, principal: &str, resource: &str) ->
         .expect("the schema admits this request")
 }
 
-/// The Cedar form of a wire action: `iam:org-read` is
-/// `Iam::Action::"org-read"`.
+/// The Cedar form of a wire action: `iam:org.read` is
+/// `Iam::Action::"org.read"`.
 fn cedar_action(wire: &str) -> String {
     let (service, id) = wire.split_once(':').expect("a wire action holds a colon");
     let mut namespace = service.to_owned();
@@ -214,7 +214,7 @@ async fn the_tier_alone_allows_only_an_agents_sending() {
             .check_always_denies_opt(&compiled(&tier, &request, schema))
             .await
             .unwrap();
-        if action_of(&request) == cedar_action("iam:message-send") {
+        if action_of(&request) == cedar_action("iam:message.send") {
             assert!(!denied, "the tier stopped allowing an agent's sending");
             sending += 1;
         } else {
@@ -226,7 +226,7 @@ async fn the_tier_alone_allows_only_an_agents_sending() {
     println!("analysis: {proved} proofs");
 }
 
-/// `agent:watch` is carried by a grant or by nothing (ADR-0022): no
+/// `agent.watch` is carried by a grant or by nothing (ADR-0022): no
 /// role's link reaches it.
 #[tokio::test]
 #[ignore = "needs cvc5: make -C policy suites"]
@@ -237,7 +237,7 @@ async fn no_role_holds_agent_watch() {
     let mut solver = compiler();
     let requests: Vec<RequestEnv> = every_request(schema)
         .into_iter()
-        .filter(|request| action_of(request) == cedar_action("iam:agent-watch"))
+        .filter(|request| action_of(request) == cedar_action("iam:agent.watch"))
         .collect();
     assert_eq!(requests.len(), 4);
     for request in requests {
@@ -245,7 +245,7 @@ async fn no_role_holds_agent_watch() {
             .check_always_denies_opt(&compiled(&linked, &request, schema))
             .await
             .unwrap();
-        assert!(denied, "a role reaches agent:watch on {request:?}");
+        assert!(denied, "a role reaches agent.watch on {request:?}");
     }
 }
 
@@ -296,7 +296,7 @@ async fn each_role_holds_what_the_role_below_it_holds() {
             // The control: the order matters, so the proof is not of
             // two sets that happen to be equal. The one pair that is
             // equal is the scoped owner and admin: all an owner adds
-            // is `org:*`, which asks of an Org, and a scoped role
+            // is `org.*`, which asks of an Org, and a scoped role
             // names a team or a project.
             let equal = scope == RoleScope::TeamOrProject && above == Role::Owner;
             assert_eq!(
@@ -346,10 +346,10 @@ fn a_rendered_link_decides_as_the_link_does() {
             let static_form = world.compose(&[], &[rendered(&world, role, scope, ENG, what)]);
             for who in [KIM, LEE, OUTSIDER] {
                 for action in [
-                    "iam:agent-read",
-                    "iam:agent-configure",
-                    "iam:org-delete",
-                    "iam:group-update",
+                    "iam:agent.read",
+                    "iam:agent.configure",
+                    "iam:org.delete",
+                    "iam:group.update",
                 ] {
                     for resource in [ACME, ENG, BOT] {
                         let question = fixture::evaluation(who, action, resource);

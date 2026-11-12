@@ -86,7 +86,7 @@ describe("create policy form", () => {
 
     // Editing the text the refusal was about takes the refusal away.
     await user.clear(action);
-    await enter(user, action, "iam:project-delete");
+    await enter(user, action, "iam:project.delete");
     expect(within(editor).queryByRole("alert")).not.toBeInTheDocument();
 
     // The control: the document garam takes, sent from the same form,

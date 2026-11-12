@@ -17,7 +17,7 @@ import (
 // two converting effects are the control on the refusal: alone, it
 // would hold for a converter that refuses everything.
 func TestStatementToProto(t *testing.T) {
-	action := []string{"iam:message-send"}
+	action := []string{"iam:message.send"}
 	resource := []string{"grn:acme/*"}
 	for effect, want := range map[wire.Effect]authzv1.Effect{
 		wire.EffectAllow: authzv1.Effect_EFFECT_ALLOW,

@@ -33,7 +33,7 @@ func newReplacementStack(t *testing.T) *replacementStack {
 	s := &replacementStack{tokenStack: newTokenStack(t)}
 	s.destination = registerOperator(t, s.pool, scopedGRN("acme", operator.ServiceType, "destination"))
 	s.destinationToken = s.keyedToken(t, s.destination)
-	s.delegateTo(t, []grn.GRN{s.controller, s.destination}, "iam:agent-create", "iam:agent-activate", "iam:agent-replace")
+	s.delegateTo(t, []grn.GRN{s.controller, s.destination}, "iam:agent.create", "iam:agent.activate", "iam:agent.replace")
 	return s
 }
 
@@ -50,19 +50,19 @@ func (s *replacementStack) admitted(t *testing.T, requestID string) (grn.GRN, st
 	return g, ref
 }
 
-// mintReplace asks, as the owner, for an iam:agent-replace reference
+// mintReplace asks, as the owner, for an iam:agent.replace reference
 // moving g to destination, minted under requestID.
 func (s *replacementStack) mintReplace(t *testing.T, g, destination grn.GRN, requestID string) (int, string) {
 	t.Helper()
 	raw, err := json.Marshal(map[string]string{
-		"audience": s.hosted.String(), "operation": "iam:agent-replace", "target": g.String(),
+		"audience": s.hosted.String(), "operation": "iam:agent.replace", "target": g.String(),
 		"destination": destination.String(), "requestId": requestID, "bodySha256": emptyDigest,
 	})
 	require.NoError(t, err)
 	return call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", s.owner, string(raw))
 }
 
-// replaceRef is the owner's iam:agent-replace reference moving g to
+// replaceRef is the owner's iam:agent.replace reference moving g to
 // destination.
 func (s *replacementStack) replaceRef(t *testing.T, g, destination grn.GRN, requestID string) string {
 	t.Helper()
@@ -316,20 +316,20 @@ func TestAgentReplacement_AGrantCoveringOnlyTheSourceIsRefused(t *testing.T) {
 	s := newReplacementStack(t)
 	g, _ := s.admitted(t, "enrol-1")
 
-	s.delegateTo(t, []grn.GRN{s.controller}, "iam:agent-create", "iam:agent-activate", "iam:agent-replace")
+	s.delegateTo(t, []grn.GRN{s.controller}, "iam:agent.create", "iam:agent.activate", "iam:agent.replace")
 	status, got := s.mintReplace(t, g, s.destination, "move-1")
 	assert.Equal(t, http.StatusForbidden, status, "a destination the grant does not name: %s", got)
 
-	s.delegateTo(t, []grn.GRN{s.destination}, "iam:agent-create", "iam:agent-activate", "iam:agent-replace")
+	s.delegateTo(t, []grn.GRN{s.destination}, "iam:agent.create", "iam:agent.activate", "iam:agent.replace")
 	status, got = s.mintReplace(t, g, s.destination, "move-1")
 	assert.Equal(t, http.StatusForbidden, status, "a source the grant does not name: %s", got)
 
-	s.delegateTo(t, []grn.GRN{s.controller, s.destination}, "iam:agent-create", "iam:agent-activate", "iam:agent-replace")
+	s.delegateTo(t, []grn.GRN{s.controller, s.destination}, "iam:agent.create", "iam:agent.activate", "iam:agent.replace")
 	ref := s.replaceRef(t, g, s.destination, "move-1")
 	body := replacement("move-1", g, s.controller, 1, s.destination, ref)
 	approval := s.prepared(t, body)
 
-	s.delegateTo(t, []grn.GRN{s.controller}, "iam:agent-create", "iam:agent-activate", "iam:agent-replace")
+	s.delegateTo(t, []grn.GRN{s.controller}, "iam:agent.create", "iam:agent.activate", "iam:agent.replace")
 	reply := s.admit(t, approval, body)
 	assert.Equal(t, http.StatusForbidden, reply.status, "a reference whose grant was narrowed admits nothing: %s", reply.body)
 	_, epoch := s.assignmentOf(t, g)
@@ -343,18 +343,18 @@ func TestAgentReplacement_TheReplaceActionIsAnOwnersOrAdministratorsAlone(t *tes
 	s := newReplacementStack(t)
 	g, _ := s.admitted(t, "enrol-1")
 	raw, err := json.Marshal(map[string]string{
-		"audience": s.hosted.String(), "operation": "iam:agent-replace", "target": g.String(),
+		"audience": s.hosted.String(), "operation": "iam:agent.replace", "target": g.String(),
 		"destination": s.destination.String(), "requestId": "move-1", "bodySha256": emptyDigest,
 	})
 	require.NoError(t, err)
 	status, got := call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", s.member, string(raw))
-	assert.Equal(t, http.StatusForbidden, status, "a member holds no iam:agent-replace: %s", got)
+	assert.Equal(t, http.StatusForbidden, status, "a member holds no iam:agent.replace: %s", got)
 
 	status, got = s.mintReplace(t, g, s.destination, "move-1")
 	assert.Equal(t, http.StatusCreated, status, "control: the owner mints it: %s", got)
 
 	raw, err = json.Marshal(map[string]string{
-		"audience": s.hosted.String(), "operation": "iam:agent-replace", "target": g.String(),
+		"audience": s.hosted.String(), "operation": "iam:agent.replace", "target": g.String(),
 		"requestId": "move-2", "bodySha256": emptyDigest,
 	})
 	require.NoError(t, err)

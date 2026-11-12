@@ -28,166 +28,166 @@ func ParseRole(s string) (Role, error) {
 // Org-scoped action constants. Domains own their actions (ADR-0003);
 // the authz engine matches the strings only.
 const (
-	ActionOrgRead       = "iam:org-read"
-	ActionOrgUpdate     = "iam:org-update"
-	ActionOrgDelete     = "iam:org-delete"
-	ActionOrgMemberList = "iam:org-member-list"
-	ActionOrgInvite     = "iam:org-invite"
+	ActionOrgRead       = "iam:org.read"
+	ActionOrgUpdate     = "iam:org.update"
+	ActionOrgDelete     = "iam:org.delete"
+	ActionOrgMemberList = "iam:org.member-list"
+	ActionOrgInvite     = "iam:org.invite"
 
-	ActionGroupCreate       = "iam:group-create"
-	ActionGroupRead         = "iam:group-read"
-	ActionGroupUpdate       = "iam:group-update"
-	ActionGroupDelete       = "iam:group-delete"
-	ActionGroupMemberList   = "iam:group-member-list"
-	ActionGroupMemberAdd    = "iam:group-member-add"
-	ActionGroupMemberRemove = "iam:group-member-remove"
+	ActionGroupCreate       = "iam:group.create"
+	ActionGroupRead         = "iam:group.read"
+	ActionGroupUpdate       = "iam:group.update"
+	ActionGroupDelete       = "iam:group.delete"
+	ActionGroupMemberList   = "iam:group.member-list"
+	ActionGroupMemberAdd    = "iam:group.member-add"
+	ActionGroupMemberRemove = "iam:group.member-remove"
 
-	ActionProjectCreate       = "iam:project-create"
-	ActionProjectRead         = "iam:project-read"
-	ActionProjectUpdate       = "iam:project-update"
-	ActionProjectDelete       = "iam:project-delete"
-	ActionProjectMemberList   = "iam:project-member-list"
-	ActionProjectMemberAdd    = "iam:project-member-add"
-	ActionProjectMemberRemove = "iam:project-member-remove"
+	ActionProjectCreate       = "iam:project.create"
+	ActionProjectRead         = "iam:project.read"
+	ActionProjectUpdate       = "iam:project.update"
+	ActionProjectDelete       = "iam:project.delete"
+	ActionProjectMemberList   = "iam:project.member-list"
+	ActionProjectMemberAdd    = "iam:project.member-add"
+	ActionProjectMemberRemove = "iam:project.member-remove"
 
 	// Policy management actions. The org owns them because policies
 	// are org-managed data and the api server may not import the
 	// engine that stores them (ADR-0003).
-	ActionPolicyCreate = "iam:policy-create"
-	ActionPolicyRead   = "iam:policy-read"
-	ActionPolicyUpdate = "iam:policy-update"
-	ActionPolicyAttach = "iam:policy-attach"
-	ActionPolicyDetach = "iam:policy-detach"
-	ActionPolicyDelete = "iam:policy-delete"
+	ActionPolicyCreate = "iam:policy.create"
+	ActionPolicyRead   = "iam:policy.read"
+	ActionPolicyUpdate = "iam:policy.update"
+	ActionPolicyAttach = "iam:policy.attach"
+	ActionPolicyDetach = "iam:policy.detach"
+	ActionPolicyDelete = "iam:policy.delete"
 
 	// Cross-organization consent management (ADR-0035). The org owns
 	// the constants for the reason it owns the policy ones: the
 	// relation is org-managed data the api server enforces over,
 	// stored by internal/message.
-	ActionConsentRead     = "iam:consent-read"
-	ActionConsentGrant    = "iam:consent-grant"
-	ActionConsentWithdraw = "iam:consent-withdraw"
+	ActionConsentRead     = "iam:consent.read"
+	ActionConsentGrant    = "iam:consent.grant"
+	ActionConsentWithdraw = "iam:consent.withdraw"
 
 	// Reading the operators an org has registered, and registering one
 	// (ADR-0045). The org owns the constants for the reason it owns the
 	// policy ones, and internal/operator does not import this package.
-	ActionOperatorRead = "iam:operator-read"
+	ActionOperatorRead = "iam:operator.read"
 	// ActionOperatorRegister is recording that the org has an operator.
 	// It mints no certificate: what the record admits, it admits for a
 	// certificate the org's authority signed and this action does not
 	// sign (ADR-0070).
-	ActionOperatorRegister = "iam:operator-register"
+	ActionOperatorRegister = "iam:operator.register"
 	// ActionOperatorDelete is withdrawing that record, which stops the
 	// operator authenticating (ADR-0070). It is an action of its own
 	// rather than the registering one, because it is the first thing a
 	// member does here that takes a machine identity away: registering
 	// grants nothing and this withdraws what an operator runs on.
-	ActionOperatorDelete = "iam:operator-delete"
+	ActionOperatorDelete = "iam:operator.delete"
 	// ActionOperatorReissue is issuing an operator a key beside or in
 	// place of the one it holds, and withdrawing one, which voids every
 	// token exchanged under it (ADR-0102). It is an action of its own
 	// for the reason deleting is: it withdraws what an operator runs on
 	// until the new key is placed, which registering does not.
-	ActionOperatorReissue = "iam:operator-reissue"
+	ActionOperatorReissue = "iam:operator.reissue"
 	// ActionOperatorUpdate is changing what the org says about an
 	// operator: its name and description (ADR-0074). It is an action of
 	// its own because it neither grants what registering does nor
 	// withdraws what deleting does.
-	ActionOperatorUpdate = "iam:operator-update"
+	ActionOperatorUpdate = "iam:operator.update"
 	// ActionOperatorDelegate is granting a hosted operator bounded
 	// authority over the org's controllers, and withdrawing it
 	// (ADR-0078). It is the administrative act of handing execution to
 	// a service, which registering an operator alone does not do.
-	ActionOperatorDelegate = "iam:operator-delegate"
+	ActionOperatorDelegate = "iam:operator.delegate"
 
 	// Reading the agents an org holds and watching one work. The org
 	// owns the constants for the reason it owns the policy ones: the
 	// api server enforces them, and internal/agent does not import
 	// this package — it derives an org's GRN through lib/grn
 	// rather than depend on it.
-	ActionAgentRead = "iam:agent-read"
+	ActionAgentRead = "iam:agent.read"
 	// ActionAgentWatch is watching an agent work (ADR-0022). Reading an
 	// agent reports that it exists and what two parties say about its
 	// state; watching exposes the content of its work, which an
 	// organization may withhold from someone it lets read. No role
 	// grants it: a policy carries it or nothing does.
-	ActionAgentWatch = "iam:agent-watch"
+	ActionAgentWatch = "iam:agent.watch"
 	// ActionAgentRename is changing what the org calls an agent
 	// (ADR-0119). It moves no value an operator reads.
-	ActionAgentRename = "iam:agent-rename"
+	ActionAgentRename = "iam:agent.rename"
 	// ActionAgentCreate is asking a delegated operator to create an agent
 	// from an immutable template or profile it already allows
 	// (ADR-0078). It chooses no execution setting.
-	ActionAgentCreate = "iam:agent-create"
+	ActionAgentCreate = "iam:agent.create"
 	// ActionAgentConfigure is asking a delegated operator to change an
 	// agent's execution settings or profile: what runs on a host, which
 	// membership alone does not grant (ADR-0078).
-	ActionAgentConfigure = "iam:agent-configure"
+	ActionAgentConfigure = "iam:agent.configure"
 	// ActionAgentRecover is asking a delegated operator to replace an
 	// agent's credential lineage, which fences every certificate it
 	// held before (ADR-0078). Membership alone does not grant it.
-	ActionAgentRecover = "iam:agent-recover"
+	ActionAgentRecover = "iam:agent.recover"
 	// ActionAgentEnroll is approving a standalone host's keys for one
 	// agent, withdrawing that approval and revoking the supervisor it
 	// registered (ADR-0082). It stands a machine identity up with
 	// lifecycle authority over an agent, and a replacement fences every
 	// certificate that agent held, so membership alone does not grant
 	// it.
-	ActionAgentEnroll = "iam:agent-enroll"
+	ActionAgentEnroll = "iam:agent.enroll"
 	// ActionAgentReplace is asking a delegated operator to move an
 	// existing agent to another controller under its GRN (ADR-0107).
 	// It ends the agent's activation and fences every token and
 	// certificate of its lineage, so membership alone does not grant
 	// it.
-	ActionAgentReplace = "iam:agent-replace"
+	ActionAgentReplace = "iam:agent.replace"
 
 	// ActionAgentTemplateRead is reading the templates the delegated
 	// Operator has published (#1170). garam keeps no template of its own
 	// (ADR-0117).
-	ActionAgentTemplateRead = "iam:agent-template-read"
+	ActionAgentTemplateRead = "iam:agent-template.read"
 	// ActionAgentTemplatePublish is publishing the next immutable
 	// version of a template the delegated Operator holds (#1170). It
 	// edits no agent created from an earlier version.
-	ActionAgentTemplatePublish = "iam:agent-template-publish"
+	ActionAgentTemplatePublish = "iam:agent-template.publish"
 
 	// ActionExecutionProfileRead is reading the execution profiles the
 	// delegated Operator has published. Publishing one stays with the
 	// deployment, and no action here grants it (#1170).
-	ActionExecutionProfileRead = "iam:execution-profile-read"
+	ActionExecutionProfileRead = "iam:execution-profile.read"
 	// ActionAgentExecutionRead is reading an agent's pending, rendered
 	// and runtime-reported execution from the delegated Operator
 	// (#1170). Reading an agent is reading its identity, and grants
 	// none of this.
-	ActionAgentExecutionRead = "iam:agent-execution-read"
+	ActionAgentExecutionRead = "iam:agent.execution-read"
 
 	// Reading and writing the organization's cowork pages (ADR-0127).
 	// cowork asks for them through checkPermissions; nothing here
 	// enforces them. On the organization they cover its page tree,
 	// listing and creating pages, and on a cowork page that page.
-	ActionCoworkPageRead  = "cowork:page-read"
-	ActionCoworkPageWrite = "cowork:page-write"
+	ActionCoworkPageRead  = "cowork:page.read"
+	ActionCoworkPageWrite = "cowork:page.write"
 
 	// Reading and posting in the organization's cowork channels
 	// (ADR-0127, ADR-0128). On the organization they cover listing and
 	// searching its channels and creating one, and on a cowork channel
 	// that channel. A private channel or a direct message narrows them
 	// further to its participants, which cowork keeps.
-	ActionCoworkChannelRead = "cowork:channel-read"
-	ActionCoworkChannelPost = "cowork:channel-post"
+	ActionCoworkChannelRead = "cowork:channel.read"
+	ActionCoworkChannelPost = "cowork:channel.post"
 
 	// Reading and writing the organization's cowork tasks (ADR-0127).
 	// On the organization they cover listing tasks and creating one,
 	// and on a cowork task that task: its fields, its comments and its
 	// links.
-	ActionCoworkTaskRead  = "cowork:task-read"
-	ActionCoworkTaskWrite = "cowork:task-write"
+	ActionCoworkTaskRead  = "cowork:task.read"
+	ActionCoworkTaskWrite = "cowork:task.write"
 
 	// Reading and writing the organization's cowork artifacts
 	// (ADR-0127). On the organization they cover listing artifacts and
 	// creating one, and on a cowork artifact that artifact: its
 	// versions, each saved one, and its embeds.
-	ActionCoworkArtifactRead  = "cowork:artifact-read"
-	ActionCoworkArtifactWrite = "cowork:artifact-write"
+	ActionCoworkArtifactRead  = "cowork:artifact.read"
+	ActionCoworkArtifactWrite = "cowork:artifact.write"
 )
 
 // actions is every action above: the ones a browser-facing operation
@@ -218,7 +218,7 @@ func Actions() []string {
 }
 
 // IsAction reports whether a is an action garam defines. A role's
-// wildcard such as `iam:org-*` matches any name with its prefix, so a
+// wildcard such as `iam:org.*` matches any name with its prefix, so a
 // caller asking about a name nothing defines would otherwise be
 // allowed something no operation checks.
 func IsAction(a string) bool {
@@ -236,7 +236,7 @@ func IsAction(a string) bool {
 // template or read an agent's execution.
 //
 // Agent and operator actions are granted one at a time and never as
-// `iam:agent-*` or `iam:operator-*`: ADR-0012 puts provisioning outside
+// `iam:agent.*` or `iam:operator.*`: ADR-0012 puts provisioning outside
 // garam, so a wildcard would grant in advance the actions no endpoint
 // may offer. Deleting an operator is what that caution was for — it
 // arrived after registering and reading, and a wildcard would have
@@ -297,12 +297,12 @@ func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:
 		return slices.Concat([]string{
-			"iam:org-*", "iam:group-*", "iam:project-*", "iam:policy-*", "iam:consent-*",
+			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
 		}, machineActionsHeld(false), coworkActions)
 	case RoleAdmin:
 		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
-			"iam:group-*", "iam:project-*", "iam:policy-*", "iam:consent-*",
+			"iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
 		}, machineActionsHeld(false), coworkActions)
 	case RoleMember:
 		return slices.Concat([]string{

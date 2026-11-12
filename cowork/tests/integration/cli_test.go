@@ -179,7 +179,7 @@ func TestCLI_ExitsWithTheCodeOfWhatFailed(t *testing.T) {
 	assert.Equal(t, exitUnauthenticated, code)
 
 	s.signIn(t, "bob")
-	s.platform.denyCheck("bob cowork:page-read@" + id)
+	s.platform.denyCheck("bob cowork:page.read@" + id)
 	for _, read := range []string{"get", "read"} {
 		_, code = garam(t, "", "cowork", "pages", read, id)
 		assert.Equal(t, exitPermissionDenied, code, read)

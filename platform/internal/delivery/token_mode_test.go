@@ -404,7 +404,7 @@ func TestRun_FencedTokenModeKeepsItsTwoTokensApart(t *testing.T) {
 // rewritten token file asks once more. The authority's answer decides:
 // where it activates protected work resumes, and where it refuses the
 // pause holds and nothing more is asked. Against garam, the re-ask of
-// the same generation after an iam:agent-recover is the refusal, and
+// the same generation after an iam:agent.recover is the refusal, and
 // the next generation resumes (adapter.md §Token mode,
 // TestAdapterTokenMode_ARecoveryIsResumedByTheNextGeneration).
 func TestRun_ARewrittenTokenReasksAPausedActivation(t *testing.T) {

@@ -17,8 +17,8 @@ const ServiceType = "task"
 // The platform's actions on tasks: on the organization, to list and
 // create them, and on a task, to read and change it.
 const (
-	ActionRead  = "cowork:task-read"
-	ActionWrite = "cowork:task-write"
+	ActionRead  = "cowork:task.read"
+	ActionWrite = "cowork:task.write"
 )
 
 // Status is where a task stands, and a board's column.

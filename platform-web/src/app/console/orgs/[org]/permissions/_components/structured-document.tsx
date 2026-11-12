@@ -276,7 +276,7 @@ function StatementControls({
         label="Actions"
         itemLabel={`${name} action`}
         addLabel="Add action"
-        placeholder="iam:project-update"
+        placeholder="iam:project.update"
         values={fields.actions}
         readOnly={readOnly}
         invalid={invalid("Action")}

@@ -75,7 +75,7 @@ describe("policy page", () => {
     // publish.
     expect(
       document.getByRole("textbox", { name: "Statement 1 action 1" }),
-    ).toHaveValue("iam:project-delete");
+    ).toHaveValue("iam:project.delete");
     expect(document.getByRole("button", { name: "Publish v3" })).toBeDisabled();
     // Deleting is in the danger zone, at the end of the last tab.
     expect(container.textContent).not.toContain("grn:acme:default:group");
@@ -173,7 +173,7 @@ describe("policy page", () => {
   it("withdraws only the writes the server denies, and keeps the document readable", async () => {
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:policy-attach" ? "allow" : "deny",
+        action === "iam:policy.attach" ? "allow" : "deny",
       ),
     );
 
@@ -259,7 +259,7 @@ describe("policy page", () => {
 
     server.use(
       answerPermissionChecks((action) =>
-        action === "iam:policy-update" ? "deny" : "allow",
+        action === "iam:policy.update" ? "deny" : "allow",
       ),
     );
     await renderPolicy();

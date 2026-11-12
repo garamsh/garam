@@ -113,10 +113,20 @@ func TestDescribeGrn(t *testing.T) {
 		assert.Nil(t, d.Parent, "a locator is not a pair")
 	})
 
+	t.Run("a codehub repository is named by its id", func(t *testing.T) {
+		d := describe(t, "grn:acme/codehub/repo/4821")
+		assert.True(t, d.Known)
+		assert.Equal(t, "codehub", *d.Service)
+		assert.Equal(t, "repo", *d.Type)
+		assert.Equal(t, "Codehub::Repo", *d.EntityType)
+		assert.Contains(t, *d.Actions, "codehub:repo.write")
+		assert.NotContains(t, *d.Actions, "codehub:org.use", "an action of the organization does not apply")
+	})
+
 	t.Run("a service no manifest declares is unknown", func(t *testing.T) {
-		d := describe(t, "grn:acme/codehub/repo/api-server")
+		d := describe(t, "grn:acme/billing/invoice/1")
 		assert.False(t, d.Known)
-		assert.Equal(t, "grn:acme/codehub/repo/api-server", d.Grn)
+		assert.Equal(t, "grn:acme/billing/invoice/1", d.Grn)
 		assert.Nil(t, d.Service)
 		assert.Nil(t, d.Type)
 		assert.Nil(t, d.EntityType)

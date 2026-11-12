@@ -19,8 +19,8 @@ func TestEveryDeclaredTypeIsInTheCatalogue(t *testing.T) {
 		}
 	}
 	// Control: a service no manifest declares owns no type.
-	assert.Empty(t, catalogue["codehub"])
-	assert.Empty(t, Types("codehub"))
+	assert.Empty(t, catalogue["billing"])
+	assert.Empty(t, Types("billing"))
 }
 
 func TestActionsAreQualifiedByTheirService(t *testing.T) {

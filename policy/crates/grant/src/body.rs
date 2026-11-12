@@ -1,23 +1,28 @@
 use std::str::FromStr;
 
-use cedar_policy::{Effect, EntityId, EntityTypeName, EntityUid, Policy, PolicyId};
+use cedar_policy::{
+    Effect, EntityId, EntityTypeName, EntityUid, Policy, PolicyId, ResourceConstraint,
+};
 use decision::{Engine, OrgGrn, Role, RoleLink, RoleScope};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
+use crate::permit_right::PermitRight;
 
-/// The longest guardrail. Cedar recurses over `+`, `.` and method
+/// The longest guardrail or permit. Cedar recurses over `+`, `.` and method
 /// chains, which hold no bracket: 4,375 terms overflow 1 MiB unoptimised
 /// and this admits 2,048, the stack being what a request runs on.
 const MAX_GUARDRAIL_BYTES: usize = 4 * 1024;
-/// The deepest brackets and `if`s in a guardrail. 18 brackets overflow
+/// The deepest brackets and `if`s in a guardrail or permit. 18 brackets overflow
 /// the same 1 MiB and 186 `if`s do, and one level is the `when` block.
 const MAX_GUARDRAIL_NESTING: usize = 12;
 
-/// What one version of a policy says. Only [`Body::role_link`] and
-/// [`Body::guardrail`] make one, and it neither serializes nor
-/// deserializes outside this crate, so the store is given nothing the
-/// schema has not admitted.
+/// What one version of a policy says. Only [`Body::role_link`],
+/// [`Body::guardrail`] and [`Body::permit`] make one, and it neither
+/// serializes nor deserializes outside this crate, so the store is
+/// given nothing the schema has not admitted. [`Body::permit`] takes a
+/// [`PermitRight`], which only an allowed evaluation of
+/// `iam:policy-permit` makes, so no permit exists that nobody asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Body(pub(crate) Stored);
 
@@ -32,6 +37,13 @@ pub(crate) enum Stored {
     },
     Guardrail {
         source: String,
+    },
+    Permit {
+        source: String,
+        /// The organization the right was given on.
+        org: String,
+        /// The writer the right was given to.
+        writer: String,
     },
 }
 
@@ -102,7 +114,7 @@ impl Body {
     /// A guardrail of `org`, refused unless it is one `forbid` the
     /// schema admits, naming no other organization's entity.
     pub fn guardrail(engine: &Engine, org: &OrgGrn, source: &str) -> Result<Self, Error> {
-        let policy = parse_guardrail(PolicyId::new("candidate"), source)?;
+        let policy = parse_own(Kind::Guardrail, PolicyId::new("candidate"), source)?;
         for entity in policy.entity_literals() {
             if entity.type_name().basename() != "Action" && !org.owns(&entity) {
                 return Err(Error::ForeignEntity(entity.to_string()));
@@ -112,6 +124,38 @@ impl Body {
         Ok(Self(Stored::Guardrail {
             source: source.to_owned(),
         }))
+    }
+
+    /// A permit of the organization `right` was given on, refused
+    /// unless it is one `permit` the schema admits, scoped by `resource
+    /// ==`, `resource in` or `resource is T in` to an entity whose GRN
+    /// names that organization or to its `Org` (ADR-0144 item 2). The
+    /// principal scope is not read: tenant isolation requires a
+    /// principal's membership of the resource's organization.
+    pub fn permit(engine: &Engine, right: &PermitRight, source: &str) -> Result<Self, Error> {
+        let policy = parse_own(Kind::Permit, PolicyId::new("candidate"), source)?;
+        engine
+            .validate(&[], std::slice::from_ref(&policy))
+            .map_err(refused)?;
+        check_resource_scope(right.org(), &policy)?;
+        Ok(Self(Stored::Permit {
+            source: source.to_owned(),
+            org: right.org().as_str().to_owned(),
+            writer: right.writer().to_owned(),
+        }))
+    }
+
+    /// Refuses a permit stored under another organization or by
+    /// another writer than the right it was made with.
+    pub(crate) fn check_right(&self, org: &OrgGrn, writer: &str) -> Result<(), Error> {
+        match &self.0 {
+            Stored::Permit {
+                org: given_on,
+                writer: given_to,
+                ..
+            } if given_on != org.as_str() || given_to != writer => Err(Error::PermitRight),
+            _ => Ok(()),
+        }
     }
 
     /// The Cedar form of a stored version, under the policy's GRN.
@@ -145,8 +189,13 @@ impl Body {
                     resource: uid(resource)?,
                 }))
             }
-            Stored::Guardrail { source } => {
-                Ok(StoredPolicy::Guardrail(parse_guardrail(id, &source)?))
+            Stored::Guardrail { source } => Ok(StoredPolicy::Guardrail(parse_own(
+                Kind::Guardrail,
+                id,
+                &source,
+            )?)),
+            Stored::Permit { source, .. } => {
+                Ok(StoredPolicy::Permit(parse_own(Kind::Permit, id, &source)?))
             }
         }
     }
@@ -156,18 +205,54 @@ impl Body {
 pub(crate) enum StoredPolicy {
     Link(RoleLink),
     Guardrail(Policy),
+    Permit(Policy),
 }
 
-/// Parses a guardrail on the write path and on every read of one.
-fn parse_guardrail(id: PolicyId, source: &str) -> Result<Policy, Error> {
+/// What an organization's own policy is.
+#[derive(Clone, Copy)]
+enum Kind {
+    Guardrail,
+    Permit,
+}
+
+/// Parses a guardrail or a permit on the write path and on every read
+/// of one.
+fn parse_own(kind: Kind, id: PolicyId, source: &str) -> Result<Policy, Error> {
     if source.len() > MAX_GUARDRAIL_BYTES || nesting(source) > MAX_GUARDRAIL_NESTING {
-        return Err(Error::GuardrailTooDeep);
+        return Err(match kind {
+            Kind::Guardrail => Error::GuardrailTooDeep,
+            Kind::Permit => Error::PermitTooDeep,
+        });
     }
-    let policy =
-        Policy::parse(Some(id), source).map_err(|error| Error::GuardrailSyntax(error.into()))?;
-    match policy.effect() {
-        Effect::Forbid => Ok(policy),
-        Effect::Permit => Err(Error::GuardrailPermits),
+    let policy = Policy::parse(Some(id), source).map_err(|error| match kind {
+        Kind::Guardrail => Error::GuardrailSyntax(error.into()),
+        Kind::Permit => Error::PermitSyntax(error.into()),
+    })?;
+    match (kind, policy.effect()) {
+        (Kind::Guardrail, Effect::Forbid) | (Kind::Permit, Effect::Permit) => Ok(policy),
+        (Kind::Guardrail, Effect::Permit) => Err(Error::GuardrailPermits),
+        (Kind::Permit, Effect::Forbid) => Err(Error::PermitForbids),
+    }
+}
+
+/// Reads a permit's resource scope as the engine selects policies: it
+/// must name one entity of the organization, so that no resource of
+/// another is in reach.
+fn check_resource_scope(org: &OrgGrn, policy: &Policy) -> Result<(), Error> {
+    match policy.resource_constraint() {
+        ResourceConstraint::Any => Err(Error::PermitResourceUnscoped),
+        ResourceConstraint::Is(entity_type) => {
+            Err(Error::PermitResourceByType(entity_type.to_string()))
+        }
+        ResourceConstraint::Eq(entity)
+        | ResourceConstraint::In(entity)
+        | ResourceConstraint::IsIn(_, entity) => {
+            if org.names(&entity) {
+                Ok(())
+            } else {
+                Err(Error::ForeignEntity(entity.to_string()))
+            }
+        }
     }
 }
 

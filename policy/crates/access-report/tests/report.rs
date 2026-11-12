@@ -35,6 +35,11 @@ const ON_ENG_ALONE: &str =
 const ON_AGENTS: &str = "forbid (principal is Iam::Agent, action, resource);";
 const ON_LEE: &str =
     r#"forbid (principal == Iam::User::"grn:acme/iam/user/lee", action, resource);"#;
+const ENG_WATCHES_BOT: &str = r#"permit (
+    principal in Iam::Team::"grn:acme/iam/group/eng",
+    action == Iam::Action::"agent-watch",
+    resource == Iam::Agent::"grn:acme/iam/agent/bot"
+);"#;
 
 fn uid(named: Named) -> EntityUid {
     EntityUid::from_type_name_and_id(
@@ -112,6 +117,7 @@ fn links(links: Vec<RoleLink>) -> Held {
     Held(OrgPolicies {
         links,
         guardrails: vec![],
+        permits: vec![],
     })
 }
 
@@ -191,6 +197,7 @@ async fn a_report_reads_no_membership_of_another_organization() {
 async fn a_guardrail_scoped_past_what_is_asked_is_left_out() {
     let policies = Held(OrgPolicies {
         links: vec![],
+        permits: vec![],
         guardrails: vec![
             guardrail("eng-alone", ON_ENG_ALONE),
             guardrail("agents", ON_AGENTS),
@@ -199,6 +206,7 @@ async fn a_guardrail_scoped_past_what_is_asked_is_left_out() {
 
     let in_eng = Held(OrgPolicies {
         links: vec![],
+        permits: vec![],
         guardrails: vec![guardrail("in-eng", ON_ENG)],
     });
     let entries = subject_report(&in_eng, LEE).await;
@@ -216,6 +224,7 @@ async fn a_guardrail_scoped_past_what_is_asked_is_left_out() {
 async fn a_guardrail_is_listed_where_it_names_or_reaches_what_is_asked() {
     let policies = Held(OrgPolicies {
         links: vec![],
+        permits: vec![],
         guardrails: vec![
             guardrail("on-eng", ON_ENG),
             guardrail("on-ops", ON_OPS_IN_CONDITION),
@@ -229,6 +238,33 @@ async fn a_guardrail_is_listed_where_it_names_or_reaches_what_is_asked() {
     assert_eq!(entries[0].named, []);
     assert_eq!(entries[1].named, [uid(ENG)]);
     assert_eq!(entries[2].named, [uid(OPS)]);
+}
+
+#[tokio::test]
+async fn a_permit_is_listed_by_its_id_where_its_scope_reaches_what_is_asked() {
+    let policies = Held(OrgPolicies {
+        links: vec![],
+        guardrails: vec![],
+        permits: vec![guardrail("watch-bot", ENG_WATCHES_BOT)],
+    });
+    let directory = Directory(Engine::load().unwrap());
+    let org = OrgGrn::new(ACME);
+
+    let entries = subject_report(&policies, KIM).await;
+    assert_eq!(ids(&entries), ["watch-bot"]);
+    assert_eq!(entries[0].named, [uid(ENG)]);
+    let entries = subject_report(&policies, LEE).await;
+    assert!(entries.is_empty(), "{entries:?}");
+
+    let entries = for_resource(&policies, &directory, &org, &uid(BOT))
+        .await
+        .unwrap();
+    assert_eq!(ids(&entries), ["watch-bot"]);
+    assert_eq!(entries[0].named, [uid(BOT), uid(ENG)]);
+    let entries = for_resource(&policies, &directory, &org, &uid(ENG))
+        .await
+        .unwrap();
+    assert!(entries.is_empty(), "{entries:?}");
 }
 
 #[tokio::test]

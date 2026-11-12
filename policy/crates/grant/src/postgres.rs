@@ -56,6 +56,7 @@ impl PolicyStore {
     /// its organization, so no organization squats another's.
     pub async fn create(&self, policy: NewPolicy<'_>) -> Result<(), Error> {
         owned(policy.org, policy.grn)?;
+        policy.body.check_right(policy.org, policy.created_by)?;
         let mut transaction = self.pool.begin().await.map_err(Error::Store)?;
         let inserted = sqlx::query(
             "INSERT INTO policies (grn, org_grn, name, status, default_version)
@@ -92,6 +93,7 @@ impl PolicyStore {
         created_by: &str,
     ) -> Result<i32, Error> {
         owned(org, grn)?;
+        body.check_right(org, created_by)?;
         let mut transaction = self.pool.begin().await.map_err(Error::Store)?;
         // The row lock orders two appends to one policy.
         sqlx::query("SELECT 1 FROM policies WHERE grn = $1 FOR UPDATE")
@@ -208,6 +210,7 @@ impl PolicyStore {
             match Body(body.0).into_policy(&grn)? {
                 StoredPolicy::Link(link) => policies.links.push(link),
                 StoredPolicy::Guardrail(guardrail) => policies.guardrails.push(guardrail),
+                StoredPolicy::Permit(permit) => policies.permits.push(permit),
             }
         }
         Ok(policies)

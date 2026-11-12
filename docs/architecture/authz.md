@@ -48,11 +48,12 @@ ADR-0141 supersedes in part its §2: the platform no longer asks for
 cowork's checks, since cowork asks the policy service itself, and the
 list stays closed and static.
 
-**Two further decisions are taken, the first partly built.** The
-policy service loads `policy/schema/iam.cedarschema` and
+**Two further decisions are taken, both partly built.** The policy
+service loads `policy/schema/iam.cedarschema` and
 `policy/schema/cowork.cedarschema` as one schema, and the platform's
 role table and console still write `<type>:<verb>`. An organization
-writes role links and `forbid` guardrails and no `permit`.
+writes role links, `forbid` guardrails and `permit` policies, the last
+only in the policy service: nothing sends one yet.
 
 - **A service is declared by one manifest**
   ([ADR-0143](./adr/0143-a-service-is-declared-by-one-manifest-that-is-its-cedar-schema-and-garam-serves-what-the-manifests-say.md)).
@@ -81,6 +82,22 @@ writes role links and `forbid` guardrails and no `permit`.
   outside `iam:policy-*`, which whatever serves the write asks for
   first; another role writing one, bounded by what it holds, is open.
   The console's editor and the platform's switch are #1689 slice 4.
+  Built (#1780): `grant::Body::permit` takes a `PermitRight`, which
+  only an allowed evaluation of `iam:policy-permit` for the writer on
+  the organization's `Org` makes, so a `permit` is stored only through
+  a path that asked; the right's organization and writer are written
+  into the stored body and the store refuses a mismatch. The write
+  admits `resource == E`, `resource in E` and `resource is T in E`,
+  where `E` is an entity of the organization or its `Org`, and refuses
+  `resource` alone, `resource is T` alone and an `E` of another
+  organization. The principal scope is not read. A `when` or `unless`
+  is bounded as a guardrail's is. A decision composes the
+  organization's `permit` policies beside its guardrails, and
+  `access-report` lists one by its id. Not built: an RPC to write one;
+  that `activate` and `roll_back` ask for the right, so an owner's
+  stored version can be made effective by a writer that does not
+  hold `iam:policy-permit`; and a check of an entity literal in a
+  `permit`'s principal scope or condition.
 
 **Built of ADR-0143** (items 1, 2, 3 and 5): the two manifests, the
 `manifest` crate that reads them, `lib/grn`'s generated catalogue, the
@@ -93,8 +110,7 @@ outbox sends `Iam::` types under migration 000070. **Not built:** item
 4, the platform's role table, `role.go` and the console still write
 `<type>:<verb>`, so no platform check names an action the service now
 accepts; item 6, the registry; item 7's proofs for a new service;
-codehub's manifest, so `repo` is in no catalogue; and the
-policy service accepts no `permit` from an organization (ADR-0144).
+codehub's manifest, so `repo` is in no catalogue.
 
 **The platform's outbox, its delivery and its signer are built.** Under
 ADR-0140 triggers mark each entity a row change reaches, in a set

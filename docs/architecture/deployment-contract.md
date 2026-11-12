@@ -443,13 +443,41 @@ deployment supplies:
   reads the key, as ADR-0104's erratum of 2026-10-18 records.
   `platform/tests/integration/transit_signing_test.go` runs it under a
   token holding those two and nothing else.
-- **A token file**, `GARAM_TRANSIT_TOKEN_FILE`, owner-only and owned by
-  the process's UID: it is read through `platform/internal/keyfile` like
-  every key file above, but on every call rather than at start, so a
-  renewed token takes effect on the next call and a file not yet written
-  fails a claim rather than the start. garam logs in with nothing, so
-  the auth role binding the machine workload's account to the policy,
-  and whatever writes and renews the file, are the deployment's.
+- **One of two ways to give garam the OpenBao token**, never both:
+  - **A token file**, `GARAM_TRANSIT_TOKEN_FILE`, owner-only and owned
+    by the process's UID: it is read through
+    `platform/internal/keyfile` like every key file above, but on every
+    call rather than at start, so a renewed token takes effect on the
+    next call and a file not yet written fails a claim rather than the
+    start. garam logs in with nothing, so the auth role binding the
+    machine workload's account to the policy, and whatever writes and
+    renews the file, are the deployment's. This is the form the chart
+    renders.
+  - **A workload identity file**, `GARAM_TRANSIT_IDENTITY_FILE`, for a
+    deployment with no process beside garam to write a token file
+    ([ADR-0152](./adr/0152-garam-may-log-in-to-openbao-with-a-workload-identity-file-beside-the-token-file.md)).
+    garam logs in to OpenBao's JWT auth method itself, at
+    `GARAM_TRANSIT_AUTH_MOUNT` (default `jwt`) as
+    `GARAM_TRANSIT_AUTH_ROLE`, which is required; holds the token it is
+    given in memory alone; renews it with `renew-self` after two
+    thirds of its lease inside the call that finds it due; and logs in
+    again where renewal is refused or a call is answered 403 by a token
+    that had served before. The file is owner-only and owned by the
+    process's UID, is read once at start, so a start with it unreadable
+    does not happen, and is read again at every login. The auth mount,
+    its issuer and keys, and a role that binds the audience and grants
+    the policy above and `auth/token/renew-self` (a role without it
+    makes each lease end in a login) are the deployment's. The auth
+    mount and role are refused beside a token file.
+
+  The identity file's writer is gaon's Node Agent, **which does not
+  write it yet**: gaon has decided a fixed path, renewal in place at 80%
+  of the token's lifetime, and an API server that serves discovery and
+  the key set (`garamsh/gaon` at
+  `9941e390da42b49071ded0508f953ccac60e6e58`), and serves only the
+  token request itself. Its path, owner and mode are stated nowhere
+  there. The gaon deployment contract does not exist yet, so this
+  document says nothing further of gaon's side.
 
 **What the binary does with it:** the published set is read from
 Postgres and keeps being served while OpenBao is unreachable; a claim
@@ -827,6 +855,9 @@ that would assert one:
   — a deployment may hold its message signing keys in an OpenBao
   Transit key it supplies, and the authorities stay on the
   key-encryption key
+- [ADR-0152](./adr/0152-garam-may-log-in-to-openbao-with-a-workload-identity-file-beside-the-token-file.md)
+  — garam may hold the Transit token by logging in to OpenBao's JWT auth
+  method with a workload identity file, beside the token file
 - [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
   — every machine caller authenticates with a garam-issued credential
   and short-lived tokens over server TLS

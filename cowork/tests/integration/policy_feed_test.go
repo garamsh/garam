@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -257,6 +258,47 @@ func TestPolicyFeed_AWriteLandingMidPassSurvivesIt(t *testing.T) {
 	assert.Zero(t, r.generation(t, "page", "acme", "mnopqrstuvwx"), "the page not written is delivered")
 	r.deliver(t)
 	assert.Zero(t, r.marks(t), "the next pass delivers the survivor")
+}
+
+// failingSender fails every send for one organization, as a token the
+// platform no longer issues does.
+type failingSender struct {
+	policyfeed.Sender
+	org string
+}
+
+func (s failingSender) Send(ctx context.Context, org string, seq int64, entries []policyfeed.Entry) ([]policyfeed.Refusal, error) {
+	if org == s.org {
+		return nil, errors.New("token refused")
+	}
+	return s.Sender.Send(ctx, org, seq, entries)
+}
+
+func TestPolicyFeed_AFailingOrganizationDoesNotHoldTheOthers(t *testing.T) {
+	r := newFeedRig(t)
+	_, err := r.sw.Start(context.Background())
+	require.NoError(t, err)
+	r.exec(t, sources[1].insert, "acme", "abcdefghijkl")
+	r.exec(t, sources[1].insert, "acme", "mnopqrstuvwx")
+	r.exec(t, sources[1].insert, "zeta", "yzabcdefghij")
+	sender := failingSender{Sender: feedgrpc.NewSender(r.client), org: "zeta"}
+
+	for pass := 1; pass <= 2; pass++ {
+		result := r.deliverVia(t, sender)
+
+		require.Len(t, result.Failed, 1, "pass %d", pass)
+		assert.Equal(t, "zeta", result.Failed[0].Org)
+		if pass == 1 {
+			assert.Equal(t, []string{"acme"}, result.Delivered)
+		}
+		assert.Zero(t, r.generation(t, "page", "acme", "abcdefghijkl"), "acme's marks are delivered and gone")
+		assert.Zero(t, r.generation(t, "page", "acme", "mnopqrstuvwx"))
+		assert.EqualValues(t, 1, r.generation(t, "page", "zeta", "yzabcdefghij"), "zeta's mark stays")
+	}
+	assert.Len(t, r.server.Applied(), 1, "acme's run went in once; zeta's never did")
+
+	assert.Empty(t, r.deliver(t).Failed, "zeta recovers when its send does")
+	assert.Zero(t, r.marks(t))
 }
 
 func TestPolicyFeed_ARefusedEntityIsDeletedAtAHigherSequence(t *testing.T) {

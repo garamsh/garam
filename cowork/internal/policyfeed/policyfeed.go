@@ -55,10 +55,23 @@ type Sender interface {
 // BatchLimit is how many marks one pass reads (ADR-0140 item 7).
 const BatchLimit = 500
 
+// OrgFailure is an organization whose run a pass could not deliver:
+// its marks are left, and every other organization's are not held by
+// it.
+type OrgFailure struct {
+	Org string
+	Err error
+}
+
 // Result is what one pass did.
 type Result struct {
 	// Marks is how many marks the pass read.
 	Marks int
+	// Delivered holds the organizations whose runs were delivered and
+	// whose marks were dropped.
+	Delivered []string
+	// Failed holds the organizations whose runs were not.
+	Failed []OrgFailure
 	// Refused holds the entries the service refused, whose marks the
 	// pass deleted after sending each entity's delete (ADR-0140
 	// item 11).
@@ -70,9 +83,11 @@ type Store interface {
 	// Deliver runs one pass in one transaction (ADR-0140 item 7): it
 	// does nothing unless the feed is on and no other replica holds it,
 	// reads up to limit marks, and hands their state to sender, one
-	// organization at a time under a sequence taken for each. It
-	// deletes each mark still at the generation it read, and commits.
-	// An error from sender, or any other, rolls the pass back and
-	// leaves every mark.
+	// organization at a time under a sequence taken for each. Each
+	// organization's run is delivered and its marks deleted, each still
+	// at the generation it read, in a savepoint of its own: a run whose
+	// send fails leaves its marks and is reported in Result.Failed, and
+	// the other organizations' runs still go. An error of the database
+	// rolls the whole pass back and leaves every mark.
 	Deliver(ctx context.Context, limit int, sender Sender) (Result, error)
 }

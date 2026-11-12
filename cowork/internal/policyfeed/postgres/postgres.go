@@ -49,6 +49,7 @@ const holdFeed = `SELECT enabled FROM policy_feed FOR UPDATE SKIP LOCKED`
 
 const readMarks = `
 SELECT org, entity_type, entity_id, generation FROM policy_outbox
+WHERE org <> ALL($2::text[])
 ORDER BY org, entity_type, entity_id LIMIT $1`
 
 const readState = `SELECT org FROM policy_entity_state($1, $2, $3)`
@@ -96,31 +97,88 @@ func deliver(
 		return result, nil
 	}
 
-	marks, err := readMarkRows(ctx, tx, limit)
-	if err != nil || len(marks) == 0 {
-		return result, err
-	}
-	result.Marks = len(marks)
-
-	entries, err := readEntries(ctx, tx, marks)
-	if err != nil {
-		return result, err
-	}
-	// The marks come ordered by organization, so each organization's
-	// entries are one run, sent under that organization's own token.
-	for start := 0; start < len(entries); {
-		end := start + 1
-		for end < len(entries) && entries[end].Entity.Org == entries[start].Entity.Org {
-			end++
-		}
-		refused, err := send(ctx, tx, sender, entries[start].Entity.Org, entries[start:end])
-		if err != nil {
+	// A failed organization's marks stay first in the order, so the
+	// pass reads on past them while a batch still fails one: otherwise
+	// one organization's marks would fill every batch and starve the
+	// rest.
+	failed := []string{}
+	for {
+		marks, err := readMarkRows(ctx, tx, limit, failed)
+		if err != nil || len(marks) == 0 {
 			return result, err
 		}
-		result.Refused = append(result.Refused, refused...)
+		result.Marks += len(marks)
+		before := len(result.Failed)
+		if err := deliverRuns(ctx, tx, sender, marks, &result); err != nil {
+			return result, err
+		}
+		if len(result.Failed) == before {
+			return result, nil
+		}
+		for _, f := range result.Failed[before:] {
+			failed = append(failed, f.Org)
+		}
+	}
+}
+
+// deliverRuns delivers marks, which come ordered by organization, so
+// each organization's are one run, sent under that organization's own
+// token. Each run has a savepoint of its own.
+func deliverRuns(
+	ctx context.Context, tx pgx.Tx, sender policyfeed.Sender, marks []mark, result *policyfeed.Result,
+) error {
+	entries, err := readEntries(ctx, tx, marks)
+	if err != nil {
+		return err
+	}
+	for start := 0; start < len(marks); {
+		end := start + 1
+		for end < len(marks) && marks[end].entity.Org == marks[start].entity.Org {
+			end++
+		}
+		org := marks[start].entity.Org
+		refused, err := deliverRun(ctx, tx, sender, org, marks[start:end], entries[start:end])
+		switch {
+		case err == nil:
+			result.Delivered = append(result.Delivered, org)
+			result.Refused = append(result.Refused, refused...)
+		case errors.As(err, new(sendError)):
+			result.Failed = append(result.Failed, policyfeed.OrgFailure{Org: org, Err: err})
+		default:
+			return err
+		}
 		start = end
 	}
+	return nil
+}
 
+// sendError marks an error of sending a run, which fails that run
+// alone, where any other error is the database's and fails the pass.
+type sendError struct{ error }
+
+func (e sendError) Unwrap() error { return e.error }
+
+// deliverRun sends one organization's run and deletes its marks, in a
+// savepoint that a failed send rolls back.
+func deliverRun(
+	ctx context.Context, tx pgx.Tx, sender policyfeed.Sender, org string, marks []mark, entries []policyfeed.Entry,
+) ([]policyfeed.Refusal, error) {
+	sp, err := tx.Begin(ctx)
+	if err != nil {
+		return nil, fail(err, "begin run")
+	}
+	refused, err := send(ctx, sp, sender, org, entries)
+	if err == nil {
+		err = dropRun(ctx, sp, marks)
+	}
+	if err != nil {
+		_ = sp.Rollback(context.WithoutCancel(ctx))
+		return nil, err
+	}
+	return refused, fail(sp.Commit(ctx), "release run")
+}
+
+func dropRun(ctx context.Context, tx pgx.Tx, marks []mark) error {
 	orgs := make([]string, len(marks))
 	types := make([]string, len(marks))
 	ids := make([]string, len(marks))
@@ -128,14 +186,12 @@ func deliver(
 	for i, m := range marks {
 		orgs[i], types[i], ids[i], generations[i] = m.entity.Org, m.entity.Type, m.entity.ID, m.generation
 	}
-	if _, err := tx.Exec(ctx, dropMarks, orgs, types, ids, generations); err != nil {
-		return result, fail(err, "delete marks")
-	}
-	return result, nil
+	_, err := tx.Exec(ctx, dropMarks, orgs, types, ids, generations)
+	return fail(err, "delete marks")
 }
 
-func readMarkRows(ctx context.Context, tx pgx.Tx, limit int) ([]mark, error) {
-	rows, err := tx.Query(ctx, readMarks, limit)
+func readMarkRows(ctx context.Context, tx pgx.Tx, limit int, except []string) ([]mark, error) {
+	rows, err := tx.Query(ctx, readMarks, limit, except)
 	if err != nil {
 		return nil, fail(err, "read marks")
 	}
@@ -182,8 +238,11 @@ func send(
 		return nil, err
 	}
 	refused, err := sender.Send(ctx, org, sequence, entries)
-	if err != nil || len(refused) == 0 {
-		return nil, err
+	if err != nil {
+		return nil, sendError{err}
+	}
+	if len(refused) == 0 {
+		return nil, nil
 	}
 	deletes := make([]policyfeed.Entry, len(refused))
 	for i, r := range refused {
@@ -194,10 +253,10 @@ func send(
 	}
 	again, err := sender.Send(ctx, org, sequence, deletes)
 	if err != nil {
-		return nil, err
+		return nil, sendError{err}
 	}
 	if len(again) > 0 {
-		return nil, errorx.New(errorx.KindInternal, "policy service refused an entity's delete")
+		return nil, sendError{errorx.New(errorx.KindInternal, "policy service refused an entity's delete")}
 	}
 	return refused, nil
 }

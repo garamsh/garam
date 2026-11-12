@@ -236,6 +236,11 @@ type Server struct {
 	// Decide answers one evaluation, its defaults filled in, asked as
 	// org's cowork. A nil Decide denies.
 	Decide func(org string, e *policyv1.Evaluation) bool
+	// Member says whether a subject, by its GRN, is a member of org.
+	// A nil Member makes every subject one. A non-member's decisions
+	// are false and name the policy `tenant-isolation` in their
+	// reasons, as the real service's do.
+	Member func(org, subject string) bool
 	// Refuse gives the reason the service refuses one entry for its
 	// own fault, or "" to accept it.
 	Refuse func(c *policyv1.EntityChange) string
@@ -370,8 +375,20 @@ func (s *service) Evaluations(ctx context.Context, req *policyv1.EvaluationsRequ
 			!strings.HasPrefix(filled.GetResource().GetId(), "grn:"+c.org+"/") && filled.GetResource().GetId() != grn.Org(c.org).String() {
 			return nil, status.Error(codes.PermissionDenied, "a cowork asks only cowork: actions on resources of its organization")
 		}
+		if s.Member != nil && !s.Member(c.org, filled.GetSubject().GetId()) {
+			resp.Evaluations = append(resp.Evaluations, &policyv1.EvaluateResponse{
+				Context: &policyv1.DecisionContext{Reasons: []*policyv1.Reason{{PolicyId: "tenant-isolation"}}},
+			})
+			continue
+		}
 		allow := s.Decide != nil && s.Decide(c.org, filled)
-		resp.Evaluations = append(resp.Evaluations, &policyv1.EvaluateResponse{Decision: allow})
+		answer := &policyv1.EvaluateResponse{Decision: allow}
+		if !allow {
+			// A member's denial names the policy that made it, which
+			// is not tenant isolation.
+			answer.Context = &policyv1.DecisionContext{Reasons: []*policyv1.Reason{{PolicyId: "guardrail"}}}
+		}
+		resp.Evaluations = append(resp.Evaluations, answer)
 	}
 	return resp, nil
 }

@@ -40,12 +40,19 @@ func New(base platform.Platform, policy Evaluator) *Platform {
 	return &Platform{Platform: base, policy: policy}
 }
 
+// tenantIsolation is the id of the system policy that denies a caller
+// an organization it is no member of (policy/system-policies).
+const tenantIsolation = "tenant-isolation"
+
 // Allowed implements platform.Platform. The service has no question
-// that is membership of an organization, which cowork may not ask, so
-// every batch carries one more: whether the caller may read the
-// organization's pages, which every member's role does. A caller who
-// may not is not a member, and is answered permission denied as the
-// platform answers it. A service that cannot be asked, or answers
+// that is membership of an organization, which cowork may not ask, but
+// it says why it denied: a decision whose reasons name tenant
+// isolation is a caller outside the organization, and the batch is
+// answered permission denied as the platform answers it. A denial for
+// any other reason, a guardrail's say, is that check's own false. A
+// batch that asks nothing still asks one question, whether the caller
+// may read the organization's pages, to learn that from its reasons
+// and not its decision. A service that cannot be asked, or answers
 // otherwise than one decision per check, is unavailable.
 func (p *Platform) Allowed(ctx context.Context, caller platform.Caller, org string, checks []platform.Check) ([]bool, error) {
 	subject, err := subjectOf(caller)
@@ -57,7 +64,7 @@ func (p *Platform) Allowed(ctx context.Context, caller platform.Caller, org stri
 	}
 	req := &policyv1.EvaluationsRequest{
 		Subject:     subject,
-		Evaluations: make([]*policyv1.Evaluation, 0, len(checks)+1),
+		Evaluations: make([]*policyv1.Evaluation, 0, len(checks)),
 	}
 	// asked[i] is where check i sits in the request; a check naming a
 	// resource no GRN can name is denied without being asked.
@@ -74,8 +81,9 @@ func (p *Platform) Allowed(ctx context.Context, caller platform.Caller, org stri
 		asked[i] = len(req.Evaluations)
 		req.Evaluations = append(req.Evaluations, evaluation(ch.Action, resource))
 	}
-	member := len(req.Evaluations)
-	req.Evaluations = append(req.Evaluations, evaluation(platform.ActionPageRead, resourceOfOrg(org)))
+	if len(req.Evaluations) == 0 {
+		req.Evaluations = append(req.Evaluations, evaluation(platform.ActionPageRead, resourceOfOrg(org)))
+	}
 
 	ctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
@@ -88,8 +96,12 @@ func (p *Platform) Allowed(ctx context.Context, caller platform.Caller, org stri
 		return nil, errorx.New(errorx.KindUnavailable,
 			fmt.Sprintf("policy service: %d questions answered %d decisions", len(req.Evaluations), len(answers)))
 	}
-	if !answers[member].GetDecision() {
-		return nil, errorx.New(errorx.KindPermissionDenied, "not a member of this organization")
+	for _, a := range answers {
+		for _, r := range a.GetContext().GetReasons() {
+			if r.GetPolicyId() == tenantIsolation {
+				return nil, errorx.New(errorx.KindPermissionDenied, "not a member of this organization")
+			}
+		}
 	}
 	allowed := make([]bool, len(checks))
 	for i, at := range asked {

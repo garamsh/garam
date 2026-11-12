@@ -106,10 +106,14 @@ agents.
   under cowork's own caller token for the organization
   ([ADR-0141](../../docs/architecture/adr/0141-garam-is-an-oidc-issuer-that-exchanges-sessions-for-audience-bound-tokens-and-services-call-the-policy-service-directly.md)
   §12). `me` and the organization list stay with the platform. The
-  policy service has no membership question for cowork, so each batch
-  carries one more evaluation, `cowork:page.read` on the organization,
-  and a caller denied it is no member. With none of the four settings
-  below set, cowork asks the platform as above.
+  policy service has no membership question for cowork, so cowork
+  reads it off the decisions: a caller is no member when a decision's
+  reasons name the `tenant-isolation` policy, and a denial for any
+  other reason, a guardrail's among them, is that check's own `false`.
+  A batch that would otherwise be empty carries one
+  `cowork:page.read` on the organization to be judged the same way.
+  With none of the four settings below set, cowork asks the platform
+  as above.
 - **The session.** A person signs in on the site and cowork-web is
   handed a session of its own on its host, by ADR-0131's one-time code
   ([sign-in.md](../../docs/architecture/sign-in.md)). The cookie is
@@ -394,7 +398,11 @@ artifacts as entities, fed from an outbox in cowork's database
 The feed is off until `cowork policy-feed start` marks every entity
 and `cowork policy-feed stop` ends it. `serve` delivers it, one
 organization at a time under that organization's token, once the four
-settings are set.
+settings are set. Each organization's run is sent and its marks
+dropped on their own, so an organization whose send fails keeps its
+marks and the others' are delivered in the same pass; the failing
+organization is logged once as it starts failing and once as it
+recovers.
 
 Swapping the store is configuration alone. RustFS, as the deployment
 runs it:

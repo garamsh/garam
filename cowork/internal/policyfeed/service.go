@@ -36,7 +36,10 @@ func NewService(store Store, sender Sender, logger *slog.Logger, config Config) 
 }
 
 func (s *service) Run(ctx context.Context) error {
-	var failures int
+	// failures counts passes that failed whole, orgFailures passes in
+	// which an organization's run failed.
+	var failures, orgFailures int
+	failing := map[string]bool{}
 	for {
 		result, err := s.store.Deliver(ctx, BatchLimit, s.sender)
 		if err != nil && ctx.Err() != nil {
@@ -57,6 +60,7 @@ func (s *service) Run(ctx context.Context) error {
 				s.logger.Info("policy feed delivery recovered", slog.Int("failed_passes", failures))
 				failures = 0
 			}
+			s.reportOrgs(result, failing)
 			for _, r := range result.Refused {
 				s.logger.Error("policy service refused an entity; its delete was sent instead",
 					slog.String("entity_type", r.Entity.Type),
@@ -64,12 +68,40 @@ func (s *service) Run(ctx context.Context) error {
 					slog.String("entity_id", r.Entity.ID),
 					slog.String("reason", r.Reason))
 			}
-			if result.Marks >= BatchLimit {
+			switch {
+			case len(result.Failed) > 0:
+				// The others' runs went in this pass; the failing
+				// ones are retried at a pace that spares the service.
+				orgFailures++
+				wait = s.backoff(orgFailures)
+			case result.Marks >= BatchLimit:
+				orgFailures = 0
 				wait = 0
+			default:
+				orgFailures = 0
 			}
 		}
 		if !sleep(ctx, wait) {
 			return nil
+		}
+	}
+}
+
+// reportOrgs logs an organization once as it starts failing and once
+// as its run is delivered again, so an organization the platform no
+// longer knows does not log on every retry.
+func (s *service) reportOrgs(result Result, failing map[string]bool) {
+	for _, f := range result.Failed {
+		if !failing[f.Org] {
+			failing[f.Org] = true
+			s.logger.Error("policy feed delivery failing for an organization",
+				slog.String("org", f.Org), slog.String("error", f.Err.Error()))
+		}
+	}
+	for _, org := range result.Delivered {
+		if failing[org] {
+			delete(failing, org)
+			s.logger.Info("policy feed delivery recovered for an organization", slog.String("org", org))
 		}
 	}
 }

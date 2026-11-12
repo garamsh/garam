@@ -104,8 +104,7 @@ func TestAllowed_AsksOneEvaluationsForTheBatchAndMapsEachAnswer(t *testing.T) {
 		"cowork:page.read Cowork::Page " + pageID,
 		"cowork:channel.post Cowork::Channel grn:acme/cowork/channel/abcdefghijkl",
 		"cowork:task.write Cowork::Task grn:acme/cowork/task/abcdefghijkl",
-		"cowork:page.read Iam::Org " + orgID, // the membership question
-	}, got2)
+	}, got2, "no question beyond the batch's own")
 }
 
 func TestAllowed_AnAgentIsAskedAsAnAgent(t *testing.T) {
@@ -121,21 +120,50 @@ func TestAllowed_AnAgentIsAskedAsAnAgent(t *testing.T) {
 }
 
 func TestAllowed_ANonMemberIsDeniedAsThePlatformDeniesOne(t *testing.T) {
-	// Control: the same adapter answers a member's denied check as false.
-	f := newFixture(t, map[string]bool{"cowork:page.read@" + orgID: true})
-	got, err := f.adapter.Allowed(context.Background(), f.ada, "acme",
-		[]platform.Check{platform.OnPage("cowork:page.write", "abcdefghijkl")})
-	require.NoError(t, err)
-	assert.Equal(t, []bool{false}, got)
+	f := newFixture(t, map[string]bool{"cowork:page.read@" + pageID: true})
+	f.server.Member = func(_, subject string) bool { return subject != "grn:root/iam/user/eve" }
+	eve := platform.Caller{GRN: grn.New(grn.RootOwner, "user", "eve")}
 
-	// A caller who may not read the organization's pages is no member,
-	// whatever else the batch asks.
-	f = newFixture(t, map[string]bool{"cowork:page.read@" + pageID: true})
-	got, err = f.adapter.Allowed(context.Background(), f.ada, "acme",
+	got, err := f.adapter.Allowed(context.Background(), eve, "acme",
 		[]platform.Check{platform.OnPage("cowork:page.read", "abcdefghijkl")})
 	assert.Nil(t, got)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied))
+
+	// Control: a member of the same organization is answered.
+	got, err = f.adapter.Allowed(context.Background(), f.ada, "acme",
+		[]platform.Check{platform.OnPage("cowork:page.read", "abcdefghijkl")})
+	require.NoError(t, err)
+	assert.Equal(t, []bool{true}, got)
+}
+
+func TestAllowed_AnEmptyBatchAsksOneQuestionAndJudgesItByItsReasons(t *testing.T) {
+	f := newFixture(t, nil)
+	f.server.Member = func(_, subject string) bool { return subject != "grn:root/iam/user/eve" }
+	eve := platform.Caller{GRN: grn.New(grn.RootOwner, "user", "eve")}
+
+	_, err := f.adapter.Allowed(context.Background(), eve, "acme", nil)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied))
+
+	// A member denied the question is still a member.
+	got, err := f.adapter.Allowed(context.Background(), f.ada, "acme", nil)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+	require.Len(t, f.server.Asked()[1].Request.GetEvaluations(), 1)
+}
+
+func TestAllowed_AMemberAGuardrailForbidsPageReadStillGetsEachChecksDecision(t *testing.T) {
+	channelID := "grn:acme/cowork/channel/abcdefghijkl"
+	f := newFixture(t, map[string]bool{"cowork:channel.read@" + channelID: true})
+
+	got, err := f.adapter.Allowed(context.Background(), f.ada, "acme", []platform.Check{
+		platform.OnPage("cowork:page.read", "abcdefghijkl"),
+		platform.OnChannel("cowork:channel.read", "abcdefghijkl"),
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, []bool{false, true}, got)
 }
 
 func TestAllowed_AnUnreachableServiceIsUnavailable(t *testing.T) {
@@ -198,7 +226,7 @@ func TestAllowed_AResourceNoGRNCanNameIsDeniedWithoutBeingAsked(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, []bool{true, false, false}, got)
-	assert.Len(t, f.server.Asked()[0].Request.GetEvaluations(), 2, "the page and the membership question")
+	assert.Len(t, f.server.Asked()[0].Request.GetEvaluations(), 1, "the page alone")
 }
 
 func TestAllowed_IdentifyAndOrganizationsStayWithThePlatform(t *testing.T) {

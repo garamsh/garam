@@ -14,7 +14,7 @@
 # refuses anonymous pulls past a per-IP limit a CI runner shares with
 # whoever held its address before (#1337), and ECR Public caps
 # anonymous data across the addresses hosted runners share (#1532).
-FROM mirror.gcr.io/library/golang:1.27.2-alpine3.24@sha256:f92b6ef800e499660581efdabdf25d9d817a9d124eaf900924f0504e7e27e12d AS build
+FROM mirror.gcr.io/library/golang:1.27.4-alpine3.24@sha256:0a5f7fe796599ff487605987432e7619ae45beeb2fba4c2ce0b907879932aebf AS build
 
 WORKDIR /src
 

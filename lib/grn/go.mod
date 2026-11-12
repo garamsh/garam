@@ -1,6 +1,6 @@
 module github.com/garamsh/garam/lib/grn
 
-go 1.27.2
+go 1.27.4
 
 replace github.com/garamsh/garam/lib/errorx => ../errorx
 

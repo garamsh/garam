@@ -1320,3 +1320,14 @@ ADRs:
   `chart-rewrite` is removed; a release publishes six images; supersedes
   0056 in full, 0039's bound-to-one-API-URL consequence and 0134's
   site-bakes-the-address sentence
+- [0152](./adr/0152-garam-may-log-in-to-openbao-with-a-workload-identity-file-beside-the-token-file.md)
+  — garam may hold the Transit token by logging in to OpenBao's JWT auth
+  method with a workload identity file beside the token file:
+  `GARAM_TRANSIT_IDENTITY_FILE`, `GARAM_TRANSIT_AUTH_ROLE` and
+  `GARAM_TRANSIT_AUTH_MOUNT`, refused beside the token file; the file
+  is owner-only, read at start and at each login; the OpenBao token is
+  held in memory, renewed in the call that finds it due and replaced
+  by a login where renewal is refused or a served token is answered
+  403; gaon serves the token request only and has decided, not built,
+  the file's writer, discovery and key set; accepted, built in
+  `platform/internal/message/transit`; supersedes nothing

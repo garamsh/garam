@@ -483,6 +483,9 @@ Responsibility documents:
   give each of the six images: settings, files, listeners, probes,
   stop, order of start, what each calls, the public names, what
   codehub must reach, the three databases, and what is not established
+- [deployment-gaon.md](./deployment-gaon.md) — how each of those
+  processes is declared on a gaon cluster: the kind, what the object
+  states, the order, the names, and what gaon does not yet serve
 - [ai-gateway.md](./ai-gateway.md) — how agents reach AI models: the
   gateway, the keys it holds, how it routes and what it records; not
   yet built

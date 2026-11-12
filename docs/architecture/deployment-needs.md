@@ -4,6 +4,9 @@ For each of the six images, what any deployment must provide and what
 the process does with it, read off the source, so that a deployment that
 is not the Helm chart is written from this document.
 
+How a gaon cluster declares these processes is
+[deployment-gaon.md](./deployment-gaon.md).
+
 Every claim holds at commit
 `210b58da3bcdf9b4e3fd5346dca01a74f9d80e4e`, read from the files cited,
 and is not checked against any later one. The exception is the

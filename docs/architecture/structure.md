@@ -43,7 +43,10 @@ Beside it:
   imports them directly.
 - **`lib/platform-sdk-go/`** and **`lib/cowork-sdk-go/`**, the Go
   clients generated from `platform/api/openapi.yaml` and
-  `cowork/api/openapi.yaml`, **`lib/policy-sdk-go/`**, the Go client
+  `cowork/api/openapi.yaml` (`lib/platform-sdk-go/machine` is the
+  platform module's second client, generated from
+  `platform/api/machine.yaml` for a caller of the machine listener),
+  **`lib/policy-sdk-go/`**, the Go client
   generated from `policy/proto` that the platform feeds the policy
   service through and cowork is to ask it through (ADR-0140), and
   **`garam-cli/`**, the one client CLI

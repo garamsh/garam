@@ -124,26 +124,30 @@ async fn a_request_with_no_bearer_token_is_refused() {
     assert_eq!(answer_with(Some(format!("Bearer {token}"))).await, Ok(()));
 }
 
+/// Subjects that are neither the bare `platform` nor a principal of a
+/// scoped caller in an organization other than `root`.
+const UNKNOWN_SUBJECTS: [&str; 16] = [
+    "cowork",
+    "Platform",
+    "platform ",
+    "grn:root/iam/service/platform",
+    "grn:acme/iam/service/platform",
+    "grn:root/iam/service/cowork",
+    "grn:acme/iam/service/other",
+    "grn:acme/iam/service/",
+    "grn:acme/iam/service/cowork/x",
+    "grn:acme/iam/service/cowork#x",
+    "grn:acme/iam/user/cowork",
+    "grn:acme/codehub/service/cowork",
+    "grn:Acme/iam/service/cowork",
+    "grn:/iam/service/cowork",
+    "grn:acme:iam:service:cowork",
+    "grn:root/iam/org/acme",
+];
+
 #[tokio::test]
 async fn a_verified_token_of_a_service_this_one_does_not_serve_is_refused() {
-    for subject in [
-        "cowork",
-        "Platform",
-        "platform ",
-        "grn:root/iam/service/platform",
-        "grn:acme/iam/service/platform",
-        "grn:root/iam/service/cowork",
-        "grn:acme/iam/service/other",
-        "grn:acme/iam/service/",
-        "grn:acme/iam/service/cowork/x",
-        "grn:acme/iam/service/cowork#x",
-        "grn:acme/iam/user/cowork",
-        "grn:acme/codehub/service/cowork",
-        "grn:Acme/iam/service/cowork",
-        "grn:/iam/service/cowork",
-        "grn:acme:iam:service:cowork",
-        "grn:root/iam/org/acme",
-    ] {
+    for subject in UNKNOWN_SUBJECTS {
         let token = signer().sign(&Claims {
             sub: subject.to_owned(),
             ..claims()
@@ -157,6 +161,24 @@ async fn a_verified_token_of_a_service_this_one_does_not_serve_is_refused() {
 
     let control = signer().sign(&claims());
     assert_eq!(answer_to(control).await, Ok(()));
+}
+
+#[test]
+fn a_subject_outside_the_two_forms_is_no_known_service() {
+    let verifier = verifier();
+
+    for subject in UNKNOWN_SUBJECTS {
+        let refused = verifier.verify(&signer().sign(&Claims {
+            sub: subject.to_owned(),
+            ..claims()
+        }));
+        assert!(matches!(refused, Err(Refusal::UnknownService)), "{subject}");
+    }
+    let control = verifier.verify(&signer().sign(&Claims {
+        sub: "grn:acme/iam/service/cowork".to_owned(),
+        ..claims()
+    }));
+    assert!(control.is_ok(), "{control:?}");
 }
 
 #[test]

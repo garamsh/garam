@@ -72,7 +72,13 @@ organization. Tenancy is structural, not a flag.
   `iam` service.
 - **A resource's parent is its name with the last pair removed.** A
   name of one pair has no parent in the name; its owner is its
-  organization.
+  organization. Where only the first `project/<id>` pair is left, that
+  pair names the platform's project and no entity of the service
+  holding it, so the parent is the project's own name,
+  `grn:<org>/iam/project/<id>`: the parent of
+  `grn:acme/cowork/project/web/channel/general` is
+  `grn:acme/iam/project/web`. `GRN.Parent()` answers it, and every
+  parent it answers parses.
 - **A project-scoped resource begins with `project/<id>`** after the
   service. The `default` placeholder of the earlier form is gone: an
   organization-level resource has no project pair. A first

@@ -244,8 +244,10 @@ func TestGRN_ParentIsTheNameWithItsLastPairRemoved(t *testing.T) {
 	tests := []struct{ name, input, want string }{
 		{"one pair", "grn:acme/iam/user/alice", ""},
 		{"organization", "grn:root/iam/org/acme", ""},
-		{"two pairs", "grn:acme/cowork/project/frontend/channel/general", "grn:acme/cowork/project/frontend"},
-		{"locator dropped", "grn:acme/cowork/project/frontend/page/home#section-2", "grn:acme/cowork/project/frontend"},
+		{"project-scoped cowork name", "grn:acme/cowork/project/frontend/channel/general", "grn:acme/iam/project/frontend"},
+		{"iam name under a project", "grn:acme/iam/project/frontend/agent/bot", "grn:acme/iam/project/frontend"},
+		{"nested two deep", "grn:acme/cowork/project/frontend/channel/general/task/t1", "grn:acme/cowork/project/frontend/channel/general"},
+		{"locator dropped", "grn:acme/cowork/project/frontend/page/home#section-2", "grn:acme/iam/project/frontend"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -253,6 +255,25 @@ func TestGRN_ParentIsTheNameWithItsLastPairRemoved(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, g.Parent())
 		})
+	}
+}
+
+// TestGRN_EveryParentIsAGRN holds that a parent is a name garam knows:
+// following it never lands on a name Parse refuses, up to a name of one
+// pair.
+func TestGRN_EveryParentIsAGRN(t *testing.T) {
+	for _, input := range []string{
+		"grn:acme/cowork/project/frontend/channel/general",
+		"grn:acme/iam/project/frontend/agent/bot",
+		"grn:acme/cowork/project/frontend/channel/general/task/t1",
+		"grn:acme/cowork/project/frontend/page/home#section-2",
+	} {
+		g, err := grn.Parse(input)
+		require.NoError(t, err, input)
+		for parent := g.Parent(); parent != ""; parent = g.Parent() {
+			g, err = grn.Parse(parent)
+			require.NoError(t, err, "the parent %s of %s", parent, input)
+		}
 	}
 }
 

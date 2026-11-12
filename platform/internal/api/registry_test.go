@@ -96,7 +96,10 @@ func TestDescribeGrn(t *testing.T) {
 		assert.Equal(t, "cowork", *d.Service)
 		assert.Equal(t, "channel", *d.Type)
 		assert.Equal(t, "Cowork::Channel", *d.EntityType)
-		assert.Equal(t, "grn:acme/cowork/project/frontend", *d.Parent)
+		assert.Equal(t, "grn:acme/iam/project/frontend", *d.Parent)
+		parent := describe(t, *d.Parent)
+		assert.True(t, parent.Known, "a parent is a name garam knows")
+		assert.Equal(t, "project", *parent.Type)
 		assert.Contains(t, *d.Actions, "cowork:channel.post")
 		assert.NotContains(t, *d.Actions, "cowork:page.read")
 	})
@@ -208,6 +211,7 @@ func TestRegistry_PrintsEachOperationAsServed(t *testing.T) {
 		"/registry",
 		describePath("grn:acme/iam/group/eng"),
 		describePath("grn:acme/cowork/project/frontend/channel/general"),
+		describePath("grn:acme/iam/project/frontend"),
 		describePath("grn:acme/cowork/page/home#section-2"),
 		describePath("grn:acme/codehub/repo/api-server"),
 		describePath("not-a-grn"),

@@ -207,12 +207,20 @@ func (g GRN) name() string {
 
 // Parent returns the name of the GRN with its last type and id pair
 // removed and its locator dropped, and the empty string where the name
-// holds one pair and so has no parent in the name (ADR-0142 item 3).
+// holds one pair and so has no parent in the name. Where only the
+// shared first project/<id> pair is left, that pair names the
+// platform's project and no entity of the service holding it, so the
+// parent is the project's own name, grn:<org>/iam/project/<id>
+// (ADR-0142 item 3).
 func (g GRN) Parent() string {
 	if g.Ancestors == "" {
 		return ""
 	}
-	return prefix + g.Organization + "/" + g.Service + "/" + g.Ancestors
+	service := g.Service
+	if id, ok := strings.CutPrefix(g.Ancestors, "project/"); ok && !strings.Contains(id, "/") {
+		service = "iam"
+	}
+	return prefix + g.Organization + "/" + service + "/" + g.Ancestors
 }
 
 // IsZero reports whether the GRN is the zero value.

@@ -1324,3 +1324,8 @@ ADRs:
   `chart-rewrite` is removed; a release publishes six images; supersedes
   0056 in full, 0039's bound-to-one-API-URL consequence and 0134's
   site-bakes-the-address sentence
+- [0151](./adr/0151-the-gaon-operator-is-a-service-here-that-runs-each-managed-agent-as-one-microvm.md)
+  — the gaon operator is a service here that runs each managed agent as
+  one MicroVM: a `gaon-operator/` folder with its own module and image,
+  no custom gaon kind, one composed guest image, one no-ingress network
+  policy, a pair registered in garam; accepted, and unbuilt

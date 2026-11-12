@@ -25,8 +25,8 @@ gen:
 # every manifest holds, when an `@caller` is neither `none` nor a
 # `Caller`, when a `Caller` is named by no manifest, when the committed
 # catalogue is not what the manifests generate, and when an audience of
-# the platform names no manifest service and is neither policy nor
-# codehub. The last is a Go test, and `go test` exits 0 on a package
+# the platform names no manifest service and is not policy. The last is
+# a Go test, and `go test` exits 0 on a package
 # where the named test does not exist, so its run is counted.
 check-gen:
 	@test -f '$(CATALOGUE)' || { echo 'check-gen: $(CATALOGUE) is missing — run make -C policy gen'; exit 1; }

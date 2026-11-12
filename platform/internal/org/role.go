@@ -188,10 +188,23 @@ const (
 	// versions, each saved one, and its embeds.
 	ActionCoworkArtifactRead  = "cowork:artifact.read"
 	ActionCoworkArtifactWrite = "cowork:artifact.write"
+
+	// codehub's actions (ADR-0149). On the organization they cover
+	// listing repositories, creating one, using codehub at all and
+	// administering its runners, and on a repository that repository.
+	// codehub asks for them through the policy service; nothing here
+	// enforces them.
+	ActionCodehubRepoRead         = "codehub:repo.read"
+	ActionCodehubRepoWrite        = "codehub:repo.write"
+	ActionCodehubRepoCreate       = "codehub:repo.create"
+	ActionCodehubRunnerAdminister = "codehub:runner.administer"
+	ActionCodehubOrgUse           = "codehub:org.use"
 )
 
 // actions is every action above: the ones a browser-facing operation
 // is checked against, and so the only ones worth asking about.
+// codehub's are not among them: it asks the policy service itself, and
+// no operation of this platform is checked against one.
 var actions = []string{
 	ActionOrgRead, ActionOrgUpdate, ActionOrgDelete, ActionOrgMemberList, ActionOrgInvite,
 	ActionGroupCreate, ActionGroupRead, ActionGroupUpdate, ActionGroupDelete,
@@ -288,6 +301,34 @@ var coworkActions = []string{
 	ActionCoworkArtifactRead, ActionCoworkArtifactWrite,
 }
 
+// codehubActions is every codehub action, one row each. An owner and
+// an admin hold every row. A member holds the rows marked for it: it
+// reads repositories and uses codehub, and an owner's `permit` says
+// who writes (ADR-0149 item 1). Named one at a time and never as
+// `codehub:*`, as the cowork actions are.
+var codehubActions = []struct {
+	action string
+	member bool
+}{
+	{ActionCodehubRepoRead, true},
+	{ActionCodehubOrgUse, true},
+	{ActionCodehubRepoWrite, false},
+	{ActionCodehubRepoCreate, false},
+	{ActionCodehubRunnerAdminister, false},
+}
+
+// codehubActionsHeld returns the codehub actions an owner or admin
+// holds, or with member set, the ones a member holds.
+func codehubActionsHeld(member bool) []string {
+	var held []string
+	for _, a := range codehubActions {
+		if a.member || !member {
+			held = append(held, a.action)
+		}
+	}
+	return held
+}
+
 // Actions returns the action patterns the role grants on an org and
 // on the groups, projects, operators, agents, and the cowork pages,
 // channels, tasks and artifacts it contains. The
@@ -298,18 +339,18 @@ func (r Role) Actions() []string {
 	case RoleOwner:
 		return slices.Concat([]string{
 			"iam:org.*", "iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
-		}, machineActionsHeld(false), coworkActions)
+		}, machineActionsHeld(false), coworkActions, codehubActionsHeld(false))
 	case RoleAdmin:
 		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
 			"iam:group.*", "iam:project.*", "iam:policy.*", "iam:consent.*",
-		}, machineActionsHeld(false), coworkActions)
+		}, machineActionsHeld(false), coworkActions, codehubActionsHeld(false))
 	case RoleMember:
 		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgMemberList,
 			ActionGroupRead, ActionGroupMemberList,
 			ActionProjectRead, ActionProjectMemberList,
-		}, machineActionsHeld(true), coworkActions)
+		}, machineActionsHeld(true), coworkActions, codehubActionsHeld(true))
 	}
 	return nil
 }

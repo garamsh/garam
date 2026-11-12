@@ -25,7 +25,7 @@ fn the_shipped_manifests_break_no_rule() {
 
     assert_eq!(manifests.problems(), Vec::<String>::new());
     let names: Vec<_> = manifests.services().iter().map(|s| &s.name).collect();
-    assert_eq!(names, ["iam", "cowork"]);
+    assert_eq!(names, ["iam", "cowork", "codehub"]);
 }
 
 #[test]
@@ -256,5 +256,34 @@ fn an_operator_may_hold_the_ten_delegable_operations_and_no_other_action() {
         "nope:x.y",
     ] {
         assert!(!manifests.delegable(not), "{not}");
+    }
+}
+
+#[test]
+fn a_grn_names_the_entity_type_its_service_and_last_type_segment_declare() {
+    let manifests = Manifests::load().unwrap();
+    let of = |grn: &str| manifests.entity_type_of_grn(grn).map(str::to_owned);
+
+    assert_eq!(of("grn:acme/codehub/repo/4821").unwrap(), "Codehub::Repo");
+    assert_eq!(of("grn:acme/iam/user/lee").unwrap(), "Iam::User");
+    assert_eq!(of("grn:root/iam/org/acme").unwrap(), "Iam::Org");
+    assert_eq!(
+        of("grn:acme/cowork/project/web/channel/general").unwrap(),
+        "Cowork::Channel"
+    );
+    assert_eq!(
+        of("grn:acme/codehub/repo/4821#src/a").unwrap(),
+        "Codehub::Repo"
+    );
+    // Controls: what no manifest declares, and what is no GRN.
+    for grn in [
+        "grn:acme/billing/invoice/1",
+        "grn:acme/codehub/branch/main",
+        "grn:acme/codehub/repo",
+        "grn:acme/codehub/repo/4821/branch",
+        "acme/codehub/repo/4821",
+        "",
+    ] {
+        assert!(of(grn).is_err(), "{grn:?} resolved to {:?}", of(grn));
     }
 }

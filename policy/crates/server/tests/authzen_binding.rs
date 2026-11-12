@@ -367,3 +367,85 @@ async fn an_unreadable_store_is_service_unavailable() {
 
     assert_eq!(reply.status, 503, "{}", reply.body);
 }
+
+const CODEHUB: &str = "grn:acme/iam/service/codehub";
+const REPO: &str = "grn:acme/codehub/repo/4821";
+
+#[tokio::test]
+async fn the_type_grn_is_resolved_before_the_store_is_reached() {
+    let service = serving().await;
+    let token = token_of(CODEHUB);
+    let by = |subject: &str, resource: &str| {
+        json!({
+            "subject": {"type": "grn", "id": subject},
+            "action": {"name": "codehub:repo.read"},
+            "resource": {"type": "grn", "id": resource},
+        })
+    };
+
+    for body in [
+        by("grn:acme/iam/user/lee", "grn:acme/billing/invoice/1"),
+        by("grn:acme/iam/user/lee", "grn:acme/codehub/branch/main"),
+        by("grn:acme/iam/user", REPO),
+    ] {
+        let reply = service
+            .call("POST", EVALUATION, Some(&token), &[], Some(&body))
+            .await;
+        assert_eq!(reply.status, 400, "{body}: {}", reply.body);
+    }
+
+    // Control: declared GRNs, and a Cedar type name, are past the
+    // check and reach the store that is out of reach.
+    let declared = by("grn:acme/iam/user/lee", REPO);
+    let named = ask("codehub:repo.read", "Codehub::Repo", REPO);
+    for body in [declared, named] {
+        let reply = service
+            .call("POST", EVALUATION, Some(&token), &[], Some(&body))
+            .await;
+        assert_eq!(reply.status, 503, "{body}: {}", reply.body);
+    }
+}
+
+#[tokio::test]
+async fn the_codehub_caller_is_scoped_to_its_service_and_its_type() {
+    let service = serving().await;
+    let token = token_of(CODEHUB);
+    let iam = ask("iam:agent.read", "Iam::Agent", "grn:acme/iam/agent/bot");
+    let cowork = ask(
+        "cowork:channel.post",
+        "Cowork::Channel",
+        "grn:acme/cowork/project/web/channel/general",
+    );
+    let feed = |kind: &str, id: &str| {
+        json!({"changes": [{
+            "entity": {"type": kind, "id": id},
+            "sequence": "1",
+            "upsert": {},
+        }]})
+    };
+
+    for body in [&iam, &cowork] {
+        let reply = service
+            .call("POST", EVALUATION, Some(&token), &[], Some(body))
+            .await;
+        assert_eq!(reply.status, 403, "{body}: {}", reply.body);
+    }
+    for body in [
+        feed("Iam::User", "grn:acme/iam/user/new"),
+        feed("Cowork::Channel", "grn:acme/cowork/project/web/channel/x"),
+        feed("grn", "grn:acme/iam/user/new"),
+    ] {
+        let reply = service
+            .call("POST", CHANGES, Some(&token), &[], Some(&body))
+            .await;
+        assert_eq!(reply.status, 403, "{body}: {}", reply.body);
+    }
+
+    // Control: its own type, named either way, reaches the store.
+    for kind in ["Codehub::Repo", "grn"] {
+        let reply = service
+            .call("POST", CHANGES, Some(&token), &[], Some(&feed(kind, REPO)))
+            .await;
+        assert_eq!(reply.status, 503, "{kind}: {}", reply.body);
+    }
+}

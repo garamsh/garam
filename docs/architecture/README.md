@@ -1308,5 +1308,6 @@ ADRs:
   the exact UTF-8 context key `path` and not as an entity;
   `unauthorized_client` for an organization garam does not hold;
   repositories fed through an outbox with a sequence per entity; a
-  runner as an `Iam::Agent` codehub registers; accepted, not built;
+  runner as an `Iam::Agent` codehub registers; accepted, built in the
+  policy service (#1815), not in codehub, its outbox or the runner;
   supersedes 0141 in part, on its codehub example's answers 4 and 5

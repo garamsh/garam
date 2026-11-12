@@ -198,6 +198,15 @@ fn a_verified_token_is_read_as_the_service_its_subject_names() {
     assert_eq!(cowork.caller(), Caller::Cowork);
     assert_eq!(cowork.org(), Some(&OrgGrn::named("acme")));
 
+    let codehub = verifier
+        .verify(&signer().sign(&Claims {
+            sub: "grn:acme/iam/service/codehub".to_owned(),
+            ..claims()
+        }))
+        .unwrap();
+    assert_eq!(codehub.caller(), Caller::Codehub);
+    assert_eq!(codehub.org(), Some(&OrgGrn::named("acme")));
+
     let other = verifier.verify(&signer().sign(&Claims {
         sub: "cowork".to_owned(),
         ..claims()
